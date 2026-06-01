@@ -16,6 +16,7 @@ import parametricVersion from "./assets/save-variant.js";
 import abiRouter from "./abi-router.js";
 import rateLimit from "./rate-limiter.js";
 import ledgerRouter from "./ledger.js";
+import openapiSpec from "./openapi.json" with { type: "json" };
 import { createLedgerEntry } from "../ledger/schema.js";
 import { appendEntry } from "../ledger/store.js";
 import { getSceneNodes } from "./manifest-utils.js";
@@ -386,10 +387,44 @@ export default () => {
   // ─── Ledger ───────────────────────────────────────────────────────────────
 
   v1.use("/ledger", ledgerRouter());
+  // ─── OpenAPI Specification ─────────────────────────────────────────────────
+
+  v1.get("/openapi.json", (req, res) => {
+    res.json(openapiSpec);
+  });
+
 
   // ─── Mount under /api/v1 ──────────────────────────────────────────────────
 
   const api = Router();
+  
+  // ─── Swagger UI ────────────────────────────────────────────────────────────
+
+  api.get("/docs", (req, res) => {
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arbesk API Documentation</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
+  <script>
+    SwaggerUIBundle({
+      url: "/api/v1/openapi.json",
+      dom_id: "#swagger-ui",
+      presets: [SwaggerUIBundle.presets.apis],
+      layout: "BaseLayout",
+      deepLinking: true
+    });
+  </script>
+</body>
+</html>`);
+  });
+
   api.use("/v1", v1);
 
   // Expose for test helpers
