@@ -206,7 +206,7 @@ async function autoConnectWallet() {
 async function _finishWalletSetup(address) {
   window.walletAddress = address;
 
-  let chainId = await web3.eth.getChainId();
+  let chainId = Number(await web3.eth.getChainId());
   window.chainId = chainId;
   console.log("Connected wallet:", window.walletAddress, "chainId:", chainId);
 
@@ -215,7 +215,8 @@ async function _finishWalletSetup(address) {
     const switched = await _promptHardhatNetwork();
     if (switched) {
       // Re-read chainId after switch
-      chainId = await web3.eth.getChainId();
+      chainId = Number(await web3.eth.getChainId());
+      window.chainId = chainId;
     } else {
       console.warn("User did not switch to Hardhat network");
     }

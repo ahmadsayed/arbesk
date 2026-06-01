@@ -174,8 +174,9 @@ export async function resolveChildRef(childRef, options = {}) {
     };
   }
 
-  // Fall back to connected wallet's chain/contract when not provided
-  const chainId = childRef.chainId || window.chainId || null;
+  // Fall back to connected wallet's chain/contract when not provided.
+  // Normalize chainId to Number — getChainId() returns BigInt in Web3 v4.
+  const chainId = Number(childRef.chainId || window.chainId) || null;
   const contractAddress =
     childRef.contractAddress || window.contractAddress || null;
 

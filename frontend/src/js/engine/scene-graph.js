@@ -765,7 +765,7 @@ async function handleLinkedAssetDropped(event) {
   const { token_id, standard, resolution, chainId, contractAddress } = detail;
   if (!token_id) return;
 
-  const resolvedChainId = chainId || window.chainId || 314159;
+  const resolvedChainId = Number(chainId || window.chainId || 314159);
   const resolvedContractAddr =
     contractAddress || window.contractAddress || null;
 
