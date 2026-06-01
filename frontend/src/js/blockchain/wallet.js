@@ -564,12 +564,13 @@ async function removeEditor(tokenId, editorAddress) {
 // Retain mock flow for offline development when contract is not deployed
 async function _mockPayForGeneration(nodeId, prompt) {
   const w3 = _getWeb3();
+  // Send a 0-value transfer to the dev account (MetaMask blocks self-transfers with data)
+  const devAccount = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
   const tx = {
     from: window.walletAddress,
-    to: window.walletAddress,
+    to: devAccount,
     value: w3.utils.toWei("0", "ether"),
     gas: 21000,
-    data: w3.utils.asciiToHex(`arbesk:generate:${nodeId}`),
   };
   const receipt = await w3.eth.sendTransaction(tx);
   document.dispatchEvent(

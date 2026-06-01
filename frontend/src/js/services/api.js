@@ -351,3 +351,18 @@ export async function getLedgerStats() {
   if (!response.ok) return null;
   return response.json();
 }
+
+// ─── Global Exports (for non-module <script> loading) ───────────────────────
+
+window.signTxHash = signTxHash;
+window.getConfig = getConfig;
+window.getContractAddress = getContractAddress;
+window.getContractArtifact = getContractArtifact;
+window.generateAsset = generateAsset;
+window.saveManifest = saveManifest;
+window.saveParametricVersion = saveParametricVersion;
+window.publishManifest = publishManifest;
+window.getManifestHistory = getManifestHistory;
+window.getTokenManifest = getTokenManifest;
+window.queryLedger = queryLedger;
+window.getLedgerStats = getLedgerStats;
