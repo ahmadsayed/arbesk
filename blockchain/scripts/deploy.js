@@ -9,19 +9,19 @@ async function main() {
   const treasury = process.env.TREASURY_ADDRESS || deployer.address;
   console.log("Treasury wallet:", treasury);
 
-  const ArbeskWorld = await hre.ethers.getContractFactory("ArbeskWorld");
-  const world = await ArbeskWorld.deploy(treasury);
-  await world.waitForDeployment();
+  const ArbeskAsset = await hre.ethers.getContractFactory("ArbeskAsset");
+  const asset = await ArbeskAsset.deploy(treasury);
+  await asset.waitForDeployment();
 
-  const address = await world.getAddress();
-  console.log("ArbeskWorld deployed to:", address);
+  const address = await asset.getAddress();
+  console.log("ArbeskAsset deployed to:", address);
 
   // Save deployment artifact
   const network = hre.network.name;
   const deployDir = path.join(__dirname, "..", "deployments", network);
   fs.mkdirSync(deployDir, { recursive: true });
   fs.writeFileSync(
-    path.join(deployDir, "ArbeskWorld.json"),
+    path.join(deployDir, "ArbeskAsset.json"),
     JSON.stringify({
       address,
       treasury,

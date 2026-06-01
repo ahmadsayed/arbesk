@@ -2,7 +2,7 @@
  * Arbesk Remote IPFS Reader (Gateway-Only)
  *
  * All reads go through the private Kubo gateway (127.0.0.1:8080).
- * All writes go through the backend API (POST /api/generate-asset-node, etc.).
+ * All writes go through the backend API (POST /api/assets/generate-node, etc.).
  *
  * Browser storage cache policy:
  * - cache only on demand, after a CID is explicitly opened/read by the user flow
@@ -176,15 +176,15 @@ async function getBlobFromRemoteIPFS(cid) {
 
 /**
  * Traverse a fractal manifest history starting from a manifest CID.
- * Returns the history entries for a specific node, or all nodes.
+ * Returns the variant entries for a specific node, or all nodes.
  */
 async function getManifestHistory(cid, nodeId = null) {
   const manifest = await getFromRemoteIPFS(cid);
   if (!nodeId) {
-    return manifest.nodes || [];
+    return manifest.scene?.nodes || [];
   }
-  const node = (manifest.nodes || []).find((n) => n.node_id === nodeId);
-  return node ? node.history || [] : [];
+  const node = (manifest.scene?.nodes || []).find((n) => n.node_id === nodeId);
+  return node ? node.variants || [] : [];
 }
 
 export {

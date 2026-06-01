@@ -8,7 +8,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("Verifying ArbeskWorld at:", address);
+  console.log("Verifying ArbeskAsset at:", address);
   await hre.run("verify:verify", {
     address,
     constructorArguments: [treasury],

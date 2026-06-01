@@ -106,10 +106,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     return `Bearer ${message}.${signature}`;
   }
 
-  describe("POST /api/generate-asset-node", () => {
-    it("creates a new manifest with a generation history entry", async () => {
+  describe("POST /api/assets/generate-node", () => {
+    it("creates a new manifest with a generation variant entry", async () => {
       const res = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", makeAuthHeader())
         .send({
           prompt: "A modern minimalist workbench",
@@ -118,16 +118,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.newManifestCid).toBeDefined();
-      expect(res.body.assetCID).toBeDefined();
-      expect(res.body.historyEntry).toMatchObject({
+      expect(res.body.assetManifestCid).toBeDefined();
+      expect(res.body.sourceAssetCid).toBeDefined();
+      expect(res.body.variantEntry).toMatchObject({
         v: 1,
         type: "generation",
         provider: "mock",
         prompt: "A modern minimalist workbench",
       });
       // New source object format
-      expect(res.body.historyEntry.src).toMatchObject({
+      expect(res.body.variantEntry.source).toMatchObject({
         cid: expect.any(String),
         path: expect.any(String),
         format: expect.any(String),
@@ -136,7 +136,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("returns suka.gltf for character prompts", async () => {
       const res = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", makeAuthHeader())
         .send({
           prompt: "A tall character",
@@ -145,12 +145,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.assetCID).toBeDefined();
+      expect(res.body.sourceAssetCid).toBeDefined();
     });
 
     it("rejects when prompt or nodeId is missing", async () => {
       const res = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", makeAuthHeader())
         .send({
           prompt: "",
@@ -166,13 +166,13 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const auth = makeAuthHeader(txHash);
 
       const res1 = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", auth)
         .send({ prompt: "First", nodeId: "node_r1", txHash });
       expect(res1.status).toBe(200);
 
       const res2 = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", auth)
         .send({ prompt: "Second", nodeId: "node_r2", txHash });
       expect(res2.status).toBe(409);
@@ -183,43 +183,43 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const originalTo = mockWeb3Receipt.to;
       mockWeb3Receipt.to = "0xWrongAddress";
       const res = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", makeAuthHeader("0xwrongaddr"))
         .send({ prompt: "Test", nodeId: "node_w1", txHash: "0xwrongaddr" });
       expect(res.status).toBe(403);
-      expect(res.body.error).toContain("not sent to ArbeskWorld");
+      expect(res.body.error).toContain("not sent to ArbeskAsset");
       mockWeb3Receipt.to = originalTo;
     });
   });
 
-  describe("POST /api/parametric-version", () => {
-    let prevManifestCid;
+  describe("POST /api/assets/save-variant", () => {
+    let prevAssetManifestCid;
 
     beforeAll(async () => {
       const res = await request(app)
-        .post("/api/generate-asset-node")
+        .post("/api/assets/generate-node")
         .set("Authorization", makeAuthHeader("0xparam"))
         .send({
           prompt: "A chair",
           nodeId: "node_chair_001",
           txHash: "0xparam",
         });
-      prevManifestCid = res.body.newManifestCid;
+      prevAssetManifestCid = res.body.assetManifestCid;
     });
 
-    it("appends a parametric history entry", async () => {
+    it("appends a parametric variant entry", async () => {
       const res = await request(app)
-        .post("/api/parametric-version")
+        .post("/api/assets/save-variant")
         .send({
           nodeId: "node_chair_001",
-          prevManifestCid: prevManifestCid,
+          prevAssetManifestCid: prevAssetManifestCid,
           color: "#FF5733",
           scale: { x: 1.5, y: 1.5, z: 1.5 },
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.newManifestCid).toBeDefined();
-      expect(res.body.historyEntry).toMatchObject({
+      expect(res.body.assetManifestCid).toBeDefined();
+      expect(res.body.variantEntry).toMatchObject({
         v: 2,
         type: "parametric",
         provider: "parametric",
@@ -232,10 +232,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects invalid color", async () => {
       const res = await request(app)
-        .post("/api/parametric-version")
+        .post("/api/assets/save-variant")
         .send({
           nodeId: "node_chair_001",
-          prevManifestCid: prevManifestCid,
+          prevAssetManifestCid: prevAssetManifestCid,
           color: "not-a-color",
           scale: { x: 1, y: 1, z: 1 },
         });
@@ -245,10 +245,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects invalid scale", async () => {
       const res = await request(app)
-        .post("/api/parametric-version")
+        .post("/api/assets/save-variant")
         .send({
           nodeId: "node_chair_001",
-          prevManifestCid: prevManifestCid,
+          prevAssetManifestCid: prevAssetManifestCid,
           scale: { x: -1, y: 1, z: 1 },
         });
 
@@ -257,16 +257,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("validates manifest structure on round-trip", async () => {
       const res = await request(app)
-        .post("/api/parametric-version")
+        .post("/api/assets/save-variant")
         .send({
           nodeId: "node_chair_001",
-          prevManifestCid: prevManifestCid,
+          prevAssetManifestCid: prevAssetManifestCid,
           color: "#000000",
           scale: { x: 2, y: 2, z: 2 },
         });
 
       expect(res.status).toBe(200);
-      const newCid = res.body.newManifestCid;
+      const newCid = res.body.assetManifestCid;
 
       let data = "";
       for await (const file of mockIPFS.cat(newCid)) {
@@ -277,16 +277,18 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       }
       const manifest = JSON.parse(data);
 
-      expect(manifest).toHaveProperty("manifest_id");
+      expect(manifest).toHaveProperty("asset_id");
       expect(manifest).toHaveProperty("version");
-      expect(manifest).toHaveProperty("nodes");
-      expect(Array.isArray(manifest.nodes)).toBe(true);
-      expect(manifest.nodes.length).toBeGreaterThan(0);
+      expect(manifest).toHaveProperty("scene");
+      expect(Array.isArray(manifest.scene.nodes)).toBe(true);
+      expect(manifest.scene.nodes.length).toBeGreaterThan(0);
 
-      const node = manifest.nodes.find((n) => n.node_id === "node_chair_001");
+      const node = manifest.scene.nodes.find(
+        (n) => n.node_id === "node_chair_001",
+      );
       expect(node).toBeDefined();
-      expect(Array.isArray(node.history)).toBe(true);
-      expect(node.history.length).toBeGreaterThanOrEqual(2);
+      expect(Array.isArray(node.variants)).toBe(true);
+      expect(node.variants.length).toBeGreaterThanOrEqual(2);
 
       // Validate new source object format
       expect(node.source).toBeDefined();
@@ -296,22 +298,20 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         format: expect.any(String),
       });
 
-      // Validate history entries have source objects
-      for (const entry of node.history) {
-        expect(entry.src).toBeDefined();
-        if (typeof entry.src === "object") {
-          expect(entry.src).toHaveProperty("cid");
-          expect(entry.src).toHaveProperty("path");
-          expect(entry.src).toHaveProperty("format");
-        }
+      // Validate variant entries have source objects
+      for (const entry of node.variants) {
+        expect(entry.source).toBeDefined();
+        expect(entry.source).toHaveProperty("cid");
+        expect(entry.source).toHaveProperty("path");
+        expect(entry.source).toHaveProperty("format");
       }
     });
   });
 
-  describe("POST /api/push-ipfs", () => {
+  describe("POST /api/assets/publish-manifest", () => {
     it("stores and returns a CID", async () => {
       const res = await request(app)
-        .post("/api/push-ipfs")
+        .post("/api/assets/publish-manifest")
         .send({ test: "data" });
 
       expect(res.status).toBe(200);
@@ -321,11 +321,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("stores embedded publish thumbnails as separate IPFS assets", async () => {
       const dataUrl = `data:image/webp;base64,${Buffer.from("mock-webp-thumbnail").toString("base64")}`;
       const res = await request(app)
-        .post("/api/push-ipfs")
+        .post("/api/assets/publish-manifest")
         .send({
-          manifest_id: "manifest_with_thumbnail",
+          asset_id: "asset_with_thumbnail",
           version: 1,
-          nodes: [],
+          scene: { nodes: [] },
           thumbnail: {
             type: "snapshot",
             dataUrl,
@@ -366,7 +366,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       let lastStatus = 200;
       for (let i = 0; i < 15; i++) {
         const res = await request(app)
-          .post("/api/generate-asset-node")
+          .post("/api/assets/generate-node")
           .set("Authorization", makeAuthHeader(`0xrate${i}`))
           .send({
             prompt: `Rate test ${i}`,
@@ -382,7 +382,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   describe("ABI Route", () => {
     it("returns ABI JSON when compiled", async () => {
-      const res = await request(app).get("/api/abi/ArbeskWorld.json");
+      const res = await request(app).get("/api/abi/ArbeskAsset.json");
       // Since we compiled the contract during test setup, the ABI should be present
       if (res.status === 200) {
         expect(res.body).toHaveProperty("abi");
@@ -391,6 +391,198 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(res.status).toBe(404);
         expect(res.body.error).toContain("ABI not found");
       }
+    });
+  });
+
+  describe("Token Child Ref Manifest", () => {
+    let baseCid;
+
+    beforeAll(async () => {
+      // Create a base manifest to attach child refs to
+      const res = await request(app)
+        .post("/api/assets/generate-node")
+        .set("Authorization", makeAuthHeader("0xchildtest"))
+        .send({
+          prompt: "A table",
+          nodeId: "node_table_child_001",
+          txHash: "0xchildtest",
+        });
+      baseCid = res.body.assetManifestCid;
+    });
+
+    it("saves a manifest with token child_ref nodes", async () => {
+      const manifest = {
+        name: "Composed World",
+        asset_id: "composed_world_001",
+        version: 1,
+        scene: {
+          nodes: [
+            {
+              node_id: "child_token_314159_12345678_42",
+              transform_matrix: [
+                1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 0, -5, 1,
+              ],
+              child_ref: {
+                type: "token",
+                chainId: 314159,
+                contractAddress: "0x1234567890abcdef1234567890abcdef12345678",
+                tokenId: "42",
+                standard: "ERC721",
+                resolution: "latest",
+              },
+            },
+          ],
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/assets/save-draft")
+        .send(manifest);
+
+      expect(res.status).toBe(200);
+      expect(res.body.cid).toBeDefined();
+
+      // Verify round-trip: fetch the manifest and check child_ref structure
+      let data = "";
+      for await (const file of mockIPFS.cat(res.body.cid)) {
+        const buffer = new Uint16Array(file);
+        buffer.forEach((code) => {
+          data += String.fromCharCode(code);
+        });
+      }
+      const stored = JSON.parse(data);
+
+      expect(stored.scene.nodes.length).toBe(1);
+      const childNode = stored.scene.nodes[0];
+      expect(childNode.node_id).toBe("child_token_314159_12345678_42");
+      expect(childNode.child_ref).toMatchObject({
+        type: "token",
+        chainId: 314159,
+        contractAddress: "0x1234567890abcdef1234567890abcdef12345678",
+        tokenId: "42",
+        standard: "ERC721",
+        resolution: "latest",
+      });
+      expect(childNode.transform_matrix).toEqual([
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 0, -5, 1,
+      ]);
+      // Token child nodes should NOT have source or history
+      expect(childNode.source).toBeUndefined();
+      expect(childNode.history).toBeUndefined();
+    });
+
+    it("saves a mixed manifest with regular and child_ref nodes", async () => {
+      const manifest = {
+        name: "Mixed World",
+        asset_id: "mixed_world_001",
+        version: 1,
+        scene: {
+          nodes: [
+            {
+              node_id: "node_regular_001",
+              source: {
+                cid: "QmSomeCid",
+                path: "asset.glb",
+                format: "glb",
+              },
+              transform_matrix: [
+                1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+              ],
+              history: [],
+            },
+            {
+              node_id: "child_token_314159_abcdef01_7",
+              transform_matrix: [
+                1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -5, 0, 3, 1,
+              ],
+              child_ref: {
+                type: "token",
+                chainId: 314159,
+                contractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
+                tokenId: "7",
+                standard: "ERC721",
+                resolution: "latest",
+              },
+            },
+          ],
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/assets/save-draft")
+        .send(manifest);
+
+      expect(res.status).toBe(200);
+
+      let data = "";
+      for await (const file of mockIPFS.cat(res.body.cid)) {
+        const buffer = new Uint16Array(file);
+        buffer.forEach((code) => {
+          data += String.fromCharCode(code);
+        });
+      }
+      const stored = JSON.parse(data);
+
+      expect(stored.scene.nodes.length).toBe(2);
+
+      const regularNode = stored.scene.nodes.find(
+        (n) => n.node_id === "node_regular_001",
+      );
+      expect(regularNode.source).toBeDefined();
+      expect(regularNode.child_ref).toBeUndefined();
+
+      const childNode = stored.scene.nodes.find(
+        (n) => n.node_id === "child_token_314159_abcdef01_7",
+      );
+      expect(childNode.child_ref).toBeDefined();
+      expect(childNode.source).toBeUndefined();
+      expect(childNode.transform_matrix).toBeDefined();
+    });
+
+    it("publish-manifest accepts thumbnails alongside child_ref nodes", async () => {
+      const dataUrl = `data:image/webp;base64,${Buffer.from("child-world-thumb").toString("base64")}`;
+      const res = await request(app)
+        .post("/api/assets/publish-manifest")
+        .send({
+          asset_id: "composed_with_thumbnail",
+          version: 2,
+          scene: {
+            nodes: [
+              {
+                node_id: "child_token_314159_12345678_99",
+                transform_matrix: [
+                  1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                ],
+                child_ref: {
+                  type: "token",
+                  chainId: 314159,
+                  contractAddress: "0x1234567890abcdef1234567890abcdef12345678",
+                  tokenId: "99",
+                  standard: "ERC721",
+                  resolution: "latest",
+                },
+              },
+            ],
+          },
+          thumbnail: {
+            type: "snapshot",
+            dataUrl,
+            mime: "image/webp",
+            format: "webp",
+            path: "thumbnail.webp",
+            width: 512,
+            height: 288,
+            timestamp: 1780000000,
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const storedManifest = JSON.parse(ipfsStorage.get(res.text));
+      expect(storedManifest.thumbnail).toMatchObject({
+        type: "snapshot",
+        cid: expect.any(String),
+      });
+      expect(storedManifest.scene.nodes[0].child_ref.tokenId).toBe("99");
     });
   });
 });

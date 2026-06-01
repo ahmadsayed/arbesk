@@ -11,6 +11,36 @@ This project is initialized for Zed's coding agent workflow.
 
 When working in Zed, the agent should first read `AGENTS.md` and then use `docs/CURRENT_STATUS.md` for the latest implementation snapshot.
 
+## Active Phase: Token ID-Based Child Worlds (5.1)
+
+The current focus is implementing token-based child world references. Key context:
+
+- **Schema**: `child_ref` objects with `{type: "token", chainId, contractAddress, tokenId}` replace legacy `child_manifest_id`.
+- **New files**: `token-resolver.js` (blockchain or services) and `asset-drop-zone.js` (UI).
+- **Core files affected**: `scene-graph.js` (rendering), `asset-library.js` (drag source), `asset-save.js` (persist).
+- **Design**: Clean slate — no backward-compat with legacy child manifests.
+- **Testing**: `test/api.test.js` for backend; manual QA checklist for drag/drop flow.
+
+## File Map (Updated for Phase 5.1)
+
+| Purpose | File |
+|---------|------|
+| Scene graph + asset loading | `frontend/src/js/engine/scene-graph.js` |
+| Time travel / history | `frontend/src/js/engine/time-travel.js` |
+| Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
+| Wallet + blockchain | `frontend/src/js/blockchain/wallet.js` |
+| **Token resolver (NEW)** | `frontend/src/js/services/token-resolver.js` or `blockchain/token-resolver.js` |
+| **Asset drop zone (NEW)** | `frontend/src/js/ui/asset-drop-zone.js` |
+| Gallery / asset library | `frontend/src/js/ui/asset-library.js` |
+| Asset editors | `frontend/src/js/ui/asset-editors.js` |
+| Asset history / timeline | `frontend/src/js/ui/asset-history.js` |
+| Asset save / publish | `frontend/src/js/ui/asset-save.js` |
+| Create panel | `frontend/src/js/ui/create-panel.js` |
+| API service | `frontend/src/js/services/api.js` |
+| Team service | `frontend/src/js/services/team.js` |
+| IPFS read/write | `frontend/src/js/ipfs/` |
+| glTF CID translation | `frontend/src/js/gltf/` |
+
 ## Zed Tasks
 
 Project tasks are defined in `.zed/tasks.json` and can be run from Zed's task palette.

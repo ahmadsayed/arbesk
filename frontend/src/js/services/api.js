@@ -47,17 +47,17 @@ export async function signTxHash(txHash) {
 }
 
 /**
- * POST /api/generate-asset-node
+ * POST /api/assets/generate-node
  * @param {Object} params
- * @returns {Promise<{newManifestCid, historyEntry, assetCID}>}
+ * @returns {Promise<{assetManifestCid, variantEntry, sourceAssetCid}>}
  */
 export async function generateAsset({
     prompt,
     nodeId,
     txHash,
     provider = 'mock',
-    manifestId,
-    prevManifestCid,
+    assetId,
+    prevAssetManifestCid,
     transformMatrix
 }) {
     const authToken = await signTxHash(txHash);
@@ -67,12 +67,12 @@ export async function generateAsset({
         nodeId,
         txHash,
         provider,
-        ...(manifestId && { manifestId }),
-        ...(prevManifestCid && { prevManifestCid }),
+        ...(assetId && { assetId }),
+        ...(prevAssetManifestCid && { prevAssetManifestCid }),
         ...(transformMatrix && { transform_matrix: transformMatrix })
     };
 
-    const response = await fetch('/api/generate-asset-node', {
+    const response = await fetch('/api/assets/generate-node', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -95,12 +95,12 @@ export async function generateAsset({
 }
 
 /**
- * POST /api/parametric-version
+ * POST /api/assets/save-variant
  * @param {Object} body
- * @returns {Promise<{newManifestCid, historyEntry}>}
+ * @returns {Promise<{assetManifestCid, variantEntry}>}
  */
 export async function saveParametricVersion(body) {
-    const response = await fetch('/api/parametric-version', {
+    const response = await fetch('/api/assets/save-variant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -134,12 +134,12 @@ export async function getContractAddress() {
 }
 
 /**
- * GET /abi/ArbeskWorld.json
+ * GET /abi/ArbeskAsset.json
  * @returns {Promise<Object|null>} Full Hardhat artifact
  */
 export async function getContractArtifact() {
     try {
-        const res = await fetch('/abi/ArbeskWorld.json');
+        const res = await fetch('/api/abi/ArbeskAsset.json');
         if (!res.ok) return null;
         return await res.json();
     } catch {

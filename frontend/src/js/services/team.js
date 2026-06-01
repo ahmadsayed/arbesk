@@ -1,7 +1,7 @@
 /**
  * Arbesk Team / Editor Management Service
  *
- * Wraps contract calls for listing, adding, and removing world editors.
+ * Wraps contract calls for listing, adding, and removing asset editors.
  */
 
 import { contract, web3 } from '../blockchain/wallet.js';

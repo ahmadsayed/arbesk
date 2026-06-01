@@ -384,14 +384,29 @@ blockchain/artifacts/contracts/ArbeskWorld.sol/ArbeskWorld.json
 
 ## Planned / Not Yet Implemented API
 
-The following are planned for Phase 5 or later and are not current backend routes:
+The following are planned for Phase 5.1 (Token ID-Based Child Worlds) and Phase 5 (Micro-Ledger) or later and are not current backend routes:
 
-- `GET /api/ledger`
-- `GET /api/ledger/stats`
-- `GET /api/health`
-- `GET /api/manifest/:id`
-- `POST /api/manifest`
-- `POST /api/manifest/clone`
+### Phase 5.1 — Token Child World Resolution
+
+| Endpoint | Purpose | Status |
+|---|---|---|
+| `GET /api/resolve-token?chainId=&contract=&tokenId=` | Resolve a token reference to its latest manifest CID (back-end fallback for front-end resolver) | 📋 Planned |
+
+### Phase 5 — Micro-Ledger
+
+| Endpoint | Purpose | Status |
+|---|---|---|
+| `GET /api/ledger?manifestId=` | Query operation history for a manifest | 📋 Planned |
+| `GET /api/ledger/stats` | Aggregate analytics across all manifests | 📋 Planned |
+
+### General
+
+| Endpoint | Purpose | Status |
+|---|---|---|
+| `GET /api/health` | Health check endpoint | 📋 Planned |
+| `GET /api/manifest/:id` | Fetch manifest by internal ID | 📋 Planned |
+| `POST /api/manifest` | Create new manifest | 📋 Planned |
+| `POST /api/manifest/clone` | Clone manifest with deep copy | 📋 Planned |
 
 ---
 

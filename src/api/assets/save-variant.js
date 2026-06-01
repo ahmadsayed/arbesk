@@ -7,11 +7,11 @@ export default function parametricVersion(ipfs) {
 
     router.post('/', async (req, res) => {
         try {
-            const { nodeId, color, scale, prevManifestCid } = req.body;
-            console.log(`[PARAM] nodeId=${nodeId} color=${color || 'none'} scale=${scale ? `${scale.x},${scale.y},${scale.z}` : 'none'} prev=${prevManifestCid}`);
-            if (!nodeId || !prevManifestCid) {
-                console.log(`[PARAM] rejected — nodeId and prevManifestCid required`);
-                return res.status(400).json({ error: 'nodeId and prevManifestCid are required' });
+            const { nodeId, color, scale, prevAssetManifestCid } = req.body;
+            console.log(`[PARAM] nodeId=${nodeId} color=${color || 'none'} scale=${scale ? `${scale.x},${scale.y},${scale.z}` : 'none'} prev=${prevAssetManifestCid}`);
+            if (!nodeId || !prevAssetManifestCid) {
+                console.log(`[PARAM] rejected — nodeId and prevAssetManifestCid required`);
+                return res.status(400).json({ error: 'nodeId and prevAssetManifestCid are required' });
             }
 
             // Validate color
@@ -32,17 +32,18 @@ export default function parametricVersion(ipfs) {
             }
 
             // Read current manifest from IPFS
-            console.log(`[IPFS] cat prev manifest ${prevManifestCid}`);
+            console.log(`[IPFS] cat prev manifest ${prevAssetManifestCid}`);
             let data = '';
-            for await (const file of ipfs.cat(prevManifestCid)) {
+            for await (const file of ipfs.cat(prevAssetManifestCid)) {
                 const buffer = new Uint16Array(file);
                 buffer.forEach(code => { data += String.fromCharCode(code); });
             }
             const manifest = JSON.parse(data);
-            console.log(`[PARAM] loaded manifest version=${manifest.version} nodes=${(manifest.nodes || []).length}`);
+            console.log(`[PARAM] loaded manifest version=${manifest.version} nodes=${(manifest.scene?.nodes || []).length}`);
 
             // Find node
-            const node = manifest.nodes.find(n => n.node_id === nodeId);
+            const nodes = manifest.scene?.nodes || [];
+            const node = nodes.find(n => n.node_id === nodeId);
             if (!node) {
                 console.log(`[PARAM] rejected — node ${nodeId} not found`);
                 return res.status(404).json({ error: `Node ${nodeId} not found in manifest` });
@@ -54,12 +55,12 @@ export default function parametricVersion(ipfs) {
             }
             const srcRef = { ...node.source };
 
-            // Append parametric history entry
-            const nextVersion = node.history.length + 1;
-            const historyEntry = {
+            // Append parametric variant entry
+            const nextVersion = (node.variants || []).length + 1;
+            const variantEntry = {
                 v: nextVersion,
                 timestamp: Date.now(),
-                src: srcRef,
+                source: srcRef,
                 prompt: `Scale ${scale ? `${scale.x}x,${scale.y}x,${scale.z}x` : '1x,1x,1x'}, Color ${color || 'unchanged'}`,
                 provider: 'parametric',
                 type: 'parametric',
@@ -69,19 +70,20 @@ export default function parametricVersion(ipfs) {
                 }
             };
 
-            node.history.push(historyEntry);
+            node.variants = node.variants || [];
+            node.variants.push(variantEntry);
             manifest.version += 1;
-            manifest.prev_manifest_cid = prevManifestCid;
+            manifest.prev_asset_manifest_cid = prevAssetManifestCid;
 
             // Write updated manifest to IPFS
             console.log(`[IPFS] add manifest | version=${manifest.version}`);
-            const { cid: newManifestCid } = await ipfs.add(JSON.stringify(manifest));
-            const newManifestCidStr = newManifestCid.toString();
-            console.log(`[PARAM] success → ${newManifestCidStr} history_v=${historyEntry.v}`);
+            const { cid: newAssetManifestCid } = await ipfs.add(JSON.stringify(manifest));
+            const assetManifestCid = newAssetManifestCid.toString();
+            console.log(`[PARAM] success → ${assetManifestCid} variant_v=${variantEntry.v}`);
 
             res.json({
-                newManifestCid: newManifestCidStr,
-                historyEntry
+                assetManifestCid,
+                variantEntry
             });
         } catch (error) {
             console.error('[PARAM] error:', error.message);

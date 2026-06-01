@@ -17,17 +17,33 @@ html
         .topbar-brand
           img.brand-icon(src="/logo.png", alt="Arbesk Logo")
           span.brand-text Arbesk
-        #manifestHistory.manifest-history-section(hidden)
+        #assetStatus.asset-status
+          span#assetStatusName.asset-status-name No asset open
+          span#assetStatusMeta.asset-status-meta Create or open an asset
+        #assetHistory.asset-history-section(hidden)
           .history-bar
             .history-track-line
         .topbar-actions
-          button#mobileMenuBtn.mobile-menu-toggle(aria-label="Toggle chat")
+          button#mobileMenuBtn.mobile-menu-toggle(aria-label="Toggle create panel")
             svg(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
               line(x1="3" y1="6" x2="21" y2="6")
               line(x1="3" y1="12" x2="21" y2="12")
               line(x1="3" y1="18" x2="21" y2="18")
-          button#newWorldTopBtn.btn-arabesque-secondary.btn-sm.me-2(title="Create a new world") ➕ New
-          button#connectWalletBtn.btn-arabesque-outline.btn-sm.me-2(onclick="connectWallet()") Connect Wallet
+          button#newAssetTopBtn.btn-arabesque-secondary.btn-sm(title="Create a new asset") New Asset
+          #saveAssetSection.topbar-save-section(hidden)
+            button#saveAssetBtn.btn-arabesque-secondary.btn-sm
+              svg.btn-icon(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
+                path(d="M17 21v-8H7v8")
+                path(d="M7 3v5h8")
+              span#saveAssetBtnText Save Draft
+            button#publishAssetBtn.btn-arabesque.btn-sm
+              svg.btn-icon(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                path(d="M12 3v12")
+                path(d="m7 8 5-5 5 5")
+                path(d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4")
+              span#publishAssetBtnText Publish Asset
+          button#connectWalletBtn.btn-arabesque-outline.btn-sm(onclick="connectWallet()") Connect Wallet
           button#disconnectWalletBtn.btn-arabesque-outline.btn-sm.hidden(onclick="disconnectWallet()") Disconnect
 
       .arabesque-lattice-border
@@ -35,81 +51,50 @@ html
       .studio-layout
         aside#chatSidebar.chat-sidebar
           .sidebar-header
-            h3 Conversation
-            button#toggleChatBtn.sidebar-toggle(aria-label="Collapse sidebar")
+            h3 Create
+            button#toggleChatBtn.sidebar-toggle(aria-label="Collapse create panel")
               svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
                 polyline(points="15 18 9 12 15 6")
           .sidebar-body
+            #assetDefinition.asset-definition-section
+              .asset-def-header
+                button#toggleAssetDef.asset-def-toggle(aria-label="Toggle settings")
+                  svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                    polyline(points="9 18 15 12 9 6")
+                  span Settings
+              .asset-def-body(hidden)
+                .control-group
+                  label.form-label Asset Name
+                  #assetNameDisplay.asset-name-display Untitled Asset
+                .control-group
+                  label.form-label(for="providerSelect") Generation Provider
+                  select#providerSelect.form-select
+                    option(value="mock") Mock (Local)
+                    option(value="meshy") Meshy
+                    option(value="tripo3d") Tripo3D
+                    option(value="hunyuan3d") Hunyuan3D
+                #teamPanel.team-section(hidden)
+                  .team-header
+                    h5 Asset Editors
+                    span#teamOwnerBadge.owner-badge(hidden) Owner
+                  #teamList.team-list
+                  .team-add
+                    input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
+                    button#teamAddBtn.btn-arabesque.btn-sm Add Editor
+
             #chatHistory.chat-history
               .chat-welcome
                 .welcome-icon ✦
-                p.welcome-text Welcome to Arbesk
-                p.welcome-sub Describe the 3D asset you envision and watch it take form.
-
-            //- Save & Publish Buttons
-            #saveWorldSection.save-world-section(hidden)
-              .save-publish-stack
-                button#saveWorldBtn.btn-arabesque.btn-block.btn-save
-                  span 💾
-                  span#saveWorldBtnText Save
-                button#publishWorldBtn.btn-arabesque-outline.btn-block.btn-publish
-                  span 🌐
-                  span#publishWorldBtnText Publish
-
-            //- Team Editor Panel (Phase 5)
-            #teamPanel.team-section(hidden)
-              .team-header
-                h5 World Editors
-                span#teamOwnerBadge.owner-badge(hidden) Owner
-              #teamList.team-list
-              .team-add
-                input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
-                button#teamAddBtn.btn-arabesque.btn-sm Add Editor
+                p.welcome-text Create an asset
+                p.welcome-sub Describe the 3D asset you want to generate.
 
             #timeline.timeline-section(hidden)
-              label.timeline-label Version History
+              label.timeline-label Asset Variants
               .timeline-slider-wrap
                 input#versionSlider.timeline-slider(type="range", min="0", max="0", step="1")
                 span#versionLabel.version-badge v1
 
-          //- Asset Definition Panel (Phase 4)
-          #assetDefinition.asset-definition-section
-            .asset-def-header
-              button#toggleAssetDef.asset-def-toggle(aria-label="Toggle asset settings")
-                svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
-                  polyline(points="9 18 15 12 9 6")
-                span Asset Settings
-            .asset-def-body(hidden)
-              .control-group
-                label.form-label(for="assetName") Asset Name
-                input#assetName.form-control(type="text", placeholder="e.g. Workbench")
-              .control-group
-                label.form-label(for="providerSelect") Provider
-                select#providerSelect.form-select
-                  option(value="mock") Mock (Local)
-                  option(value="meshy") Meshy
-                  option(value="tripo3d") Tripo3D
-                  option(value="hunyuan3d") Hunyuan3D
-              .control-group
-                label.form-label Position
-                .vector-inputs
-                  input#posX.form-control(type="number", step="0.1", value="0", placeholder="X")
-                  input#posY.form-control(type="number", step="0.1", value="0", placeholder="Y")
-                  input#posZ.form-control(type="number", step="0.1", value="0", placeholder="Z")
-              .control-group
-                label.form-label Rotation (deg)
-                .vector-inputs
-                  input#rotX.form-control(type="number", step="1", value="0", placeholder="X")
-                  input#rotY.form-control(type="number", step="1", value="0", placeholder="Y")
-                  input#rotZ.form-control(type="number", step="1", value="0", placeholder="Z")
-              .control-group
-                label.form-label Scale
-                .vector-inputs
-                  input#scaleX.form-control(type="number", step="0.1", value="1", placeholder="X")
-                  input#scaleY.form-control(type="number", step="0.1", value="1", placeholder="Y")
-                  input#scaleZ.form-control(type="number", step="0.1", value="1", placeholder="Z")
-
-        button#showSidebarBtn.show-sidebar-btn(aria-label="Show chat sidebar", title="Show chat sidebar")
+        button#showSidebarBtn.show-sidebar-btn(aria-label="Show create panel", title="Show create panel")
           svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
             polyline(points="9 18 15 12 9 6")
 
@@ -118,77 +103,101 @@ html
             .chat-editor-inner
               .editor-frame
                 textarea#promptInput(placeholder="Describe the 3D asset you envision…")
-                button#generateBtn.generate-btn(aria-label="Generate")
+                button#generateBtn.generate-btn(aria-label="Generate asset")
                   span.generate-icon ✦
-                  span.generate-text Generate
+                  span.generate-text Generate Asset
 
           #viewport.viewport
             canvas#renderCanvas
 
-            //- Welcome overlay — TokenID is the only reference; CID is internal
             #welcomeOverlay.welcome-overlay
               .welcome-content
                 .welcome-icon-large ✦
                 h2 Welcome to Arbesk
-                p Start creating 3D fractal worlds.
+                p Create, compose, and publish tokenized 3D assets.
                 .welcome-actions
-                  button#newWorldBtn.btn-arabesque Create New World
-                  p.welcome-hint Connect your wallet to browse your gallery.
+                  button#newAssetBtn.btn-arabesque Start New Asset
+                  p.welcome-hint Generate an asset, open one from your library, or drag an asset into the scene.
+
+            #assetDropOverlay.asset-drop-overlay.hidden
+              .asset-drop-content
+                .asset-drop-icon ⊕
+                p Drop to add linked asset to scene
 
             #waitingOverlay.waiting-overlay.hidden
               .waiting-content
                 .arabesque-spinner
-                p#waitingText.waiting-text Carving your model…
+                p#waitingText.waiting-text Carving your asset…
 
           aside#inspector.inspector-panel(hidden)
             .inspector-header
-              h5 Node Inspector
+              h5 Selection Inspector
               button.btn-close(type="button", aria-label="Close", onclick="document.getElementById('inspector').hidden=true")
             .inspector-body
-              .control-group
-                label.form-label(for="nodeColor") Color
-                input#nodeColor.form-control.form-control-color(type="color", value="#C19A6B")
-              .control-group
-                label.form-label Scale X
-                input#nodeScaleX.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
-              .control-group
-                label.form-label Scale Y
-                input#nodeScaleY.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
-              .control-group
-                label.form-label Scale Z
-                input#nodeScaleZ.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
-              .control-actions
-                button#saveParametric.btn-arabesque Save Parametric Version
-                button#cancelParametric.btn-arabesque-secondary Cancel
+              //- Token Child World Info (shown for child_ref nodes)
+              #tokenChildInfo.inspector-token-child(hidden)
+                .control-group
+                  label.form-label Linked Token
+                  span#tokenChildId.token-child-value —
+                .control-group
+                  label.form-label Contract
+                  span#tokenChildContract.token-child-value —
+                .control-group
+                  label.form-label Chain ID
+                  span#tokenChildChain.token-child-value —
+                .control-group
+                  label.form-label Resolution
+                  span#tokenChildResolution.token-child-value latest
+                .control-group
+                  label.form-label Manifest CID
+                  span#tokenChildCid.token-child-value.token-child-cid —
+              //- Parametric Editor (shown for regular nodes)
+              #parametricEditor
+                .control-group
+                  label.form-label(for="nodeColor") Color
+                  input#nodeColor.form-control.form-control-color(type="color", value="#C19A6B")
+                .control-group
+                  label.form-label Scale X
+                  input#nodeScaleX.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
+                .control-group
+                  label.form-label Scale Y
+                  input#nodeScaleY.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
+                .control-group
+                  label.form-label Scale Z
+                  input#nodeScaleZ.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
+                .control-actions
+                  button#saveParametric.btn-arabesque Save Variant
+                  button#cancelParametric.btn-arabesque-secondary Cancel
 
-        //- Right-side Gallery Panel (TokenID-centric world browser)
-        aside#galleryPanel.gallery-panel.collapsed
-          .gallery-header
-            h3 Gallery
-            button#galleryToggle.gallery-toggle(aria-label="Collapse gallery")
+        aside#assetLibraryPanel.asset-library-panel.collapsed
+          .asset-library-header
+            h3 Asset Library
+            button#assetLibraryToggle.asset-library-toggle(aria-label="Collapse asset library")
               svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
                 polyline(points="9 18 15 12 9 6")
-          #galleryBody.gallery-body
-            p.gallery-empty Connect wallet to view your worlds.
+          #assetLibraryBody.asset-library-body
+            p.asset-library-empty Connect wallet to browse your asset tokens.
 
-        button#showGalleryBtn.show-gallery-btn(aria-label="Show gallery", title="Show gallery", style="display:none")
+        button#showAssetLibraryBtn.show-asset-library-btn(aria-label="Show asset library", title="Show asset library", style="display:none")
           svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
             polyline(points="15 18 9 12 15 6")
 
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")
     script(type="module", src="/js/engine/parametric-preview.js")
+    script(type="module", src="/js/blockchain/token-resolver.js")
     script(type="module", src="/js/blockchain/wallet.js")
     script(type="module", src="/js/services/api.js")
     script(type="module", src="/js/services/team.js")
-    script(type="module", src="/js/ui/team-panel.js")
-    script(type="module", src="/js/ui/gallery.js")
-    script(type="module", src="/js/ui/save-world.js")
-    script(type="module", src="/js/ui/history-browser.js")
-    script(type="module", src="/js/ui/chat-studio.js")
+    script(type="module", src="/js/ui/asset-editors.js")
+    script(type="module", src="/js/ui/asset-library.js")
+    script(type="module", src="/js/ui/asset-save.js")
+    script(type="module", src="/js/ui/asset-history.js")
+    script(type="module", src="/js/ui/create-panel.js")
+    script(type="module", src="/js/ui/asset-drop-zone.js")
     script(type="module").
-      import { initGallery } from '/js/ui/gallery.js';
-      initGallery();
+      import { initAssetLibrary } from '/js/ui/asset-library.js';
+      initAssetLibrary();
 
       document.addEventListener('wallet:connected', () => {
         document.getElementById('connectWalletBtn').classList.add('hidden');

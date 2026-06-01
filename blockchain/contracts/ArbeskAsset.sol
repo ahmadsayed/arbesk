@@ -7,14 +7,13 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
- * @title ArbeskWorld
+ * @title ArbeskAsset
  * @dev Unified PayGo + NFT + Collaboration contract for Arbesk 3D asset platform.
  *      Users pay native FIL to trigger AI mesh generation.
- *      Worlds/assets are minted as ERC721 NFTs with editor collaboration.
+ *      Assets are minted as ERC721 NFTs with editor collaboration.
  *      Parametric edits (color/scale) do NOT use the payment function.
  */
-contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
-
+contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     /// @notice Cost per generation in wei (native FIL).
     /// @dev Default: 0.01 FIL = 10^16 wei. Owner can update.
     uint256 public costPerGeneration = 0.01 ether;
@@ -47,8 +46,8 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         uint256 timestamp
     );
 
-    /// @notice Emitted when a new world NFT is minted.
-    event WorldMinted(
+    /// @notice Emitted when a new asset NFT is minted.
+    event AssetPublished(
         address indexed owner,
         uint256 indexed tokenId,
         string tokenURI
@@ -61,16 +60,21 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     event EditorRemoved(uint256 indexed tokenId, address indexed editor);
 
     /// @notice Emitted when token URI is updated.
-    event TokenURIUpdated(uint256 indexed tokenId, string newTokenURI);
+    event AssetURIUpdated(uint256 indexed tokenId, string newAssetURI);
 
     /// @notice Emitted when treasury wallet is updated.
-    event TreasuryUpdated(address indexed previousWallet, address indexed newWallet);
+    event TreasuryUpdated(
+        address indexed previousWallet,
+        address indexed newWallet
+    );
 
     /// @notice Emitted when generation cost is updated.
     event CostUpdated(uint256 previousCost, uint256 newCost);
 
     /// @param _treasury Initial treasury wallet address.
-    constructor(address _treasury) Ownable(msg.sender) ERC721("ArbeskWorld", "ARBW") {
+    constructor(
+        address _treasury
+    ) Ownable(msg.sender) ERC721("ArbeskAsset", "ARBA") {
         require(_treasury != address(0), "Treasury cannot be zero address");
         developerTreasuryWallet = _treasury;
     }
@@ -86,17 +90,20 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @dev Requires exact `costPerGeneration` FIL value. Forwards 100% to treasury.
      *      Emits `AssetGenerationPaid` for backend indexing.
      */
-    function payForGeneration(bytes32 nodeId, string calldata prompt)
-        external
-        payable
-        nonReentrant
-        whenNotPaused
-    {
+    function payForGeneration(
+        bytes32 nodeId,
+        string calldata prompt
+    ) external payable nonReentrant whenNotPaused {
         require(msg.value == costPerGeneration, "Incorrect payment amount");
-        require(bytes(prompt).length > 0 && bytes(prompt).length <= 500, "Invalid prompt length");
+        require(
+            bytes(prompt).length > 0 && bytes(prompt).length <= 500,
+            "Invalid prompt length"
+        );
         require(nodeId != bytes32(0), "Invalid nodeId");
 
-        bytes32 paymentKey = keccak256(abi.encodePacked(nodeId, msg.sender, block.number));
+        bytes32 paymentKey = keccak256(
+            abi.encodePacked(nodeId, msg.sender, block.number)
+        );
         require(!usedPayments[paymentKey], "Payment already used");
         usedPayments[paymentKey] = true;
 
@@ -119,11 +126,11 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @param sender The payer address.
      * @param blockNum The block number of the payment.
      */
-    function isPaymentUsed(bytes32 nodeId, address sender, uint256 blockNum)
-        external
-        view
-        returns (bool)
-    {
+    function isPaymentUsed(
+        bytes32 nodeId,
+        address sender,
+        uint256 blockNum
+    ) external view returns (bool) {
         bytes32 key = keccak256(abi.encodePacked(nodeId, sender, blockNum));
         return usedPayments[key];
     }
@@ -133,38 +140,39 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Mint a new world NFT.
+     * @notice Mint a new asset NFT.
      * @param uri IPFS CID or URI pointing to the manifest.
      * @param tokenId Unique token identifier.
      * @return The minted tokenId.
      */
-    function mintWorld(string memory uri, uint256 tokenId)
-        public
-        returns (uint256)
-    {
-        require(!_exists(tokenId), "ArbeskWorld: tokenId already minted");
+    function publishAsset(
+        string memory uri,
+        uint256 tokenId
+    ) public returns (uint256) {
+        require(!_exists(tokenId), "ArbeskAsset: tokenId already minted");
 
         _tokenCounts++;
         _mint(msg.sender, tokenId);
         _setTokenURI(tokenId, uri);
         members[tokenId].push(msg.sender);
 
-        emit WorldMinted(msg.sender, tokenId, uri);
+        emit AssetPublished(msg.sender, tokenId, uri);
         return tokenId;
     }
 
     /**
-     * @notice Mint a new world NFT with initial editors.
+     * @notice Mint a new asset NFT with initial editors.
      * @param uri IPFS CID or URI pointing to the manifest.
      * @param tokenId Unique token identifier.
      * @param editors Array of editor addresses to add.
      * @return The minted tokenId.
      */
-    function mintWorld(string memory uri, uint256 tokenId, address[] memory editors)
-        public
-        returns (uint256)
-    {
-        mintWorld(uri, tokenId);
+    function publishAsset(
+        string memory uri,
+        uint256 tokenId,
+        address[] memory editors
+    ) public returns (uint256) {
+        publishAsset(uri, tokenId);
         for (uint256 i = 0; i < editors.length; i++) {
             _addEditor(tokenId, editors[i]);
         }
@@ -174,12 +182,9 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     /**
      * @dev See {IERC721Metadata-tokenURI}.
      */
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override
-        returns (string memory)
-    {
+    function tokenURI(
+        uint256 tokenId
+    ) public view override returns (string memory) {
         _requireOwned(tokenId);
 
         string memory _tokenURI = _tokenURIs[tokenId];
@@ -210,12 +215,18 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @return editorList The list of editor addresses for the token.
      * @dev Convenience function to "reach" a manifest by its token ID.
      */
-    function getWorldManifest(uint256 tokenId)
+    function getAssetManifest(
+        uint256 tokenId
+    )
         public
         view
-        returns (string memory manifestURI, address owner, address[] memory editorList)
+        returns (
+            string memory manifestURI,
+            address owner,
+            address[] memory editorList
+        )
     {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         manifestURI = _tokenURIs[tokenId];
         owner = _ownerOf(tokenId);
         editorList = members[tokenId];
@@ -228,16 +239,16 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     /**
      * @notice Update the token URI. Owner or editor only.
      * @param tokenId The token to update.
-     * @param newTokenURI The new URI (e.g. new manifest CID).
+     * @param newAssetURI The new URI (e.g. new asset manifest CID).
      */
-    function updateTokenURI(uint256 tokenId, string memory newTokenURI) public {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+    function updateAssetURI(uint256 tokenId, string memory newAssetURI) public {
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         require(
             _isEditor(tokenId, msg.sender),
-            "ArbeskWorld: Only owner or editor can update"
+            "ArbeskAsset: Only owner or editor can update"
         );
-        _setTokenURI(tokenId, newTokenURI);
-        emit TokenURIUpdated(tokenId, newTokenURI);
+        _setTokenURI(tokenId, newAssetURI);
+        emit AssetURIUpdated(tokenId, newAssetURI);
     }
 
     /**
@@ -246,10 +257,10 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @param editor Address to add as editor.
      */
     function addEditor(uint256 tokenId, address editor) public {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         require(
             _ownerOf(tokenId) == msg.sender,
-            "ArbeskWorld: Only owner can add editor"
+            "ArbeskAsset: Only owner can add editor"
         );
         _addEditor(tokenId, editor);
     }
@@ -260,10 +271,10 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @param editors Addresses to add as editors.
      */
     function addEditor(uint256 tokenId, address[] memory editors) public {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         require(
             _ownerOf(tokenId) == msg.sender,
-            "ArbeskWorld: Only owner can add editors"
+            "ArbeskAsset: Only owner can add editors"
         );
         for (uint256 i = 0; i < editors.length; i++) {
             _addEditor(tokenId, editors[i]);
@@ -276,10 +287,10 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @param editor Address to remove.
      */
     function removeEditor(uint256 tokenId, address editor) public {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         require(
             _ownerOf(tokenId) == msg.sender,
-            "ArbeskWorld: Only owner can remove editor"
+            "ArbeskAsset: Only owner can remove editor"
         );
         _removeEditor(tokenId, editor);
     }
@@ -289,12 +300,10 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @param tokenId The token to query.
      * @return Array of editor addresses.
      */
-    function listEditors(uint256 tokenId)
-        public
-        view
-        returns (address[] memory)
-    {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+    function listEditors(
+        uint256 tokenId
+    ) public view returns (address[] memory) {
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         return members[tokenId];
     }
 
@@ -315,11 +324,10 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         return _ownerOf(tokenId) != address(0);
     }
 
-    function _isEditor(uint256 tokenId, address sender)
-        internal
-        view
-        returns (bool)
-    {
+    function _isEditor(
+        uint256 tokenId,
+        address sender
+    ) internal view returns (bool) {
         for (uint256 i = 0; i < members[tokenId].length; i++) {
             if (members[tokenId][i] == sender) {
                 return true;
@@ -344,7 +352,9 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         }
         if (memberIdx != -1) {
             address temp = members[tokenId][members[tokenId].length - 1];
-            members[tokenId][members[tokenId].length - 1] = members[tokenId][uint256(memberIdx)];
+            members[tokenId][members[tokenId].length - 1] = members[tokenId][
+                uint256(memberIdx)
+            ];
             members[tokenId][uint256(memberIdx)] = temp;
             members[tokenId].pop();
         }
@@ -357,8 +367,12 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
             }
         }
         if (participantIdx != -1) {
-            uint256 temp = tokensIParticipate[editor][tokensIParticipate[editor].length - 1];
-            tokensIParticipate[editor][tokensIParticipate[editor].length - 1] = tokensIParticipate[editor][uint256(participantIdx)];
+            uint256 temp = tokensIParticipate[editor][
+                tokensIParticipate[editor].length - 1
+            ];
+            tokensIParticipate[editor][
+                tokensIParticipate[editor].length - 1
+            ] = tokensIParticipate[editor][uint256(participantIdx)];
             tokensIParticipate[editor][uint256(participantIdx)] = temp;
             tokensIParticipate[editor].pop();
         }
@@ -367,7 +381,7 @@ contract ArbeskWorld is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     }
 
     function _setTokenURI(uint256 tokenId, string memory uri) internal {
-        require(_exists(tokenId), "ArbeskWorld: nonexistent token");
+        require(_exists(tokenId), "ArbeskAsset: nonexistent token");
         _tokenURIs[tokenId] = uri;
     }
 

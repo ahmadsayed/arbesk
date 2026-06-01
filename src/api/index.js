@@ -6,8 +6,8 @@ import fs from "fs";
 import { create } from "ipfs-http-client";
 import Web3 from "web3";
 
-import generateAssetNode from "./generate-asset-node.js";
-import parametricVersion from "./parametric-version.js";
+import generateAssetNode from "./assets/generate-node.js";
+import parametricVersion from "./assets/save-variant.js";
 import abiRouter from "./abi-router.js";
 import rateLimit from "./rate-limiter.js";
 
@@ -99,20 +99,20 @@ export default () => {
     res.json({ contract_address: CONTRACT_ADDRESS });
   });
 
-  api.post("/push-ipfs", async (req, res) => {
+  api.post("/assets/publish-manifest", async (req, res) => {
     try {
       const manifest = req.body;
       await persistEmbeddedThumbnail(manifest);
 
       const payload = JSON.stringify(manifest);
       console.log(
-        `[IPFS] add /push-ipfs | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
+        `[IPFS] add /assets/publish-manifest | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
       );
       const { cid } = await ipfs.add(payload);
-      console.log(`[IPFS] add /push-ipfs | cid=${cid}`);
+      console.log(`[IPFS] add /assets/publish-manifest | cid=${cid}`);
       res.send(cid.toString());
     } catch (error) {
-      console.error("[IPFS] /push-ipfs error:", error.message);
+      console.error("[IPFS] /assets/publish-manifest error:", error.message);
       res.status(500).json({ error: error.message });
     }
   });
@@ -121,7 +121,7 @@ export default () => {
    * Save a manifest to IPFS without any blockchain interaction.
    * Handles version chaining automatically.
    */
-  api.post("/save-manifest", async (req, res) => {
+  api.post("/assets/save-draft", async (req, res) => {
     try {
       const manifest = req.body;
       if (!manifest || typeof manifest !== "object") {
@@ -130,9 +130,11 @@ export default () => {
       }
 
       // Ensure version fields are present
-      if (!manifest.manifest_id) {
-        manifest.manifest_id = `manifest_${Date.now()}`;
+      if (!manifest.asset_id) {
+        manifest.asset_id = `asset_${Date.now()}`;
       }
+      manifest.scene ||= { nodes: [] };
+      manifest.scene.nodes ||= [];
       if (typeof manifest.version !== "number") {
         manifest.version = 1;
       }
@@ -140,13 +142,13 @@ export default () => {
       await persistEmbeddedThumbnail(manifest);
 
       console.log(
-        `[SAVE] manifest_id=${manifest.manifest_id} version=${manifest.version} nodes=${(manifest.nodes || []).length} prev=${manifest.prev_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"}`,
+        `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"}`,
       );
       const { cid } = await ipfs.add(JSON.stringify(manifest));
-      console.log(`[SAVE] manifest_id=${manifest.manifest_id} → cid=${cid}`);
+      console.log(`[SAVE] asset_id=${manifest.asset_id} → cid=${cid}`);
       res.json({
         cid: cid.toString(),
-        manifest_id: manifest.manifest_id,
+        asset_id: manifest.asset_id,
         version: manifest.version,
       });
     } catch (error) {
@@ -158,9 +160,9 @@ export default () => {
   // Mount ABI router
   api.use("/abi", abiRouter());
 
-  api.use("/generate-asset-node", generateAssetNode(ipfs));
+  api.use("/assets/generate-node", generateAssetNode(ipfs));
 
-  api.use("/parametric-version", parametricVersion(ipfs));
+  api.use("/assets/save-variant", parametricVersion(ipfs));
 
   async function getFromIPFS(cid) {
     console.log(`[IPFS] cat ${cid}`);
@@ -176,10 +178,10 @@ export default () => {
   }
 
   /**
-   * Walk the manifest chain backwards via prev_manifest_cid links.
+   * Walk the manifest chain backwards via prev_asset_manifest_cid links.
    * Returns lightweight summaries of each version.
    */
-  api.get("/manifest-chain", async (req, res) => {
+  api.get("/assets/history", async (req, res) => {
     try {
       const { cid } = req.query;
       if (!cid) {
@@ -205,18 +207,19 @@ export default () => {
         try {
           const raw = await getFromIPFS(currentCid);
           const manifest = JSON.parse(raw);
-          const firstNode = manifest.nodes?.[0];
-          const timestamp = firstNode?.history?.[0]?.timestamp || null;
+          const nodes = manifest.scene?.nodes || [];
+          const firstNode = nodes[0];
+          const timestamp = firstNode?.variants?.[0]?.timestamp || null;
 
           chain.unshift({
             cid: currentCid,
             version: manifest.version || 1,
             name: manifest.name || null,
-            nodeCount: (manifest.nodes || []).length,
+            nodeCount: nodes.length,
             timestamp,
           });
 
-          currentCid = manifest.prev_manifest_cid || null;
+          currentCid = manifest.prev_asset_manifest_cid || null;
         } catch (e) {
           console.warn(`[CHAIN] walk failed at ${currentCid}: ${e.message}`);
           break;
@@ -235,9 +238,9 @@ export default () => {
 
   /**
    * Fetch a manifest by TokenID.
-   * Queries the ArbeskWorld contract for tokenURI, then fetches the manifest from IPFS.
+   * Queries the ArbeskAsset contract for tokenURI, then fetches the manifest from IPFS.
    */
-  api.get("/manifest-by-token/:tokenId", async (req, res) => {
+  api.get("/assets/by-token/:tokenId", async (req, res) => {
     try {
       const { tokenId } = req.params;
       if (!tokenId) {
@@ -257,18 +260,16 @@ export default () => {
       try {
         const abiPath = path.resolve(
           __dirname,
-          "../../blockchain/artifacts/contracts/ArbeskWorld.sol/ArbeskWorld.json",
+          "../../blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json",
         );
         const abiRaw = fs.readFileSync(abiPath, "utf-8");
         abi = JSON.parse(abiRaw).abi;
       } catch (e) {
         console.log(`[TOKEN] ABI not found — compile contracts first`);
-        return res
-          .status(503)
-          .json({
-            error:
-              "Contract ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile",
-          });
+        return res.status(503).json({
+          error:
+            "Contract ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile",
+        });
       }
 
       const contract = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
