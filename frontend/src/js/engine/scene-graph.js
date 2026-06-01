@@ -1139,4 +1139,11 @@ export {
   hideWelcomeOverlay,
   getPendingChildRefs,
   clearPendingChildRefs,
+  // Pure helpers exported for testing
+  getManifestNodes,
+  getRenderableMeshes,
+  getWorldBounds,
+  centerImportedAsset,
+  applyDefaultMaterial,
+  DEFAULT_WOOD_COLOR,
 };

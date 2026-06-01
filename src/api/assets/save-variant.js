@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { createLedgerEntry } from "../../ledger/schema.js";
 import { appendEntry } from "../../ledger/store.js";
+import { getSceneNodes, bumpManifestVersion } from "../manifest-utils.js";
+import { catManifest } from "../ipfs-utils.js";
 
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{6})$/;
 
@@ -49,37 +51,14 @@ export default function parametricVersion(ipfs) {
       }
 
       // Read current manifest from IPFS with 15s timeout
-      console.log(`[IPFS] cat prev manifest ${prevAssetManifestCid}`);
-      const catController = new AbortController();
-      const catTimeoutId = setTimeout(() => catController.abort(), 15000);
-      let data;
-      try {
-        const chunks = [];
-        for await (const chunk of ipfs.cat(prevAssetManifestCid, {
-          signal: catController.signal,
-        })) {
-          chunks.push(chunk);
-        }
-        // Decode chunks: Uint16Array (mock/test) or Uint8Array/Buffer (real)
-        data = chunks
-          .map((chunk) => {
-            if (chunk instanceof Uint16Array) {
-              return String.fromCharCode(...chunk);
-            }
-            if (typeof chunk === "string") return chunk;
-            return new TextDecoder().decode(chunk);
-          })
-          .join("");
-      } finally {
-        clearTimeout(catTimeoutId);
-      }
+      const data = await catManifest(ipfs, prevAssetManifestCid);
       const manifest = JSON.parse(data);
       console.log(
-        `[PARAM] loaded manifest version=${manifest.version} nodes=${(manifest.scene?.nodes || []).length}`,
+        `[PARAM] loaded manifest version=${manifest.version} nodes=${getSceneNodes(manifest).length}`,
       );
 
       // Find node
-      const nodes = manifest.scene?.nodes || [];
+      const nodes = getSceneNodes(manifest);
       const node = nodes.find((n) => n.node_id === nodeId);
       if (!node) {
         console.log(`[PARAM] rejected — node ${nodeId} not found`);
@@ -93,9 +72,7 @@ export default function parametricVersion(ipfs) {
       if (color) node.appearance.color = color;
       if (scale) node.appearance.scale = scale;
 
-      manifest.version += 1;
-      manifest.timestamp = Date.now();
-      manifest.prev_asset_manifest_cid = prevAssetManifestCid;
+      bumpManifestVersion(manifest, prevAssetManifestCid);
 
       // Write updated manifest to IPFS
       console.log(`[IPFS] add manifest | version=${manifest.version}`);

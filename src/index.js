@@ -3,12 +3,17 @@ import path from "path";
 import http from "http";
 import url from "url";
 import * as dotenv from "dotenv";
-import api from "./api/index.js";
 import bodyParser from "body-parser";
 import { loadLedger } from "./ledger/store.js";
 
 const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
+
+// Load .env files BEFORE any module that reads process.env (config.js)
 dotenv.config({ path: path.resolve(__dirnameRoot, "../.env") });
+dotenv.config({ path: path.resolve(__dirnameRoot, "../blockchain/.env") });
+
+// Now safe to import — config.js reads from process.env which is populated
+const { default: api } = await import("./api/index.js");
 
 export const app = express();
 const port = process.env.PORT || 9090;

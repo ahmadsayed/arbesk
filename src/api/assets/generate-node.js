@@ -1,30 +1,15 @@
 import { Router } from "express";
-import Web3 from "web3";
-import path from "path";
-import url from "url";
-import * as dotenv from "dotenv";
-import MockAdapter from "../adapters/mock-adapter.js";
+import { CONTRACT_ADDRESS, API_URL, web3 } from "../../config.js";
+import { mockGenerate } from "../adapters/mock-adapter.js";
 import authenticate from "../authentication.js";
 import rateLimit from "../rate-limiter.js";
 import { createLedgerEntry } from "../../ledger/schema.js";
 import { appendEntry } from "../../ledger/store.js";
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../blockchain/.env") });
+import { getSceneNodes, bumpManifestVersion } from "../manifest-utils.js";
+import { catManifest } from "../ipfs-utils.js";
 
-const API_URL =
-  process.env.API_URL || process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545";
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const web3 = new Web3(API_URL);
-
-const mockAdapter = new MockAdapter();
 const usedTxHashes = new Set();
-
-function getSceneNodes(manifest) {
-  manifest.scene ||= { nodes: [] };
-  manifest.scene.nodes ||= [];
-  return manifest.scene.nodes;
-}
 
 export default function generateAssetNode(ipfs) {
   const router = Router();
@@ -114,7 +99,7 @@ export default function generateAssetNode(ipfs) {
         let result;
         if (process.env.MOCK_3D_GENERATION === "true") {
           console.log(`[GEN] using MOCK adapter for "${prompt}"`);
-          result = await mockAdapter.generate(prompt);
+          result = await mockGenerate(prompt);
           console.log(
             `[GEN] mock returned provider=${result.provider || "mock"} size=${result.data?.length || result.buffer?.length || "?"} bytes`,
           );
@@ -139,13 +124,7 @@ export default function generateAssetNode(ipfs) {
             console.log(
               `[GEN] reading previous asset manifest ${prevAssetManifestCid}`,
             );
-            let data = "";
-            for await (const file of ipfs.cat(prevAssetManifestCid)) {
-              const buffer = new Uint16Array(file);
-              buffer.forEach((code) => {
-                data += String.fromCharCode(code);
-              });
-            }
+            const data = await catManifest(ipfs, prevAssetManifestCid);
             manifest = JSON.parse(data);
             console.log(
               `[GEN] previous manifest loaded — version=${manifest.version} nodes=${getSceneNodes(manifest).length}`,
@@ -205,9 +184,7 @@ export default function generateAssetNode(ipfs) {
 
         node.source = source;
         node.appearance = { color: null, scale: { x: 1, y: 1, z: 1 } };
-        manifest.version = (manifest.version || 0) + 1;
-        manifest.timestamp = Date.now();
-        manifest.prev_asset_manifest_cid = prevAssetManifestCid || null;
+        bumpManifestVersion(manifest, prevAssetManifestCid || null);
 
         console.log(
           `[IPFS] add asset manifest | version=${manifest.version} nodes=${nodes.length}`,

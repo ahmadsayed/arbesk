@@ -11,6 +11,7 @@ import {
   getPendingChildRefs,
   clearPendingChildRefs,
 } from "../engine/scene-graph.js";
+import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 
 const saveSection = document.getElementById("saveAssetSection");
 const saveBtn = document.getElementById("saveAssetBtn");
@@ -49,13 +50,6 @@ function updateButtonState() {
       ? "Update the asset token URI to the latest manifest CID"
       : "Publish this asset as a token";
   }
-}
-
-function updateUrlAsset(tokenId) {
-  const url = new URL(window.location);
-  url.searchParams.delete("manifest");
-  url.searchParams.set("asset", String(tokenId));
-  window.history.pushState({}, "", url);
 }
 
 async function fetchAssetName(tokenId) {
@@ -170,14 +164,7 @@ async function onSaveAssetDraft() {
     // Update URL to point to the latest draft manifest so the user sees
     // their current work. tokenID-based loading (Publish) returns the
     // on-chain tokenURI which only updates on Publish, not Save.
-    const url = new URL(window.location);
-    url.searchParams.set("manifest", cid);
-    if (window.activeAssetTokenId) {
-      url.searchParams.set("asset", String(window.activeAssetTokenId));
-    } else {
-      url.searchParams.delete("asset");
-    }
-    window.history.pushState({}, "", url);
+    updateUrlManifest(cid, window.activeAssetTokenId || null);
 
     document.dispatchEvent(
       new CustomEvent("asset:draftSaved", { detail: { cid } })

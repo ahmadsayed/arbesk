@@ -2,12 +2,17 @@
  * Arbesk Asset Library — token-centric browser for owned and shared assets.
  */
 
-import { loadAssetManifest, clearScene } from "../engine/scene-graph.js";
+import {
+  loadAssetManifest,
+  clearScene,
+  hideWelcomeOverlay,
+} from "../engine/scene-graph.js";
 import { contract as walletContract } from "../blockchain/wallet.js";
 import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
+import { updateUrlAsset } from "../services/url-utils.js";
 
 let assetLibraryPanel = null;
 let assetLibraryBody = null;
@@ -78,18 +83,6 @@ async function openAssetByTokenId(tokenId) {
     console.error("Failed to open asset by Token ID:", err);
     alert(`Failed to open asset #${tokenId}`);
   }
-}
-
-function hideWelcomeOverlay() {
-  const overlay = document.getElementById("welcomeOverlay");
-  if (overlay) overlay.hidden = true;
-}
-
-function updateUrlAsset(tokenId) {
-  const url = new URL(window.location);
-  url.searchParams.delete("manifest");
-  url.searchParams.set("asset", String(tokenId));
-  window.history.pushState({}, "", url);
 }
 
 function renderAssetLibrary(owned, shared) {

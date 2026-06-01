@@ -1,10 +1,15 @@
 import { Router } from "express";
 import path from "path";
 import url from "url";
-import * as dotenv from "dotenv";
 import fs from "fs";
 import { create } from "ipfs-http-client";
-import Web3 from "web3";
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+// Dynamic import to ensure process.env is populated before config.js reads it.
+// api/index.js is loaded via dynamic import() from index.js after dotenv runs.
+const { CONTRACT_ADDRESS, ASSETS_IPFS, IPFS_API_URL, HARDHAT_RPC_URL, web3 } =
+  await import("../config.js");
 
 import generateAssetNode from "./assets/generate-node.js";
 import parametricVersion from "./assets/save-variant.js";
@@ -13,16 +18,8 @@ import rateLimit from "./rate-limiter.js";
 import ledgerRouter from "./ledger.js";
 import { createLedgerEntry } from "../ledger/schema.js";
 import { appendEntry } from "../ledger/store.js";
-
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-dotenv.config({ path: __dirname + "/../../blockchain/.env" });
-
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const ASSETS_IPFS = process.env.ASSETS_IPFS;
-const IPFS_API_URL = process.env.IPFS_API_URL || "http://127.0.0.1:5001";
-const HARDHAT_RPC_URL = process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545";
-
-const web3 = new Web3(HARDHAT_RPC_URL);
+import { getSceneNodes } from "./manifest-utils.js";
+import { catManifest } from "./ipfs-utils.js";
 
 const ipfs = create(new URL(IPFS_API_URL));
 
@@ -156,8 +153,7 @@ export default () => {
       if (!manifest.asset_id) {
         manifest.asset_id = `asset_${Date.now()}`;
       }
-      manifest.scene ||= { nodes: [] };
-      manifest.scene.nodes ||= [];
+      getSceneNodes(manifest); // ensure .scene and .nodes exist
       if (typeof manifest.version !== "number") {
         manifest.version = 1;
       }
@@ -208,31 +204,7 @@ export default () => {
   api.use("/assets/save-variant", parametricVersion(ipfs));
 
   async function getFromIPFS(cid) {
-    console.log(`[IPFS] cat ${cid}`);
-    const catController = new AbortController();
-    const catTimeoutId = setTimeout(() => catController.abort(), 15000);
-    try {
-      const chunks = [];
-      for await (const chunk of ipfs.cat(cid, {
-        signal: catController.signal,
-      })) {
-        chunks.push(chunk);
-      }
-      // Decode chunks: Uint16Array (mock/test) or Uint8Array/Buffer (real)
-      const data = chunks
-        .map((chunk) => {
-          if (chunk instanceof Uint16Array) {
-            return String.fromCharCode(...chunk);
-          }
-          if (typeof chunk === "string") return chunk;
-          return new TextDecoder().decode(chunk);
-        })
-        .join("");
-      console.log(`[IPFS] cat ${cid} → ${data.length} chars`);
-      return data;
-    } finally {
-      clearTimeout(catTimeoutId);
-    }
+    return catManifest(ipfs, cid);
   }
 
   /**
@@ -265,7 +237,7 @@ export default () => {
         try {
           const raw = await getFromIPFS(currentCid);
           const manifest = JSON.parse(raw);
-          const nodes = manifest.scene?.nodes || [];
+          const nodes = getSceneNodes(manifest);
           const firstNode = nodes[0];
           const timestamp = manifest.timestamp || null;
 
