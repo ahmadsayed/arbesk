@@ -375,16 +375,16 @@ async function payForGeneration(nodeId, prompt) {
     const tx = c.methods.payForGeneration(nodeIdBytes32, prompt);
     console.log("[PAY] estimating gas for payForGeneration...");
     const gas = await tx.estimateGas({
-    console.log("[PAY] estimated gas =", gas, "→ using", Math.floor(Number(gas) * 1.2));
       from: window.walletAddress,
       value: cost,
     });
+    console.log("[PAY] estimated gas =", gas, "-> using", Math.floor(Number(gas) * 1.2));
     const receipt = await tx.send({
-    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
       from: window.walletAddress,
       value: cost,
       gas: Math.floor(Number(gas) * 1.2),
     });
+    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
 
     document.dispatchEvent(
       new CustomEvent("wallet:generationPaid", {
@@ -459,9 +459,7 @@ async function publishAsset(tokenURI, tokenId) {
   try {
     const tx = c.methods.publishAsset(tokenURI, tokenId);
     const gas = await tx.estimateGas({ from: window.walletAddress });
-    console.log("[PAY] estimated gas =", gas, "→ using", Math.floor(Number(gas) * 1.2));
     const receipt = await tx.send({
-    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
       from: window.walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
@@ -496,9 +494,7 @@ async function updateAssetURI(tokenId, newTokenURI) {
   try {
     const tx = c.methods.updateAssetURI(tokenId, newTokenURI);
     const gas = await tx.estimateGas({ from: window.walletAddress });
-    console.log("[PAY] estimated gas =", gas, "→ using", Math.floor(Number(gas) * 1.2));
     const receipt = await tx.send({
-    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
       from: window.walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
@@ -526,9 +522,7 @@ async function addEditor(tokenId, editorAddress) {
   try {
     const tx = c.methods.addEditor(tokenId, editorAddress);
     const gas = await tx.estimateGas({ from: window.walletAddress });
-    console.log("[PAY] estimated gas =", gas, "→ using", Math.floor(Number(gas) * 1.2));
     const receipt = await tx.send({
-    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
       from: window.walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
@@ -556,9 +550,7 @@ async function removeEditor(tokenId, editorAddress) {
   try {
     const tx = c.methods.removeEditor(tokenId, editorAddress);
     const gas = await tx.estimateGas({ from: window.walletAddress });
-    console.log("[PAY] estimated gas =", gas, "→ using", Math.floor(Number(gas) * 1.2));
     const receipt = await tx.send({
-    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
       from: window.walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
