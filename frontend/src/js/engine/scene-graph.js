@@ -1,8 +1,8 @@
 /**
- * Arbesk Scene Graph Parser
+ * Arbesk Scene Graph
  *
- * Loads a fractal manifest from IPFS and recursively builds a Babylon.js scene.
- * Supports both raw GLB binaries and CID-referenced glTF JSON.
+ * Loads a fractal manifest from IPFS and recursively builds a Babylon.js state.scene.
+ * Re-exports from sub-modules for backward compatibility.
  */
 
 import {
@@ -16,40 +16,57 @@ import {
 } from "../blockchain/token-resolver.js";
 import { applyColor, applyScale } from "./time-travel.js";
 
-const DEFAULT_WOOD_COLOR = "#C19A6B"; // Light wooden color
-const MAX_CHILD_WORLD_DEPTH = 5;
-const PLACEHOLDER_COLOR = "#E8D5B7"; // Warm sand for placeholders
-const ERROR_PLACEHOLDER_COLOR = "#CC6666"; // Muted red for error placeholders
+import { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
 
-/** @type {BABYLON.Engine} */
-let engine = null;
-/** @type {BABYLON.Scene} */
-let scene = null;
-/** @type {Map<string, BABYLON.TransformNode>} */
-const nodeAnchors = new Map();
-/** @type {Map<string, BABYLON.AbstractMesh[]>} */
-const nodeMeshes = new Map();
-/** @type {BABYLON.TransformNode|null} */
-let rootSceneAnchor = null;
+import {
+  extractCid,
+  detectAssetFormat,
+  getManifestNodes,
+  applyTransformMatrix,
+  applyDefaultMaterial,
+  getRenderableMeshes,
+  getWorldBounds,
+  centerImportedAsset,
+} from "./transforms.js";
 
-/** @type {Array<Object>} Pending child_ref nodes to be saved on next save/publish */
-const pendingChildRefs = [];
+import { createPlaceholder, disposePlaceholder } from "./placeholders.js";
+import {
+  disposeNode,
+  clearScene,
+  clearPendingChildRefs,
+  getPendingChildRefs,
+} from "./cleanup.js";
 
-/** @type {BABYLON.StandardMaterial|null} Shared default material for meshes without explicit materials */
-let defaultWoodMaterial = null;
+// Re-export state and constants
+export { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
 
-/** @type {Function|null} Resize handler reference for cleanup */
-let resizeEngineHandler = null;
+// Re-export transforms
+export {
+  extractCid,
+  detectAssetFormat,
+  getManifestNodes,
+  applyTransformMatrix,
+  applyDefaultMaterial,
+  getRenderableMeshes,
+  getWorldBounds,
+  centerImportedAsset,
+} from "./transforms.js";
 
-/** @type {ResizeObserver|null} ResizeObserver reference for cleanup */
-let resizeObserverInstance = null;
+// Re-export placeholders (internal use)
+export { createPlaceholder, disposePlaceholder } from "./placeholders.js";
 
-/** @type {Function|null} Pointer observable callback reference for cleanup */
-let pointerObservableCallback = null;
+// Re-export cleanup
+export {
+  disposeNode,
+  clearScene,
+  clearPendingChildRefs,
+  getPendingChildRefs,
+} from "./cleanup.js";
 
-/**
- * Initialize the Babylon.js engine and scene.
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// Engine initialization
+// ═══════════════════════════════════════════════════════════════════════════
+
 function initEngine() {
   const canvas = document.getElementById("renderCanvas");
   if (!canvas) {
@@ -57,81 +74,69 @@ function initEngine() {
     return;
   }
 
-  engine = new BABYLON.Engine(canvas, true, {
+  state.engine = new BABYLON.Engine(canvas, true, {
     preserveDrawingBuffer: true,
     stencil: true,
   });
-  scene = new BABYLON.Scene(engine);
-  scene.clearColor = new BABYLON.Color4(0.05, 0.05, 0.08, 1);
 
-  // Camera
+  state.scene = new BABYLON.Scene(state.engine);
+  state.scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.14, 1);
+
+  // ArcRotateCamera for orbit controls
   const camera = new BABYLON.ArcRotateCamera(
     "camera",
     -Math.PI / 2,
-    Math.PI / 2.5,
-    10,
+    Math.PI / 3,
+    15,
     BABYLON.Vector3.Zero(),
-    scene
+    state.scene
   );
+  camera.lowerRadiusLimit = 2;
+  camera.upperRadiusLimit = 50;
   camera.attachControl(canvas, true);
-  camera.wheelPrecision = 50;
 
-  // Lighting
   const hemiLight = new BABYLON.HemisphericLight(
     "hemiLight",
     new BABYLON.Vector3(0, 1, 0),
-    scene
+    state.scene
   );
   hemiLight.intensity = 0.7;
 
   const dirLight = new BABYLON.DirectionalLight(
     "dirLight",
-    new BABYLON.Vector3(-1, -2, -1),
-    scene
+    new BABYLON.Vector3(-0.5, -1, -0.5),
+    state.scene
   );
-  dirLight.position = new BABYLON.Vector3(20, 40, 20);
-  dirLight.intensity = 0.6;
+  dirLight.intensity = 0.5;
 
-  // Resize whenever the browser or studio panels change the canvas container size.
-  resizeEngineHandler = () => {
-    if (!engine) return;
-    engine.resize();
-  };
+  state.engine.runRenderLoop(() => state.scene.render());
 
-  window.addEventListener("resize", resizeEngineHandler);
+  window.addEventListener("resize", () => state.engine.resize());
+  state.resizeEngineHandler = () => state.engine.resize();
+  state.resizeObserverInstance = new ResizeObserver(() =>
+    state.engine.resize()
+  );
+  state.resizeObserverInstance.observe(canvas);
 
-  const viewport = document.getElementById("viewport") || canvas.parentElement;
-  if (window.ResizeObserver && viewport) {
-    resizeObserverInstance = new ResizeObserver(() => {
-      requestAnimationFrame(resizeEngineHandler);
-    });
-    resizeObserverInstance.observe(viewport);
-  }
-
-  // Click handling for node selection
-  pointerObservableCallback = (pointerInfo) => {
-    if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
-      const pickResult = scene.pick(scene.pointerX, scene.pointerY);
-      if (pickResult.hit && pickResult.pickedMesh) {
-        const mesh = pickResult.pickedMesh;
-        let target = mesh;
-        while (target && !target.metadata?.nodeId && target.parent) {
-          target = target.parent;
-        }
-        if (target?.metadata?.nodeId) {
+  // Click-to-select
+  state.scene.onPointerObservable.add((pointerInfo) => {
+    const pickResult = pointerInfo.pickInfo;
+    if (pickResult.hit && pickResult.pickedMesh) {
+      const mesh = pickResult.pickedMesh;
+      let target = mesh;
+      while (target) {
+        if (target.metadata?.nodeId) {
           selectNode(target.metadata.nodeId, target);
+          return;
         }
+        target = target.parent;
       }
     }
-  };
-  scene.onPointerObservable.add(pointerObservableCallback);
+  }, BABYLON.PointerEventTypes.POINTERPICK);
 
-  engine.runRenderLoop(() => scene.render());
+  state.pointerObservableCallback = null; // managed by Babylon internally
 }
 
-/**
- * Select a node and dispatch the node:selected event.
- */
 function selectNode(nodeId, mesh) {
   window.selectedNodeId = nodeId;
   document.dispatchEvent(
@@ -141,54 +146,10 @@ function selectNode(nodeId, mesh) {
   );
 }
 
-/**
- * Extract a CID from a source reference.
- */
-function extractCid(src) {
-  if (src && typeof src === "object" && src.cid) {
-    return src.cid;
-  }
-  return src;
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Asset loading
+// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Detect the asset format from its source reference.
- */
-function detectAssetFormat(src) {
-  if (src && typeof src === "object" && src.format) {
-    return src.format.toLowerCase();
-  }
-  return "gltf";
-}
-
-/**
- * Apply a 4x4 column-major transform matrix to a mesh or transform node.
- */
-function applyTransformMatrix(meshOrNode, matrixArray) {
-  if (!matrixArray || matrixArray.length !== 16) return;
-
-  const matrix = BABYLON.Matrix.FromValues(...matrixArray);
-  const decomposed = matrix.decompose(
-    BABYLON.Vector3.Zero(),
-    BABYLON.Quaternion.Identity(),
-    BABYLON.Vector3.Zero()
-  );
-
-  // decompose returns { scale, rotation, translation }
-  // Babylon's Matrix.decompose signature: (scale, rotation, translation)
-  const scale = new BABYLON.Vector3();
-  const rotation = new BABYLON.Quaternion();
-  const translation = new BABYLON.Vector3();
-  matrix.decompose(scale, rotation, translation);
-
-  meshOrNode.scaling = scale;
-  meshOrNode.rotationQuaternion = rotation;
-  meshOrNode.position = translation;
-}
-
-/**
- * Load a glTF or GLB asset into the scene under a parent node.
- */
 async function loadAsset(src, parentNode, nodeId) {
   const cid = extractCid(src);
   const format = detectAssetFormat(src);
@@ -196,8 +157,6 @@ async function loadAsset(src, parentNode, nodeId) {
 
   try {
     if (format === "glb") {
-      // Raw GLB path: fetch binary blob from browser-backed IPFS cache.
-      // This remains on-demand only: nothing is cached until the user opens it.
       const blob = await getBlobFromRemoteIPFS(cid);
       console.log(
         `[SCENE] GLB fetched | cid=${cid} size=${blob.size} bytes | type=${blob.type}`
@@ -208,7 +167,7 @@ async function loadAsset(src, parentNode, nodeId) {
         "",
         blobUrl,
         "",
-        scene,
+        state.scene,
         null,
         ".glb"
       );
@@ -223,7 +182,6 @@ async function loadAsset(src, parentNode, nodeId) {
       applyDefaultMaterial(result.meshes);
       return result.meshes;
     } else {
-      // glTF JSON path: fetch JSON, resolve CIDs, serve via Blob URL
       console.log(`[SCENE] fetching glTF JSON from gateway | cid=${cid}`);
       const gltfJson = await getFromRemoteIPFS(cid);
       console.log(
@@ -236,7 +194,6 @@ async function loadAsset(src, parentNode, nodeId) {
       const gltfString = JSON.stringify(resolvedGltf);
       console.log(`[SCENE] glTF stringified | chars=${gltfString.length}`);
 
-      // Use Blob URL instead of data URI to avoid browser size limits
       const gltfBlob = new Blob([gltfString], { type: "application/json" });
       const blobUrl = URL.createObjectURL(gltfBlob);
 
@@ -244,7 +201,7 @@ async function loadAsset(src, parentNode, nodeId) {
         "",
         blobUrl,
         "",
-        scene,
+        state.scene,
         null,
         ".gltf"
       );
@@ -261,11 +218,10 @@ async function loadAsset(src, parentNode, nodeId) {
     }
   } catch (error) {
     console.error(`[SCENE] FAILED to load asset for node ${nodeId}:`, error);
-    // Create a fallback placeholder mesh with default wood color
     const box = BABYLON.MeshBuilder.CreateBox(
       `placeholder_${nodeId}`,
       { size: 1 },
-      scene
+      state.scene
     );
     box.parent = parentNode;
     box.metadata = { nodeId };
@@ -274,131 +230,6 @@ async function loadAsset(src, parentNode, nodeId) {
   }
 }
 
-/**
- * Apply default light wooden material to meshes that have no explicit color.
- */
-function applyDefaultMaterial(meshes) {
-  const woodColor = BABYLON.Color3.FromHexString(DEFAULT_WOOD_COLOR);
-  if (!defaultWoodMaterial) {
-    defaultWoodMaterial = new BABYLON.StandardMaterial("defaultWood", scene);
-    defaultWoodMaterial.diffuseColor = woodColor;
-  }
-  for (const mesh of meshes) {
-    if (mesh.material) {
-      if (mesh.material.diffuseColor) {
-        mesh.material.diffuseColor = woodColor;
-      } else if (mesh.material.albedoColor) {
-        mesh.material.albedoColor = woodColor;
-      }
-      if (mesh.material.getSubMeshMaterials) {
-        for (const mat of mesh.material.getSubMeshMaterials()) {
-          if (mat.diffuseColor) mat.diffuseColor = woodColor;
-          else if (mat.albedoColor) mat.albedoColor = woodColor;
-        }
-      }
-    } else {
-      mesh.material = defaultWoodMaterial;
-    }
-  }
-}
-
-/**
- * Return renderable meshes that can contribute to imported asset bounds.
- */
-function getRenderableMeshes(meshes) {
-  return meshes.filter(
-    (mesh) =>
-      mesh &&
-      !mesh.isDisposed() &&
-      typeof mesh.getTotalVertices === "function" &&
-      mesh.getTotalVertices() > 0
-  );
-}
-
-/**
- * Compute world-space bounds for a set of renderable meshes.
- */
-function getWorldBounds(meshes) {
-  let min = new BABYLON.Vector3(
-    Number.POSITIVE_INFINITY,
-    Number.POSITIVE_INFINITY,
-    Number.POSITIVE_INFINITY
-  );
-  let max = new BABYLON.Vector3(
-    Number.NEGATIVE_INFINITY,
-    Number.NEGATIVE_INFINITY,
-    Number.NEGATIVE_INFINITY
-  );
-
-  for (const mesh of meshes) {
-    mesh.computeWorldMatrix(true);
-    if (typeof mesh.refreshBoundingInfo === "function") {
-      mesh.refreshBoundingInfo();
-    }
-
-    const boundingInfo = mesh.getBoundingInfo?.();
-    const boundingBox = boundingInfo?.boundingBox;
-    if (!boundingBox) continue;
-
-    min = BABYLON.Vector3.Minimize(min, boundingBox.minimumWorld);
-    max = BABYLON.Vector3.Maximize(max, boundingBox.maximumWorld);
-  }
-
-  if (!Number.isFinite(min.x) || !Number.isFinite(max.x)) return null;
-
-  const center = min.add(max).scale(0.5);
-  const size = max.subtract(min);
-  return { min, max, center, size };
-}
-
-/**
- * Shift imported root nodes so the asset's bounding-box center sits on its anchor.
- */
-function centerImportedAsset(meshes, importedNodes, parentNode, nodeId) {
-  const renderableMeshes = getRenderableMeshes(meshes);
-  if (renderableMeshes.length === 0) return;
-
-  const bounds = getWorldBounds(renderableMeshes);
-  if (!bounds) return;
-
-  const rootNodes = importedNodes.filter((node) => node?.parent === parentNode);
-  if (rootNodes.length === 0) {
-    console.warn(
-      `[SCENE] unable to center asset nodeId=${nodeId}: no imported root nodes`
-    );
-    return;
-  }
-
-  parentNode.computeWorldMatrix(true);
-  const inverseParentWorld = parentNode.getWorldMatrix().clone().invert();
-  const localCenter = BABYLON.Vector3.TransformCoordinates(
-    bounds.center,
-    inverseParentWorld
-  );
-
-  if (!Number.isFinite(localCenter.x)) return;
-
-  for (const rootNode of rootNodes) {
-    rootNode.position.subtractInPlace(localCenter);
-    rootNode.computeWorldMatrix(true);
-    rootNode.metadata = rootNode.metadata || {};
-    rootNode.metadata.centeringOffset = localCenter.clone();
-  }
-
-  console.log(
-    `[SCENE] centered asset | nodeId=${nodeId} center=(${bounds.center.x.toFixed(
-      3
-    )}, ${bounds.center.y.toFixed(3)}, ${bounds.center.z.toFixed(
-      3
-    )}) size=(${bounds.size.x.toFixed(3)}, ${bounds.size.y.toFixed(
-      3
-    )}, ${bounds.size.z.toFixed(3)})`
-  );
-}
-
-/**
- * Attach metadata and parent relationships to loaded meshes.
- */
 function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
   const meshArray = [];
   const importedNodes = [...transformNodes, ...meshes];
@@ -427,72 +258,13 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
   }
 
   centerImportedAsset(meshArray, importedNodes, parentNode, nodeId);
-  nodeMeshes.set(nodeId, meshArray);
+  state.nodeMeshes.set(nodeId, meshArray);
 }
 
-function getManifestNodes(manifest) {
-  return manifest?.scene?.nodes || [];
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Token child world loading
+// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Create a placeholder mesh for token child nodes that are loading or failed.
- */
-function createPlaceholder(nodeId, parentNode, state) {
-  const color = state === "error" ? ERROR_PLACEHOLDER_COLOR : PLACEHOLDER_COLOR;
-  const box = BABYLON.MeshBuilder.CreateBox(
-    `placeholder_${nodeId}`,
-    { size: 0.5 },
-    scene
-  );
-  box.parent = parentNode;
-  box.metadata = {
-    nodeId,
-    isPlaceholder: true,
-    placeholderState: state,
-  };
-
-  const mat = new BABYLON.StandardMaterial(`placeholderMat_${nodeId}`, scene);
-  mat.diffuseColor = BABYLON.Color3.FromHexString(color);
-  mat.alpha = state === "loading" ? 0.6 : 0.8;
-  box.material = mat;
-
-  if (state === "loading") {
-    // Pulse animation for loading
-    const pulseAnim = new BABYLON.Animation(
-      `pulse_${nodeId}`,
-      "scaling",
-      30,
-      BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
-      BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
-    );
-    pulseAnim.setKeys([
-      { frame: 0, value: new BABYLON.Vector3(1, 1, 1) },
-      { frame: 15, value: new BABYLON.Vector3(1.2, 1.2, 1.2) },
-      { frame: 30, value: new BABYLON.Vector3(1, 1, 1) },
-    ]);
-    box.animations = [pulseAnim];
-    scene.beginAnimation(box, 0, 30, true);
-  }
-
-  // Store animation reference so we can stop it before disposal
-  box.metadata = {
-    ...box.metadata,
-    _placeholderAnim: state === "loading",
-  };
-
-  return box;
-}
-
-/**
- * Load a token-based child world (child_ref node).
- * Resolves the on-chain token reference, fetches the child manifest,
- * and recursively loads it under the parent anchor.
- *
- * @param {Object} node - The manifest node with child_ref
- * @param {BABYLON.TransformNode} anchor - The anchor for this node
- * @param {number} depth - Current recursion depth
- * @param {Set<string>} resolvingCids - CIDs currently being resolved (cycle protection)
- */
 async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   const childRef = node.child_ref;
   if (!childRef) return [];
@@ -505,7 +277,6 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
     return [placeholder];
   }
 
-  // Self-reference check: build a fingerprint of this reference
   const refKey = `${childRef.chainId}:${childRef.contractAddress}:${childRef.tokenId}`;
   if (resolvingCids.has(refKey)) {
     console.warn(
@@ -515,7 +286,6 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
     return [placeholder];
   }
 
-  // Show loading placeholder
   const loadingPlaceholder = createPlaceholder(node.node_id, anchor, "loading");
 
   resolvingCids.add(refKey);
@@ -524,7 +294,6 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       `[SCENE] resolving token child node ${node.node_id} depth=${depth}`
     );
 
-    // Resolve the token reference to a manifest CID
     const resolution = await resolveChildRef(childRef);
     if (!resolution.resolved || !resolution.manifestCid) {
       console.warn(
@@ -539,10 +308,9 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       `[SCENE] token child node ${node.node_id} resolved → ${resolution.manifestCid}`
     );
 
-    // Create a child anchor for the resolved manifest
     const childAnchor = new BABYLON.TransformNode(
       `child_anchor_${node.node_id}`,
-      scene
+      state.scene
     );
     childAnchor.parent = anchor;
     childAnchor.metadata = {
@@ -551,13 +319,10 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       loaded: true,
     };
 
-    // Track child anchor so clearScene/disposeNode can clean it up
-    nodeAnchors.set(node.node_id, childAnchor);
+    state.nodeAnchors.set(node.node_id, childAnchor);
 
-    // Remove loading placeholder and load the child manifest
     disposePlaceholder(loadingPlaceholder);
 
-    // Load the child manifest recursively under the child anchor
     await loadAssetManifest(
       resolution.manifestCid,
       childAnchor,
@@ -565,7 +330,6 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       resolvingCids
     );
 
-    // Return empty — the child manifest's own nodes are tracked separately
     return [];
   } catch (err) {
     console.error(
@@ -580,23 +344,22 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   }
 }
 
-/**
- * Load a single manifest node into the scene.
- */
 async function loadNode(node, parentNode, depth, resolvingCids) {
   console.log(
     `[SCENE] loadNode node_id=${node.node_id} source=${JSON.stringify(
       node.source
     )} childRef=${!!node.child_ref}`
   );
-  const anchor = new BABYLON.TransformNode(`anchor_${node.node_id}`, scene);
+  const anchor = new BABYLON.TransformNode(
+    `anchor_${node.node_id}`,
+    state.scene
+  );
   anchor.parent = parentNode;
   applyTransformMatrix(anchor, node.transform_matrix);
-  nodeAnchors.set(node.node_id, anchor);
+  state.nodeAnchors.set(node.node_id, anchor);
 
   let meshes = [];
 
-  // Handle token-based child world (child_ref)
   if (node.child_ref) {
     meshes = await loadTokenChildNode(
       node,
@@ -615,8 +378,6 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
     );
   }
 
-  // Apply appearance (color/scale) from the manifest — overrides defaults.
-  // Must run for all nodes at any depth so child token worlds get their look.
   if (meshes.length > 0 && node.appearance) {
     applyColor(meshes, node.appearance.color);
     applyScale(meshes, node.appearance.scale);
@@ -625,14 +386,6 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   return { anchor, meshes };
 }
 
-/**
- * Load a manifest and all its root nodes.
- *
- * @param {string} manifestCid
- * @param {BABYLON.TransformNode|null} parentAnchor
- * @param {number} depth - Current recursion depth for child worlds
- * @param {Set<string>} resolvingCids - Set of ref keys being resolved (cycle protection)
- */
 async function loadAssetManifest(
   manifestCid,
   parentAnchor = null,
@@ -641,18 +394,16 @@ async function loadAssetManifest(
 ) {
   console.log(`[SCENE] loadAssetManifest cid=${manifestCid} depth=${depth}`);
 
-  // Top-level manifest loads should replace the currently rendered asset.
-  // Child manifest loads (lazy nesting) must keep the existing parent scene intact.
   if (
     !parentAnchor &&
     depth === 0 &&
-    (rootSceneAnchor || nodeMeshes.size > 0 || nodeAnchors.size > 0)
+    (state.rootSceneAnchor ||
+      state.nodeMeshes.size > 0 ||
+      state.nodeAnchors.size > 0)
   ) {
     clearScene();
   }
 
-  // Clear token resolution cache so child_ref nodes always re-resolve
-  // to the latest on-chain tokenURI (child assets may have been updated).
   if (depth === 0) {
     clearResolutionCache();
   }
@@ -669,9 +420,9 @@ async function loadAssetManifest(
   }
 
   const rootAnchor =
-    parentAnchor || new BABYLON.TransformNode("root_anchor", scene);
+    parentAnchor || new BABYLON.TransformNode("root_anchor", state.scene);
   if (!parentAnchor) {
-    rootSceneAnchor = rootAnchor;
+    state.rootSceneAnchor = rootAnchor;
   }
 
   for (const node of getManifestNodes(manifest)) {
@@ -690,223 +441,131 @@ async function loadAssetManifest(
   return manifest;
 }
 
-/**
- * Clear pending child refs
- */
-function clearPendingChildRefs() {
-  pendingChildRefs.length = 0;
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Drag/drop — linked asset composition
+// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Get the list of pending child_ref nodes to be included in the next save.
- */
-function getPendingChildRefs() {
-  return [...pendingChildRefs];
-}
-
-/**
- * Handle a linked asset being dropped onto the scene canvas.
- * Creates a token child node with child_ref, resolves it, and loads the child world.
- */
 async function handleLinkedAssetDropped(event) {
   const detail = event.detail;
   if (!detail) return;
 
-  const { token_id, standard, resolution, chainId, contractAddress } = detail;
-  if (!token_id) return;
+  const {
+    token_id: tokenId,
+    standard = "ERC721",
+    resolution: resolutionMode = "latest",
+    chainId: eventChainId,
+    contractAddress: eventContractAddress,
+  } = detail;
+  if (!tokenId) return;
 
-  const resolvedChainId = Number(chainId || window.chainId || 314159);
+  const resolvedChainId = Number(eventChainId || window.chainId || 31415822);
   const resolvedContractAddr =
-    contractAddress || window.contractAddress || null;
+    eventContractAddress || window.contractAddress || window._contractAddress;
 
   if (!resolvedContractAddr) {
-    console.warn(
-      "[SCENE] Cannot add token child: no contract address available. Connect wallet first."
-    );
-    alert("Please connect your wallet before adding linked assets.");
+    console.warn("[SCENE] No contract address available for linked asset drop");
     return;
   }
 
-  // Check for duplicates: don't add the same token twice
-  const refKey = `${resolvedChainId}:${resolvedContractAddr.toLowerCase()}:${String(
-    token_id
-  )}`;
-  if (pendingChildRefs.some((ref) => ref.node_id.endsWith(refKey))) {
-    console.warn(`[SCENE] token child ${refKey} already in scene — skipping`);
+  if (!window.walletAddress) {
+    console.warn("[SCENE] Wallet not connected — cannot resolve linked asset");
     return;
   }
 
-  // Check against already-loaded nodes too
-  for (const [nodeId] of nodeAnchors) {
-    if (nodeId.endsWith(refKey)) {
-      console.warn(`[SCENE] token child ${refKey} already in scene — skipping`);
+  const refKey = `${resolvedChainId}:${resolvedContractAddr}:${tokenId}`;
+
+  // Prevent duplicate drops for the same reference
+  for (const [, anchor] of state.nodeAnchors) {
+    if (
+      anchor.metadata?.childRef &&
+      `${anchor.metadata.childRef.chainId}:${anchor.metadata.childRef.contractAddress}:${anchor.metadata.childRef.tokenId}` ===
+        refKey
+    ) {
+      console.warn(
+        `[SCENE] duplicate child_ref drop ignored: token #${tokenId}`
+      );
       return;
     }
   }
 
-  // Build the node_id
-  const shortAddr = resolvedContractAddr.slice(2, 10).toLowerCase();
-  const nodeId = `child_token_${resolvedChainId}_${shortAddr}_${token_id}`;
+  const shortAddr =
+    resolvedContractAddr.slice(0, 8) + resolvedContractAddr.slice(-6);
+  const nodeId = `child_token_${resolvedChainId}_${shortAddr}_${tokenId}`;
 
-  // Build the child_ref
   const childRef = {
     type: "token",
     chainId: resolvedChainId,
     contractAddress: resolvedContractAddr,
-    tokenId: String(token_id),
-    standard: standard || "ERC721",
-    resolution: resolution || "latest",
+    tokenId,
+    standard,
+    resolution: resolutionMode,
   };
 
-  // Build the node entry
   const nodeEntry = {
     node_id: nodeId,
-    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], // identity matrix
+    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
     child_ref: childRef,
   };
 
-  console.log(`[SCENE] adding token child node: ${nodeId}`, childRef);
+  state.pendingChildRefs.push(nodeEntry);
 
-  // Ensure there's a root anchor (create if scene is empty)
-  if (!rootSceneAnchor) {
-    rootSceneAnchor = new BABYLON.TransformNode("root_anchor", scene);
-    hideWelcomeOverlay();
+  // Load the token child immediately for live preview
+  const resolvedRef = {
+    ...childRef,
+    chainId: resolvedChainId,
+    contractAddress: resolvedContractAddr,
+  };
+  const childResolution = await resolveChildRef(resolvedRef);
+  const resolvedCid = childResolution?.manifestCid || null;
+
+  if (!resolvedCid) {
+    console.warn(
+      `[SCENE] could not resolve linked asset preview for token #${tokenId}: ${
+        childResolution?.error || "unknown error"
+      }`
+    );
+    return;
   }
 
-  // Store in pending list for save
-  pendingChildRefs.push(nodeEntry);
+  disposeNode(nodeId);
 
-  // Load the token child into the scene
-  await loadNode(nodeEntry, rootSceneAnchor, 0, new Set());
-
-  // Retrieve the resolved CID from the anchor metadata
-  const resolvedRef = getNodeChildRef(nodeId);
-  const resolvedCid = resolvedRef?.resolvedCid || null;
-
-  // Dispatch event so save/publish can include child refs
   document.dispatchEvent(
     new CustomEvent("scene:tokenChildAdded", {
-      detail: { nodeId, childRef, resolvedCid },
+      detail: {
+        nodeId,
+        chainId: resolvedChainId,
+        contractAddress: resolvedContractAddr,
+        tokenId,
+        resolvedCid,
+      },
     })
   );
 }
 
-/**
- * Dispose a placeholder mesh, first stopping any running animation.
- */
-function disposePlaceholder(placeholder) {
-  if (!placeholder || placeholder.isDisposed()) return;
-  if (placeholder.metadata?._placeholderAnim) {
-    scene.stopAnimation(placeholder);
-  }
-  placeholder.dispose();
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Node accessors
+// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Clear the entire scene, disposing all meshes, anchors, and imported resources.
- * Keeps the engine running.
- */
-function clearScene() {
-  if (!scene) {
-    window.activeAssetManifestCid = null;
-    window.selectedNodeId = null;
-    return;
-  }
-
-  // Stop all animations first to prevent callbacks during disposal
-  scene.stopAllAnimations();
-
-  // Dispose tracked meshes
-  for (const [, meshes] of nodeMeshes) {
-    for (const mesh of meshes) {
-      if (mesh && !mesh.isDisposed()) {
-        mesh.dispose();
-      }
-    }
-  }
-  nodeMeshes.clear();
-
-  // Dispose tracked anchors (includes child anchors for token children)
-  for (const [, anchor] of nodeAnchors) {
-    if (anchor && !anchor.isDisposed()) {
-      anchor.dispose();
-    }
-  }
-  nodeAnchors.clear();
-
-  if (rootSceneAnchor && !rootSceneAnchor.isDisposed()) {
-    rootSceneAnchor.dispose();
-  }
-  rootSceneAnchor = null;
-
-  // Babylon importers may leave behind transform nodes or meshes that are not
-  // represented in our tracking maps. For one-node-per-asset history scrubbing,
-  // a top-level clear should remove every rendered asset artifact.
-  for (const transformNode of [...scene.transformNodes]) {
-    if (transformNode && !transformNode.isDisposed()) {
-      transformNode.dispose();
-    }
-  }
-
-  for (const mesh of [...scene.meshes]) {
-    if (mesh && !mesh.isDisposed()) {
-      mesh.dispose();
-    }
-  }
-
-  // Dispose and null out the shared default material so it gets recreated fresh
-  // (do not iterate all scene.materials here — it can break internal Babylon state)
-  if (defaultWoodMaterial) {
-    try {
-      defaultWoodMaterial.dispose();
-    } catch (_) {
-      // ignore
-    }
-    defaultWoodMaterial = null;
-  }
-
-  // Notify other modules that scene content has been cleared so they can
-  // release any retained mesh references (time-travel nodeStates, etc.)
-  document.dispatchEvent(new CustomEvent("scene:cleared"));
-
-  window.activeAssetManifestCid = null;
-  window.selectedNodeId = null;
-  window.latestAssetManifestCid = null;
-
-  // Clear pending child refs
-  pendingChildRefs.length = 0;
-}
-
-/**
- * Get the anchor node for a given nodeId.
- */
 function getNodeAnchor(nodeId) {
-  return nodeAnchors.get(nodeId) || null;
+  return state.nodeAnchors.get(nodeId) || null;
 }
 
-/**
- * Get the meshes for a given nodeId.
- */
 function getNodeMeshes(nodeId) {
-  return nodeMeshes.get(nodeId) || [];
+  return state.nodeMeshes.get(nodeId) || [];
 }
 
-/**
- * Check if a node is a token-based child node (has child_ref).
- * Returns the child_ref data if found, null otherwise.
- */
 function getNodeChildRef(nodeId) {
-  // Check if nodeId itself is a token child (starts with child_token_)
   if (nodeId && nodeId.startsWith("child_token_")) {
-    const anchor = nodeAnchors.get(nodeId);
+    const anchor = state.nodeAnchors.get(nodeId);
     if (anchor && anchor.metadata?.childRef) {
       return {
         ...anchor.metadata.childRef,
         resolvedCid: anchor.metadata.resolvedCid || null,
       };
     }
-    // Also check child anchors for nested token children
-    const childAnchor = scene?.getTransformNodeByName(`child_anchor_${nodeId}`);
+    const childAnchor = state.scene?.getTransformNodeByName(
+      `child_anchor_${nodeId}`
+    );
     if (childAnchor?.metadata?.childRef) {
       return {
         ...childAnchor.metadata.childRef,
@@ -915,8 +574,7 @@ function getNodeChildRef(nodeId) {
     }
   }
 
-  // Check ancestor anchors for token child context
-  const anchor = nodeAnchors.get(nodeId);
+  const anchor = state.nodeAnchors.get(nodeId);
   if (anchor) {
     let current = anchor.parent;
     while (current) {
@@ -933,29 +591,10 @@ function getNodeChildRef(nodeId) {
   return null;
 }
 
-/**
- * Dispose all meshes and anchors for a node.
- */
-function disposeNode(nodeId) {
-  const meshes = nodeMeshes.get(nodeId);
-  if (meshes) {
-    for (const mesh of meshes) {
-      if (mesh && !mesh.isDisposed()) {
-        mesh.dispose();
-      }
-    }
-    nodeMeshes.delete(nodeId);
-  }
-  const anchor = nodeAnchors.get(nodeId);
-  if (anchor) {
-    if (!anchor.isDisposed()) {
-      anchor.dispose();
-    }
-    nodeAnchors.delete(nodeId);
-  }
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Welcome overlay
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Initialize on DOM ready
 function showWelcomeOverlay() {
   const overlay = document.getElementById("welcomeOverlay");
   if (overlay) overlay.hidden = false;
@@ -966,184 +605,165 @@ function hideWelcomeOverlay() {
   if (overlay) overlay.hidden = true;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Thumbnail capture
+// ═══════════════════════════════════════════════════════════════════════════
+
 function canvasToBlob(canvas, type, quality) {
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), type, quality);
-  });
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () =>
-      reject(reader.error || new Error("Blob read failed"));
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 }
 
-/**
- * Capture the current rendered asset as a small WebP thumbnail for publish.
- * Returns null when the scene/canvas is unavailable or the browser cannot encode WebP.
- */
 async function captureAssetThumbnail(options = {}) {
-  if (!scene || !engine) return null;
+  const canvas = document.getElementById("renderCanvas");
+  if (!canvas) return null;
 
-  const canvas = engine.getRenderingCanvas();
-  if (!canvas || !canvas.width || !canvas.height) return null;
+  try {
+    const width = options.width || 512;
+    const height = options.height || 288;
+    const quality = options.quality || 0.85;
+    const format = options.format || "webp";
+    const mime = `image/${format}`;
 
-  const width = options.width || 512;
-  const height = options.height || 288;
-  const quality = options.quality ?? 0.82;
+    const thumbnailCanvas = document.createElement("canvas");
+    thumbnailCanvas.width = width;
+    thumbnailCanvas.height = height;
+    const ctx = thumbnailCanvas.getContext("2d");
+    if (!ctx) return null;
 
-  scene.render();
+    const sourceWidth = canvas.width;
+    const sourceHeight = canvas.height;
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = width / height;
 
-  const thumbnailCanvas = document.createElement("canvas");
-  thumbnailCanvas.width = width;
-  thumbnailCanvas.height = height;
+    let sx = 0,
+      sy = 0,
+      sw = sourceWidth,
+      sh = sourceHeight;
 
-  const ctx = thumbnailCanvas.getContext("2d");
-  if (!ctx) return null;
+    if (sourceRatio > targetRatio) {
+      sw = sourceHeight * targetRatio;
+      sx = (sourceWidth - sw) / 2;
+    } else {
+      sh = sourceWidth / targetRatio;
+      sy = (sourceHeight - sh) / 2;
+    }
 
-  ctx.fillStyle = "#0d0d14";
-  ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, width, height);
 
-  const sourceWidth = canvas.width;
-  const sourceHeight = canvas.height;
-  const sourceRatio = sourceWidth / sourceHeight;
-  const targetRatio = width / height;
+    const blob = await canvasToBlob(thumbnailCanvas, mime, quality);
+    if (!blob) return null;
 
-  let sx = 0;
-  let sy = 0;
-  let sw = sourceWidth;
-  let sh = sourceHeight;
+    const dataUrl = await blobToDataUrl(blob);
 
-  if (sourceRatio > targetRatio) {
-    sw = sourceHeight * targetRatio;
-    sx = (sourceWidth - sw) / 2;
-  } else if (sourceRatio < targetRatio) {
-    sh = sourceWidth / targetRatio;
-    sy = (sourceHeight - sh) / 2;
-  }
-
-  ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, width, height);
-
-  const blob = await canvasToBlob(thumbnailCanvas, "image/webp", quality);
-  if (!blob || blob.type !== "image/webp") {
-    console.warn("[SCENE] WebP thumbnail capture unavailable in this browser");
+    return {
+      type: "snapshot",
+      dataUrl,
+      mime,
+      format,
+      path: `thumbnail.${format}`,
+      width,
+      height,
+      bytes: blob.size,
+      timestamp: Date.now(),
+    };
+  } catch (err) {
+    console.warn("[THUMB] capture failed:", err.message);
     return null;
   }
-
-  const dataUrl = await blobToDataUrl(blob);
-  return {
-    type: "snapshot",
-    dataUrl,
-    mime: "image/webp",
-    format: "webp",
-    path: "thumbnail.webp",
-    width,
-    height,
-    bytes: blob.size,
-    timestamp: Date.now(),
-  };
 }
 
-// Listen for linked asset drops from the asset library or drop zone
-document.addEventListener("asset:linkedDropped", handleLinkedAssetDropped);
+// ═══════════════════════════════════════════════════════════════════════════
+// Mock registration
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Initialize on DOM ready
-document.addEventListener("DOMContentLoaded", () => {
-  initEngine();
-
-  // manifest= (draft) takes priority when present — it's newer than
-  // the on-chain tokenURI which only updates on Publish.
-  // asset= alone uses the canonical tokenURI path for published state.
-  const urlParams = new URLSearchParams(window.location.search);
-  const manifestCid = urlParams.get("manifest");
-  const assetTokenId = urlParams.get("asset");
-
-  if (manifestCid) {
-    // Draft manifest — load directly, bypass tokenURI (not yet published)
-    hideWelcomeOverlay();
-    if (assetTokenId) window.activeAssetTokenId = String(assetTokenId);
-    loadAssetManifest(manifestCid);
-  } else if (assetTokenId) {
-    // TokenID-based loading — assetLibrary.js handles contract lookup
-    document.dispatchEvent(
-      new CustomEvent("asset:openByTokenId", {
-        detail: { tokenId: assetTokenId },
-      })
-    );
-  } else if (window.activeAssetManifestCid) {
-    hideWelcomeOverlay();
-    loadAssetManifest(window.activeAssetManifestCid);
-  } else {
-    showWelcomeOverlay();
-    document.dispatchEvent(new CustomEvent("scene:empty"));
-  }
-
-  // Welcome overlay buttons
-  const newAssetBtn = document.getElementById("newAssetBtn");
-  if (newAssetBtn) {
-    newAssetBtn.addEventListener("click", () => {
-      if (!window.activeAssetName) {
-        const nameInput = prompt("Name your new asset:", "My Asset");
-        window.activeAssetName = nameInput ? nameInput.trim() : "My Asset";
-      }
-      hideWelcomeOverlay();
-      clearScene();
-      window.activeAssetTokenId = null;
-      window.latestAssetManifestCid = null;
-      const url = new URL(window.location);
-      url.searchParams.delete("asset");
-      url.searchParams.delete("manifest");
-      window.history.pushState({}, "", url);
-      const sidebar = document.getElementById("chatSidebar");
-      if (sidebar) sidebar.classList.remove("collapsed");
-    });
-  }
-});
-
-/**
- * Register an externally created mesh as a node for engine integration.
- * Useful for mock / demo flows that create meshes directly via MeshBuilder.
- */
-function registerMockNode(nodeId, mesh, history = []) {
-  const anchor = new BABYLON.TransformNode(`anchor_${nodeId}`, scene);
+function registerMockNode(nodeId, mesh, _history = []) {
+  const anchor = new BABYLON.TransformNode(`anchor_${nodeId}`, state.scene);
   mesh.parent = anchor;
   mesh.metadata = {
     nodeId,
     isNodeRoot: true,
   };
-  nodeMeshes.set(nodeId, [mesh]);
-  nodeAnchors.set(nodeId, anchor);
+  state.nodeMeshes.set(nodeId, [mesh]);
+  state.nodeAnchors.set(nodeId, anchor);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Exports
+// ═══════════════════════════════════════════════════════════════════════════
+
 export {
-  scene,
-  engine,
   loadAssetManifest,
   loadNode,
   loadAsset,
   getNodeAnchor,
   getNodeMeshes,
   getNodeChildRef,
-  disposeNode,
-  applyTransformMatrix,
-  extractCid,
-  detectAssetFormat,
   registerMockNode,
-  clearScene,
   captureAssetThumbnail,
   showWelcomeOverlay,
   hideWelcomeOverlay,
-  getPendingChildRefs,
-  clearPendingChildRefs,
-  // Pure helpers exported for testing
-  getManifestNodes,
-  getRenderableMeshes,
-  getWorldBounds,
-  centerImportedAsset,
-  applyDefaultMaterial,
-  DEFAULT_WOOD_COLOR,
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOM initialization
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function init() {
+  if (typeof document === "undefined") return;
+  document.addEventListener("DOMContentLoaded", () => {
+    initEngine();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const manifestCid = urlParams.get("manifest");
+    const assetTokenId = urlParams.get("asset");
+
+    if (assetTokenId && window.contract) {
+      window.contract.methods
+        .tokenURI(assetTokenId)
+        .call()
+        .then((cid) => {
+          if (cid) {
+            window.activeAssetTokenId = String(assetTokenId);
+            window.activeAssetManifestCid = cid;
+            window.latestAssetManifestCid = cid;
+            document.dispatchEvent(
+              new CustomEvent("asset:openByTokenId", {
+                detail: { tokenId: assetTokenId },
+              })
+            );
+          }
+        })
+        .catch(() => {});
+    } else if (manifestCid) {
+      window.activeAssetManifestCid = manifestCid;
+      window.latestAssetManifestCid = manifestCid;
+      loadAssetManifest(manifestCid);
+      hideWelcomeOverlay();
+    }
+
+    const newAssetBtn = document.getElementById("newAssetTopBtn");
+    if (newAssetBtn) {
+      newAssetBtn.addEventListener("click", () => {
+        const nameInput = document.getElementById("assetNameDisplay");
+        if (nameInput && nameInput.textContent !== "Untitled Asset") {
+        }
+        const nameInputEl = document.getElementById("assetNameDisplay");
+        if (nameInputEl) {
+          window.activeAssetName = nameInputEl.textContent || "Untitled Asset";
+        }
+        // Do not auto-prompt — the create-panel handles the new-asset flow
+      });
+    }
+
+    document.addEventListener("asset:linkedDropped", handleLinkedAssetDropped);
+  });
+})();
