@@ -1,4 +1,4 @@
-# Arbesk — Product Specification & Architecture Plan (MVP v0.3)
+# Arbesk — Product Specification & Architecture Plan (MVP v0.4)
 
 **Author**: Ahmad Sayed Hassan  
 **Project**: Arbesk  
@@ -13,7 +13,8 @@
 **Blockchain Dev**: Hardhat inside Docker container  
 **Frontend Stack**: Pug + SCSS + Bootstrap 5 + Babylon.js (aligned with SukaVerse)  
 **Backend Stack**: Node.js + Express (aligned with SukaVerse + PromptSCAD)  
-**Procedural CAD**: OpenSCAD WASM in browser (from PromptSCAD)
+**Procedural CAD**: OpenSCAD WASM in browser (from PromptSCAD) — schema-compatible, deferred post-MVP  
+**Current Implementation Status**: Phases 1–4 complete; Phase 4.1 publishing polish complete; Phase 5 micro-ledger planned.
 
 ---
 
@@ -30,8 +31,11 @@ This project merges **SukaVerse** (decentralized spatial state tracking) and **P
 - **Blockchain**: Moved from Base/Arbitrum to **Filecoin FEVM** for native storage alignment.
 - **IPFS**: Replaced public IPFS gateways with a **Dockerized private Kubo node** (no DHT, no peers, loopback-only).
 - **Hardhat**: Runs inside a **Docker container** for reproducible local EVM development.
-- **Mock Generation**: Added **mock adapters** for offline development using SukaVerse GLB assets (`intro.glb`, `suka.glb`, `suka.gltf`).
+- **Mock Generation**: Added a **mock adapter** for offline development using committed local assets (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`).
 - **Parametric Versions**: UI-driven **color and scale edits** now create their own history entries without requiring cloud generation or payment.
+- **Runtime Cache**: Browser IPFS reads are cached on demand with memory + IndexedDB, without prefetching.
+- **Publish Thumbnails**: Publish captures an optional WebP viewport snapshot, uploads it to private IPFS, and stores thumbnail CID metadata in the manifest.
+- **Zed Agent Setup**: `.zed/tasks.json`, `.zed/settings.json`, `AGENTS.md`, and `docs/ZED_AGENT_GUIDE.md` now define repeatable project workflows for Zed AI agents.
 
 ---
 
@@ -92,6 +96,17 @@ AI Agents must use this exact layout structure when writing the data storage scr
   "version": 4,
   "timestamp": 1780000000,
   "prev_manifest_cid": "QmPreviousManifestHash...",
+  "thumbnail": {
+    "type": "snapshot",
+    "cid": "QmThumbnailCid...",
+    "path": "thumbnail.webp",
+    "format": "webp",
+    "mime": "image/webp",
+    "width": 512,
+    "height": 288,
+    "bytes": 12345,
+    "timestamp": 1780000000
+  },
   "nodes": [
     {
       "node_id": "node_table_xyz_01",
@@ -150,6 +165,10 @@ AI Agents must use this exact layout structure when writing the data storage scr
 | `generation` | User submits prompt | Yes | Yes | `prompt`, `provider`, `txHash`, `src` |
 | `parametric` | User edits color/scale | No | No | `params.scale`, `params.color`, `src` |
 
+**Optional Publish Thumbnail:**
+
+The manifest-level `thumbnail` object is optional. It is created during publish only when browser WebP capture succeeds. The frontend temporarily sends a `dataUrl`; the backend uploads the image bytes to private IPFS and stores only CID metadata in the final manifest.
+
 ---
 
 ## 4. PHASED ENGINE DEVELOPMENT ROADMAP
@@ -175,11 +194,10 @@ Requirements:
 - CORS headers for local development
 
 Create src/api/adapters/ with:
-1. mock-adapter.js — reads from /home/ahmedh/projects/arbesk/suka-forever/frontend/src/assets/glb/
-   - intro.glb → generic prompts
-   - suka.glb → character/figure prompts
-   - suka.gltf → fallback format
-   Returns buffer + format="glb"
+1. mock-adapter.js — reads from `MOCK_ASSETS_DIR` or committed `./mock-gltf-assets/`
+   - intro.gltf → generic prompts
+   - suka.gltf → character/figure/person/avatar prompts
+   Returns text payload + format="gltf"
 
 2. tripo3d.js — production adapter (placeholder for future)
 3. meshy.js — production adapter (placeholder for future)
@@ -347,18 +365,32 @@ Deployment:
 
 ---
 
+### PHASE 4.1: Publishing Polish, Gallery Thumbnails & Runtime Cache ✅ DONE
+*   **Status**: Complete — implemented after Phase 4.
+*   **Target**: `frontend/src/js/engine/scene-graph.js`, `frontend/src/js/ipfs/remote-ipfs.js`, `frontend/src/js/ui/save-world.js`, `frontend/src/js/ui/gallery.js`, `src/api/index.js`, `test/api.test.js`
+*   **Objective**: Improve publish UX and runtime performance while preserving manifest compatibility.
+*   **Delivered**:
+    *   **Optional WebP Thumbnail Capture** — `captureWorldThumbnail()` renders the current Babylon canvas into a `512x288` WebP snapshot during publish.
+    *   **Thumbnail IPFS Normalization** — `/api/push-ipfs` and `/api/save-manifest` upload embedded thumbnail `dataUrl` payloads as separate IPFS assets and store only CID metadata in the manifest.
+    *   **Gallery Thumbnail Rendering** — gallery cards read `manifest.thumbnail.cid` and render cached WebP previews when present; older manifests show a placeholder.
+    *   **On-Demand IPFS Cache** — gateway reads use memory + IndexedDB, keyed by gateway URL, CID, and payload kind. Content is cached only after an explicit user flow opens it.
+    *   **One-Node-Per-World Scene Cleanup** — top-level manifest loads clear previous scene meshes/anchors to avoid stacked history geometry.
+    *   **Regression Coverage** — API tests verify thumbnail normalization and manifest storage behavior.
+
+---
+
 ### PHASE 5: Micro-Ledger & Audit Infrastructure 🔄 UPCOMING
-*   **Status**: Planned — specification complete in `Phase5.md`. Implementation scheduled as next focus.
+*   **Status**: Planned — specification complete in `Phase5.md`. Implementation scheduled as next focus after Phase 4.1 publishing/cache polish.
 *   **Target**: `src/ledger/`, `src/api/ledger.js`, `frontend/src/js/ui/ledger-panel.js`, contract extensions
 *   **Objective**: Build a structured, queryable, append-only audit trail for every manifest mutation. Decouple operational logging from the Babylon.js display layer for future XR/immersive ports.
 *   **Planned Deliverables**:
-    *   **Typed Ledger Schema** — `LedgerEntry` interface with `opType`, `manifestId`, `cid`, `actorAddress`, `payload`
+    *   **Typed Ledger Schema** — `LedgerEntry` interface with `opType`, `manifestId`, `cid`, `prevCid`, `actorAddress`, `payload`
     *   **Append-Only Store** — JSONL file (`logs/ledger.jsonl`) for MVP; SQLite upgrade path for post-MVP
     *   **Query API** — `GET /api/ledger?manifestId=&opType=&since=&limit=` with pagination
     *   **Analytics API** — `GET /api/ledger/stats` for operation counts, daily aggregates, unique actors
     *   **On-Chain Anchoring** — `anchorManifest(manifestId, cid)` in `ArbeskWorld.sol` emits `ManifestAnchored` event
     *   **Ledger Panel** — Collapsible studio panel showing operation history, filters, CSV/JSON export
-    *   **Event Hooks** — Ledger auto-records on `manifest:saved`, `wallet:generationPaid`, parametric saves, and team edits
+    *   **Event Hooks** — Ledger auto-records on generation, parametric saves, `/api/save-manifest`, `/api/push-ipfs`, mint/update URI, and team edits
 
 **Design Principles:**
 1. **Append-only**: Never mutate or delete log entries.
@@ -432,14 +464,14 @@ Datastore.StorageMax: 100GB
 
 | Prompt Keyword | Mock Asset | Source Path |
 |----------------|------------|-------------|
-| (default / any) | `intro.glb` | `../suka-forever/frontend/src/assets/glb/intro.glb` |
-| character, figure, person, avatar | `suka.glb` | `../suka-forever/frontend/src/assets/glb/suka.glb` |
-| (fallback) | `suka.gltf` | `../suka-forever/frontend/src/assets/glb/suka.gltf` |
+| (default / any) | `intro.gltf` | `mock-gltf-assets/intro.gltf` |
+| character, figure, person, avatar | `suka.gltf` | `mock-gltf-assets/suka.gltf` |
 
 **Mock mode activation:**
 - Environment variable `MOCK_3D_GENERATION=true`
 - Bypasses all SaaS API keys
-- Returns buffer within < 2s
+- Returns a GLTF text payload within < 2s
+- `MOCK_ASSETS_DIR` can override the default local mock asset directory
 
 ---
 
@@ -455,6 +487,24 @@ To prevent technical debt during future scaling, ensure the AI Agent strictly ad
 *   **FEVM-First Design:** Optimize smart contracts for Filecoin's gas economics. Test thoroughly on Calibration testnet before mainnet deployment.
 *   **Free Parametric Edits:** Color and scale edits must never require on-chain payment. They are first-class versions but remain free to encourage iterative experimentation.
 *   **Containerized Dev Tools:** All blockchain development (Hardhat compile, test, deploy) runs inside Docker containers. Host environment should only need Docker and Node.js for the backend/frontend.
+*   **Thumbnail Optionality:** Published thumbnails are best-effort metadata. All render/load flows must continue to work when `manifest.thumbnail` is absent or when thumbnail IPFS reads fail.
+*   **Zed Agent Compatibility:** Keep `AGENTS.md`, `.zed/tasks.json`, and docs synchronized when commands, routes, or phase status change.
+
+---
+
+## 7. ZED AI AGENT INITIALIZATION
+
+The repository includes Zed-specific project setup:
+
+| File | Purpose |
+|------|---------|
+| `.zed/tasks.json` | Repeatable tasks for install, build, tests, Docker, backend start |
+| `.zed/settings.json` | Excludes generated/heavy directories from project scanning |
+| `AGENTS.md` | Primary coding-agent instructions and project rules |
+| `docs/ZED_AGENT_GUIDE.md` | Short Zed-specific onboarding guide |
+| `docs/CURRENT_STATUS.md` | Latest implementation snapshot and known gaps |
+
+Agents should use `AGENTS.md` as the first source of instructions, then verify current status in `docs/CURRENT_STATUS.md` before planning large changes.
 
 ---
 

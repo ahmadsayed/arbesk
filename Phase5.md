@@ -1,22 +1,23 @@
 # Phase 5: Micro-Ledger & Audit Infrastructure
 
-> **Status**: Planned — upcoming focus  
+> **Status**: Planned — next major focus after Phase 4.1 publishing/cache polish  
 > **Target**: `src/ledger/`, `src/api/ledger.js`, `frontend/src/js/ui/ledger-panel.js`, contract extensions  
-> **Objective**: Build a structured, queryable, append-only audit trail for every manifest mutation, generation, and parametric edit. The micro-ledger decouples operational logging from the Babylon.js display layer so the system can be ported to XR/immersive environments with zero refactoring.
+> **Objective**: Build a structured, queryable, append-only audit trail for every manifest mutation, generation, parametric edit, save, publish, mint/update, thumbnail attachment, and team-editor change. The micro-ledger decouples operational logging from the Babylon.js display layer so the system can be ported to XR/immersive environments with zero refactoring.
 
 ---
 
 ## 1. Motivation — Why a Micro-Ledger?
 
-The backend currently logs operations to `console.log()` with tagged prefixes (`[SAVE]`, `[GEN]`, `[PARAM]`, etc.). This is excellent for development but insufficient for:
+The backend currently logs operations to `console.log()` with tagged prefixes (`[SAVE]`, `[GEN]`, `[PARAM]`, `[IPFS]`, etc.). The frontend also emits custom events such as `manifest:saved`, `wallet:worldMinted`, and `scenegraph:ready`. This is excellent for development but insufficient for:
 
 | Gap | Current State | Desired State |
 |-----|--------------|---------------|
 | **Forensic audit** | Console logs scroll away | Persistent queryable record: "Who changed what, when?" |
-| **Cross-session replay** | `usedTxHashes` Set lost on restart | Append-only log file survives restarts |
+| **Cross-session replay** | `usedTxHashes` Set is in memory, with manifest-history fallback | Append-only log file survives restarts and supports replay indexes |
 | **Analytics** | No aggregation | "Which prompts produce the most parametric edits?" |
 | **Immersive ports** | Browser console only | Backend API serves logs to XR headsets |
-| **On-chain proof** | No anchoring | Contract stores manifest root CID hashes for immutability |
+| **On-chain proof** | Token URI points to latest manifest CID, but no separate anchor log | Contract stores manifest root CID hashes for immutability |
+| **Publishing audit** | Thumbnail CIDs are stored in manifests only | Ledger records publish, thumbnail CID, token URI update/mint tx |
 
 ---
 
@@ -67,7 +68,18 @@ interface LedgerEntry {
   // Metadata
   id: string;           // ULID or UUID v7 (sortable)
   timestamp: number;    // Unix millis
-  opType: 'GENERATION' | 'PARAMETRIC' | 'SAVE' | 'LOAD' | 'MINT' | 'EDIT' | 'REVERT';
+  opType:
+    | 'GENERATION'
+    | 'PARAMETRIC'
+    | 'SAVE'
+    | 'PUBLISH'
+    | 'THUMBNAIL'
+    | 'MINT'
+    | 'TOKEN_URI_UPDATE'
+    | 'TEAM_EDIT'
+    | 'LOAD'
+    | 'REVERT'
+    | 'SNAPSHOT';
   
   // Identity
   manifestId: string;   // The manifest affected
@@ -94,11 +106,18 @@ interface LedgerEntry {
     version?: number;
     nodeCount?: number;
     
-    // MINT
-    tokenId?: number;
+    // PUBLISH / THUMBNAIL
+    thumbnailCid?: string;
+    thumbnailMime?: string;
+    thumbnailBytes?: number;
+    publishedCid?: string;
+
+    // MINT / TOKEN_URI_UPDATE
+    tokenId?: number | string;
     uri?: string;
+    txHash?: string;
     
-    // EDIT
+    // TEAM_EDIT
     editorsAdded?: string[];
     editorsRemoved?: string[];
   };
@@ -215,11 +234,20 @@ A new collapsible panel in the studio (similar to Team Panel) showing:
 
 ### Wire into existing events
 
-The ledger hooks into events already dispatched by the system:
+The ledger should hook into both backend operations and frontend events:
+
+Backend hooks:
+- `POST /api/generate-asset-node` — generation result manifest CID, asset CID, tx hash
+- `POST /api/parametric-version` — parametric edit result manifest CID and node params
+- `POST /api/save-manifest` — draft save CID
+- `POST /api/push-ipfs` — publish manifest CID and optional thumbnail CID
+
+Frontend/contract hooks:
 - `manifest:saved` — emitted by `save-world.js`
+- `wallet:worldMinted` — emitted after mint/update refresh flows
 - `wallet:generationPaid` — emitted by `wallet.js`
 - `node:parametricSaved` — to be added to parametric preview
-- `team:editorAdded` / `team:editorRemoved` — team panel operations
+- `team:editorAdded` / `team:editorRemoved` — to be emitted by team panel operations
 
 ---
 
@@ -233,13 +261,14 @@ The ledger hooks into events already dispatched by the system:
 | 2 | Implement JSONL append-only store | `src/ledger/store.js` | 2h |
 | 3 | Implement query API | `src/api/ledger.js` | 2h |
 | 4 | Mount ledger routes | `src/api/index.js` | 15m |
-| 5 | Hook into existing operations | `src/api/generate-asset-node.js`, `parametric-version.js`, `save-manifest` | 1h |
+| 5 | Hook into existing operations | `src/api/generate-asset-node.js`, `parametric-version.js`, `save-manifest`, `push-ipfs` | 1h |
 | 6 | Add `anchorManifest()` to contract | `blockchain/contracts/ArbeskWorld.sol` | 1h |
 | 7 | Write contract tests for anchoring | `blockchain/test/ArbeskWorld.test.js` | 1h |
 | 8 | Build basic ledger panel | `frontend/src/js/ui/ledger-panel.js` | 3h |
 | 9 | Add ledger panel to studio layout | `frontend/src/pug/studio.pug` | 30m |
 | 10 | Style ledger panel | `frontend/src/scss/studio.scss` | 1h |
-| 11 | Update AGENTS.md with ledger conventions | `AGENTS.md` | 30m |
+| 11 | Add ledger panel script to template | `frontend/src/pug/studio.pug` | 30m |
+| 12 | Update AGENTS.md and docs with ledger conventions | `AGENTS.md`, `docs/API_SPEC.md`, `docs/CURRENT_STATUS.md` | 30m |
 
 ### Phase 5b: Upgrade (SQLite + Analytics + Export)
 

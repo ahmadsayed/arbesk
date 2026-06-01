@@ -1,5 +1,7 @@
 # Phase 1: Data Bridge, Mock Adapters & Private IPFS
 
+> Current note (2026-06-01): The original Phase 1 design discussed external SukaVerse GLB files. The committed default adapter now reads local GLTF fixtures from `mock-gltf-assets/intro.gltf` and `mock-gltf-assets/suka.gltf` and returns `format: "gltf"`. `MOCK_ASSETS_DIR` can still point to an alternate asset directory if needed.
+
 > **Source System**: SukaVerse (`/home/ahmedh/projects/arbesk/suka-forever`)  
 > **Target System**: Arbesk (`/home/ahmedh/projects/arbesk/arabesk`)  
 > **Scope**: Backend API, IPFS storage pipeline, mock generation adapters  
@@ -24,17 +26,9 @@ SukaVerse taught us a critical lesson about 3D asset storage on IPFS that Arbesk
 Generation (Mock Adapter)
     │
     ▼
-┌─────────────────┐
-│   GLB Buffer    │  ← intro.glb / suka.glb (from SukaVerse assets)
-│  (render-ready) │
-└────────┬────────┘
-         │
-         ▼
 ┌─────────────────────────────┐
-│  Convert GLB → glTF JSON    │  ← structural extraction
-│  with embedded base64 URIs  │
-│  data:application/octet-    │
-│  stream;base64,...          │
+│  GLTF JSON fixture          │  ← mock-gltf-assets/intro.gltf or suka.gltf
+│  with CID/base64 buffers    │
 └────────┬────────────────────┘
          │
          ▼
@@ -63,7 +57,11 @@ Generation (Mock Adapter)
 │  {                          │
 │    "v": 1,                  │
 │    "type": "generation",    │
-│    "src": "ipfs://Qm...",   │
+│    "src": {                 │
+│      "cid": "Qm...",       │
+│      "path": "asset.gltf", │
+│      "format": "gltf"      │
+│    },                        │
 │    ...                      │
 │  }                          │
 └─────────────────────────────┘
@@ -365,20 +363,15 @@ async function remoteMicroLedgerToList(cid, cids = []) {
 
 ## 4. Mock Asset Source Files
 
-**Source Directory**: `suka-forever/frontend/src/assets/glb/`  
-**Target Reference**: `arabesk` reads from `../suka-forever/frontend/src/assets/glb/`
+**Source Directory (current default)**: `mock-gltf-assets/`  
+**Target Reference**: `arabesk` reads from `MOCK_ASSETS_DIR` or `./mock-gltf-assets` by default
 
 | File | Purpose | Prompt Trigger |
 |------|---------|----------------|
-| `intro.glb` | Default generic mock asset | Any prompt (fallback) |
-| `suka.glb` | Character / figure mock asset | Prompt contains "character", "figure", "person", "avatar" |
-| `suka.gltf` | Fallback format mock asset | Fallback if GLB fails |
+| `mock-gltf-assets/intro.gltf` | Default generic mock asset | Any prompt (fallback) |
+| `mock-gltf-assets/suka.gltf` | Character / figure mock asset | Prompt contains "character", "figure", "person", "avatar" |
 
-**Note**: These are **GLB** files (render-ready). The mock adapter returns them as Buffers. The backend pipeline must decide whether to:
-- **Option A (Phase 1 pragmatic)**: Store the GLB binary directly to IPFS. Reference in manifest as `src: "ipfs://Qm..."` with implied `.glb` format.
-- **Option B (architecturally correct)**: Convert GLB → glTF JSON with embedded base64 buffers → extract buffers to IPFS CIDs → store CID-referenced glTF JSON. This matches the SukaVerse `uri_to_cid.js` pattern.
-
-**Recommendation for Phase 1**: Implement Option A to get the pipeline working end-to-end. Document Option B as the Phase 2 refinement when the Babylon.js engine needs to manipulate individual materials and buffers.
+**Current implementation**: These are **GLTF JSON** files. The mock adapter returns text data with `format: "gltf"`; the scene graph then resolves CID-based glTF buffers at render time. The older GLB-vs-glTF design notes remain useful for future binary asset support, but the committed development default is GLTF.
 
 ---
 
@@ -429,18 +422,18 @@ These do not exist in SukaVerse and must be written from scratch.
 import fs from 'fs';
 import path from 'path';
 
-const MOCK_ASSETS_DIR = process.env.MOCK_ASSETS_DIR || '../suka-forever/frontend/src/assets/glb';
+const MOCK_ASSETS_DIR = process.env.MOCK_ASSETS_DIR || './mock-gltf-assets';
 
 export default class MockAdapter {
     async generate(prompt) {
         const lower = prompt.toLowerCase();
-        let filename = 'intro.glb';
+        let filename = 'intro.gltf';
         if (lower.includes('character') || lower.includes('figure') || lower.includes('person') || lower.includes('avatar')) {
-            filename = 'suka.glb';
+            filename = 'suka.gltf';
         }
         const filepath = path.resolve(MOCK_ASSETS_DIR, filename);
-        const buffer = fs.readFileSync(filepath);
-        return { buffer, format: 'glb', provider: 'mock' };
+        const data = fs.readFileSync(filepath, 'utf-8');
+        return { data, format: 'gltf', provider: 'mock' };
     }
 }
 ```
@@ -601,9 +594,9 @@ Replicate the Jest + Supertest pattern. Minimum tests:
 | `frontend/src/js/gltf/uri_to_cid.js` | `frontend/src/js/gltf/uri_to_cid.js` | **Copy** | Defines the storage format; backend must produce compatible glTF |
 | `frontend/src/js/ipfs/remote-ipfs.js` | `frontend/src/js/ipfs/remote-ipfs.js` | **Adapt** | Change gateway URL to `127.0.0.1:8080` |
 
-| `frontend/src/assets/glb/*.glb` | (referenced externally) | **Read** | Mock adapter reads from `../suka-forever/frontend/src/assets/glb/` |
+| `mock-gltf-assets/*.gltf` | `mock-gltf-assets/*.gltf` | **Read** | Mock adapter reads local GLTF fixtures by prompt keyword |
 | `package.json` | `package.json` | **Adapt** | Remove Lotus deps, add Web3/Ethers |
-| *new* | `src/api/adapters/mock-adapter.js` | **Create** | Reads GLB files based on prompt keywords |
+| *new* | `src/api/adapters/mock-adapter.js` | **Create** | Reads GLTF files based on prompt keywords |
 | *new* | `src/api/generate-asset-node.js` | **Create** | Core generation route |
 | *new* | `src/api/parametric-version.js` | **Create** | Free parametric edit route |
 

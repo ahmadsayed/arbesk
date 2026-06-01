@@ -1,73 +1,65 @@
 # Arbesk
 
-> **4D Fractal Version-Controlled 3D Asset Platform**
+> **Cloud-native 4D fractal version-controlled 3D asset platform**
 
-Arbesk merges **SukaVerse** (decentralized spatial state tracking) and **PromptSCAD** (generative CAD inputs) into the world's first **4D Fractal Version-Controlled Scene Graph**. Users generate 3D assets via cloud AI services, store them as versioned fractal manifests on a **private IPFS node**, and navigate through time and space with a **Filecoin FEVM** pay-as-you-go model.
+Arbesk combines a Babylon.js world studio, private IPFS storage, Filecoin FEVM PayGo payments, and fractal JSON manifests into a local-first workflow for generating, versioning, publishing, and collaborating on 3D worlds.
 
-**Current Status**: Phases 1–4 complete. Phase 5 (Micro-Ledger & Audit Infrastructure) is the upcoming focus.
+- Repository: <https://github.com/ahmadsayed/arbesk>
+- License: ISC
+- Current status: Phases 1–4 + publishing polish are complete; Phase 5 micro-ledger/audit infrastructure is planned next.
 
 ---
 
-## What is Arbesk?
+## Current Capabilities
 
-- **Cloud 3D Generation**: Integrates Tripo3D, Meshy, and Hunyuan3D APIs to turn text prompts into production-ready 3D meshes. **Mock adapters** use pre-built GLB models from SukaVerse for offline testing.
-- **Parametric Versioning**: Users can edit **color** and **scale** of any node directly in the UI. Each edit appends a new version entry to the node's history — no cloud generation required.
-- **Fractal Version Control**: Every asset maintains a full history array. Time-travel any node independently without affecting its parent or siblings.
-- **History Timeline Scrubber**: Draggable circular-node timeline in the topbar for Google Earth-style version navigation.
-- **Dollhouse Architecture**: Worlds nest recursively — a room contains a desk, a desk contains a drawer, a drawer contains a micro-city.
-- **Web3 PayGo**: Per-generation micropayments on **Filecoin FEVM**. No subscriptions, no vaults, no refunds.
-- **Private IPFS**: All assets stored on a **Dockerized private IPFS node** (no public DHT, no external peers) for complete data sovereignty.
-- **Containerized Blockchain**: Hardhat runs in a **Docker container** alongside IPFS for reproducible local contract development.
-- **OpenSCAD Hybrid**: Supports both cloud AI generation and procedural OpenSCAD code (WASM in browser) — scaffolded, deferred post-MVP.
-- **Team Collaboration**: Mint worlds as NFTs, then add/remove editors via on-chain contract calls.
-- **Verbose Backend Logging**: Every essential operation (IPFS add/cat, manifest save, generation, parametric edit, auth) is logged with structured tagged output.
+- **Private IPFS storage** — Dockerized Kubo node bound to loopback with no public DHT or bootstrap peers.
+- **Dockerized Hardhat** — reproducible local EVM at `127.0.0.1:8545`.
+- **Filecoin FEVM PayGo contract** — `ArbeskWorld.sol` supports generation payments, ERC721 world minting, token URI updates, and team editor management.
+- **Mock 3D generation** — backend mock adapter returns local GLTF/GLB-style SukaVerse assets for deterministic development.
+- **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, history entries, child manifest references, and optional thumbnails.
+- **Parametric versions** — color and scale edits append history entries without payment or SaaS generation.
+- **Babylon.js scene graph** — loads GLB/GLTF assets from private IPFS, supports one-node-per-world replacement behavior, selection, lazy child anchors, and history scrubbing.
+- **On-demand browser IPFS cache** — memory + IndexedDB cache for IPFS JSON/blob payloads, populated only when content is opened.
+- **Publish thumbnails** — publishing captures an optional `512x288` WebP snapshot, stores it on IPFS, and adds a lightweight `manifest.thumbnail` CID reference.
+- **Gallery + team UI** — wallet-connected gallery renders world names/thumbnails and loads worlds by token ID; team panel manages editors on-chain.
+
+See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementation snapshot and known gaps.
 
 ---
 
 ## Repository Layout
 
-```
+```text
 arbesk/
 ├── src/                          # Express backend
 │   ├── index.js                  # Server entry point
 │   └── api/
-│       ├── index.js              # API route registry
-│       ├── generate-asset-node.js# Cloud generation / mock adapter
-│       └── parametric-version.js # Color & scale edits → new history entry
+│       ├── index.js              # API route registry + IPFS manifest helpers
+│       ├── generate-asset-node.js# PayGo-validated mock generation route
+│       ├── parametric-version.js # Color/scale edit route
+│       ├── authentication.js     # Bearer txHash signature auth
+│       ├── rate-limiter.js       # In-memory rate limits
+│       └── adapters/             # Mock/cloud generation adapters
 ├── frontend/                     # Pug + SCSS + Bootstrap + Babylon.js frontend
-│   ├── src/
-│   │   ├── pug/                  # Page templates
-│   │   ├── scss/                 # Stylesheets
-│   │   ├── js/
-│   │   │   ├── engine/           # Babylon.js scene graph & time-travel
-│   │   │   ├── blockchain/       # Web3.js wallet integration (FEVM)
-│   │   │   ├── ipfs/             # IPFS read/write helpers (private node)
-│   │   │   ├── gltf/             # glTF CID translation utilities
-│   │   │   ├── services/         # API service layer, team service
-│   │   │   └── ui/               # UI controllers (chat, history, save, gallery, team)
-│   │   └── assets/               # Images, GLB files, fonts
-│   ├── scripts/                  # Build scripts (Pug → HTML, SCSS → CSS)
-│   ├── public/                   # Built static assets
-│   └── package.json
-├── blockchain/                   # Hardhat + Solidity (FEVM target)
-│   ├── contracts/
-│   │   └── ArbeskWorld.sol       # PayGo + ERC721 + editor management
-│   ├── scripts/
-│   │   ├── deploy.js             # Deployment script (Filecoin)
-│   │   └── verify.js             # Filfox verification
-│   ├── test/
-│   │   └── ArbeskWorld.test.js   # Contract tests
-│   ├── hardhat.config.js
-│   └── package.json
-├── docker/                       # Container definitions
-│   ├── Dockerfile                # Private IPFS (Kubo)
-│   ├── entrypoint.sh             # IPFS private config
-│   └── hardhat.Dockerfile        # Hardhat dev environment
-├── docker-compose.yml            # Orchestrates IPFS + Hardhat containers
-├── docs/                         # Architecture, API spec, MVP plan
+│   ├── src/pug/                  # Studio template
+│   ├── src/scss/                 # Studio styles
+│   ├── src/js/engine/            # Scene graph, time travel, parametric preview
+│   ├── src/js/blockchain/        # Web3.js wallet/contract integration
+│   ├── src/js/ipfs/              # Remote IPFS reader + browser cache
+│   ├── src/js/gltf/              # glTF CID URI conversion
+│   ├── src/js/services/          # API/team services
+│   └── src/js/ui/                # Chat, gallery, history, save/publish, team UI
+├── blockchain/                   # Hardhat + Solidity FEVM target
+│   ├── contracts/ArbeskWorld.sol
+│   ├── scripts/deploy.js
+│   ├── scripts/verify.js
+│   └── test/ArbeskWorld.test.js
+├── docker/                       # Private IPFS + Hardhat Dockerfiles
+├── docs/                         # Architecture, API, current status, Zed guide
+├── .zed/                         # Zed project tasks/settings
 ├── test/                         # Jest + Supertest backend tests
-├── AGENTS.md                     # Developer conventions
-└── README.md                     # This file
+├── AGENTS.md                     # Zed/AI agent coding guide
+└── Phase*.md                     # Phase specs and retrospectives
 ```
 
 ---
@@ -75,73 +67,146 @@ arbesk/
 ## Documentation Index
 
 | Document | Purpose |
-|----------|---------|
-| [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) | Product specification, phased roadmap, AI agent instructions |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture, data flows, component breakdown |
-| [`docs/API_SPEC.md`](docs/API_SPEC.md) | REST API specification for the Express backend |
-| [`AGENTS.md`](AGENTS.md) | Coding conventions, build commands, environment variables |
+|---|---|
+| [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Latest phase status, validation snapshot, known gaps |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Current system architecture and data flows |
+| [`docs/API_SPEC.md`](docs/API_SPEC.md) | Implemented Express API routes and response shapes |
+| [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) | Product plan and phase roadmap |
+| [`docs/ZED_AGENT_GUIDE.md`](docs/ZED_AGENT_GUIDE.md) | Zed task/agent onboarding |
+| [`AGENTS.md`](AGENTS.md) | AI agent conventions, commands, file map, safety rules |
+| [`Phase5.md`](Phase5.md) | Planned micro-ledger/audit infrastructure specification |
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
-| Backend | Node.js + Express |
-| Frontend Templates | Pug |
+|---|---|
+| Backend | Node.js + Express ES modules |
+| Frontend templates | Pug |
 | Styling | SCSS + Bootstrap 5 |
-| 3D Renderer | Babylon.js |
-| Frontend JS | Vanilla JavaScript (ES modules) |
+| 3D renderer | Babylon.js |
+| Frontend JS | Vanilla JavaScript ES modules |
 | Web3 | Web3.js + Web3Modal |
-| Blockchain | **Filecoin FEVM** |
-| Smart Contracts | Solidity 0.8.17, OpenZeppelin |
-| Blockchain Dev | **Hardhat (Dockerized)** |
-| 3D Generation | Tripo3D / Meshy / Hunyuan3D APIs; **Mock adapters** for dev |
-| Procedural CAD | OpenSCAD WASM (browser) |
-| Storage | **Private IPFS** (Dockerized Kubo node) |
-| Testing | Jest + Supertest (backend), Hardhat (contracts) |
-| Build | Custom Node.js scripts |
-| Orchestration | Docker Compose |
+| Blockchain | Filecoin FEVM / local Hardhat |
+| Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
+| Blockchain dev | Dockerized Hardhat |
+| Storage | Private Dockerized Kubo/IPFS |
+| Runtime cache | Browser memory cache + IndexedDB |
+| Testing | Jest + Supertest, Hardhat contract tests |
+| Build | Custom Node.js frontend scripts |
+| Editor/agent setup | Zed `.zed/tasks.json` + `AGENTS.md` |
 
 ---
 
 ## Quick Start
 
-```bash
-# 1. Start all infrastructure containers (IPFS + Hardhat)
-docker-compose up -d
+All commands run from the project root.
 
-# 2. Install root + frontend dependencies
+```bash
+# 1. Install dependencies
 npm install
 cd frontend && npm install && cd ..
 
-# 3. Build frontend (Pug → HTML, SCSS → CSS, JS copy, assets copy)
-cd frontend && npm run build && cd ..
+# Optional host-side blockchain deps for editor intellisense
+cd blockchain && npm install && cd ..
 
-# 4. Start backend server (port 9090)
+# 2. Start local infrastructure: private IPFS + Hardhat node
+docker-compose up -d
+
+# 3. Build frontend assets into frontend/dist
+npm run build:frontend
+
+# 4. Start backend on port 9090
 npm start
-
-# 5. Run backend tests
-npm test
-
-# ─── Blockchain (inside Hardhat container) ───
-# Compile contracts
-docker-compose run --rm hardhat npx hardhat compile
-
-# Run contract tests
-docker-compose run --rm hardhat npx hardhat test
-
-# Deploy to local Hardhat network
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-
-# Deploy to Filecoin Calibration testnet
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network filecoinCalibration
 ```
 
-See [`AGENTS.md`](AGENTS.md) for full commands and environment variables.
+Open the app at:
+
+```text
+http://localhost:9090/studio.html
+```
+
+### Tests
+
+```bash
+# Backend API tests
+NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest
+
+# Current focused API regression suite
+NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
+
+# Frontend build validation
+npm run build:frontend
+
+# Contract tests inside Dockerized Hardhat
+docker-compose run --rm hardhat npx hardhat test
+```
+
+### Zed Tasks
+
+This repo includes `.zed/tasks.json`. In Zed, use the task palette for:
+
+- `Start Docker infrastructure`
+- `Build frontend`
+- `Run backend tests`
+- `Run API tests only`
+- `Run contract tests in Docker`
+- `Start backend`
+- `Start full dev stack`
 
 ---
 
-## License
+## Environment Files
 
-MIT
+Environment files are intentionally ignored by Git.
+
+- Root `.env` — backend/cloud adapter/private IPFS settings
+- `blockchain/.env` — Filecoin RPC, deployment keys, contract addresses
+- `frontend/.env` — optional build-time public frontend settings
+
+Start blockchain configuration from:
+
+```bash
+cp blockchain/.env.example blockchain/.env
+```
+
+Never commit private keys, API keys, or wallet secrets.
+
+---
+
+## Manifest Thumbnail Format
+
+Published worlds may include an optional thumbnail reference:
+
+```json
+{
+  "thumbnail": {
+    "type": "snapshot",
+    "cid": "QmThumbnailCid...",
+    "path": "thumbnail.webp",
+    "format": "webp",
+    "mime": "image/webp",
+    "width": 512,
+    "height": 288,
+    "bytes": 12345,
+    "timestamp": 1780000000
+  }
+}
+```
+
+The frontend captures this snapshot during publish. The backend uploads the image separately to private IPFS and stores only the CID metadata in the manifest.
+
+---
+
+## Next Planned Phase
+
+Phase 5 will add a structured micro-ledger:
+
+- append-only operation records
+- query API (`GET /api/ledger`)
+- frontend ledger panel
+- manifest anchoring extensions in `ArbeskWorld.sol`
+- optional analytics/export support
+
+See [`Phase5.md`](Phase5.md).

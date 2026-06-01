@@ -15,9 +15,12 @@ This file contains conventions, key file references, and practical guidance for 
 - **Blockchain**: Filecoin FEVM (not Base/Arbitrum)
 - **IPFS**: Private Dockerized Kubo node (no public DHT, no external peers)
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
-- **3D Generation**: Mock adapters for testing using SukaVerse GLB assets (`intro.glb`, `suka.glb`, `suka.gltf`)
+- **3D Generation**: Mock adapter for testing using local SukaVerse-style assets (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`; external GLB assets may also be configured)
 - **Parametric Versions**: Color + scale edits in UI append new history entries without cloud generation
 - **History Timeline**: Draggable circular-node scrubber in the topbar (Google Earth-style)
+- **Publish Thumbnails**: Publishing may attach an optional WebP snapshot stored as a separate IPFS asset and referenced by `manifest.thumbnail`
+- **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB caching; do not add prefetching unless explicitly requested
+- **Zed Agent Setup**: `.zed/tasks.json`, `.zed/settings.json`, `docs/ZED_AGENT_GUIDE.md`, and this `AGENTS.md` are the agent onboarding surface
 
 **Phase Status:**
 | Phase | Status | Focus |
@@ -26,6 +29,7 @@ This file contains conventions, key file references, and practical guidance for 
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ DONE | Scene graph, time-travel, parametric preview |
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ DONE | `ArbeskWorld.sol`, tx validation, replay prevention |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ DONE | Studio shell, wallet wiring, team panel, minting |
+| Phase 4.1: Publishing Polish & Runtime Cache | ✅ DONE | WebP thumbnails, gallery thumbnails, on-demand IPFS cache, one-node scene cleanup |
 | **Phase 5: Micro-Ledger & Audit Infrastructure** | 🔄 **UPCOMING** | Structured operation logging, manifest audit trail, on-chain attestations |
 
 ---
@@ -65,6 +69,8 @@ This file contains conventions, key file references, and practical guidance for 
 | Phase 2 specification (DONE) | `Phase2.md` |
 | Phase 3 specification (DONE) | `Phase3.md` |
 | Phase 4 specification (DONE) | `Phase4.md` |
+| Current implementation snapshot | `docs/CURRENT_STATUS.md` |
+| Zed agent onboarding | `docs/ZED_AGENT_GUIDE.md` + `.zed/tasks.json` |
 | Upcoming micro-ledger focus | `Phase5.md` (planned) |
 
 ---
@@ -122,6 +128,9 @@ cd blockchain && npm install && cd ..
 # Build frontend assets (Pug → HTML, SCSS → CSS, JS copy, assets copy)
 cd frontend && npm run build
 
+# Equivalent root script
+npm run build:frontend
+
 # ─── Backend ───
 # Start backend server (port 9090)
 npm start
@@ -138,6 +147,9 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest
 
 # Run only contract tests (inside Hardhat container)
 docker-compose run --rm hardhat npx hardhat test
+
+# Run current focused API regression suite
+NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
 
 # ─── Blockchain (inside Hardhat container) ───
 # Compile contracts
@@ -195,9 +207,9 @@ TRIPO3D_API_KEY=
 MESHY_API_KEY=
 HUNYUAN3D_API_KEY=
 
-# Mock mode: set to "true" to use local GLB files instead of cloud APIs
+# Mock mode: set to "true" to use local GLTF/GLB files instead of cloud APIs
 MOCK_3D_GENERATION=true
-MOCK_ASSETS_DIR=../suka-forever/frontend/src/assets/glb
+MOCK_ASSETS_DIR=./mock-gltf-assets
 
 # Private IPFS (Dockerized node)
 IPFS_API_URL=http://127.0.0.1:5001
@@ -272,10 +284,30 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 ## 7. The Fractal Manifest
 
 Arbesk stores worlds as **fractal manifests** — JSON documents where every asset is a node that can contain:
+- A manifest-level `thumbnail` object with optional WebP snapshot CID metadata
 - A `source` object with `{ cid, path, format }` (e.g. GLB, GLTF, OBJ, FBX) OR `scad_source` (OpenSCAD code string)
 - A `transform_matrix` (4x4 column-major)
 - A `history` array of version deltas
 - A `child_manifest_id` for recursive nesting
+
+**Optional Manifest Thumbnail:**
+```json
+{
+  "thumbnail": {
+    "type": "snapshot",
+    "cid": "QmThumbnailCid...",
+    "path": "thumbnail.webp",
+    "format": "webp",
+    "mime": "image/webp",
+    "width": 512,
+    "height": 288,
+    "bytes": 12345,
+    "timestamp": 1780000000
+  }
+}
+```
+
+The thumbnail is best-effort publish metadata. All code must tolerate missing thumbnails and failed thumbnail reads.
 
 **Two Types of History Entries:**
 
@@ -339,15 +371,16 @@ Manifest History Array ← Append Generation Version
 ```
 User Prompt → PayGo Contract → Express API Route → Mock Adapter
                                                     ↓
-User ← IPFS CID ← Upload Service ← Copied from ../suka-forever/frontend/src/assets/glb/
+User ← IPFS CID ← Upload Service ← Read from ./mock-gltf-assets/
        ↓
 Manifest History Array ← Append Generation Version
 ```
 
-**Mock Assets (from SukaVerse):**
-- `intro.glb` — Default mock asset for generic prompts
-- `suka.glb` — Default mock asset for character/figure prompts
-- `suka.gltf` — Alternative format mock
+**Mock Assets (current repo default):**
+- `mock-gltf-assets/intro.gltf` — Default mock asset for generic prompts
+- `mock-gltf-assets/suka.gltf` — Character/figure/person/avatar prompts
+
+`MOCK_ASSETS_DIR` may point to an external SukaVerse GLB/GLTF asset directory, but the committed default adapter reads the local `.gltf` files above and returns `format: "gltf"`.
 
 ---
 
@@ -386,8 +419,8 @@ Manifest History Array ← Append Generation Version
 |-----------|-----------|-------|
 | Backend API | Jest + Supertest | `test/api.test.js` |
 | Smart Contracts | Hardhat | `blockchain/test/*.js` |
-| Frontend | Manual / browser-based | No automated E2E tests currently |
-| Mock Adapters | Jest | `test/mock-adapters.test.js` |
+| Frontend | Build validation / manual browser testing | No automated E2E tests currently |
+| Mock Adapters | Covered through API tests | `test/api.test.js` |
 
 ---
 
@@ -412,6 +445,17 @@ Manifest History Array ← Append Generation Version
   "version": 4,
   "timestamp": 1780000000,
   "prev_manifest_cid": "QmPreviousManifestHash...",
+  "thumbnail": {
+    "type": "snapshot",
+    "cid": "QmThumbnailCid...",
+    "path": "thumbnail.webp",
+    "format": "webp",
+    "mime": "image/webp",
+    "width": 512,
+    "height": 288,
+    "bytes": 12345,
+    "timestamp": 1780000000
+  },
   "nodes": [
     {
       "node_id": "node_table_xyz_01",
@@ -484,12 +528,31 @@ Manifest History Array ← Append Generation Version
 
 ---
 
-## 14. Phase 5: Micro-Ledger & Audit Infrastructure (Upcoming)
+## 14. Zed AI Agent Setup
+
+This repository is initialized for Zed agent workflows.
+
+| File | Purpose |
+|------|---------|
+| `.zed/tasks.json` | Repeatable Zed tasks for install/build/test/Docker/backend |
+| `.zed/settings.json` | Excludes heavy/generated folders from project scanning |
+| `docs/ZED_AGENT_GUIDE.md` | Short Zed-specific onboarding |
+| `docs/CURRENT_STATUS.md` | Current implementation and validation snapshot |
+
+**Recommended agent startup flow:**
+1. Read this `AGENTS.md`.
+2. Check `docs/CURRENT_STATUS.md` before making roadmap or architecture claims.
+3. Use `.zed/tasks.json` task names when suggesting repeatable Zed workflows.
+4. Keep this file and `.zed/tasks.json` synchronized when commands change.
+
+---
+
+## 15. Phase 5: Micro-Ledger & Audit Infrastructure (Upcoming)
 
 > **Status**: Planned — not yet implemented.  
 > **Goal**: Build a structured, queryable audit trail for every manifest mutation, generation, and parametric edit. The micro-ledger decouples operational logging from the Babylon.js display layer so the system can be ported to XR/immersive environments with zero refactoring.
 
-### 14.1 Why a Micro-Ledger?
+### 15.1 Why a Micro-Ledger?
 
 Current state: The backend logs operations to `console.log()` with tagged prefixes. This is sufficient for development but not for:
 - **Forensic audit** — "Who changed what, when?"
@@ -497,7 +560,7 @@ Current state: The backend logs operations to `console.log()` with tagged prefix
 - **Analytics** — "Which prompts produce the most parametric edits?"
 - **Immersive ports** — XR headsets need the same audit trail without browser console access
 
-### 14.2 Proposed Scope
+### 15.2 Proposed Scope
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
@@ -507,7 +570,7 @@ Current state: The backend logs operations to `console.log()` with tagged prefix
 | On-chain attestation | `ArbeskWorld.sol` extension | Anchor manifest root CIDs to the contract for immutability proof |
 | Frontend ledger panel | `frontend/src/js/ui/ledger-panel.js` | Visual audit trail in the studio |
 
-### 14.3 Design Principles
+### 15.3 Design Principles
 
 1. **Append-only**: Never mutate or delete log entries. Invalidations are new entries.
 2. **Content-addressed**: Log entries reference manifests by CID, not mutable IDs.
@@ -516,7 +579,7 @@ Current state: The backend logs operations to `console.log()` with tagged prefix
 
 ---
 
-## 15. Contact & Links
+## 16. Contact & Links
 
 - **Repository**: https://github.com/ahmadsayed/arbesk
 - **Docs**: `docs/` directory in this repo

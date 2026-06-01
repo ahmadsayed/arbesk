@@ -1,0 +1,10 @@
+{
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/node_modules",
+    "**/frontend/dist",
+    "**/blockchain/artifacts",
+    "**/blockchain/cache",
+    "**/.playwright-mcp"
+  ]
+}
