@@ -529,6 +529,10 @@ async function handleLinkedAssetDropped(event) {
 
   disposeNode(nodeId);
 
+  // Render the child world immediately into the scene
+  const parentNode = state.rootSceneAnchor || state.scene;
+  await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
+
   document.dispatchEvent(
     new CustomEvent("scene:tokenChildAdded", {
       detail: {
