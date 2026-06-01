@@ -1,0 +1,200 @@
+doctype html
+html
+  head
+    title Arbesk Studio
+    meta(charset="utf-8")
+    meta(name="viewport", content="width=device-width, initial-scale=1")
+    link(rel="icon", type="image/png", href="/logo.png")
+    link(rel="apple-touch-icon", href="/apple-touch-icon.png")
+    link(rel="stylesheet", href="/css/styles.css")
+    script(src="https://cdn.babylonjs.com/babylon.js")
+    script(src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js")
+    script(src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js")
+    script(src="https://cdn.jsdelivr.net/npm/web3modal@1.9.12/dist/index.js")
+  body
+    #app
+      nav#topbar.arabesque-topbar
+        .topbar-brand
+          img.brand-icon(src="/logo.png", alt="Arbesk Logo")
+          span.brand-text Arbesk
+        #manifestHistory.manifest-history-section(hidden)
+          .history-bar
+            .history-track-line
+        .topbar-actions
+          button#mobileMenuBtn.mobile-menu-toggle(aria-label="Toggle chat")
+            svg(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+              line(x1="3" y1="6" x2="21" y2="6")
+              line(x1="3" y1="12" x2="21" y2="12")
+              line(x1="3" y1="18" x2="21" y2="18")
+          button#newWorldTopBtn.btn-arabesque-secondary.btn-sm.me-2(title="Create a new world") ➕ New
+          button#connectWalletBtn.btn-arabesque-outline.btn-sm.me-2(onclick="connectWallet()") Connect Wallet
+          button#disconnectWalletBtn.btn-arabesque-outline.btn-sm.hidden(onclick="disconnectWallet()") Disconnect
+
+      .arabesque-lattice-border
+
+      .studio-layout
+        aside#chatSidebar.chat-sidebar
+          .sidebar-header
+            h3 Conversation
+            button#toggleChatBtn.sidebar-toggle(aria-label="Collapse sidebar")
+              svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                polyline(points="15 18 9 12 15 6")
+          .sidebar-body
+            #chatHistory.chat-history
+              .chat-welcome
+                .welcome-icon ✦
+                p.welcome-text Welcome to Arbesk
+                p.welcome-sub Describe the 3D asset you envision and watch it take form.
+
+            //- Save & Publish Buttons
+            #saveWorldSection.save-world-section(hidden)
+              .save-publish-stack
+                button#saveWorldBtn.btn-arabesque.btn-block.btn-save
+                  span 💾
+                  span#saveWorldBtnText Save
+                button#publishWorldBtn.btn-arabesque-outline.btn-block.btn-publish
+                  span 🌐
+                  span#publishWorldBtnText Publish
+
+            //- Team Editor Panel (Phase 5)
+            #teamPanel.team-section(hidden)
+              .team-header
+                h5 World Editors
+                span#teamOwnerBadge.owner-badge(hidden) Owner
+              #teamList.team-list
+              .team-add
+                input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
+                button#teamAddBtn.btn-arabesque.btn-sm Add Editor
+
+            #timeline.timeline-section(hidden)
+              label.timeline-label Version History
+              .timeline-slider-wrap
+                input#versionSlider.timeline-slider(type="range", min="0", max="0", step="1")
+                span#versionLabel.version-badge v1
+
+          //- Asset Definition Panel (Phase 4)
+          #assetDefinition.asset-definition-section
+            .asset-def-header
+              button#toggleAssetDef.asset-def-toggle(aria-label="Toggle asset settings")
+                svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                  polyline(points="9 18 15 12 9 6")
+                span Asset Settings
+            .asset-def-body(hidden)
+              .control-group
+                label.form-label(for="assetName") Asset Name
+                input#assetName.form-control(type="text", placeholder="e.g. Workbench")
+              .control-group
+                label.form-label(for="providerSelect") Provider
+                select#providerSelect.form-select
+                  option(value="mock") Mock (Local)
+                  option(value="meshy") Meshy
+                  option(value="tripo3d") Tripo3D
+                  option(value="hunyuan3d") Hunyuan3D
+              .control-group
+                label.form-label Position
+                .vector-inputs
+                  input#posX.form-control(type="number", step="0.1", value="0", placeholder="X")
+                  input#posY.form-control(type="number", step="0.1", value="0", placeholder="Y")
+                  input#posZ.form-control(type="number", step="0.1", value="0", placeholder="Z")
+              .control-group
+                label.form-label Rotation (deg)
+                .vector-inputs
+                  input#rotX.form-control(type="number", step="1", value="0", placeholder="X")
+                  input#rotY.form-control(type="number", step="1", value="0", placeholder="Y")
+                  input#rotZ.form-control(type="number", step="1", value="0", placeholder="Z")
+              .control-group
+                label.form-label Scale
+                .vector-inputs
+                  input#scaleX.form-control(type="number", step="0.1", value="1", placeholder="X")
+                  input#scaleY.form-control(type="number", step="0.1", value="1", placeholder="Y")
+                  input#scaleZ.form-control(type="number", step="0.1", value="1", placeholder="Z")
+
+        button#showSidebarBtn.show-sidebar-btn(aria-label="Show chat sidebar", title="Show chat sidebar")
+          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+            polyline(points="9 18 15 12 9 6")
+
+        main#mainStage.main-stage
+          #chatEditor.chat-editor
+            .chat-editor-inner
+              .editor-frame
+                textarea#promptInput(placeholder="Describe the 3D asset you envision…")
+                button#generateBtn.generate-btn(aria-label="Generate")
+                  span.generate-icon ✦
+                  span.generate-text Generate
+
+          #viewport.viewport
+            canvas#renderCanvas
+
+            //- Welcome overlay — TokenID is the only reference; CID is internal
+            #welcomeOverlay.welcome-overlay
+              .welcome-content
+                .welcome-icon-large ✦
+                h2 Welcome to Arbesk
+                p Start creating 3D fractal worlds.
+                .welcome-actions
+                  button#newWorldBtn.btn-arabesque Create New World
+                  p.welcome-hint Connect your wallet to browse your gallery.
+
+            #waitingOverlay.waiting-overlay.hidden
+              .waiting-content
+                .arabesque-spinner
+                p#waitingText.waiting-text Carving your model…
+
+          aside#inspector.inspector-panel(hidden)
+            .inspector-header
+              h5 Node Inspector
+              button.btn-close(type="button", aria-label="Close", onclick="document.getElementById('inspector').hidden=true")
+            .inspector-body
+              .control-group
+                label.form-label(for="nodeColor") Color
+                input#nodeColor.form-control.form-control-color(type="color", value="#C19A6B")
+              .control-group
+                label.form-label Scale X
+                input#nodeScaleX.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
+              .control-group
+                label.form-label Scale Y
+                input#nodeScaleY.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
+              .control-group
+                label.form-label Scale Z
+                input#nodeScaleZ.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
+              .control-actions
+                button#saveParametric.btn-arabesque Save Parametric Version
+                button#cancelParametric.btn-arabesque-secondary Cancel
+
+        //- Right-side Gallery Panel (TokenID-centric world browser)
+        aside#galleryPanel.gallery-panel.collapsed
+          .gallery-header
+            h3 Gallery
+            button#galleryToggle.gallery-toggle(aria-label="Collapse gallery")
+              svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                polyline(points="9 18 15 12 9 6")
+          #galleryBody.gallery-body
+            p.gallery-empty Connect wallet to view your worlds.
+
+        button#showGalleryBtn.show-gallery-btn(aria-label="Show gallery", title="Show gallery", style="display:none")
+          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+            polyline(points="15 18 9 12 15 6")
+
+    script(type="module", src="/js/engine/scene-graph.js")
+    script(type="module", src="/js/engine/time-travel.js")
+    script(type="module", src="/js/engine/parametric-preview.js")
+    script(type="module", src="/js/blockchain/wallet.js")
+    script(type="module", src="/js/services/api.js")
+    script(type="module", src="/js/services/team.js")
+    script(type="module", src="/js/ui/team-panel.js")
+    script(type="module", src="/js/ui/gallery.js")
+    script(type="module", src="/js/ui/save-world.js")
+    script(type="module", src="/js/ui/history-browser.js")
+    script(type="module", src="/js/ui/chat-studio.js")
+    script(type="module").
+      import { initGallery } from '/js/ui/gallery.js';
+      initGallery();
+
+      document.addEventListener('wallet:connected', () => {
+        document.getElementById('connectWalletBtn').classList.add('hidden');
+        document.getElementById('disconnectWalletBtn').classList.remove('hidden');
+      });
+      document.addEventListener('wallet:disconnected', () => {
+        document.getElementById('connectWalletBtn').classList.remove('hidden');
+        document.getElementById('disconnectWalletBtn').classList.add('hidden');
+      });

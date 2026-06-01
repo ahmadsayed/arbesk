@@ -1,0 +1,123 @@
+/**
+ * Arbesk Team Panel UI Controller
+ *
+ * Manages the World Editors list in the chat sidebar.
+ */
+
+import { fetchEditors, isOwner, addTeamMember, removeTeamMember } from '../services/team.js';
+
+// DOM references
+const teamPanel = document.getElementById('teamPanel');
+const teamList = document.getElementById('teamList');
+const teamAddInput = document.getElementById('teamAddInput');
+const teamAddBtn = document.getElementById('teamAddBtn');
+const teamOwnerBadge = document.getElementById('teamOwnerBadge');
+
+let activeTokenId = null;
+let owner = false;
+
+function truncateAddr(addr) {
+    return addr.slice(0, 6) + '…' + addr.slice(-4);
+}
+
+async function refreshEditors() {
+    if (!teamPanel || !activeTokenId) return;
+
+    const editors = await fetchEditors(activeTokenId);
+    owner = await isOwner(activeTokenId);
+
+    if (teamOwnerBadge) {
+        teamOwnerBadge.hidden = !owner;
+    }
+
+    if (!teamList) return;
+    teamList.innerHTML = '';
+
+    if (editors.length === 0) {
+        teamList.innerHTML = '<p class="team-empty">No editors yet.</p>';
+        return;
+    }
+
+    for (const addr of editors) {
+        const row = document.createElement('div');
+        row.className = 'team-row';
+
+        const label = document.createElement('span');
+        label.className = 'team-address';
+        label.textContent = truncateAddr(addr);
+        label.title = addr;
+        row.appendChild(label);
+
+        if (owner && addr.toLowerCase() !== window.walletAddress?.toLowerCase()) {
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn-team-remove';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove editor';
+            removeBtn.addEventListener('click', async () => {
+                try {
+                    removeBtn.disabled = true;
+                    await removeTeamMember(activeTokenId, addr);
+                    await refreshEditors();
+                } catch (err) {
+                    alert('Remove failed: ' + err.message);
+                    removeBtn.disabled = false;
+                }
+            });
+            row.appendChild(removeBtn);
+        }
+
+        teamList.appendChild(row);
+    }
+}
+
+async function onAddEditor() {
+    if (!activeTokenId || !teamAddInput) return;
+    const address = teamAddInput.value.trim();
+    if (!address) return;
+
+    try {
+        teamAddBtn.disabled = true;
+        await addTeamMember(activeTokenId, address);
+        teamAddInput.value = '';
+        await refreshEditors();
+    } catch (err) {
+        alert('Add editor failed: ' + err.message);
+    } finally {
+        teamAddBtn.disabled = false;
+    }
+}
+
+function showTeamPanel(tokenId) {
+    activeTokenId = tokenId;
+    if (teamPanel) {
+        teamPanel.hidden = false;
+        refreshEditors();
+    }
+}
+
+function hideTeamPanel() {
+    activeTokenId = null;
+    if (teamPanel) teamPanel.hidden = true;
+}
+
+// Event bindings
+if (teamAddBtn) {
+    teamAddBtn.addEventListener('click', onAddEditor);
+}
+
+if (teamAddInput) {
+    teamAddInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') onAddEditor();
+    });
+}
+
+// Listen for mint success to reveal panel
+document.addEventListener('wallet:worldMinted', (e) => {
+    const tokenId = e.detail?.tokenId;
+    if (tokenId) showTeamPanel(tokenId);
+});
+
+// Listen for scenegraph:ready to check if an existing token matches manifest
+// (Future enhancement: map manifest CID → tokenId via contract events or backend index)
+
+export { showTeamPanel, hideTeamPanel, refreshEditors };

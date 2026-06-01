@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <defs>
+    <pattern id="arabesque" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
+      <!-- Background fill -->
+      <rect width="120" height="120" fill="#4A3222"/>
+      
+      <!-- Wood grain lines -->
+      <g opacity="0.15" stroke="#C19A6B" stroke-width="0.5" fill="none">
+        <path d="M0 10 Q30 5 60 10 T120 10"/>
+        <path d="M0 30 Q30 25 60 30 T120 30"/>
+        <path d="M0 50 Q30 45 60 50 T120 50"/>
+        <path d="M0 70 Q30 65 60 70 T120 70"/>
+        <path d="M0 90 Q30 85 60 90 T120 90"/>
+        <path d="M0 110 Q30 105 60 110 T120 110"/>
+      </g>
+      
+      <!-- Arabesque geometric lattice -->
+      <g stroke="#C19A6B" stroke-width="1.2" fill="none" opacity="0.25">
+        <!-- Center 8-point star -->
+        <path d="M60 20 L68 40 L90 35 L75 52 L90 70 L68 65 L60 85 L52 65 L30 70 L45 52 L30 35 L52 40 Z"/>
+        
+        <!-- Interlacing octagon -->
+        <path d="M60 35 L75 40 L80 55 L75 70 L60 75 L45 70 L40 55 L45 40 Z"/>
+        
+        <!-- Cross arms -->
+        <path d="M60 0 L60 20 M60 85 L60 120"/>
+        <path d="M0 60 L30 60 M90 60 L120 60"/>
+        <path d="M20 20 L35 35 M85 35 L100 20"/>
+        <path d="M20 100 L35 85 M85 85 L100 100"/>
+        
+        <!-- Corner stars -->
+        <path d="M15 15 L20 5 L25 15 L35 20 L25 25 L20 35 L15 25 L5 20 Z"/>
+        <path d="M95 15 L100 5 L105 15 L115 20 L105 25 L100 35 L95 25 L85 20 Z"/>
+        <path d="M15 95 L20 85 L25 95 L35 100 L25 105 L20 115 L15 105 L5 100 Z"/>
+        <path d="M95 95 L100 85 L105 95 L115 100 L105 105 L100 115 L95 105 L85 100 Z"/>
+      </g>
+      
+      <!-- Dots at intersections -->
+      <g fill="#C19A6B" opacity="0.35">
+        <circle cx="60" cy="20" r="1.5"/>
+        <circle cx="60" cy="85" r="1.5"/>
+        <circle cx="30" cy="60" r="1.5"/>
+        <circle cx="90" cy="60" r="1.5"/>
+        <circle cx="20" cy="20" r="1"/>
+        <circle cx="100" cy="20" r="1"/>
+        <circle cx="20" cy="100" r="1"/>
+        <circle cx="100" cy="100" r="1"/>
+      </g>
+    </pattern>
+  </defs>
+  <rect width="120" height="120" fill="url(#arabesque)"/>
+</svg>
