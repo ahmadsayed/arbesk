@@ -13,6 +13,7 @@
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { normalizeTokenURI } from "./uri-utils.js";
+import { web3 as walletWeb3 } from "./wallet.js";
 
 /** @type {Map<string, {manifestCid: string, timestamp: number}>} */
 const resolutionCache = new Map();
@@ -100,7 +101,7 @@ const minERC721ABI = [
  * @returns {Object|null} Web3 contract instance or null
  */
 function getTokenContract(chainId, contractAddress) {
-  let provider = (typeof web3 !== "undefined" && web3) || window.web3 || null;
+  let provider = walletWeb3 || window.web3 || null;
 
   // If the target chain differs from the connected chain, try an external RPC
   if (provider && chainId) {
