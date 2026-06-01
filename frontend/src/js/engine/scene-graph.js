@@ -10,7 +10,10 @@ import {
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
 import { convertToDataURI } from "../gltf/uri_to_cid.js";
-import { resolveChildRef } from "../blockchain/token-resolver.js";
+import {
+  resolveChildRef,
+  clearResolutionCache,
+} from "../blockchain/token-resolver.js";
 
 const LAZY_LOAD_DISTANCE_FACTOR = 2.0;
 const DEFAULT_WOOD_COLOR = "#C19A6B"; // Light wooden color
@@ -656,6 +659,12 @@ async function loadAssetManifest(
     (rootSceneAnchor || nodeMeshes.size > 0 || nodeAnchors.size > 0)
   ) {
     clearScene();
+  }
+
+  // Clear token resolution cache so child_ref nodes always re-resolve
+  // to the latest on-chain tokenURI (child assets may have been updated).
+  if (depth === 0) {
+    clearResolutionCache();
   }
 
   const manifest = await getFromRemoteIPFS(manifestCid);
