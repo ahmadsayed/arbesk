@@ -2,11 +2,14 @@
  * Token Resolver Unit Tests
  *
  * Tests for token URI normalization and child_ref validation.
+ *
+ * normalizeTokenURI is tested inline to avoid Jest ESM resolution
+ * issues with the frontend directory. The canonical implementation
+ * lives at frontend/src/js/blockchain/uri-utils.js.
  */
 
 /**
- * Normalize a tokenURI response to a plain CID string.
- * (Inline copy of token-resolver.js function for test isolation)
+ * Inline copy of normalizeTokenURI from frontend/src/js/blockchain/uri-utils.js
  */
 function normalizeTokenURI(uri) {
   if (!uri || typeof uri !== "string") return "";

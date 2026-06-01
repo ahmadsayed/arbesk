@@ -12,6 +12,7 @@
  */
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { normalizeTokenURI } from "./uri-utils.js";
 
 /** @type {Map<string, {manifestCid: string, timestamp: number}>} */
 const resolutionCache = new Map();
@@ -20,8 +21,9 @@ const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 
 // Well-known RPC endpoints for common chains
 const KNOWN_RPC_ENDPOINTS = {
-  314159: "http://127.0.0.1:8545", // Filecoin Calibration (local Hardhat)
-  314: "https://api.calibration.node.glif.io/rpc/v1", // Filecoin Calibration
+  31415822: "http://127.0.0.1:8545", // Hardhat local dev node
+  314159: "https://api.calibration.node.glif.io/rpc/v1", // Filecoin Calibration testnet
+  314: "https://api.node.glif.io/rpc/v1", // Filecoin Mainnet
   1: "https://eth.llamarpc.com", // Ethereum mainnet (public fallback)
   11155111: "https://ethereum-sepolia.publicnode.com", // Sepolia testnet
 };
@@ -77,6 +79,17 @@ function setCachedResolution(childRef, manifestCid) {
   });
 }
 
+// Minimal ERC-721 ABI for tokenURI
+const minERC721ABI = [
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "tokenURI",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
+    stateMutability: "view",
+    type: "function",
+  },
+];
+
 /**
  * Create a Web3 contract instance for a token at a given chain and address.
  * Uses the current provider for the connected chain, or creates a new
@@ -120,53 +133,8 @@ function getTokenContract(chainId, contractAddress) {
   }
 }
 
-// Minimal ERC-721 ABI for tokenURI
-const minERC721ABI = [
-  {
-    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
-    name: "tokenURI",
-    outputs: [{ internalType: "string", name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-];
-
-/**
- * Normalize a tokenURI response to a plain CID string.
- * Handles:
- *   - Plain CID: "QmABC123..."
- *   - ipfs:// URI: "ipfs://QmABC123..."
- *   - ipfs:// with path: "ipfs://QmABC123/path/to/manifest.json"
- *   - HTTP gateway URL: "http://127.0.0.1:8080/ipfs/QmABC123..."
- *   - Full URL: "https://ipfs.io/ipfs/QmABC123..."
- *
- * @param {string} uri
- * @returns {string} Plain CID
- */
-export function normalizeTokenURI(uri) {
-  if (!uri || typeof uri !== "string") return "";
-
-  let normalized = uri.trim();
-
-  // Remove ipfs:// or ipfs/ prefix
-  if (normalized.startsWith("ipfs://")) {
-    normalized = normalized.slice(7);
-  }
-
-  // Remove HTTP gateway prefix
-  const ipfsPathMatch = normalized.match(/\/ipfs\/([A-Za-z0-9]{46,})/);
-  if (ipfsPathMatch) {
-    normalized = ipfsPathMatch[1];
-  }
-
-  // Remove any trailing path or query
-  const cidMatch = normalized.match(/^([A-Za-z0-9]{46,})/);
-  if (cidMatch) {
-    normalized = cidMatch[1];
-  }
-
-  return normalized;
-}
+// Re-export normalizeTokenURI for backward compatibility
+export { normalizeTokenURI } from "./uri-utils.js";
 
 /**
  * Resolve a child_ref token reference to a manifest CID.

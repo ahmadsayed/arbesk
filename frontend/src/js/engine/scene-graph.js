@@ -829,10 +829,14 @@ async function handleLinkedAssetDropped(event) {
   // Load the token child into the scene
   await loadNode(nodeEntry, rootSceneAnchor, 0, new Set());
 
+  // Retrieve the resolved CID from the anchor metadata
+  const resolvedRef = getNodeChildRef(nodeId);
+  const resolvedCid = resolvedRef?.resolvedCid || null;
+
   // Dispatch event so save/publish can include child refs
   document.dispatchEvent(
     new CustomEvent("scene:tokenChildAdded", {
-      detail: { nodeId, childRef },
+      detail: { nodeId, childRef, resolvedCid },
     })
   );
 }
@@ -912,12 +916,18 @@ function getNodeChildRef(nodeId) {
   if (nodeId && nodeId.startsWith("child_token_")) {
     const anchor = nodeAnchors.get(nodeId);
     if (anchor && anchor.metadata?.childRef) {
-      return anchor.metadata.childRef;
+      return {
+        ...anchor.metadata.childRef,
+        resolvedCid: anchor.metadata.resolvedCid || null,
+      };
     }
     // Also check child anchors for nested token children
     const childAnchor = scene?.getTransformNodeByName(`child_anchor_${nodeId}`);
     if (childAnchor?.metadata?.childRef) {
-      return childAnchor.metadata.childRef;
+      return {
+        ...childAnchor.metadata.childRef,
+        resolvedCid: childAnchor.metadata.resolvedCid || null,
+      };
     }
   }
 

@@ -319,10 +319,10 @@ if (versionSlider) versionSlider.addEventListener("input", onTimelineChange);
 document.addEventListener("wallet:connected", () => {});
 document.addEventListener("wallet:disconnected", () => {});
 
-// Update token child CID if the child manifest loads and we're showing the info
+// Update token child CID when resolution completes and we're showing the info
 document.addEventListener("scene:tokenChildAdded", (e) => {
   if (e.detail?.nodeId === activeNodeId && tokenChildCidEl) {
-    tokenChildCidEl.textContent = "Resolving…";
+    tokenChildCidEl.textContent = e.detail.resolvedCid || "Resolving…";
   }
 });
 
