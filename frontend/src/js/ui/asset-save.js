@@ -120,15 +120,15 @@ async function prepareManifestForWrite(assetName) {
     }
   }
 
-  const latestCid =
-    window.latestAssetManifestCid || window.activeAssetManifestCid;
-  if (latestCid && latestCid !== window.activeAssetManifestCid) {
+  // Bump version from the manifest we loaded (the previous version)
+  const prevCid = window.activeAssetManifestCid;
+  if (prevCid) {
     try {
-      const latestManifest = await getFromRemoteIPFS(latestCid);
-      manifest.version = (latestManifest.version || 0) + 1;
-      manifest.prev_asset_manifest_cid = latestCid;
+      const prevManifest = await getFromRemoteIPFS(prevCid);
+      manifest.version = (prevManifest.version || 0) + 1;
+      manifest.prev_asset_manifest_cid = prevCid;
     } catch {
-      advanceManifestVersion(manifest, latestCid);
+      advanceManifestVersion(manifest, prevCid);
     }
   }
   return manifest;
@@ -161,8 +161,8 @@ async function onSaveAssetDraft() {
       throw new Error(err.error || "Failed to save asset draft");
     }
     const { cid } = await response.json();
+    window.latestAssetManifestCid = window.activeAssetManifestCid;
     window.activeAssetManifestCid = cid;
-    window.latestAssetManifestCid = cid;
 
     // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
@@ -260,8 +260,8 @@ async function onPublishAsset() {
       showAssetEditors(tokenId);
     }
 
+    window.latestAssetManifestCid = window.activeAssetManifestCid;
     window.activeAssetManifestCid = cid;
-    window.latestAssetManifestCid = cid;
 
     // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
