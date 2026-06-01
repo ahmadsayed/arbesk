@@ -167,11 +167,15 @@ async function onSaveAssetDraft() {
     // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
 
-    if (!window.activeAssetTokenId) {
-      const url = new URL(window.location);
-      url.searchParams.set("manifest", cid);
-      window.history.pushState({}, "", url);
+    // Always update URL to point to latest manifest CID so the user sees
+    // their current work even before publishing (tokenURI stays on the old CID
+    // until Publish is clicked).
+    const url = new URL(window.location);
+    url.searchParams.set("manifest", cid);
+    if (window.activeAssetTokenId) {
+      url.searchParams.set("asset", String(window.activeAssetTokenId));
     }
+    window.history.pushState({}, "", url);
 
     document.dispatchEvent(
       new CustomEvent("asset:draftSaved", { detail: { cid } })

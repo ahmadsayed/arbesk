@@ -1076,23 +1076,27 @@ document.addEventListener("asset:linkedDropped", handleLinkedAssetDropped);
 document.addEventListener("DOMContentLoaded", () => {
   initEngine();
 
-  // Parse asset tokenId from URL first (TokenID is the primary reference)
+  // manifest= takes priority over asset= when both are present:
+  // manifest represents a saved draft (newer than on-chain tokenURI).
   const urlParams = new URLSearchParams(window.location.search);
+  const manifestCid = urlParams.get("manifest");
   const assetTokenId = urlParams.get("asset");
-  const manifestCid = urlParams.get("manifest"); // legacy fallback
 
-  if (assetTokenId) {
-    // TokenID-based loading — assetLibrary.js will handle contract lookup
-    // Welcome overlay stays visible until load succeeds
+  if (manifestCid) {
+    // Load the draft manifest CID directly (bypasses tokenURI)
+    hideWelcomeOverlay();
+    if (assetTokenId) window.activeAssetTokenId = String(assetTokenId);
+    loadAssetManifest(manifestCid);
+  } else if (assetTokenId) {
+    // TokenID-based loading — assetLibrary.js handles contract lookup
     document.dispatchEvent(
       new CustomEvent("asset:openByTokenId", {
         detail: { tokenId: assetTokenId },
       })
     );
-  } else if (manifestCid || window.activeAssetManifestCid) {
-    // Legacy CID-based loading (draft asset not yet minted)
+  } else if (window.activeAssetManifestCid) {
     hideWelcomeOverlay();
-    loadAssetManifest(manifestCid || window.activeAssetManifestCid);
+    loadAssetManifest(window.activeAssetManifestCid);
   } else {
     showWelcomeOverlay();
     document.dispatchEvent(new CustomEvent("scene:empty"));
