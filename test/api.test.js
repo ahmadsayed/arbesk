@@ -137,10 +137,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     return JSON.parse(data);
   }
 
-  describe("POST /api/assets/generate-node", () => {
+  describe("POST /api/v1/generations", () => {
     it("creates a new manifest with a generation variant entry", async () => {
       const res = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader())
         .send({
           prompt: "A modern minimalist workbench",
@@ -170,7 +170,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("returns suka.gltf for character prompts", async () => {
       const res = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader())
         .send({
           prompt: "A tall character",
@@ -184,7 +184,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects when prompt or nodeId is missing", async () => {
       const res = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader())
         .send({
           prompt: "",
@@ -200,38 +200,38 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const auth = makeAuthHeader(txHash);
 
       const res1 = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", auth)
         .send({ prompt: "First", nodeId: "node_r1", txHash });
       expect(res1.status).toBe(200);
 
       const res2 = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", auth)
         .send({ prompt: "Second", nodeId: "node_r2", txHash });
       expect(res2.status).toBe(409);
-      expect(res2.body.error).toBe("REPLAY_DETECTED");
+      expect(res2.body.error.code).toBe("REPLAY_DETECTED");
     });
 
     it("rejects tx sent to wrong contract address", async () => {
       const originalTo = mockWeb3Receipt.to;
       mockWeb3Receipt.to = "0xWrongAddress";
       const res = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader("0xwrongaddr"))
         .send({ prompt: "Test", nodeId: "node_w1", txHash: "0xwrongaddr" });
       expect(res.status).toBe(403);
-      expect(res.body.error).toContain("not sent to ArbeskAsset");
+      expect(res.body.error.message).toContain("not sent to ArbeskAsset");
       mockWeb3Receipt.to = originalTo;
     });
   });
 
-  describe("POST /api/assets/save-variant", () => {
+  describe("POST /api/v1/manifests/:cid/variants", () => {
     let prevAssetManifestCid;
 
     beforeAll(async () => {
       const res = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader("0xparam"))
         .send({
           prompt: "A chair",
@@ -243,10 +243,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("appends a parametric variant entry", async () => {
       const res = await request(app)
-        .post("/api/assets/save-variant")
+        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
         .send({
           nodeId: "node_chair_001",
-          prevAssetManifestCid: prevAssetManifestCid,
           color: "#FF5733",
           scale: { x: 1.5, y: 1.5, z: 1.5 },
         });
@@ -268,10 +267,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects invalid color", async () => {
       const res = await request(app)
-        .post("/api/assets/save-variant")
+        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
         .send({
           nodeId: "node_chair_001",
-          prevAssetManifestCid: prevAssetManifestCid,
           color: "not-a-color",
           scale: { x: 1, y: 1, z: 1 },
         });
@@ -281,10 +279,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects invalid scale", async () => {
       const res = await request(app)
-        .post("/api/assets/save-variant")
+        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
         .send({
           nodeId: "node_chair_001",
-          prevAssetManifestCid: prevAssetManifestCid,
           scale: { x: -1, y: 1, z: 1 },
         });
 
@@ -293,10 +290,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("validates manifest structure on round-trip", async () => {
       const res = await request(app)
-        .post("/api/assets/save-variant")
+        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
         .send({
           nodeId: "node_chair_001",
-          prevAssetManifestCid: prevAssetManifestCid,
           color: "#000000",
           scale: { x: 2, y: 2, z: 2 },
         });
@@ -354,20 +350,20 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
-  describe("POST /api/assets/publish-manifest", () => {
+  describe("POST /api/v1/manifests/:cid/publish", () => {
     it("stores and returns a CID", async () => {
       const res = await request(app)
-        .post("/api/assets/publish-manifest")
+        .post("/api/v1/manifests/QmFakePublish/publish")
         .send({ test: "data" });
 
       expect(res.status).toBe(200);
-      expect(res.text).toBeDefined();
+      expect(res.body.cid).toBeDefined();
     });
 
     it("stores embedded publish thumbnails as separate IPFS assets", async () => {
       const dataUrl = `data:image/webp;base64,${Buffer.from("mock-webp-thumbnail").toString("base64")}`;
       const res = await request(app)
-        .post("/api/assets/publish-manifest")
+        .post("/api/v1/manifests/QmFakeThumbPublish/publish")
         .send({
           asset_id: "asset_with_thumbnail",
           version: 1,
@@ -385,7 +381,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      const storedManifest = JSON.parse(ipfsStorage.get(res.text));
+      const storedManifest = JSON.parse(ipfsStorage.get(res.body.cid));
       expect(storedManifest.thumbnail).toMatchObject({
         type: "snapshot",
         cid: expect.any(String),
@@ -412,7 +408,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       let lastStatus = 200;
       for (let i = 0; i < 15; i++) {
         const res = await request(app)
-          .post("/api/assets/generate-node")
+          .post("/api/v1/generations")
           .set("Authorization", makeAuthHeader(`0xrate${i}`))
           .send({
             prompt: `Rate test ${i}`,
@@ -428,14 +424,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   describe("ABI Route", () => {
     it("returns ABI JSON when compiled", async () => {
-      const res = await request(app).get("/api/abi/ArbeskAsset.json");
+      const res = await request(app).get("/api/v1/contracts/ArbeskAsset/abi");
       // Since we compiled the contract during test setup, the ABI should be present
       if (res.status === 200) {
         expect(res.body).toHaveProperty("abi");
         expect(Array.isArray(res.body.abi)).toBe(true);
       } else {
         expect(res.status).toBe(404);
-        expect(res.body.error).toContain("ABI not found");
+        expect(res.body.error.message).toContain("ABI not found");
       }
     });
   });
@@ -446,7 +442,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     beforeAll(async () => {
       // Create a base manifest to attach child refs to
       const res = await request(app)
-        .post("/api/assets/generate-node")
+        .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader("0xchildtest"))
         .send({
           prompt: "A table",
@@ -481,11 +477,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
       };
 
-      const res = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
+      const res = await request(app).post("/api/v1/manifests").send(manifest);
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       expect(res.body.cid).toBeDefined();
 
       // Verify round-trip: fetch the manifest and check child_ref structure
@@ -554,11 +548,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
       };
 
-      const res = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
+      const res = await request(app).post("/api/v1/manifests").send(manifest);
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
 
       let data = "";
       for await (const file of mockIPFS.cat(res.body.cid)) {
@@ -588,7 +580,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("publish-manifest accepts thumbnails alongside child_ref nodes", async () => {
       const dataUrl = `data:image/webp;base64,${Buffer.from("child-world-thumb").toString("base64")}`;
       const res = await request(app)
-        .post("/api/assets/publish-manifest")
+        .post("/api/v1/manifests/QmFakeChildPublish/publish")
         .send({
           asset_id: "composed_with_thumbnail",
           version: 2,
@@ -623,7 +615,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      const storedManifest = JSON.parse(ipfsStorage.get(res.text));
+      const storedManifest = JSON.parse(ipfsStorage.get(res.body.cid));
       expect(storedManifest.thumbnail).toMatchObject({
         type: "snapshot",
         cid: expect.any(String),
@@ -634,7 +626,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   // ─── Manifest Chain History ──────────────────────────────────────────────
 
-  describe("GET /api/assets/history", () => {
+  describe("GET /api/v1/manifests/:cid/history", () => {
     let chainCids = [];
 
     beforeAll(async () => {
@@ -659,29 +651,31 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           ],
         },
       };
-      const r1 = await request(app).post("/api/assets/save-draft").send(v1);
+      const r1 = await request(app).post("/api/v1/manifests").send(v1);
       chainCids.push(r1.body.cid);
 
       // v2: save-variant on that node
-      const r2 = await request(app).post("/api/assets/save-variant").send({
-        nodeId: "node_hist_001",
-        prevAssetManifestCid: chainCids[0],
-        color: "#111111",
-      });
+      const r2 = await request(app)
+        .post(`/api/v1/manifests/${chainCids[0]}/variants`)
+        .send({
+          nodeId: "node_hist_001",
+          color: "#111111",
+        });
       chainCids.push(r2.body.assetManifestCid);
 
       // v3: another save-variant
-      const r3 = await request(app).post("/api/assets/save-variant").send({
-        nodeId: "node_hist_001",
-        prevAssetManifestCid: chainCids[1],
-        color: "#222222",
-      });
+      const r3 = await request(app)
+        .post(`/api/v1/manifests/${chainCids[1]}/variants`)
+        .send({
+          nodeId: "node_hist_001",
+          color: "#222222",
+        });
       chainCids.push(r3.body.assetManifestCid);
     });
 
     it("walks manifest chain and returns versions in chronological order", async () => {
       const res = await request(app).get(
-        `/api/assets/history?cid=${encodeURIComponent(chainCids[2])}`,
+        `/api/v1/manifests/${encodeURIComponent(chainCids[2])}/history`,
       );
 
       expect(res.status).toBe(200);
@@ -706,16 +700,17 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       }
     });
 
-    it("returns 400 when cid query param is missing", async () => {
-      const res = await request(app).get("/api/assets/history");
-      expect(res.status).toBe(400);
-      expect(res.body.error).toContain("cid");
+    it("returns empty chain for non-existent CID with history walk", async () => {
+      const res = await request(app).get("/api/v1/manifests/nonexistentcid/history");
+      expect(res.status).toBe(200);
+      expect(res.body.chain).toBeDefined();
+      expect(res.body.chain.length).toBe(0);
     });
 
     it("returns empty chain for non-existent CID", async () => {
       const fakeCid = "QmDoesNotExistAnywhereInStorage";
       const res = await request(app).get(
-        `/api/assets/history?cid=${encodeURIComponent(fakeCid)}`,
+        `/api/v1/manifests/${encodeURIComponent(fakeCid)}/history`,
       );
 
       expect(res.status).toBe(200);
@@ -726,7 +721,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   // ─── Token-By-ID Resolution ───────────────────────────────────────────────
 
-  describe("GET /api/assets/by-token/:tokenId", () => {
+  describe("GET /api/v1/tokens/:tokenId/manifest", () => {
     const knownTokenId = "42";
     let knownCid;
 
@@ -758,7 +753,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       globalThis.__setTokenURICid(knownCid);
 
       const res = await request(app).get(
-        `/api/assets/by-token/${knownTokenId}`,
+        `/api/v1/tokens/${knownTokenId}/manifest`,
       );
 
       expect(res.status).toBe(200);
@@ -774,7 +769,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("returns 404 when tokenURI returns null/falsy for a token", async () => {
       globalThis.__setTokenURICid(null);
 
-      const res = await request(app).get("/api/assets/by-token/99999");
+      const res = await request(app).get("/api/v1/tokens/99999/manifest");
 
       // tokenURI returns null → the handler returns 404
       expect(res.status).toBe(404);
@@ -785,7 +780,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // so deleting process.env after import doesn't change the in-memory value.
       // This test validates the handler's guard exists in code;
       // env-based path is covered by manual testing without the env var.
-      const res = await request(app).get("/api/assets/by-token/1");
+      const res = await request(app).get("/api/v1/tokens/1/manifest");
       // With CONTRACT_ADDRESS configured, it should attempt resolution
       // (may fail at tokenURI but not at the CONTRACT_ADDRESS guard)
       expect(res.status).not.toBe(503);
@@ -794,7 +789,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   // ─── Save Draft ───────────────────────────────────────────────────────────
 
-  describe("POST /api/assets/save-draft", () => {
+  describe("POST /api/v1/manifests", () => {
     it("saves a draft manifest and returns CID with asset_id and version", async () => {
       const manifest = {
         name: "Draft Test",
@@ -803,13 +798,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         scene: { nodes: [] },
       };
 
-      const res = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
+      const res = await request(app).post("/api/v1/manifests").send(manifest);
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       expect(res.body.cid).toBeDefined();
-      expect(res.body.asset_id).toBe("draft_test_001");
+      expect(res.body.assetId).toBe("draft_test_001");
       expect(res.body.version).toBe(1);
 
       // Verify round-trip
@@ -824,19 +817,17 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         scene: { nodes: [] },
       };
 
-      const res = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
+      const res = await request(app).post("/api/v1/manifests").send(manifest);
 
-      expect(res.status).toBe(200);
-      expect(res.body.asset_id).toBeDefined();
-      expect(res.body.asset_id).toMatch(/^asset_\d+$/);
+      expect(res.status).toBe(201);
+      expect(res.body.assetId).toBeDefined();
+      expect(res.body.assetId).toMatch(/^asset_\d+$/);
     });
 
     it("chains versions correctly via prev_asset_manifest_cid", async () => {
       // Save v1
       const res1 = await request(app)
-        .post("/api/assets/save-draft")
+        .post("/api/v1/manifests")
         .send({
           name: "Chain Draft",
           asset_id: "chain_draft",
@@ -846,7 +837,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       // Save v2 pointing to v1
       const res2 = await request(app)
-        .post("/api/assets/save-draft")
+        .post("/api/v1/manifests")
         .send({
           name: "Chain Draft v2",
           asset_id: "chain_draft",
@@ -855,7 +846,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           scene: { nodes: [] },
         });
 
-      expect(res2.status).toBe(200);
+      expect(res2.status).toBe(201);
       expect(res2.body.cid).not.toBe(res1.body.cid);
       expect(res2.body.version).toBe(2);
 
@@ -883,11 +874,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
       };
 
-      const res = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
+      const res = await request(app).post("/api/v1/manifests").send(manifest);
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
 
       // The manifest should have the thumbnail CID stored (not the dataUrl)
       const stored = JSON.parse(ipfsStorage.get(res.body.cid));
@@ -912,7 +901,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // body-parser (strict:true default) only accepts objects/arrays.
       // Sending malformed JSON triggers a syntax error → 400 response.
       const res = await request(app)
-        .post("/api/assets/save-draft")
+        .post("/api/v1/manifests")
         .send("not-valid-json")
         .set("Content-Type", "application/json");
 
@@ -922,9 +911,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   // ─── Micro-Ledger API ─────────────────────────────────────────────────────
 
-  describe("GET /api/ledger", () => {
+  describe("GET /api/v1/ledger", () => {
     it("returns ledger entries from the current session", async () => {
-      const res = await request(app).get("/api/ledger");
+      const res = await request(app).get("/api/v1/ledger");
 
       expect(res.status).toBe(200);
       expect(res.body.entries).toBeDefined();
@@ -949,7 +938,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("filters entries by opType", async () => {
-      const res = await request(app).get("/api/ledger?opType=GENERATION");
+      const res = await request(app).get("/api/v1/ledger?opType=GENERATION");
 
       expect(res.status).toBe(200);
       for (const entry of res.body.entries) {
@@ -958,7 +947,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("respects limit and offset pagination", async () => {
-      const res = await request(app).get("/api/ledger?limit=3&offset=0");
+      const res = await request(app).get("/api/v1/ledger?limit=3&offset=0");
 
       expect(res.status).toBe(200);
       expect(res.body.entries.length).toBeLessThanOrEqual(3);
@@ -969,7 +958,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("filters entries by manifestId", async () => {
       // Use an asset_id from a previous test
       const res = await request(app).get(
-        "/api/ledger?manifestId=draft_test_001",
+        "/api/v1/ledger?manifestId=draft_test_001",
       );
 
       expect(res.status).toBe(200);
@@ -979,7 +968,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("caps limit at 500", async () => {
-      const res = await request(app).get("/api/ledger?limit=1000");
+      const res = await request(app).get("/api/v1/ledger?limit=1000");
 
       expect(res.status).toBe(200);
       expect(res.body.limit).toBe(500);
@@ -987,9 +976,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
-  describe("GET /api/ledger/stats", () => {
+  describe("GET /api/v1/ledger/stats", () => {
     it("returns aggregate operation statistics", async () => {
-      const res = await request(app).get("/api/ledger/stats");
+      const res = await request(app).get("/api/v1/ledger/stats");
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
@@ -1026,21 +1015,22 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   // ─── Edge Cases ───────────────────────────────────────────────────────────
 
   describe("Edge cases", () => {
-    it("POST /api/assets/save-variant rejects missing prevAssetManifestCid", async () => {
+    it("POST /api/v1/manifests/:cid/variants rejects missing nodeId", async () => {
       const res = await request(app)
-        .post("/api/assets/save-variant")
-        .send({ nodeId: "some_node", color: "#FF0000" });
+        .post("/api/v1/manifests/QmFakeCid/variants")
+        .send({ color: "#FF0000" });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain("prevAssetManifestCid");
-    });
+      expect(res.body.error.code).toBe("MISSING_PARAMS");
 
-    it("POST /api/assets/save-variant returns 404 for unknown nodeId", async () => {
-      const res = await request(app).post("/api/assets/save-variant").send({
-        nodeId: "nonexistent_node_999",
-        prevAssetManifestCid: "QmSomeCidThatExists",
-        color: "#FF0000",
-      });
+    });
+    it("POST /api/v1/manifests/:cid/variants returns 404 for unknown nodeId", async () => {
+      const res = await request(app)
+        .post("/api/v1/manifests/QmSomeCidThatExists/variants")
+        .send({
+          nodeId: "nonexistent_node_999",
+          color: "#FF0000",
+        });
 
       // The mock IPFS won't have this CID → manifest parse fails → 500
       // or the CID exists but doesn't contain this node → 404
@@ -1048,9 +1038,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).not.toBe(200);
     });
 
-    it("POST /api/assets/publish-manifest handles missing thumbnail gracefully", async () => {
+    it("POST /api/v1/manifests/:cid/publish handles missing thumbnail gracefully", async () => {
       const res = await request(app)
-        .post("/api/assets/publish-manifest")
+        .post("/api/v1/manifests/QmNoThumb/publish")
         .send({
           asset_id: "no_thumbnail_asset",
           version: 1,
@@ -1058,14 +1048,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      const stored = JSON.parse(ipfsStorage.get(res.text));
+      const stored = JSON.parse(ipfsStorage.get(res.body.cid));
       // Manifest should not have a thumbnail key at all when no thumbnail provided
       expect(stored.thumbnail).toBeUndefined();
     });
 
-    it("POST /api/assets/publish-manifest skips invalid thumbnail data URL", async () => {
+    it("POST /api/v1/manifests/:cid/publish skips invalid thumbnail data URL", async () => {
       const res = await request(app)
-        .post("/api/assets/publish-manifest")
+        .post("/api/v1/manifests/QmBadThumb/publish")
         .send({
           asset_id: "bad_thumb",
           version: 1,
@@ -1077,12 +1067,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      const stored = JSON.parse(ipfsStorage.get(res.text));
+      const stored = JSON.parse(ipfsStorage.get(res.body.cid));
       // Invalid data URL should be stripped
       expect(stored.thumbnail).toBeUndefined();
     });
 
-    it("POST /api/assets/save-draft preserves existing scene nodes on re-save", async () => {
+    it("POST /api/v1/manifests preserves existing scene nodes on re-save", async () => {
       // Save a manifest with a node, then re-save it and verify nodes persist
       const manifest = {
         name: "Re-save Test",
@@ -1099,18 +1089,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
       };
 
-      const res1 = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
-      expect(res1.status).toBe(200);
+      const res1 = await request(app).post("/api/v1/manifests").send(manifest);
+      expect(res1.status).toBe(201);
 
       // Re-save same manifest with incremented version
       manifest.version = 2;
       manifest.prev_asset_manifest_cid = res1.body.cid;
-      const res2 = await request(app)
-        .post("/api/assets/save-draft")
-        .send(manifest);
-      expect(res2.status).toBe(200);
+      const res2 = await request(app).post("/api/v1/manifests").send(manifest);
+      expect(res2.status).toBe(201);
 
       // Verify round-trip preserves node data
       const stored = JSON.parse(ipfsStorage.get(res2.body.cid));
@@ -1119,11 +1105,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(stored.scene.nodes[0].appearance.color).toBe("#FF0000");
     });
 
-    it("GET /api/contract_address returns the configured address", async () => {
-      const res = await request(app).get("/api/contract_address");
+    it("GET /api/v1/config returns the configured address", async () => {
+      const res = await request(app).get("/api/v1/config");
 
       expect(res.status).toBe(200);
-      expect(res.body.contract_address).toBe("0xArbeskContractAddress");
+      expect(res.body.contractAddress).toBe("0xArbeskContractAddress");
     });
   });
 });

@@ -125,7 +125,7 @@ async function prepareManifestForWrite(assetName) {
       advanceManifestVersion(manifest, prevCid);
     }
   }
-  return manifest;
+  return { manifest, prevCid };
 }
 
 async function onSaveAssetDraft() {
@@ -138,32 +138,22 @@ async function onSaveAssetDraft() {
 
   try {
     const assetName = await resolveAssetName();
-    const manifest = await prepareManifestForWrite(assetName);
-    if (!manifest) {
+    const prepared = await prepareManifestForWrite(assetName);
+    if (!prepared) {
       alert(
         "No asset data to save. Generate an asset or add linked worlds first."
       );
       return;
     }
-    const response = await fetch("/api/assets/save-draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(manifest),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || "Failed to save asset draft");
-    }
-    const { cid } = await response.json();
+
+    const { cid } = await saveManifest(prepared.manifest);
     window.latestAssetManifestCid = window.activeAssetManifestCid;
     window.activeAssetManifestCid = cid;
 
     // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
 
-    // Update URL to point to the latest draft manifest so the user sees
-    // their current work. tokenID-based loading (Publish) returns the
-    // on-chain tokenURI which only updates on Publish, not Save.
+    // Update URL to point to the latest draft manifest
     updateUrlManifest(cid, window.activeAssetTokenId || null);
 
     document.dispatchEvent(
@@ -198,8 +188,8 @@ async function onPublishAsset() {
 
   try {
     const assetName = await resolveAssetName();
-    const manifest = await prepareManifestForWrite(assetName);
-    if (!manifest) {
+    const prepared = await prepareManifestForWrite(assetName);
+    if (!prepared) {
       alert(
         "No asset data to publish. Generate an asset or add linked worlds first."
       );
@@ -209,8 +199,8 @@ async function onPublishAsset() {
     try {
       const thumbnail = await captureAssetThumbnail();
       if (thumbnail) {
-        manifest.thumbnail = manifest.thumbnail?.cid
-          ? { ...thumbnail, cid: manifest.thumbnail.cid }
+        prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
+          ? { ...thumbnail, cid: prepared.manifest.thumbnail.cid }
           : thumbnail;
       }
     } catch (thumbnailError) {
@@ -220,13 +210,7 @@ async function onPublishAsset() {
       );
     }
 
-    const response = await fetch("/api/assets/publish-manifest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(manifest),
-    });
-    if (!response.ok) throw new Error("Failed to publish manifest to IPFS");
-    const cid = await response.text();
+    const { cid } = await publishManifest(prepared.prevCid, prepared.manifest);
 
     if (window.activeAssetTokenId) {
       const txHash = await updateAssetURI(window.activeAssetTokenId, cid);

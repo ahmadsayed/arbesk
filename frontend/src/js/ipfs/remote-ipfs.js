@@ -2,7 +2,7 @@
  * Arbesk Remote IPFS Reader (Gateway-Only)
  *
  * All reads go through the private Kubo gateway (127.0.0.1:8080).
- * All writes go through the backend API (POST /api/assets/generate-node, etc.).
+ * All writes go through the backend API (POST /api/v1/generations, etc.).
  *
  * Browser caching (memory + IndexedDB) is DISABLED for development.
  * Every read hits the IPFS gateway directly to avoid stale-data confusion.

@@ -7,6 +7,9 @@
 
 import { web3 } from "../blockchain/wallet.js";
 
+/** Base URL for all API calls */
+const API_BASE = "/api/v1";
+
 /**
  * Custom API error with status and backend error code.
  */
@@ -17,6 +20,21 @@ export class ApiError extends Error {
     this.code = code;
     this.name = "ApiError";
   }
+}
+
+/**
+ * Parse a standardized error response body.
+ */
+function parseErrorBody(data) {
+  if (data?.error && typeof data.error === "object") {
+    return {
+      message: data.error.message || "Unknown error",
+      code: data.error.code || null,
+      details: data.error.details || null,
+    };
+  }
+  // Fallback for legacy error formats
+  return { message: data?.error || "Unknown error", code: null, details: null };
 }
 
 /**
@@ -50,10 +68,63 @@ export async function signTxHash(txHash) {
   }
 }
 
+// ─── Config ─────────────────────────────────────────────────────────────────
+
 /**
- * POST /api/assets/generate-node
+ * GET /api/v1/config
+ * @returns {Promise<Object>} { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
+ */
+export async function getConfig() {
+  try {
+    const res = await fetch(`${API_BASE}/config`);
+    const data = await res.json();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /api/v1/config → contractAddress only
+ * @returns {Promise<string|null>}
+ */
+export async function getContractAddress() {
+  try {
+    const config = await getConfig();
+    return config?.contractAddress || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /api/v1/contracts/:name/abi
+ * @param {string} contractName — e.g. "ArbeskAsset"
+ * @returns {Promise<Object|null>} Full Hardhat artifact
+ */
+export async function getContractArtifact(contractName = "ArbeskAsset") {
+  try {
+    const res = await fetch(`${API_BASE}/contracts/${contractName}/abi`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// ─── Generations ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/generations
  * @param {Object} params
- * @returns {Promise<{assetManifestCid, sourceAssetCid}>}
+ * @param {string} params.prompt
+ * @param {string} params.nodeId
+ * @param {string} params.txHash
+ * @param {string} [params.provider]
+ * @param {string} [params.assetId]
+ * @param {string} [params.prevAssetManifestCid]
+ * @param {number[]} [params.transformMatrix]
+ * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string}>}
  */
 export async function generateAsset({
   prompt,
@@ -76,7 +147,7 @@ export async function generateAsset({
     ...(transformMatrix && { transform_matrix: transformMatrix }),
   };
 
-  const response = await fetch("/api/assets/generate-node", {
+  const response = await fetch(`${API_BASE}/generations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -88,10 +159,40 @@ export async function generateAsset({
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
     throw new ApiError(
-      data.error || `Generation failed (HTTP ${response.status})`,
+      message || `Generation failed (HTTP ${response.status})`,
       response.status,
-      data.error
+      code
+    );
+  }
+
+  return data;
+}
+
+// ─── Manifests ───────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/manifests
+ * Create or update a draft manifest.
+ * @param {Object} manifest — Full manifest object
+ * @returns {Promise<{cid: string, assetId: string, version: number}>}
+ */
+export async function saveManifest(manifest) {
+  const response = await fetch(`${API_BASE}/manifests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(manifest),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Save failed (HTTP ${response.status})`,
+      response.status,
+      code
     );
   }
 
@@ -99,12 +200,19 @@ export async function generateAsset({
 }
 
 /**
- * POST /api/assets/save-variant
- * @param {Object} body
- * @returns {Promise<{assetManifestCid}>}
+ * POST /api/v1/manifests/:cid/variants
+ * Create a parametric variant (color/scale edit) of a node.
+ * @param {Object} params
+ * @param {string} params.prevCid — Previous manifest CID
+ * @param {string} params.nodeId — Node to edit
+ * @param {string} [params.color] — Hex color #RRGGBB
+ * @param {{x:number, y:number, z:number}} [params.scale]
+ * @returns {Promise<{assetManifestCid: string}>}
  */
-export async function saveParametricVersion(body) {
-  const response = await fetch("/api/assets/save-variant", {
+export async function saveParametricVersion({ prevCid, nodeId, color, scale }) {
+  const body = { nodeId, ...(color && { color }), ...(scale && { scale }) };
+
+  const response = await fetch(`${API_BASE}/manifests/${prevCid}/variants`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -113,10 +221,11 @@ export async function saveParametricVersion(body) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
     throw new ApiError(
-      data.error || `Save failed (HTTP ${response.status})`,
+      message || `Save failed (HTTP ${response.status})`,
       response.status,
-      data.error
+      code
     );
   }
 
@@ -124,29 +233,121 @@ export async function saveParametricVersion(body) {
 }
 
 /**
- * GET /api/contract_address
- * @returns {Promise<string|null>}
+ * POST /api/v1/manifests/:cid/publish
+ * Publish a manifest to IPFS with optional thumbnail.
+ * @param {string} prevCid — Previous manifest CID (for URL)
+ * @param {Object} manifest — Full manifest object
+ * @returns {Promise<{cid: string}>}
  */
-export async function getContractAddress() {
-  try {
-    const res = await fetch("/api/contract_address");
-    const data = await res.json();
-    return data.contract_address || null;
-  } catch {
-    return null;
+export async function publishManifest(prevCid, manifest) {
+  const response = await fetch(`${API_BASE}/manifests/${prevCid}/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(manifest),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Publish failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
   }
+
+  return data;
 }
 
 /**
- * GET /abi/ArbeskAsset.json
- * @returns {Promise<Object|null>} Full Hardhat artifact
+ * GET /api/v1/manifests/:cid/history
+ * Walk the manifest version chain.
+ * @param {string} cid — Manifest CID to start from
+ * @returns {Promise<{chain: Array}>}
  */
-export async function getContractArtifact() {
-  try {
-    const res = await fetch("/api/abi/ArbeskAsset.json");
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+export async function getManifestHistory(cid) {
+  const response = await fetch(
+    `${API_BASE}/manifests/${encodeURIComponent(cid)}/history`
+  );
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `History fetch failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
   }
+
+  return data;
+}
+
+// ─── Tokens ──────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/tokens/:tokenId/manifest
+ * Resolve a token ID to its manifest.
+ * @param {string|number} tokenId
+ * @returns {Promise<{tokenId: string, manifestCid: string, manifest: Object}>}
+ */
+export async function getTokenManifest(tokenId) {
+  const response = await fetch(
+    `${API_BASE}/tokens/${encodeURIComponent(tokenId)}/manifest`
+  );
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Token resolution failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+
+  return data;
+}
+
+// ─── Ledger ──────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/ledger
+ * Query the micro-ledger audit trail.
+ * @param {Object} params
+ * @returns {Promise<{entries: Array, total: number, limit: number, offset: number}>}
+ */
+export async function queryLedger({ manifestId, opType, limit } = {}) {
+  const queryParams = new URLSearchParams({ limit: String(limit || 50) });
+  if (manifestId) queryParams.set("manifestId", manifestId);
+  if (opType) queryParams.set("opType", opType);
+
+  const response = await fetch(`${API_BASE}/ledger?${queryParams}`);
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Ledger query failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+
+  return data;
+}
+
+/**
+ * GET /api/v1/ledger/stats
+ * Get aggregated ledger analytics.
+ * @returns {Promise<Object>}
+ */
+export async function getLedgerStats() {
+  const response = await fetch(`${API_BASE}/ledger/stats`);
+  if (!response.ok) return null;
+  return response.json();
 }

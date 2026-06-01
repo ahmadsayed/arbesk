@@ -23,6 +23,39 @@ import { catManifest } from "./ipfs-utils.js";
 
 const ipfs = create(new URL(IPFS_API_URL));
 
+// ─── Middleware & Helpers ────────────────────────────────────────────────────
+
+/**
+ * Reject requests that are not application/json.
+ */
+function requireJson(req, res, next) {
+  if (
+    ["POST", "PUT", "PATCH"].includes(req.method) &&
+    !req.is("application/json")
+  ) {
+    return res.status(415).json({
+      error: {
+        code: "UNSUPPORTED_MEDIA_TYPE",
+        message: "Content-Type must be application/json",
+      },
+    });
+  }
+  next();
+}
+
+/**
+ * Standardized error response helper.
+ */
+function sendError(res, status, code, message, details = null) {
+  const body = {
+    error: { code, message },
+  };
+  if (details) body.error.details = details;
+  return res.status(status).json(body);
+}
+
+// ─── Thumbnail Helpers ──────────────────────────────────────────────────────
+
 const THUMBNAIL_DATA_URL_RE =
   /^data:(image\/(?:webp|png|jpeg));base64,([A-Za-z0-9+/=]+)$/;
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
@@ -92,61 +125,44 @@ async function persistEmbeddedThumbnail(manifest) {
   return manifest;
 }
 
+// ─── Router ─────────────────────────────────────────────────────────────────
+
 export default () => {
-  let api = Router();
+  const v1 = Router();
 
-  api.get("/contract_address", (req, res) => {
-    res.json({ contract_address: CONTRACT_ADDRESS });
+  // Apply JSON validation to all mutating routes
+  v1.use(requireJson);
+
+  // ─── Config ───────────────────────────────────────────────────────────────
+
+  v1.get("/config", (req, res) => {
+    res.json({
+      contractAddress: CONTRACT_ADDRESS,
+      ipfsGatewayUrl:
+        process.env.IPFS_GATEWAY_URL || "http://127.0.0.1:8080/ipfs/",
+      hardhatRpcUrl: HARDHAT_RPC_URL,
+      mockGeneration: process.env.MOCK_3D_GENERATION === "true",
+    });
   });
 
-  api.post("/assets/publish-manifest", async (req, res) => {
-    try {
-      const manifest = req.body;
-      await persistEmbeddedThumbnail(manifest);
+  // ─── Generations ──────────────────────────────────────────────────────────
 
-      const payload = JSON.stringify(manifest);
-      console.log(
-        `[IPFS] add /assets/publish-manifest | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
-      );
-      const { cid } = await ipfs.add(payload);
-      const resultCid = cid.toString();
-      console.log(`[IPFS] add /assets/publish-manifest | cid=${resultCid}`);
+  v1.use("/generations", generateAssetNode(ipfs));
 
-      // Record to micro-ledger
-      const hasThumbnail = !!manifest?.thumbnail?.cid;
-      appendEntry(
-        createLedgerEntry({
-          opType: "PUBLISH",
-          manifestId: manifest.asset_id || manifest.name || "unknown",
-          cid: resultCid,
-          prevCid: manifest.prev_asset_manifest_cid || null,
-          actorAddress: req.body.actorAddress || "system",
-          payload: {
-            publishedCid: resultCid,
-            thumbnailCid: manifest?.thumbnail?.cid || null,
-            thumbnailMime: manifest?.thumbnail?.mime || null,
-            thumbnailBytes: manifest?.thumbnail?.bytes || null,
-          },
-        }),
-      );
+  // ─── Manifests ────────────────────────────────────────────────────────────
 
-      res.send(resultCid);
-    } catch (error) {
-      console.error("[IPFS] /assets/publish-manifest error:", error.message);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  /**
-   * Save a manifest to IPFS without any blockchain interaction.
-   * Handles version chaining automatically.
-   */
-  api.post("/assets/save-draft", async (req, res) => {
+  // Create a new manifest (was save-draft)
+  v1.post("/manifests", async (req, res) => {
     try {
       const manifest = req.body;
       if (!manifest || typeof manifest !== "object") {
         console.log(`[SAVE] rejected — manifest object required`);
-        return res.status(400).json({ error: "Manifest object required" });
+        return sendError(
+          res,
+          400,
+          "INVALID_MANIFEST",
+          "Manifest object required",
+        );
       }
 
       // Ensure version fields are present
@@ -182,41 +198,70 @@ export default () => {
         }),
       );
 
-      res.json({
+      res.status(201).json({
         cid: resultCid,
-        asset_id: manifest.asset_id,
+        assetId: manifest.asset_id,
         version: manifest.version,
       });
     } catch (error) {
       console.error("[SAVE] error:", error.message);
-      res.status(500).json({ error: error.message });
+      sendError(res, 500, "SAVE_FAILED", error.message);
     }
   });
 
-  // Mount ABI router
-  api.use("/abi", abiRouter());
+  // Create a parametric variant for a node
+  v1.use("/manifests", parametricVersion(ipfs));
 
-  // Mount ledger routes
-  api.use("/ledger", ledgerRouter());
-
-  api.use("/assets/generate-node", generateAssetNode(ipfs));
-
-  api.use("/assets/save-variant", parametricVersion(ipfs));
-
-  async function getFromIPFS(cid) {
-    return catManifest(ipfs, cid);
-  }
-
-  /**
-   * Walk the manifest chain backwards via prev_asset_manifest_cid links.
-   * Returns lightweight summaries of each version.
-   */
-  api.get("/assets/history", async (req, res) => {
+  // Publish a manifest (with thumbnail support)
+  v1.post("/manifests/:cid/publish", async (req, res) => {
     try {
-      const { cid } = req.query;
+      const manifest = req.body;
+      await persistEmbeddedThumbnail(manifest);
+
+      const payload = JSON.stringify(manifest);
+      console.log(
+        `[IPFS] add publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
+      );
+      const { cid } = await ipfs.add(payload);
+      const resultCid = cid.toString();
+      console.log(`[IPFS] add publish | cid=${resultCid}`);
+
+      // Record to micro-ledger
+      appendEntry(
+        createLedgerEntry({
+          opType: "PUBLISH",
+          manifestId: manifest.asset_id || manifest.name || "unknown",
+          cid: resultCid,
+          prevCid: manifest.prev_asset_manifest_cid || null,
+          actorAddress: req.body.actorAddress || "system",
+          payload: {
+            publishedCid: resultCid,
+            thumbnailCid: manifest?.thumbnail?.cid || null,
+            thumbnailMime: manifest?.thumbnail?.mime || null,
+            thumbnailBytes: manifest?.thumbnail?.bytes || null,
+          },
+        }),
+      );
+
+      res.status(200).json({ cid: resultCid });
+    } catch (error) {
+      console.error("[IPFS] publish error:", error.message);
+      sendError(res, 500, "PUBLISH_FAILED", error.message);
+    }
+  });
+
+  // Walk manifest version chain
+  v1.get("/manifests/:cid/history", async (req, res) => {
+    try {
+      const { cid } = req.params;
       if (!cid) {
-        console.log(`[CHAIN] rejected — cid query param required`);
-        return res.status(400).json({ error: "cid query param required" });
+        console.log(`[CHAIN] rejected — cid param required`);
+        return sendError(
+          res,
+          400,
+          "MISSING_CID",
+          "CID path parameter is required",
+        );
       }
 
       console.log(`[CHAIN] walking from ${cid}`);
@@ -235,10 +280,9 @@ export default () => {
         visited.add(currentCid);
 
         try {
-          const raw = await getFromIPFS(currentCid);
+          const raw = await catManifest(ipfs, currentCid);
           const manifest = JSON.parse(raw);
           const nodes = getSceneNodes(manifest);
-          const firstNode = nodes[0];
           const timestamp = manifest.timestamp || null;
 
           chain.unshift({
@@ -262,27 +306,29 @@ export default () => {
       res.json({ chain });
     } catch (error) {
       console.error("[CHAIN] error:", error.message);
-      res.status(500).json({ error: error.message });
+      sendError(res, 500, "CHAIN_WALK_FAILED", error.message);
     }
   });
 
-  /**
-   * Fetch a manifest by TokenID.
-   * Queries the ArbeskAsset contract for tokenURI, then fetches the manifest from IPFS.
-   */
-  api.get("/assets/by-token/:tokenId", async (req, res) => {
+  // ─── Tokens ───────────────────────────────────────────────────────────────
+
+  // Resolve a token ID to its manifest
+  v1.get("/tokens/:tokenId/manifest", async (req, res) => {
     try {
       const { tokenId } = req.params;
       if (!tokenId) {
         console.log(`[TOKEN] rejected — tokenId required`);
-        return res.status(400).json({ error: "tokenId is required" });
+        return sendError(res, 400, "MISSING_TOKEN_ID", "tokenId is required");
       }
 
       if (!CONTRACT_ADDRESS) {
         console.log(`[TOKEN] rejected — CONTRACT_ADDRESS not configured`);
-        return res
-          .status(503)
-          .json({ error: "Contract address not configured" });
+        return sendError(
+          res,
+          503,
+          "CONTRACT_NOT_CONFIGURED",
+          "Contract address not configured",
+        );
       }
 
       // Load ABI
@@ -296,33 +342,59 @@ export default () => {
         abi = JSON.parse(abiRaw).abi;
       } catch (e) {
         console.log(`[TOKEN] ABI not found — compile contracts first`);
-        return res.status(503).json({
-          error:
-            "Contract ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile",
-        });
+        return sendError(
+          res,
+          503,
+          "ABI_NOT_FOUND",
+          "Contract ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile",
+        );
       }
 
       const contract = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
       const manifestCid = await contract.methods.tokenURI(tokenId).call();
       if (!manifestCid) {
         console.log(`[TOKEN] no manifest URI for token ${tokenId}`);
-        return res
-          .status(404)
-          .json({ error: "Token not found or has no manifest URI" });
+        return sendError(
+          res,
+          404,
+          "TOKEN_NOT_FOUND",
+          "Token not found or has no manifest URI",
+        );
       }
 
       console.log(`[TOKEN] token ${tokenId} → CID ${manifestCid}`);
-      const raw = await getFromIPFS(manifestCid);
+      const raw = await catManifest(ipfs, manifestCid);
       const manifest = JSON.parse(raw);
 
       res.json({ tokenId, manifestCid, manifest });
     } catch (error) {
       console.error("[TOKEN] error:", error.message);
-      res.status(500).json({ error: error.message });
+      sendError(res, 500, "TOKEN_RESOLUTION_FAILED", error.message);
     }
   });
 
-  api.getFromIPFS = getFromIPFS;
+  // ─── Contracts ────────────────────────────────────────────────────────────
+
+  // Serve contract ABI by name
+  v1.get("/contracts/:name/abi", (req, res) => {
+    const abiRouterInstance = abiRouter();
+    // Forward to the existing ABI router logic
+    req.url = `/${req.params.name}.json`;
+    abiRouterInstance(req, res);
+  });
+
+  // ─── Ledger ───────────────────────────────────────────────────────────────
+
+  v1.use("/ledger", ledgerRouter());
+
+  // ─── Mount under /api/v1 ──────────────────────────────────────────────────
+
+  const api = Router();
+  api.use("/v1", v1);
+
+  // Expose for test helpers
+  api._getFromIPFS = async (cid) => catManifest(ipfs, cid);
+  api._ipfs = ipfs;
 
   return api;
 };

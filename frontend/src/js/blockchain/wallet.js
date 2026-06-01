@@ -69,14 +69,13 @@ function initWallet() {
  */
 async function _initContract() {
   try {
-    const [addrRes, abiRes] = await Promise.all([
-      fetch("/api/contract_address"),
-      fetch("/api/abi/ArbeskAsset.json"),
+    const [addr, abiData] = await Promise.all([
+      getContractAddress(),
+      getContractArtifact("ArbeskAsset"),
     ]);
-    const { contract_address: addr } = await addrRes.json();
     if (!addr) return;
+    if (!abiData?.abi) return;
 
-    const abiData = await abiRes.json();
     contractAddress = addr;
     contract = new web3.eth.Contract(abiData.abi, contractAddress);
   } catch (e) {

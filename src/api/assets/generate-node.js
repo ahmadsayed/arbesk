@@ -14,6 +14,10 @@ const usedTxHashes = new Set();
 export default function generateAssetNode(ipfs) {
   const router = Router();
 
+  /**
+   * POST /api/v1/generations
+   * Generate a 3D asset from a text prompt.
+   */
   router.post(
     "/",
     authenticate,
@@ -35,9 +39,12 @@ export default function generateAssetNode(ipfs) {
         );
         if (!prompt || !nodeId) {
           console.log("[GEN] rejected — prompt and nodeId required");
-          return res
-            .status(400)
-            .json({ error: "prompt and nodeId are required" });
+          return res.status(400).json({
+            error: {
+              code: "MISSING_PARAMS",
+              message: "prompt and nodeId are required",
+            },
+          });
         }
 
         const effectiveTxHash = txHash || res.locals.txHash;
@@ -47,9 +54,12 @@ export default function generateAssetNode(ipfs) {
           console.log(
             `[GEN] tx validation failed — receipt=${!!receipt} status=${receipt ? receipt.status : "n/a"}`,
           );
-          return res
-            .status(403)
-            .json({ error: "Invalid or failed transaction" });
+          return res.status(403).json({
+            error: {
+              code: "INVALID_TRANSACTION",
+              message: "Invalid or failed transaction",
+            },
+          });
         }
         console.log(
           `[GEN] tx ${effectiveTxHash} confirmed (block ${receipt.blockNumber})`,
@@ -63,9 +73,12 @@ export default function generateAssetNode(ipfs) {
           console.log(
             `[GEN] contract mismatch — receipt.to=${receipt.to} CONTRACT_ADDRESS=${CONTRACT_ADDRESS}`,
           );
-          return res
-            .status(403)
-            .json({ error: "Transaction not sent to ArbeskAsset contract" });
+          return res.status(403).json({
+            error: {
+              code: "WRONG_CONTRACT",
+              message: "Transaction not sent to ArbeskAsset contract",
+            },
+          });
         }
 
         if (CONTRACT_ADDRESS) {
@@ -80,7 +93,10 @@ export default function generateAssetNode(ipfs) {
           if (!hasEvent) {
             console.log("[GEN] event not found in tx logs");
             return res.status(403).json({
-              error: "Transaction did not emit expected payment event",
+              error: {
+                code: "EVENT_NOT_FOUND",
+                message: "Transaction did not emit expected payment event",
+              },
             });
           }
           console.log("[GEN] AssetGenerationPaid event verified");
@@ -91,8 +107,10 @@ export default function generateAssetNode(ipfs) {
             `[GEN] REPLAY detected — tx ${effectiveTxHash} already consumed`,
           );
           return res.status(409).json({
-            error: "REPLAY_DETECTED",
-            message: "txHash already consumed",
+            error: {
+              code: "REPLAY_DETECTED",
+              message: "This transaction has already been consumed",
+            },
           });
         }
 
@@ -105,9 +123,12 @@ export default function generateAssetNode(ipfs) {
           );
         } else {
           console.log("[GEN] cloud adapter not implemented — rejecting");
-          return res
-            .status(501)
-            .json({ error: "Cloud adapters not yet implemented" });
+          return res.status(501).json({
+            error: {
+              code: "NOT_IMPLEMENTED",
+              message: "Cloud adapters not yet implemented",
+            },
+          });
         }
 
         const assetPayload = result.data || result.buffer;
@@ -222,7 +243,12 @@ export default function generateAssetNode(ipfs) {
         res.json({ assetManifestCid, sourceAssetCid });
       } catch (error) {
         console.error("[GEN] error:", error.message);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({
+          error: {
+            code: "GENERATION_FAILED",
+            message: error.message,
+          },
+        });
       }
     },
   );

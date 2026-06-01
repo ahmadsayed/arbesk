@@ -224,41 +224,26 @@ async function onSave() {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
-    const body = {
-      nodeId: activeNodeId,
-      prevAssetManifestCid: window.activeAssetManifestCid,
-      color:
-        draftState.color !== committedState.color
-          ? draftState.color
-          : undefined,
-      scale:
-        draftState.scale.x !== committedState.scale.x ||
-        draftState.scale.y !== committedState.scale.y ||
-        draftState.scale.z !== committedState.scale.z
-          ? draftState.scale
-          : undefined,
-    };
+    const hasColorChange = draftState.color !== committedState.color;
+    const hasScaleChange =
+      draftState.scale.x !== committedState.scale.x ||
+      draftState.scale.y !== committedState.scale.y ||
+      draftState.scale.z !== committedState.scale.z;
 
     // Only send if something changed
-    if (!body.color && !body.scale) {
+    if (!hasColorChange && !hasScaleChange) {
       closeInspector();
       return;
     }
 
-    const response = await fetch("/api/assets/save-variant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
+    const result = await saveParametricVersion({
+      prevCid: window.activeAssetManifestCid,
+      nodeId: activeNodeId,
+      color: hasColorChange ? draftState.color : undefined,
+      scale: hasScaleChange ? draftState.scale : undefined,
     });
+
     clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || `HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
 
     // Update global manifest CID
     window.activeAssetManifestCid = result.assetManifestCid;

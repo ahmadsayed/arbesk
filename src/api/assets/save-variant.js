@@ -9,27 +9,38 @@ const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{6})$/;
 export default function parametricVersion(ipfs) {
   const router = Router();
 
-  router.post("/", async (req, res) => {
-    const { nodeId, color, scale, prevAssetManifestCid } = req.body;
+  /**
+   * POST /api/v1/manifests/:cid/variants
+   * Create a parametric variant (color/scale edit) of a node in an existing manifest.
+   */
+  router.post("/:cid/variants", async (req, res) => {
+    const { cid: prevAssetManifestCid } = req.params;
+    const { nodeId, color, scale } = req.body;
+
     try {
       console.log(
         `[PARAM] nodeId=${nodeId} color=${color || "none"} scale=${scale ? `${scale.x},${scale.y},${scale.z}` : "none"} prev=${prevAssetManifestCid}`,
       );
+
       if (!nodeId || !prevAssetManifestCid) {
-        console.log(
-          `[PARAM] rejected — nodeId and prevAssetManifestCid required`,
-        );
-        return res
-          .status(400)
-          .json({ error: "nodeId and prevAssetManifestCid are required" });
+        console.log(`[PARAM] rejected — nodeId and prevCid required`);
+        return res.status(400).json({
+          error: {
+            code: "MISSING_PARAMS",
+            message: "nodeId and manifest CID path parameter are required",
+          },
+        });
       }
 
       // Validate color
       if (color && !HEX_COLOR_REGEX.test(color)) {
         console.log(`[PARAM] rejected — invalid color "${color}"`);
-        return res
-          .status(400)
-          .json({ error: "color must be a valid hex color (#RRGGBB)" });
+        return res.status(400).json({
+          error: {
+            code: "INVALID_COLOR",
+            message: "color must be a valid hex color (#RRGGBB)",
+          },
+        });
       }
 
       // Validate scale
@@ -45,7 +56,10 @@ export default function parametricVersion(ipfs) {
         ) {
           console.log(`[PARAM] rejected — invalid scale`);
           return res.status(400).json({
-            error: "scale must be an object with positive x, y, z numbers",
+            error: {
+              code: "INVALID_SCALE",
+              message: "scale must be an object with positive x, y, z numbers",
+            },
           });
         }
       }
@@ -62,9 +76,12 @@ export default function parametricVersion(ipfs) {
       const node = nodes.find((n) => n.node_id === nodeId);
       if (!node) {
         console.log(`[PARAM] rejected — node ${nodeId} not found`);
-        return res
-          .status(404)
-          .json({ error: `Node ${nodeId} not found in manifest` });
+        return res.status(404).json({
+          error: {
+            code: "NODE_NOT_FOUND",
+            message: `Node ${nodeId} not found in manifest`,
+          },
+        });
       }
 
       // Apply parametric changes directly to the node
@@ -108,12 +125,20 @@ export default function parametricVersion(ipfs) {
         console.error(
           `[PARAM] timeout — IPFS cat aborted for ${prevAssetManifestCid}`,
         );
-        return res
-          .status(504)
-          .json({ error: "IPFS read timed out. Is the IPFS node running?" });
+        return res.status(504).json({
+          error: {
+            code: "IPFS_TIMEOUT",
+            message: "IPFS read timed out. Is the IPFS node running?",
+          },
+        });
       }
       console.error("[PARAM] error:", error.message);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({
+        error: {
+          code: "VARIANT_FAILED",
+          message: error.message,
+        },
+      });
     }
   });
 

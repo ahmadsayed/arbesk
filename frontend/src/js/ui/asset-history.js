@@ -38,11 +38,7 @@ let dragScrollLeft = 0;
 async function _fetchChain(cid) {
   if (!cid) return [];
   try {
-    const res = await fetch(
-      `/api/assets/history?cid=${encodeURIComponent(cid)}`
-    );
-    if (!res.ok) throw new Error("Failed to fetch asset chain");
-    const { chain } = await res.json();
+    const { chain } = await getManifestHistory(cid);
     return chain;
   } catch (err) {
     console.error("History chain fetch failed:", err);

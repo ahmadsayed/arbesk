@@ -35,18 +35,11 @@ function ensureDOM() {
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 async function fetchLedger(manifestId, opType = "") {
-  const params = new URLSearchParams({ limit: "50" });
-  if (manifestId) params.set("manifestId", manifestId);
-  if (opType) params.set("opType", opType);
-  const res = await fetch(`/api/ledger?${params}`);
-  if (!res.ok) throw new Error(`Ledger API error: ${res.status}`);
-  return res.json();
+  return queryLedger({ manifestId, opType });
 }
 
 async function fetchStats() {
-  const res = await fetch("/api/ledger/stats");
-  if (!res.ok) return null;
-  return res.json();
+  return getLedgerStats();
 }
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
