@@ -15,7 +15,6 @@ import {
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
 
-const LAZY_LOAD_DISTANCE_FACTOR = 2.0;
 const DEFAULT_WOOD_COLOR = "#C19A6B"; // Light wooden color
 const MAX_CHILD_WORLD_DEPTH = 5;
 const PLACEHOLDER_COLOR = "#E8D5B7"; // Warm sand for placeholders
@@ -176,7 +175,7 @@ function applyTransformMatrix(meshOrNode, matrixArray) {
 /**
  * Load a glTF or GLB asset into the scene under a parent node.
  */
-async function loadAsset(src, parentNode, nodeId, variants, linkedAssetRef) {
+async function loadAsset(src, parentNode, nodeId, variants) {
   const cid = extractCid(src);
   const format = detectAssetFormat(src);
   console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${format}`);
@@ -205,7 +204,6 @@ async function loadAsset(src, parentNode, nodeId, variants, linkedAssetRef) {
         result.meshes,
         nodeId,
         variants,
-        linkedAssetRef,
         parentNode,
         result.transformNodes || []
       );
@@ -243,7 +241,6 @@ async function loadAsset(src, parentNode, nodeId, variants, linkedAssetRef) {
         result.meshes,
         nodeId,
         variants,
-        linkedAssetRef,
         parentNode,
         result.transformNodes || []
       );
@@ -259,7 +256,7 @@ async function loadAsset(src, parentNode, nodeId, variants, linkedAssetRef) {
       scene
     );
     box.parent = parentNode;
-    box.metadata = { nodeId, variants: variants || [], linkedAssetRef };
+    box.metadata = { nodeId, variants: variants || [] };
     applyDefaultMaterial([box]);
     return [box];
   }
@@ -392,7 +389,6 @@ function attachMetadata(
   meshes,
   nodeId,
   variants,
-  linkedAssetRef,
   parentNode,
   transformNodes = []
 ) {
@@ -407,7 +403,6 @@ function attachMetadata(
       ...(transformNode.metadata || {}),
       nodeId,
       variants: variants || [],
-      linkedAssetRef,
       isNodeRoot: transformNode.parent === parentNode,
     };
   }
@@ -420,7 +415,6 @@ function attachMetadata(
       ...(mesh.metadata || {}),
       nodeId,
       variants: variants || [],
-      linkedAssetRef,
       isNodeRoot: mesh.parent === parentNode,
     };
     meshArray.push(mesh);
@@ -599,37 +593,11 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   }
 
   if (node.source) {
-    meshes = await loadAsset(
-      node.source,
-      anchor,
-      node.node_id,
-      node.variants,
-      node.linked_asset_manifest_cid
-    );
+    meshes = await loadAsset(node.source, anchor, node.node_id, node.variants);
   } else {
     console.warn(
       `[SCENE] node ${node.node_id} has no source — no geometry to load`
     );
-  }
-
-  // Create lazy-load anchor for child manifest if present
-  if (node.linked_asset_manifest_cid) {
-    const childAnchor = new BABYLON.TransformNode(
-      `child_anchor_${node.node_id}`,
-      scene
-    );
-    childAnchor.parent = anchor;
-    childAnchor.metadata = {
-      lazyManifestCid: node.linked_asset_manifest_cid,
-      loaded: false,
-    };
-
-    // Double-click handler for lazy loading
-    for (const mesh of meshes) {
-      mesh.metadata = mesh.metadata || {};
-      mesh.metadata.linkedAssetManifestCid = node.linked_asset_manifest_cid;
-      mesh.metadata.hasLazyChild = true;
-    }
   }
 
   return { anchor, meshes };
@@ -698,55 +666,6 @@ async function loadAssetManifest(
   }
 
   return manifest;
-}
-
-/**
- * Lazy-load a child manifest into a parent anchor.
- */
-async function loadLinkedAssetManifest(linkedAssetManifestCid, parentAnchor) {
-  if (!parentAnchor || parentAnchor.metadata?.loaded) return;
-  console.log("Lazy loading child manifest:", linkedAssetManifestCid);
-  if (parentAnchor.metadata) parentAnchor.metadata.loaded = true;
-  await loadAssetManifest(linkedAssetManifestCid, parentAnchor);
-}
-
-/**
- * Check camera distance to nodes with lazy children and trigger loads.
- */
-function checkLazyLoads() {
-  if (!scene || !scene.activeCamera) return;
-  const camera = scene.activeCamera;
-
-  for (const [nodeId, anchor] of nodeAnchors) {
-    const meshes = nodeMeshes.get(nodeId);
-    if (!meshes || meshes.length === 0) continue;
-
-    for (const mesh of meshes) {
-      if (!mesh.metadata?.hasLazyChild || mesh.metadata?.childLoaded) continue;
-
-      const boundingInfo = mesh.getBoundingInfo();
-      if (!boundingInfo) continue;
-
-      const radius = boundingInfo.boundingSphere.radiusWorld;
-      const distance = BABYLON.Vector3.Distance(
-        camera.position,
-        mesh.getAbsolutePosition()
-      );
-
-      if (distance < radius * LAZY_LOAD_DISTANCE_FACTOR) {
-        const childAnchor = scene.getTransformNodeByName(
-          `child_anchor_${nodeId}`
-        );
-        if (childAnchor) {
-          loadLinkedAssetManifest(
-            mesh.metadata.linkedAssetManifestCid,
-            childAnchor
-          );
-          mesh.metadata.childLoaded = true;
-        }
-      }
-    }
-  }
 }
 
 /**
@@ -1103,9 +1022,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.dispatchEvent(new CustomEvent("scene:empty"));
   }
 
-  // Periodic lazy load check
-  setInterval(checkLazyLoads, 500);
-
   // Welcome overlay buttons
   const newAssetBtn = document.getElementById("newAssetBtn");
   if (newAssetBtn) {
@@ -1128,32 +1044,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Handle manual lazy-load trigger via double-click
-document.addEventListener("dblclick", () => {
-  if (!scene) return;
-  const pickResult = scene.pick(scene.pointerX, scene.pointerY);
-  if (pickResult.hit && pickResult.pickedMesh) {
-    const mesh = pickResult.pickedMesh;
-    let target = mesh;
-    while (target && !target.metadata?.hasLazyChild && target.parent) {
-      target = target.parent;
-    }
-    if (target?.metadata?.hasLazyChild && !target.metadata?.childLoaded) {
-      const nodeId = target.metadata.nodeId;
-      const childAnchor = scene.getTransformNodeByName(
-        `child_anchor_${nodeId}`
-      );
-      if (childAnchor) {
-        loadLinkedAssetManifest(
-          target.metadata.linkedAssetManifestCid,
-          childAnchor
-        );
-        target.metadata.childLoaded = true;
-      }
-    }
-  }
-});
-
 /**
  * Register an externally created mesh as a node for engine integration.
  * Useful for mock / demo flows that create meshes directly via MeshBuilder.
@@ -1165,7 +1055,6 @@ function registerMockNode(nodeId, mesh, history = []) {
     nodeId,
     variants: history,
     isNodeRoot: true,
-    linkedAssetRef: null,
   };
   nodeMeshes.set(nodeId, [mesh]);
   nodeAnchors.set(nodeId, anchor);
@@ -1177,7 +1066,6 @@ export {
   loadAssetManifest,
   loadNode,
   loadAsset,
-  loadLinkedAssetManifest,
   getNodeAnchor,
   getNodeMeshes,
   getNodeChildRef,

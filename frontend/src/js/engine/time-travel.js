@@ -152,8 +152,7 @@ async function swapGeometry(nodeId, entry, anchor) {
     entry.source,
     anchor,
     nodeId,
-    oldState?.variants || [],
-    oldState?.meshes?.[0]?.metadata?.linkedAssetRef || null
+    oldState?.variants || []
   );
 
   preserveMeshState(oldMeshes, newMeshes);
