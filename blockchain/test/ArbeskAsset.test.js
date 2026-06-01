@@ -303,6 +303,59 @@ describe("ArbeskAsset", function () {
       expect(editors).to.include(e2.address);
     });
 
+    it("prevents duplicate editor entries", async () => {
+      // Add editor once
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+      // Add same editor again — should not emit EditorAdded
+      await expect(
+        asset.connect(user)["addEditor(uint256,address)"](1, editor.address)
+      ).to.not.emit(asset, "EditorAdded");
+
+      // Editor should appear exactly once in the list (not duplicated)
+      const editors = await asset.listEditors(1);
+      const occurrences = editors.filter((e) => e === editor.address).length;
+      expect(occurrences).to.equal(1);
+    });
+
+    it("reverts when exceeding MAX_EDITORS_PER_TOKEN", async () => {
+      // Fill up to the cap (49 = cap of 50 minus the owner already added via publishAsset)
+      const cap = Number(await asset.MAX_EDITORS_PER_TOKEN());
+      const freeSlots = cap - 1; // owner already occupies slot 0
+      const wallets = Array.from({ length: freeSlots }, () =>
+        ethers.Wallet.createRandom()
+      );
+      // Batch-add all remaining slots
+      await asset.connect(user)["addEditor(uint256,address[])"](
+        1,
+        wallets.map((w) => w.address)
+      );
+
+      expect((await asset.listEditors(1)).length).to.equal(cap);
+
+      // 51st should revert
+      const extra = ethers.Wallet.createRandom();
+      await expect(
+        asset.connect(user)["addEditor(uint256,address)"](1, extra.address)
+      ).to.be.revertedWith("ArbeskAsset: max editors reached");
+    });
+
+    it("reverts when exceeding MAX_TOKENS_PER_EDITOR", async () => {
+      const cap = Number(await asset.MAX_TOKENS_PER_EDITOR());
+      // User already has token #1 via publishAsset in beforeEach
+      // Mint tokens #2 through #500 — each publishAsset auto-adds user as editor
+      for (let i = 2; i <= cap; i++) {
+        await asset.connect(user).publishAsset(`ipfs://QmToken${i}`, i);
+      }
+      expect((await asset.listTokens(user.address)).length).to.equal(cap);
+
+      // 501st should revert
+      await expect(
+        asset.connect(user).publishAsset("ipfs://QmToken501", 501)
+      ).to.be.revertedWith("ArbeskAsset: max tokens per editor reached");
+    });
+
     it("only owner can remove editor", async () => {
       await asset
         .connect(user)
@@ -310,6 +363,16 @@ describe("ArbeskAsset", function () {
       await expect(
         asset.connect(editor).removeEditor(1, editor.address)
       ).to.be.revertedWith("ArbeskAsset: Only owner can remove editor");
+    });
+
+    it("silently no-ops when removing a non-editor", async () => {
+      // Removing someone who was never an editor should not emit EditorRemoved
+      await expect(
+        asset.connect(user).removeEditor(1, editor.address)
+      ).to.not.emit(asset, "EditorRemoved");
+      // Editors list should still only contain the owner
+      const editors = await asset.listEditors(1);
+      expect(editors).to.deep.equal([user.address]);
     });
 
     it("removes editor and updates reverse mapping", async () => {
@@ -390,54 +453,54 @@ describe("ArbeskAsset", function () {
     });
   });
 
-  describe("anchorManifest", () => {
-    it("anchors a manifest CID and emits ManifestAnchored", async () => {
-      const manifestId = "asset_test_001";
-      const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
-
-      const tx = await asset.connect(user).anchorManifest(manifestId, cid);
-      const receipt = await tx.wait();
-      const block = await ethers.provider.getBlock(receipt.blockNumber);
-
-      await expect(tx)
-        .to.emit(asset, "ManifestAnchored")
-        .withArgs(manifestId, cid, block.timestamp, user.address);
+  describe("transfer", () => {
+    beforeEach(async () => {
+      await asset.connect(user).publishAsset("ipfs://QmA", 1);
+      // Add editor so we can verify they survive the transfer
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
     });
 
-    it("stores CID in manifestAnchors mapping", async () => {
-      const manifestId = "asset_test_002";
-      const cid1 = "QmFirstCid1234567890123456789012345678901234567890";
-      const cid2 = "QmSeconCid1234567890123456789012345678901234567890";
+    it("revokes old owner editor rights after transfer", async () => {
+      await asset
+        .connect(user)
+        .safeTransferFrom(user.address, treasury.address, 1);
 
-      await asset.connect(user).anchorManifest(manifestId, cid1);
-      await asset.connect(user).anchorManifest(manifestId, cid2);
-
-      const anchors = await asset.manifestAnchors(manifestId, 0);
-      expect(anchors).to.equal(cid1);
-
-      const anchors2 = await asset.manifestAnchors(manifestId, 1);
-      expect(anchors2).to.equal(cid2);
-    });
-
-    it("reverts with empty manifestId", async () => {
-      await expect(asset.anchorManifest("", "QmSomeCid")).to.be.revertedWith(
-        "Empty manifestId"
-      );
-    });
-
-    it("reverts with empty CID", async () => {
-      await expect(asset.anchorManifest("asset_1", "")).to.be.revertedWith(
-        "Empty CID"
-      );
-    });
-
-    it("allows any caller to anchor", async () => {
-      const manifestId = "asset_public_001";
-      const cid = "QmPublicCid12345678901234567890123456789012345678901";
-
+      // Old owner can no longer update URI
       await expect(
-        asset.connect(editor).anchorManifest(manifestId, cid)
-      ).to.emit(asset, "ManifestAnchored");
+        asset.connect(user).updateAssetURI(1, "ipfs://QmHijack")
+      ).to.be.revertedWith("ArbeskAsset: Only owner or editor can update");
+
+      // Old owner is not in the editor list
+      const editors = await asset.listEditors(1);
+      expect(editors).to.not.include(user.address);
+    });
+
+    it("auto-adds new owner as editor after transfer", async () => {
+      await asset
+        .connect(user)
+        .safeTransferFrom(user.address, treasury.address, 1);
+
+      // New owner can update URI immediately
+      await expect(
+        asset.connect(treasury).updateAssetURI(1, "ipfs://QmNew")
+      ).to.emit(asset, "AssetURIUpdated");
+
+      // New owner is in the editor list
+      const editors = await asset.listEditors(1);
+      expect(editors).to.include(treasury.address);
+    });
+
+    it("preserves other editors after transfer", async () => {
+      await asset
+        .connect(user)
+        .safeTransferFrom(user.address, treasury.address, 1);
+
+      // Existing editor should still have access
+      await expect(
+        asset.connect(editor).updateAssetURI(1, "ipfs://QmEditorUpdate")
+      ).to.emit(asset, "AssetURIUpdated");
     });
   });
 });

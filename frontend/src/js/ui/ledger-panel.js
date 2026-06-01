@@ -2,8 +2,7 @@
  * Arbesk Micro-Ledger Panel
  *
  * Collapsible studio panel showing the audit trail for the current asset.
- * Filters by operation type, supports pagination, and provides an
- * "Anchor Manifest" button to record the current CID on-chain.
+ * Filters by operation type and supports pagination.
  */
 
 const OP_TYPE_CONFIG = {
@@ -22,7 +21,7 @@ const OP_TYPE_CONFIG = {
 
 // ─── DOM References ──────────────────────────────────────────────────────────
 
-let panel, body, list, filterSelect, anchorBtn, statsEl;
+let panel, body, list, filterSelect, statsEl;
 let initialized = false;
 
 function ensureDOM() {
@@ -30,7 +29,6 @@ function ensureDOM() {
   body = document.getElementById("ledgerBody");
   list = document.getElementById("ledgerList");
   filterSelect = document.getElementById("ledgerFilter");
-  anchorBtn = document.getElementById("ledgerAnchorBtn");
   statsEl = document.getElementById("ledgerStats");
 }
 
@@ -83,10 +81,18 @@ function renderEntry(entry) {
   li.className = "ledger-entry";
   li.innerHTML = `
     <span class="ledger-entry-icon">${config.icon}</span>
-    <span class="ledger-entry-type" title="${entry.opType}">${config.label}</span>
-    <span class="ledger-entry-cid" title="${entry.cid}">${truncateCid(entry.cid)}</span>
-    <span class="ledger-entry-actor" title="${entry.actorAddress}">${truncateAddress(entry.actorAddress)}</span>
-    <span class="ledger-entry-time">${formatDate(entry.timestamp)} ${formatTime(entry.timestamp)}</span>
+    <span class="ledger-entry-type" title="${entry.opType}">${
+    config.label
+  }</span>
+    <span class="ledger-entry-cid" title="${entry.cid}">${truncateCid(
+    entry.cid
+  )}</span>
+    <span class="ledger-entry-actor" title="${
+      entry.actorAddress
+    }">${truncateAddress(entry.actorAddress)}</span>
+    <span class="ledger-entry-time">${formatDate(entry.timestamp)} ${formatTime(
+    entry.timestamp
+  )}</span>
   `;
   return li;
 }
@@ -124,7 +130,8 @@ async function refreshLedger() {
     renderStats(stats);
   } catch (err) {
     console.warn("[LEDGER] refresh failed:", err.message);
-    if (list) list.innerHTML = '<li class="ledger-empty">Ledger unavailable.</li>';
+    if (list)
+      list.innerHTML = '<li class="ledger-empty">Ledger unavailable.</li>';
   }
 }
 
@@ -137,40 +144,6 @@ async function resolveAssetId() {
     return manifest?.asset_id || null;
   } catch {
     return null;
-  }
-}
-
-async function onAnchorClick() {
-  if (!anchorBtn) return;
-  const manifestId = await resolveAssetId();
-  const cid = window.activeAssetManifestCid;
-  if (!manifestId || !cid) {
-    alert("Save your asset first before anchoring.");
-    return;
-  }
-  if (!window.walletAddress) {
-    alert("Connect your wallet first.");
-    return;
-  }
-  try {
-    anchorBtn.disabled = true;
-    anchorBtn.textContent = "Anchoring…";
-
-    const { contract } = await import("../blockchain/wallet.js");
-    const c = contract || window.contract;
-    if (!c) throw new Error("Contract not available");
-    const tx = await c.methods
-      .anchorManifest(manifestId, cid)
-      .send({ from: window.walletAddress });
-    console.log(`[LEDGER] anchored manifest ${manifestId} → tx ${tx.transactionHash}`);
-    anchorBtn.textContent = "Anchored ✓";
-    setTimeout(refreshLedger, 2000);
-  } catch (err) {
-    console.error("[LEDGER] anchor failed:", err);
-    alert("Anchor failed: " + err.message);
-    anchorBtn.textContent = "Anchor Manifest";
-  } finally {
-    anchorBtn.disabled = false;
   }
 }
 
@@ -206,11 +179,6 @@ function initLedgerPanel() {
   // Filter dropdown
   if (filterSelect) {
     filterSelect.addEventListener("change", refreshLedger);
-  }
-
-  // Anchor button
-  if (anchorBtn) {
-    anchorBtn.addEventListener("click", onAnchorClick);
   }
 
   // Refresh on relevant events

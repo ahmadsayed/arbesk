@@ -34,6 +34,15 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     /// @notice Editor members per tokenId.
     mapping(uint256 => address[]) public members;
 
+    /// @notice O(1) editor membership test — kept in sync with members[].
+    mapping(uint256 => mapping(address => bool)) private _isEditorMap;
+
+    /// @notice Maximum number of editors per token.
+    uint256 public constant MAX_EDITORS_PER_TOKEN = 50;
+
+    /// @notice Maximum number of tokens an address can be editor on.
+    uint256 public constant MAX_TOKENS_PER_EDITOR = 500;
+
     /// @notice Reverse lookup: which tokens an address participates in.
     mapping(address => uint256[]) public tokensIParticipate;
 
@@ -70,21 +79,6 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
 
     /// @notice Emitted when generation cost is updated.
     event CostUpdated(uint256 previousCost, uint256 newCost);
-
-    /// @notice Emitted when a manifest CID is anchored for immutability proof.
-    /// @param manifestId The manifest identifier.
-    /// @param cid The IPFS CID of the anchored manifest.
-    /// @param timestamp Block timestamp of the anchor action.
-    /// @param anchorer Address that performed the anchoring.
-    event ManifestAnchored(
-        string indexed manifestId,
-        string cid,
-        uint256 timestamp,
-        address indexed anchorer
-    );
-
-    /// @notice Manifest CID anchors per manifestId for immutability proof.
-    mapping(string => string[]) public manifestAnchors;
 
     /// @param _treasury Initial treasury wallet address.
     constructor(
@@ -169,7 +163,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         _tokenCounts++;
         _mint(msg.sender, tokenId);
         _setTokenURI(tokenId, uri);
-        members[tokenId].push(msg.sender);
+        _addEditor(tokenId, msg.sender);
 
         emit AssetPublished(msg.sender, tokenId, uri);
         return tokenId;
@@ -291,7 +285,8 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
             _ownerOf(tokenId) == msg.sender,
             "ArbeskAsset: Only owner can add editors"
         );
-        for (uint256 i = 0; i < editors.length; i++) {
+        uint256 remaining = MAX_EDITORS_PER_TOKEN - members[tokenId].length;
+        for (uint256 i = 0; i < editors.length && i < remaining; i++) {
             _addEditor(tokenId, editors[i]);
         }
     }
@@ -339,19 +334,40 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         return _ownerOf(tokenId) != address(0);
     }
 
+    /// @dev Override OZ v5 transfer hook — revoke editor rights on transfer.
+    function _update(
+        address to,
+        uint256 tokenId,
+        address auth
+    ) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        if (from != address(0) && from != to) {
+            _removeEditor(tokenId, from);
+            if (to != address(0)) {
+                _addEditor(tokenId, to);
+            }
+        }
+        return super._update(to, tokenId, auth);
+    }
+
     function _isEditor(
         uint256 tokenId,
         address sender
     ) internal view returns (bool) {
-        for (uint256 i = 0; i < members[tokenId].length; i++) {
-            if (members[tokenId][i] == sender) {
-                return true;
-            }
-        }
-        return false;
+        return _isEditorMap[tokenId][sender];
     }
 
     function _addEditor(uint256 tokenId, address editor) internal {
+        if (_isEditorMap[tokenId][editor]) return; // Already an editor — no-op
+        require(
+            members[tokenId].length < MAX_EDITORS_PER_TOKEN,
+            "ArbeskAsset: max editors reached"
+        );
+        require(
+            tokensIParticipate[editor].length < MAX_TOKENS_PER_EDITOR,
+            "ArbeskAsset: max tokens per editor reached"
+        );
+        _isEditorMap[tokenId][editor] = true;
         members[tokenId].push(editor);
         tokensIParticipate[editor].push(tokenId);
         emit EditorAdded(tokenId, editor);
@@ -359,10 +375,13 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
 
     function _removeEditor(uint256 tokenId, address editor) internal {
         // Remove from members[tokenId]
+        if (!_isEditorMap[tokenId][editor]) return; // Not an editor — no-op
+
         int256 memberIdx = -1;
         for (uint256 i = 0; i < members[tokenId].length; i++) {
             if (members[tokenId][i] == editor) {
                 memberIdx = int256(i);
+                break;
             }
         }
         if (memberIdx != -1) {
@@ -372,6 +391,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
             ];
             members[tokenId][uint256(memberIdx)] = temp;
             members[tokenId].pop();
+            delete _isEditorMap[tokenId][editor];
         }
 
         // Remove from tokensIParticipate[editor]
@@ -379,6 +399,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         for (uint256 i = 0; i < tokensIParticipate[editor].length; i++) {
             if (tokensIParticipate[editor][i] == tokenId) {
                 participantIdx = int256(i);
+                break;
             }
         }
         if (participantIdx != -1) {
@@ -424,23 +445,6 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
 
     function unpause() external onlyOwner {
         _unpause();
-    }
-
-    /**
-     * @notice Anchor a manifest CID on-chain for immutability proof.
-     * @dev Stores the CID in manifestAnchors mapping and emits an event.
-     *      Does NOT store the full manifest — only the CID hash. Cheap operation.
-     * @param manifestId The manifest asset_id to anchor.
-     * @param cid The IPFS CID to anchor.
-     */
-    function anchorManifest(
-        string calldata manifestId,
-        string calldata cid
-    ) external whenNotPaused {
-        require(bytes(manifestId).length > 0, "Empty manifestId");
-        require(bytes(cid).length > 0, "Empty CID");
-        manifestAnchors[manifestId].push(cid);
-        emit ManifestAnchored(manifestId, cid, block.timestamp, msg.sender);
     }
 
     function withdraw() external onlyOwner nonReentrant {
