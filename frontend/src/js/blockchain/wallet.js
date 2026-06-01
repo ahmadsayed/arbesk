@@ -208,7 +208,6 @@ async function _finishWalletSetup(address) {
 
   let chainId = await web3.eth.getChainId();
   window.chainId = chainId;
-  window.contractAddress = contractAddress;
   console.log("Connected wallet:", window.walletAddress, "chainId:", chainId);
 
   // Prompt network switch if not on Hardhat
@@ -223,6 +222,7 @@ async function _finishWalletSetup(address) {
   }
 
   await _initContract();
+  window.contractAddress = contractAddress;
   await _checkBalance();
 
   document.dispatchEvent(
