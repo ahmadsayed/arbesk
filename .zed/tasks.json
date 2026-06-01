@@ -4,90 +4,90 @@
     "command": "npm install",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Install frontend dependencies",
     "command": "cd frontend && npm install",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Start Docker infrastructure",
     "command": "docker-compose up -d",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Stop Docker infrastructure",
     "command": "docker-compose down",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Build frontend",
     "command": "npm run build:frontend",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Run backend tests",
     "command": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Run API tests only",
     "command": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Run contract tests in Docker",
     "command": "docker-compose run --rm hardhat npx hardhat test",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Compile contracts in Docker",
     "command": "docker-compose run --rm hardhat npx hardhat compile",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Start backend",
     "command": "npm start",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Start full dev stack",
     "command": "npm run dev",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Run full validation (build + all tests)",
     "command": "npm run build:frontend && NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest --silent && docker-compose run --rm hardhat npx hardhat test",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
+    "reveal": "always"
   },
   {
     "label": "Deploy contracts to local Hardhat",
     "command": "docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
-    "reveal": "always",
-  },
+    "reveal": "always"
+  }
 ]
