@@ -191,26 +191,10 @@ export default function generateAssetNode(ipfs) {
               Array.isArray(transform_matrix) && transform_matrix.length === 16
                 ? transform_matrix
                 : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            variants: [],
           };
           nodes.push(node);
         }
 
-        const isReplayInVariants = nodes.some((n) =>
-          (n.variants || []).some((entry) => entry.txHash === effectiveTxHash),
-        );
-        if (isReplayInVariants) {
-          console.log(
-            `[GEN] REPLAY detected in variants — tx ${effectiveTxHash}`,
-          );
-          return res.status(409).json({
-            error: "REPLAY_DETECTED",
-            message: "txHash already in asset variants",
-          });
-        }
-
-        node.variants ||= [];
-        const nextVersion = node.variants.length + 1;
         const assetFormat = result.format || "gltf";
         const assetPath = result.path || `asset.${assetFormat}`;
         const source = {
@@ -218,18 +202,9 @@ export default function generateAssetNode(ipfs) {
           path: assetPath,
           format: assetFormat,
         };
-        const variantEntry = {
-          v: nextVersion,
-          timestamp: Date.now(),
-          type: "generation",
-          provider: result.provider || provider || "mock",
-          prompt,
-          txHash: effectiveTxHash,
-          source,
-        };
 
-        node.variants.push(variantEntry);
         node.source = source;
+        node.appearance = { color: null, scale: { x: 1, y: 1, z: 1 } };
         manifest.version = (manifest.version || 0) + 1;
         manifest.timestamp = Date.now();
         manifest.prev_asset_manifest_cid = prevAssetManifestCid || null;
@@ -245,7 +220,7 @@ export default function generateAssetNode(ipfs) {
 
         usedTxHashes.add(effectiveTxHash);
         console.log(
-          `[GEN] success — manifest=${assetManifestCid} sourceAsset=${sourceAssetCid} variant_v=${variantEntry.v}`,
+          `[GEN] success — manifest=${assetManifestCid} sourceAsset=${sourceAssetCid}`,
         );
 
         // Record to micro-ledger
@@ -267,7 +242,7 @@ export default function generateAssetNode(ipfs) {
           }),
         );
 
-        res.json({ assetManifestCid, variantEntry, sourceAssetCid });
+        res.json({ assetManifestCid, sourceAssetCid });
       } catch (error) {
         console.error("[GEN] error:", error.message);
         res.status(500).json({ error: error.message });

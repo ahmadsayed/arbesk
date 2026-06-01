@@ -141,10 +141,7 @@ async function onGenerate() {
     await loadAssetManifest(result.assetManifestCid);
     hideWelcomeOverlay();
 
-    addChatMessage(
-      "system",
-      `Model carved via ${result.variantEntry.provider}. Version ${result.variantEntry.v}.`
-    );
+    addChatMessage("system", `Model carved via ${getProvider()}.`);
   } catch (err) {
     console.error("Generation failed:", err);
     let userMsg = "Generation failed. Please try again.";

@@ -14,6 +14,7 @@ import {
   resolveChildRef,
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
+import { applyColor, applyScale } from "./time-travel.js";
 
 const DEFAULT_WOOD_COLOR = "#C19A6B"; // Light wooden color
 const MAX_CHILD_WORLD_DEPTH = 5;
@@ -33,6 +34,18 @@ let rootSceneAnchor = null;
 
 /** @type {Array<Object>} Pending child_ref nodes to be saved on next save/publish */
 const pendingChildRefs = [];
+
+/** @type {BABYLON.StandardMaterial|null} Shared default material for meshes without explicit materials */
+let defaultWoodMaterial = null;
+
+/** @type {Function|null} Resize handler reference for cleanup */
+let resizeEngineHandler = null;
+
+/** @type {ResizeObserver|null} ResizeObserver reference for cleanup */
+let resizeObserverInstance = null;
+
+/** @type {Function|null} Pointer observable callback reference for cleanup */
+let pointerObservableCallback = null;
 
 /**
  * Initialize the Babylon.js engine and scene.
@@ -80,23 +93,23 @@ function initEngine() {
   dirLight.intensity = 0.6;
 
   // Resize whenever the browser or studio panels change the canvas container size.
-  const resizeEngine = () => {
+  resizeEngineHandler = () => {
     if (!engine) return;
     engine.resize();
   };
 
-  window.addEventListener("resize", resizeEngine);
+  window.addEventListener("resize", resizeEngineHandler);
 
   const viewport = document.getElementById("viewport") || canvas.parentElement;
   if (window.ResizeObserver && viewport) {
-    const resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(resizeEngine);
+    resizeObserverInstance = new ResizeObserver(() => {
+      requestAnimationFrame(resizeEngineHandler);
     });
-    resizeObserver.observe(viewport);
+    resizeObserverInstance.observe(viewport);
   }
 
   // Click handling for node selection
-  scene.onPointerObservable.add((pointerInfo) => {
+  pointerObservableCallback = (pointerInfo) => {
     if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
       const pickResult = scene.pick(scene.pointerX, scene.pointerY);
       if (pickResult.hit && pickResult.pickedMesh) {
@@ -110,7 +123,8 @@ function initEngine() {
         }
       }
     }
-  });
+  };
+  scene.onPointerObservable.add(pointerObservableCallback);
 
   engine.runRenderLoop(() => scene.render());
 }
@@ -175,7 +189,7 @@ function applyTransformMatrix(meshOrNode, matrixArray) {
 /**
  * Load a glTF or GLB asset into the scene under a parent node.
  */
-async function loadAsset(src, parentNode, nodeId, variants) {
+async function loadAsset(src, parentNode, nodeId) {
   const cid = extractCid(src);
   const format = detectAssetFormat(src);
   console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${format}`);
@@ -203,7 +217,6 @@ async function loadAsset(src, parentNode, nodeId, variants) {
       attachMetadata(
         result.meshes,
         nodeId,
-        variants,
         parentNode,
         result.transformNodes || []
       );
@@ -240,7 +253,6 @@ async function loadAsset(src, parentNode, nodeId, variants) {
       attachMetadata(
         result.meshes,
         nodeId,
-        variants,
         parentNode,
         result.transformNodes || []
       );
@@ -256,7 +268,7 @@ async function loadAsset(src, parentNode, nodeId, variants) {
       scene
     );
     box.parent = parentNode;
-    box.metadata = { nodeId, variants: variants || [] };
+    box.metadata = { nodeId };
     applyDefaultMaterial([box]);
     return [box];
   }
@@ -267,6 +279,10 @@ async function loadAsset(src, parentNode, nodeId, variants) {
  */
 function applyDefaultMaterial(meshes) {
   const woodColor = BABYLON.Color3.FromHexString(DEFAULT_WOOD_COLOR);
+  if (!defaultWoodMaterial) {
+    defaultWoodMaterial = new BABYLON.StandardMaterial("defaultWood", scene);
+    defaultWoodMaterial.diffuseColor = woodColor;
+  }
   for (const mesh of meshes) {
     if (mesh.material) {
       if (mesh.material.diffuseColor) {
@@ -281,9 +297,7 @@ function applyDefaultMaterial(meshes) {
         }
       }
     } else {
-      const mat = new BABYLON.StandardMaterial("defaultWood", scene);
-      mat.diffuseColor = woodColor;
-      mesh.material = mat;
+      mesh.material = defaultWoodMaterial;
     }
   }
 }
@@ -385,13 +399,7 @@ function centerImportedAsset(meshes, importedNodes, parentNode, nodeId) {
 /**
  * Attach metadata and parent relationships to loaded meshes.
  */
-function attachMetadata(
-  meshes,
-  nodeId,
-  variants,
-  parentNode,
-  transformNodes = []
-) {
+function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
   const meshArray = [];
   const importedNodes = [...transformNodes, ...meshes];
 
@@ -402,7 +410,6 @@ function attachMetadata(
     transformNode.metadata = {
       ...(transformNode.metadata || {}),
       nodeId,
-      variants: variants || [],
       isNodeRoot: transformNode.parent === parentNode,
     };
   }
@@ -414,7 +421,6 @@ function attachMetadata(
     mesh.metadata = {
       ...(mesh.metadata || {}),
       nodeId,
-      variants: variants || [],
       isNodeRoot: mesh.parent === parentNode,
     };
     meshArray.push(mesh);
@@ -468,6 +474,12 @@ function createPlaceholder(nodeId, parentNode, state) {
     scene.beginAnimation(box, 0, 30, true);
   }
 
+  // Store animation reference so we can stop it before disposal
+  box.metadata = {
+    ...box.metadata,
+    _placeholderAnim: state === "loading",
+  };
+
   return box;
 }
 
@@ -502,11 +514,11 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
     const placeholder = createPlaceholder(node.node_id, anchor, "error");
     return [placeholder];
   }
-  resolvingCids.add(refKey);
 
   // Show loading placeholder
   const loadingPlaceholder = createPlaceholder(node.node_id, anchor, "loading");
 
+  resolvingCids.add(refKey);
   try {
     console.log(
       `[SCENE] resolving token child node ${node.node_id} depth=${depth}`
@@ -518,7 +530,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       console.warn(
         `[SCENE] token child resolution failed for node ${node.node_id}: ${resolution.error}`
       );
-      loadingPlaceholder.dispose();
+      disposePlaceholder(loadingPlaceholder);
       const errorPlaceholder = createPlaceholder(node.node_id, anchor, "error");
       return [errorPlaceholder];
     }
@@ -539,8 +551,11 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       loaded: true,
     };
 
+    // Track child anchor so clearScene/disposeNode can clean it up
+    nodeAnchors.set(node.node_id, childAnchor);
+
     // Remove loading placeholder and load the child manifest
-    loadingPlaceholder.dispose();
+    disposePlaceholder(loadingPlaceholder);
 
     // Load the child manifest recursively under the child anchor
     await loadAssetManifest(
@@ -557,9 +572,11 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       `[SCENE] failed to load token child node ${node.node_id}:`,
       err
     );
-    loadingPlaceholder.dispose();
+    disposePlaceholder(loadingPlaceholder);
     const errorPlaceholder = createPlaceholder(node.node_id, anchor, "error");
     return [errorPlaceholder];
+  } finally {
+    resolvingCids.delete(refKey);
   }
 }
 
@@ -570,9 +587,7 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   console.log(
     `[SCENE] loadNode node_id=${node.node_id} source=${JSON.stringify(
       node.source
-    )} childRef=${!!node.child_ref} variantCount=${
-      (node.variants || []).length
-    }`
+    )} childRef=${!!node.child_ref}`
   );
   const anchor = new BABYLON.TransformNode(`anchor_${node.node_id}`, scene);
   anchor.parent = parentNode;
@@ -593,11 +608,18 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   }
 
   if (node.source) {
-    meshes = await loadAsset(node.source, anchor, node.node_id, node.variants);
+    meshes = await loadAsset(node.source, anchor, node.node_id);
   } else {
     console.warn(
       `[SCENE] node ${node.node_id} has no source — no geometry to load`
     );
+  }
+
+  // Apply appearance (color/scale) from the manifest — overrides defaults.
+  // Must run for all nodes at any depth so child token worlds get their look.
+  if (meshes.length > 0 && node.appearance) {
+    applyColor(meshes, node.appearance.color);
+    applyScale(meshes, node.appearance.scale);
   }
 
   return { anchor, meshes };
@@ -770,15 +792,31 @@ async function handleLinkedAssetDropped(event) {
 }
 
 /**
- * Clear the entire scene, disposing all meshes, anchors, and cameras.
+ * Dispose a placeholder mesh, first stopping any running animation.
+ */
+function disposePlaceholder(placeholder) {
+  if (!placeholder || placeholder.isDisposed()) return;
+  if (placeholder.metadata?._placeholderAnim) {
+    scene.stopAnimation(placeholder);
+  }
+  placeholder.dispose();
+}
+
+/**
+ * Clear the entire scene, disposing all meshes, anchors, and imported resources.
  * Keeps the engine running.
  */
 function clearScene() {
   if (!scene) {
     window.activeAssetManifestCid = null;
+    window.selectedNodeId = null;
     return;
   }
 
+  // Stop all animations first to prevent callbacks during disposal
+  scene.stopAllAnimations();
+
+  // Dispose tracked meshes
   for (const [, meshes] of nodeMeshes) {
     for (const mesh of meshes) {
       if (mesh && !mesh.isDisposed()) {
@@ -788,6 +826,7 @@ function clearScene() {
   }
   nodeMeshes.clear();
 
+  // Dispose tracked anchors (includes child anchors for token children)
   for (const [, anchor] of nodeAnchors) {
     if (anchor && !anchor.isDisposed()) {
       anchor.dispose();
@@ -815,7 +854,24 @@ function clearScene() {
     }
   }
 
+  // Dispose and null out the shared default material so it gets recreated fresh
+  // (do not iterate all scene.materials here — it can break internal Babylon state)
+  if (defaultWoodMaterial) {
+    try {
+      defaultWoodMaterial.dispose();
+    } catch (_) {
+      // ignore
+    }
+    defaultWoodMaterial = null;
+  }
+
+  // Notify other modules that scene content has been cleared so they can
+  // release any retained mesh references (time-travel nodeStates, etc.)
+  document.dispatchEvent(new CustomEvent("scene:cleared"));
+
   window.activeAssetManifestCid = null;
+  window.selectedNodeId = null;
+  window.latestAssetManifestCid = null;
 
   // Clear pending child refs
   pendingChildRefs.length = 0;
@@ -884,13 +940,17 @@ function disposeNode(nodeId) {
   const meshes = nodeMeshes.get(nodeId);
   if (meshes) {
     for (const mesh of meshes) {
-      mesh.dispose();
+      if (mesh && !mesh.isDisposed()) {
+        mesh.dispose();
+      }
     }
     nodeMeshes.delete(nodeId);
   }
   const anchor = nodeAnchors.get(nodeId);
   if (anchor) {
-    anchor.dispose();
+    if (!anchor.isDisposed()) {
+      anchor.dispose();
+    }
     nodeAnchors.delete(nodeId);
   }
 }
@@ -1053,7 +1113,6 @@ function registerMockNode(nodeId, mesh, history = []) {
   mesh.parent = anchor;
   mesh.metadata = {
     nodeId,
-    variants: history,
     isNodeRoot: true,
   };
   nodeMeshes.set(nodeId, [mesh]);

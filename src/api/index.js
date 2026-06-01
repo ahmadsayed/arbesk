@@ -209,15 +209,30 @@ export default () => {
 
   async function getFromIPFS(cid) {
     console.log(`[IPFS] cat ${cid}`);
-    let data = "";
-    for await (const file of ipfs.cat(cid)) {
-      const buffer = new Uint16Array(file);
-      buffer.forEach((code) => {
-        data += String.fromCharCode(code);
-      });
+    const catController = new AbortController();
+    const catTimeoutId = setTimeout(() => catController.abort(), 15000);
+    try {
+      const chunks = [];
+      for await (const chunk of ipfs.cat(cid, {
+        signal: catController.signal,
+      })) {
+        chunks.push(chunk);
+      }
+      // Decode chunks: Uint16Array (mock/test) or Uint8Array/Buffer (real)
+      const data = chunks
+        .map((chunk) => {
+          if (chunk instanceof Uint16Array) {
+            return String.fromCharCode(...chunk);
+          }
+          if (typeof chunk === "string") return chunk;
+          return new TextDecoder().decode(chunk);
+        })
+        .join("");
+      console.log(`[IPFS] cat ${cid} → ${data.length} chars`);
+      return data;
+    } finally {
+      clearTimeout(catTimeoutId);
     }
-    console.log(`[IPFS] cat ${cid} → ${data.length} chars`);
-    return data;
   }
 
   /**
@@ -252,7 +267,7 @@ export default () => {
           const manifest = JSON.parse(raw);
           const nodes = manifest.scene?.nodes || [];
           const firstNode = nodes[0];
-          const timestamp = firstNode?.variants?.[0]?.timestamp || null;
+          const timestamp = manifest.timestamp || null;
 
           chain.unshift({
             cid: currentCid,

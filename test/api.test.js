@@ -106,6 +106,23 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     return `Bearer ${message}.${signature}`;
   }
 
+  async function fetchManifestFromIPFS(cid) {
+    const chunks = [];
+    for await (const chunk of mockIPFS.cat(cid)) {
+      chunks.push(chunk);
+    }
+    const data = chunks
+      .map((chunk) => {
+        if (chunk instanceof Uint16Array) {
+          return String.fromCharCode(...chunk);
+        }
+        if (typeof chunk === "string") return chunk;
+        return new TextDecoder().decode(chunk);
+      })
+      .join("");
+    return JSON.parse(data);
+  }
+
   describe("POST /api/assets/generate-node", () => {
     it("creates a new manifest with a generation variant entry", async () => {
       const res = await request(app)
@@ -120,14 +137,17 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(200);
       expect(res.body.assetManifestCid).toBeDefined();
       expect(res.body.sourceAssetCid).toBeDefined();
-      expect(res.body.variantEntry).toMatchObject({
-        v: 1,
-        type: "generation",
-        provider: "mock",
-        prompt: "A modern minimalist workbench",
-      });
-      // New source object format
-      expect(res.body.variantEntry.source).toMatchObject({
+
+      // Verify the manifest stores state directly on the node
+      const manifestData = await fetchManifestFromIPFS(
+        res.body.assetManifestCid,
+      );
+      const node = (manifestData.scene?.nodes || [])[0];
+      expect(node).toBeDefined();
+      expect(node).toHaveProperty("appearance");
+      expect(node.appearance).toHaveProperty("color");
+      expect(node.appearance).toHaveProperty("scale");
+      expect(node.source).toMatchObject({
         cid: expect.any(String),
         path: expect.any(String),
         format: expect.any(String),
@@ -219,15 +239,17 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.assetManifestCid).toBeDefined();
-      expect(res.body.variantEntry).toMatchObject({
-        v: 2,
-        type: "parametric",
-        provider: "parametric",
-        params: {
-          scale: { x: 1.5, y: 1.5, z: 1.5 },
-          color: "#FF5733",
-        },
-      });
+
+      // Verify the manifest stores color + scale directly on the node
+      const manifestData = await fetchManifestFromIPFS(
+        res.body.assetManifestCid,
+      );
+      const node = (manifestData.scene?.nodes || []).find(
+        (n) => n.node_id === "node_chair_001",
+      );
+      expect(node).toBeDefined();
+      expect(node.appearance.color).toBe("#FF5733");
+      expect(node.appearance.scale).toMatchObject({ x: 1.5, y: 1.5, z: 1.5 });
     });
 
     it("rejects invalid color", async () => {
@@ -268,13 +290,19 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(200);
       const newCid = res.body.assetManifestCid;
 
-      let data = "";
-      for await (const file of mockIPFS.cat(newCid)) {
-        const buffer = new Uint16Array(file);
-        buffer.forEach((code) => {
-          data += String.fromCharCode(code);
-        });
+      const chunks = [];
+      for await (const chunk of mockIPFS.cat(newCid)) {
+        chunks.push(chunk);
       }
+      const data = chunks
+        .map((chunk) => {
+          if (chunk instanceof Uint16Array) {
+            return String.fromCharCode(...chunk);
+          }
+          if (typeof chunk === "string") return chunk;
+          return new TextDecoder().decode(chunk);
+        })
+        .join("");
       const manifest = JSON.parse(data);
 
       expect(manifest).toHaveProperty("asset_id");
@@ -287,8 +315,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         (n) => n.node_id === "node_chair_001",
       );
       expect(node).toBeDefined();
-      expect(Array.isArray(node.variants)).toBe(true);
-      expect(node.variants.length).toBeGreaterThanOrEqual(2);
+
+      // Validate current state lives directly on the node under appearance
+      expect(node).toHaveProperty("appearance");
+      expect(node.appearance).toHaveProperty("color");
+      expect(node.appearance).toHaveProperty("scale");
+      expect(node.appearance.scale).toMatchObject({
+        x: expect.any(Number),
+        y: expect.any(Number),
+        z: expect.any(Number),
+      });
 
       // Validate new source object format
       expect(node.source).toBeDefined();
@@ -298,13 +334,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         format: expect.any(String),
       });
 
-      // Validate variant entries have source objects
-      for (const entry of node.variants) {
-        expect(entry.source).toBeDefined();
-        expect(entry.source).toHaveProperty("cid");
-        expect(entry.source).toHaveProperty("path");
-        expect(entry.source).toHaveProperty("format");
-      }
+      // Validate version chain via prev_asset_manifest_cid
+      expect(manifest).toHaveProperty("prev_asset_manifest_cid");
+      expect(manifest.prev_asset_manifest_cid).toBeTruthy();
     });
   });
 

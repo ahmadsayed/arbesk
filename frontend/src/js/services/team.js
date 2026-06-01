@@ -16,7 +16,8 @@ export async function fetchEditors(tokenId) {
     try {
         return await contract.methods.listEditors(tokenId).call();
     } catch (err) {
-        console.error('fetchEditors failed:', err);
+        // Silently return empty list — token may not exist or network may be wrong.
+        // MetaMask logs its own RPC errors; we don't need to duplicate them.
         return [];
     }
 }

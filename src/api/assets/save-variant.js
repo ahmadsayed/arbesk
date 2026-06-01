@@ -8,8 +8,8 @@ export default function parametricVersion(ipfs) {
   const router = Router();
 
   router.post("/", async (req, res) => {
+    const { nodeId, color, scale, prevAssetManifestCid } = req.body;
     try {
-      const { nodeId, color, scale, prevAssetManifestCid } = req.body;
       console.log(
         `[PARAM] nodeId=${nodeId} color=${color || "none"} scale=${scale ? `${scale.x},${scale.y},${scale.z}` : "none"} prev=${prevAssetManifestCid}`,
       );
@@ -48,14 +48,30 @@ export default function parametricVersion(ipfs) {
         }
       }
 
-      // Read current manifest from IPFS
+      // Read current manifest from IPFS with 15s timeout
       console.log(`[IPFS] cat prev manifest ${prevAssetManifestCid}`);
-      let data = "";
-      for await (const file of ipfs.cat(prevAssetManifestCid)) {
-        const buffer = new Uint16Array(file);
-        buffer.forEach((code) => {
-          data += String.fromCharCode(code);
-        });
+      const catController = new AbortController();
+      const catTimeoutId = setTimeout(() => catController.abort(), 15000);
+      let data;
+      try {
+        const chunks = [];
+        for await (const chunk of ipfs.cat(prevAssetManifestCid, {
+          signal: catController.signal,
+        })) {
+          chunks.push(chunk);
+        }
+        // Decode chunks: Uint16Array (mock/test) or Uint8Array/Buffer (real)
+        data = chunks
+          .map((chunk) => {
+            if (chunk instanceof Uint16Array) {
+              return String.fromCharCode(...chunk);
+            }
+            if (typeof chunk === "string") return chunk;
+            return new TextDecoder().decode(chunk);
+          })
+          .join("");
+      } finally {
+        clearTimeout(catTimeoutId);
       }
       const manifest = JSON.parse(data);
       console.log(
@@ -72,32 +88,13 @@ export default function parametricVersion(ipfs) {
           .json({ error: `Node ${nodeId} not found in manifest` });
       }
 
-      // Build source reference from node.source object
-      if (!node.source || typeof node.source !== "object") {
-        return res
-          .status(400)
-          .json({ error: `Node ${nodeId} has no source reference` });
-      }
-      const srcRef = { ...node.source };
+      // Apply parametric changes directly to the node
+      node.appearance ||= {};
+      if (color) node.appearance.color = color;
+      if (scale) node.appearance.scale = scale;
 
-      // Append parametric variant entry
-      const nextVersion = (node.variants || []).length + 1;
-      const variantEntry = {
-        v: nextVersion,
-        timestamp: Date.now(),
-        source: srcRef,
-        prompt: `Scale ${scale ? `${scale.x}x,${scale.y}x,${scale.z}x` : "1x,1x,1x"}, Color ${color || "unchanged"}`,
-        provider: "parametric",
-        type: "parametric",
-        params: {
-          scale: scale || { x: 1, y: 1, z: 1 },
-          color: color || null,
-        },
-      };
-
-      node.variants = node.variants || [];
-      node.variants.push(variantEntry);
       manifest.version += 1;
+      manifest.timestamp = Date.now();
       manifest.prev_asset_manifest_cid = prevAssetManifestCid;
 
       // Write updated manifest to IPFS
@@ -107,7 +104,7 @@ export default function parametricVersion(ipfs) {
       );
       const assetManifestCid = newAssetManifestCid.toString();
       console.log(
-        `[PARAM] success → ${assetManifestCid} variant_v=${variantEntry.v}`,
+        `[PARAM] success → ${assetManifestCid} color=${node.appearance?.color}`,
       );
 
       // Record to micro-ledger
@@ -128,11 +125,16 @@ export default function parametricVersion(ipfs) {
         }),
       );
 
-      res.json({
-        assetManifestCid,
-        variantEntry,
-      });
+      res.json({ assetManifestCid });
     } catch (error) {
+      if (error.name === "AbortError") {
+        console.error(
+          `[PARAM] timeout — IPFS cat aborted for ${prevAssetManifestCid}`,
+        );
+        return res
+          .status(504)
+          .json({ error: "IPFS read timed out. Is the IPFS node running?" });
+      }
       console.error("[PARAM] error:", error.message);
       res.status(500).json({ error: error.message });
     }

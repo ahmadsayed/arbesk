@@ -1,60 +1,22 @@
 /**
  * Arbesk Time-Travel Engine
  *
- * Maintains per-node version state and allows scrubbing through variant.
- * Generation entries swap geometry; parametric entries apply color/scale overlays.
- * Guarantees temporal isolation: only the target node mutates.
+ * Walks the manifest chain (prev_asset_manifest_cid links) to reconstruct
+ * per-node state history. Applies color/scale from any historical manifest
+ * version to the current scene meshes.
+ *
+ * No more variants array — current state lives directly on each node
+ * (color, scale, source). History is the manifest chain.
  */
 
-import {
-  getNodeAnchor,
-  getNodeMeshes,
-  disposeNode,
-  loadAsset,
-  applyTransformMatrix,
-} from "./scene-graph.js";
+import { getNodeMeshes } from "./scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
-/**
- * @typedef {Object} NodeState
- * @property {BABYLON.AbstractMesh[]} meshes
- * @property {number} currentVersionIndex
- * @property {Object[]} variants
- */
-
-/** @type {Map<string, NodeState>} */
-const nodeStates = new Map();
+// Cache of manifest chain versions for each starting CID
+const chainCache = new Map();
 
 /**
- * Register a node's initial state after scene graph load.
- */
-function registerNode(nodeId, variants) {
-  const meshes = getNodeMeshes(nodeId);
-  nodeStates.set(nodeId, {
-    meshes,
-    currentVersionIndex: variants.length > 0 ? variants.length - 1 : -1,
-    variants: variants || [],
-  });
-
-  // If the latest variant entry is parametric, apply its overlays to the loaded mesh
-  if (variants.length > 0) {
-    const latest = variants[variants.length - 1];
-    if (latest.type === "parametric" && latest.params) {
-      applyParametric(nodeId, latest);
-    }
-  }
-}
-
-/**
- * Get a node's variant array.
- */
-function getNodeVariants(nodeId) {
-  const state = nodeStates.get(nodeId);
-  return state ? state.variants : [];
-}
-
-/**
- * Update a node's material color without affecting geometry.
+ * Apply a color to meshes.
  */
 function applyColor(meshes, colorHex) {
   if (!colorHex) return;
@@ -82,7 +44,7 @@ function applyColor(meshes, colorHex) {
 }
 
 /**
- * Update a node's scaling.
+ * Apply scale to meshes.
  */
 function applyScale(meshes, scale) {
   if (!scale) return;
@@ -95,168 +57,71 @@ function applyScale(meshes, scale) {
 }
 
 /**
- * Clone transform and metadata from old meshes to new ones.
+ * Walk the manifest chain from a CID backward through prev_asset_manifest_cid.
+ * Returns an array of { cid, version, color, scale, sourceCid } in chronological order.
+ *
+ * @param {string} startCid - The latest manifest CID to start walking from
+ * @param {number} maxDepth - Maximum chain depth to traverse
+ * @returns {Promise<Array<{cid: string, version: number, color: string|null, scale: object, sourceCid: string|null}>>}
  */
-function preserveMeshState(oldMeshes, newMeshes) {
-  if (
-    !oldMeshes ||
-    oldMeshes.length === 0 ||
-    !newMeshes ||
-    newMeshes.length === 0
-  )
-    return;
+async function walkManifestChain(startCid, maxDepth = 50) {
+  // Check cache first
+  const cached = chainCache.get(startCid);
+  if (cached) return cached;
 
-  const rootOld = oldMeshes.find((m) => m.metadata?.isNodeRoot) || oldMeshes[0];
-  const rootNew = newMeshes.find((m) => m.metadata?.isNodeRoot) || newMeshes[0];
-  const newMeshMetadata = new Map(
-    newMeshes.map((mesh) => [mesh, { ...(mesh.metadata || {}) }])
-  );
+  const chain = [];
+  let cid = startCid;
 
-  if (rootOld && rootNew) {
-    if (!rootNew.metadata?.centeringOffset) {
-      rootNew.position = rootOld.position.clone();
-    }
-    rootNew.rotation = rootOld.rotation
-      ? rootOld.rotation.clone()
-      : BABYLON.Vector3.Zero();
-    rootNew.rotationQuaternion = rootOld.rotationQuaternion
-      ? rootOld.rotationQuaternion.clone()
-      : null;
-    rootNew.scaling = rootOld.scaling.clone();
-  }
+  while (cid && chain.length < maxDepth) {
+    try {
+      const manifest = await getFromRemoteIPFS(cid);
+      const nodes = manifest.scene?.nodes || [];
+      const firstNode = nodes[0] || {};
 
-  for (const mesh of newMeshes) {
-    mesh.metadata = {
-      ...rootOld.metadata,
-      ...(newMeshMetadata.get(mesh) || {}),
-    };
-    mesh.metadata.isNodeRoot = mesh === rootNew;
-  }
-}
+      chain.unshift({
+        cid,
+        version: manifest.version || 0,
+        color: firstNode.appearance?.color || null,
+        scale: firstNode.appearance?.scale || { x: 1, y: 1, z: 1 },
+        sourceCid: firstNode.source?.cid || null,
+      });
 
-/**
- * Swap a node's geometry to a new version (generation type).
- */
-async function swapGeometry(nodeId, entry, anchor) {
-  const oldMeshes = getNodeMeshes(nodeId);
-  const oldState = nodeStates.get(nodeId);
-
-  // Remove old meshes but keep anchor
-  if (oldMeshes) {
-    for (const mesh of oldMeshes) {
-      mesh.dispose();
+      cid = manifest.prev_asset_manifest_cid || null;
+    } catch (err) {
+      console.warn(
+        `[TIME] walkManifestChain failed at cid=${cid}:`,
+        err.message
+      );
+      break;
     }
   }
 
-  const newMeshes = await loadAsset(
-    entry.source,
-    anchor,
-    nodeId,
-    oldState?.variants || []
-  );
-
-  preserveMeshState(oldMeshes, newMeshes);
-
-  if (oldState) {
-    oldState.meshes = newMeshes;
-  }
+  // Cache the result
+  chainCache.set(startCid, chain);
+  return chain;
 }
 
 /**
- * Apply parametric overlays (color + scale) without fetching new geometry.
+ * Apply a specific manifest version's state to a node's meshes.
+ * Fetches the manifest at manifestCid, finds the node by nodeId,
+ * and applies its color + scale to the current scene meshes.
+ *
+ * @param {string} nodeId - The node to update
+ * @param {string} manifestCid - The CID of the manifest version to apply
  */
-function applyParametric(nodeId, entry) {
-  const state = nodeStates.get(nodeId);
-  if (!state || !entry.params) return;
-
-  applyColor(state.meshes, entry.params.color);
-  applyScale(state.meshes, entry.params.scale);
-}
-
-/**
- * Update a node to a specific version index in its variant.
- */
-async function updateNodeToVersion(nodeId, targetVersionIndex) {
-  const state = nodeStates.get(nodeId);
-  if (!state) {
-    console.warn(`Node ${nodeId} not registered for time-travel`);
+async function applyManifestVersion(nodeId, manifestCid) {
+  const manifest = await getFromRemoteIPFS(manifestCid);
+  const node = (manifest.scene?.nodes || []).find((n) => n.node_id === nodeId);
+  if (!node) {
+    console.warn(`[TIME] node ${nodeId} not found in manifest ${manifestCid}`);
     return;
   }
 
-  const variants = state.variants;
-  if (targetVersionIndex < 0 || targetVersionIndex >= variants.length) {
-    console.warn(
-      `Invalid version index ${targetVersionIndex} for node ${nodeId}`
-    );
-    return;
+  const meshes = getNodeMeshes(nodeId);
+  if (meshes) {
+    applyColor(meshes, node.appearance?.color);
+    applyScale(meshes, node.appearance?.scale);
   }
-
-  const entry = variants[targetVersionIndex];
-  const anchor = getNodeAnchor(nodeId);
-
-  if (entry.type === "generation") {
-    await swapGeometry(nodeId, entry, anchor);
-  } else if (entry.type === "parametric") {
-    // For parametric entries, we start from the most recent generation geometry
-    // Find the latest generation before this parametric entry
-    let baseGeneration = null;
-    for (let i = targetVersionIndex; i >= 0; i--) {
-      if (variants[i].type === "generation") {
-        baseGeneration = variants[i];
-        break;
-      }
-    }
-
-    // If the current meshes are from a different generation, swap first
-    const currentEntry = variants[state.currentVersionIndex];
-    const currentIsDifferentGeneration =
-      currentEntry &&
-      (currentEntry.type !== "generation" ||
-        currentEntry.source?.cid !== baseGeneration?.source?.cid);
-
-    if (baseGeneration && currentIsDifferentGeneration) {
-      await swapGeometry(nodeId, baseGeneration, anchor);
-    }
-
-    applyParametric(nodeId, entry);
-  }
-
-  state.currentVersionIndex = targetVersionIndex;
-
-  document.dispatchEvent(
-    new CustomEvent("node:versionChanged", {
-      detail: { nodeId, versionIndex: targetVersionIndex, entry },
-    })
-  );
 }
 
-/**
- * Append a variant entry to a node's local state (after parametric save).
- */
-function appendHistoryEntry(nodeId, entry) {
-  const state = nodeStates.get(nodeId);
-  if (!state) return;
-  state.variants.push(entry);
-  state.currentVersionIndex = state.variants.length - 1;
-}
-
-/**
- * Listen for scenegraph ready to auto-register nodes.
- */
-document.addEventListener("scene:ready", (e) => {
-  const manifest = e.detail.manifest;
-  if (!manifest.scene?.nodes) return;
-
-  for (const node of manifest.scene?.nodes) {
-    registerNode(node.node_id, node.variants || []);
-  }
-});
-
-export {
-  registerNode,
-  getNodeVariants,
-  updateNodeToVersion,
-  appendHistoryEntry,
-  applyColor,
-  applyScale,
-};
+export { applyColor, applyScale, walkManifestChain, applyManifestVersion };

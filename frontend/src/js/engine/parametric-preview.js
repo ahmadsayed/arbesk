@@ -4,16 +4,19 @@
  * Binds Node Inspector inputs to live Babylon.js material/mesh updates.
  * Handles save (POST to backend) and cancel (revert to committed state).
  * Shows read-only token child info for child_ref nodes.
+ *
+ * History timeline now walks the manifest chain via prev_asset_manifest_cid
+ * links instead of relying on an in-memory variants array.
  */
 
 import {
-  updateNodeToVersion,
-  getNodeVariants,
-  appendHistoryEntry,
+  applyManifestVersion,
+  walkManifestChain,
   applyColor,
   applyScale,
 } from "./time-travel.js";
 import { getNodeMeshes, getNodeChildRef } from "./scene-graph.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 // DOM references
 const inspector = document.getElementById("inspector");
@@ -42,6 +45,9 @@ let activeNodeId = null;
 let draftState = null;
 let committedState = null;
 let isSaving = false;
+
+// Cached manifest chain for the currently open node (used by timeline slider)
+let currentChain = [];
 
 /**
  * Show the Token Child Info panel for a child_ref node.
@@ -81,7 +87,7 @@ function showTokenChildInfo(nodeId) {
 /**
  * Show the parametric editor for a regular node.
  */
-function openInspector(nodeId) {
+async function openInspector(nodeId) {
   activeNodeId = nodeId;
 
   // Check if this is a token child node
@@ -95,28 +101,29 @@ function openInspector(nodeId) {
   if (parametricEditor) parametricEditor.hidden = false;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
 
-  const meshes = getNodeMeshes(nodeId);
-  if (!meshes || meshes.length === 0) return;
-
-  // Read current committed values from the mesh
-  const rootMesh = meshes.find((m) => m.metadata?.isNodeRoot) || meshes[0];
-
+  // Read current committed values from the manifest node
   let currentColor = "#ffffff";
   let currentScale = { x: 1, y: 1, z: 1 };
 
-  if (rootMesh.material) {
-    const color =
-      rootMesh.material.diffuseColor || rootMesh.material.albedoColor;
-    if (color) {
-      currentColor = color.toHexString();
+  const manifestCid =
+    window.activeAssetManifestCid || window.latestAssetManifestCid;
+  if (manifestCid) {
+    try {
+      const manifest = await getFromRemoteIPFS(manifestCid);
+      const node = (manifest.scene?.nodes || []).find(
+        (n) => n.node_id === nodeId
+      );
+      if (node) {
+        if (node.appearance?.color) currentColor = node.appearance.color;
+        if (node.appearance?.scale) currentScale = { ...node.appearance.scale };
+      }
+    } catch (err) {
+      console.warn(
+        `[PARAM] failed to fetch manifest for inspector:`,
+        err.message
+      );
     }
   }
-
-  currentScale = {
-    x: rootMesh.scaling.x,
-    y: rootMesh.scaling.y,
-    z: rootMesh.scaling.z,
-  };
 
   committedState = {
     color: currentColor,
@@ -148,6 +155,7 @@ function closeInspector() {
   activeNodeId = null;
   draftState = null;
   committedState = null;
+  currentChain = [];
   inspector.hidden = true;
   timeline.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
@@ -155,16 +163,25 @@ function closeInspector() {
 }
 
 /**
- * Bind the timeline slider to the node's history.
+ * Bind the timeline slider to the node's manifest chain.
  */
-function bindTimeline(nodeId) {
-  const variants = getNodeVariants(nodeId);
-  if (variants.length > 1) {
+async function bindTimeline(nodeId) {
+  const manifestCid =
+    window.activeAssetManifestCid || window.latestAssetManifestCid;
+  if (!manifestCid) {
+    timeline.hidden = true;
+    return;
+  }
+
+  currentChain = await walkManifestChain(manifestCid);
+
+  if (currentChain.length > 1) {
     timeline.hidden = false;
     versionSlider.min = 0;
-    versionSlider.max = variants.length - 1;
-    versionSlider.value = variants.length - 1;
-    versionLabel.textContent = `v${variants.length}`;
+    versionSlider.max = currentChain.length - 1;
+    versionSlider.value = currentChain.length - 1;
+    const latestEntry = currentChain[currentChain.length - 1];
+    versionLabel.textContent = `v${latestEntry.version || currentChain.length}`;
   } else {
     timeline.hidden = true;
   }
@@ -203,6 +220,9 @@ async function onSave() {
   saveBtn.disabled = true;
   saveBtn.textContent = "Saving…";
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
   try {
     const body = {
       nodeId: activeNodeId,
@@ -222,9 +242,6 @@ async function onSave() {
     // Only send if something changed
     if (!body.color && !body.scale) {
       closeInspector();
-      isSaving = false;
-      saveBtn.disabled = false;
-      saveBtn.textContent = "Save Variant";
       return;
     }
 
@@ -232,7 +249,9 @@ async function onSave() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const err = await response.json();
@@ -241,12 +260,9 @@ async function onSave() {
 
     const result = await response.json();
 
-    // Update global manifest
+    // Update global manifest CID
     window.activeAssetManifestCid = result.assetManifestCid;
     window.latestAssetManifestCid = result.assetManifestCid;
-
-    // Append to local history
-    appendHistoryEntry(activeNodeId, result.variantEntry);
 
     // Update committed state to draft state
     committedState = {
@@ -271,8 +287,13 @@ async function onSave() {
 
     closeInspector();
   } catch (error) {
-    console.error("Failed to save parametric version:", error);
-    alert("Save failed: " + error.message);
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      alert("Save timed out. Make sure the backend and IPFS are running.");
+    } else {
+      console.error("Failed to save parametric version:", error);
+      alert("Save failed: " + error.message);
+    }
   } finally {
     isSaving = false;
     saveBtn.disabled = false;
@@ -293,20 +314,24 @@ function onCancel() {
 
 /**
  * Timeline slider change handler.
+ * Uses the cached manifest chain to apply the selected version's
+ * color + scale to the active node without re-fetching.
  */
 function onTimelineChange() {
-  if (!activeNodeId) return;
+  if (!activeNodeId || currentChain.length === 0) return;
   const index = parseInt(versionSlider.value, 10);
-  updateNodeToVersion(activeNodeId, index);
-  const variants = getNodeVariants(activeNodeId);
-  const entry = variants[index];
-  versionLabel.textContent = `v${entry?.v || index + 1}`;
+  const entry = currentChain[index];
+  if (!entry) return;
+
+  applyManifestVersion(activeNodeId, entry.cid);
+  versionLabel.textContent = `v${entry.version || index + 1}`;
 }
 
 // Event bindings
-document.addEventListener("node:selected", (e) => {
+function onNodeSelected(e) {
   openInspector(e.detail.nodeId);
-});
+}
+document.addEventListener("node:selected", onNodeSelected);
 
 if (nodeColorInput) nodeColorInput.addEventListener("input", onColorChange);
 if (nodeScaleX) nodeScaleX.addEventListener("input", onScaleChange);
@@ -316,14 +341,12 @@ if (saveBtn) saveBtn.addEventListener("click", onSave);
 if (cancelBtn) cancelBtn.addEventListener("click", onCancel);
 if (versionSlider) versionSlider.addEventListener("input", onTimelineChange);
 
-document.addEventListener("wallet:connected", () => {});
-document.addEventListener("wallet:disconnected", () => {});
-
 // Update token child CID when resolution completes and we're showing the info
-document.addEventListener("scene:tokenChildAdded", (e) => {
+function onTokenChildAdded(e) {
   if (e.detail?.nodeId === activeNodeId && tokenChildCidEl) {
     tokenChildCidEl.textContent = e.detail.resolvedCid || "Resolving…";
   }
-});
+}
+document.addEventListener("scene:tokenChildAdded", onTokenChildAdded);
 
 export { openInspector, closeInspector };
