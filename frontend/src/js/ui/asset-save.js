@@ -167,15 +167,27 @@ async function onSaveAssetDraft() {
     // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
 
-    // Always update URL to point to latest manifest CID so the user sees
-    // their current work even before publishing (tokenURI stays on the old CID
-    // until Publish is clicked).
-    const url = new URL(window.location);
-    url.searchParams.set("manifest", cid);
+    // If this asset is already published, update the on-chain tokenURI so
+    // tokenID → tokenURI always returns the latest manifest CID.
     if (window.activeAssetTokenId) {
+      try {
+        await updateAssetURI(window.activeAssetTokenId, cid);
+      } catch (err) {
+        console.warn(
+          "tokenURI update on save failed (non-blocking):",
+          err.message
+        );
+      }
+      const url = new URL(window.location);
       url.searchParams.set("asset", String(window.activeAssetTokenId));
+      url.searchParams.delete("manifest");
+      window.history.pushState({}, "", url);
+    } else {
+      const url = new URL(window.location);
+      url.searchParams.set("manifest", cid);
+      url.searchParams.delete("asset");
+      window.history.pushState({}, "", url);
     }
-    window.history.pushState({}, "", url);
 
     document.dispatchEvent(
       new CustomEvent("asset:draftSaved", { detail: { cid } })
