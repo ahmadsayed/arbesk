@@ -141,11 +141,12 @@ export { normalizeTokenURI } from "./uri-utils.js";
  * Resolve a child_ref token reference to a manifest CID.
  *
  * Resolution steps:
- *   1. Check in-memory cache
- *   2. Call tokenURI() on the contract
- *   3. Normalize the returned URI to a plain CID
- *   4. Optionally validate that the CID resolves to a valid manifest
- *   5. Cache the result
+ *   1. Fall back to connected wallet's chain/contract when not provided
+ *   2. Check in-memory cache using resolved values
+ *   3. Call tokenURI() on the contract
+ *   4. Normalize the returned URI to a plain CID
+ *   5. Optionally validate that the CID resolves to a valid manifest
+ *   6. Cache the result
  *
  * @param {ChildRef} childRef
  * @param {Object} [options]
@@ -173,11 +174,17 @@ export async function resolveChildRef(childRef, options = {}) {
     };
   }
 
-  // Check cache first
-  const cachedCid = getCachedResolution(childRef);
+  // Fall back to connected wallet's chain/contract when not provided
+  const chainId = childRef.chainId || window.chainId || null;
+  const contractAddress =
+    childRef.contractAddress || window.contractAddress || null;
+
+  // Check cache using resolved values
+  const resolvedRef = { ...childRef, chainId, contractAddress };
+  const cachedCid = getCachedResolution(resolvedRef);
   if (cachedCid) {
     console.log(
-      `[TOKEN] cache hit for token #${childRef.tokenId} → ${cachedCid}`
+      `[TOKEN] cache hit for token #${childRef.tokenId} -> ${cachedCid}`
     );
     const manifest = options.validate
       ? await fetchManifestSafe(cachedCid)
@@ -192,14 +199,11 @@ export async function resolveChildRef(childRef, options = {}) {
   }
 
   console.log(
-    `[TOKEN] resolving child_ref token #${childRef.tokenId} at ${childRef.contractAddress} chain ${childRef.chainId}`
+    `[TOKEN] resolving child_ref token #${childRef.tokenId} at ${contractAddress} chain ${chainId}`
   );
 
   // Get contract instance
-  const tokenContract = getTokenContract(
-    childRef.chainId,
-    childRef.contractAddress
-  );
+  const tokenContract = getTokenContract(chainId, contractAddress);
   if (!tokenContract) {
     const err = `No Web3 provider available to resolve token #${childRef.tokenId}`;
     console.error(`[TOKEN] ${err}`);
@@ -254,10 +258,10 @@ export async function resolveChildRef(childRef, options = {}) {
     };
   }
 
-  console.log(`[TOKEN] resolved token #${childRef.tokenId} → ${manifestCid}`);
+  console.log(`[TOKEN] resolved token #${childRef.tokenId} -> ${manifestCid}`);
 
-  // Cache the result
-  setCachedResolution(childRef, manifestCid);
+  // Cache the result using resolved values
+  setCachedResolution(resolvedRef, manifestCid);
 
   // Optionally validate
   const manifest = options.validate
