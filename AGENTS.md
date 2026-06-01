@@ -59,8 +59,12 @@ This file contains conventions, key file references, and practical guidance for 
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
 | API service layer | `frontend/src/js/services/api.js` |
-| Team service | `frontend/src/js/services/team.js` |
-| **Token resolver (planned)** | `frontend/src/js/blockchain/token-resolver.js` or `frontend/src/js/services/token-resolver.js` |
+| Token resolver | `frontend/src/js/blockchain/token-resolver.js` |
+| URI utilities | `frontend/src/js/blockchain/uri-utils.js` |
+| **Micro-ledger schema** | `src/ledger/schema.js` |
+| **Micro-ledger store** | `src/ledger/store.js` |
+| **Ledger API** | `src/api/ledger.js` |
+| **Ledger panel** | `frontend/src/js/ui/ledger-panel.js` |
 | Smart contracts | `blockchain/contracts/` |
 | Hardhat config | `blockchain/hardhat.config.js` |
 | Contract tests | `blockchain/test/` |
@@ -273,8 +277,9 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 | `[GEN]` | Asset generation pipeline | `[GEN] prompt="..." nodeId=... tx=0x...` |
 | `[PARAM]` | Parametric version | `[PARAM] nodeId=... color=#FF5733` |
 | `[AUTH]` | Authentication | `[AUTH] recovered address=0x... tx=0x...` |
-| `[ABI]` | ABI serving | `[ABI] serving /path/to/ArbeskWorld.json` |
+| `[ABI]` | ABI serving | `[ABI] serving /path/to/ArbeskAsset.json` |
 | `[TOKEN]` | Token child ref resolution | `[TOKEN] resolving child token #42 at 0x...` → `[TOKEN] resolved → Qm...` |
+| `[LEDGER]` | Micro-ledger operations | `[LEDGER] append GENERATION | manifestId=asset_... cid=Qm...` |
 
 **Rules for adding new logs:**
 1. Always prefix with `[TAG]` in UPPERCASE.

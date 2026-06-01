@@ -6,6 +6,8 @@ import * as dotenv from "dotenv";
 import MockAdapter from "../adapters/mock-adapter.js";
 import authenticate from "../authentication.js";
 import rateLimit from "../rate-limiter.js";
+import { createLedgerEntry } from "../../ledger/schema.js";
+import { appendEntry } from "../../ledger/store.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../blockchain/.env") });
@@ -92,11 +94,9 @@ export default function generateAssetNode(ipfs) {
           );
           if (!hasEvent) {
             console.log("[GEN] event not found in tx logs");
-            return res
-              .status(403)
-              .json({
-                error: "Transaction did not emit expected payment event",
-              });
+            return res.status(403).json({
+              error: "Transaction did not emit expected payment event",
+            });
           }
           console.log("[GEN] AssetGenerationPaid event verified");
         }
@@ -105,12 +105,10 @@ export default function generateAssetNode(ipfs) {
           console.log(
             `[GEN] REPLAY detected — tx ${effectiveTxHash} already consumed`,
           );
-          return res
-            .status(409)
-            .json({
-              error: "REPLAY_DETECTED",
-              message: "txHash already consumed",
-            });
+          return res.status(409).json({
+            error: "REPLAY_DETECTED",
+            message: "txHash already consumed",
+          });
         }
 
         let result;
@@ -205,12 +203,10 @@ export default function generateAssetNode(ipfs) {
           console.log(
             `[GEN] REPLAY detected in variants — tx ${effectiveTxHash}`,
           );
-          return res
-            .status(409)
-            .json({
-              error: "REPLAY_DETECTED",
-              message: "txHash already in asset variants",
-            });
+          return res.status(409).json({
+            error: "REPLAY_DETECTED",
+            message: "txHash already in asset variants",
+          });
         }
 
         node.variants ||= [];
@@ -250,6 +246,25 @@ export default function generateAssetNode(ipfs) {
         usedTxHashes.add(effectiveTxHash);
         console.log(
           `[GEN] success — manifest=${assetManifestCid} sourceAsset=${sourceAssetCid} variant_v=${variantEntry.v}`,
+        );
+
+        // Record to micro-ledger
+        appendEntry(
+          createLedgerEntry({
+            opType: "GENERATION",
+            manifestId: manifest.asset_id,
+            cid: assetManifestCid,
+            prevCid: prevAssetManifestCid || null,
+            actorAddress:
+              req.body.walletAddress || res.locals.actorAddress || "system",
+            payload: {
+              prompt,
+              provider: result.provider || provider || "mock",
+              txHash: effectiveTxHash,
+              nodeId,
+              sourceAssetCid,
+            },
+          }),
         );
 
         res.json({ assetManifestCid, variantEntry, sourceAssetCid });

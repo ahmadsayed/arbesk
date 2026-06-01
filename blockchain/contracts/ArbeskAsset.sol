@@ -71,6 +71,21 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     /// @notice Emitted when generation cost is updated.
     event CostUpdated(uint256 previousCost, uint256 newCost);
 
+    /// @notice Emitted when a manifest CID is anchored for immutability proof.
+    /// @param manifestId The manifest identifier.
+    /// @param cid The IPFS CID of the anchored manifest.
+    /// @param timestamp Block timestamp of the anchor action.
+    /// @param anchorer Address that performed the anchoring.
+    event ManifestAnchored(
+        string indexed manifestId,
+        string cid,
+        uint256 timestamp,
+        address indexed anchorer
+    );
+
+    /// @notice Manifest CID anchors per manifestId for immutability proof.
+    mapping(string => string[]) public manifestAnchors;
+
     /// @param _treasury Initial treasury wallet address.
     constructor(
         address _treasury
@@ -409,6 +424,23 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
 
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /**
+     * @notice Anchor a manifest CID on-chain for immutability proof.
+     * @dev Stores the CID in manifestAnchors mapping and emits an event.
+     *      Does NOT store the full manifest — only the CID hash. Cheap operation.
+     * @param manifestId The manifest asset_id to anchor.
+     * @param cid The IPFS CID to anchor.
+     */
+    function anchorManifest(
+        string calldata manifestId,
+        string calldata cid
+    ) external whenNotPaused {
+        require(bytes(manifestId).length > 0, "Empty manifestId");
+        require(bytes(cid).length > 0, "Empty CID");
+        manifestAnchors[manifestId].push(cid);
+        emit ManifestAnchored(manifestId, cid, block.timestamp, msg.sender);
     }
 
     function withdraw() external onlyOwner nonReentrant {

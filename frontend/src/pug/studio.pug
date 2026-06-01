@@ -182,6 +182,38 @@ html
           svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
             polyline(points="15 18 9 12 15 6")
 
+        //- Micro-Ledger Panel
+        aside#ledgerPanel.ledger-panel.collapsed
+          .ledger-panel-header
+            h3 Audit Ledger
+            button.ledger-panel-close.btn-close(type="button", aria-label="Close ledger")
+          #ledgerBody.ledger-panel-body
+            .ledger-panel-controls
+              select#ledgerFilter.ledger-filter
+                option(value="") All Operations
+                option(value="GENERATION") Generation
+                option(value="PARAMETRIC") Parametric
+                option(value="SAVE") Save
+                option(value="PUBLISH") Publish
+                option(value="THUMBNAIL") Thumbnail
+                option(value="MINT") Mint
+                option(value="TOKEN_URI_UPDATE") URI Update
+                option(value="TEAM_EDIT") Team Edit
+              button#ledgerAnchorBtn.ledger-anchor-btn(
+                title="Anchor current manifest CID on-chain for immutability proof"
+              ) Anchor Manifest
+            #ledgerStats.ledger-stats
+            ul#ledgerList.ledger-list
+
+        button#ledgerPanelToggle.ledger-panel-toggle(aria-label="Show audit ledger", title="Audit Ledger")
+          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+            path(d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z")
+            path(d="M14 2v6h6")
+            path(d="M8 13h2")
+            path(d="M8 17h2")
+            path(d="M14 13h2")
+            path(d="M14 17h2")
+
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")
     script(type="module", src="/js/engine/parametric-preview.js")
@@ -195,9 +227,13 @@ html
     script(type="module", src="/js/ui/asset-history.js")
     script(type="module", src="/js/ui/create-panel.js")
     script(type="module", src="/js/ui/asset-drop-zone.js")
+    script(type="module", src="/js/ui/ledger-panel.js")
     script(type="module").
       import { initAssetLibrary } from '/js/ui/asset-library.js';
       initAssetLibrary();
+
+      import { initLedgerPanel } from '/js/ui/ledger-panel.js';
+      initLedgerPanel();
 
       document.addEventListener('wallet:connected', () => {
         document.getElementById('connectWalletBtn').classList.add('hidden');

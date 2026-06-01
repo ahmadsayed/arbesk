@@ -10,6 +10,9 @@ import generateAssetNode from "./assets/generate-node.js";
 import parametricVersion from "./assets/save-variant.js";
 import abiRouter from "./abi-router.js";
 import rateLimit from "./rate-limiter.js";
+import ledgerRouter from "./ledger.js";
+import { createLedgerEntry } from "../ledger/schema.js";
+import { appendEntry } from "../ledger/store.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: __dirname + "/../../blockchain/.env" });
@@ -109,8 +112,28 @@ export default () => {
         `[IPFS] add /assets/publish-manifest | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
       );
       const { cid } = await ipfs.add(payload);
-      console.log(`[IPFS] add /assets/publish-manifest | cid=${cid}`);
-      res.send(cid.toString());
+      const resultCid = cid.toString();
+      console.log(`[IPFS] add /assets/publish-manifest | cid=${resultCid}`);
+
+      // Record to micro-ledger
+      const hasThumbnail = !!manifest?.thumbnail?.cid;
+      appendEntry(
+        createLedgerEntry({
+          opType: "PUBLISH",
+          manifestId: manifest.asset_id || manifest.name || "unknown",
+          cid: resultCid,
+          prevCid: manifest.prev_asset_manifest_cid || null,
+          actorAddress: req.body.actorAddress || "system",
+          payload: {
+            publishedCid: resultCid,
+            thumbnailCid: manifest?.thumbnail?.cid || null,
+            thumbnailMime: manifest?.thumbnail?.mime || null,
+            thumbnailBytes: manifest?.thumbnail?.bytes || null,
+          },
+        }),
+      );
+
+      res.send(resultCid);
     } catch (error) {
       console.error("[IPFS] /assets/publish-manifest error:", error.message);
       res.status(500).json({ error: error.message });
@@ -141,13 +164,30 @@ export default () => {
 
       await persistEmbeddedThumbnail(manifest);
 
+      const { cid } = await ipfs.add(JSON.stringify(manifest));
+      const resultCid = cid.toString();
       console.log(
         `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"}`,
       );
-      const { cid } = await ipfs.add(JSON.stringify(manifest));
-      console.log(`[SAVE] asset_id=${manifest.asset_id} → cid=${cid}`);
+      console.log(`[SAVE] asset_id=${manifest.asset_id} → cid=${resultCid}`);
+
+      // Record to micro-ledger
+      appendEntry(
+        createLedgerEntry({
+          opType: "SAVE",
+          manifestId: manifest.asset_id,
+          cid: resultCid,
+          prevCid: manifest.prev_asset_manifest_cid || null,
+          actorAddress: req.body.actorAddress || "system",
+          payload: {
+            version: manifest.version,
+            nodeCount: manifest.scene.nodes.length,
+          },
+        }),
+      );
+
       res.json({
-        cid: cid.toString(),
+        cid: resultCid,
         asset_id: manifest.asset_id,
         version: manifest.version,
       });
@@ -159,6 +199,9 @@ export default () => {
 
   // Mount ABI router
   api.use("/abi", abiRouter());
+
+  // Mount ledger routes
+  api.use("/ledger", ledgerRouter());
 
   api.use("/assets/generate-node", generateAssetNode(ipfs));
 

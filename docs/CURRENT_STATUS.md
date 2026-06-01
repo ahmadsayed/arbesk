@@ -38,8 +38,8 @@ Completed capabilities include:
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | FEVM contract, tx validation, replay prevention, Hardhat Docker |
 | Phase 4: UI Assembly & Workspace Studio | ✅ Complete | Studio shell, wallet, gallery, minting, team editor panel |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Optional WebP thumbnails, gallery thumbnails, on-demand IPFS cache |
-| **Phase 5.1: Token ID-Based Child Worlds** | **✅ MVP Complete** | `child_ref` schema, token resolver, drag/drop, scene graph rendering, persistence, inspector, external chain support, tests |
-| Phase 5: Micro-Ledger & Audit Infrastructure | 🔄 Planned | Append-only operation ledger, query API, contract anchoring |
+| **Phase 5.1: Token ID-Based Child Worlds** | **✅ Complete** | `child_ref` schema, token resolver, drag/drop, scene graph rendering, persistence, inspector, external chain support, tests |
+| **Phase 5: Micro-Ledger & Audit Infrastructure** | **🔄 In Progress** | Schema & JSONL store done, API mounted, operations hooked, `anchorManifest()` in contract, frontend ledger panel built |
 
 ---
 
@@ -122,7 +122,16 @@ All 10 issues completed:
 
 ### Upcoming (Phase 5)
 
-5. **Micro-ledger** — add durable operation records for generation, parametric edits, saves, publishes, mint/update URI, and team editor changes.
+5. **Micro-ledger** — ✅ Phase 5a (MVP) in progress:
+   - ✅ `src/ledger/schema.js` — LedgerEntry types and validation
+   - ✅ `src/ledger/store.js` — JSONL append-only store with query support
+   - ✅ `src/api/ledger.js` — Query API (`GET /api/ledger`, `GET /api/ledger/stats`)
+   - ✅ Routes mounted and operations hooked (GENERATION, PARAMETRIC, SAVE, PUBLISH)
+   - ✅ `ArbeskAsset.sol` — `anchorManifest()` function + `ManifestAnchored` event
+   - ✅ Contract tests (5 tests for anchoring)
+   - ✅ `frontend/src/js/ui/ledger-panel.js` — Collapsible audit trail panel with filter + anchor
+   - 🔲 Ledger panel not yet wired to show per-asset filtering via `manifestId` (uses global view)
+   - 🔲 Snapshots and digital signatures deferred to Phase 5b
 
 ### Deferred
 
