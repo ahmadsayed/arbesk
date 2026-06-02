@@ -10,7 +10,7 @@ import {
   clearScene,
   hideWelcomeOverlay,
 } from "../engine/scene-graph.js";
-import { payForGeneration } from "../blockchain/wallet.js";
+import { payForGenerationWithUSDC } from "../blockchain/wallet.js";
 import { generateAsset, ApiError } from "../services/api.js";
 
 // ─── DOM References ───
@@ -28,6 +28,7 @@ const mainStage = document.getElementById("mainStage");
 // Settings
 const assetNameDisplay = document.getElementById("assetNameDisplay");
 const providerSelect = document.getElementById("providerSelect");
+const tierSelect = document.getElementById("tierSelect");
 
 // ─── Chat Messages ───
 
@@ -72,6 +73,12 @@ function getProvider() {
   return providerSelect?.value || "mock";
 }
 
+function getTier() {
+  const val = tierSelect?.value;
+  if (val === undefined || val === null || val === "") return 0; // default Basic
+  return Number(val);
+}
+
 function buildTransformMatrix() {
   return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 }
@@ -102,8 +109,9 @@ async function onGenerate() {
   const transformMatrix = buildTransformMatrix();
 
   try {
-    // 1. On-chain payment
-    const txHash = await payForGeneration(nodeId, prompt);
+    // 1. On-chain payment with selected tier
+    const tier = getTier();
+    const txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
     if (!txHash) {
       throw new Error("Payment was cancelled or failed.");
     }
@@ -118,6 +126,7 @@ async function onGenerate() {
       provider: getProvider(),
       prevAssetManifestCid,
       transformMatrix,
+      tier,
     });
 
     // 3. Load new manifest

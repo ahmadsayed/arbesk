@@ -2,13 +2,38 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("ArbeskAsset", function () {
-  let asset, owner, treasury, user, editor;
+  let asset, usdc, owner, treasury, user, editor;
   const COST = ethers.parseEther("0.01");
+  const USDC_DECIMALS = 6;
+
+  // Tier costs in 6-decimal USDC units
+  const TIER_COSTS = {
+    Basic: 750000n, // $0.75
+    Standard: 1250000n, // $1.25
+    Premium: 1750000n, // $1.75
+    Pro: 2500000n, // $2.50
+  };
+
+  // Tier enum values (Solidity enum indices)
+  const Tier = { Basic: 0, Standard: 1, Premium: 2, Pro: 3 };
 
   beforeEach(async () => {
     [owner, treasury, user, editor] = await ethers.getSigners();
+
+    // Deploy MockUSDC for local testing
+    const MockUSDC = await ethers.getContractFactory("MockUSDC");
+    usdc = await MockUSDC.deploy();
+    await usdc.waitForDeployment();
+
+    // Mint USDC to users for testing
+    const mintAmount = ethers.parseUnits("10000", USDC_DECIMALS);
+    await usdc.mint(user.address, mintAmount);
+    await usdc.mint(editor.address, mintAmount);
+    await usdc.mint(owner.address, mintAmount);
+
+    // Deploy ArbeskAsset with USDC token
     const Factory = await ethers.getContractFactory("ArbeskAsset");
-    asset = await Factory.deploy(treasury.address);
+    asset = await Factory.deploy(treasury.address, await usdc.getAddress());
     await asset.waitForDeployment();
   });
 
@@ -21,11 +46,42 @@ describe("ArbeskAsset", function () {
       expect(await asset.developerTreasuryWallet()).to.equal(treasury.address);
     });
 
+    it("sets USDC token address", async () => {
+      expect(await asset.usdcToken()).to.equal(await usdc.getAddress());
+    });
+
+    it("initializes all tier costs", async () => {
+      expect(await asset.tierCosts(Tier.Basic)).to.equal(TIER_COSTS.Basic);
+      expect(await asset.tierCosts(Tier.Standard)).to.equal(
+        TIER_COSTS.Standard
+      );
+      expect(await asset.tierCosts(Tier.Premium)).to.equal(TIER_COSTS.Premium);
+      expect(await asset.tierCosts(Tier.Pro)).to.equal(TIER_COSTS.Pro);
+    });
+
+    it("getTierCost returns correct values", async () => {
+      expect(await asset.getTierCost(Tier.Basic)).to.equal(TIER_COSTS.Basic);
+      expect(await asset.getTierCost(Tier.Standard)).to.equal(
+        TIER_COSTS.Standard
+      );
+      expect(await asset.getTierCost(Tier.Premium)).to.equal(
+        TIER_COSTS.Premium
+      );
+      expect(await asset.getTierCost(Tier.Pro)).to.equal(TIER_COSTS.Pro);
+    });
+
     it("reverts if treasury is zero address", async () => {
       const Factory = await ethers.getContractFactory("ArbeskAsset");
-      await expect(Factory.deploy(ethers.ZeroAddress)).to.be.revertedWith(
-        "Treasury cannot be zero address"
-      );
+      await expect(
+        Factory.deploy(ethers.ZeroAddress, await usdc.getAddress())
+      ).to.be.revertedWith("Treasury cannot be zero address");
+    });
+
+    it("allows zero USDC address (USDC payments disabled)", async () => {
+      const Factory = await ethers.getContractFactory("ArbeskAsset");
+      const a = await Factory.deploy(treasury.address, ethers.ZeroAddress);
+      await a.waitForDeployment();
+      expect(await a.usdcToken()).to.equal(ethers.ZeroAddress);
     });
 
     it("has correct ERC721 metadata", async () => {
@@ -34,7 +90,7 @@ describe("ArbeskAsset", function () {
     });
   });
 
-  describe("payForGeneration", () => {
+  describe("payForGeneration (native token)", () => {
     it("accepts exact payment and emits AssetGenerationPaid", async () => {
       const nodeId = ethers.encodeBytes32String("node_001");
       const prompt = "A modern workbench";
@@ -109,13 +165,10 @@ describe("ArbeskAsset", function () {
         .payForGeneration(nodeId, "prompt1", { value: COST });
       const receipt = await tx.wait();
 
-      // Verify payment is recorded as used
       expect(
         await asset.isPaymentUsed(nodeId, user.address, receipt.blockNumber)
       ).to.be.true;
 
-      // A second payment in a different block has a different key (block.number changes),
-      // so it succeeds. This is by design — the backend validates txHash uniqueness.
       const tx2 = await asset
         .connect(user)
         .payForGeneration(nodeId, "prompt2", { value: COST });
@@ -135,6 +188,200 @@ describe("ArbeskAsset", function () {
     });
   });
 
+  describe("payForGenerationWithUSDC", () => {
+    const nodeId = ethers.encodeBytes32String("node_001");
+    const prompt = "A modern workbench";
+
+    it("accepts Basic tier payment and emits AssetGenerationPaidUSDC", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
+      ).to.emit(asset, "AssetGenerationPaidUSDC");
+    });
+
+    it("accepts Pro tier payment", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Pro);
+
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, Tier.Pro)
+      ).to.emit(asset, "AssetGenerationPaidUSDC");
+    });
+
+    it("transfers correct USDC amount per tier", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Premium);
+
+      const beforeTreasury = await usdc.balanceOf(treasury.address);
+      const beforeUser = await usdc.balanceOf(user.address);
+
+      await asset
+        .connect(user)
+        .payForGenerationWithUSDC(nodeId, prompt, Tier.Premium);
+
+      const afterTreasury = await usdc.balanceOf(treasury.address);
+      const afterUser = await usdc.balanceOf(user.address);
+
+      expect(afterTreasury - beforeTreasury).to.equal(TIER_COSTS.Premium);
+      expect(beforeUser - afterUser).to.equal(TIER_COSTS.Premium);
+    });
+
+    it("charges different amounts for different tiers", async () => {
+      // Pay Basic first
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic + TIER_COSTS.Pro);
+
+      const before = await usdc.balanceOf(treasury.address);
+
+      await asset
+        .connect(user)
+        .payForGenerationWithUSDC(
+          ethers.encodeBytes32String("node_basic"),
+          "basic gen",
+          Tier.Basic
+        );
+      await asset
+        .connect(user)
+        .payForGenerationWithUSDC(
+          ethers.encodeBytes32String("node_pro"),
+          "pro gen",
+          Tier.Pro
+        );
+
+      const after = await usdc.balanceOf(treasury.address);
+      expect(after - before).to.equal(TIER_COSTS.Basic + TIER_COSTS.Pro);
+    });
+
+    it("records payment as used", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Standard);
+      const tx = await asset
+        .connect(user)
+        .payForGenerationWithUSDC(nodeId, prompt, Tier.Standard);
+      const receipt = await tx.wait();
+
+      const used = await asset.isPaymentUsed(
+        nodeId,
+        user.address,
+        receipt.blockNumber
+      );
+      expect(used).to.be.true;
+    });
+
+    it("reverts if USDC token is not set (address(0))", async () => {
+      const Factory = await ethers.getContractFactory("ArbeskAsset");
+      const noUsdc = await Factory.deploy(treasury.address, ethers.ZeroAddress);
+      await noUsdc.waitForDeployment();
+
+      await expect(
+        noUsdc
+          .connect(user)
+          .payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
+      ).to.be.revertedWith("USDC payments disabled");
+    });
+
+    it("reverts if caller has not approved USDC", async () => {
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
+      ).to.be.reverted; // ERC20: insufficient allowance
+    });
+
+    it("reverts if caller has insufficient USDC for the tier", async () => {
+      // Approve huge amount but set cost > balance
+      const hugeAmount = ethers.parseUnits("999999", USDC_DECIMALS);
+      await usdc.connect(user).approve(await asset.getAddress(), hugeAmount);
+      await asset.setTierCost(
+        Tier.Basic,
+        ethers.parseUnits("999999", USDC_DECIMALS)
+      );
+
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
+      ).to.be.reverted; // ERC20: transfer amount exceeds balance
+    });
+
+    it("reverts if prompt is empty", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, "", Tier.Basic)
+      ).to.be.revertedWith("Invalid prompt length");
+    });
+
+    it("reverts if prompt exceeds 500 bytes", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      const longPrompt = "a".repeat(501);
+      await expect(
+        asset
+          .connect(user)
+          .payForGenerationWithUSDC(nodeId, longPrompt, Tier.Basic)
+      ).to.be.revertedWith("Invalid prompt length");
+    });
+
+    it("reverts if nodeId is zero", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      await expect(
+        asset
+          .connect(user)
+          .payForGenerationWithUSDC(ethers.ZeroHash, prompt, Tier.Basic)
+      ).to.be.revertedWith("Invalid nodeId");
+    });
+
+    it("reverts when paused", async () => {
+      await asset.pause();
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
+      ).to.be.revertedWithCustomError(asset, "EnforcedPause");
+    });
+
+    it("reverts with invalid tier value (out of enum range)", async () => {
+      // Passing an out-of-range enum value triggers a Solidity panic
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, 99)
+      ).to.be.reverted;
+    });
+
+    it("shared paymentKey: USDC and native payments don't collide", async () => {
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      const tx1 = await asset
+        .connect(user)
+        .payForGenerationWithUSDC(nodeId, "prompt1", Tier.Basic);
+      const receipt1 = await tx1.wait();
+
+      const tx2 = await asset
+        .connect(user)
+        .payForGeneration(nodeId, "prompt2", { value: COST });
+      const receipt2 = await tx2.wait();
+
+      expect(
+        await asset.isPaymentUsed(nodeId, user.address, receipt1.blockNumber)
+      ).to.be.true;
+      expect(
+        await asset.isPaymentUsed(nodeId, user.address, receipt2.blockNumber)
+      ).to.be.true;
+    });
+  });
+
   describe("Access Control", () => {
     it("only owner can setCost", async () => {
       await expect(
@@ -145,6 +392,24 @@ describe("ArbeskAsset", function () {
     it("only owner can setTreasury", async () => {
       await expect(
         asset.connect(user).setTreasury(user.address)
+      ).to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount");
+    });
+
+    it("only owner can setTierCost", async () => {
+      await expect(
+        asset.connect(user).setTierCost(Tier.Basic, 500000)
+      ).to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount");
+    });
+
+    it("only owner can setUsdcToken", async () => {
+      await expect(
+        asset.connect(user).setUsdcToken(user.address)
+      ).to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount");
+    });
+
+    it("only owner can withdrawUSDC", async () => {
+      await expect(
+        asset.connect(user).withdrawUSDC()
       ).to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount");
     });
 
@@ -204,16 +469,101 @@ describe("ArbeskAsset", function () {
     });
   });
 
+  describe("setTierCost", () => {
+    it("updates a single tier cost", async () => {
+      const newCost = 500000n; // $0.50
+      await asset.setTierCost(Tier.Basic, newCost);
+      expect(await asset.tierCosts(Tier.Basic)).to.equal(newCost);
+      // Other tiers unchanged
+      expect(await asset.tierCosts(Tier.Pro)).to.equal(TIER_COSTS.Pro);
+    });
+
+    it("emits TierCostUpdated", async () => {
+      const newCost = 999999n;
+      await expect(asset.setTierCost(Tier.Premium, newCost))
+        .to.emit(asset, "TierCostUpdated")
+        .withArgs(Tier.Premium, TIER_COSTS.Premium, newCost);
+    });
+
+    it("reverts if cost is 0", async () => {
+      await expect(asset.setTierCost(Tier.Basic, 0)).to.be.revertedWith(
+        "Tier cost must be > 0"
+      );
+    });
+
+    it("allows updating all tiers independently", async () => {
+      await asset.setTierCost(Tier.Basic, 100000n);
+      await asset.setTierCost(Tier.Standard, 200000n);
+      await asset.setTierCost(Tier.Premium, 300000n);
+      await asset.setTierCost(Tier.Pro, 400000n);
+
+      expect(await asset.tierCosts(Tier.Basic)).to.equal(100000n);
+      expect(await asset.tierCosts(Tier.Standard)).to.equal(200000n);
+      expect(await asset.tierCosts(Tier.Premium)).to.equal(300000n);
+      expect(await asset.tierCosts(Tier.Pro)).to.equal(400000n);
+    });
+
+    it("cannot set tier cost to zero", async () => {
+      // Setting to 0 should revert (must be > 0)
+      await expect(asset.setTierCost(Tier.Standard, 0)).to.be.revertedWith(
+        "Tier cost must be > 0"
+      );
+    });
+  });
+
+  describe("setUsdcToken", () => {
+    it("updates USDC token address", async () => {
+      const oldToken = await asset.usdcToken();
+      await asset.setUsdcToken(user.address);
+      expect(await asset.usdcToken()).to.equal(user.address);
+    });
+
+    it("emits UsdcTokenUpdated", async () => {
+      const oldToken = await usdc.getAddress();
+      await expect(asset.setUsdcToken(user.address))
+        .to.emit(asset, "UsdcTokenUpdated")
+        .withArgs(oldToken, user.address);
+    });
+
+    it("allows setting to zero address to disable USDC", async () => {
+      await asset.setUsdcToken(ethers.ZeroAddress);
+      expect(await asset.usdcToken()).to.equal(ethers.ZeroAddress);
+    });
+  });
+
   describe("withdraw", () => {
     it("sends stray balance to treasury", async () => {
-      // Force some balance by sending directly through selfdestruct or via a helper.
-      // Instead, we can use a low-level call from another contract, but for simplicity
-      // send via a helper that bypasses the receive revert.
-      // Actually, the receive() reverts, so we can't send ETH directly.
-      // Let's fund via an intermediate contract or just skip if impossible.
-      // Instead, we can test withdraw by having owner call it when balance is 0 -> revert.
       await expect(asset.withdraw()).to.be.revertedWith(
         "No balance to withdraw"
+      );
+    });
+  });
+
+  describe("withdrawUSDC", () => {
+    it("reverts when no USDC to withdraw", async () => {
+      await expect(asset.withdrawUSDC()).to.be.revertedWith(
+        "No USDC to withdraw"
+      );
+    });
+
+    it("recovers USDC accidentally sent to contract", async () => {
+      const recoverAmount = ethers.parseUnits("100", USDC_DECIMALS);
+      await usdc
+        .connect(user)
+        .transfer(await asset.getAddress(), recoverAmount);
+
+      const beforeTreasury = await usdc.balanceOf(treasury.address);
+      await asset.withdrawUSDC();
+      const afterTreasury = await usdc.balanceOf(treasury.address);
+
+      expect(afterTreasury - beforeTreasury).to.equal(recoverAmount);
+      expect(await usdc.balanceOf(await asset.getAddress())).to.equal(0);
+    });
+
+    it("reverts if USDC token is not set", async () => {
+      await asset.setUsdcToken(ethers.ZeroAddress);
+      await expect(asset.withdrawUSDC()).to.be.revertedWith(
+        "USDC token not set"
       );
     });
   });
@@ -304,29 +654,24 @@ describe("ArbeskAsset", function () {
     });
 
     it("prevents duplicate editor entries", async () => {
-      // Add editor once
       await asset
         .connect(user)
         ["addEditor(uint256,address)"](1, editor.address);
-      // Add same editor again — should not emit EditorAdded
       await expect(
         asset.connect(user)["addEditor(uint256,address)"](1, editor.address)
       ).to.not.emit(asset, "EditorAdded");
 
-      // Editor should appear exactly once in the list (not duplicated)
       const editors = await asset.listEditors(1);
       const occurrences = editors.filter((e) => e === editor.address).length;
       expect(occurrences).to.equal(1);
     });
 
     it("reverts when exceeding MAX_EDITORS_PER_TOKEN", async () => {
-      // Fill up to the cap (49 = cap of 50 minus the owner already added via publishAsset)
       const cap = Number(await asset.MAX_EDITORS_PER_TOKEN());
-      const freeSlots = cap - 1; // owner already occupies slot 0
+      const freeSlots = cap - 1;
       const wallets = Array.from({ length: freeSlots }, () =>
         ethers.Wallet.createRandom()
       );
-      // Batch-add all remaining slots
       await asset.connect(user)["addEditor(uint256,address[])"](
         1,
         wallets.map((w) => w.address)
@@ -334,7 +679,6 @@ describe("ArbeskAsset", function () {
 
       expect((await asset.listEditors(1)).length).to.equal(cap);
 
-      // 51st should revert
       const extra = ethers.Wallet.createRandom();
       await expect(
         asset.connect(user)["addEditor(uint256,address)"](1, extra.address)
@@ -343,14 +687,11 @@ describe("ArbeskAsset", function () {
 
     it("reverts when exceeding MAX_TOKENS_PER_EDITOR", async () => {
       const cap = Number(await asset.MAX_TOKENS_PER_EDITOR());
-      // User already has token #1 via publishAsset in beforeEach
-      // Mint tokens #2 through #500 — each publishAsset auto-adds user as editor
       for (let i = 2; i <= cap; i++) {
         await asset.connect(user).publishAsset(`ipfs://QmToken${i}`, i);
       }
       expect((await asset.listTokens(user.address)).length).to.equal(cap);
 
-      // 501st should revert
       await expect(
         asset.connect(user).publishAsset("ipfs://QmToken501", 501)
       ).to.be.revertedWith("ArbeskAsset: max tokens per editor reached");
@@ -366,11 +707,9 @@ describe("ArbeskAsset", function () {
     });
 
     it("silently no-ops when removing a non-editor", async () => {
-      // Removing someone who was never an editor should not emit EditorRemoved
       await expect(
         asset.connect(user).removeEditor(1, editor.address)
       ).to.not.emit(asset, "EditorRemoved");
-      // Editors list should still only contain the owner
       const editors = await asset.listEditors(1);
       expect(editors).to.deep.equal([user.address]);
     });
@@ -438,11 +777,28 @@ describe("ArbeskAsset", function () {
       expect(used).to.be.false;
     });
 
-    it("returns true after payment", async () => {
+    it("returns true after native payment", async () => {
       const nodeId = ethers.encodeBytes32String("node_001");
       const tx = await asset
         .connect(user)
         .payForGeneration(nodeId, "prompt", { value: COST });
+      const receipt = await tx.wait();
+      const used = await asset.isPaymentUsed(
+        nodeId,
+        user.address,
+        receipt.blockNumber
+      );
+      expect(used).to.be.true;
+    });
+
+    it("returns true after USDC payment", async () => {
+      const nodeId = ethers.encodeBytes32String("node_001");
+      await usdc
+        .connect(user)
+        .approve(await asset.getAddress(), TIER_COSTS.Basic);
+      const tx = await asset
+        .connect(user)
+        .payForGenerationWithUSDC(nodeId, "prompt", Tier.Basic);
       const receipt = await tx.wait();
       const used = await asset.isPaymentUsed(
         nodeId,
@@ -456,7 +812,6 @@ describe("ArbeskAsset", function () {
   describe("transfer", () => {
     beforeEach(async () => {
       await asset.connect(user).publishAsset("ipfs://QmA", 1);
-      // Add editor so we can verify they survive the transfer
       await asset
         .connect(user)
         ["addEditor(uint256,address)"](1, editor.address);
@@ -467,12 +822,10 @@ describe("ArbeskAsset", function () {
         .connect(user)
         .safeTransferFrom(user.address, treasury.address, 1);
 
-      // Old owner can no longer update URI
       await expect(
         asset.connect(user).updateAssetURI(1, "ipfs://QmHijack")
       ).to.be.revertedWith("ArbeskAsset: Only owner or editor can update");
 
-      // Old owner is not in the editor list
       const editors = await asset.listEditors(1);
       expect(editors).to.not.include(user.address);
     });
@@ -482,12 +835,10 @@ describe("ArbeskAsset", function () {
         .connect(user)
         .safeTransferFrom(user.address, treasury.address, 1);
 
-      // New owner can update URI immediately
       await expect(
         asset.connect(treasury).updateAssetURI(1, "ipfs://QmNew")
       ).to.emit(asset, "AssetURIUpdated");
 
-      // New owner is in the editor list
       const editors = await asset.listEditors(1);
       expect(editors).to.include(treasury.address);
     });
@@ -497,15 +848,9 @@ describe("ArbeskAsset", function () {
         .connect(user)
         .safeTransferFrom(user.address, treasury.address, 1);
 
-      // Existing editor should still have access
       await expect(
         asset.connect(editor).updateAssetURI(1, "ipfs://QmEditorUpdate")
       ).to.emit(asset, "AssetURIUpdated");
     });
   });
 });
-
-async function timeLatest() {
-  const block = await ethers.provider.getBlock("latest");
-  return block.timestamp;
-}

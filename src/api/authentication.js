@@ -1,4 +1,20 @@
+/**
+ * Arbesk API Authentication Middleware
+ *
+ * Accepts two authorization schemes:
+ *
+ * 1. Bearer <base64message>.<base64signature>
+ *    Per-generation auth: signs the txHash to prove wallet ownership.
+ *    Used as a fallback when no session token is available.
+ *
+ * 2. Session <token>
+ *    Session-based auth: the user signs once to create a session (POST /sessions),
+ *    then reuses the opaque token for subsequent requests within 24 hours.
+ *    Eliminates the per-generation MetaMask pop-up.
+ */
+
 import { web3 } from "../config.js";
+import { validateSession } from "./sessions.js";
 
 export default async function authorize(request, response, next) {
   try {
@@ -14,12 +30,51 @@ export default async function authorize(request, response, next) {
     }
 
     const parts = authHeader.split(" ");
-    if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") {
+    if (parts.length !== 2) {
       console.log(`[AUTH] rejected — invalid format`);
       return response.status(401).json({
         error: {
           code: "INVALID_AUTH_FORMAT",
-          message: "Invalid Authorization format. Expected: Bearer <token>",
+          message:
+            "Invalid Authorization format. Expected: Bearer <token> or Session <token>",
+        },
+      });
+    }
+
+    const scheme = parts[0].toLowerCase();
+
+    // ─── Session-Based Auth ──────────────────────────────────────────────
+
+    if (scheme === "session") {
+      const token = parts[1];
+      const address = validateSession(token);
+
+      if (!address) {
+        console.log(`[AUTH] rejected — invalid or expired session token`);
+        return response.status(401).json({
+          error: {
+            code: "INVALID_SESSION",
+            message:
+              "Session token is invalid or expired. Create a new session by signing again.",
+          },
+        });
+      }
+
+      response.locals.userAddress = address;
+      // No txHash for session auth — the caller is already authenticated
+      response.locals.txHash = null;
+      console.log(`[AUTH] session valid — address=${address}`);
+      return next();
+    }
+
+    // ─── Bearer (txHash Signature) Auth ──────────────────────────────────
+
+    if (scheme !== "bearer") {
+      console.log(`[AUTH] rejected — unknown scheme: ${scheme}`);
+      return response.status(401).json({
+        error: {
+          code: "UNKNOWN_AUTH_SCHEME",
+          message: `Unknown auth scheme "${scheme}". Expected: Bearer or Session`,
         },
       });
     }

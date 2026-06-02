@@ -200,10 +200,35 @@ A manifest is a complete snapshot stored on private IPFS.
 }
 ```
 
+### 4.1 Manifest Chain (IPFS Content-Addressed Version Chain)
+
+Every manifest stored on private IPFS is content-addressed — its IPFS CID is a cryptographic hash of its contents. When a new version is saved, the updated manifest includes a `prev_manifest_cid` pointer to the previous version, forming a **manifest chain** (also referred to as the **IPFS version chain** or **manifest history chain**).
+
+```text
+Manifest v1 (CID: QmA...)  ←──  Manifest v2 (CID: QmB...)  ←──  Manifest v3 (CID: QmC...)
+     prev_manifest_cid: null          prev_manifest_cid: QmA...        prev_manifest_cid: QmB...
+```
+
+**Key properties:**
+
+- **Content-addressed immutability**: Each manifest CID is a verifiable fingerprint. The chain cannot be altered without changing every subsequent CID.
+- **Backward-only traversal**: The chain walks from newest to oldest via `prev_manifest_cid`. There is no forward pointer — IPFS CIDs of future versions cannot be known in advance.
+- **IPFS as the chain substrate**: Unlike a traditional blockchain, the "chain" here lives on IPFS. The CIDs themselves form the links; no separate ledger or contract maintains the ordering.
+- **Temporal isolation**: Loading a specific manifest CID renders the exact world state at that version. The chain enables time-travel without re-rendering unrelated nodes.
+
+**How the chain is used:**
+
+| Consumer | Description |
+|---|---|
+| `GET /api/manifest-chain` | Backend walks up to 50 entries and returns lightweight summaries (CID, version, name, node count, timestamp) |
+| History timeline UI | Frontend fetches the chain and renders a draggable circular-node scrubber for version switching |
+| Replay prevention | Backend scans manifest history entries for duplicate `txHash` values to prevent generation replay |
+| Micro-ledger (Phase 5) | The ledger records each manifest CID as an append-only log entry, with optional on-chain anchoring via `anchorManifest()` |
+
 ### History Entry Types
 
 | Type | Trigger | Payment | Asset CID changes? | Notes |
-|---|---|---:|---:|---|
+|---|---:|---:|---:|---|
 | `generation` | Prompt generation | Yes | Usually yes | Uses PayGo tx validation and mock/cloud adapter |
 | `parametric` | Color/scale edit | No | No | Reuses node source CID, appends params |
 

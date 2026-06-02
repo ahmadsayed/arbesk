@@ -91,7 +91,7 @@ if [ -f "blockchain/.env" ]; then
     CONTRACT_ADDRESS=$(grep '^CONTRACT_ADDRESS=' blockchain/.env | cut -d'=' -f2 | tr -d ' ')
 fi
 
-DEPLOYMENT_FILE="blockchain/deployments/localhost/ArbeskWorld.json"
+DEPLOYMENT_FILE="blockchain/deployments/localhost/ArbeskAsset.json"
 NEEDS_DEPLOY=false
 
 if [ -z "$CONTRACT_ADDRESS" ] || [ ! -f "$DEPLOYMENT_FILE" ]; then
@@ -109,18 +109,75 @@ else
 fi
 
 if [ "$NEEDS_DEPLOY" = true ]; then
-    echo "📜 Deploying ArbeskWorld contract to Hardhat..."
-    docker compose exec hardhat npx hardhat run scripts/deploy.js --network localhost
+    # Ensure contracts are compiled before deploy.
+    # Hardhat auto-compiles inside getContractFactory but an explicit step
+    # catches stale artifacts and missing dependencies before the deploy runs.
+    echo "🔨 Compiling Solidity contracts..."
+    docker compose exec -T hardhat npx hardhat compile
 
-    # Extract deployed address from deployment record
-    if [ -f "$DEPLOYMENT_FILE" ]; then
-        CONTRACT_ADDRESS=$(grep '"address"' "$DEPLOYMENT_FILE" | head -1 | sed 's/.*"address".*"\([^"]*\)".*/\1/')
-        if [ -n "$CONTRACT_ADDRESS" ]; then
-            sed -i "s|^CONTRACT_ADDRESS=.*|CONTRACT_ADDRESS=${CONTRACT_ADDRESS}|" blockchain/.env
+    # Docker bind mounts on some systems don't sync container→host file writes.
+    # To avoid stale USDC_TOKEN poisoning the deploy, we MUST remove it inside
+    # the container before running the deploy script.
+    # See: test/frontend/deployment-integrity.test.js for regression coverage.
+    echo "🧹 Ensuring clean USDC_TOKEN state for fresh MockUSDC deploy..."
+    docker compose exec -T hardhat sh -c '
+        TMPFILE=$(mktemp)
+        grep -v "^USDC_TOKEN=" /app/.env > "$TMPFILE" && cat "$TMPFILE" > /app/.env && rm "$TMPFILE"
+    '
+
+    echo "📜 Deploying ArbeskAsset + MockUSDC to Hardhat..."
+    docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
+
+    # Read deployed addresses from the deployment artifact inside the container.
+    # docker-compose exec output includes non-JSON noise; filter to the JSON.
+    ARTIFACT_RAW=$(docker compose exec -T hardhat cat /app/deployments/localhost/ArbeskAsset.json 2>/dev/null)
+    # Find the JSON object between { and }
+    ARTIFACT_JSON=$(echo "$ARTIFACT_RAW" | sed -n '/^{/,/^}/p')
+
+    if [ -n "$ARTIFACT_JSON" ]; then
+        CONTRACT_ADDRESS=$(echo "$ARTIFACT_JSON" | grep '"address"' | head -1 | sed 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        USDC_TOKEN=$(echo "$ARTIFACT_JSON" | grep '"usdcToken"' | head -1 | sed 's/.*"usdcToken"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+        if [ -n "$CONTRACT_ADDRESS" ] && [ -n "$USDC_TOKEN" ]; then
+            # Update blockchain/.env on HOST (write from host side, not container)
+            TMPFILE=$(mktemp)
+            grep -v '^CONTRACT_ADDRESS=\|^USDC_TOKEN=' blockchain/.env > "$TMPFILE"
+            echo "CONTRACT_ADDRESS=${CONTRACT_ADDRESS}" >> "$TMPFILE"
+            echo "USDC_TOKEN=${USDC_TOKEN}" >> "$TMPFILE"
+            mv "$TMPFILE" blockchain/.env
             echo "✅ Contract deployed at ${CONTRACT_ADDRESS}"
+            echo "✅ MockUSDC deployed at ${USDC_TOKEN}"
+
+            # Sync CONTRACT_ADDRESS to root .env (backend reads root .env)
+            if [ -f ".env" ]; then
+                TMPFILE2=$(mktemp)
+                grep -v '^CONTRACT_ADDRESS=' .env > "$TMPFILE2" || true
+                echo "CONTRACT_ADDRESS=${CONTRACT_ADDRESS}" >> "$TMPFILE2"
+                mv "$TMPFILE2" .env
+                echo "✅ Root .env synced with CONTRACT_ADDRESS"
+            fi
+
+            # Verify MockUSDC is a real ERC20 (not the same contract as ArbeskAsset)
+            USDC_CODE=$(curl -s -X POST http://127.0.0.1:8545 \
+                -H "Content-Type: application/json" \
+                -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"${USDC_TOKEN}\",\"latest\"],\"id\":1}" \
+                | grep -o '"result":"[^"]*"' | sed 's/"result":"//;s/"$//')
+            ARB_CODE=$(curl -s -X POST http://127.0.0.1:8545 \
+                -H "Content-Type: application/json" \
+                -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"${CONTRACT_ADDRESS}\",\"latest\"],\"id\":1}" \
+                | grep -o '"result":"[^"]*"' | sed 's/"result":"//;s/"$//')
+            if [ "$USDC_CODE" = "$ARB_CODE" ] && [ "$USDC_CODE" != "0x" ]; then
+                echo "❌ CRITICAL: MockUSDC and ArbeskAsset have the SAME bytecode!"
+                echo "   This causes ERC721NonexistentToken errors."
+                echo "   Remove USDC_TOKEN from blockchain/.env and re-run."
+            else
+                echo "✅ MockUSDC verified as distinct ERC20 at ${USDC_TOKEN}"
+            fi
+        else
+            echo "⚠️  Could not parse deployment artifact; .env files may need manual update."
         fi
     else
-        echo "⚠️  Deployment file not found; contract may need manual deployment."
+        echo "⚠️  Deployment artifact not found; contract may need manual deployment."
     fi
 else
     echo "✅ Contract verified on-chain at ${CONTRACT_ADDRESS}"

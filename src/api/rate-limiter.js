@@ -1,5 +1,10 @@
 const rateMap = new Map(); // walletAddress → { count, resetTime }
 
+// Exposed for test teardown
+export function _resetRateLimiter() {
+  rateMap.clear();
+}
+
 export default function rateLimit({ max, windowMs }) {
   return (req, res, next) => {
     const wallet = req.body.txHash

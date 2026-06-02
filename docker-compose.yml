@@ -9,8 +9,8 @@ services:
     # Swarm ports are intentionally not published — the daemon binds swarm to
     # the container's loopback and has no bootstrap peers.
     ports:
-      - "127.0.0.1:5001:5001"   # IPFS API
-      - "127.0.0.1:8080:8080"   # IPFS Gateway
+      - "127.0.0.1:5001:5001" # IPFS API
+      - "127.0.0.1:8080:8080" # IPFS Gateway
     volumes:
       - ipfs-data:/data/ipfs
     # Isolation is enforced inside the daemon, not at the Docker network layer:
@@ -24,7 +24,7 @@ services:
       dockerfile: docker/hardhat.Dockerfile
     container_name: arbesk-hardhat
     ports:
-      - "127.0.0.1:8545:8545"   # Hardhat local EVM network
+      - "127.0.0.1:8545:8545" # Hardhat local EVM network
     volumes:
       # Mount project files individually so the host's empty node_modules
       # directory does not shadow the image's installed dependencies.
@@ -32,6 +32,9 @@ services:
       - ./blockchain/contracts:/app/contracts
       - ./blockchain/scripts:/app/scripts
       - ./blockchain/test:/app/test
+      - ./blockchain/deployments:/app/deployments
+      - ./blockchain/.env:/app/.env
+      - ./blockchain/artifacts:/app/artifacts
       # Named volume keeps Hardhat compiler cache across restarts
       - hardhat-cache:/app/cache
     # Default command starts the local node; override for compile/test/deploy:

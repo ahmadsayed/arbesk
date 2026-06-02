@@ -266,7 +266,9 @@ QmManifestCid...
 
 ### `GET /api/manifest-chain?cid=<manifestCid>`
 
-Walks backwards through `prev_manifest_cid` links and returns lightweight summaries.
+Walks the **IPFS content-addressed version chain** (also called the **manifest chain**) — the backward-linked sequence of `prev_manifest_cid` pointers that connects each manifest version to its predecessor. Because every manifest CID is a cryptographic hash of its contents, the chain is tamper-evident: altering any version invalidates all subsequent CIDs.
+
+This endpoint walks backwards through `prev_manifest_cid` links and returns lightweight summaries.
 
 **Query Parameters**
 

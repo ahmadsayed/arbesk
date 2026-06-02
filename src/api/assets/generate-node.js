@@ -82,24 +82,74 @@ export default function generateAssetNode(ipfs) {
         }
 
         if (CONTRACT_ADDRESS) {
-          const eventSignature = web3.utils.keccak256(
+          // Check for both native-token and USDC (tiered) payment events
+          // USDC event now includes Tier (uint8) as 6th indexed param
+          const nativeEventSig = web3.utils.keccak256(
             "AssetGenerationPaid(address,bytes32,string,uint256,uint256)",
           );
-          const hasEvent = receipt.logs.some(
-            (log) =>
-              log.topics[0] === eventSignature &&
-              log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase(),
+          const usdcEventSig = web3.utils.keccak256(
+            "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)",
           );
-          if (!hasEvent) {
-            console.log("[GEN] event not found in tx logs");
+          const contractAddr = CONTRACT_ADDRESS.toLowerCase();
+          const hasPaymentEvent = receipt.logs.some(
+            (log) =>
+              (log.topics[0] === nativeEventSig ||
+                log.topics[0] === usdcEventSig) &&
+              log.address.toLowerCase() === contractAddr,
+          );
+          if (!hasPaymentEvent) {
+            console.log("[GEN] payment event not found in tx logs");
             return res.status(403).json({
               error: {
                 code: "EVENT_NOT_FOUND",
-                message: "Transaction did not emit expected payment event",
+                message:
+                  "Transaction did not emit expected payment event (AssetGenerationPaid or AssetGenerationPaidUSDC)",
               },
             });
           }
-          console.log("[GEN] AssetGenerationPaid event verified");
+          console.log("[GEN] payment event verified (native or USDC tiered)");
+
+          // If request specifies a tier, validate it against the on-chain event
+          if (req.body.tier !== undefined && req.body.tier !== null) {
+            const requestedTier = Number(req.body.tier);
+            const usdcLog = receipt.logs.find(
+              (log) =>
+                log.topics[0] === usdcEventSig &&
+                log.address.toLowerCase() === contractAddr,
+            );
+            if (!usdcLog) {
+              // Request claims a tier but no USDC event found — reject
+              console.log(
+                `[GEN] TIER MISMATCH — tier ${requestedTier} requested but no USDC payment event found`,
+              );
+              return res.status(403).json({
+                error: {
+                  code: "TIER_MISMATCH",
+                  message: `Tier ${requestedTier} specified but transaction does not contain a USDC payment event`,
+                },
+              });
+            }
+            // Decode event data: (string prompt, uint256 amount, uint256 timestamp, uint8 tier)
+            const decoded = web3.eth.abi.decodeParameters(
+              ["string", "uint256", "uint256", "uint8"],
+              usdcLog.data,
+            );
+            const onChainTier = Number(decoded[3]); // 4th param = tier
+            if (onChainTier !== requestedTier) {
+              console.log(
+                `[GEN] TIER MISMATCH — requested=${requestedTier} on-chain=${onChainTier}`,
+              );
+              return res.status(403).json({
+                error: {
+                  code: "TIER_MISMATCH",
+                  message: `Requested tier ${requestedTier} does not match on-chain payment tier ${onChainTier}`,
+                },
+              });
+            }
+            console.log(
+              `[GEN] tier validated — ${onChainTier} (${["Basic", "Standard", "Premium", "Pro"][onChainTier] || "?"})`,
+            );
+          }
         }
 
         if (usedTxHashes.has(effectiveTxHash)) {
@@ -236,11 +286,24 @@ export default function generateAssetNode(ipfs) {
               txHash: effectiveTxHash,
               nodeId,
               sourceAssetCid,
+              ...(req.body.tier !== undefined &&
+                req.body.tier !== null && {
+                  tier: Number(req.body.tier),
+                  tierName:
+                    ["Basic", "Standard", "Premium", "Pro"][
+                      Number(req.body.tier)
+                    ] || "Unknown",
+                }),
             },
           }),
         );
 
-        res.json({ assetManifestCid, sourceAssetCid });
+        res.json({
+          assetManifestCid,
+          sourceAssetCid,
+          ...(req.body.tier !== undefined &&
+            req.body.tier !== null && { tier: Number(req.body.tier) }),
+        });
       } catch (error) {
         console.error("[GEN] error:", error.message);
         res.status(500).json({

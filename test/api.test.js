@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import request from "supertest";
+import { _resetRateLimiter } from "../src/api/rate-limiter.js";
 
 jest.setTimeout(30000);
 
@@ -39,12 +40,25 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       from: "0xTestAddress",
       to: "0xArbeskContractAddress",
       blockNumber: 123,
+      _usdcTier: 2, // default tier for tests; overridden per-test
       logs: [
         {
           address: "0xArbeskContractAddress",
           topics: [
             "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
           ],
+        },
+        // USDC payment event (topics[0] matches "USDC" keccak256 mock)
+        {
+          address: "0xArbeskContractAddress",
+          topics: [
+            "0x0000000000000000000000000000000000000000000000000000000000usdc00",
+          ],
+          data:
+            "0x0000000000000000000000000000000000000000000000000000000000000080" +
+            "00000000000000000000000000000000000000000000000000000000001ab3f0" +
+            "000000000000000000000000000000000000000000000000000000006642b400" +
+            "0000000000000000000000000000000000000000000000000000000000000002",
         },
       ],
     };
@@ -62,10 +76,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     jest.unstable_mockModule("web3", () => ({
       default: jest.fn(() => ({
         utils: {
-          keccak256: jest.fn(
-            () =>
-              "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-          ),
+          keccak256: jest.fn((sig) => {
+            // Return different hashes for different event signatures
+            // so we can distinguish native vs USDC events in tests
+            if (sig.includes("USDC")) {
+              return "0x0000000000000000000000000000000000000000000000000000000000usdc00";
+            }
+            return "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+          }),
           padRight: jest.fn((x) => x),
           utf8ToHex: jest.fn((x) => x),
         },
@@ -74,6 +92,19 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           getTransactionReceipt: jest.fn(() =>
             Promise.resolve(mockWeb3Receipt),
           ),
+          abi: {
+            decodeParameters: jest.fn((types, data) => {
+              // Simulate decoding USDC event data for tier tests
+              // Types: ["string", "uint256", "uint256", "uint8"]
+              // Returns decoded values including the tier from mockWeb3Receipt._usdcTier
+              return {
+                0: "mock prompt",
+                1: "1750000",
+                2: Math.floor(Date.now() / 1000).toString(),
+                3: (mockWeb3Receipt._usdcTier ?? 2).toString(),
+              };
+            }),
+          },
           Contract: jest.fn(() => ({
             methods: {
               costPerGeneration: jest.fn(() => ({
@@ -223,6 +254,131 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(403);
       expect(res.body.error.message).toContain("not sent to ArbeskAsset");
       mockWeb3Receipt.to = originalTo;
+    });
+
+    // ─── Tier-specific tests ───
+
+    // Reset rate limiter: earlier tests may have exhausted the 10/hour quota
+    beforeEach(() => {
+      _resetRateLimiter();
+    });
+
+    it("accepts generation with matching tier (Premium=2)", async () => {
+      // Default mock receipt has USDC event with tier 2, and _usdcTier = 2
+      const uniqTx = "0xtier_match_" + Date.now();
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader(uniqTx))
+        .send({
+          prompt: "A chair",
+          nodeId: "node_tier_match",
+          txHash: uniqTx,
+          tier: 2,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.assetManifestCid).toBeDefined();
+      expect(res.body.tier).toBe(2);
+    });
+
+    it("accepts Basic tier (0)", async () => {
+      mockWeb3Receipt._usdcTier = 0;
+      const uniqTx = "0xtier_basic_" + Date.now();
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader(uniqTx))
+        .send({
+          prompt: "A table",
+          nodeId: "node_tier_basic",
+          txHash: uniqTx,
+          tier: 0,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.tier).toBe(0);
+      mockWeb3Receipt._usdcTier = 2; // reset
+    });
+
+    it("accepts Pro tier (3)", async () => {
+      mockWeb3Receipt._usdcTier = 3;
+      const uniqTx = "0xtier_pro_" + Date.now();
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader(uniqTx))
+        .send({
+          prompt: "A spaceship",
+          nodeId: "node_tier_pro",
+          txHash: uniqTx,
+          tier: 3,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.tier).toBe(3);
+      mockWeb3Receipt._usdcTier = 2; // reset
+    });
+
+    it("rejects when requested tier does not match on-chain tier", async () => {
+      // On-chain event says tier 2 (default), but request claims tier 3
+      const uniqTx = "0xtier_mismatch_" + Date.now();
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader(uniqTx))
+        .send({
+          prompt: "A lamp",
+          nodeId: "node_tier_mismatch",
+          txHash: uniqTx,
+          tier: 3, // claims Pro, but receipt says Premium (2)
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("TIER_MISMATCH");
+      expect(res.body.error.message).toContain("does not match");
+    });
+
+    it("rejects when tier specified but no USDC event in receipt", async () => {
+      // Remove the USDC log from the receipt
+      const originalLogs = mockWeb3Receipt.logs;
+      mockWeb3Receipt.logs = mockWeb3Receipt.logs.filter(
+        (log) =>
+          log.topics[0] !==
+          "0x0000000000000000000000000000000000000000000000000000000000usdc00",
+      );
+
+      const uniqTx = "0xtier_nousdc_" + Date.now();
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader(uniqTx))
+        .send({
+          prompt: "A desk",
+          nodeId: "node_tier_nousdc",
+          txHash: uniqTx,
+          tier: 2,
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("TIER_MISMATCH");
+      expect(res.body.error.message).toContain(
+        "does not contain a USDC payment event",
+      );
+      mockWeb3Receipt.logs = originalLogs; // restore
+    });
+
+    it("generation without tier still works (backward compat)", async () => {
+      const uniqTx = "0xnotier_" + Date.now();
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader(uniqTx))
+        .send({
+          prompt: "A bookshelf",
+          nodeId: "node_notier",
+          txHash: uniqTx,
+          // no tier field — backward compat
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.assetManifestCid).toBeDefined();
+      // Tier should NOT be in response since it wasn't sent
+      expect(res.body.tier).toBeUndefined();
     });
   });
 
@@ -701,7 +857,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("returns empty chain for non-existent CID with history walk", async () => {
-      const res = await request(app).get("/api/v1/manifests/nonexistentcid/history");
+      const res = await request(app).get(
+        "/api/v1/manifests/nonexistentcid/history",
+      );
       expect(res.status).toBe(200);
       expect(res.body.chain).toBeDefined();
       expect(res.body.chain.length).toBe(0);
@@ -1022,7 +1180,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("MISSING_PARAMS");
-
     });
     it("POST /api/v1/manifests/:cid/variants returns 404 for unknown nodeId", async () => {
       const res = await request(app)

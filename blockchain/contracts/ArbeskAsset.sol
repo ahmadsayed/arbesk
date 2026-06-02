@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
@@ -9,14 +11,38 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 /**
  * @title ArbeskAsset
  * @dev Unified PayGo + NFT + Collaboration contract for Arbesk 3D asset platform.
- *      Users pay native FIL to trigger AI mesh generation.
+ *      Supports two payment paths:
+ *        - Native token (ETH on Base, FIL on FEVM) via payForGeneration()
+ *        - USDC (ERC-20) via payForGenerationWithUSDC() with tiered pricing
  *      Assets are minted as ERC721 NFTs with editor collaboration.
  *      Parametric edits (color/scale) do NOT use the payment function.
+ *      Only generation costs money — pinning, downloads, and minting are gas-only.
  */
 contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
-    /// @notice Cost per generation in wei (native FIL).
-    /// @dev Default: 0.01 FIL = 10^16 wei. Owner can update.
+    using SafeERC20 for IERC20;
+
+    /// @notice Generation quality tiers for USDC payments.
+    /// @dev Only generation is priced; pinning, downloads, and minting are free.
+    enum Tier {
+        Basic, // 0
+        Standard, // 1
+        Premium, // 2
+        Pro // 3
+    }
+
+    /// @notice Cost per generation in native wei (ETH on Base, FIL on FEVM).
+    /// @dev Default: 0.01 ether. Flat rate — no tiering on native path. Owner can update.
     uint256 public costPerGeneration = 0.01 ether;
+
+    /// @notice USDC cost per tier (6 decimals). Owner can update.
+    /// @dev Defaults: Basic=$0.75, Standard=$1.25, Premium=$1.75, Pro=$2.50
+    mapping(Tier => uint256) public tierCosts;
+
+    /// @notice USDC token contract (ERC-20, 6 decimals).
+    /// @dev Set to address(0) to disable USDC payments.
+    ///      Base mainnet: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+    ///      Base Sepolia: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
+    IERC20 public usdcToken;
 
     /// @notice Treasury wallet receiving all generation payments.
     address public developerTreasuryWallet;
@@ -46,13 +72,24 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     /// @notice Reverse lookup: which tokens an address participates in.
     mapping(address => uint256[]) public tokensIParticipate;
 
-    /// @notice Emitted when a user pays for generation.
+    /// @notice Emitted when a user pays for generation with native token.
     event AssetGenerationPaid(
         address indexed userWallet,
         bytes32 indexed nodeId,
         string prompt,
         uint256 amount,
         uint256 timestamp
+    );
+
+    /// @notice Emitted when a user pays for generation with USDC (tiered).
+    /// @param tier The selected quality tier (0=Basic, 1=Standard, 2=Premium, 3=Pro).
+    event AssetGenerationPaidUSDC(
+        address indexed userWallet,
+        bytes32 indexed nodeId,
+        string prompt,
+        uint256 amount,
+        uint256 timestamp,
+        Tier tier
     );
 
     /// @notice Emitted when a new asset NFT is minted.
@@ -77,27 +114,52 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         address indexed newWallet
     );
 
-    /// @notice Emitted when generation cost is updated.
+    /// @notice Emitted when native-token generation cost is updated.
     event CostUpdated(uint256 previousCost, uint256 newCost);
 
+    /// @notice Emitted when a tier's USDC cost is updated.
+    event TierCostUpdated(
+        Tier indexed tier,
+        uint256 previousCost,
+        uint256 newCost
+    );
+
+    /// @notice Emitted when USDC token address is updated.
+    event UsdcTokenUpdated(
+        address indexed previousToken,
+        address indexed newToken
+    );
+
     /// @param _treasury Initial treasury wallet address.
+    /// @param _usdcToken Initial USDC token address (use address(0) to disable).
     constructor(
-        address _treasury
+        address _treasury,
+        address _usdcToken
     ) Ownable(msg.sender) ERC721("ArbeskAsset", "ARBA") {
         require(_treasury != address(0), "Treasury cannot be zero address");
         developerTreasuryWallet = _treasury;
+        usdcToken = IERC20(_usdcToken);
+
+        // Initialize tiered USDC pricing (6 decimals)
+        // Basic:   $0.75  =   750000
+        // Standard:$1.25  =  1250000
+        // Premium: $1.75  =  1750000
+        // Pro:     $2.50  =  2500000
+        tierCosts[Tier.Basic] = 750000;
+        tierCosts[Tier.Standard] = 1250000;
+        tierCosts[Tier.Premium] = 1750000;
+        tierCosts[Tier.Pro] = 2500000;
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // Payment
+    // Payment — Native Token (ETH / FIL)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Pay for a 3D asset generation.
+     * @notice Pay for a 3D asset generation with native token (ETH on Base, FIL on FEVM).
      * @param nodeId Unique identifier for the target scene node.
      * @param prompt Text prompt sent to the generation engine.
-     * @dev Requires exact `costPerGeneration` FIL value. Forwards 100% to treasury.
-     *      Emits `AssetGenerationPaid` for backend indexing.
+     * @dev Flat-rate native payment. For tiered pricing, use payForGenerationWithUSDC().
      */
     function payForGeneration(
         bytes32 nodeId,
@@ -129,6 +191,61 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // Payment — USDC (ERC-20, Tiered)
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Pay for a 3D asset generation with USDC at the selected quality tier.
+     * @param nodeId Unique identifier for the target scene node.
+     * @param prompt Text prompt sent to the generation engine.
+     * @param tier Quality tier (0=Basic, 1=Standard, 2=Premium, 3=Pro).
+     * @dev Caller must first `approve()` this contract for the tier's USDC cost.
+     *      Transfers USDC from caller to treasury via transferFrom.
+     */
+    function payForGenerationWithUSDC(
+        bytes32 nodeId,
+        string calldata prompt,
+        Tier tier
+    ) external nonReentrant whenNotPaused {
+        require(address(usdcToken) != address(0), "USDC payments disabled");
+        require(
+            bytes(prompt).length > 0 && bytes(prompt).length <= 500,
+            "Invalid prompt length"
+        );
+        require(nodeId != bytes32(0), "Invalid nodeId");
+
+        uint256 cost = tierCosts[tier];
+        require(cost > 0, "Tier cost not set");
+
+        bytes32 paymentKey = keccak256(
+            abi.encodePacked(nodeId, msg.sender, block.number)
+        );
+        require(!usedPayments[paymentKey], "Payment already used");
+        usedPayments[paymentKey] = true;
+
+        // Transfer USDC from caller to treasury
+        usdcToken.safeTransferFrom(msg.sender, developerTreasuryWallet, cost);
+
+        emit AssetGenerationPaidUSDC(
+            msg.sender,
+            nodeId,
+            prompt,
+            cost,
+            block.timestamp,
+            tier
+        );
+    }
+
+    /// @notice Get the USDC cost for a given tier.
+    function getTierCost(Tier tier) external view returns (uint256) {
+        return tierCosts[tier];
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Payment Queries
+    // ─────────────────────────────────────────────────────────────────
+
     /**
      * @notice Check if a payment key has been consumed.
      * @param nodeId The node identifier.
@@ -145,7 +262,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // NFT Minting
+    // NFT Minting (no USDC cost — gas only)
     // ─────────────────────────────────────────────────────────────────
 
     /**
@@ -222,7 +339,6 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
      * @return manifestURI The IPFS CID / URI pointing to the manifest.
      * @return owner The owner address of the token.
      * @return editorList The list of editor addresses for the token.
-     * @dev Convenience function to "reach" a manifest by its token ID.
      */
     function getAssetManifest(
         uint256 tokenId
@@ -358,7 +474,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     }
 
     function _addEditor(uint256 tokenId, address editor) internal {
-        if (_isEditorMap[tokenId][editor]) return; // Already an editor — no-op
+        if (_isEditorMap[tokenId][editor]) return;
         require(
             members[tokenId].length < MAX_EDITORS_PER_TOKEN,
             "ArbeskAsset: max editors reached"
@@ -374,8 +490,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     }
 
     function _removeEditor(uint256 tokenId, address editor) internal {
-        // Remove from members[tokenId]
-        if (!_isEditorMap[tokenId][editor]) return; // Not an editor — no-op
+        if (!_isEditorMap[tokenId][editor]) return;
 
         int256 memberIdx = -1;
         for (uint256 i = 0; i < members[tokenId].length; i++) {
@@ -394,7 +509,6 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
             delete _isEditorMap[tokenId][editor];
         }
 
-        // Remove from tokensIParticipate[editor]
         int256 participantIdx = -1;
         for (uint256 i = 0; i < tokensIParticipate[editor].length; i++) {
             if (tokensIParticipate[editor][i] == tokenId) {
@@ -422,7 +536,7 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // Admin
+    // Admin — Native Token
     // ─────────────────────────────────────────────────────────────────
 
     function setCost(uint256 newCost) external onlyOwner {
@@ -439,6 +553,39 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         emit TreasuryUpdated(oldWallet, newWallet);
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // Admin — USDC Tiers
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * @notice Set the USDC token contract address.
+     * @param _usdcToken The USDC ERC-20 token address.
+     *                   Use address(0) to disable USDC payments.
+     *                   Base mainnet: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+     *                   Base Sepolia: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
+     */
+    function setUsdcToken(address _usdcToken) external onlyOwner {
+        address oldToken = address(usdcToken);
+        usdcToken = IERC20(_usdcToken);
+        emit UsdcTokenUpdated(oldToken, _usdcToken);
+    }
+
+    /**
+     * @notice Update the USDC cost for a specific tier.
+     * @param tier The quality tier to update.
+     * @param newCost New cost in USDC base units (6 decimals).
+     */
+    function setTierCost(Tier tier, uint256 newCost) external onlyOwner {
+        require(newCost > 0, "Tier cost must be > 0");
+        uint256 oldCost = tierCosts[tier];
+        tierCosts[tier] = newCost;
+        emit TierCostUpdated(tier, oldCost, newCost);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Admin — Emergency
+    // ─────────────────────────────────────────────────────────────────
+
     function pause() external onlyOwner {
         _pause();
     }
@@ -447,11 +594,26 @@ contract ArbeskAsset is ERC721Enumerable, Ownable, ReentrancyGuard, Pausable {
         _unpause();
     }
 
+    /**
+     * @notice Withdraw native token balance (ETH) to treasury.
+     * @dev Only for stray ETH sent outside payForGeneration().
+     */
     function withdraw() external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
         require(balance > 0, "No balance to withdraw");
         (bool sent, ) = developerTreasuryWallet.call{value: balance}("");
         require(sent, "Withdraw failed");
+    }
+
+    /**
+     * @notice Recover USDC accidentally sent to this contract.
+     * @dev Transfers all USDC held by this contract to the treasury.
+     */
+    function withdrawUSDC() external onlyOwner nonReentrant {
+        require(address(usdcToken) != address(0), "USDC token not set");
+        uint256 balance = usdcToken.balanceOf(address(this));
+        require(balance > 0, "No USDC to withdraw");
+        usdcToken.safeTransfer(developerTreasuryWallet, balance);
     }
 
     receive() external payable {

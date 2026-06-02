@@ -5,8 +5,11 @@
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",
+    "test:trace": "hardhat test --trace",
     "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
-    "deploy:filecoinCalibration": "hardhat run scripts/deploy.js --network filecoinCalibration"
+    "deploy:filecoinCalibration": "hardhat run scripts/deploy.js --network filecoinCalibration",
+    "deploy:baseSepolia": "hardhat run scripts/deploy.js --network baseSepolia",
+    "deploy:base": "hardhat run scripts/deploy.js --network base"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

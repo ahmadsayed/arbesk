@@ -16,6 +16,7 @@ import parametricVersion from "./assets/save-variant.js";
 import abiRouter from "./abi-router.js";
 import rateLimit from "./rate-limiter.js";
 import ledgerRouter from "./ledger.js";
+import sessionRouter from "./sessions.js";
 import openapiSpec from "./openapi.json" with { type: "json" };
 import { createLedgerEntry } from "../ledger/schema.js";
 import { appendEntry } from "../ledger/store.js";
@@ -145,6 +146,10 @@ export default () => {
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
     });
   });
+
+  // ─── Sessions ────────────────────────────────────────────────────────────
+
+  v1.use("/sessions", sessionRouter());
 
   // ─── Generations ──────────────────────────────────────────────────────────
 
@@ -393,11 +398,10 @@ export default () => {
     res.json(openapiSpec);
   });
 
-
   // ─── Mount under /api/v1 ──────────────────────────────────────────────────
 
   const api = Router();
-  
+
   // ─── Swagger UI ────────────────────────────────────────────────────────────
 
   api.get("/docs", (req, res) => {

@@ -369,7 +369,11 @@ async function payForGeneration(nodeId, prompt) {
     }
 
     const cost = await c.methods.costPerGeneration().call();
-    console.log("[PAY] costPerGeneration =", cost, "wei (" + Number(cost)/1e18 + " tFIL)");
+    console.log(
+      "[PAY] costPerGeneration =",
+      cost,
+      "wei (" + Number(cost) / 1e18 + " tFIL)"
+    );
     const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
 
     const tx = c.methods.payForGeneration(nodeIdBytes32, prompt);
@@ -378,7 +382,12 @@ async function payForGeneration(nodeId, prompt) {
       from: window.walletAddress,
       value: cost,
     });
-    console.log("[PAY] estimated gas =", gas, "-> using", Math.floor(Number(gas) * 1.2));
+    console.log(
+      "[PAY] estimated gas =",
+      gas,
+      "-> using",
+      Math.floor(Number(gas) * 1.2)
+    );
     const receipt = await tx.send({
       from: window.walletAddress,
       value: cost,
@@ -401,7 +410,14 @@ async function payForGeneration(nodeId, prompt) {
     return receipt.transactionHash;
   } catch (error) {
     console.error("payForGeneration failed:", error);
-    console.error("[PAY] error details:", JSON.stringify({ message: error.message, code: error.code, data: error.data }, null, 2));
+    console.error(
+      "[PAY] error details:",
+      JSON.stringify(
+        { message: error.message, code: error.code, data: error.data },
+        null,
+        2
+      )
+    );
 
     // Detect specific errors and show helpful messages
     const msg = error.message || "";
@@ -429,6 +445,135 @@ async function payForGeneration(nodeId, prompt) {
       // User cancelled — silent
     } else {
       alert("Payment failed: " + msg);
+    }
+    return null;
+  }
+}
+
+// ─── Tier constants for USDC generation ───
+const TIER_NAMES = ["Basic", "Standard", "Premium", "Pro"];
+const TIER_COSTS_USDC = {
+  0: "0.75",
+  1: "1.25",
+  2: "1.75",
+  3: "2.50",
+};
+
+/**
+ * Pay for a generation using USDC at the selected quality tier.
+ * Requires the user to first approve() the contract for the tier cost.
+ * @param {string} nodeId — hex or string node identifier
+ * @param {string} prompt — generation prompt
+ * @param {number} tier — 0=Basic, 1=Standard, 2=Premium, 3=Pro
+ * @returns {string|null} txHash on success, null on failure
+ */
+async function payForGenerationWithUSDC(nodeId, prompt, tier) {
+  const w3 = _getWeb3();
+  if (!w3 || !window.walletAddress) {
+    alert("Wallet not connected. Please connect your wallet first.");
+    return null;
+  }
+
+  const c = _getContract();
+  if (!c || !contractAddress) {
+    alert("Contract not configured. Cannot process USDC payment.");
+    return null;
+  }
+
+  try {
+    // Get tier cost from contract
+    const tierCostWei = await c.methods.tierCosts(tier).call();
+    if (tierCostWei === "0" || Number(tierCostWei) === 0) {
+      alert("Tier cost not set for " + TIER_NAMES[tier] + ". Contact admin.");
+      return null;
+    }
+    const tierCostUSDC = Number(tierCostWei) / 1e6;
+    console.log(
+      "[USDC] tier =",
+      TIER_NAMES[tier],
+      "cost =",
+      tierCostUSDC,
+      "USDC"
+    );
+
+    // Get USDC token address from contract
+    const usdcAddr = await c.methods.usdcToken().call();
+    if (usdcAddr === "0x0000000000000000000000000000000000000000") {
+      alert("USDC payments are not enabled on this contract.");
+      return null;
+    }
+
+    // Step 1: Approve USDC spend
+    console.log("[USDC] requesting approval for", tierCostUSDC, "USDC...");
+    const usdcAbi = [
+      {
+        constant: false,
+        inputs: [
+          { name: "spender", type: "address" },
+          { name: "value", type: "uint256" },
+        ],
+        name: "approve",
+        outputs: [{ name: "", type: "bool" }],
+        type: "function",
+      },
+    ];
+    const usdcContract = new w3.eth.Contract(usdcAbi, usdcAddr);
+    const approveTx = usdcContract.methods.approve(
+      contractAddress,
+      tierCostWei
+    );
+    const approveGas = await approveTx.estimateGas({
+      from: window.walletAddress,
+    });
+    await approveTx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(approveGas) * 1.2),
+    });
+    console.log("[USDC] approval confirmed");
+
+    // Step 2: Pay for generation with USDC
+    console.log("[USDC] calling payForGenerationWithUSDC...");
+    const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
+    const payTx = c.methods.payForGenerationWithUSDC(
+      nodeIdBytes32,
+      prompt,
+      tier
+    );
+    const payGas = await payTx.estimateGas({ from: window.walletAddress });
+    const receipt = await payTx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(payGas) * 1.2),
+    });
+    console.log("[USDC] payment confirmed! txHash =", receipt.transactionHash);
+
+    document.dispatchEvent(
+      new CustomEvent("wallet:generationPaid", {
+        detail: {
+          txHash: receipt.transactionHash,
+          nodeId,
+          prompt,
+          tier,
+          tierCostUSDC,
+          blockNumber: receipt.blockNumber,
+          contractAddress,
+        },
+      })
+    );
+
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("payForGenerationWithUSDC failed:", error);
+    const msg = error.message || "";
+    if (
+      msg.includes("User denied") ||
+      msg.includes("rejected") ||
+      error.code === 4001
+    ) {
+      // User cancelled — silent
+    } else if (msg.includes("insufficient")) {
+      alert("Insufficient USDC balance or allowance for this tier.");
+    } else {
+      alert("USDC payment failed: " + msg);
     }
     return null;
   }
@@ -585,6 +730,7 @@ async function _mockPayForGeneration(nodeId, prompt) {
 window.connectWallet = connectWallet;
 window.disconnectWallet = disconnectWallet;
 window.payForGeneration = payForGeneration;
+window.payForGenerationWithUSDC = payForGenerationWithUSDC;
 window.publishAsset = publishAsset;
 window.updateAssetURI = updateAssetURI;
 window.addEditor = addEditor;
@@ -603,6 +749,7 @@ export {
   connectWallet,
   disconnectWallet,
   payForGeneration,
+  payForGenerationWithUSDC,
   publishAsset,
   updateAssetURI,
   addEditor,

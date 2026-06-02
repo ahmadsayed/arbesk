@@ -44,6 +44,7 @@ This file contains conventions, key file references, and practical guidance for 
 | Cloud generation route | `src/api/generate-asset-node.js` |
 | Parametric version route | `src/api/parametric-version.js` |
 | Auth middleware | `src/api/authentication.js` |
+| Session store | `src/api/sessions.js` |
 | Rate limiter | `src/api/rate-limiter.js` |
 | ABI serving | `src/api/abi-router.js` |
 | Frontend templates | `frontend/src/pug/` |
@@ -72,13 +73,10 @@ This file contains conventions, key file references, and practical guidance for 
 | Build scripts | `frontend/scripts/` |
 | Private IPFS Docker | `docker-compose.yml` + `docker/Dockerfile` + `docker/entrypoint.sh` |
 | Hardhat Docker | `docker/hardhat.Dockerfile` |
-| Phase 1 specification (DONE) | `Phase1.md` |
-| Phase 2 specification (DONE) | `Phase2.md` |
-| Phase 3 specification (DONE) | `Phase3.md` |
-| Phase 4 specification (DONE) | `Phase4.md` |
 | Current implementation snapshot | `docs/CURRENT_STATUS.md` |
+| System architecture | `docs/ARCHITECTURE.md` |
+| API specification | `docs/API_SPEC.md` |
 | Zed agent onboarding | `docs/ZED_AGENT_GUIDE.md` + `.zed/tasks.json` |
-| Upcoming micro-ledger focus | `Phase5.md` (planned) |
 
 ---
 
@@ -174,9 +172,57 @@ docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network file
 # Verify contract on Filfox
 docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network filecoinCalibration
 
+# Recompile and redeploy after contract changes (captures ABI + address)
+docker-compose run --rm hardhat npx hardhat compile
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+# Then sync CONTRACT_ADDRESS from blockchain/.env to root .env
+
+# Run deployment integrity tests to verify the pipeline is intact
+npm run test:frontend
+
 # Start an interactive shell inside the Hardhat container
 docker-compose run --rm hardhat sh
 ```
+
+### Contract Update Workflow (MANDATORY after any .sol change)
+
+Every contract source change creates a **deployment pipeline** that must stay intact:
+
+```text
+.sol change  ->  compile  ->  artifacts on host  ->  backend serves ABI
+            ->  deploy   ->  .env files update   ->  frontend gets address
+```
+
+**If any link breaks, the frontend gets stale ABIs or wrong addresses, causing `c.methods.X is not a function` or `Transaction reverted` errors.**
+
+**Required steps after any `blockchain/contracts/*.sol` change:**
+
+```bash
+# 1. Recompile (writes fresh ABI to blockchain/artifacts/ on host)
+docker-compose run --rm hardhat npx hardhat compile
+
+# 2. Redeploy to local Hardhat (updates blockchain/.env + deployment artifact)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+
+# 3. Sync CONTRACT_ADDRESS from blockchain/.env to root .env (backend reads root .env)
+#    The deploy script updates blockchain/.env but NOT root .env.
+#    Manually copy the new CONTRACT_ADDRESS value, or run:
+grep CONTRACT_ADDRESS blockchain/.env
+#    Then update root .env to match.
+
+# 4. Verify the pipeline is intact
+npm run test:frontend
+```
+
+**The `test/frontend/deployment-integrity.test.js` test suite catches:**
+- Missing/stale compiled ABI on host
+- Missing ABI function entries (runs `test.each` over every required function)
+- Conflicting CONTRACT_ADDRESS between root .env and blockchain/.env
+- Missing USDC_TOKEN in blockchain/.env
+- Deployment artifact not matching configured address
+- Missing Docker volume mounts in docker-compose.yml
+
+**ALWAYS run `npm run test:frontend` after contract changes before starting the backend.**
 
 ---
 
@@ -224,6 +270,9 @@ IPFS_GATEWAY_URL=http://127.0.0.1:8080/ipfs/
 
 # Hardhat local network (Docker container)
 HARDHAT_RPC_URL=http://127.0.0.1:8545
+
+# ArbeskAsset contract address (deploy via Hardhat first)
+CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
 
 # Optional: Pinata for public gateway fallback
 PINATA_API_KEY=
@@ -279,6 +328,7 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 | `[AUTH]` | Authentication | `[AUTH] recovered address=0x... tx=0x...` |
 | `[ABI]` | ABI serving | `[ABI] serving /path/to/ArbeskAsset.json` |
 | `[TOKEN]` | Token child ref resolution | `[TOKEN] resolving child token #42 at 0x...` → `[TOKEN] resolved → Qm...` |
+| `[SESSION]` | Session auth operations | `[SESSION] created — token=abc123... address=0x...` |
 | `[LEDGER]` | Micro-ledger operations | `[LEDGER] append GENERATION | manifestId=asset_... cid=Qm...` |
 
 **Rules for adding new logs:**
@@ -299,6 +349,14 @@ Arbesk stores worlds as **fractal manifests** — JSON documents where every ass
 - A `history` array of version deltas
 - A `child_manifest_id` for recursive nesting (legacy; being replaced by `child_ref` token references)
 - A `child_ref` object for token-based dynamic child world references
+
+**IPFS Content-Addressed Version Chain:**
+
+Every manifest includes a `prev_manifest_cid` that points to the previous version's IPFS CID. This forms a backward-linked **manifest chain** (also called the **IPFS version chain**) walking from newest → oldest. Because each CID is a cryptographic hash of the manifest content, the chain is tamper-evident: altering any version invalidates all subsequent CIDs. The chain is consumed by:
+- `GET /api/manifest-chain` — the backend walks `prev_manifest_cid` links up to 50 entries deep.
+- **History timeline UI** — a draggable circular-node scrubber in the topbar for version switching.
+- **Replay prevention** — the backend scans manifest history for duplicate `txHash` values.
+- **Micro-ledger (Phase 5)** — each manifest CID is recorded as an append-only log entry.
 
 **Optional Manifest Thumbnail:**
 ```json
@@ -465,7 +523,43 @@ Manifest History Array ← Append Generation Version
 
 ---
 
-## 11. Security Notes
+## 11. Session-Based Authentication
+
+Each 3D generation involves two on-chain transactions (USDC approval + PayGo payment), which trigger two MetaMask pop-ups. Before session auth, the backend API call required a third signature (`personal.sign`) to prove wallet ownership — bringing the total to **3 pop-ups per generation**.
+
+**Session auth reduces this to 2 pop-ups after the first generation** by having the user sign a session-creation message once, then reusing an opaque token for 24 hours.
+
+### How it works
+
+| Step | Pop-ups | What happens |
+|------|:---:|---|
+| First generation | 3 | USDC approval + PayGo payment + session creation signature |
+| Subsequent generations | 2 | USDC approval + PayGo payment (session token reused) |
+
+### Implementation
+
+| File | Purpose |
+|------|---------|
+| `src/api/sessions.js` | Session store (in-memory Map, 24h TTL), create/validate/invalidate, `POST/DELETE /api/v1/sessions` routes |
+| `src/api/authentication.js` | Accepts `Authorization: Session <token>` alongside existing `Bearer` scheme |
+| `src/api/index.js` | Mounts session routes at `/api/v1/sessions` |
+| `frontend/src/js/services/api.js` | `createSession()`, `getOrCreateSession()`, `clearSession()` — localStorage-backed with auto-clear on wallet disconnect |
+
+### Security trade-off
+
+The session token lives in `localStorage`. The only risk is physical access to the browser — accepted as a reasonable trade-off for eliminating the per-generation pop-up. Session tokens:
+- Are opaque random UUIDs (not guessable)
+- Expire after 24 hours
+- Are bound to a specific wallet address (checked on every request)
+- Are auto-cleared when the wallet disconnects
+
+### Fallback behavior
+
+If session creation fails (e.g., user denies the session signature), `generateAsset()` falls back to the per-request `Bearer` txHash signature — so generation still works, just with 3 pop-ups instead of 2.
+
+---
+
+## 12. Security Notes
 
 - **`.env` files contain private keys and API keys**. Never commit them.
 - **API Routes**: Always validate `req.body` and `req.params`.
@@ -476,7 +570,7 @@ Manifest History Array ← Append Generation Version
 
 ---
 
-## 12. Data Formats
+## 13. Data Formats
 
 ### Fractal Manifest Entry (stored on private IPFS)
 
@@ -567,7 +661,7 @@ Manifest History Array ← Append Generation Version
 
 ---
 
-## 13. Filecoin FEVM Notes
+## 14. Filecoin FEVM Notes
 
 - **RPC Endpoints**:
   - Calibration: `https://api.calibration.node.glif.io/rpc/v1`
@@ -581,7 +675,7 @@ Manifest History Array ← Append Generation Version
 
 ---
 
-## 14. Zed AI Agent Setup
+## 15. Zed AI Agent Setup
 
 This repository is initialized for Zed agent workflows.
 
@@ -600,7 +694,7 @@ This repository is initialized for Zed agent workflows.
 
 ---
 
-## 15. Phase 5.1: Token ID-Based Child Worlds (IN PROGRESS)
+## 16. Phase 5.1: Token ID-Based Child Worlds (IN PROGRESS)
 
 > **Status**: 🔄 In Progress — 11 open issues tracked on GitHub  
 > **Goal**: Allow Arbesk worlds to compose other worlds by on-chain token ID, replacing static manifest CID child links with dynamic token references. Child world updates automatically reflect through the token's `tokenURI` at load time.
@@ -646,7 +740,7 @@ Current state: Child worlds are linked via static `child_manifest_id` / `linked_
 
 ---
 
-## 15. Phase 5: Micro-Ledger & Audit Infrastructure (Upcoming)
+## 17. Phase 5: Micro-Ledger & Audit Infrastructure (Upcoming)
 
 > **Status**: Planned — not yet implemented.  
 > **Goal**: Build a structured, queryable audit trail for every manifest mutation, generation, and parametric edit. The micro-ledger decouples operational logging from the Babylon.js display layer so the system can be ported to XR/immersive environments with zero refactoring.
@@ -678,7 +772,7 @@ Current state: The backend logs operations to `console.log()` with tagged prefix
 
 ---
 
-## 16. Contact & Links
+## 18. Contact & Links
 
 - **Repository**: https://github.com/ahmadsayed/arbesk
 - **Docs**: `docs/` directory in this repo

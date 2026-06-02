@@ -73,6 +73,14 @@ html
                     option(value="meshy") Meshy
                     option(value="tripo3d") Tripo3D
                     option(value="hunyuan3d") Hunyuan3D
+                .control-group
+                  label.form-label(for="tierSelect") Quality Tier
+                  select#tierSelect.form-select
+                    option(value="0" selected) Basic — 0.75 USDC
+                    option(value="1") Standard — 1.25 USDC
+                    option(value="2") Premium — 1.75 USDC
+                    option(value="3") Pro — 2.50 USDC
+                  small.form-text Higher tiers produce better quality meshes.
                 #teamPanel.team-section(hidden)
                   .team-header
                     h5 Asset Editors

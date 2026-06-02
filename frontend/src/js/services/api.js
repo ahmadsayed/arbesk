@@ -68,6 +68,120 @@ export async function signTxHash(txHash) {
   }
 }
 
+// ─── Session Management ─────────────────────────────────────────────────────
+
+const SESSION_STORAGE_KEY = "arbesk_session";
+
+/**
+ * Read the cached session token from localStorage.
+ * @returns {{ token: string, expiresAt: number, address: string } | null}
+ */
+function getCachedSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (!session.token || !session.expiresAt || !session.address) return null;
+    // Check expiry (with 60s grace period for clock skew)
+    if (session.expiresAt <= Date.now() - 60_000) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store session token in localStorage.
+ */
+function cacheSession(token, expiresAt, address) {
+  try {
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ token, expiresAt, address })
+    );
+  } catch {
+    // localStorage may be full or unavailable
+  }
+}
+
+/**
+ * Clear the cached session (e.g. on disconnect).
+ */
+export function clearSession() {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+// Auto-clear session when wallet disconnects
+document.addEventListener("wallet:disconnected", () => {
+  clearSession();
+});
+
+/**
+ * Create a new session by signing a session-creation message.
+ * This triggers ONE MetaMask pop-up to prove wallet ownership.
+ *
+ * @returns {Promise<{ token: string, expiresAt: number }>}
+ */
+export async function createSession() {
+  if (!web3 || !window.walletAddress) {
+    throw new ApiError("Wallet not connected", 401, "WALLET_NOT_CONNECTED");
+  }
+
+  const message = `arbesk-session:${window.walletAddress}:${Date.now()}`;
+  let signature;
+  try {
+    signature = await web3.eth.personal.sign(message, window.walletAddress, "");
+  } catch (err) {
+    console.error("Session sign failed:", err);
+    throw new ApiError(
+      "Failed to sign session creation message",
+      401,
+      "SIGN_FAILED"
+    );
+  }
+
+  const response = await fetch(`${API_BASE}/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, signature }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message: errMsg, code } = parseErrorBody(data);
+    throw new ApiError(
+      errMsg || `Session creation failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+
+  cacheSession(data.token, data.expiresAt, window.walletAddress);
+  return data;
+}
+
+/**
+ * Get a valid session token, creating one if necessary.
+ * Reuses cached token from localStorage when valid.
+ *
+ * @returns {Promise<string>} session token
+ */
+async function getOrCreateSession() {
+  // Try cached session first
+  const cached = getCachedSession();
+  if (cached && cached.address === window.walletAddress?.toLowerCase()) {
+    return cached.token;
+  }
+
+  // Create new session (triggers ONE MetaMask pop-up)
+  const session = await createSession();
+  return session.token;
+}
+
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 /**
@@ -124,6 +238,7 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
  * @param {string} [params.assetId]
  * @param {string} [params.prevAssetManifestCid]
  * @param {number[]} [params.transformMatrix]
+ * @param {number} [params.tier] — 0=Basic, 1=Standard, 2=Premium, 3=Pro
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string}>}
  */
 export async function generateAsset({
@@ -134,8 +249,19 @@ export async function generateAsset({
   assetId,
   prevAssetManifestCid,
   transformMatrix,
+  tier,
 }) {
-  const authToken = await signTxHash(txHash);
+  // Use session token when available; fall back to per-request txHash signature.
+  // Session reuses the ONE pop-up from createSession() across all generation
+  // calls in a 24-hour window — reducing from 3 pop-ups to 2 after the first.
+  let authHeader;
+  try {
+    const sessionToken = await getOrCreateSession();
+    authHeader = `Session ${sessionToken}`;
+  } catch {
+    const bearerToken = await signTxHash(txHash);
+    authHeader = `Bearer ${bearerToken}`;
+  }
 
   const body = {
     prompt,
@@ -145,13 +271,14 @@ export async function generateAsset({
     ...(assetId && { assetId }),
     ...(prevAssetManifestCid && { prevAssetManifestCid }),
     ...(transformMatrix && { transform_matrix: transformMatrix }),
+    ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
   };
 
   const response = await fetch(`${API_BASE}/generations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
+      Authorization: authHeader,
     },
     body: JSON.stringify(body),
   });
@@ -355,6 +482,8 @@ export async function getLedgerStats() {
 // ─── Global Exports (for non-module <script> loading) ───────────────────────
 
 window.signTxHash = signTxHash;
+window.createSession = createSession;
+window.clearSession = clearSession;
 window.getConfig = getConfig;
 window.getContractAddress = getContractAddress;
 window.getContractArtifact = getContractArtifact;
