@@ -82,12 +82,14 @@ export function clearScene() {
 
   for (const transformNode of [...state.scene.transformNodes]) {
     if (transformNode && !transformNode.isDisposed()) {
+      if (transformNode.metadata?.isViewportChrome) continue;
       transformNode.dispose();
     }
   }
 
   for (const mesh of [...state.scene.meshes]) {
     if (mesh && !mesh.isDisposed()) {
+      if (mesh.metadata?.isViewportChrome) continue;
       if (mesh.material && mesh.material !== sharedMat) {
         mesh.dispose(false, true);
       } else {

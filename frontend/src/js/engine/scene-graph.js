@@ -80,7 +80,7 @@ function initEngine() {
   });
 
   state.scene = new BABYLON.Scene(state.engine);
-  state.scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.14, 1);
+  state.scene.clearColor = new BABYLON.Color4(0.118, 0.118, 0.118, 1); // neutral #1e1e1e — Blender/Unity standard
 
   // ArcRotateCamera for orbit controls
   const camera = new BABYLON.ArcRotateCamera(
@@ -108,6 +108,28 @@ function initEngine() {
     state.scene
   );
   dirLight.intensity = 0.5;
+
+  // Ground plane grid — semi-transparent plane
+  try {
+    const grid = BABYLON.MeshBuilder.CreateGround(
+      "groundGrid",
+      { width: 40, height: 40, subdivisions: 20 },
+      state.scene
+    );
+    grid.isPickable = false;
+    grid.metadata = { isViewportChrome: true };
+
+    const mat = new BABYLON.StandardMaterial("gridMat", state.scene);
+    mat.wireframe = true;
+    mat.emissiveColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+    mat.disableLighting = true;
+    mat.alpha = 0.3;
+    mat.backFaceCulling = false;
+    grid.material = mat;
+    console.log("[SCENE] ground grid created");
+  } catch (e) {
+    console.warn("[SCENE] grid failed:", e.message);
+  }
 
   state.engine.runRenderLoop(() => state.scene.render());
 
