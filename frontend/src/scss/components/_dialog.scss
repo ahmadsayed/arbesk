@@ -1,0 +1,82 @@
+// ═══════════════════════════════════════════════════════════════════
+// Dialog / Modal
+// GNOME HIG: centered popover with backdrop, title + body + actions
+// ═══════════════════════════════════════════════════════════════════
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 35%);
+  backdrop-filter: blur(4px);
+  animation: dialog-backdrop-in var(--duration-moderate) var(--ease-out-3);
+}
+
+@keyframes dialog-backdrop-in {
+  from { opacity: 0; }
+}
+
+.dialog {
+  width: min(400px, calc(100vw - var(--size-7) * 2));
+  max-height: calc(100vh - var(--size-10) * 2);
+  overflow-y: auto;
+  background: var(--popover-bg);
+  color: var(--popover-fg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-3);
+  box-shadow: var(--shadow-5);
+  animation: dialog-in var(--duration-moderate) var(--ease-out-3);
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+  }
+}
+
+.dialog-header {
+  padding: var(--size-5) var(--size-5) 0;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-7);
+  line-height: var(--font-lineheight-2);
+}
+
+.dialog-body {
+  padding: var(--size-4) var(--size-5);
+  font-size: var(--font-size-1);
+  line-height: var(--font-lineheight-3);
+  color: var(--dim-fg);
+
+  .form-group {
+    margin-bottom: 0;
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-2);
+  padding: 0 var(--size-5) var(--size-5);
+
+  .btn {
+    min-width: 80px;
+  }
+}
+
+// Reduce motion
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop,
+  .dialog {
+    animation: none;
+  }
+}

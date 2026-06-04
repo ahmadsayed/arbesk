@@ -5,6 +5,7 @@
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { publishAsset, updateAssetURI } from "../blockchain/wallet.js";
+import { showDialog } from "./dialog.js";
 import {
   clearScene,
   captureAssetThumbnail,
@@ -92,17 +93,19 @@ async function resolveAssetName() {
  * Prompt the user for an asset name if the current one is a default/fallback.
  * Returns the final name (user-provided or existing).
  */
-function ensureExplicitName() {
+async function ensureExplicitName() {
   const currentName = window.activeAssetName || "";
   if (isDefaultName(currentName)) {
-    const input = prompt("Name your asset before publishing:", "");
+    const input = await showDialog(
+      "Name Your Asset",
+      "Give your asset a descriptive name before publishing.",
+      ""
+    );
     if (input !== null && input.trim()) {
       window.activeAssetName = input.trim();
-      // Update the headerbar title immediately
       if (assetStatusName) assetStatusName.textContent = window.activeAssetName;
     } else if (input === null) {
-      // User cancelled — still return a fallback but it's their choice
-      window.activeAssetName = "My Asset";
+      return null;
     }
   }
   return window.activeAssetName || "My Asset";
@@ -216,8 +219,13 @@ async function onPublishAsset() {
       : "Publishing…";
 
   try {
-    const assetName = ensureExplicitName();
-    if (!assetName) return; // user cancelled
+    const assetName = await ensureExplicitName();
+    if (!assetName) {
+      isPublishing = false;
+      if (publishBtn) publishBtn.disabled = false;
+      updateButtonState();
+      return;
+    }
     const prepared = await prepareManifestForWrite(assetName);
     if (!prepared) {
       alert(
