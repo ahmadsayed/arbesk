@@ -109,29 +109,24 @@ function initEngine() {
   );
   dirLight.intensity = 0.5;
 
-  // Ground plane grid — Blender-style thin lines on the X-Z floor plane.
-  // Uses GridMaterial (from the materials library, already loaded in studio.pug)
-  // for shader-drawn orthogonal lines with proper minor/major distinction.
-  // Marked as viewport chrome so clearScene() preserves it across loads.
+  // Ground plane grid — semi-transparent plane
   try {
-    const gridMat = new BABYLON.GridMaterial("gridMat", state.scene);
-    gridMat.gridRatio = 1; // 1 world unit between minor lines
-    gridMat.majorUnitFrequency = 5; // major (slightly stronger) line every 5 units
-    gridMat.minorUnitVisibility = 0.45; // minor lines are dimmer
-    gridMat.mainColor = new BABYLON.Color3(0.55, 0.55, 0.55); // major lines
-    gridMat.lineColor = new BABYLON.Color3(0.32, 0.32, 0.32); // minor lines
-    gridMat.opacity = 0.9;
-    gridMat.backFaceCulling = false;
-
     const grid = BABYLON.MeshBuilder.CreateGround(
       "groundGrid",
-      { width: 80, height: 80 },
+      { width: 40, height: 40, subdivisions: 20 },
       state.scene
     );
     grid.isPickable = false;
     grid.metadata = { isViewportChrome: true };
-    grid.material = gridMat;
-    console.log("[SCENE] grid created (GridMaterial)");
+
+    const mat = new BABYLON.StandardMaterial("gridMat", state.scene);
+    mat.wireframe = true;
+    mat.emissiveColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+    mat.disableLighting = true;
+    mat.alpha = 0.3;
+    mat.backFaceCulling = false;
+    grid.material = mat;
+    console.log("[SCENE] ground grid created");
   } catch (e) {
     console.warn("[SCENE] grid failed:", e.message);
   }
