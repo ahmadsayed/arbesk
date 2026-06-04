@@ -66,6 +66,17 @@ async function fetchAssetName(tokenId) {
   }
 }
 
+const DEFAULT_NAMES = new Set([
+  "untitled asset",
+  "my asset",
+  "no asset open",
+  "",
+]);
+
+function isDefaultName(name) {
+  return DEFAULT_NAMES.has((name || "").toLowerCase().trim());
+}
+
 async function resolveAssetName() {
   // Always prefer the user's in-session rename.
   if (window.activeAssetName) return window.activeAssetName;
@@ -75,6 +86,26 @@ async function resolveAssetName() {
     return (await fetchAssetName(window.activeAssetTokenId)) || "My Asset";
   }
   return "My Asset";
+}
+
+/**
+ * Prompt the user for an asset name if the current one is a default/fallback.
+ * Returns the final name (user-provided or existing).
+ */
+function ensureExplicitName() {
+  const currentName = window.activeAssetName || "";
+  if (isDefaultName(currentName)) {
+    const input = prompt("Name your asset before publishing:", "");
+    if (input !== null && input.trim()) {
+      window.activeAssetName = input.trim();
+      // Update the headerbar title immediately
+      if (assetStatusName) assetStatusName.textContent = window.activeAssetName;
+    } else if (input === null) {
+      // User cancelled — still return a fallback but it's their choice
+      window.activeAssetName = "My Asset";
+    }
+  }
+  return window.activeAssetName || "My Asset";
 }
 
 function advanceManifestVersion(manifest, latestCid) {
@@ -185,7 +216,8 @@ async function onPublishAsset() {
       : "Publishing…";
 
   try {
-    const assetName = await resolveAssetName();
+    const assetName = ensureExplicitName();
+    if (!assetName) return; // user cancelled
     const prepared = await prepareManifestForWrite(assetName);
     if (!prepared) {
       alert(
