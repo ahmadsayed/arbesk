@@ -90,23 +90,27 @@ async function resolveAssetName() {
 }
 
 /**
- * Prompt the user for an asset name if the current one is a default/fallback.
- * Returns the final name (user-provided or existing).
+ * Prompt the user for an asset name before publishing.
+ * Always shows the dialog pre-filled with the current name.
+ * Returns the final name or null if cancelled.
  */
 async function ensureExplicitName() {
   const currentName = window.activeAssetName || "";
-  if (isDefaultName(currentName)) {
-    const input = await showDialog(
-      "Name Your Asset",
-      "Give your asset a descriptive name before publishing.",
-      ""
-    );
-    if (input !== null && input.trim()) {
-      window.activeAssetName = input.trim();
-      if (assetStatusName) assetStatusName.textContent = window.activeAssetName;
-    } else if (input === null) {
-      return null;
-    }
+  // Show dialog pre-filled with current name (but not with defaults)
+  const defaultValue = isDefaultName(currentName) ? "" : currentName;
+  const input = await showDialog(
+    "Name Your Asset",
+    "Give your asset a descriptive name before publishing.",
+    defaultValue
+  );
+  if (input === null) {
+    return null; // user cancelled
+  }
+  const name = input.trim();
+  if (name) {
+    window.activeAssetName = name;
+    if (assetStatusName) assetStatusName.textContent = window.activeAssetName;
+    return name;
   }
   return window.activeAssetName || "My Asset";
 }
