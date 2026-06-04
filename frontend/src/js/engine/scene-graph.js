@@ -131,60 +131,8 @@ function initEngine() {
     console.warn("[SCENE] grid failed:", e.message);
   }
 
-  // World axes at origin (Blender-style: shows where 0,0,0 is in the scene).
-  // Sits alongside the 2D viewport gizmo, which shows camera orientation.
-  // Marked as viewport chrome so clearScene() preserves them across loads.
-  try {
-    const axes = [
-      {
-        name: "axis_x",
-        color: new BABYLON.Color3(0.886, 0.169, 0.188), // #e22b30 — matches 2D gizmo
-        dir: "x",
-        rot: [0, 0, -Math.PI / 2],
-      },
-      {
-        name: "axis_y",
-        color: new BABYLON.Color3(0.263, 0.757, 0.259), // #43c142 — matches 2D gizmo
-        dir: "y",
-        rot: [0, 0, 0],
-      },
-      {
-        name: "axis_z",
-        color: new BABYLON.Color3(0.204, 0.471, 0.922), // #3478eb — matches 2D gizmo
-        dir: "z",
-        rot: [Math.PI / 2, 0, 0],
-      },
-    ];
-
-    for (const { name, color, dir, rot } of axes) {
-      const axis = BABYLON.MeshBuilder.CreateCylinder(
-        name,
-        { height: 2, diameter: 0.06 },
-        state.scene
-      );
-      axis.position = new BABYLON.Vector3(
-        dir === "x" ? 1 : 0,
-        dir === "y" ? 1 : 0,
-        dir === "z" ? 1 : 0
-      );
-      axis.rotation.set(rot[0], rot[1], rot[2]);
-      axis.isPickable = false;
-      axis.metadata = { isViewportChrome: true };
-      axis.renderingGroupId = 1; // render on top of the grid (avoid z-fighting)
-
-      const mat = new BABYLON.StandardMaterial(`${name}_mat`, state.scene);
-      mat.emissiveColor = color;
-      mat.disableLighting = true;
-      axis.material = mat;
-    }
-    console.log("[SCENE] world axes created");
-  } catch (e) {
-    console.warn("[SCENE] world axes failed:", e.message);
-  }
-
   // Initialize the Blender-style 2D orientation gizmo (top-right corner overlay).
-  // Pairs with the world axes above: the gizmo shows camera orientation,
-  // the in-scene axes show where the world origin is.
+  // The sole orientation reference — world axes are not drawn in the scene.
   import("../ui/viewport-gizmo.js")
     .then(({ initViewportGizmo }) => {
       initViewportGizmo(state.scene, camera);
