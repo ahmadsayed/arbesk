@@ -115,3 +115,14 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+// ── Viewport orientation gizmo ─────────────────────────────────────
+// Blender-style 2D X/Y/Z overlay in the top-right corner. Sits above
+// the 3D canvas but never intercepts pointer events.
+#viewportGizmo {
+  position: absolute;
+  top: var(--size-3);
+  right: var(--size-3);
+  pointer-events: none;
+  z-index: 20;
+}

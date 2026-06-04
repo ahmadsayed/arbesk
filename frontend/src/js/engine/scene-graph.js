@@ -131,46 +131,16 @@ function initEngine() {
     console.warn("[SCENE] grid failed:", e.message);
   }
 
-  // Colored axis arrows at origin
-  try {
-    const axes = [
-      {
-        color: new BABYLON.Color3(0.88, 0.11, 0.14),
-        dir: "x",
-        rot: [0, 0, -Math.PI / 2],
-      },
-      { color: new BABYLON.Color3(0.18, 0.76, 0.27), dir: "y", rot: [0, 0, 0] },
-      {
-        color: new BABYLON.Color3(0.21, 0.52, 0.89),
-        dir: "z",
-        rot: [Math.PI / 2, 0, 0],
-      },
-    ];
-
-    for (const { color, dir, rot } of axes) {
-      const axis = BABYLON.MeshBuilder.CreateCylinder(
-        `axis_${dir}`,
-        { height: 2, diameter: 0.08 },
-        state.scene
-      );
-      axis.position = new BABYLON.Vector3(
-        dir === "x" ? 1 : 0,
-        dir === "y" ? 1 : 0,
-        dir === "z" ? 1 : 0
-      );
-      axis.rotation.set(rot[0], rot[1], rot[2]);
-      axis.isPickable = false;
-      axis.metadata = { isViewportChrome: true };
-
-      const mat = new BABYLON.StandardMaterial(`axis_${dir}_mat`, state.scene);
-      mat.emissiveColor = color;
-      mat.disableLighting = true;
-      axis.material = mat;
-    }
-    console.log("[SCENE] axis arrows created");
-  } catch (e) {
-    console.warn("[SCENE] axis arrows failed:", e.message);
-  }
+  // Initialize the Blender-style 2D orientation gizmo (top-right corner overlay).
+  // Replaces the previous in-scene X-Y-Z axis arrows.
+  import("../ui/viewport-gizmo.js")
+    .then(({ initViewportGizmo }) => {
+      initViewportGizmo(state.scene, camera);
+      console.log("[SCENE] viewport gizmo initialized");
+    })
+    .catch((e) => {
+      console.warn("[SCENE] viewport gizmo init failed:", e.message);
+    });
 
   state.engine.runRenderLoop(() => state.scene.render());
 
@@ -875,6 +845,16 @@ export {
       if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) {
         e.preventDefault();
         startNewAsset();
+      }
+    });
+
+    // Esc — dismiss the welcome overlay (priority chain for future: deselect, close inspector).
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      const overlay = document.getElementById("welcomeOverlay");
+      if (overlay && !overlay.hidden) {
+        e.preventDefault();
+        hideWelcomeOverlay();
       }
     });
 
