@@ -757,19 +757,39 @@ export {
       hideWelcomeOverlay();
     }
 
-    function startNewAsset() {
+    async function startNewAsset() {
+      if (window.activeAssetManifestCid) {
+        const ok = confirm(
+          "Start a new asset? Any unsaved changes will be lost."
+        );
+        if (!ok) return;
+      }
+
       clearScene();
       showWelcomeOverlay();
       window.activeAssetManifestCid = null;
       window.latestAssetManifestCid = null;
-      window.activeAssetName = null;
       window.activeAssetTokenId = null;
+
+      // Prompt for a name using the GNOME HIG dialog
+      try {
+        const { showDialog } = await import("../ui/dialog.js");
+        const name = await showDialog(
+          "Name Your Asset",
+          "Give your new asset a descriptive name.",
+          ""
+        );
+        window.activeAssetName = (name && name.trim()) || "Untitled Asset";
+      } catch {
+        window.activeAssetName = "Untitled Asset";
+      }
+
       const nameEl = document.getElementById("assetNameDisplay");
-      if (nameEl) nameEl.textContent = "Untitled Asset";
+      if (nameEl) nameEl.textContent = window.activeAssetName;
       const statusEl = document.getElementById("assetStatusName");
-      if (statusEl) statusEl.textContent = "No asset open";
+      if (statusEl) statusEl.textContent = window.activeAssetName;
       const metaEl = document.getElementById("assetStatusMeta");
-      if (metaEl) metaEl.textContent = "Create or open an asset";
+      if (metaEl) metaEl.textContent = "Draft Scene";
       document.dispatchEvent(new CustomEvent("scene:empty"));
       import("/js/ui/sidebar.js").then(function (m) {
         m.switchView("create");

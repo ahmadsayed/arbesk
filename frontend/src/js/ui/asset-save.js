@@ -25,7 +25,6 @@ const assetStatusMeta = document.getElementById("assetStatusMeta");
 
 let isSaving = false;
 let isPublishing = false;
-let isCreatingNew = false;
 
 function updateAssetStatus(name, meta) {
   if (assetStatusName) assetStatusName.textContent = name;
@@ -315,37 +314,7 @@ async function onPublishAsset() {
   }
 }
 
-async function onCreateNewAsset() {
-  if (isCreatingNew) return;
-  if (window.activeAssetManifestCid) {
-    const ok = confirm("Start a new asset? Any unsaved changes will be lost.");
-    if (!ok) return;
-  }
-
-  isCreatingNew = true;
-
-  try {
-    const nameInput = prompt("Name your new asset:", "My Asset");
-    window.activeAssetName = nameInput ? nameInput.trim() : "My Asset";
-    clearScene();
-    window.activeAssetTokenId = null;
-    window.activeAssetManifestCid = null;
-    window.latestAssetManifestCid = null;
-
-    const url = new URL(window.location);
-    url.searchParams.delete("asset");
-    url.searchParams.delete("manifest");
-    window.history.pushState({}, "", url);
-
-    showWelcomeOverlay();
-    document.dispatchEvent(new CustomEvent("scene:empty"));
-    updateAssetStatus(window.activeAssetName, "Draft Scene");
-  } catch (err) {
-    console.error("Create new asset failed:", err);
-  } finally {
-    isCreatingNew = false;
-  }
-}
+export { onSaveAssetDraft, onPublishAsset };
 
 saveBtn?.addEventListener("click", onSaveAssetDraft);
 publishBtn?.addEventListener("click", onPublishAsset);
