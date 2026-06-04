@@ -20,7 +20,6 @@
  * @returns {Promise<string|null>} User input or null if cancelled
  */
 export function showDialog(title, body, defaultValue = "") {
-  console.log("[DIALOG] showDialog called:", { title, body, defaultValue });
   return new Promise((resolve) => {
     try {
       // ── Build DOM ───────────────────────────────────────────────────
@@ -55,7 +54,6 @@ export function showDialog(title, body, defaultValue = "") {
 
       backdrop.appendChild(dialog);
       document.body.appendChild(backdrop);
-      console.log("[DIALOG] DOM appended to body");
 
       // ── Element references ──────────────────────────────────────────
       const input = dialog.querySelector(".dialog-input");
@@ -122,8 +120,6 @@ export function showDialog(title, body, defaultValue = "") {
     }
   });
 }
-
-console.log("[DIALOG] module loaded");
 
 function escapeHtml(str) {
   return String(str)
