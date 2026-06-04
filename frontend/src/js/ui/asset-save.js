@@ -401,5 +401,3 @@ document.addEventListener("wallet:disconnected", () => {
   if (saveBtn) saveBtn.hidden = true;
   if (publishBtn) publishBtn.hidden = true;
 });
-
-export { onSaveAssetDraft, onPublishAsset, onCreateNewAsset };
