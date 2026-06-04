@@ -131,6 +131,47 @@ function initEngine() {
     console.warn("[SCENE] grid failed:", e.message);
   }
 
+  // Colored axis arrows at origin
+  try {
+    const axes = [
+      {
+        color: new BABYLON.Color3(0.88, 0.11, 0.14),
+        dir: "x",
+        rot: [0, 0, -Math.PI / 2],
+      },
+      { color: new BABYLON.Color3(0.18, 0.76, 0.27), dir: "y", rot: [0, 0, 0] },
+      {
+        color: new BABYLON.Color3(0.21, 0.52, 0.89),
+        dir: "z",
+        rot: [Math.PI / 2, 0, 0],
+      },
+    ];
+
+    for (const { color, dir, rot } of axes) {
+      const axis = BABYLON.MeshBuilder.CreateCylinder(
+        `axis_${dir}`,
+        { height: 2, diameter: 0.08 },
+        state.scene
+      );
+      axis.position = new BABYLON.Vector3(
+        dir === "x" ? 1 : 0,
+        dir === "y" ? 1 : 0,
+        dir === "z" ? 1 : 0
+      );
+      axis.rotation.set(rot[0], rot[1], rot[2]);
+      axis.isPickable = false;
+      axis.metadata = { isViewportChrome: true };
+
+      const mat = new BABYLON.StandardMaterial(`axis_${dir}_mat`, state.scene);
+      mat.emissiveColor = color;
+      mat.disableLighting = true;
+      axis.material = mat;
+    }
+    console.log("[SCENE] axis arrows created");
+  } catch (e) {
+    console.warn("[SCENE] axis arrows failed:", e.message);
+  }
+
   state.engine.runRenderLoop(() => state.scene.render());
 
   window.addEventListener("resize", () => state.engine.resize());
