@@ -6,6 +6,7 @@
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { publishAsset, updateAssetURI } from "../blockchain/wallet.js";
 import { showDialog } from "./dialog.js";
+console.log("[SAVE] module loaded, showDialog:", typeof showDialog);
 import {
   clearScene,
   captureAssetThumbnail,
@@ -96,13 +97,23 @@ async function resolveAssetName() {
  */
 async function ensureExplicitName() {
   const currentName = window.activeAssetName || "";
-  // Show dialog pre-filled with current name (but not with defaults)
+  console.log(
+    "[PUBLISH] ensureExplicitName: currentName=",
+    currentName,
+    "isDefault:",
+    isDefaultName(currentName)
+  );
   const defaultValue = isDefaultName(currentName) ? "" : currentName;
+  console.log(
+    "[PUBLISH] ensureExplicitName: calling showDialog with defaultValue=",
+    defaultValue
+  );
   const input = await showDialog(
     "Name Your Asset",
     "Give your asset a descriptive name before publishing.",
     defaultValue
   );
+  console.log("[PUBLISH] ensureExplicitName: showDialog returned:", input);
   if (input === null) {
     return null; // user cancelled
   }
@@ -212,6 +223,11 @@ async function onSaveAssetDraft() {
 }
 
 async function onPublishAsset() {
+  console.log("[PUBLISH] onPublishAsset called", {
+    isPublishing,
+    wallet: !!window.walletAddress,
+    tokenId: window.activeAssetTokenId,
+  });
   if (isPublishing) return;
   if (!window.walletAddress) return alert("Please connect your wallet first.");
 
@@ -223,7 +239,12 @@ async function onPublishAsset() {
       : "Publishing…";
 
   try {
+    console.log(
+      "[PUBLISH] calling ensureExplicitName, currentName:",
+      window.activeAssetName
+    );
     const assetName = await ensureExplicitName();
+    console.log("[PUBLISH] ensureExplicitName returned:", assetName);
     if (!assetName) {
       isPublishing = false;
       if (publishBtn) publishBtn.disabled = false;
