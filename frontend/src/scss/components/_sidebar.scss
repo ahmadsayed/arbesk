@@ -1,0 +1,201 @@
+// ═══════════════════════════════════════════════════════════════════
+// Sidebar — GNOME-style with View Switcher
+//
+// Single unified sidebar replacing 3 separate panels.
+// Left panel with 4-icon View Switcher.
+// ═══════════════════════════════════════════════════════════════════
+
+.sidebar {
+  display: flex;
+  flex-shrink: 0;
+  width: var(--sidebar-width);
+  height: 100%;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-fg);
+  border-right: var(--border-size-1) solid var(--border-color);
+  overflow: hidden;
+  transition: width var(--duration-moderate) var(--ease-out-3);
+
+  &.collapsed {
+    width: 0;
+    border-right: none;
+  }
+}
+
+// View Switcher — vertical icon stack
+.sidebar-switcher {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 48px;
+  padding: var(--size-2) 0;
+  gap: var(--size-1);
+  border-right: var(--border-size-1) solid var(--border-color);
+  background-color: var(--headerbar-bg);
+}
+
+.sidebar-switcher-bottom {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  padding: var(--size-1) 0;
+  border-top: var(--border-size-1) solid var(--border-color);
+}
+
+.sidebar-switcher-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-2);
+  color: var(--dim-fg);
+  transition: background-color var(--duration-quick) var(--ease-out-3),
+              color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--card-bg);
+    color: var(--sidebar-fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.sidebar-switcher-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0 var(--size-2);
+  border-radius: var(--radius-2);
+  color: var(--dim-fg);
+  transition: background-color var(--duration-quick) var(--ease-out-3),
+              color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--card-bg);
+    color: var(--sidebar-fg);
+  }
+
+  &.active {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+// Sidebar content area
+.sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+// Each view pane
+.sidebar-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// View header
+.sidebar-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-3) var(--size-3);
+  flex-shrink: 0;
+
+  h2 {
+    font-size: var(--font-size-2);
+    font-weight: var(--font-weight-6);
+  }
+}
+
+// View body
+.sidebar-view-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--size-3) var(--size-3);
+}
+
+// Sidebar toggle (collapse/expand)
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-round);
+  color: var(--dim-fg);
+
+  &:hover {
+    background-color: var(--card-bg);
+    color: var(--sidebar-fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+}
+
+// Show sidebar button (visible when collapsed)
+.sidebar-reveal {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 72px;
+  background-color: var(--headerbar-bg);
+  border: var(--border-size-1) solid var(--accent-bg);
+  border-left: none;
+  border-radius: 0 var(--radius-3) var(--radius-3) 0;
+  color: var(--accent-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-quick) var(--ease-out-3);
+  box-shadow: var(--shadow-2);
+
+  &:hover {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    width: 36px;
+  }
+
+  .sidebar.collapsed ~ & {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

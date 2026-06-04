@@ -1,0 +1,118 @@
+// ═══════════════════════════════════════════════════════════════════
+// Helpers — utility classes
+// ═══════════════════════════════════════════════════════════════════
+
+.hidden {
+  display: none !important;
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+.text-accent {
+  color: var(--accent-bg);
+}
+
+.text-dim {
+  color: var(--dim-fg);
+}
+
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ── Medium screens (480px - 900px) ──
+// Sidebar and inspector overlay content instead of pushing it
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-width: 280px;
+    --inspector-width: 260px;
+  }
+
+  .sidebar {
+    position: absolute;
+    top: var(--headerbar-height);
+    left: 0;
+    bottom: var(--bottombar-height);
+    z-index: 50;
+    box-shadow: var(--shadow-5);
+
+    &.collapsed {
+      transform: translateX(-100%);
+    }
+  }
+
+  .sidebar-reveal {
+    top: auto;
+    bottom: var(--size-3);
+    border-radius: 0 var(--radius-3) var(--radius-3) 0;
+  }
+
+  .inspector {
+    position: absolute;
+    top: var(--headerbar-height);
+    right: 0;
+    bottom: var(--bottombar-height);
+    z-index: 50;
+    box-shadow: var(--shadow-5);
+
+    &.collapsed {
+      transform: translateX(100%);
+    }
+  }
+}
+
+// ── Narrow screens (< 480px) ──
+// Sidebar hidden by default, inspector as bottom sheet
+
+@media (max-width: 480px) {
+  :root {
+    --sidebar-width: 100vw;
+  }
+
+  .headerbar-actions {
+    gap: var(--size-1);
+  }
+
+  .sidebar {
+    width: 80vw;
+    max-width: 320px;
+
+    &.collapsed {
+      width: 0;
+      transform: translateX(-100%);
+    }
+  }
+
+  .inspector {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 50vh;
+    border-radius: var(--radius-3) var(--radius-3) 0 0;
+    border: none;
+    border-top: var(--border-size-1) solid var(--border-color);
+    box-shadow: var(--shadow-5);
+    z-index: 100;
+
+    &.collapsed {
+      transform: translateY(100%);
+    }
+  }
+
+  .messagebar {
+    padding: var(--size-2);
+  }
+
+  .bottombar {
+    font-size: 11px;
+    padding: 0 var(--size-2);
+  }
+}

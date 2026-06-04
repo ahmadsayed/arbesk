@@ -1,0 +1,124 @@
+// ═══════════════════════════════════════════════════════════════════
+// Buttons
+// ═══════════════════════════════════════════════════════════════════
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-4);
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
+  line-height: var(--font-lineheight-2);
+  border-radius: var(--radius-2);
+  border: var(--border-size-1) solid transparent;
+  transition: background-color var(--duration-quick) var(--ease-out-3),
+              color var(--duration-quick) var(--ease-out-3),
+              border-color var(--duration-quick) var(--ease-out-3);
+  white-space: nowrap;
+  user-select: none;
+  min-height: 36px;
+  min-width: 36px;
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// Primary
+.btn-primary {
+  background-color: var(--accent-bg);
+  color: var(--accent-fg);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:active:not(:disabled) {
+    filter: brightness(0.95);
+  }
+}
+
+// Secondary / default
+.btn-secondary {
+  background-color: var(--card-bg);
+  color: var(--card-fg);
+  border-color: var(--border-color);
+
+  &:hover:not(:disabled) {
+    background-color: var(--popover-bg);
+    border-color: var(--dim-fg);
+  }
+
+  &:active:not(:disabled) {
+    background-color: var(--border-color);
+  }
+}
+
+// Outline
+.btn-outline {
+  background: transparent;
+  color: var(--accent-bg);
+  border-color: var(--accent-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+}
+
+// Destructive
+.btn-danger {
+  background-color: var(--destructive-bg);
+  color: var(--destructive-fg);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+}
+
+// Flat / icon-only
+.btn-flat {
+  background: transparent;
+  color: var(--dim-fg);
+  border-color: transparent;
+
+  &:hover:not(:disabled) {
+    background-color: var(--card-bg);
+    color: var(--sidebar-fg);
+  }
+}
+
+// Sizes
+.btn-sm {
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--font-size-0);
+  min-height: 28px;
+  border-radius: var(--radius-2);
+}
+
+.btn-lg {
+  padding: var(--size-3) var(--size-5);
+  font-size: var(--font-size-2);
+  min-height: 44px;
+}
+
+// Icon-only
+.btn-icon {
+  padding: var(--size-2);
+  min-width: 36px;
+  min-height: 36px;
+
+  &.btn-sm {
+    padding: var(--size-1);
+    min-width: 28px;
+    min-height: 28px;
+  }
+}

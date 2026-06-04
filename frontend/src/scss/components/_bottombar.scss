@@ -1,0 +1,76 @@
+// ═══════════════════════════════════════════════════════════════════
+// Bottom Bar — status bar with wallet
+// ═══════════════════════════════════════════════════════════════════
+
+.bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--bottombar-height);
+  padding: 0 var(--size-3);
+  background-color: var(--headerbar-bg);
+  color: var(--dim-fg);
+  border-top: var(--border-size-1) solid var(--border-color);
+  font-size: var(--font-size-0);
+  flex-shrink: 0;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.bottombar-status {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bottombar-status-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  & + &::before {
+    content: '·';
+    margin-right: var(--size-2);
+    color: var(--border-color);
+  }
+}
+
+.bottombar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  flex-shrink: 0;
+}
+
+.bottombar-wallet {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: 0 var(--size-2);
+  height: 24px;
+  font-size: var(--font-size-0);
+  font-family: var(--font-mono);
+  color: var(--accent-bg);
+  border: var(--border-size-1) solid var(--accent-bg);
+  border-radius: var(--radius-round);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+
+  &.disconnected {
+    color: var(--dim-fg);
+    border-color: var(--border-color);
+
+    &:hover {
+      background-color: var(--card-bg);
+      color: var(--sidebar-fg);
+    }
+  }
+}

@@ -1,5 +1,6 @@
 /**
  * Arbesk Asset Library — token-centric browser for owned and shared assets.
+ * Phase C: Library is now a sidebar view navigated by the View Switcher.
  */
 
 import {
@@ -13,11 +14,9 @@ import {
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
 import { updateUrlAsset } from "../services/url-utils.js";
+import { switchView } from "./sidebar.js";
 
-let assetLibraryPanel = null;
 let assetLibraryBody = null;
-let assetLibraryToggle = null;
-let showAssetLibraryBtn = null;
 
 function getContract() {
   return walletContract || window.contract || null;
@@ -78,7 +77,9 @@ async function openAssetByTokenId(tokenId) {
     const { showAssetEditors } = await import("./asset-editors.js");
     showAssetEditors(tokenId);
 
-    if (window.innerWidth <= 768) collapseAssetLibrary();
+    if (window.innerWidth <= 900) {
+      switchView("library");
+    }
   } catch (err) {
     console.error("Failed to open asset by Token ID:", err);
     alert(`Failed to open asset #${tokenId}`);
@@ -171,12 +172,12 @@ function createAssetCard(tokenId, role) {
   badge.textContent = role === "owner" ? "Owner" : "Editor";
 
   const openBtn = document.createElement("button");
-  openBtn.className = "asset-library-item-open btn-arabesque-outline btn-sm";
+  openBtn.className = "asset-library-item-open btn-outline btn-sm";
   openBtn.textContent = "Open";
   openBtn.addEventListener("click", () => openAssetByTokenId(tokenId));
 
   const addBtn = document.createElement("button");
-  addBtn.className = "asset-library-item-add btn-arabesque-secondary btn-sm";
+  addBtn.className = "asset-library-item-add btn-secondary btn-sm";
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {
@@ -265,29 +266,6 @@ async function loadAssetMetadata(tokenId, nameEl, thumbnailEl) {
   }
 }
 
-function expandAssetLibrary() {
-  if (!assetLibraryPanel) return;
-  assetLibraryPanel.classList.remove("collapsed");
-  if (showAssetLibraryBtn) {
-    showAssetLibraryBtn.style.opacity = "0";
-    showAssetLibraryBtn.style.pointerEvents = "none";
-  }
-}
-
-function collapseAssetLibrary() {
-  if (!assetLibraryPanel) return;
-  assetLibraryPanel.classList.add("collapsed");
-  if (showAssetLibraryBtn) {
-    showAssetLibraryBtn.style.opacity = "1";
-    showAssetLibraryBtn.style.pointerEvents = "auto";
-  }
-}
-
-function toggleAssetLibrary() {
-  if (assetLibraryPanel?.classList.contains("collapsed")) expandAssetLibrary();
-  else collapseAssetLibrary();
-}
-
 async function refreshAssetLibrary() {
   if (!window.walletAddress || !assetLibraryBody) return;
   const { owned, shared } = await fetchAssetLibrary(window.walletAddress);
@@ -305,13 +283,7 @@ function highlightActiveAsset() {
 }
 
 function initAssetLibrary() {
-  assetLibraryPanel = document.getElementById("assetLibraryPanel");
   assetLibraryBody = document.getElementById("assetLibraryBody");
-  assetLibraryToggle = document.getElementById("assetLibraryToggle");
-  showAssetLibraryBtn = document.getElementById("showAssetLibraryBtn");
-
-  assetLibraryToggle?.addEventListener("click", toggleAssetLibrary);
-  showAssetLibraryBtn?.addEventListener("click", expandAssetLibrary);
 }
 
 document.addEventListener("scene:ready", highlightActiveAsset);
@@ -326,12 +298,10 @@ document.addEventListener("asset:openByTokenId", (e) => {
 
 document.addEventListener("wallet:connected", async () => {
   await refreshAssetLibrary();
-  expandAssetLibrary();
+  switchView("library");
 
   const assetTokenId = new URLSearchParams(window.location.search).get("asset");
   if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId);
-
-  if (showAssetLibraryBtn) showAssetLibraryBtn.style.display = "flex";
 });
 
 document.addEventListener("wallet:disconnected", () => {
@@ -339,8 +309,6 @@ document.addEventListener("wallet:disconnected", () => {
     assetLibraryBody.innerHTML =
       '<p class="asset-library-empty">Connect wallet to browse your asset tokens.</p>';
   }
-  collapseAssetLibrary();
-  if (showAssetLibraryBtn) showAssetLibraryBtn.style.display = "none";
 });
 
 export {
@@ -348,7 +316,4 @@ export {
   openAssetByTokenId,
   fetchAssetLibrary,
   refreshAssetLibrary,
-  expandAssetLibrary,
-  collapseAssetLibrary,
-  toggleAssetLibrary,
 };

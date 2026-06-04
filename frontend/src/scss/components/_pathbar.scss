@@ -1,0 +1,54 @@
+// ═══════════════════════════════════════════════════════════════════
+// Path Bar — GNOME-style breadcrumb navigation for nesting
+// ═══════════════════════════════════════════════════════════════════
+
+.pathbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pathbar-segment {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-6);
+  color: var(--headerbar-fg);
+  border-radius: var(--radius-2);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--card-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+}
+
+.pathbar-separator {
+  color: var(--dim-fg);
+  font-size: var(--font-size-2);
+  margin: 0 var(--size-1);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pathbar-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-weight-7);
+
+  &:hover {
+    background-color: transparent;
+    cursor: default;
+  }
+}

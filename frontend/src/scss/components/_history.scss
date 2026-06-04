@@ -1,0 +1,87 @@
+// ═══════════════════════════════════════════════════════════════════
+// History Timeline — pill-shaped version scrubber in header bar
+// ═══════════════════════════════════════════════════════════════════
+
+.history {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: 0 var(--size-3);
+  overflow: hidden;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.history-label {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-7);
+  color: var(--dim-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-right: var(--size-1);
+}
+
+// Track — horizontal scrollable pill
+.history-track {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: var(--size-1);
+  padding: var(--size-1) var(--size-2);
+  background-color: var(--card-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-round);
+  cursor: grab;
+  user-select: none;
+  min-height: 36px;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+// Individual version node
+.history-node {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-7);
+  color: var(--dim-fg);
+  background-color: var(--popover-bg);
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  transition: transform var(--duration-quick) var(--ease-out-3),
+              background-color var(--duration-quick) var(--ease-out-3),
+              border-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    transform: scale(1.15);
+    border-color: var(--accent-bg);
+    color: var(--sidebar-fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+
+  &.active {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    border-color: var(--accent-bg);
+    transform: scale(1.25);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
+  }
+}

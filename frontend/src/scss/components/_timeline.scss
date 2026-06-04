@@ -1,0 +1,72 @@
+// ═══════════════════════════════════════════════════════════════════
+// Timeline Section — version slider in Create sidebar view
+// ═══════════════════════════════════════════════════════════════════
+
+.timeline-section {
+  padding: var(--size-3);
+  border-top: var(--border-size-1) solid var(--border-color);
+  flex-shrink: 0;
+  background-color: var(--card-bg);
+
+  &[hidden] {
+    display: none !important;
+  }
+}
+
+.timeline-label {
+  display: block;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--accent-bg);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--size-2);
+}
+
+.timeline-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+}
+
+.timeline-slider {
+  flex: 1;
+  appearance: none;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: var(--radius-round);
+  outline: none;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-bg);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--view-bg);
+    box-shadow: var(--shadow-1);
+  }
+
+  &::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--accent-bg);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--view-bg);
+    box-shadow: var(--shadow-1);
+  }
+}
+
+.version-badge {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--accent-fg);
+  background-color: var(--accent-bg);
+  padding: var(--size-1) var(--size-2);
+  border-radius: var(--radius-2);
+  min-width: 2rem;
+  text-align: center;
+  white-space: nowrap;
+}

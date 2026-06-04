@@ -63,11 +63,22 @@ export function createPlaceholder(nodeId, parentNode, placeholderState) {
 
 /**
  * Dispose a placeholder mesh, stopping any running animation first.
+ * Also releases the placeholder's material to prevent GPU memory leaks.
  */
 export function disposePlaceholder(placeholder) {
   if (!placeholder || placeholder.isDisposed()) return;
   if (placeholder.metadata?._placeholderAnim) {
     state.scene.stopAnimation(placeholder);
   }
+  // Dispose the mesh first, then the material (separately to avoid
+  // shared-material cascade issues with mesh.dispose(false, true)).
+  const mat = placeholder.material;
   placeholder.dispose();
+  if (mat) {
+    try {
+      mat.dispose();
+    } catch (_) {
+      // ignore
+    }
+  }
 }

@@ -1,0 +1,118 @@
+// ═══════════════════════════════════════════════════════════════════
+// Cards — asset cards, library items
+// ═══════════════════════════════════════════════════════════════════
+
+.card {
+  background-color: var(--card-bg);
+  color: var(--card-fg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-2);
+  padding: var(--size-3);
+  box-shadow: var(--shadow-1);
+}
+
+// Asset library card
+.asset-card {
+  background-color: var(--card-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-2);
+  padding: var(--size-2);
+  cursor: pointer;
+  transition: border-color var(--duration-quick) var(--ease-out-3),
+              background-color var(--duration-quick) var(--ease-out-3),
+              box-shadow var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    border-color: var(--dim-fg);
+    background-color: var(--popover-bg);
+  }
+
+  &.active {
+    border-color: var(--accent-bg);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-bg) 20%, transparent);
+  }
+
+  &[draggable="true"] {
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+}
+
+.asset-card-thumbnail {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-bottom: var(--size-2);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  background-color: rgb(0 0 0 / 30%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.asset-card-thumbnail-empty {
+  color: var(--dim-fg);
+  font-size: var(--font-size-5);
+}
+
+.asset-card-id {
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-6);
+  font-family: var(--font-mono);
+  color: var(--accent-bg);
+  margin-bottom: var(--size-1);
+}
+
+.asset-card-name {
+  font-size: var(--font-size-1);
+  color: var(--card-fg);
+  margin-bottom: var(--size-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+}
+
+.asset-card-badge {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px var(--size-1);
+  border-radius: var(--radius-2);
+
+  &.badge-owner {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+
+  &.badge-editor {
+    background-color: var(--popover-bg);
+    color: var(--dim-fg);
+  }
+}
+
+.asset-card-actions {
+  display: flex;
+  gap: var(--size-1);
+  margin-top: var(--size-2);
+
+  button {
+    flex: 1;
+  }
+}

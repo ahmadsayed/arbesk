@@ -1,0 +1,28 @@
+// ═══════════════════════════════════════════════════════════════════
+// Studio Layout — flex container for sidebar + main stage
+// ═══════════════════════════════════════════════════════════════════
+
+// Root app shell — vertical stack: header bar / studio layout / bottom bar
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.studio-layout {
+  display: flex;
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}

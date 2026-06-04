@@ -1,5 +1,6 @@
 /**
  * Arbesk Asset Save/Publish Controller.
+ * Phase B: Updated for GNOME headerbar — buttons managed individually, no wrapper div.
  */
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
@@ -13,12 +14,10 @@ import {
 } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 
-const saveSection = document.getElementById("saveAssetSection");
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
 const publishBtn = document.getElementById("publishAssetBtn");
 const publishBtnText = document.getElementById("publishAssetBtnText");
-const newAssetTopBtn = document.getElementById("newAssetTopBtn");
 const assetStatusName = document.getElementById("assetStatusName");
 const assetStatusMeta = document.getElementById("assetStatusMeta");
 
@@ -32,12 +31,13 @@ function updateAssetStatus(name, meta) {
 }
 
 function updateButtonState() {
-  if (!saveSection) return;
-
   const hasAsset =
     !!window.activeAssetManifestCid || getPendingChildRefs().length > 0;
   const hasWallet = !!window.walletAddress;
-  saveSection.hidden = !hasAsset || !hasWallet;
+  const visible = hasAsset && hasWallet;
+
+  if (saveBtn) saveBtn.hidden = !visible;
+  if (publishBtn) publishBtn.hidden = !visible;
 
   if (saveBtnText) saveBtnText.textContent = "Save Draft";
   if (publishBtnText) {
@@ -67,10 +67,14 @@ async function fetchAssetName(tokenId) {
 }
 
 async function resolveAssetName() {
+  // Always prefer the user's in-session rename.
+  if (window.activeAssetName) return window.activeAssetName;
+
+  // If no rename yet, try fetching from the token's stored manifest.
   if (window.activeAssetTokenId) {
     return (await fetchAssetName(window.activeAssetTokenId)) || "My Asset";
   }
-  return window.activeAssetName || "My Asset";
+  return "My Asset";
 }
 
 function advanceManifestVersion(manifest, latestCid) {
@@ -86,7 +90,6 @@ async function prepareManifestForWrite(assetName) {
   if (window.activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(window.activeAssetManifestCid);
   } else if (pendingRefs.length > 0) {
-    // No existing manifest but we have pending child refs — create a fresh manifest
     manifest = {
       name: assetName,
       asset_id: `asset_${Date.now()}`,
@@ -106,15 +109,12 @@ async function prepareManifestForWrite(assetName) {
   manifest.scene ||= { nodes: [] };
   manifest.scene.nodes ||= [];
 
-  // Merge pending token child refs into the manifest nodes
   for (const pendingNode of pendingRefs) {
-    // Don't duplicate if already in manifest
     if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
       manifest.scene.nodes.push(pendingNode);
     }
   }
 
-  // Bump version from the manifest we loaded (the previous version)
   const prevCid = window.activeAssetManifestCid;
   if (prevCid) {
     try {
@@ -150,10 +150,8 @@ async function onSaveAssetDraft() {
     window.latestAssetManifestCid = window.activeAssetManifestCid;
     window.activeAssetManifestCid = cid;
 
-    // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
 
-    // Update URL to point to the latest draft manifest
     updateUrlManifest(cid, window.activeAssetTokenId || null);
 
     document.dispatchEvent(
@@ -234,7 +232,6 @@ async function onPublishAsset() {
     window.latestAssetManifestCid = window.activeAssetManifestCid;
     window.activeAssetManifestCid = cid;
 
-    // Clear pending child refs since they've been persisted
     clearPendingChildRefs();
 
     document.dispatchEvent(
@@ -261,7 +258,6 @@ async function onCreateNewAsset() {
   }
 
   isCreatingNew = true;
-  if (newAssetTopBtn) newAssetTopBtn.disabled = true;
 
   try {
     const nameInput = prompt("Name your new asset:", "My Asset");
@@ -279,23 +275,79 @@ async function onCreateNewAsset() {
     showWelcomeOverlay();
     document.dispatchEvent(new CustomEvent("scene:empty"));
     updateAssetStatus(window.activeAssetName, "Draft Scene");
-    if (saveSection) saveSection.hidden = true;
   } catch (err) {
     console.error("Create new asset failed:", err);
   } finally {
     isCreatingNew = false;
-    if (newAssetTopBtn) newAssetTopBtn.disabled = false;
   }
 }
 
 saveBtn?.addEventListener("click", onSaveAssetDraft);
 publishBtn?.addEventListener("click", onPublishAsset);
-newAssetTopBtn?.addEventListener("click", onCreateNewAsset);
+
+// ─── Editable asset title (header bar) ───
+// `#assetStatusName` is contenteditable; commit on Enter/blur, revert on Escape,
+// and propagate the new name to the rest of the app.
+
+function hasAssetContext() {
+  return (
+    !!window.activeAssetManifestCid ||
+    !!window.activeAssetName ||
+    getPendingChildRefs().length > 0
+  );
+}
+
+function sanitizeName(raw) {
+  return (raw || "").replace(/\s+/g, " ").trim();
+}
+
+function commitAssetName() {
+  if (!assetStatusName) return;
+  const name = sanitizeName(assetStatusName.textContent);
+
+  // No open asset, or the field was cleared — restore the current label.
+  if (!hasAssetContext() || !name) {
+    assetStatusName.textContent = window.activeAssetName || "No asset open";
+    return;
+  }
+
+  window.activeAssetName = name;
+  assetStatusName.textContent = name; // normalize (strip stray newlines)
+  document.dispatchEvent(
+    new CustomEvent("asset:renamed", { detail: { name } })
+  );
+}
+
+if (assetStatusName) {
+  assetStatusName.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      assetStatusName.blur(); // commit through the blur handler
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      assetStatusName.textContent = window.activeAssetName || "No asset open";
+      assetStatusName.blur();
+    }
+  });
+
+  assetStatusName.addEventListener("blur", commitAssetName);
+
+  // Force plain-text paste (no rich HTML or line breaks).
+  assetStatusName.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text =
+      (e.clipboardData || window.clipboardData)?.getData("text") || "";
+    document.execCommand("insertText", false, text.replace(/\s+/g, " "));
+  });
+}
 
 document.addEventListener("scene:ready", (e) => {
   const manifest = e.detail?.manifest;
+  // Preserve an existing rename — don't overwrite with fallback defaults.
   const name = manifest?.name || window.activeAssetName || "Untitled Asset";
-  window.activeAssetName = name;
+  if (manifest?.name || !window.activeAssetName) {
+    window.activeAssetName = name;
+  }
   updateAssetStatus(
     name,
     window.activeAssetTokenId
@@ -306,12 +358,14 @@ document.addEventListener("scene:ready", (e) => {
 });
 
 document.addEventListener("scene:empty", () => {
-  if (saveSection) saveSection.hidden = true;
+  if (saveBtn) saveBtn.hidden = true;
+  if (publishBtn) publishBtn.hidden = true;
   updateAssetStatus("No asset open", "Create or open an asset");
 });
 document.addEventListener("wallet:connected", updateButtonState);
 document.addEventListener("wallet:disconnected", () => {
-  if (saveSection) saveSection.hidden = true;
+  if (saveBtn) saveBtn.hidden = true;
+  if (publishBtn) publishBtn.hidden = true;
 });
 
 export { onSaveAssetDraft, onPublishAsset, onCreateNewAsset };

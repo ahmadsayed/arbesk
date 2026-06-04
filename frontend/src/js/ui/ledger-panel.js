@@ -1,8 +1,6 @@
 /**
  * Arbesk Micro-Ledger Panel
- *
- * Collapsible studio panel showing the audit trail for the current asset.
- * Filters by operation type and supports pagination.
+ * Phase C: Ledger is now a sidebar view navigated by the View Switcher.
  */
 
 const OP_TYPE_CONFIG = {
@@ -19,20 +17,15 @@ const OP_TYPE_CONFIG = {
   SNAPSHOT: { label: "Snapshot", icon: "◎" },
 };
 
-// ─── DOM References ──────────────────────────────────────────────────────────
-
-let panel, body, list, filterSelect, statsEl;
+let body, list, filterSelect, statsEl;
 let initialized = false;
 
 function ensureDOM() {
-  panel = document.getElementById("ledgerPanel");
   body = document.getElementById("ledgerBody");
   list = document.getElementById("ledgerList");
   filterSelect = document.getElementById("ledgerFilter");
   statsEl = document.getElementById("ledgerStats");
 }
-
-// ─── API ─────────────────────────────────────────────────────────────────────
 
 async function fetchLedger(manifestId, opType = "") {
   return queryLedger({ manifestId, opType });
@@ -41,8 +34,6 @@ async function fetchLedger(manifestId, opType = "") {
 async function fetchStats() {
   return getLedgerStats();
 }
-
-// ─── Rendering ───────────────────────────────────────────────────────────────
 
 function formatTime(ts) {
   const d = new Date(ts);
@@ -108,8 +99,6 @@ function renderStats(stats) {
   statsEl.textContent = `${stats.totalOperations} ops · ${stats.uniqueManifests} assets · ${stats.uniqueActors} actors`;
 }
 
-// ─── Actions ─────────────────────────────────────────────────────────────────
-
 async function refreshLedger() {
   try {
     const manifestId = window.activeAssetManifestCid
@@ -140,41 +129,15 @@ async function resolveAssetId() {
   }
 }
 
-// ─── Toggle ──────────────────────────────────────────────────────────────────
-
-function togglePanel() {
-  if (!panel) return;
-  panel.classList.toggle("collapsed");
-  if (!panel.classList.contains("collapsed")) {
-    refreshLedger();
-  }
-}
-
-// ─── Init ────────────────────────────────────────────────────────────────────
-
 function initLedgerPanel() {
   if (initialized) return;
   ensureDOM();
-  if (!panel) return;
+  if (!body) return;
 
-  // Toggle button
-  const toggleBtn = document.getElementById("ledgerPanelToggle");
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", togglePanel);
-  }
-
-  // Close button inside panel
-  const closeBtn = panel.querySelector(".ledger-panel-close");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => panel.classList.add("collapsed"));
-  }
-
-  // Filter dropdown
   if (filterSelect) {
     filterSelect.addEventListener("change", refreshLedger);
   }
 
-  // Refresh on relevant events
   document.addEventListener("asset:draftSaved", () => refreshLedger());
   document.addEventListener("asset:published", () => refreshLedger());
   document.addEventListener("scene:ready", () => refreshLedger());
@@ -182,4 +145,4 @@ function initLedgerPanel() {
   initialized = true;
 }
 
-export { initLedgerPanel, refreshLedger, togglePanel };
+export { initLedgerPanel, refreshLedger };

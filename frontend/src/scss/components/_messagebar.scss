@@ -1,0 +1,102 @@
+// ═══════════════════════════════════════════════════════════════════
+// Message Bar — prompt input at bottom of viewport
+// ═══════════════════════════════════════════════════════════════════
+
+.messagebar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-2);
+  min-height: var(--messagebar-min-height);
+  padding: var(--size-2) var(--size-3);
+  background-color: var(--card-bg);
+  border-top: var(--border-size-1) solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.messagebar-input {
+  flex: 1;
+  padding: var(--size-2) var(--size-3);
+  font-size: var(--font-size-1);
+  font-family: var(--font-family);
+  line-height: var(--font-lineheight-3);
+  color: var(--view-fg);
+  background-color: var(--view-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-3);
+  resize: none;
+  min-height: 24px;
+  max-height: 120px;
+
+  &::placeholder {
+    color: var(--dim-fg);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-bg);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
+  }
+}
+
+.messagebar-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: var(--accent-bg);
+  color: var(--accent-fg);
+  border-radius: var(--radius-round);
+  flex-shrink: 0;
+  transition: background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  // Spinner state (replaces icon during generation)
+  &.generating {
+    .messagebar-submit-icon { display: none; }
+    .messagebar-spinner { display: block; }
+  }
+}
+
+.messagebar-spinner {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent-fg);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.messagebar-hint {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  text-align: center;
+  padding: var(--size-2) 0 0;
+
+  &[hidden] {
+    display: none;
+  }
+}

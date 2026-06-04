@@ -1,0 +1,129 @@
+// ═══════════════════════════════════════════════════════════════════
+// Inspector — Right sidebar, contextual on node selection
+//
+// Two modes: mesh editor / token child world info
+// ═══════════════════════════════════════════════════════════════════
+
+.inspector {
+  width: var(--inspector-width);
+  flex-shrink: 0;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-fg);
+  border-left: var(--border-size-1) solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width var(--duration-moderate) var(--ease-out-3);
+
+  &.collapsed {
+    width: 0;
+    border-left: none;
+  }
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-3);
+  border-bottom: var(--border-size-1) solid var(--border-color);
+  flex-shrink: 0;
+
+  h3,
+  h5 {
+    font-size: var(--font-size-2);
+    font-weight: var(--font-weight-6);
+  }
+}
+
+.inspector-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--size-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+}
+
+// Section within inspector
+.inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+
+.inspector-section-title {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-7);
+  color: var(--dim-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: var(--size-1);
+  border-bottom: var(--border-size-1) solid var(--border-color);
+}
+
+// Node metadata (type, name, token info)
+.inspector-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+}
+
+.inspector-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--font-size-1);
+
+  .label {
+    color: var(--dim-fg);
+  }
+
+  .value {
+    font-weight: var(--font-weight-6);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-0);
+    word-break: break-all;
+    text-align: right;
+    max-width: 60%;
+  }
+}
+
+// Transform controls
+.inspector-transform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+
+.inspector-transform-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+
+  label {
+    font-size: var(--font-size-0);
+    color: var(--dim-fg);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  input {
+    flex: 1;
+  }
+}
+
+// Actions
+.inspector-token-child {
+  &[hidden] {
+    display: none;
+  }
+}
+
+.inspector-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  padding-top: var(--size-3);
+  border-top: var(--border-size-1) solid var(--border-color);
+}

@@ -1,0 +1,115 @@
+// ═══════════════════════════════════════════════════════════════════
+// Ledger — audit trail (sidebar view)
+// ═══════════════════════════════════════════════════════════════════
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ledger-panel-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ledger-panel-controls {
+  display: flex;
+  gap: var(--size-2);
+  padding: var(--size-2) 0;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.ledger-anchor-btn {
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--accent-bg);
+  background: transparent;
+  border: var(--border-size-1) solid var(--accent-bg);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--duration-quick) var(--ease-out-3),
+              color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+}
+
+.ledger-filter {
+  flex: 1;
+}
+
+.ledger-stats {
+  padding: var(--size-1) 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  border-bottom: var(--border-size-1) solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.ledger-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.ledger-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--font-size-0);
+  border-bottom: var(--border-size-1) solid var(--border-color);
+  transition: background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--card-bg);
+  }
+}
+
+.ledger-entry-icon {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  color: var(--accent-bg);
+}
+
+.ledger-entry-type {
+  font-weight: var(--font-weight-6);
+  color: var(--accent-bg);
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.ledger-entry-cid {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ledger-entry-actor {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  min-width: 80px;
+  text-align: right;
+}
+
+.ledger-empty {
+  padding: var(--size-5) var(--size-3);
+  text-align: center;
+  color: var(--dim-fg);
+  font-size: var(--font-size-1);
+  font-style: italic;
+}

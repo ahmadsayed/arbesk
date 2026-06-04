@@ -81,7 +81,7 @@ function showTokenChildInfo(nodeId) {
   // Hide timeline for token children (no local history)
   timeline.hidden = true;
 
-  inspector.hidden = false;
+  inspector.classList.remove("collapsed");
 }
 
 /**
@@ -142,7 +142,7 @@ async function openInspector(nodeId) {
   if (nodeScaleZ) nodeScaleZ.value = currentScale.z;
 
   // Show inspector
-  inspector.hidden = false;
+  inspector.classList.remove("collapsed");
 
   // Bind timeline
   bindTimeline(nodeId);
@@ -156,7 +156,7 @@ function closeInspector() {
   draftState = null;
   committedState = null;
   currentChain = [];
-  inspector.hidden = true;
+  inspector.classList.add("collapsed");
   timeline.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
@@ -317,6 +317,24 @@ function onNodeSelected(e) {
   openInspector(e.detail.nodeId);
 }
 document.addEventListener("node:selected", onNodeSelected);
+document.addEventListener("outliner:nodeSelected", onNodeSelected);
+
+// Inspector close button
+const inspectorCloseBtn = document.getElementById("inspectorCloseBtn");
+if (inspectorCloseBtn) inspectorCloseBtn.addEventListener("click", closeInspector);
+
+// Dive button for child worlds
+const diveBtn = document.getElementById("inspectorDiveBtn");
+if (diveBtn) {
+  diveBtn.addEventListener("click", () => {
+    const childRef = activeNodeId ? getNodeChildRef(activeNodeId) : null;
+    if (childRef) {
+      document.dispatchEvent(new CustomEvent("nesting:diveRequested", {
+        detail: { childRef, nodeId: activeNodeId }
+      }));
+    }
+  });
+}
 
 if (nodeColorInput) nodeColorInput.addEventListener("input", onColorChange);
 if (nodeScaleX) nodeScaleX.addEventListener("input", onScaleChange);

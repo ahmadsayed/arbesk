@@ -501,21 +501,15 @@ async function handleLinkedAssetDropped(event) {
     resolution: resolutionMode,
   };
 
-  const nodeEntry = {
-    node_id: nodeId,
-    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-    child_ref: childRef,
-  };
-
-  state.pendingChildRefs.push(nodeEntry);
-
-  // Load the token child immediately for live preview
+  // Resolve the token manifest first so we can derive the display name.
   const resolvedRef = {
     ...childRef,
     chainId: resolvedChainId,
     contractAddress: resolvedContractAddr,
   };
-  const childResolution = await resolveChildRef(resolvedRef);
+  const childResolution = await resolveChildRef(resolvedRef, {
+    validate: true,
+  });
   const resolvedCid = childResolution?.manifestCid || null;
 
   if (!resolvedCid) {
@@ -526,6 +520,15 @@ async function handleLinkedAssetDropped(event) {
     );
     return;
   }
+
+  const nodeEntry = {
+    node_id: nodeId,
+    name: childResolution?.manifest?.name || `World #${tokenId}`,
+    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    child_ref: childRef,
+  };
+
+  state.pendingChildRefs.push(nodeEntry);
 
   disposeNode(nodeId);
 
@@ -754,19 +757,43 @@ export {
       hideWelcomeOverlay();
     }
 
-    const newAssetBtn = document.getElementById("newAssetTopBtn");
-    if (newAssetBtn) {
-      newAssetBtn.addEventListener("click", () => {
-        const nameInput = document.getElementById("assetNameDisplay");
-        if (nameInput && nameInput.textContent !== "Untitled Asset") {
-        }
-        const nameInputEl = document.getElementById("assetNameDisplay");
-        if (nameInputEl) {
-          window.activeAssetName = nameInputEl.textContent || "Untitled Asset";
-        }
-        // Do not auto-prompt — the create-panel handles the new-asset flow
+    function startNewAsset() {
+      clearScene();
+      showWelcomeOverlay();
+      window.activeAssetManifestCid = null;
+      window.latestAssetManifestCid = null;
+      window.activeAssetName = null;
+      window.activeAssetTokenId = null;
+      const nameEl = document.getElementById("assetNameDisplay");
+      if (nameEl) nameEl.textContent = "Untitled Asset";
+      const statusEl = document.getElementById("assetStatusName");
+      if (statusEl) statusEl.textContent = "No asset open";
+      const metaEl = document.getElementById("assetStatusMeta");
+      if (metaEl) metaEl.textContent = "Create or open an asset";
+      document.dispatchEvent(new CustomEvent("scene:empty"));
+      import("/js/ui/sidebar.js").then(function (m) {
+        m.switchView("create");
       });
+      var promptInput = document.getElementById("promptInput");
+      if (promptInput)
+        setTimeout(function () {
+          promptInput.focus();
+        }, 100);
     }
+
+    // Both the welcome-overlay button and the persistent header button.
+    ["newAssetBtn", "newAssetTopBtn"].forEach(function (id) {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener("click", startNewAsset);
+    });
+
+    // Ctrl+N / Cmd+N — start a new asset.
+    document.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        startNewAsset();
+      }
+    });
 
     document.addEventListener("asset:linkedDropped", handleLinkedAssetDropped);
   });

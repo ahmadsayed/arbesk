@@ -6,7 +6,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, Filecoin FEVM P
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
-- Current status: Phases 1–4 + publishing polish are complete; Phase 5 micro-ledger/audit infrastructure is planned next.
+- Current status: Phases 1–4 + publishing polish + token child worlds are complete; Phase 5 micro-ledger/audit infrastructure is in progress.
 
 ---
 
@@ -58,8 +58,7 @@ arbesk/
 ├── docs/                         # Architecture, API, current status, Zed guide
 ├── .zed/                         # Zed project tasks/settings
 ├── test/                         # Jest + Supertest backend tests
-├── AGENTS.md                     # Zed/AI agent coding guide
-└── Phase*.md                     # Phase specs and retrospectives
+└── AGENTS.md                     # Zed/AI agent coding guide
 ```
 
 ---
@@ -68,13 +67,11 @@ arbesk/
 
 | Document | Purpose |
 |---|---|
-| [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Latest phase status, validation snapshot, known gaps |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Current system architecture and data flows |
+| [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Phase status, validation snapshot, known gaps |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture and data flows |
 | [`docs/API_SPEC.md`](docs/API_SPEC.md) | Implemented Express API routes and response shapes |
-| [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) | Product plan and phase roadmap |
 | [`docs/ZED_AGENT_GUIDE.md`](docs/ZED_AGENT_GUIDE.md) | Zed task/agent onboarding |
 | [`AGENTS.md`](AGENTS.md) | AI agent conventions, commands, file map, safety rules |
-| [`Phase5.md`](Phase5.md) | Planned micro-ledger/audit infrastructure specification |
 
 ---
 
@@ -201,12 +198,14 @@ The frontend captures this snapshot during publish. The backend uploads the imag
 
 ## Next Planned Phase
 
-Phase 5 will add a structured micro-ledger:
+Phase 5 micro-ledger is in progress:
 
-- append-only operation records
-- query API (`GET /api/ledger`)
-- frontend ledger panel
-- manifest anchoring extensions in `ArbeskWorld.sol`
-- optional analytics/export support
+- ✅ Schema and JSONL append-only store
+- ✅ Query API (`GET /api/ledger`, `GET /api/ledger/stats`)
+- ✅ Operations hooked (GENERATION, PARAMETRIC, SAVE, PUBLISH)
+- ✅ `anchorManifest()` in `ArbeskWorld.sol` + contract tests
+- ✅ Frontend ledger panel
+- 🔲 Per-asset filtering via `manifestId`
+- 🔲 Snapshots and digital signatures (Phase 5b)
 
-See [`Phase5.md`](Phase5.md).
+See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the full status.

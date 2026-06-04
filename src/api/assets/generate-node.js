@@ -232,10 +232,14 @@ export default function generateAssetNode(ipfs) {
           }
           nodes.length = 1;
         } else {
+          // Use prompt as display name (truncated for UI clarity)
+          const displayName = prompt
+            ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
+            : nodeId;
           node = {
             node_id: nodeId,
             type: "source_asset",
-            name: nodeId,
+            name: displayName,
             source: null,
             transform_matrix:
               Array.isArray(transform_matrix) && transform_matrix.length === 16

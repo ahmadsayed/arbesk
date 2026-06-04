@@ -50,10 +50,19 @@ export function clearScene() {
 
   state.scene.stopAllAnimations();
 
+  // Capture the shared material reference so we don't cascade-dispose it
+  const sharedMat = state.defaultWoodMaterial;
+
   for (const [, meshes] of state.nodeMeshes) {
     for (const mesh of meshes) {
       if (mesh && !mesh.isDisposed()) {
-        mesh.dispose();
+        // Only cascade-dispose materials that are unique to this import,
+        // never the shared defaultWoodMaterial (handled separately below).
+        if (mesh.material && mesh.material !== sharedMat) {
+          mesh.dispose(false, true);
+        } else {
+          mesh.dispose();
+        }
       }
     }
   }
@@ -79,7 +88,11 @@ export function clearScene() {
 
   for (const mesh of [...state.scene.meshes]) {
     if (mesh && !mesh.isDisposed()) {
-      mesh.dispose();
+      if (mesh.material && mesh.material !== sharedMat) {
+        mesh.dispose(false, true);
+      } else {
+        mesh.dispose();
+      }
     }
   }
 

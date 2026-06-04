@@ -17,7 +17,7 @@ import { contract } from "../blockchain/wallet.js";
 // ─── DOM References ───
 const historySection = document.getElementById("assetHistory");
 const historyBar = historySection
-  ? historySection.querySelector(".history-bar")
+  ? historySection.querySelector(".history-track")
   : null;
 
 // ─── State ───

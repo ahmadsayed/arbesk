@@ -13,11 +13,11 @@ function hasLinkedAssetPayload(event) {
 }
 
 function showOverlay() {
-  overlay?.classList.remove("hidden");
+  overlay?.classList.add("active");
 }
 
 function hideOverlay() {
-  overlay?.classList.add("hidden");
+  overlay?.classList.remove("active");
 }
 
 function parsePayload(event) {
@@ -25,7 +25,9 @@ function parsePayload(event) {
   if (!raw) return null;
   try {
     const payload = JSON.parse(raw);
-    return payload?.type === "linked_asset" && payload.token_id ? payload : null;
+    return payload?.type === "linked_asset" && payload.token_id
+      ? payload
+      : null;
   } catch {
     return null;
   }

@@ -17,13 +17,7 @@ import { generateAsset, ApiError } from "../services/api.js";
 const chatHistory = document.getElementById("chatHistory");
 const promptInput = document.getElementById("promptInput");
 const generateBtn = document.getElementById("generateBtn");
-const waitingOverlay = document.getElementById("waitingOverlay");
-const waitingText = document.getElementById("waitingText");
-const chatSidebar = document.getElementById("chatSidebar");
-const toggleChatBtn = document.getElementById("toggleChatBtn");
-const showSidebarBtn = document.getElementById("showSidebarBtn");
-const mobileMenuBtn = document.getElementById("mobileMenuBtn");
-const mainStage = document.getElementById("mainStage");
+const generateHint = document.getElementById("generateHint");
 
 // Settings
 const assetNameDisplay = document.getElementById("assetNameDisplay");
@@ -40,17 +34,22 @@ function addChatMessage(role, text) {
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
-// ─── Waiting Overlay ───
+// ─── Generate Button State ───
 
-function setWaitingStep(label) {
-  if (waitingText) waitingText.textContent = label;
-  waitingOverlay.classList.remove("hidden");
-  generateBtn.disabled = true;
+function setGenerating(active) {
+  if (!generateBtn) return;
+  if (active) {
+    generateBtn.classList.add("generating");
+    generateBtn.disabled = true;
+  } else {
+    generateBtn.classList.remove("generating");
+    generateBtn.disabled = false;
+  }
 }
 
-function hideWaiting() {
-  waitingOverlay.classList.add("hidden");
-  generateBtn.disabled = false;
+function updateGenerateHint() {
+  if (!generateHint) return;
+  generateHint.hidden = !!window.walletAddress;
 }
 
 // ─── Asset Definition Helpers ───
@@ -75,7 +74,7 @@ function getProvider() {
 
 function getTier() {
   const val = tierSelect?.value;
-  if (val === undefined || val === null || val === "") return 0; // default Basic
+  if (val === undefined || val === null || val === "") return 0;
   return Number(val);
 }
 
@@ -89,7 +88,6 @@ async function onGenerate() {
   const prompt = promptInput.value.trim();
   if (!prompt) return;
 
-  // Wallet check
   if (!window.walletAddress) {
     alert("Please connect your wallet first.");
     return;
@@ -99,7 +97,7 @@ async function onGenerate() {
   promptInput.value = "";
   promptInput.style.height = "auto";
 
-  setWaitingStep("Confirming payment in wallet…");
+  setGenerating(true);
 
   const assetName = getAssetName();
   const nodeId = `${assetName
@@ -109,16 +107,12 @@ async function onGenerate() {
   const transformMatrix = buildTransformMatrix();
 
   try {
-    // 1. On-chain payment with selected tier
     const tier = getTier();
     const txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
     if (!txHash) {
       throw new Error("Payment was cancelled or failed.");
     }
 
-    setWaitingStep("Carving your asset…");
-
-    // 2. Backend generation
     const result = await generateAsset({
       prompt,
       nodeId,
@@ -129,7 +123,6 @@ async function onGenerate() {
       tier,
     });
 
-    // 3. Load new manifest
     if (prevAssetManifestCid) {
       clearScene();
     }
@@ -137,7 +130,6 @@ async function onGenerate() {
     window.activeAssetManifestCid = result.assetManifestCid;
     window.latestAssetManifestCid = result.assetManifestCid;
 
-    // Update URL — use ?asset if we have a tokenId, otherwise ?manifest for drafts
     const url = new URL(window.location);
     if (window.activeAssetTokenId) {
       url.searchParams.set("asset", window.activeAssetTokenId);
@@ -174,18 +166,8 @@ async function onGenerate() {
 
     addChatMessage("system", userMsg);
   } finally {
-    hideWaiting();
+    setGenerating(false);
   }
-}
-
-// ─── Sidebar Toggle ───
-
-function toggleChat() {
-  chatSidebar.classList.toggle("collapsed");
-}
-
-function toggleMobileMenu() {
-  chatSidebar.classList.toggle("open");
 }
 
 // ─── Asset Definition Toggle ───
@@ -204,11 +186,7 @@ if (toggleAssetDef && assetDefBody) {
 // ─── Event Bindings ───
 
 generateBtn.addEventListener("click", onGenerate);
-toggleChatBtn.addEventListener("click", toggleChat);
-if (showSidebarBtn) showSidebarBtn.addEventListener("click", toggleChat);
-if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", toggleMobileMenu);
 
-// Enter to submit, Shift+Enter for newline
 promptInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -216,7 +194,6 @@ promptInput.addEventListener("keydown", (e) => {
   }
 });
 
-// Auto-resize textarea
 promptInput.addEventListener("input", () => {
   promptInput.style.height = "auto";
   promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + "px";
@@ -231,16 +208,22 @@ document.addEventListener("scene:empty", () => {
   syncAssetNameDisplay();
 });
 
-syncAssetNameDisplay();
+// Reflect renames made via the editable header title.
+document.addEventListener("asset:renamed", (event) => {
+  const name = event.detail?.name;
+  if (name) syncAssetNameDisplay(name);
+});
 
-// Close mobile sidebar when clicking outside
-if (mainStage) {
-  mainStage.addEventListener("click", () => {
-    if (chatSidebar.classList.contains("open")) {
-      chatSidebar.classList.remove("open");
-    }
-  });
-}
+document.addEventListener("wallet:connected", () => {
+  updateGenerateHint();
+});
+
+document.addEventListener("wallet:disconnected", () => {
+  updateGenerateHint();
+});
+
+syncAssetNameDisplay();
+updateGenerateHint();
 
 // ─── Exports ───
 export { addChatMessage };

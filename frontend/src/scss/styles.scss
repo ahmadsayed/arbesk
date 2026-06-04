@@ -1,5 +1,32 @@
-// Arbesk Studio Styles Entry Point
-// Imports Bootstrap 5 and the studio layout
+// ═══════════════════════════════════════════════════════════════════
+// Arbesk Studio — Entry Point
+//
+// Replaces Bootstrap 5. Compose from partials.
+// Output: frontend/dist/css/styles.css
+// ═══════════════════════════════════════════════════════════════════
 
-@import "bootstrap/scss/bootstrap";
-@import "studio";
+// ── Foundation ──────────────────────────────────────────────────────
+@use 'base/tokens';
+@use 'base/reset';
+
+// ── Components ──────────────────────────────────────────────────────
+@use 'components/buttons';
+@use 'components/forms';
+@use 'components/headerbar';
+@use 'components/sidebar';
+@use 'components/pathbar';
+@use 'components/viewport';
+@use 'components/inspector';
+@use 'components/messagebar';
+@use 'components/bottombar';
+@use 'components/cards';
+@use 'components/history';
+@use 'components/outliner';
+@use 'components/ledger';
+@use 'components/layout';
+@use 'components/chat';
+@use 'components/timeline';
+@use 'components/settings';
+
+// ── Utilities ───────────────────────────────────────────────────────
+@use 'utilities/responsive';
