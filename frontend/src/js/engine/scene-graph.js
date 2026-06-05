@@ -17,6 +17,7 @@ import {
 import { applyColor, applyScale } from "./time-travel.js";
 
 import { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
+import { getCssVar, hexToColor3, hexToColor4 } from "./theme.js";
 
 import {
   extractCid,
@@ -35,6 +36,9 @@ import {
   clearScene,
   clearPendingChildRefs,
   getPendingChildRefs,
+  getPendingAppearanceEdits,
+  clearPendingAppearanceEdits,
+  clearPendingAppearanceEdit,
 } from "./cleanup.js";
 
 // Re-export state and constants
@@ -61,7 +65,18 @@ export {
   clearScene,
   clearPendingChildRefs,
   getPendingChildRefs,
+  getPendingAppearanceEdits,
+  clearPendingAppearanceEdits,
+  clearPendingAppearanceEdit,
 } from "./cleanup.js";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// View presets — Blender-style 1/3/7 orthographic view snapping
+// ═══════════════════════════════════════════════════════════════════════════
+
+const VIEW_FRONT = { name: "Front", alpha: 0, beta: Math.PI / 2 };
+const VIEW_RIGHT = { name: "Right", alpha: Math.PI / 2, beta: Math.PI / 2 };
+const VIEW_TOP = { name: "Top", alpha: 0, beta: 0.01 };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Engine initialization
@@ -80,7 +95,11 @@ function initEngine() {
   });
 
   state.scene = new BABYLON.Scene(state.engine);
-  state.scene.clearColor = new BABYLON.Color4(0.118, 0.118, 0.118, 1); // neutral #1e1e1e — Blender/Unity standard
+  // Read viewport background from the SCSS token system so the 3D scene
+  // matches the surrounding chrome in both light and dark modes.
+  const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
+  state.scene.clearColor =
+    hexToColor4(viewportBg, 1) || new BABYLON.Color4(0.118, 0.118, 0.118, 1);
 
   // ArcRotateCamera for orbit controls
   const camera = new BABYLON.ArcRotateCamera(
@@ -94,6 +113,31 @@ function initEngine() {
   camera.lowerRadiusLimit = 2;
   camera.upperRadiusLimit = 50;
   camera.attachControl(canvas, true);
+  state.camera = camera;
+
+  // Custom ortho-mode wheel zoom. Babylon's default wheel handler changes
+  // `radius`, which has no effect on the ortho frustum when the four
+  // orthoLeft/Right/Top/Bottom properties are set explicitly. We scale
+  // those four bounds proportionally instead.
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      if (
+        state.camera &&
+        state.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA
+      ) {
+        e.preventDefault();
+        // Smooth exponential zoom: deltaY ~100 per tick → ~10% step
+        const factor = Math.exp(e.deltaY * 0.0015);
+        const cam = state.camera;
+        cam.orthoLeft *= factor;
+        cam.orthoRight *= factor;
+        cam.orthoTop *= factor;
+        cam.orthoBottom *= factor;
+      }
+    },
+    { passive: false }
+  );
 
   const hemiLight = new BABYLON.HemisphericLight(
     "hemiLight",
@@ -165,17 +209,310 @@ function initEngine() {
         target = target.parent;
       }
     }
+    // Clicked empty space → deselect
+    if (state.highlightedNodeId) {
+      deselectAll();
+    }
   }, BABYLON.PointerEventTypes.POINTERPICK);
 
   state.pointerObservableCallback = null; // managed by Babylon internally
+
+  // Selection highlight layer — Arbesk amber glow around picked meshes
+  state.highlightLayer = new BABYLON.HighlightLayer(
+    "highlightLayer",
+    state.scene
+  );
+  state.highlightLayer.innerGlow = false;
+  state.highlightLayer.outerGlow = true;
+  state.highlightLayer.blurHorizontalSize = 0.4;
+  state.highlightLayer.blurVerticalSize = 0.4;
+  state.highlightLayer.alpha = 0.7;
+
+  // Keyboard shortcuts — only fire when focus is on the canvas or body
+  document.addEventListener("keydown", (e) => {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    const editable =
+      document.activeElement?.isContentEditable ||
+      tag === "input" ||
+      tag === "textarea" ||
+      tag === "select";
+    if (editable) return; // don't steal keystrokes from form fields
+
+    switch (e.key) {
+      case "Escape":
+        if (state.highlightedNodeId) {
+          e.preventDefault();
+          deselectAll();
+        }
+        break;
+      case "Home":
+        e.preventDefault();
+        frameAll();
+        break;
+      case "f":
+        if (state.highlightedNodeId) {
+          e.preventDefault();
+          frameSelected();
+        }
+        break;
+      case "1":
+        e.preventDefault();
+        snapView(VIEW_FRONT);
+        break;
+      case "3":
+        e.preventDefault();
+        snapView(VIEW_RIGHT);
+        break;
+      case "7":
+        e.preventDefault();
+        snapView(VIEW_TOP);
+        break;
+    }
+  });
 }
 
 function selectNode(nodeId, mesh) {
+  if (nodeId === state.highlightedNodeId) return; // already selected
+
+  // Clear previous highlight
+  clearHighlight();
+
+  // Add all meshes belonging to this node to the highlight layer
+  const meshes = state.nodeMeshes.get(nodeId);
+  if (meshes && state.highlightLayer) {
+    for (const m of meshes) {
+      if (m && !m.isDisposed()) {
+        const amber =
+          hexToColor3(getCssVar("--highlight-amber")) ||
+          BABYLON.Color3.FromHexString("#D4A017");
+        state.highlightLayer.addMesh(m, amber);
+      }
+    }
+  }
+
+  state.highlightedNodeId = nodeId;
   window.selectedNodeId = nodeId;
   document.dispatchEvent(
     new CustomEvent("node:selected", {
       detail: { nodeId, mesh },
     })
+  );
+}
+
+/**
+ * Highlight a node by ID alone (from outliner or programmatic selection).
+ * Does not re-fire node:selected if already highlighted.
+ */
+function selectNodeById(nodeId) {
+  selectNode(nodeId, null);
+}
+
+/**
+ * Remove all meshes from the highlight layer without changing selection state.
+ */
+function clearHighlight() {
+  if (!state.highlightLayer) return;
+  const prevId = state.highlightedNodeId;
+  if (!prevId) return;
+  const meshes = state.nodeMeshes.get(prevId);
+  if (meshes) {
+    for (const m of meshes) {
+      if (m && !m.isDisposed()) {
+        try {
+          state.highlightLayer.removeMesh(m);
+        } catch (_) {
+          // mesh may not be in the highlight layer
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Deselect the current node: clear highlight, reset state, dispatch event.
+ */
+function deselectAll() {
+  clearHighlight();
+  state.highlightedNodeId = null;
+  window.selectedNodeId = null;
+  document.dispatchEvent(new CustomEvent("node:deselected"));
+}
+
+/**
+ * Frame the ArcRotateCamera to a bounding box, keeping current alpha/beta.
+ */
+function frameCameraToBounds(bounds) {
+  if (!state.camera || !bounds) return;
+
+  const cam = state.camera;
+  const diagonal = Math.sqrt(
+    bounds.size.x * bounds.size.x +
+      bounds.size.y * bounds.size.y +
+      bounds.size.z * bounds.size.z
+  );
+  const fov = cam.fov || 0.8; // radians, default ~45°
+  const radius = (diagonal * 0.6) / Math.tan(fov / 2);
+
+  // Animate to the new target + radius over 300ms
+  BABYLON.Animation.CreateAndStartAnimation(
+    "frameAnim",
+    cam,
+    "target",
+    60,
+    20,
+    cam.target,
+    bounds.center,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+  BABYLON.Animation.CreateAndStartAnimation(
+    "frameRadiusAnim",
+    cam,
+    "radius",
+    60,
+    20,
+    cam.radius,
+    Math.max(radius, cam.lowerRadiusLimit),
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+}
+
+/**
+ * Frame all non-chrome meshes in the scene (Home key).
+ */
+function frameAll() {
+  if (!state.scene) return;
+
+  const allMeshes = state.scene.meshes.filter(
+    (m) => m && !m.isDisposed() && !m.metadata?.isViewportChrome
+  );
+  const renderable = getRenderableMeshes(allMeshes);
+  if (renderable.length === 0) return;
+
+  const bounds = getWorldBounds(renderable);
+  if (!bounds) return;
+
+  frameCameraToBounds(bounds);
+}
+
+/**
+ * Frame the currently highlighted node (F key).
+ */
+function frameSelected() {
+  if (!state.highlightedNodeId) return;
+
+  const meshes = state.nodeMeshes.get(state.highlightedNodeId);
+  if (!meshes) return;
+
+  const renderable = getRenderableMeshes(meshes);
+  if (renderable.length === 0) return;
+
+  const bounds = getWorldBounds(renderable);
+  if (!bounds) return;
+
+  frameCameraToBounds(bounds);
+}
+
+/**
+ * Snap the camera to an orthographic view preset (1=Front, 3=Right, 7=Top).
+ * Frames the scene first to compute good camera parameters, converts the
+ * perspective radius to ortho radius, then animates alpha + beta + radius.
+ */
+function snapView(preset) {
+  if (!state.camera || !state.scene) return;
+
+  const cam = state.camera;
+  const canvas = state.engine.getRenderingCanvas();
+
+  const allMeshes = state.scene.meshes.filter(
+    (m) => m && !m.isDisposed() && !m.metadata?.isViewportChrome
+  );
+  const renderable = getRenderableMeshes(allMeshes);
+
+  let target = cam.target.clone();
+
+  if (renderable.length > 0) {
+    const bounds = getWorldBounds(renderable);
+    if (bounds) {
+      target = bounds.center.clone();
+
+      // Projected bounds on the ortho view plane per view direction.
+      // Front (1) = look -Z → visible X×Y
+      // Right (3) = look +X → visible Z×Y
+      // Top   (7) = look -Y → visible X×Z
+      let spanW, spanH;
+      if (preset.name === "Right") {
+        spanW = bounds.size.z;
+        spanH = bounds.size.y;
+      } else if (preset.name === "Top") {
+        spanW = bounds.size.x;
+        spanH = bounds.size.z;
+      } else {
+        spanW = bounds.size.x;
+        spanH = bounds.size.y;
+      }
+
+      // Set the ortho frustum EXPLICITLY, matched to the canvas aspect ratio.
+      const canvasAspect = canvas.width / canvas.height;
+      const sceneAspect = spanW / spanH;
+      const padding = 1.1;
+      let halfW, halfH;
+      if (sceneAspect > canvasAspect) {
+        halfW = (spanW * padding) / 2;
+        halfH = halfW / canvasAspect;
+      } else {
+        halfH = (spanH * padding) / 2;
+        halfW = halfH * canvasAspect;
+      }
+
+      cam.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+      cam.orthoLeft = -halfW;
+      cam.orthoRight = halfW;
+      cam.orthoBottom = -halfH;
+      cam.orthoTop = halfH;
+      // Radius is irrelevant for ortho rendering but ArcRotateCamera uses
+      // it for direction calc — keep a safe distance.
+      cam.radius = (spanW + spanH) / 2 + 2;
+
+      console.log(
+        `[VIEW] ${preset.name} | span=${spanW.toFixed(1)}×${spanH.toFixed(
+          1
+        )} halfW=${halfW.toFixed(1)} halfH=${halfH.toFixed(1)} canvas=${
+          canvas.width
+        }×${canvas.height}`
+      );
+    }
+  }
+
+  // Animate target + alpha + beta. Ortho frustum is already set.
+  BABYLON.Animation.CreateAndStartAnimation(
+    "snapTarget",
+    cam,
+    "target",
+    60,
+    18,
+    cam.target.clone(),
+    target,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+  BABYLON.Animation.CreateAndStartAnimation(
+    "snapAlpha",
+    cam,
+    "alpha",
+    60,
+    18,
+    cam.alpha,
+    preset.alpha,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+  BABYLON.Animation.CreateAndStartAnimation(
+    "snapBeta",
+    cam,
+    "beta",
+    60,
+    18,
+    cam.beta,
+    preset.beta,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
   );
 }
 
@@ -751,6 +1088,8 @@ export {
   captureAssetThumbnail,
   showWelcomeOverlay,
   hideWelcomeOverlay,
+  deselectAll,
+  selectNodeById,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

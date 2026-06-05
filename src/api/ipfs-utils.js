@@ -4,7 +4,6 @@
  * Shared IPFS read/write helpers with consistent timeout handling.
  * Replaces the duplicated chunk-decoding pattern in:
  *   - api/index.js (getFromIPFS)
- *   - api/assets/save-variant.js (inline)
  *   - api/assets/generate-node.js (inline, no timeout — bug!)
  */
 

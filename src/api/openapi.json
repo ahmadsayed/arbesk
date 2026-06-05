@@ -20,12 +20,23 @@
   ],
   "tags": [
     { "name": "Config", "description": "Runtime configuration" },
-    { "name": "Generations", "description": "3D asset generation from text prompts" },
-    { "name": "Manifests", "description": "Fractal manifest CRUD and version history" },
-    { "name": "Variants", "description": "Parametric color and scale edits" },
-    { "name": "Tokens", "description": "On-chain token-to-manifest resolution" },
+    {
+      "name": "Generations",
+      "description": "3D asset generation from text prompts"
+    },
+    {
+      "name": "Manifests",
+      "description": "Fractal manifest CRUD and version history"
+    },
+    {
+      "name": "Tokens",
+      "description": "On-chain token-to-manifest resolution"
+    },
     { "name": "Contracts", "description": "Smart contract ABI serving" },
-    { "name": "Ledger", "description": "Micro-ledger audit trail and analytics" }
+    {
+      "name": "Ledger",
+      "description": "Micro-ledger audit trail and analytics"
+    }
   ],
   "paths": {
     "/config": {
@@ -77,7 +88,10 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "MISSING_PARAMS", "message": "prompt and nodeId are required" }
+                  "error": {
+                    "code": "MISSING_PARAMS",
+                    "message": "prompt and nodeId are required"
+                  }
                 }
               }
             }
@@ -88,7 +102,10 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "MISSING_AUTH", "message": "Missing Authorization header" }
+                  "error": {
+                    "code": "MISSING_AUTH",
+                    "message": "Missing Authorization header"
+                  }
                 }
               }
             }
@@ -107,7 +124,10 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "REPLAY_DETECTED", "message": "This transaction has already been consumed" }
+                  "error": {
+                    "code": "REPLAY_DETECTED",
+                    "message": "This transaction has already been consumed"
+                  }
                 }
               }
             }
@@ -115,9 +135,18 @@
           "429": {
             "description": "Rate limit exceeded",
             "headers": {
-              "X-RateLimit-Limit": { "schema": { "type": "integer" }, "description": "Max requests per window" },
-              "X-RateLimit-Remaining": { "schema": { "type": "integer" }, "description": "Remaining requests" },
-              "Retry-After": { "schema": { "type": "integer" }, "description": "Seconds until reset" }
+              "X-RateLimit-Limit": {
+                "schema": { "type": "integer" },
+                "description": "Max requests per window"
+              },
+              "X-RateLimit-Remaining": {
+                "schema": { "type": "integer" },
+                "description": "Remaining requests"
+              },
+              "Retry-After": {
+                "schema": { "type": "integer" },
+                "description": "Seconds until reset"
+              }
             },
             "content": {
               "application/json": {
@@ -156,7 +185,9 @@
             "description": "Manifest created/updated successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SaveManifestResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SaveManifestResponse"
+                }
               }
             }
           },
@@ -166,7 +197,10 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "INVALID_MANIFEST", "message": "Manifest object required" }
+                  "error": {
+                    "code": "INVALID_MANIFEST",
+                    "message": "Manifest object required"
+                  }
                 }
               }
             }
@@ -177,71 +211,11 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "UNSUPPORTED_MEDIA_TYPE", "message": "Content-Type must be application/json" }
+                  "error": {
+                    "code": "UNSUPPORTED_MEDIA_TYPE",
+                    "message": "Content-Type must be application/json"
+                  }
                 }
-              }
-            }
-          }
-        }
-      }
-    },
-
-    "/manifests/{cid}/variants": {
-      "post": {
-        "tags": ["Variants"],
-        "summary": "Create a parametric variant of a node",
-        "description": "Applies color and/or scale changes to a node in an existing manifest. Does not re-upload the source mesh — reuses the existing asset CID from the previous manifest version.\n\nColor must be a valid hex color (`#RRGGBB`). Scale values must be positive numbers.",
-        "operationId": "createVariant",
-        "parameters": [
-          {
-            "name": "cid",
-            "in": "path",
-            "required": true,
-            "description": "IPFS CID of the manifest to base the variant on",
-            "schema": { "type": "string", "example": "QmSomeManifestCid" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/VariantRequest" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Variant created successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/VariantResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing parameters or invalid color/scale",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "404": {
-            "description": "Node not found in manifest",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" },
-                "example": {
-                  "error": { "code": "NODE_NOT_FOUND", "message": "Node node_table_01 not found in manifest" }
-                }
-              }
-            }
-          },
-          "504": {
-            "description": "IPFS read timed out",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
               }
             }
           }
@@ -268,7 +242,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PublishManifestRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PublishManifestRequest"
+              }
             }
           }
         },
@@ -277,7 +253,9 @@
             "description": "Manifest published successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PublishManifestResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PublishManifestResponse"
+                }
               }
             }
           }
@@ -333,7 +311,9 @@
             "description": "Token resolved to manifest",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TokenManifestResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TokenManifestResponse"
+                }
               }
             }
           },
@@ -343,7 +323,10 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "TOKEN_NOT_FOUND", "message": "Token not found or has no manifest URI" }
+                  "error": {
+                    "code": "TOKEN_NOT_FOUND",
+                    "message": "Token not found or has no manifest URI"
+                  }
                 }
               }
             }
@@ -390,7 +373,10 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
-                  "error": { "code": "ABI_NOT_FOUND", "message": "Contract ABI not found. Run compile first." }
+                  "error": {
+                    "code": "ABI_NOT_FOUND",
+                    "message": "Contract ABI not found. Run compile first."
+                  }
                 }
               }
             }
@@ -495,10 +481,26 @@
       "Config": {
         "type": "object",
         "properties": {
-          "contractAddress": { "type": "string", "description": "Deployed ArbeskAsset contract address", "example": "0x1234567890abcdef1234567890abcdef12345678" },
-          "ipfsGatewayUrl": { "type": "string", "description": "Private IPFS gateway URL", "example": "http://127.0.0.1:8080/ipfs/" },
-          "hardhatRpcUrl": { "type": "string", "description": "Hardhat local network RPC URL", "example": "http://127.0.0.1:8545" },
-          "mockGeneration": { "type": "boolean", "description": "Whether mock 3D generation is enabled", "example": true }
+          "contractAddress": {
+            "type": "string",
+            "description": "Deployed ArbeskAsset contract address",
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          },
+          "ipfsGatewayUrl": {
+            "type": "string",
+            "description": "Private IPFS gateway URL",
+            "example": "http://127.0.0.1:8080/ipfs/"
+          },
+          "hardhatRpcUrl": {
+            "type": "string",
+            "description": "Hardhat local network RPC URL",
+            "example": "http://127.0.0.1:8545"
+          },
+          "mockGeneration": {
+            "type": "boolean",
+            "description": "Whether mock 3D generation is enabled",
+            "example": true
+          }
         }
       },
 
@@ -506,12 +508,37 @@
         "type": "object",
         "required": ["prompt", "nodeId"],
         "properties": {
-          "prompt": { "type": "string", "description": "Text description of the 3D asset to generate", "example": "A modern minimalist workbench" },
-          "nodeId": { "type": "string", "description": "Unique identifier for this asset node", "example": "node_table_001" },
-          "txHash": { "type": "string", "description": "On-chain payment transaction hash (auto-extracted from auth token if omitted)", "example": "0xabc123..." },
-          "provider": { "type": "string", "description": "Generation provider name", "example": "meshy", "default": "mock" },
-          "assetId": { "type": "string", "description": "Existing asset ID for manifest chaining", "example": "asset_1700000000000" },
-          "prevAssetManifestCid": { "type": "string", "description": "Previous manifest CID for version chaining", "example": "QmPrevManifestCid" },
+          "prompt": {
+            "type": "string",
+            "description": "Text description of the 3D asset to generate",
+            "example": "A modern minimalist workbench"
+          },
+          "nodeId": {
+            "type": "string",
+            "description": "Unique identifier for this asset node",
+            "example": "node_table_001"
+          },
+          "txHash": {
+            "type": "string",
+            "description": "On-chain payment transaction hash (auto-extracted from auth token if omitted)",
+            "example": "0xabc123..."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Generation provider name",
+            "example": "meshy",
+            "default": "mock"
+          },
+          "assetId": {
+            "type": "string",
+            "description": "Existing asset ID for manifest chaining",
+            "example": "asset_1700000000000"
+          },
+          "prevAssetManifestCid": {
+            "type": "string",
+            "description": "Previous manifest CID for version chaining",
+            "example": "QmPrevManifestCid"
+          },
           "transform_matrix": {
             "type": "array",
             "description": "4×4 column-major transform matrix (16 floats). Defaults to identity matrix.",
@@ -526,8 +553,14 @@
       "GenerationResponse": {
         "type": "object",
         "properties": {
-          "assetManifestCid": { "type": "string", "description": "IPFS CID of the updated fractal manifest" },
-          "sourceAssetCid": { "type": "string", "description": "IPFS CID of the generated source mesh" }
+          "assetManifestCid": {
+            "type": "string",
+            "description": "IPFS CID of the updated fractal manifest"
+          },
+          "sourceAssetCid": {
+            "type": "string",
+            "description": "IPFS CID of the generated source mesh"
+          }
         }
       },
 
@@ -535,11 +568,31 @@
         "type": "object",
         "required": ["name"],
         "properties": {
-          "name": { "type": "string", "description": "Human-readable asset name", "example": "My World" },
-          "asset_id": { "type": "string", "description": "Unique asset identifier (auto-generated if missing)", "example": "asset_1700000000000" },
-          "version": { "type": "integer", "description": "Manifest version number (auto-incremented if missing)", "example": 3 },
-          "timestamp": { "type": "integer", "format": "int64", "description": "Unix milliseconds timestamp" },
-          "prev_asset_manifest_cid": { "type": "string", "description": "Previous manifest CID for version chaining", "nullable": true },
+          "name": {
+            "type": "string",
+            "description": "Human-readable asset name",
+            "example": "My World"
+          },
+          "asset_id": {
+            "type": "string",
+            "description": "Unique asset identifier (auto-generated if missing)",
+            "example": "asset_1700000000000"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Manifest version number (auto-incremented if missing)",
+            "example": 3
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix milliseconds timestamp"
+          },
+          "prev_asset_manifest_cid": {
+            "type": "string",
+            "description": "Previous manifest CID for version chaining",
+            "nullable": true
+          },
           "thumbnail": { "$ref": "#/components/schemas/Thumbnail" },
           "scene": {
             "type": "object",
@@ -559,23 +612,47 @@
         "type": "object",
         "required": ["node_id"],
         "properties": {
-          "node_id": { "type": "string", "description": "Unique node identifier", "example": "node_table_001" },
+          "node_id": {
+            "type": "string",
+            "description": "Unique node identifier",
+            "example": "node_table_001"
+          },
           "name": { "type": "string", "description": "Display name" },
-          "type": { "type": "string", "description": "Node type", "enum": ["source_asset"] },
+          "type": {
+            "type": "string",
+            "description": "Node type",
+            "enum": ["source_asset"]
+          },
           "source": {
             "type": "object",
             "description": "Source mesh reference",
             "properties": {
-              "cid": { "type": "string", "description": "IPFS CID of the mesh file" },
-              "path": { "type": "string", "description": "Filename", "example": "asset.glb" },
-              "format": { "type": "string", "description": "File format", "example": "glb" }
+              "cid": {
+                "type": "string",
+                "description": "IPFS CID of the mesh file"
+              },
+              "path": {
+                "type": "string",
+                "description": "Filename",
+                "example": "asset.glb"
+              },
+              "format": {
+                "type": "string",
+                "description": "File format",
+                "example": "glb"
+              }
             }
           },
           "appearance": {
             "type": "object",
             "description": "Current visual state",
             "properties": {
-              "color": { "type": "string", "description": "Hex color", "nullable": true, "example": "#FF5733" },
+              "color": {
+                "type": "string",
+                "description": "Hex color",
+                "nullable": true,
+                "example": "#FF5733"
+              },
               "scale": { "$ref": "#/components/schemas/Scale3D" }
             }
           },
@@ -646,11 +723,21 @@
         "type": "object",
         "properties": {
           "type": { "type": "string", "enum": ["snapshot"] },
-          "dataUrl": { "type": "string", "description": "Base64 data URL (replaced with CID on save)", "example": "data:image/webp;base64,UklGRiQ..." },
-          "cid": { "type": "string", "description": "IPFS CID of the thumbnail (set by server after upload)" },
+          "dataUrl": {
+            "type": "string",
+            "description": "Base64 data URL (replaced with CID on save)",
+            "example": "data:image/webp;base64,UklGRiQ..."
+          },
+          "cid": {
+            "type": "string",
+            "description": "IPFS CID of the thumbnail (set by server after upload)"
+          },
           "path": { "type": "string", "example": "thumbnail.webp" },
           "format": { "type": "string", "example": "webp" },
-          "mime": { "type": "string", "enum": ["image/webp", "image/png", "image/jpeg"] },
+          "mime": {
+            "type": "string",
+            "enum": ["image/webp", "image/png", "image/jpeg"]
+          },
           "width": { "type": "integer", "example": 512 },
           "height": { "type": "integer", "example": 288 },
           "bytes": { "type": "integer", "description": "Thumbnail file size" },
@@ -661,26 +748,15 @@
       "SaveManifestResponse": {
         "type": "object",
         "properties": {
-          "cid": { "type": "string", "description": "IPFS CID of the saved manifest" },
+          "cid": {
+            "type": "string",
+            "description": "IPFS CID of the saved manifest"
+          },
           "assetId": { "type": "string", "description": "Asset identifier" },
-          "version": { "type": "integer", "description": "Manifest version number" }
-        }
-      },
-
-      "VariantRequest": {
-        "type": "object",
-        "required": ["nodeId"],
-        "properties": {
-          "nodeId": { "type": "string", "description": "Node to apply the variant to", "example": "node_chair_001" },
-          "color": { "type": "string", "description": "Hex color #RRGGBB", "pattern": "^#[0-9A-Fa-f]{6}$", "example": "#FF5733" },
-          "scale": { "$ref": "#/components/schemas/Scale3D" }
-        }
-      },
-
-      "VariantResponse": {
-        "type": "object",
-        "properties": {
-          "assetManifestCid": { "type": "string", "description": "IPFS CID of the new manifest with the variant applied" }
+          "version": {
+            "type": "integer",
+            "description": "Manifest version number"
+          }
         }
       },
 
@@ -697,7 +773,10 @@
           "scene": {
             "type": "object",
             "properties": {
-              "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/SceneNode" } }
+              "nodes": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SceneNode" }
+              }
             }
           }
         }
@@ -706,18 +785,36 @@
       "PublishManifestResponse": {
         "type": "object",
         "properties": {
-          "cid": { "type": "string", "description": "IPFS CID of the published manifest" }
+          "cid": {
+            "type": "string",
+            "description": "IPFS CID of the published manifest"
+          }
         }
       },
 
       "HistoryEntrySummary": {
         "type": "object",
         "properties": {
-          "cid": { "type": "string", "description": "Manifest CID at this version" },
+          "cid": {
+            "type": "string",
+            "description": "Manifest CID at this version"
+          },
           "version": { "type": "integer", "description": "Version number" },
-          "name": { "type": "string", "nullable": true, "description": "Asset name" },
-          "nodeCount": { "type": "integer", "description": "Number of nodes in the scene" },
-          "timestamp": { "type": "integer", "format": "int64", "nullable": true, "description": "Unix milliseconds" }
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Asset name"
+          },
+          "nodeCount": {
+            "type": "integer",
+            "description": "Number of nodes in the scene"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Unix milliseconds"
+          }
         }
       },
 
@@ -735,8 +832,14 @@
       "TokenManifestResponse": {
         "type": "object",
         "properties": {
-          "tokenId": { "type": "string", "description": "The on-chain token ID" },
-          "manifestCid": { "type": "string", "description": "IPFS CID of the manifest" },
+          "tokenId": {
+            "type": "string",
+            "description": "The on-chain token ID"
+          },
+          "manifestCid": {
+            "type": "string",
+            "description": "IPFS CID of the manifest"
+          },
           "manifest": { "$ref": "#/components/schemas/Manifest" }
         }
       },
@@ -744,7 +847,11 @@
       "ContractArtifact": {
         "type": "object",
         "properties": {
-          "abi": { "type": "array", "description": "Contract ABI", "items": { "type": "object" } },
+          "abi": {
+            "type": "array",
+            "description": "Contract ABI",
+            "items": { "type": "object" }
+          },
           "bytecode": { "type": "string", "description": "Deployed bytecode" }
         }
       },
@@ -752,24 +859,58 @@
       "OpType": {
         "type": "string",
         "enum": [
-          "GENERATION", "PARAMETRIC", "SAVE", "PUBLISH",
-          "THUMBNAIL", "MINT", "TOKEN_URI_UPDATE", "TEAM_EDIT",
-          "LOAD", "REVERT", "SNAPSHOT"
+          "GENERATION",
+          "PARAMETRIC",
+          "SAVE",
+          "PUBLISH",
+          "THUMBNAIL",
+          "MINT",
+          "TOKEN_URI_UPDATE",
+          "TEAM_EDIT",
+          "LOAD",
+          "REVERT",
+          "SNAPSHOT"
         ]
       },
 
       "LedgerEntry": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "description": "Sortable entry ID (<timestamp>-<random>)" },
-          "timestamp": { "type": "integer", "format": "int64", "description": "Unix milliseconds" },
+          "id": {
+            "type": "string",
+            "description": "Sortable entry ID (<timestamp>-<random>)"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix milliseconds"
+          },
           "opType": { "$ref": "#/components/schemas/OpType" },
-          "manifestId": { "type": "string", "description": "The manifest asset_id affected" },
-          "cid": { "type": "string", "description": "IPFS CID of the resulting manifest" },
-          "prevCid": { "type": "string", "nullable": true, "description": "Previous manifest CID (null for genesis)" },
-          "actorType": { "type": "string", "enum": ["USER", "SYSTEM", "CONTRACT"] },
-          "actorAddress": { "type": "string", "description": "Wallet address or 'system'" },
-          "payload": { "type": "object", "description": "Operation-type-specific data" }
+          "manifestId": {
+            "type": "string",
+            "description": "The manifest asset_id affected"
+          },
+          "cid": {
+            "type": "string",
+            "description": "IPFS CID of the resulting manifest"
+          },
+          "prevCid": {
+            "type": "string",
+            "nullable": true,
+            "description": "Previous manifest CID (null for genesis)"
+          },
+          "actorType": {
+            "type": "string",
+            "enum": ["USER", "SYSTEM", "CONTRACT"]
+          },
+          "actorAddress": {
+            "type": "string",
+            "description": "Wallet address or 'system'"
+          },
+          "payload": {
+            "type": "object",
+            "description": "Operation-type-specific data"
+          }
         }
       },
 
@@ -780,8 +921,14 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/LedgerEntry" }
           },
-          "total": { "type": "integer", "description": "Total matching entries" },
-          "limit": { "type": "integer", "description": "Requested page size (capped at 500)" },
+          "total": {
+            "type": "integer",
+            "description": "Total matching entries"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Requested page size (capped at 500)"
+          },
           "offset": { "type": "integer", "description": "Pagination offset" }
         }
       },

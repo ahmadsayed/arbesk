@@ -382,130 +382,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
-  describe("POST /api/v1/manifests/:cid/variants", () => {
-    let prevAssetManifestCid;
-
-    beforeAll(async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader("0xparam"))
-        .send({
-          prompt: "A chair",
-          nodeId: "node_chair_001",
-          txHash: "0xparam",
-        });
-      prevAssetManifestCid = res.body.assetManifestCid;
-    });
-
-    it("appends a parametric variant entry", async () => {
-      const res = await request(app)
-        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
-        .send({
-          nodeId: "node_chair_001",
-          color: "#FF5733",
-          scale: { x: 1.5, y: 1.5, z: 1.5 },
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
-
-      // Verify the manifest stores color + scale directly on the node
-      const manifestData = await fetchManifestFromIPFS(
-        res.body.assetManifestCid,
-      );
-      const node = (manifestData.scene?.nodes || []).find(
-        (n) => n.node_id === "node_chair_001",
-      );
-      expect(node).toBeDefined();
-      expect(node.appearance.color).toBe("#FF5733");
-      expect(node.appearance.scale).toMatchObject({ x: 1.5, y: 1.5, z: 1.5 });
-    });
-
-    it("rejects invalid color", async () => {
-      const res = await request(app)
-        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
-        .send({
-          nodeId: "node_chair_001",
-          color: "not-a-color",
-          scale: { x: 1, y: 1, z: 1 },
-        });
-
-      expect(res.status).toBe(400);
-    });
-
-    it("rejects invalid scale", async () => {
-      const res = await request(app)
-        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
-        .send({
-          nodeId: "node_chair_001",
-          scale: { x: -1, y: 1, z: 1 },
-        });
-
-      expect(res.status).toBe(400);
-    });
-
-    it("validates manifest structure on round-trip", async () => {
-      const res = await request(app)
-        .post(`/api/v1/manifests/${prevAssetManifestCid}/variants`)
-        .send({
-          nodeId: "node_chair_001",
-          color: "#000000",
-          scale: { x: 2, y: 2, z: 2 },
-        });
-
-      expect(res.status).toBe(200);
-      const newCid = res.body.assetManifestCid;
-
-      const chunks = [];
-      for await (const chunk of mockIPFS.cat(newCid)) {
-        chunks.push(chunk);
-      }
-      const data = chunks
-        .map((chunk) => {
-          if (chunk instanceof Uint16Array) {
-            return String.fromCharCode(...chunk);
-          }
-          if (typeof chunk === "string") return chunk;
-          return new TextDecoder().decode(chunk);
-        })
-        .join("");
-      const manifest = JSON.parse(data);
-
-      expect(manifest).toHaveProperty("asset_id");
-      expect(manifest).toHaveProperty("version");
-      expect(manifest).toHaveProperty("scene");
-      expect(Array.isArray(manifest.scene.nodes)).toBe(true);
-      expect(manifest.scene.nodes.length).toBeGreaterThan(0);
-
-      const node = manifest.scene.nodes.find(
-        (n) => n.node_id === "node_chair_001",
-      );
-      expect(node).toBeDefined();
-
-      // Validate current state lives directly on the node under appearance
-      expect(node).toHaveProperty("appearance");
-      expect(node.appearance).toHaveProperty("color");
-      expect(node.appearance).toHaveProperty("scale");
-      expect(node.appearance.scale).toMatchObject({
-        x: expect.any(Number),
-        y: expect.any(Number),
-        z: expect.any(Number),
-      });
-
-      // Validate new source object format
-      expect(node.source).toBeDefined();
-      expect(node.source).toMatchObject({
-        cid: expect.any(String),
-        path: expect.any(String),
-        format: expect.any(String),
-      });
-
-      // Validate version chain via prev_asset_manifest_cid
-      expect(manifest).toHaveProperty("prev_asset_manifest_cid");
-      expect(manifest.prev_asset_manifest_cid).toBeTruthy();
-    });
-  });
-
   describe("POST /api/v1/manifests/:cid/publish", () => {
     it("stores and returns a CID", async () => {
       const res = await request(app)
@@ -810,23 +686,49 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const r1 = await request(app).post("/api/v1/manifests").send(v1);
       chainCids.push(r1.body.cid);
 
-      // v2: save-variant on that node
-      const r2 = await request(app)
-        .post(`/api/v1/manifests/${chainCids[0]}/variants`)
-        .send({
-          nodeId: "node_hist_001",
-          color: "#111111",
-        });
-      chainCids.push(r2.body.assetManifestCid);
+      // v2: modified color on the node, chained off v1.
+      // The /variants endpoint was removed; the regular /manifests
+      // POST now carries the full manifest with the new appearance.
+      const v2 = {
+        ...v1,
+        version: 2,
+        prev_asset_manifest_cid: chainCids[0],
+        scene: {
+          nodes: [
+            {
+              node_id: "node_hist_001",
+              source: v1.scene.nodes[0].source,
+              appearance: {
+                color: "#111111",
+                scale: { x: 1, y: 1, z: 1 },
+              },
+            },
+          ],
+        },
+      };
+      const r2 = await request(app).post("/api/v1/manifests").send(v2);
+      chainCids.push(r2.body.cid);
 
-      // v3: another save-variant
-      const r3 = await request(app)
-        .post(`/api/v1/manifests/${chainCids[1]}/variants`)
-        .send({
-          nodeId: "node_hist_001",
-          color: "#222222",
-        });
-      chainCids.push(r3.body.assetManifestCid);
+      // v3: another color change, chained off v2
+      const v3 = {
+        ...v2,
+        version: 3,
+        prev_asset_manifest_cid: chainCids[1],
+        scene: {
+          nodes: [
+            {
+              node_id: "node_hist_001",
+              source: v1.scene.nodes[0].source,
+              appearance: {
+                color: "#222222",
+                scale: { x: 1, y: 1, z: 1 },
+              },
+            },
+          ],
+        },
+      };
+      const r3 = await request(app).post("/api/v1/manifests").send(v3);
+      chainCids.push(r3.body.cid);
     });
 
     it("walks manifest chain and returns versions in chronological order", async () => {
@@ -1170,31 +1072,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
-  // ─── Edge Cases ───────────────────────────────────────────────────────────
+  // ─── Edge Cases ─────────────────────────────────────────────────────────────────
 
   describe("Edge cases", () => {
-    it("POST /api/v1/manifests/:cid/variants rejects missing nodeId", async () => {
-      const res = await request(app)
-        .post("/api/v1/manifests/QmFakeCid/variants")
-        .send({ color: "#FF0000" });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("MISSING_PARAMS");
-    });
-    it("POST /api/v1/manifests/:cid/variants returns 404 for unknown nodeId", async () => {
-      const res = await request(app)
-        .post("/api/v1/manifests/QmSomeCidThatExists/variants")
-        .send({
-          nodeId: "nonexistent_node_999",
-          color: "#FF0000",
-        });
-
-      // The mock IPFS won't have this CID → manifest parse fails → 500
-      // or the CID exists but doesn't contain this node → 404
-      // Either way, it should not be 200
-      expect(res.status).not.toBe(200);
-    });
-
     it("POST /api/v1/manifests/:cid/publish handles missing thumbnail gracefully", async () => {
       const res = await request(app)
         .post("/api/v1/manifests/QmNoThumb/publish")

@@ -12,6 +12,8 @@ import {
   showWelcomeOverlay,
   getPendingChildRefs,
   clearPendingChildRefs,
+  getPendingAppearanceEdits,
+  clearPendingAppearanceEdits,
 } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 
@@ -123,10 +125,11 @@ function advanceManifestVersion(manifest, latestCid) {
 async function prepareManifestForWrite(assetName) {
   let manifest;
   const pendingRefs = getPendingChildRefs();
+  const pendingAppearance = getPendingAppearanceEdits();
 
   if (window.activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(window.activeAssetManifestCid);
-  } else if (pendingRefs.length > 0) {
+  } else if (pendingRefs.length > 0 || pendingAppearance.size > 0) {
     manifest = {
       name: assetName,
       asset_id: `asset_${Date.now()}`,
@@ -135,7 +138,7 @@ async function prepareManifestForWrite(assetName) {
       scene: { nodes: [] },
     };
     console.log(
-      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs`
+      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingAppearance.size} pending appearance edits`
     );
   } else {
     return null;
@@ -150,6 +153,24 @@ async function prepareManifestForWrite(assetName) {
     if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
       manifest.scene.nodes.push(pendingNode);
     }
+  }
+
+  // Apply inspector appearance edits (color / scale) the same way any
+  // other scene mutation is applied. The pending map is cleared by the
+  // caller after a successful write.
+  if (pendingAppearance.size > 0) {
+    for (const [nodeId, appearance] of pendingAppearance) {
+      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      if (!node) continue;
+      node.appearance ||= {};
+      if (appearance.color !== undefined)
+        node.appearance.color = appearance.color;
+      if (appearance.scale !== undefined)
+        node.appearance.scale = { ...appearance.scale };
+    }
+    console.log(
+      `[SAVE] applied ${pendingAppearance.size} pending appearance edit(s)`
+    );
   }
 
   const prevCid = window.activeAssetManifestCid;
@@ -188,6 +209,7 @@ async function onSaveAssetDraft() {
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
+    clearPendingAppearanceEdits();
 
     updateUrlManifest(cid, window.activeAssetTokenId || null);
 
@@ -276,6 +298,7 @@ async function onPublishAsset() {
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
+    clearPendingAppearanceEdits();
 
     document.dispatchEvent(
       new CustomEvent("asset:published", {

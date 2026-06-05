@@ -16,6 +16,23 @@ export function getPendingChildRefs() {
 }
 
 /**
+ * Pending appearance edits (color/scale) accumulated in the inspector.
+ * Mirrors `getPendingChildRefs` / `clearPendingChildRefs` so that
+ * Save Draft / Publish can pick both up in one pass.
+ */
+export function getPendingAppearanceEdits() {
+  return state.pendingAppearanceEdits;
+}
+
+export function clearPendingAppearanceEdits() {
+  state.pendingAppearanceEdits.clear();
+}
+
+export function clearPendingAppearanceEdit(nodeId) {
+  state.pendingAppearanceEdits.delete(nodeId);
+}
+
+/**
  * Dispose all meshes and anchors for a single node.
  */
 export function disposeNode(nodeId) {
@@ -114,4 +131,8 @@ export function clearScene() {
   window.latestAssetManifestCid = null;
 
   state.pendingChildRefs.length = 0;
+  state.pendingAppearanceEdits.clear();
+
+  // Clear selection highlight state
+  state.highlightedNodeId = null;
 }

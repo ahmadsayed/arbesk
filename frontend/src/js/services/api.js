@@ -327,39 +327,6 @@ export async function saveManifest(manifest) {
 }
 
 /**
- * POST /api/v1/manifests/:cid/variants
- * Create a parametric variant (color/scale edit) of a node.
- * @param {Object} params
- * @param {string} params.prevCid — Previous manifest CID
- * @param {string} params.nodeId — Node to edit
- * @param {string} [params.color] — Hex color #RRGGBB
- * @param {{x:number, y:number, z:number}} [params.scale]
- * @returns {Promise<{assetManifestCid: string}>}
- */
-export async function saveParametricVersion({ prevCid, nodeId, color, scale }) {
-  const body = { nodeId, ...(color && { color }), ...(scale && { scale }) };
-
-  const response = await fetch(`${API_BASE}/manifests/${prevCid}/variants`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Save failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-
-  return data;
-}
-
-/**
  * POST /api/v1/manifests/:cid/publish
  * Publish a manifest to IPFS with optional thumbnail.
  * @param {string} prevCid — Previous manifest CID (for URL)
@@ -489,7 +456,6 @@ window.getContractAddress = getContractAddress;
 window.getContractArtifact = getContractArtifact;
 window.generateAsset = generateAsset;
 window.saveManifest = saveManifest;
-window.saveParametricVersion = saveParametricVersion;
 window.publishManifest = publishManifest;
 window.getManifestHistory = getManifestHistory;
 window.getTokenManifest = getTokenManifest;

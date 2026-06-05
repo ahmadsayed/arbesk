@@ -127,3 +127,10 @@
   padding-top: var(--size-3);
   border-top: var(--border-size-1) solid var(--border-color);
 }
+
+.inspector-hint {
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  line-height: 1.4;
+}

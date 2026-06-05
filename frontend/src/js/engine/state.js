@@ -23,6 +23,14 @@ export const state = {
   rootSceneAnchor: null,
   /** @type {Array<Object>} */
   pendingChildRefs: [],
+  /**
+   * Appearance edits (color/scale) the user has made in the inspector
+   * but not yet persisted via Save Draft / Publish. Keyed by node_id;
+   * each value is { color?, scale?: {x,y,z} }. Picked up by
+   * `asset-save.js → prepareManifestForWrite` and cleared on save.
+   * @type {Map<string, {color?: string, scale?: {x:number,y:number,z:number}}>}
+   */
+  pendingAppearanceEdits: new Map(),
   /** @type {BABYLON.StandardMaterial|null} */
   defaultWoodMaterial: null,
   /** @type {Function|null} */
@@ -31,4 +39,10 @@ export const state = {
   resizeObserverInstance: null,
   /** @type {Function|null} */
   pointerObservableCallback: null,
+  /** @type {BABYLON.HighlightLayer|null} */
+  highlightLayer: null,
+  /** @type {string|null} */
+  highlightedNodeId: null,
+  /** @type {BABYLON.ArcRotateCamera|null} */
+  camera: null,
 };

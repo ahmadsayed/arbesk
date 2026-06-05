@@ -79,7 +79,6 @@ describe("Frontend Build", () => {
       "getContractArtifact",
       "generateAsset",
       "saveManifest",
-      "saveParametricVersion",
       "publishManifest",
       "getManifestHistory",
       "getTokenManifest",
@@ -89,9 +88,7 @@ describe("Frontend Build", () => {
 
     for (const name of requiredExports) {
       test(`window.${name} is assigned`, () => {
-        expect(api).toMatch(
-          new RegExp(`window\\.${name}\\s*=\\s*${name}`)
-        );
+        expect(api).toMatch(new RegExp(`window\\.${name}\\s*=\\s*${name}`));
       });
     }
 
@@ -137,14 +134,12 @@ describe("Frontend Build", () => {
     const wallet = readBuilt("blockchain/wallet.js");
 
     test("_mockPayForGeneration sends to dev account, not self", () => {
-      expect(wallet).toMatch(
-        /0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/
-      );
+      expect(wallet).toMatch(/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/);
     });
 
     test("_mockPayForGeneration does NOT self-transfer", () => {
       const match = wallet.match(
-        /async function _mockPayForGeneration[\s\S]*?return receipt\.transactionHash;/
+        /async function _mockPayForGeneration[\s\S]*?return receipt\.transactionHash;/,
       );
       if (!match) throw new Error("_mockPayForGeneration not found");
       const body = match[0];
@@ -159,7 +154,7 @@ describe("Frontend Build", () => {
 
     test("_mockPayForGeneration has no data field in tx object", () => {
       const match = wallet.match(
-        /async function _mockPayForGeneration[\s\S]*?return receipt\.transactionHash;/
+        /async function _mockPayForGeneration[\s\S]*?return receipt\.transactionHash;/,
       );
       if (!match) throw new Error("_mockPayForGeneration not found");
       const body = match[0];
@@ -179,7 +174,7 @@ describe("Frontend Build", () => {
 
     test("handleLinkedAssetDropped calls loadTokenChildNode", () => {
       expect(sceneGraph).toMatch(
-        /await loadTokenChildNode\(nodeEntry,\s*parentNode/
+        /await loadTokenChildNode\(nodeEntry,\s*parentNode/,
       );
     });
 

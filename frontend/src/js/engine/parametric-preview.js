@@ -2,11 +2,16 @@
  * Arbesk Parametric Preview & Token Child Inspector
  *
  * Binds Node Inspector inputs to live Babylon.js material/mesh updates.
- * Handles save (POST to backend) and cancel (revert to committed state).
- * Shows read-only token child info for child_ref nodes.
+ * Color and scale edits are accumulated into `state.pendingAppearanceEdits`
+ * and committed by the headerbar Save Draft / Publish buttons — the
+ * inspector no longer has its own Save / Cancel buttons (per GNOME HIG:
+ * one obvious save action in the headerbar, not duplicated per panel).
  *
- * History timeline now walks the manifest chain via prev_asset_manifest_cid
- * links instead of relying on an in-memory variants array.
+ * Closing the inspector (X) discards pending edits for the active node
+ * and reverts the live preview to the last committed appearance.
+ *
+ * History timeline walks the manifest chain via `prev_asset_manifest_cid`
+ * links. Timeline scrubs are view-only — they do not create pending edits.
  */
 
 import {
@@ -15,7 +20,14 @@ import {
   applyColor,
   applyScale,
 } from "./time-travel.js";
-import { getNodeMeshes, getNodeChildRef } from "./scene-graph.js";
+import {
+  getNodeMeshes,
+  getNodeChildRef,
+  deselectAll,
+  selectNodeById,
+  getPendingAppearanceEdits,
+  clearPendingAppearanceEdit,
+} from "./scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 // DOM references
@@ -26,8 +38,6 @@ const nodeColorInput = document.getElementById("nodeColor");
 const nodeScaleX = document.getElementById("nodeScaleX");
 const nodeScaleY = document.getElementById("nodeScaleY");
 const nodeScaleZ = document.getElementById("nodeScaleZ");
-const saveBtn = document.getElementById("saveParametric");
-const cancelBtn = document.getElementById("cancelParametric");
 
 const timeline = document.getElementById("timeline");
 const versionSlider = document.getElementById("versionSlider");
@@ -42,9 +52,10 @@ const tokenChildCidEl = document.getElementById("tokenChildCid");
 
 // State
 let activeNodeId = null;
-let draftState = null;
+// Last saved appearance for the active node — used to revert the live
+// preview when the inspector closes without saving. Re-seeded on
+// `asset:draftSaved` so close-after-save-and-edit reverts correctly.
 let committedState = null;
-let isSaving = false;
 
 // Cached manifest chain for the currently open node (used by timeline slider)
 let currentChain = [];
@@ -130,11 +141,6 @@ async function openInspector(nodeId) {
     scale: { ...currentScale },
   };
 
-  draftState = {
-    color: currentColor,
-    scale: { ...currentScale },
-  };
-
   // Set inputs
   if (nodeColorInput) nodeColorInput.value = currentColor;
   if (nodeScaleX) nodeScaleX.value = currentScale.x;
@@ -149,17 +155,28 @@ async function openInspector(nodeId) {
 }
 
 /**
- * Close the inspector and reset state.
+ * Close the inspector: revert the live preview to the last committed
+ * appearance and discard any pending edits for the active node.
+ * Save Draft / Publish is the only path to persistence now.
  */
 function closeInspector() {
+  if (activeNodeId && committedState) {
+    const meshes = getNodeMeshes(activeNodeId);
+    if (meshes) {
+      applyColor(meshes, committedState.color);
+      applyScale(meshes, committedState.scale);
+    }
+    clearPendingAppearanceEdit(activeNodeId);
+  }
+
   activeNodeId = null;
-  draftState = null;
   committedState = null;
   currentChain = [];
   inspector.classList.add("collapsed");
   timeline.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
+  deselectAll();
 }
 
 /**
@@ -187,120 +204,56 @@ async function bindTimeline(nodeId) {
   }
 }
 
+function readScaleInputs() {
+  return {
+    x: nodeScaleX ? parseFloat(nodeScaleX.value) : 1,
+    y: nodeScaleY ? parseFloat(nodeScaleY.value) : 1,
+    z: nodeScaleZ ? parseFloat(nodeScaleZ.value) : 1,
+  };
+}
+
 /**
- * Live preview: update mesh color from input.
+ * Write the current color + scale inputs into the pending-edits map for
+ * the active node. Both fields are always written together so that
+ * Save Draft / Publish applies them atomically (no partial updates).
+ */
+function recordPendingEdit() {
+  if (!activeNodeId) return;
+  const pending = getPendingAppearanceEdits();
+  const prev = pending.get(activeNodeId) || {};
+  pending.set(activeNodeId, {
+    color: nodeColorInput ? nodeColorInput.value : prev.color ?? "#ffffff",
+    scale: readScaleInputs(),
+  });
+}
+
+/**
+ * Live preview: update mesh color from input and record the edit.
  */
 function onColorChange() {
-  if (!activeNodeId || !draftState) return;
-  draftState.color = nodeColorInput.value;
+  if (!activeNodeId) return;
+  const color = nodeColorInput ? nodeColorInput.value : null;
   const meshes = getNodeMeshes(activeNodeId);
-  applyColor(meshes, draftState.color);
+  applyColor(meshes, color);
+  recordPendingEdit();
 }
 
 /**
- * Live preview: update mesh scale from inputs.
+ * Live preview: update mesh scale from inputs and record the edit.
  */
 function onScaleChange() {
-  if (!activeNodeId || !draftState) return;
-  draftState.scale = {
-    x: parseFloat(nodeScaleX.value),
-    y: parseFloat(nodeScaleY.value),
-    z: parseFloat(nodeScaleZ.value),
-  };
+  if (!activeNodeId) return;
+  const scale = readScaleInputs();
   const meshes = getNodeMeshes(activeNodeId);
-  applyScale(meshes, draftState.scale);
-}
-
-/**
- * Save parametric version to backend.
- */
-async function onSave() {
-  if (!activeNodeId || isSaving) return;
-  isSaving = true;
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Saving…";
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-  try {
-    const hasColorChange = draftState.color !== committedState.color;
-    const hasScaleChange =
-      draftState.scale.x !== committedState.scale.x ||
-      draftState.scale.y !== committedState.scale.y ||
-      draftState.scale.z !== committedState.scale.z;
-
-    // Only send if something changed
-    if (!hasColorChange && !hasScaleChange) {
-      closeInspector();
-      return;
-    }
-
-    const result = await saveParametricVersion({
-      prevCid: window.activeAssetManifestCid,
-      nodeId: activeNodeId,
-      color: hasColorChange ? draftState.color : undefined,
-      scale: hasScaleChange ? draftState.scale : undefined,
-    });
-
-    clearTimeout(timeoutId);
-
-    // Update global manifest CID
-    window.activeAssetManifestCid = result.assetManifestCid;
-    window.latestAssetManifestCid = result.assetManifestCid;
-
-    // Update committed state to draft state
-    committedState = {
-      color: draftState.color,
-      scale: { ...draftState.scale },
-    };
-
-    // Refresh timeline
-    bindTimeline(activeNodeId);
-
-    document.dispatchEvent(
-      new CustomEvent("parametric:save", {
-        detail: { nodeId: activeNodeId, result },
-      })
-    );
-
-    document.dispatchEvent(
-      new CustomEvent("asset:draftSaved", {
-        detail: { cid: result.assetManifestCid },
-      })
-    );
-
-    closeInspector();
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === "AbortError") {
-      alert("Save timed out. Make sure the backend and IPFS are running.");
-    } else {
-      console.error("Failed to save parametric version:", error);
-      alert("Save failed: " + error.message);
-    }
-  } finally {
-    isSaving = false;
-    saveBtn.disabled = false;
-    saveBtn.textContent = "Save Variant";
-  }
-}
-
-/**
- * Cancel: revert mesh to last committed state.
- */
-function onCancel() {
-  if (!activeNodeId || !committedState) return;
-  const meshes = getNodeMeshes(activeNodeId);
-  applyColor(meshes, committedState.color);
-  applyScale(meshes, committedState.scale);
-  closeInspector();
+  applyScale(meshes, scale);
+  recordPendingEdit();
 }
 
 /**
  * Timeline slider change handler.
  * Uses the cached manifest chain to apply the selected version's
- * color + scale to the active node without re-fetching.
+ * color + scale to the active node without re-fetching. This is a
+ * view-only operation — it does not create a pending edit.
  */
 function onTimelineChange() {
   if (!activeNodeId || currentChain.length === 0) return;
@@ -314,6 +267,7 @@ function onTimelineChange() {
 
 // Event bindings
 function onNodeSelected(e) {
+  selectNodeById(e.detail.nodeId);
   openInspector(e.detail.nodeId);
 }
 document.addEventListener("node:selected", onNodeSelected);
@@ -321,7 +275,8 @@ document.addEventListener("outliner:nodeSelected", onNodeSelected);
 
 // Inspector close button
 const inspectorCloseBtn = document.getElementById("inspectorCloseBtn");
-if (inspectorCloseBtn) inspectorCloseBtn.addEventListener("click", closeInspector);
+if (inspectorCloseBtn)
+  inspectorCloseBtn.addEventListener("click", closeInspector);
 
 // Dive button for child worlds
 const diveBtn = document.getElementById("inspectorDiveBtn");
@@ -329,19 +284,31 @@ if (diveBtn) {
   diveBtn.addEventListener("click", () => {
     const childRef = activeNodeId ? getNodeChildRef(activeNodeId) : null;
     if (childRef) {
-      document.dispatchEvent(new CustomEvent("nesting:diveRequested", {
-        detail: { childRef, nodeId: activeNodeId }
-      }));
+      document.dispatchEvent(
+        new CustomEvent("nesting:diveRequested", {
+          detail: { childRef, nodeId: activeNodeId },
+        })
+      );
     }
   });
 }
+
+// After a save, the values in the inputs are now the committed values.
+// Refresh `committedState` so a subsequent edit + close reverts to the
+// just-saved state, not the pre-save one.
+document.addEventListener("asset:draftSaved", () => {
+  if (activeNodeId) {
+    committedState = {
+      color: nodeColorInput ? nodeColorInput.value : "#ffffff",
+      scale: readScaleInputs(),
+    };
+  }
+});
 
 if (nodeColorInput) nodeColorInput.addEventListener("input", onColorChange);
 if (nodeScaleX) nodeScaleX.addEventListener("input", onScaleChange);
 if (nodeScaleY) nodeScaleY.addEventListener("input", onScaleChange);
 if (nodeScaleZ) nodeScaleZ.addEventListener("input", onScaleChange);
-if (saveBtn) saveBtn.addEventListener("click", onSave);
-if (cancelBtn) cancelBtn.addEventListener("click", onCancel);
 if (versionSlider) versionSlider.addEventListener("input", onTimelineChange);
 
 // Update token child CID when resolution completes and we're showing the info

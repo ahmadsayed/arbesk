@@ -12,7 +12,6 @@ const { CONTRACT_ADDRESS, ASSETS_IPFS, IPFS_API_URL, HARDHAT_RPC_URL, web3 } =
   await import("../config.js");
 
 import generateAssetNode from "./assets/generate-node.js";
-import parametricVersion from "./assets/save-variant.js";
 import abiRouter from "./abi-router.js";
 import rateLimit from "./rate-limiter.js";
 import ledgerRouter from "./ledger.js";
@@ -214,9 +213,6 @@ export default () => {
       sendError(res, 500, "SAVE_FAILED", error.message);
     }
   });
-
-  // Create a parametric variant for a node
-  v1.use("/manifests", parametricVersion(ipfs));
 
   // Publish a manifest (with thumbnail support)
   v1.post("/manifests/:cid/publish", async (req, res) => {
