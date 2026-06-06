@@ -2,7 +2,7 @@
 
 > **Cloud-native 4D fractal version-controlled 3D asset platform**
 
-Arbesk combines a Babylon.js world studio, private IPFS storage, Filecoin FEVM PayGo payments, and fractal JSON manifests into a local-first workflow for generating, versioning, publishing, and collaborating on 3D worlds.
+Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payments, and fractal JSON manifests into a local-first workflow for generating, versioning, publishing, and collaborating on 3D worlds.
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
@@ -14,7 +14,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, Filecoin FEVM P
 
 - **Private IPFS storage** — Dockerized Kubo node bound to loopback with no public DHT or bootstrap peers.
 - **Dockerized Hardhat** — reproducible local EVM at `127.0.0.1:8545`.
-- **Filecoin FEVM PayGo contract** — `ArbeskWorld.sol` supports generation payments, ERC721 world minting, token URI updates, and team editor management.
+- **EVM PayGo contract** — `ArbeskWorld.sol` supports generation payments, ERC721 world minting, token URI updates, and team editor management.
 - **Mock 3D generation** — backend mock adapter returns local GLTF/GLB-style SukaVerse assets for deterministic development.
 - **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, history entries, child manifest references, and optional thumbnails.
 - **Parametric versions** — color and scale edits append history entries without payment or SaaS generation.
@@ -49,7 +49,7 @@ arbesk/
 │   ├── src/js/gltf/              # glTF CID URI conversion
 │   ├── src/js/services/          # API/team services
 │   └── src/js/ui/                # Chat, gallery, history, save/publish, team UI
-├── blockchain/                   # Hardhat + Solidity FEVM target
+├── blockchain/                   # Hardhat + Solidity EVM target
 │   ├── contracts/ArbeskWorld.sol
 │   ├── scripts/deploy.js
 │   ├── scripts/verify.js
@@ -85,7 +85,7 @@ arbesk/
 | 3D renderer | Babylon.js |
 | Frontend JS | Vanilla JavaScript ES modules |
 | Web3 | Web3.js + Web3Modal |
-| Blockchain | Filecoin FEVM / local Hardhat |
+| Blockchain | EVM-compatible / local Hardhat |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
 | Blockchain dev | Dockerized Hardhat |
 | Storage | Private Dockerized Kubo/IPFS |
@@ -159,7 +159,7 @@ This repo includes `.zed/tasks.json`. In Zed, use the task palette for:
 Environment files are intentionally ignored by Git.
 
 - Root `.env` — backend/cloud adapter/private IPFS settings
-- `blockchain/.env` — Filecoin RPC, deployment keys, contract addresses
+- `blockchain/.env` — RPC endpoints, deployment keys, contract addresses
 - `frontend/.env` — optional build-time public frontend settings
 
 Start blockchain configuration from:

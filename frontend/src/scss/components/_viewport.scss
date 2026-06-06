@@ -109,12 +109,20 @@
   border: 2px solid var(--border-color);
   border-top-color: var(--accent-bg);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (prefers-reduced-motion: no-preference) {
+  .viewport-spinner {
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewport-spinner {
+    opacity: 0.7;
   }
 }
 

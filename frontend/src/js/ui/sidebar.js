@@ -51,8 +51,15 @@ function initSidebar() {
     revealBtn.addEventListener("click", expandSidebar);
   }
 
+  function isEditing() {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    return document.activeElement?.isContentEditable ||
+      tag === "input" || tag === "textarea" || tag === "select";
+  }
+
   // Keyboard: Ctrl+B to toggle
   document.addEventListener("keydown", (e) => {
+    if (isEditing()) return;
     if ((e.ctrlKey || e.metaKey) && e.key === "b") {
       e.preventDefault();
       toggleSidebar();
@@ -61,6 +68,7 @@ function initSidebar() {
 
   // Keyboard: Ctrl+1-4 to switch views
   document.addEventListener("keydown", (e) => {
+    if (isEditing()) return;
     if ((e.ctrlKey || e.metaKey) && e.key >= "1" && e.key <= "4") {
       e.preventDefault();
       const idx = parseInt(e.key) - 1;
@@ -85,7 +93,10 @@ function switchView(viewName) {
 
   // Update switcher button active states
   switcherBtns.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.view === viewName);
+    const selected = btn.dataset.view === viewName;
+    btn.classList.toggle("active", selected);
+    btn.setAttribute("aria-selected", String(selected));
+    btn.setAttribute("tabindex", selected ? "0" : "-1");
   });
 
   // Persist
@@ -110,12 +121,16 @@ function collapseSidebar() {
   if (!sidebar) return;
   sidebar.classList.add("collapsed");
   collapsed = true;
+  const toggleBtn = document.getElementById("sidebarToggle");
+  if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "false");
 }
 
 function expandSidebar() {
   if (!sidebar) return;
   sidebar.classList.remove("collapsed");
   collapsed = false;
+  const toggleBtn = document.getElementById("sidebarToggle");
+  if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "true");
 }
 
 function isCollapsed() {

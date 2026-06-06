@@ -109,7 +109,9 @@ export default function generateAssetNode(ipfs) {
           }
           console.log("[GEN] payment event verified (native or USDC tiered)");
 
-          // If request specifies a tier, validate it against the on-chain event
+          // If request specifies a tier, validate it against the on-chain event.
+          // Native ETH payments (payForGeneration) do not encode tier on-chain,
+          // so we only validate tier for USDC payments (payForGenerationWithUSDC).
           if (req.body.tier !== undefined && req.body.tier !== null) {
             const requestedTier = Number(req.body.tier);
             const usdcLog = receipt.logs.find(
@@ -117,38 +119,33 @@ export default function generateAssetNode(ipfs) {
                 log.topics[0] === usdcEventSig &&
                 log.address.toLowerCase() === contractAddr,
             );
-            if (!usdcLog) {
-              // Request claims a tier but no USDC event found — reject
-              console.log(
-                `[GEN] TIER MISMATCH — tier ${requestedTier} requested but no USDC payment event found`,
+            if (usdcLog) {
+              // Decode event data: (string prompt, uint256 amount, uint256 timestamp, uint8 tier)
+              const decoded = web3.eth.abi.decodeParameters(
+                ["string", "uint256", "uint256", "uint8"],
+                usdcLog.data,
               );
-              return res.status(403).json({
-                error: {
-                  code: "TIER_MISMATCH",
-                  message: `Tier ${requestedTier} specified but transaction does not contain a USDC payment event`,
-                },
-              });
-            }
-            // Decode event data: (string prompt, uint256 amount, uint256 timestamp, uint8 tier)
-            const decoded = web3.eth.abi.decodeParameters(
-              ["string", "uint256", "uint256", "uint8"],
-              usdcLog.data,
-            );
-            const onChainTier = Number(decoded[3]); // 4th param = tier
-            if (onChainTier !== requestedTier) {
+              const onChainTier = Number(decoded[3]); // 4th param = tier
+              if (onChainTier !== requestedTier) {
+                console.log(
+                  `[GEN] TIER MISMATCH — requested=${requestedTier} on-chain=${onChainTier}`,
+                );
+                return res.status(403).json({
+                  error: {
+                    code: "TIER_MISMATCH",
+                    message: `Requested tier ${requestedTier} does not match on-chain payment tier ${onChainTier}`,
+                  },
+                });
+              }
               console.log(
-                `[GEN] TIER MISMATCH — requested=${requestedTier} on-chain=${onChainTier}`,
+                `[GEN] tier validated — ${onChainTier} (${["Basic", "Standard", "Premium", "Pro"][onChainTier] || "?"})`,
               );
-              return res.status(403).json({
-                error: {
-                  code: "TIER_MISMATCH",
-                  message: `Requested tier ${requestedTier} does not match on-chain payment tier ${onChainTier}`,
-                },
-              });
+            } else {
+              // Native ETH payment — no tier on-chain, accept any tier value
+              console.log(
+                `[GEN] native ETH payment — tier ${requestedTier} accepted without on-chain validation`,
+              );
             }
-            console.log(
-              `[GEN] tier validated — ${onChainTier} (${["Basic", "Standard", "Premium", "Pro"][onChainTier] || "?"})`,
-            );
           }
         }
 

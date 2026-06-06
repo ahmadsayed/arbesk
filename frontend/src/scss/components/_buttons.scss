@@ -59,6 +59,7 @@
 
   &:active:not(:disabled) {
     background-color: var(--border-color);
+    filter: none;
   }
 }
 
@@ -74,7 +75,9 @@
   }
 
   &:active:not(:disabled) {
-    filter: brightness(0.9);
+    background-color: color-mix(in srgb, var(--accent-bg) 12%, transparent);
+    border-color: var(--gold-7);
+    filter: none;
   }
 }
 

@@ -1,7 +1,7 @@
 # Arbesk System Architecture
 
 > Status: Current v0.4 — Phases 1–4 complete, publishing polish complete, Phase 5 planned  
-> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, FEVM PayGo, and studio publishing
+> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, EVM PayGo, and studio publishing
 
 ---
 
@@ -14,7 +14,7 @@ The system currently combines:
 - **Mock-backed generative 3D flow** via Express and private IPFS
 - **Parametric versioning** for free color/scale changes
 - **Babylon.js rendering** with GLB/GLTF loading and one-node-per-world replacement behavior
-- **Filecoin FEVM PayGo** generation payments and ERC721 world ownership
+- **EVM PayGo** generation payments and ERC721 world ownership
 - **Team collaboration** through token URI editor permissions
 - **Private Dockerized Kubo/IPFS** for local content-addressed storage
 - **Dockerized Hardhat** for reproducible local EVM development
@@ -51,7 +51,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │                                                                    │
 │  /api/generate-asset-node                                           │
 │  ├─ Bearer txHash signature auth                                    │
-│  ├─ FEVM/Hardhat receipt validation                                 │
+│  ├─ EVM/Hardhat receipt validation                                 │
 │  ├─ AssetGenerationPaid event validation                            │
 │  ├─ Mock generation adapter                                         │
 │  └─ IPFS asset + manifest writes                                    │
@@ -67,7 +67,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
                 │                               │
                 ▼                               ▼
 ┌──────────────────────────────┐   ┌─────────────────────────────────┐
-│ Private Kubo/IPFS             │   │ Filecoin FEVM / Hardhat          │
+│ Private Kubo/IPFS             │   │ EVM / Hardhat          │
 │ 127.0.0.1:5001 API            │   │ ArbeskWorld.sol                  │
 │ 127.0.0.1:8080 gateway        │   │ ├─ payForGeneration              │
 │ No DHT / no bootstrap peers   │   │ ├─ mintWorld / updateTokenURI    │
@@ -102,7 +102,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | Engine | `engine/parametric-preview.js` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.js` | Private gateway reads with memory + IndexedDB cache |
 | glTF | `gltf/uri_to_cid.js` | Rehydrates CID-based glTF buffer URIs for rendering |
-| Blockchain | `blockchain/wallet.js` | Web3Modal, wallet connection, FEVM switching, PayGo, mint/update URI, editor calls |
+| Blockchain | `blockchain/wallet.js` | Web3Modal, wallet connection, EVM switching, PayGo, mint/update URI, editor calls |
 | UI | `ui/chat-studio.js` | Prompt flow and asset definition controls |
 | UI | `ui/save-world.js` | Save/publish lifecycle, WebP thumbnail capture, token mint/update calls |
 | UI | `ui/gallery.js` | Token gallery, manifest metadata reads, thumbnail rendering |

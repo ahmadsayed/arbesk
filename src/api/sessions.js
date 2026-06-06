@@ -1,8 +1,9 @@
 /**
  * Session-based authentication for Arbesk API.
  *
- * After the first on-chain payment, the user signs a session-creation message
- * once. The backend issues an opaque session token valid for 24 hours.
+ * Uses SIWE (EIP-4361) for wallet ownership proof.
+ * The user signs a standard SIWE message once, the backend verifies it,
+ * and issues an opaque session token valid for 24 hours.
  * Subsequent generation calls use that token instead of a new signature.
  *
  * The token is stored in the browser's localStorage. The only attack vector
@@ -13,6 +14,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { web3 } from "../config.js";
+import { verifySiwe } from "./siwe-verify.js";
 
 // ─── Session Store ──────────────────────────────────────────────────────────
 
@@ -21,9 +23,6 @@ const sessions = new Map();
 
 /** Session lifetime: 24 hours (in milliseconds) */
 const SESSION_TTL = 24 * 60 * 60 * 1000;
-
-/** Maximum age of session-creation message: 5 minutes */
-const MESSAGE_MAX_AGE = 5 * 60 * 1000;
 
 /** Clean up expired sessions every hour */
 setInterval(() => {
@@ -94,10 +93,10 @@ export default function sessionRouter() {
 
   /**
    * POST /api/v1/sessions
-   * Create a session by signing a wallet-ownership proof message.
+   * Create a session by signing a SIWE (EIP-4361) message.
    *
    * Body: { message: string, signature: string }
-   *   message format: "arbesk-session:<address>:<timestamp>"
+   *   message: standard SIWE format
    *
    * Returns: { token: string, expiresAt: number }
    */
@@ -115,89 +114,25 @@ export default function sessionRouter() {
         });
       }
 
-      // Parse message: "arbesk-session:<address>:<timestamp>"
-      const parts = message.split(":");
-      if (parts.length !== 3 || parts[0] !== "arbesk-session") {
-        console.log(`[SESSION] rejected — invalid message format: ${message}`);
+      // Verify SIWE message
+      const result = await verifySiwe(message, signature, {
+        expectedDomain: req.headers.host,
+      });
+
+      if (!result.valid) {
+        console.log(`[SESSION] rejected — ${result.error}`);
         return res.status(400).json({
           error: {
-            code: "INVALID_MESSAGE",
-            message:
-              'Invalid message format. Expected: "arbesk-session:<address>:<timestamp>"',
+            code: "INVALID_SIWE",
+            message: result.error,
           },
         });
       }
 
-      const claimedAddress = parts[1].toLowerCase();
-      const messageTimestamp = parseInt(parts[2], 10);
-
-      if (!claimedAddress || isNaN(messageTimestamp)) {
-        console.log(
-          `[SESSION] rejected — bad address or timestamp in message`,
-        );
-        return res.status(400).json({
-          error: {
-            code: "INVALID_MESSAGE",
-            message: "Invalid address or timestamp in message",
-          },
-        });
-      }
-
-      // Verify message freshness (prevent replay of old signatures)
-      const age = Date.now() - messageTimestamp;
-      if (age < 0) {
-        console.log(`[SESSION] rejected — future timestamp in message`);
-        return res.status(400).json({
-          error: {
-            code: "FUTURE_TIMESTAMP",
-            message: "Message timestamp is in the future",
-          },
-        });
-      }
-      if (age > MESSAGE_MAX_AGE) {
-        console.log(
-          `[SESSION] rejected — message too old (${(age / 1000).toFixed(0)}s)`,
-        );
-        return res.status(400).json({
-          error: {
-            code: "MESSAGE_EXPIRED",
-            message: "Session creation message is too old. Please try again.",
-          },
-        });
-      }
-
-      // Recover address from signature
-      let recoveredAddress;
-      try {
-        recoveredAddress = (
-          await web3.eth.accounts.recover(message, signature)
-        ).toLowerCase();
-      } catch (e) {
-        console.log(`[SESSION] rejected — signature recovery failed: ${e.message}`);
-        return res.status(400).json({
-          error: {
-            code: "SIGNATURE_INVALID",
-            message: "Failed to recover address from signature",
-          },
-        });
-      }
-
-      if (recoveredAddress !== claimedAddress) {
-        console.log(
-          `[SESSION] rejected — address mismatch: claimed=${claimedAddress} recovered=${recoveredAddress}`,
-        );
-        return res.status(403).json({
-          error: {
-            code: "ADDRESS_MISMATCH",
-            message: "Signature does not match the claimed address",
-          },
-        });
-      }
-
-      console.log(`[SESSION] recovered address=${recoveredAddress}`);
+      console.log(`[SESSION] verified SIWE — address=${result.address}`);
 
       // Create session
-      const token = createSession(recoveredAddress);
+      const token = createSession(result.address);
       const expiresAt = sessions.get(token).expiresAt;
 
       res.status(201).json({ token, expiresAt });

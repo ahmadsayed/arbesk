@@ -23,8 +23,6 @@ const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 // Well-known RPC endpoints for common chains
 const KNOWN_RPC_ENDPOINTS = {
   31415822: "http://127.0.0.1:8545", // Hardhat local dev node
-  314159: "https://api.calibration.node.glif.io/rpc/v1", // Filecoin Calibration testnet
-  314: "https://api.node.glif.io/rpc/v1", // Filecoin Mainnet
   1: "https://eth.llamarpc.com", // Ethereum mainnet (public fallback)
   11155111: "https://ethereum-sepolia.publicnode.com", // Sepolia testnet
 };

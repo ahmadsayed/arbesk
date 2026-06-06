@@ -28,6 +28,9 @@
 @use 'components/timeline';
 @use 'components/settings';
 @use 'components/dialog';
+@use 'components/wallet-popover';
+@use 'components/wallet-modal';
+@use 'components/toasts';
 
 // ── Utilities ───────────────────────────────────────────────────────
 @use 'utilities/responsive';

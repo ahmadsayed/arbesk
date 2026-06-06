@@ -31,6 +31,10 @@ function initNesting() {
   // Keyboard: Alt+Left = ascend
   document.addEventListener("keydown", (e) => {
     if (e.altKey && e.key === "ArrowLeft") {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const editing = document.activeElement?.isContentEditable ||
+        tag === "input" || tag === "textarea" || tag === "select";
+      if (editing) return;
       e.preventDefault();
       ascendOneLevel();
     }

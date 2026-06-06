@@ -41,6 +41,30 @@ function logRequest(req, res, next) {
 }
 app.use(logRequest);
 
+/* ─── Content-Security-Policy (report-only) ───
+ * Delivered via HTTP header because <meta> does not support
+ * the "Report-Only" suffix. Monitor violations in browser
+ * console before promoting to enforcing mode.
+ */
+function cspMiddleware(req, res, next) {
+  res.setHeader(
+    "Content-Security-Policy-Report-Only",
+    "default-src 'self'; " +
+      "script-src 'self' https://cdn.babylonjs.com https://cdn.jsdelivr.net https://esm.sh; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "connect-src 'self' http://127.0.0.1:5001 http://127.0.0.1:8545 http://127.0.0.1:9090 https://*.llamarpc.com https://*.publicnode.com; " +
+      "img-src 'self' blob: data: http://127.0.0.1:8080; " +
+      "font-src 'self'; " +
+      "media-src 'self'; " +
+      "frame-src 'none'; " +
+      "object-src 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self';",
+  );
+  next();
+}
+app.use(cspMiddleware);
+
 app.use(express.static(__dirname + "/../frontend/dist"));
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));

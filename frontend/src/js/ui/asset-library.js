@@ -24,7 +24,13 @@ function getContract() {
 
 async function fetchAssetLibrary(address) {
   const contract = getContract();
-  if (!contract || !address) return { owned: [], shared: [] };
+  if (!contract || !address) {
+    console.warn(
+      "[ASSET-LIBRARY] No contract available. " +
+        "Check that your wallet is connected to the correct network."
+    );
+    return { owned: [], shared: [] };
+  }
 
   const owned = [];
   const shared = [];
@@ -128,7 +134,7 @@ function createSection(title, tokenIds, role) {
 
 function createAssetCard(tokenId, role) {
   const item = document.createElement("div");
-  item.className = "asset-library-item";
+  item.className = "asset-card";
   item.dataset.tokenId = tokenId;
   item.draggable = true;
 
@@ -154,30 +160,26 @@ function createAssetCard(tokenId, role) {
 
   const thumbnailEl = document.createElement("div");
   thumbnailEl.className =
-    "asset-library-item-thumbnail asset-library-item-thumbnail-empty";
+    "asset-card-thumbnail asset-card-thumbnail-empty";
   thumbnailEl.textContent = "✦";
 
-  const idEl = document.createElement("div");
-  idEl.className = "asset-library-item-id";
-  idEl.textContent = `Token #${tokenId}`;
-
   const nameEl = document.createElement("div");
-  nameEl.className = "asset-library-item-name";
-  nameEl.textContent = "Loading…";
+  nameEl.className = "asset-card-name";
+  nameEl.textContent = `Loading… #${tokenId}`;
 
   const badge = document.createElement("span");
-  badge.className = `asset-library-item-badge ${
+  badge.className = `asset-card-badge ${
     role === "owner" ? "badge-owner" : "badge-editor"
   }`;
   badge.textContent = role === "owner" ? "Owner" : "Editor";
 
   const openBtn = document.createElement("button");
-  openBtn.className = "asset-library-item-open btn-outline btn-sm";
+  openBtn.className = "btn btn-outline btn-sm";
   openBtn.textContent = "Open";
   openBtn.addEventListener("click", () => openAssetByTokenId(tokenId));
 
   const addBtn = document.createElement("button");
-  addBtn.className = "asset-library-item-add btn-secondary btn-sm";
+  addBtn.className = "btn btn-secondary btn-sm";
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {
@@ -198,16 +200,15 @@ function createAssetCard(tokenId, role) {
   });
 
   const meta = document.createElement("div");
-  meta.className = "asset-library-item-meta";
+  meta.className = "asset-card-meta";
   meta.appendChild(badge);
 
   const actions = document.createElement("div");
-  actions.className = "asset-library-item-actions";
+  actions.className = "asset-card-actions";
   actions.appendChild(openBtn);
   actions.appendChild(addBtn);
 
   item.appendChild(thumbnailEl);
-  item.appendChild(idEl);
   item.appendChild(nameEl);
   item.appendChild(meta);
   item.appendChild(actions);
@@ -240,7 +241,7 @@ async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
       once: true,
     });
     thumbnailEl.textContent = "";
-    thumbnailEl.classList.remove("asset-library-item-thumbnail-empty");
+    thumbnailEl.classList.remove("asset-card-thumbnail-empty");
     thumbnailEl.appendChild(img);
   } catch (err) {
     console.warn("Failed to load asset thumbnail", thumbnailCid, err);
@@ -258,11 +259,11 @@ async function loadAssetMetadata(tokenId, nameEl, thumbnailEl) {
     }
     const manifest = await getFromRemoteIPFS(cid);
     const assetName = manifest.name || "Unnamed Asset";
-    nameEl.textContent = assetName;
+    nameEl.textContent = `${assetName} #${tokenId}`;
     await renderAssetThumbnail(manifest.thumbnail, thumbnailEl, assetName);
   } catch (err) {
     console.warn("Failed to load asset metadata for token", tokenId, err);
-    nameEl.textContent = "Unnamed Asset";
+    nameEl.textContent = `Unnamed Asset #${tokenId}`;
   }
 }
 
@@ -274,7 +275,7 @@ async function refreshAssetLibrary() {
 
 function highlightActiveAsset() {
   if (!assetLibraryBody || !window.activeAssetTokenId) return;
-  assetLibraryBody.querySelectorAll(".asset-library-item").forEach((el) => {
+  assetLibraryBody.querySelectorAll(".asset-card").forEach((el) => {
     el.classList.toggle(
       "active",
       el.dataset.tokenId === String(window.activeAssetTokenId)

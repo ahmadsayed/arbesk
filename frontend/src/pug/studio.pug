@@ -3,38 +3,34 @@ html(lang="en")
   head
     title Arbesk Studio
     meta(charset="utf-8")
+    
     meta(name="viewport", content="width=device-width, initial-scale=1")
     link(rel="icon", type="image/webp", href="/logo.webp")
     link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
-    script.
-      (function(){
-        const s = localStorage.getItem('arbesk-theme');
-        const t = s || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-theme', t);
-      })();
-    script(src="https://cdn.babylonjs.com/babylon.js")
-    script(src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js")
-    script(src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js")
-    script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js")
-    script(src="https://cdn.jsdelivr.net/npm/web3modal@1.9.12/dist/index.js")
+    script(src="/js/engine/theme-init.js")
+    script(src="https://cdn.babylonjs.com/babylon.js" integrity="sha384-N21flNeAtF0n//TBAE8EFPYqxs5Jgstw59zMEuXA3FdEZ9arMLbIs+feJuhzD93+" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js" integrity="sha384-M635DZboqtaFk/2MVCxG79NnqAol4w41P3RRqOV1hmoi7/eM1EKQfA5Szdr5l0Ss" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js" integrity="sha384-CxROuhjlFK/sd8r58hLhsdPLke/MeT6KBGOlb7J3YFw5hf+4Gv5Dc4aGrh4FbUU/" crossorigin="anonymous")
+    script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" integrity="sha384-uDUzAob8VRybYi68YL5W/y5Uel6PtqYSI0YHiTQB400WGPc/TVqL2dHYDkGKdBnw" crossorigin="anonymous")
   body
     #app
       //- ═══════════════════════════════════════════════════════════
       //- Header Bar (GNOME-style)
       //- ═══════════════════════════════════════════════════════════
       header.headerbar
+        h1.sr-only Arbesk Studio
         .headerbar-brand
           img.logo-light(src="/logo.webp", alt="Arbesk")
           img.logo-dark(src="/logo-dark.webp", alt="Arbesk")
 
         button#backBtn.headerbar-back.hidden(aria-label="Go back to parent world", title="Go back (Alt+Left)")
-          svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+          svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
             path(d="M15 18l-6-6 6-6")
 
         .headerbar-title
           nav#pathBar.pathbar.hidden(aria-label="World path")
-          span#assetStatusName.headerbar-title-text(contenteditable="true") No asset open
+          span#assetStatusName.headerbar-title-text(contenteditable="true" role="textbox" aria-multiline="false" aria-label="Asset name") No asset open
           span#assetStatusMeta.headerbar-title-meta Create or open an asset
 
         #assetHistory.history(hidden)
@@ -60,7 +56,7 @@ html(lang="en")
               path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
             span#burnAssetBtnText.btn-text Burn
           button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
-            svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+            svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               circle(cx="12" cy="12" r="5")
               line(x1="12" y1="1" x2="12" y2="3")
               line(x1="12" y1="21" x2="12" y2="23")
@@ -70,45 +66,46 @@ html(lang="en")
               line(x1="21" y1="12" x2="23" y2="12")
               line(x1="4.22" y1="19.78" x2="5.64" y2="18.36")
               line(x1="18.36" y1="5.64" x2="19.78" y2="4.22")
-            svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+            svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
-          button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet" onclick="connectWallet()")
+          span#headerbarNetworkBadge.headerbar-network-badge.hidden
+          button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
               path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
               path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
             span Connect Wallet
-          button#disconnectWalletBtn.headerbar-wallet.hidden(aria-label="Disconnect wallet" onclick="disconnectWallet()")
+          button#disconnectWalletBtn.headerbar-wallet.hidden(aria-label="Wallet menu")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
               path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
               path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
-            span Disconnect
+            span#disconnectWalletBtnText Disconnect
 
       //- ═══════════════════════════════════════════════════════════
       //- Studio Layout
       //- ═══════════════════════════════════════════════════════════
       .studio-layout
         //- Unified Sidebar with View Switcher
-        aside.sidebar
-          .sidebar-switcher
-            button.sidebar-switcher-btn.active(data-view="create" aria-label="Create" title="Create (Ctrl+1)")
-              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+        aside.sidebar#sidebar
+          .sidebar-switcher(role="tablist")
+            button.sidebar-switcher-btn.active(data-view="create" role="tab" aria-selected="true" tabindex="0" aria-label="Create" title="Create (Ctrl+1)")
+              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M12 20h9")
                 path(d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z")
-            button.sidebar-switcher-btn(data-view="outline" aria-label="Outline" title="Outline (Ctrl+2)")
-              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+            button.sidebar-switcher-btn(data-view="outline" role="tab" aria-selected="false" tabindex="-1" aria-label="Outline" title="Outline (Ctrl+2)")
+              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 circle(cx="12" cy="12" r="10")
                 line(x1="12" y1="2" x2="12" y2="7")
                 line(x1="12" y1="17" x2="12" y2="22")
                 line(x1="2" y1="12" x2="7" y2="12")
                 line(x1="17" y1="12" x2="22" y2="12")
-            button.sidebar-switcher-btn(data-view="library" aria-label="Library" title="Library (Ctrl+3)")
-              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+            button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Library" title="Library (Ctrl+3)")
+              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20")
                 path(d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z")
-            button.sidebar-switcher-btn(data-view="ledger" aria-label="Ledger" title="Ledger (Ctrl+4)")
-              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+            button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Ledger" title="Ledger (Ctrl+4)")
+              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z")
                 path(d="M14 2v6h6")
                 path(d="M8 13h2")
@@ -116,14 +113,14 @@ html(lang="en")
                 path(d="M14 13h2")
                 path(d="M14 17h2")
             .sidebar-switcher-bottom
-              button#sidebarToggle.sidebar-switcher-toggle(aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)")
-                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+              button#sidebarToggle.sidebar-switcher-toggle(aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)" aria-expanded="true" aria-controls="sidebar")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                   polyline(points="15 18 9 12 15 6")
           .sidebar-content
             //- View: Create
             .sidebar-view(data-view="create")
               .sidebar-view-header
-                h2 Create
+                h3 Create
               .sidebar-view-body
                 .sidebar-action-row
                   button#newAssetSidebarBtn.btn.btn-primary(style="width:100%")
@@ -134,7 +131,7 @@ html(lang="en")
                 #assetDefinition.asset-definition-section
                   .asset-def-header
                     button#toggleAssetDef.asset-def-toggle(aria-label="Toggle settings")
-                      svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                      svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                         polyline(points="9 18 15 12 9 6")
                       span Settings
                   .asset-def-body(hidden)
@@ -150,15 +147,15 @@ html(lang="en")
                         option(value="hunyuan3d") Hunyuan3D
                     .form-group
                       label.form-label(for="tierSelect") Quality Tier
-                      select#tierSelect.form-select
+                      select#tierSelect.form-select(aria-describedby="tierHelp")
                         option(value="0" selected) Basic — 0.75 USDC
                         option(value="1") Standard — 1.25 USDC
                         option(value="2") Premium — 1.75 USDC
                         option(value="3") Pro — 2.50 USDC
-                      .form-help Higher tiers produce better quality meshes.
+                      .form-help#tierHelp Higher tiers produce better quality meshes.
                     #teamPanel.team-section(hidden)
                       .team-header
-                        h5 Collaborators
+                        h4 Collaborators
                         span#teamOwnerBadge.owner-badge(hidden) Owner
                       #teamList.team-list
                       .team-add
@@ -181,14 +178,14 @@ html(lang="en")
             //- View: Outline
             .sidebar-view(data-view="outline" hidden)
               .sidebar-view-header
-                h2 Outline
+                h3 Outline
                 .outliner-toolbar
                   button#outlinerAddBtn.btn.btn-icon.btn-sm(aria-label="Add child world" title="Add child world")
-                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                       line(x1="12" y1="5" x2="12" y2="19")
                       line(x1="5" y1="12" x2="19" y2="12")
                   button#outlinerRemoveBtn.btn.btn-icon.btn-sm(aria-label="Remove selected" title="Remove selected")
-                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                       line(x1="5" y1="12" x2="19" y2="12")
               .sidebar-view-body
                 .outliner
@@ -198,7 +195,7 @@ html(lang="en")
             //- View: Library
             .sidebar-view(data-view="library" hidden)
               .sidebar-view-header
-                h2 Library
+                h3 Library
               .sidebar-view-body
                 #assetLibraryBody.asset-library-body
                   p.asset-library-empty Connect wallet to browse your asset tokens.
@@ -206,7 +203,7 @@ html(lang="en")
             //- View: Ledger
             .sidebar-view(data-view="ledger" hidden)
               .sidebar-view-header
-                h2 Ledger
+                h3 Ledger
               .sidebar-view-body
                 #ledgerBody.ledger-panel-body
                   .ledger-panel-controls
@@ -228,13 +225,13 @@ html(lang="en")
 
         //- Sidebar reveal button
         button#sidebarReveal.sidebar-reveal(aria-label="Show sidebar" title="Show sidebar (Ctrl+B)")
-          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
             polyline(points="9 18 15 12 9 6")
 
         //- Main content area
         main#mainStage.main-stage
           #viewport.viewport
-            canvas#renderCanvas
+            canvas#renderCanvas(aria-label="3D viewport" role="img")
             canvas#viewportGizmo(aria-label="Viewport orientation gizmo" title="X Y Z orientation")
 
             #welcomeOverlay.viewport-empty
@@ -253,9 +250,9 @@ html(lang="en")
 
           //- Message bar
           .messagebar
-            textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="1")
+            textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="1" aria-label="Asset generation prompt")
             button#generateBtn.messagebar-submit(aria-label="Generate asset")
-              svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+              svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                 polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
               .messagebar-spinner
             p#generateHint.messagebar-hint(hidden) Connect wallet to generate
@@ -263,9 +260,9 @@ html(lang="en")
         //- Inspector — right sidebar
         aside#inspector.inspector.collapsed
           .inspector-header
-            h5 Selection Inspector
+            h3 Selection Inspector
             button#inspectorCloseBtn.btn.btn-icon.btn-sm(aria-label="Close inspector")
-              svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2")
+              svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                 line(x1="18" y1="6" x2="6" y2="18")
                 line(x1="6" y1="6" x2="18" y2="18")
           .inspector-body
@@ -318,6 +315,34 @@ html(lang="en")
         .bottombar-status
           span#bottomBarStatus.bottombar-status-item Draft
           span.bottombar-status-item Provider: Mock
+          span#srStatus.sr-only(aria-live="polite" aria-atomic="true")
+
+      //- Wallet Popover
+      #walletPopover.wallet-popover.hidden(aria-label="Wallet menu")
+        .wallet-popover-header
+          span#walletPopoverAddress.wallet-popover-address —
+          button#walletPopoverCopy.wallet-popover-copy(type="button") Copy
+        .wallet-popover-network
+          span#walletPopoverNetworkBadge.wallet-popover-network-badge Unknown
+          span#walletPopoverChainId.wallet-popover-chain-id
+        a#walletPopoverExplorer.wallet-popover-explorer.hidden(href="#" target="_blank" rel="noopener noreferrer")
+          | View on Explorer
+          svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+            path(d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6")
+            polyline(points="15 3 21 3 21 9")
+            line(x1="10" y1="14" x2="21" y2="3")
+        .wallet-popover-actions
+          select#walletPopoverNetworkSelect.wallet-popover-network-select(aria-label="Switch network")
+            option(value="hardhat") Hardhat Local
+            option(value="ethereum") Ethereum Mainnet
+            option(value="sepolia") Sepolia
+            option(value="polygon") Polygon
+            option(value="base") Base
+            option(value="calibration") Filecoin Calibration
+          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Disconnect
+
+      //- Toast Container
+      #toastContainer(role="region" aria-label="Notifications")
 
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")
@@ -326,6 +351,7 @@ html(lang="en")
     script(type="module", src="/js/blockchain/wallet.js")
     script(type="module", src="/js/services/api.js")
     script(type="module", src="/js/services/team.js")
+    script(type="module", src="/js/ui/toasts.js")
     script(type="module", src="/js/ui/asset-editors.js")
     script(type="module", src="/js/ui/asset-save.js")
     script(type="module", src="/js/ui/asset-history.js")
@@ -335,38 +361,5 @@ html(lang="en")
     script(type="module", src="/js/ui/outliner.js")
     script(type="module", src="/js/ui/nesting.js")
     script(type="module", src="/js/ui/collaborators.js")
-    script(type="module").
-      import { initAssetLibrary } from '/js/ui/asset-library.js';
-      initAssetLibrary();
-
-      import { initLedgerPanel } from '/js/ui/ledger-panel.js';
-      initLedgerPanel();
-
-      import { initSidebar } from '/js/ui/sidebar.js';
-      initSidebar();
-
-      import { initOutliner } from '/js/ui/outliner.js';
-      initOutliner();
-
-      import { initNesting } from "/js/ui/nesting.js";
-      initNesting();
-
-      import { initCollaborators } from '/js/ui/collaborators.js';
-      initCollaborators();
-
-      import { initTheme, toggleTheme } from '/js/engine/theme.js';
-      initTheme();
-      document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
-
-      document.addEventListener('wallet:connected', () => {
-        const c = document.getElementById('connectWalletBtn');
-        const d = document.getElementById('disconnectWalletBtn');
-        if (c) { c.classList.add('hidden'); c.classList.remove('disconnected'); }
-        if (d) d.classList.remove('hidden');
-      });
-      document.addEventListener('wallet:disconnected', () => {
-        const c = document.getElementById('connectWalletBtn');
-        const d = document.getElementById('disconnectWalletBtn');
-        if (c) { c.classList.remove('hidden'); c.classList.add('disconnected'); }
-        if (d) d.classList.add('hidden');
-      });
+    script(type="module", src="/js/ui/wallet-popover.js")
+    script(type="module", src="/js/engine/studio-init.js")

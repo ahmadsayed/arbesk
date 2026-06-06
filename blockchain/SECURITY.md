@@ -4,7 +4,7 @@
 **Contract:** `blockchain/contracts/ArbeskAsset.sol`  
 **Solidity Version:** ^0.8.20 (compiled 0.8.24, Cancun EVM)  
 **Dependencies:** OpenZeppelin v5 (ERC721Enumerable, Ownable, ReentrancyGuard, Pausable)  
-**Target Network:** Filecoin FEVM (Calibration testnet / Mainnet)  
+**Target Network:** EVM-compatible chains (testnet / mainnet)  
 
 ---
 
@@ -21,7 +21,7 @@ The `publishAsset` function has no access control or payment requirement. Anyone
 
 This is intentional — minting is a public operation. Three layers prevent abuse:
 
-1. **Gas cost on Filecoin FEVM**: Every `publishAsset` call consumes FIL for gas. Spam has a real economic cost.
+1. **Gas cost on EVM chains**: Every `publishAsset` call consumes the chain-native token for gas. Spam has a real economic cost.
 
 2. **`MAX_TOKENS_PER_EDITOR = 500` cap**: `publishAsset` auto-adds the caller as an editor via `_addEditor`. Once a wallet reaches 500 tokens, further minting reverts. An attacker would need to fund new wallets to continue spamming.
 
@@ -111,12 +111,12 @@ All admin functions are single-`onlyOwner` calls with no delay or multisig requi
 
 ### How It Is Addressed
 
-This is standard for early-stage contracts and single-developer projects. The risk is acknowledged and will be addressed before Filecoin mainnet deployment:
+This is standard for early-stage contracts and single-developer projects. The risk is acknowledged and will be addressed before mainnet deployment:
 
 | Milestone | Mitigation |
 |-----------|------------|
 | **Now (dev/testnet)** | Single owner key, Dockerized Hardhat, `.env` never committed |
-| **Before mainnet** | Deploy with a multisig wallet (e.g., Gnosis Safe on FEVM) as the `owner` |
+| **Before mainnet** | Deploy with a multisig wallet (e.g., Gnosis Safe) as the `owner` |
 | **Future** | Optionally add OpenZeppelin `TimelockController` with a 48-hour delay for sensitive operations (`setTreasury`, `setCost`) |
 
 The `pause()` function provides an emergency brake regardless of the owner key state — if a vulnerability is discovered, the contract can be frozen while the team responds.
@@ -182,13 +182,13 @@ for (uint256 i = 0; i < members[tokenId].length; i++) {
 
 ### Finding
 
-`publishAsset` and `updateAssetURI` store arbitrary-length URI strings on-chain with no bounds check. While Filecoin FEVM gas economics differ from Ethereum L1, excessive storage could be abused.
+`publishAsset` and `updateAssetURI` store arbitrary-length URI strings on-chain with no bounds check. While EVM gas economics vary by chain, excessive storage could be abused.
 
 ### How It Is Addressed
 
 1. **IPFS CIDs are ~46 characters** (`Qm...` or `bafy...`), far below any reasonable limit.
 2. **The `MAX_TOKENS_PER_EDITOR` cap** limits how many URIs one wallet can store.
-3. **Gas cost** on FEVM makes storing very large strings economically unattractive.
+3. **Gas cost** on most EVM chains makes storing very large strings economically unattractive.
 
 If a cap is desired, a reasonable bound would be 200 bytes:
 

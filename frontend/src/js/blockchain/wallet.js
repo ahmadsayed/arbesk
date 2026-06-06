@@ -1,67 +1,101 @@
 /**
  * Arbesk Wallet Connection
  *
- * Web3Modal + Web3.js for Filecoin FEVM.
+ * EIP-6963 multi-wallet discovery + WalletConnect v2 + Web3.js
+ * for EVM-compatible chains.
+ *
  * Handles connection, network switching, generation payment, NFT minting,
  * tokenURI updates, editor management, role-based collaboration, and burn.
  */
 
-// Filecoin FEVM network configurations
+import { showToast } from "../ui/toasts.js";
+import {
+  startDiscovery,
+  requestWallets,
+  getWalletByRdns,
+  stopDiscovery,
+} from "./wallet-discovery.js";
+import {
+  getWalletConnectProvider,
+  connectWalletConnect,
+  disconnectWalletConnect,
+  onWalletConnectEvent,
+  offWalletConnectEvent,
+  isWalletConnectConnected,
+} from "./wallet-connect.js";
+import { showWalletModal } from "../ui/wallet-modal.js";
+
+// Supported networks
 const NETWORKS = {
   hardhat: {
     chainId: "0x1df5e0e", // 31415822 in hex
     chainName: "Hardhat Local",
     rpcUrls: ["http://127.0.0.1:8545"],
-    nativeCurrency: { name: "TestFIL", symbol: "tFIL", decimals: 18 },
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: [],
   },
-  calibration: {
-    chainId: "0x4cb2f", // 314159 in hex
-    chainName: "Filecoin Calibration",
-    rpcUrls: ["https://api.calibration.node.glif.io/rpc/v1"],
-    nativeCurrency: { name: "TestFIL", symbol: "tFIL", decimals: 18 },
-    blockExplorerUrls: ["https://calibration.filfox.info"],
+  ethereum: {
+    chainId: "0x1",
+    chainName: "Ethereum Mainnet",
+    rpcUrls: ["https://eth.llamarpc.com"],
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://etherscan.io"],
   },
-  mainnet: {
-    chainId: "0x13a", // 314 in hex
-    chainName: "Filecoin Mainnet",
-    rpcUrls: ["https://api.node.glif.io/rpc/v1"],
-    nativeCurrency: { name: "Filecoin", symbol: "FIL", decimals: 18 },
-    blockExplorerUrls: ["https://filfox.info"],
+  sepolia: {
+    chainId: "0xaa36a7",
+    chainName: "Sepolia",
+    rpcUrls: ["https://ethereum-sepolia.publicnode.com"],
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.etherscan.io"],
+  },
+  polygon: {
+    chainId: "0x89",
+    chainName: "Polygon",
+    rpcUrls: ["https://polygon-rpc.com"],
+    nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+    blockExplorerUrls: ["https://polygonscan.com"],
+  },
+  base: {
+    chainId: "0x2105",
+    chainName: "Base",
+    rpcUrls: ["https://mainnet.base.org"],
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://basescan.org"],
+  },
+  calibration: {
+    chainId: "0x4cb2f",
+    chainName: "Filecoin Calibration",
+    rpcUrls: ["https://rpc.ankr.com/filecoin_testnet"],
+    nativeCurrency: { name: "tFIL", symbol: "tFIL", decimals: 18 },
+    blockExplorerUrls: ["https://calibration.filfox.info"],
   },
 };
 
 const HARHAT_CHAIN_ID_DEC = 31415822;
+// Only Hardhat is supported for now — the contract is only deployed there.
+// Add other chain IDs here after deploying to mainnet/sepolia/polygon/etc.
+const SUPPORTED_CHAIN_IDS = [HARHAT_CHAIN_ID_DEC];
 
-const providerOptions = {};
+/** @type {string|null} 'injected' | 'walletconnect' | null */
+let activeConnectionSource = null;
 
-let web3Modal = null;
+/** @type {string|null} rdns of the injected wallet (e.g., 'io.metamask') */
+let activeWalletRdns = null;
+
 let web3Provider = null;
 let web3 = null;
 let contract = null;
 let contractAddress = null;
 
+const LAST_WALLET_KEY = "arbesk-last-wallet";
+
 /**
- * Initialize Web3Modal. Does NOT auto-connect silently.
+ * Initialize wallet system. Starts EIP-6963 discovery.
+ * Does NOT auto-connect.
  */
 function initWallet() {
-  const hasWeb3Modal = typeof window.Web3Modal === "function";
-  if (!hasWeb3Modal) {
-    console.warn(
-      "Web3Modal not loaded; direct MetaMask fallback will be used on connect."
-    );
-    return;
-  }
-
-  try {
-    web3Modal = new window.Web3Modal({
-      cacheProvider: true,
-      providerOptions,
-      disableInjectedProvider: false,
-    });
-  } catch (e) {
-    console.error("Web3Modal init failed:", e);
-  }
+  startDiscovery();
+  console.log("[WALLET] EIP-6963 discovery started");
 }
 
 /**
@@ -76,6 +110,18 @@ async function _initContract() {
     if (!addr) return;
     if (!abiData?.abi) return;
 
+    // Verify contract actually exists at this address on the current chain
+    const code = await web3.eth.getCode(addr);
+    if (!code || code === "0x" || code === "0x0") {
+      console.warn(
+        `[CONTRACT] No bytecode at ${addr}. ` +
+          `Wrong network? Current chain: ${await web3.eth.getChainId()}`
+      );
+      contractAddress = null;
+      contract = null;
+      return;
+    }
+
     contractAddress = addr;
     contract = new web3.eth.Contract(abiData.abi, contractAddress);
   } catch (e) {
@@ -84,13 +130,19 @@ async function _initContract() {
 }
 
 /**
- * Prompt MetaMask to switch/add the Hardhat network.
+ * Prompt wallet to switch/add a target network.
+ * @param {string} networkKey - key in NETWORKS object
  */
-async function _promptHardhatNetwork() {
-  const ethereum = web3Provider || window.ethereum;
+async function _promptNetworkSwitch(networkKey) {
+  const ethereum = web3Provider;
   if (!ethereum) return false;
 
-  const net = NETWORKS.hardhat;
+  const net = NETWORKS[networkKey];
+  if (!net) {
+    console.error(`[WALLET] Unknown network key: ${networkKey}`);
+    return false;
+  }
+
   try {
     await ethereum.request({
       method: "wallet_switchEthereumChain",
@@ -99,24 +151,58 @@ async function _promptHardhatNetwork() {
     return true;
   } catch (switchError) {
     if (switchError.code === 4902) {
+      // Chain not in wallet — try wallet_addEthereumChain first.
       try {
         await ethereum.request({
           method: "wallet_addEthereumChain",
-          params: [net],
+          params: [
+            {
+              chainId: net.chainId,
+              chainName: net.chainName,
+              rpcUrls: net.rpcUrls,
+              nativeCurrency: net.nativeCurrency,
+              blockExplorerUrls: net.blockExplorerUrls,
+            },
+          ],
         });
+        console.log(
+          `[WALLET] wallet_addEthereumChain succeeded for ${net.chainName}`
+        );
         return true;
       } catch (addError) {
-        console.error("Failed to add Hardhat network:", addError);
-        alert(
-          "Please add the Hardhat Local network manually:\nRPC: http://127.0.0.1:8545\nChain ID: 31415822"
+        console.warn(
+          `[WALLET] wallet_addEthereumChain also failed:`,
+          addError.message || addError
         );
+        showToast({
+          type: "warning",
+          title: `Switch to ${net.chainName}`,
+          message: `Please add/switch to ${
+            net.chainName
+          } manually in your wallet. RPC: ${
+            net.rpcUrls[0]
+          }, Chain ID: ${parseInt(net.chainId, 16)}`,
+          duration: 0,
+        });
         return false;
       }
     } else if (switchError.code === 4001) {
       // User rejected
+      showToast({
+        type: "warning",
+        title: "Wrong Network",
+        message: `Arbesk requires ${net.chainName}. Please switch networks to continue.`,
+        duration: 0,
+      });
       return false;
     } else {
       console.error("Network switch failed:", switchError);
+      showToast({
+        type: "warning",
+        title: "Network Switch Failed",
+        message: switchError.message || "Could not switch network.",
+        duration: 0,
+      });
       return false;
     }
   }
@@ -130,7 +216,7 @@ async function _checkBalance() {
   try {
     const balanceWei = await web3.eth.getBalance(window.walletAddress);
     const balanceEth = web3.utils.fromWei(balanceWei, "ether");
-    console.log("Balance:", balanceEth, "tFIL");
+    console.log("Balance:", balanceEth, "ETH");
 
     if (parseFloat(balanceEth) < 0.1) {
       console.warn("Low balance detected");
@@ -139,22 +225,18 @@ async function _checkBalance() {
       chainId = Number(chainId);
       if (chainId === HARHAT_CHAIN_ID_DEC) {
         // Hardhat dev key for account #0
-        const devKey =
-          "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-        const devAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        const { DEV_ACCOUNT_ADDRESS } = await import("./dev-account.js");
 
-        if (window.walletAddress.toLowerCase() !== devAddress.toLowerCase()) {
-          alert(
-            "Your wallet has insufficient funds on the Hardhat local network.\n\n" +
-              "To get test funds, import this dev account into MetaMask:\n\n" +
-              "Address: " +
-              devAddress +
-              "\n" +
-              "Private key:\n" +
-              devKey +
-              "\n\n" +
-              "This account has 10,000 tFIL pre-funded."
-          );
+        if (
+          window.walletAddress.toLowerCase() !==
+          DEV_ACCOUNT_ADDRESS.toLowerCase()
+        ) {
+          showToast({
+            type: "warning",
+            title: "Low Balance",
+            message: `Your wallet has insufficient funds on Hardhat. Import dev account: ${devAddress}`,
+            duration: 0,
+          });
         }
       }
     }
@@ -169,31 +251,63 @@ async function _checkBalance() {
  */
 async function autoConnectWallet() {
   try {
-    // 1. Try Web3Modal cached provider (no popup)
-    if (web3Modal && web3Modal.cachedProvider) {
-      web3Provider = await web3Modal.connect();
-      web3 = new Web3(web3Provider);
+    const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
+
+    if (lastWallet === "walletconnect") {
+      // Try WalletConnect silent restore
+      const wcProvider = await getWalletConnectProvider();
+      if (wcProvider && wcProvider.connected) {
+        web3Provider = wcProvider;
+        web3 = new Web3(wcProvider);
+        const accounts = wcProvider.accounts || [];
+        if (accounts.length > 0) {
+          activeConnectionSource = "walletconnect";
+          await _finishWalletSetup(accounts[0]);
+          return;
+        }
+      }
+    } else if (lastWallet) {
+      // Try to reconnect injected wallet by rdns
+      requestWallets();
+      // Give wallets a moment to announce
+      await new Promise((r) => setTimeout(r, 300));
+      const wallet = getWalletByRdns(lastWallet);
+      if (wallet && wallet.provider) {
+        // Try silent eth_accounts (no popup)
+        try {
+          const accounts = await wallet.provider.request({
+            method: "eth_accounts",
+          });
+          if (accounts && accounts.length > 0) {
+            web3Provider = wallet.provider;
+            web3 = new Web3(wallet.provider);
+            activeConnectionSource = "injected";
+            activeWalletRdns = wallet.rdns;
+            await _finishWalletSetup(accounts[0]);
+            return;
+          }
+        } catch {
+          // Silent fail — wallet not authorized
+        }
+      }
     }
-    // 2. Fallback: try MetaMask silent eth_accounts (no popup)
-    else if (window.ethereum) {
+
+    // Fallback: try any available injected provider (MetaMask-style)
+    if (window.ethereum) {
       const accounts = await window.ethereum.request({
         method: "eth_accounts",
       });
-      if (!accounts || accounts.length === 0) {
-        return; // Never connected — stay disconnected
+      if (accounts && accounts.length > 0) {
+        web3Provider = window.ethereum;
+        web3 = new Web3(window.ethereum);
+        activeConnectionSource = "injected";
+        activeWalletRdns = null; // unknown which wallet
+        await _finishWalletSetup(accounts[0]);
+        return;
       }
-      web3Provider = window.ethereum;
-      web3 = new Web3(web3Provider);
-    } else {
-      return; // No provider available
     }
 
-    const accounts = await web3.eth.getAccounts();
-    if (!accounts || accounts.length === 0) {
-      console.error("No accounts found");
-      return;
-    }
-    await _finishWalletSetup(accounts[0]);
+    // No previous connection — stay disconnected
   } catch (error) {
     console.error("Auto-connect failed:", error);
   }
@@ -209,15 +323,15 @@ async function _finishWalletSetup(address) {
   window.chainId = chainId;
   console.log("Connected wallet:", window.walletAddress, "chainId:", chainId);
 
-  // Prompt network switch if not on Hardhat
-  if (chainId !== HARHAT_CHAIN_ID_DEC) {
-    const switched = await _promptHardhatNetwork();
+  // Prompt network switch if not on a supported chain
+  if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+    const switched = await _promptNetworkSwitch("hardhat");
     if (switched) {
       // Re-read chainId after switch
       chainId = Number(await web3.eth.getChainId());
       window.chainId = chainId;
     } else {
-      console.warn("User did not switch to Hardhat network");
+      console.warn("User did not switch to a supported network");
     }
   }
 
@@ -231,11 +345,45 @@ async function _finishWalletSetup(address) {
     })
   );
 
-  // Setup listeners (only once)
-  const provider = web3Provider;
-  if (provider.on && !provider._arbeskListenersAttached) {
-    provider._arbeskListenersAttached = true;
-    provider.on("accountsChanged", (accounts) => {
+  // Setup listeners (only once per provider)
+  _attachProviderListeners();
+}
+
+/**
+ * Attach accountsChanged / chainChanged listeners to the active provider.
+ * Handles both injected wallets and WalletConnect.
+ */
+function _attachProviderListeners() {
+  if (!web3Provider) return;
+  if (web3Provider._arbeskListenersAttached) return;
+  web3Provider._arbeskListenersAttached = true;
+
+  if (activeConnectionSource === "walletconnect") {
+    // WalletConnect uses its own event emitter
+    onWalletConnectEvent("accountsChanged", (accounts) => {
+      if (!accounts || accounts.length === 0) {
+        disconnectWallet();
+      } else {
+        window.walletAddress = accounts[0];
+        _checkBalance();
+        document.dispatchEvent(
+          new CustomEvent("wallet:connected", {
+            detail: { address: window.walletAddress, chainId: null },
+          })
+        );
+      }
+    });
+
+    onWalletConnectEvent("chainChanged", () => {
+      window.location.reload();
+    });
+
+    onWalletConnectEvent("disconnect", () => {
+      disconnectWallet();
+    });
+  } else {
+    // Injected wallet (EIP-1193)
+    web3Provider.on("accountsChanged", (accounts) => {
       if (accounts.length === 0) {
         disconnectWallet();
       } else {
@@ -249,42 +397,68 @@ async function _finishWalletSetup(address) {
       }
     });
 
-    provider.on("chainChanged", () => {
+    web3Provider.on("chainChanged", () => {
       window.location.reload();
     });
   }
 }
 
 /**
- * Connect wallet and setup listeners.
- * Always triggers the MetaMask / wallet popup.
+ * Connect wallet. Shows the wallet picker modal.
  */
 async function connectWallet() {
   try {
-    if (web3Modal) {
-      web3Provider = await web3Modal.connect();
-      web3 = new Web3(web3Provider);
-    } else if (window.ethereum) {
-      // Direct MetaMask/Rabby fallback — always request accounts to show popup
-      web3Provider = window.ethereum;
-      web3 = new Web3(web3Provider);
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-    } else {
-      console.error("No wallet provider found. Install MetaMask or Rabby.");
-      alert("No wallet provider found. Please install MetaMask or Rabby.");
+    const result = await showWalletModal();
+    if (!result) {
+      console.log("User cancelled wallet selection");
       return;
     }
 
-    const accounts = await web3.eth.getAccounts();
-    if (!accounts || accounts.length === 0) {
-      console.error("No accounts found");
-      return;
+    const { provider, source, walletName, walletRdns } = result;
+
+    if (source === "walletconnect") {
+      // WalletConnect provider is already connected by this point
+      web3Provider = provider;
+      web3 = new Web3(provider);
+      activeConnectionSource = "walletconnect";
+      activeWalletRdns = null;
+      localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
+
+      const accounts = provider.accounts || [];
+      if (!accounts || accounts.length === 0) {
+        console.error("No accounts found from WalletConnect");
+        return;
+      }
+      await _finishWalletSetup(accounts[0]);
+    } else {
+      // Injected wallet — request accounts to trigger popup
+      web3Provider = provider;
+      web3 = new Web3(provider);
+      activeConnectionSource = "injected";
+      activeWalletRdns = walletRdns || null;
+
+      const accounts = await web3.eth.requestAccounts();
+      if (!accounts || accounts.length === 0) {
+        console.error("No accounts found");
+        return;
+      }
+      // Store last used wallet for auto-connect (use rdns for accurate identification)
+      const reconnectId = walletRdns || walletName;
+      if (reconnectId) {
+        localStorage.setItem(LAST_WALLET_KEY, reconnectId);
+      }
+      await _finishWalletSetup(accounts[0]);
     }
-    await _finishWalletSetup(accounts[0]);
   } catch (error) {
     console.error("Wallet connection failed:", error);
-    if (error.code === 4001) {
+    if (error.message?.includes("User cancelled")) {
       console.log("User rejected connection");
+    } else {
+      showToast({
+        type: "error",
+        title: "Connection Failed",
+        message: error.message || "Could not connect wallet.",
+      });
     }
   }
 }
@@ -293,14 +467,28 @@ async function connectWallet() {
  * Disconnect wallet.
  */
 async function disconnectWallet() {
-  if (web3Modal) {
-    await web3Modal.clearCachedProvider();
+  // Detach listeners
+  if (web3Provider) {
+    if (activeConnectionSource === "walletconnect") {
+      offWalletConnectEvent("accountsChanged", () => {});
+      offWalletConnectEvent("chainChanged", () => {});
+      offWalletConnectEvent("disconnect", () => {});
+      await disconnectWalletConnect();
+    } else if (web3Provider.removeListener) {
+      web3Provider.removeListener("accountsChanged", () => {});
+      web3Provider.removeListener("chainChanged", () => {});
+    }
+    web3Provider._arbeskListenersAttached = false;
   }
+
+  activeConnectionSource = null;
+  activeWalletRdns = null;
   web3Provider = null;
   web3 = null;
   contract = null;
   contractAddress = null;
   window.walletAddress = null;
+  localStorage.removeItem(LAST_WALLET_KEY);
   document.dispatchEvent(new CustomEvent("wallet:disconnected"));
 }
 
@@ -330,134 +518,11 @@ async function switchNetwork(networkKey) {
   }
 }
 
-/**
- * Pay for a generation using the ArbeskAsset contract.
- * @param {string} nodeId — hex or string node identifier
- * @param {string} prompt — generation prompt
- * @returns {string|null} txHash on success, null on failure
- */
-async function payForGeneration(nodeId, prompt) {
-  const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress) {
-    alert("Wallet not connected. Please connect your wallet first.");
-    return null;
-  }
+// ─── Payment (USDC only) ───
 
-  // Check we're on Hardhat
-  let chainId = await w3.eth.getChainId();
-  chainId = Number(chainId);
-  if (chainId !== HARHAT_CHAIN_ID_DEC) {
-    const ok = confirm(
-      "You are not on the Hardhat Local network (chain " +
-        chainId +
-        ").\n\n" +
-        "Switch to Hardhat Local now?\n(RPC: http://127.0.0.1:8545, Chain ID: 31415822)"
-    );
-    if (ok) {
-      const switched = await _promptHardhatNetwork();
-      if (!switched) return null;
-    } else {
-      return null;
-    }
-  }
-
-  try {
-    const c = _getContract();
-    if (!c || !contractAddress) {
-      console.warn("No contract configured; falling back to mock tx");
-      return _mockPayForGeneration(nodeId, prompt);
-    }
-
-    const cost = await c.methods.costPerGeneration().call();
-    console.log(
-      "[PAY] costPerGeneration =",
-      cost,
-      "wei (" + Number(cost) / 1e18 + " tFIL)"
-    );
-    const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
-
-    const tx = c.methods.payForGeneration(nodeIdBytes32, prompt);
-    console.log("[PAY] estimating gas for payForGeneration...");
-    const gas = await tx.estimateGas({
-      from: window.walletAddress,
-      value: cost,
-    });
-    console.log(
-      "[PAY] estimated gas =",
-      gas,
-      "-> using",
-      Math.floor(Number(gas) * 1.2)
-    );
-    const receipt = await tx.send({
-      from: window.walletAddress,
-      value: cost,
-      gas: Math.floor(Number(gas) * 1.2),
-    });
-    console.log("[PAY] transaction sent! txHash =", receipt.transactionHash);
-
-    document.dispatchEvent(
-      new CustomEvent("wallet:generationPaid", {
-        detail: {
-          txHash: receipt.transactionHash,
-          nodeId,
-          prompt,
-          blockNumber: receipt.blockNumber,
-          contractAddress,
-        },
-      })
-    );
-
-    return receipt.transactionHash;
-  } catch (error) {
-    console.error("payForGeneration failed:", error);
-    console.error(
-      "[PAY] error details:",
-      JSON.stringify(
-        { message: error.message, code: error.code, data: error.data },
-        null,
-        2
-      )
-    );
-
-    // Detect specific errors and show helpful messages
-    const msg = error.message || "";
-    if (msg.includes("insufficient funds")) {
-      const devAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-      const devKey =
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-      alert(
-        "Insufficient funds on Hardhat Local network.\n\n" +
-          "Your connected account does not have enough tFIL.\n\n" +
-          "Import the dev account into MetaMask:\n" +
-          "Address: " +
-          devAddress +
-          "\n" +
-          "Private key:\n" +
-          devKey +
-          "\n\n" +
-          "This account has 10,000 tFIL pre-funded by Hardhat."
-      );
-    } else if (
-      msg.includes("User denied") ||
-      msg.includes("rejected") ||
-      error.code === 4001
-    ) {
-      // User cancelled — silent
-    } else {
-      alert("Payment failed: " + msg);
-    }
-    return null;
-  }
-}
-
-// ─── Tier constants for USDC generation ───
+/** Tier names for USDC quality levels */
 const TIER_NAMES = ["Basic", "Standard", "Premium", "Pro"];
-const TIER_COSTS_USDC = {
-  0: "0.75",
-  1: "1.25",
-  2: "1.75",
-  3: "2.50",
-};
+const TIER_COSTS_USDC = { 0: "0.75", 1: "1.25", 2: "1.75", 3: "2.50" };
 
 /**
  * Pay for a generation using USDC at the selected quality tier.
@@ -468,38 +533,55 @@ const TIER_COSTS_USDC = {
  * @returns {string|null} txHash on success, null on failure
  */
 async function payForGenerationWithUSDC(nodeId, prompt, tier) {
+  return payWithUSDC(nodeId, prompt, tier);
+}
+
+// ─── Simple USDC Payment ───
+
+async function payWithUSDC(nodeId, prompt, tier) {
   const w3 = _getWeb3();
   if (!w3 || !window.walletAddress) {
-    alert("Wallet not connected. Please connect your wallet first.");
+    showToast({
+      type: "error",
+      title: "Wallet Not Connected",
+      message: "Please connect your wallet first.",
+    });
     return null;
   }
-
   const c = _getContract();
   if (!c || !contractAddress) {
-    alert("Contract not configured. Cannot process USDC payment.");
+    showToast({
+      type: "error",
+      title: "Contract Not Configured",
+      message: "Cannot process payment. Contract not deployed.",
+      duration: 0,
+    });
     return null;
   }
-
   try {
-    // Get tier cost from contract
     const tierCostWei = await c.methods.tierCosts(tier).call();
     if (tierCostWei === "0" || Number(tierCostWei) === 0) {
-      alert("Tier cost not set for " + TIER_NAMES[tier] + ". Contact admin.");
+      showToast({
+        type: "warning",
+        title: "Tier Not Configured",
+        message: "Tier cost not set for " + TIER_NAMES[tier] + ".",
+        duration: 0,
+      });
       return null;
     }
     const tierCostUSDC = Number(tierCostWei) / 1e6;
     console.log(
-      "[USDC] tier =",
-      TIER_NAMES[tier],
-      "cost =",
-      tierCostUSDC,
-      "USDC"
+      "[USDC] tier=" + TIER_NAMES[tier] + " cost=" + tierCostUSDC + " USDC"
     );
 
-    // Get USDC token address from contract
     const usdcAddr = await c.methods.usdcToken().call();
     if (usdcAddr === "0x0000000000000000000000000000000000000000") {
-      alert("USDC payments are not enabled on this contract.");
+      showToast({
+        type: "warning",
+        title: "USDC Disabled",
+        message: "USDC payments not enabled on this contract.",
+        duration: 0,
+      });
       return null;
     }
 
@@ -522,16 +604,21 @@ async function payForGenerationWithUSDC(nodeId, prompt, tier) {
       contractAddress,
       tierCostWei
     );
-    const approveGas = await approveTx.estimateGas({
-      from: window.walletAddress,
-    });
+
+    let approveGas;
+    try {
+      approveGas = await approveTx.estimateGas({ from: window.walletAddress });
+    } catch {
+      approveGas = 100000;
+    }
+
     await approveTx.send({
       from: window.walletAddress,
       gas: Math.floor(Number(approveGas) * 1.2),
     });
     console.log("[USDC] approval confirmed");
 
-    // Step 2: Pay for generation with USDC
+    // Step 2: Pay for generation
     console.log("[USDC] calling payForGenerationWithUSDC...");
     const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
     const payTx = c.methods.payForGenerationWithUSDC(
@@ -539,7 +626,14 @@ async function payForGenerationWithUSDC(nodeId, prompt, tier) {
       prompt,
       tier
     );
-    const payGas = await payTx.estimateGas({ from: window.walletAddress });
+
+    let payGas;
+    try {
+      payGas = await payTx.estimateGas({ from: window.walletAddress });
+    } catch {
+      payGas = 300000;
+    }
+
     const receipt = await payTx.send({
       from: window.walletAddress,
       gas: Math.floor(Number(payGas) * 1.2),
@@ -559,32 +653,39 @@ async function payForGenerationWithUSDC(nodeId, prompt, tier) {
         },
       })
     );
-
     return receipt.transactionHash;
   } catch (error) {
-    console.error("payForGenerationWithUSDC failed:", error);
+    console.error("payWithUSDC failed:", error);
     const msg = error.message || "";
     if (
       msg.includes("User denied") ||
       msg.includes("rejected") ||
       error.code === 4001
     ) {
-      // User cancelled — silent
+      // silent
     } else if (msg.includes("insufficient")) {
-      alert("Insufficient USDC balance or allowance for this tier.");
+      showToast({
+        type: "warning",
+        title: "Insufficient USDC",
+        message: "Insufficient USDC balance or allowance.",
+        duration: 0,
+      });
     } else {
-      alert("USDC payment failed: " + msg);
+      showToast({
+        type: "error",
+        title: "Payment Failed",
+        message: msg,
+        actions: [
+          { label: "Retry", onClick: () => payWithUSDC(nodeId, prompt, tier) },
+        ],
+      });
     }
     return null;
   }
 }
 
-/**
- * Mint a asset token.
- * @param {string} tokenURI — manifest CID or URI
- * @param {number|string} tokenId — unique token identifier
- * @returns {string|null} txHash on success, null on failure
- */
+// ─── Shared Helpers ───
+
 function _getWeb3() {
   return web3 || window.web3 || null;
 }
@@ -592,7 +693,6 @@ function _getWeb3() {
 function _getContract() {
   return contract || window.contract || null;
 }
-
 async function publishAsset(tokenURI, tokenId) {
   const c = _getContract();
   const w3 = _getWeb3();
@@ -618,6 +718,14 @@ async function publishAsset(tokenURI, tokenId) {
     return receipt.transactionHash;
   } catch (error) {
     console.error("publishAsset failed:", error);
+    const { decodeRevertReason } = await import("./error-decoder.js");
+    const contractAbi = (await getContractArtifact("ArbeskAsset"))?.abi || null;
+    const decodedMsg = await decodeRevertReason(error, contractAbi);
+    showToast({
+      type: "error",
+      title: "Publish Failed",
+      message: decodedMsg,
+    });
     return null;
   }
 }
@@ -893,6 +1001,14 @@ async function burn(tokenId) {
     return receipt.transactionHash;
   } catch (error) {
     console.error("burn failed:", error);
+    const { decodeRevertReason } = await import("./error-decoder.js");
+    const contractAbi = (await getContractArtifact("ArbeskAsset"))?.abi || null;
+    const decodedMsg = await decodeRevertReason(error, contractAbi);
+    showToast({
+      type: "error",
+      title: "Burn Failed",
+      message: decodedMsg,
+    });
     return null;
   }
 }
@@ -951,62 +1067,23 @@ async function canBurn(tokenId, address) {
   }
 }
 
-// Retain mock flow for offline development when contract is not deployed
-async function _mockPayForGeneration(nodeId, prompt) {
-  const w3 = _getWeb3();
-  // Send a 0-value transfer to the dev account (MetaMask blocks self-transfers with data)
-  const devAccount = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-  const tx = {
-    from: window.walletAddress,
-    to: devAccount,
-    value: w3.utils.toWei("0", "ether"),
-    gas: 21000,
-  };
-  const receipt = await w3.eth.sendTransaction(tx);
-  document.dispatchEvent(
-    new CustomEvent("wallet:generationPaid", {
-      detail: { txHash: receipt.transactionHash, nodeId, prompt },
-    })
-  );
-  return receipt.transactionHash;
-}
-
 // Expose to window for inline onclick handlers if needed
 window.connectWallet = connectWallet;
 window.disconnectWallet = disconnectWallet;
-window.payForGeneration = payForGeneration;
-window.payForGenerationWithUSDC = payForGenerationWithUSDC;
-window.publishAsset = publishAsset;
-window.updateAssetURI = updateAssetURI;
-window.addEditor = addEditor;
-window.removeEditor = removeEditor;
-window.addCollaboratorWithRole = addCollaboratorWithRole;
-window.setCollaboratorRole = setCollaboratorRole;
-window.getCollaboratorRole = getCollaboratorRole;
-window.listCollaboratorsByRole = listCollaboratorsByRole;
-window.burn = burn;
-window.setBurnPermission = setBurnPermission;
-window.canBurn = canBurn;
-window.switchNetwork = switchNetwork;
-window.CollaboratorRole = CollaboratorRole;
 
-document.addEventListener("DOMContentLoaded", () => {
-  setTimeout(async () => {
-    initWallet();
-    // Try silent auto-connect if user previously authorized
-    await autoConnectWallet();
-  }, 100);
-});
-
+// ── Exports ──
 export {
+  initWallet,
   connectWallet,
   disconnectWallet,
-  payForGeneration,
+  autoConnectWallet,
+  switchNetwork,
   payForGenerationWithUSDC,
   publishAsset,
   updateAssetURI,
   addEditor,
   removeEditor,
+  CollaboratorRole,
   addCollaboratorWithRole,
   setCollaboratorRole,
   getCollaboratorRole,
@@ -1014,10 +1091,7 @@ export {
   burn,
   setBurnPermission,
   canBurn,
-  switchNetwork,
-  initWallet,
-  autoConnectWallet,
-  CollaboratorRole,
   web3,
+  web3 as walletWeb3,
   contract,
 };

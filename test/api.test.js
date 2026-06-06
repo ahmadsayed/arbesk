@@ -335,8 +335,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.error.message).toContain("does not match");
     });
 
-    it("rejects when tier specified but no USDC event in receipt", async () => {
-      // Remove the USDC log from the receipt
+    it("accepts native ETH payment even when tier is specified (Hardhat dev)", async () => {
+      // Remove the USDC log from the receipt, leaving only native payment log
       const originalLogs = mockWeb3Receipt.logs;
       mockWeb3Receipt.logs = mockWeb3Receipt.logs.filter(
         (log) =>
@@ -344,22 +344,21 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           "0x0000000000000000000000000000000000000000000000000000000000usdc00",
       );
 
-      const uniqTx = "0xtier_nousdc_" + Date.now();
+      const uniqTx = "0xtier_native_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader(uniqTx))
         .send({
           prompt: "A desk",
-          nodeId: "node_tier_nousdc",
+          nodeId: "node_tier_native",
           txHash: uniqTx,
           tier: 2,
         });
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("TIER_MISMATCH");
-      expect(res.body.error.message).toContain(
-        "does not contain a USDC payment event",
-      );
+      // Native ETH payment (e.g. Hardhat) has no on-chain tier data,
+      // so the backend should accept it regardless of the tier value sent.
+      expect(res.status).toBe(200);
+      expect(res.body.assetManifestCid).toBeDefined();
       mockWeb3Receipt.logs = originalLogs; // restore
     });
 

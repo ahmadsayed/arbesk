@@ -112,7 +112,10 @@ async function onGenerate() {
 
   try {
     const tier = getTier();
+
+    // Always use USDC payment
     const txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
+
     if (!txHash) {
       throw new Error("Payment was cancelled or failed.");
     }

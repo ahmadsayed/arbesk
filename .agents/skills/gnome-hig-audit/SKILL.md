@@ -7,6 +7,8 @@ description: Evaluate Arbesk Studio UI/UX against GNOME Human Interface Guidelin
 
 Use this skill when asked to audit, evaluate, or review the Arbesk Studio frontend against GNOME Human Interface Guidelines (HIG). The audit produces a scored report with specific, actionable recommendations per violation.
 
+> **Priority Context**: Arbesk Studio is a **Web 3.0 application** running in a browser, not a native desktop GTK app. GNOME HIG is used as a **design reference and inspiration** for the studio shell aesthetic and interaction patterns, but **WCAG 2.1 (Web Content Accessibility Guidelines) is the primary accessibility standard** that must be met. Where GNOME HIG and WCAG conflict, WCAG wins. Where browser conventions and GNOME conventions differ (e.g., web keyboard shortcuts, touch behavior, responsive breakpoints), browser/web conventions take precedence.
+
 ---
 
 ## 1. Audit Scope
@@ -41,12 +43,12 @@ Each category is scored 0–100. The final score is the average across all categ
 
 | # | Category | Weight | What it covers |
 |---|----------|--------|----------------|
-| A | Color & Theming | 1.0 | Contrast ratios (WCAG AA/AAA), dark/light parity, semantic color use, `prefers-color-scheme` and `prefers-contrast` support |
+| A | Color & Theming | 1.0 | Contrast ratios (WCAG AA/AAA — primary standard), dark/light parity, semantic color use, `prefers-color-scheme` and `prefers-contrast` support |
 | B | Typography | 0.8 | Font hierarchy, line heights, monospace usage, heading levels, readable measure lengths |
 | C | Layout & Spacing | 1.0 | GNOME shell conventions, panel sizing, spacing scale, grid alignment, overflow handling |
 | D | Buttons & Interactive Controls | 1.0 | Sizing (min 36×36px touch target), state coverage (hover/focus/active/disabled), icon-only patterns, primary/secondary distinction |
 | E | Keyboard Navigation | 1.2 | Shortcut coverage, discoverability, form-field guard, focus order, Escape/Enter conventions |
-| F | Accessibility | 1.2 | ARIA labels, screen reader support, focus rings, `prefers-reduced-motion`, heading hierarchy, alt text |
+| F | Accessibility | 1.2 | WCAG 2.1 AA/AAA compliance (primary), ARIA labels, screen reader support, focus rings, `prefers-reduced-motion`, heading hierarchy, alt text. GNOME HIG accessibility practices are secondary references.
 | G | Forms & Input | 0.8 | Label association, placeholder contrast, error states, help text, color/range inputs |
 | H | Dialogs & Modals | 0.8 | Focus trap, Escape dismiss, backdrop, title/body/actions pattern, animation |
 | I | Responsive Design | 0.8 | Breakpoint coverage, touch targets on mobile, bottom-sheet patterns, overflow |
@@ -272,6 +274,8 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ### E.1 Shortcut Coverage
 
+> **Note**: Keyboard shortcuts follow **web application conventions** first, GNOME HIG second. Standard web shortcuts (e.g., `Ctrl+Z` for undo, `Tab`/`Shift+Tab` for focus navigation) must work as expected. GNOME-specific shortcuts (e.g., `Alt+Left` for back, `Home` for reset view) are used where they enhance the studio IDE-like experience and do not conflict with browser defaults.
+
 - [ ] **E.1.1** `Escape` deselects node (modal dismissal pattern). ✅
 - [ ] **E.1.2** `Escape` closes dialogs. ✅ (dialog.js global key handler)
 - [ ] **E.1.3** `Escape` at child root ascends to parent. ✅ (nesting.js)
@@ -312,7 +316,9 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 **Files**: `arabesk/frontend/src/pug/studio.pug`, `arabesk/frontend/src/scss/base/_tokens.scss`, `arabesk/frontend/src/scss/components/_buttons.scss`, `arabesk/frontend/src/scss/components/_forms.scss`
 
-### F.1 ARIA Labels
+### F.1 ARIA Labels (WCAG 2.1 AA — Required)
+
+> **Note**: Because Arbesk Studio is a web application, ARIA and semantic HTML are the primary accessibility mechanisms. GTK accessibility patterns (e.g., ATK roles) do not apply here.
 
 - [ ] **F.1.1** All buttons have either visible text or `aria-label`. ✅ (verified on all headerbar, sidebar, inspector buttons)
 - [ ] **F.1.2** Navigation landmarks are marked (`<nav>`, `role="navigation"`). ✅ (path bar uses `<nav>`)
@@ -423,6 +429,8 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 **Files**: `arabesk/frontend/src/scss/utilities/_responsive.scss`
 
 ### I.1 Breakpoints
+
+> **Note**: As a web application, Arbesk Studio must be usable across a range of viewport sizes and input methods (mouse, keyboard, touch). Responsive design follows **web best practices**; GNOME HIG desktop assumptions (fixed window sizes, pointer-only input) do not fully apply.
 
 - [ ] **I.1.1** At least 2 breakpoints exist (medium and narrow). ✅ (900px and 480px)
 - [ ] **I.1.2** Sidebar overlays at medium breakpoint instead of pushing content. ✅
@@ -577,4 +585,8 @@ When assessing the Arbesk Studio, compare it to these GNOME reference applicatio
 | **GNOME Settings** | View switcher with icon-only sidebar, search |
 | **GNOME Console** | Bottom input bar, monospace output |
 
-Arbesk Studio is closest to **GNOME Builder** (IDE-like, 3D viewport, multiple panels, keyboard shortcuts). When in doubt about a pattern, ask: "What would Builder do?"
+Arbesk Studio is closest to **GNOME Builder** (IDE-like, 3D viewport, multiple panels, keyboard shortcuts) in its *visual aesthetic and panel layout*, but remember it is a **browser-based Web 3.0 application**. When in doubt about a pattern:
+- For **visual design and layout**: ask "What would Builder do?"
+- For **accessibility**: ask "Does this meet WCAG 2.1 AA?"
+- For **interaction and keyboard behavior**: ask "Does this follow web application conventions?"
+- For **responsive and touch**: ask "Does this work on a modern web browser with mixed input?"

@@ -81,7 +81,6 @@ describe("wallet.js export block", () => {
   const REQUIRED_EXPORTS = [
     "connectWallet",
     "disconnectWallet",
-    "payForGeneration",
     "payForGenerationWithUSDC",
     "publishAsset",
     "updateAssetURI",

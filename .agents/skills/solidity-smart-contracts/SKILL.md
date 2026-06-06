@@ -326,16 +326,14 @@ docker-compose run --rm hardhat npx hardhat compile
 # Deploy to local Hardhat
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
-# Deploy to testnet
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network filecoinCalibration
+# Deploy to testnet (e.g. Base Sepolia — configure in hardhat.config.js)
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
 
-# Deploy to mainnet
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network filecoin
+# Deploy to mainnet (e.g. Base — configure in hardhat.config.js)
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network base
 
 # Verify on-chain
-docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network filecoinCalibration
+docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network baseSepolia
 ```
 
 ### Address Alignment Verification

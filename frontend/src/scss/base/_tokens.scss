@@ -27,7 +27,7 @@
 
   // Accent: warm gold
   --gold-3: #d4a574; // ≈ --arabesque-accent-light
-  --gold-5: #c19a6b; // ≈ --arabesque-accent
+  --gold-5: #a07848; // ≈ --arabesque-accent (darkened for 3:1 focus contrast)
   --gold-7: #a07848;
 
   // Semantic
@@ -60,7 +60,7 @@
   --card-fg-light: var(--choco-11);
   --popover-bg-light: var(--choco-2);
   --popover-fg-light: var(--choco-12);
-  --border-light: var(--choco-4);
+  --border-light: #b89a7a; // darkened for visible surface separation
   --accent-bg-light: var(--gold-5);
   --accent-fg-light: var(--choco-12);
   --destructive-bg-light: var(--red-3);
@@ -204,7 +204,7 @@
 
 :root {
   --headerbar-height: 48px;
-  --sidebar-width: 280px;
+  --sidebar-width: 340px;
   --inspector-width: 260px;
   --messagebar-min-height: 52px;
   --bottombar-height: 32px;
@@ -227,6 +227,20 @@
     --shadow-3: none;
     --shadow-5: none;
   }
+}
+
+// ── Screen-reader only utility ──────────────────────────────────────
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 // ── Manual override (takes precedence over system preference) ────────

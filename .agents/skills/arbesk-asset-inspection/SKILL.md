@@ -193,8 +193,8 @@ Known RPC endpoints (in `KNOWN_RPC_ENDPOINTS`):
 | Chain ID | Name | RPC |
 |----------|------|-----|
 | 31415822 | Hardhat local | `http://127.0.0.1:8545` |
-| 314159 | Filecoin Calibration | `https://api.calibration.node.glif.io/rpc/v1` |
-| 314 | Filecoin Mainnet | `https://api.node.glif.io/rpc/v1` |
+| 314159 | Calibration testnet | `https://api.calibration.node.glif.io/rpc/v1` |
+| 314 | Mainnet | `https://api.node.glif.io/rpc/v1` |
 
 ## Key Files
 

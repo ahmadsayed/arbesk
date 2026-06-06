@@ -2,7 +2,7 @@
   "name": "arbesk",
   "type": "module",
   "version": "0.1.0",
-  "description": "Arbesk \u2014 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
+  "description": "Arbesk — 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
   "main": "src/index.js",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
@@ -21,6 +21,7 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@walletconnect/ethereum-provider": "^2.23.9",
     "body-parser": "^1.20.1",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",

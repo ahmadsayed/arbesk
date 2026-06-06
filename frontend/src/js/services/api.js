@@ -10,6 +10,14 @@ import { web3 } from "../blockchain/wallet.js";
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
 
+function announceStatus(message) {
+  const el = document.getElementById("srStatus");
+  if (el) {
+    el.textContent = "";
+    requestAnimationFrame(() => { el.textContent = message; });
+  }
+}
+
 /**
  * Custom API error with status and backend error code.
  */
@@ -79,14 +87,22 @@ const SESSION_STORAGE_KEY = "arbesk_session";
 function getCachedSession() {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      console.log("[SESSION] no cached session in localStorage");
+      return null;
+    }
     const session = JSON.parse(raw);
-    if (!session.token || !session.expiresAt || !session.address) return null;
+    if (!session.token || !session.expiresAt || !session.address) {
+      console.warn("[SESSION] cached session malformed");
+      return null;
+    }
     // Check expiry (with 60s grace period for clock skew)
     if (session.expiresAt <= Date.now() - 60_000) {
+      console.log("[SESSION] cached session expired");
       localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
+    console.log(`[SESSION] cached valid — addr=${session.address.slice(0, 8)}… expires=${new Date(session.expiresAt).toLocaleTimeString()}`);
     return session;
   } catch {
     return null;
@@ -130,7 +146,14 @@ export async function createSession() {
     throw new ApiError("Wallet not connected", 401, "WALLET_NOT_CONNECTED");
   }
 
-  const message = `arbesk-session:${window.walletAddress}:${Date.now()}`;
+  // Build SIWE (EIP-4361) message
+  const { buildSiweMessage, generateNonce } = await import("../blockchain/siwe.js");
+  const nonce = generateNonce();
+  const chainId = Number(window.chainId || 1);
+
+  const domain = window.location.origin;
+  const message = buildSiweMessage(domain, window.walletAddress, nonce, chainId);
+
   let signature;
   try {
     signature = await web3.eth.personal.sign(message, window.walletAddress, "");
@@ -174,11 +197,14 @@ async function getOrCreateSession() {
   // Try cached session first
   const cached = getCachedSession();
   if (cached && cached.address === window.walletAddress?.toLowerCase()) {
+    console.log("[SESSION] reused cached token");
     return cached.token;
   }
 
+  console.log("[SESSION] no cached token — creating new session…");
   // Create new session (triggers ONE MetaMask pop-up)
   const session = await createSession();
+  console.log("[SESSION] created — token=" + session.token.slice(0, 8) + "…");
   return session.token;
 }
 
@@ -251,14 +277,18 @@ export async function generateAsset({
   transformMatrix,
   tier,
 }) {
+  announceStatus("Authenticating…");
   // Use session token when available; fall back to per-request txHash signature.
   // Session reuses the ONE pop-up from createSession() across all generation
   // calls in a 24-hour window — reducing from 3 pop-ups to 2 after the first.
   let authHeader;
+  let usedSession = false;
   try {
     const sessionToken = await getOrCreateSession();
     authHeader = `Session ${sessionToken}`;
+    usedSession = true;
   } catch {
+    announceStatus("Sign authentication message in MetaMask…");
     const bearerToken = await signTxHash(txHash);
     authHeader = `Bearer ${bearerToken}`;
   }
@@ -274,19 +304,47 @@ export async function generateAsset({
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
   };
 
-  const response = await fetch(`${API_BASE}/generations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authHeader,
-    },
-    body: JSON.stringify(body),
-  });
+  async function doFetch(authorization) {
+    return fetch(`${API_BASE}/generations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authorization,
+      },
+      body: JSON.stringify(body),
+    });
+  }
 
-  const data = await response.json().catch(() => ({}));
+  announceStatus("Generating 3D asset…");
+  let response = await doFetch(authHeader);
+  let data = await response.json().catch(() => ({}));
+
+  // Auto-retry once with a fresh session if the backend lost our token
+  // (common during development when the Node server restarts).
+  if (response.status === 401 && usedSession) {
+    const { code } = parseErrorBody(data);
+    if (code === "INVALID_SESSION" || code === "MISSING_AUTH") {
+      console.log("[SESSION] backend rejected token — creating fresh session…");
+      clearSession();
+      try {
+        const freshToken = await createSession();
+        authHeader = `Session ${freshToken.token}`;
+        response = await doFetch(authHeader);
+        data = await response.json().catch(() => ({}));
+      } catch {
+        // Session creation failed — fall back to Bearer (txHash signature)
+        announceStatus("Sign authentication message in MetaMask…");
+        const bearerToken = await signTxHash(txHash);
+        authHeader = `Bearer ${bearerToken}`;
+        response = await doFetch(authHeader);
+        data = await response.json().catch(() => ({}));
+      }
+    }
+  }
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
+    announceStatus("Generation failed: " + (message || `HTTP ${response.status}`));
     throw new ApiError(
       message || `Generation failed (HTTP ${response.status})`,
       response.status,
@@ -294,6 +352,7 @@ export async function generateAsset({
     );
   }
 
+  announceStatus("Asset generated successfully.");
   return data;
 }
 
@@ -306,6 +365,7 @@ export async function generateAsset({
  * @returns {Promise<{cid: string, assetId: string, version: number}>}
  */
 export async function saveManifest(manifest) {
+  announceStatus("Uploading manifest to IPFS…");
   const response = await fetch(`${API_BASE}/manifests`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -316,6 +376,7 @@ export async function saveManifest(manifest) {
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
+    announceStatus("Save failed: " + (message || `HTTP ${response.status}`));
     throw new ApiError(
       message || `Save failed (HTTP ${response.status})`,
       response.status,
@@ -323,6 +384,7 @@ export async function saveManifest(manifest) {
     );
   }
 
+  announceStatus("Manifest saved.");
   return data;
 }
 
@@ -334,6 +396,7 @@ export async function saveManifest(manifest) {
  * @returns {Promise<{cid: string}>}
  */
 export async function publishManifest(prevCid, manifest) {
+  announceStatus("Publishing manifest to IPFS…");
   const response = await fetch(`${API_BASE}/manifests/${prevCid}/publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -344,6 +407,7 @@ export async function publishManifest(prevCid, manifest) {
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
+    announceStatus("Publish failed: " + (message || `HTTP ${response.status}`));
     throw new ApiError(
       message || `Publish failed (HTTP ${response.status})`,
       response.status,
@@ -351,6 +415,7 @@ export async function publishManifest(prevCid, manifest) {
     );
   }
 
+  announceStatus("Manifest published.");
   return data;
 }
 

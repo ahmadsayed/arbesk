@@ -128,42 +128,25 @@ describe("Frontend Build", () => {
     });
   });
 
-  // ── P1: wallet.js mock tx ────────────────────────────────────────────────
+  // ── P1: wallet.js USDC payment ──────────────────────────────────────────
 
-  describe("wallet.js mock transaction", () => {
+  describe("wallet.js USDC payment", () => {
     const wallet = readBuilt("blockchain/wallet.js");
 
-    test("_mockPayForGeneration sends to dev account, not self", () => {
-      expect(wallet).toMatch(/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/);
+    test("payWithUSDC is defined", () => {
+      expect(wallet).toMatch(/async function payWithUSDC/);
     });
 
-    test("_mockPayForGeneration does NOT self-transfer", () => {
-      const match = wallet.match(
-        /async function _mockPayForGeneration[\s\S]*?return receipt\.transactionHash;/,
-      );
-      if (!match) throw new Error("_mockPayForGeneration not found");
-      const body = match[0];
-
-      expect(body).toMatch(/to:\s*devAccount/);
-      expect(body).not.toMatch(/to:\s*window\.walletAddress/);
+    test("payForGenerationWithUSDC delegates to payWithUSDC", () => {
+      expect(wallet).toMatch(/return payWithUSDC\(/);
     });
 
-    test("_mockPayForGeneration sends 0 value", () => {
-      expect(wallet).toMatch(/toWei\("0",\s*"ether"\)/);
+    test("approve fallback gas is set", () => {
+      expect(wallet).toMatch(/approveGas = 100000/);
     });
 
-    test("_mockPayForGeneration has no data field in tx object", () => {
-      const match = wallet.match(
-        /async function _mockPayForGeneration[\s\S]*?return receipt\.transactionHash;/,
-      );
-      if (!match) throw new Error("_mockPayForGeneration not found");
-      const body = match[0];
-
-      // The tx object itself (between { and }) must not contain a data property
-      // Extract the tx object literal
-      const txObj = body.match(/const tx = \{[\s\S]*?\};/);
-      if (!txObj) throw new Error("tx object not found");
-      expect(txObj[0]).not.toMatch(/\bdata:/);
+    test("pay fallback gas is set", () => {
+      expect(wallet).toMatch(/payGas = 300000/);
     });
   });
 
@@ -193,8 +176,8 @@ describe("Frontend Build", () => {
       expect(html).not.toMatch(/web3@latest/);
     });
 
-    test("web3modal is pinned (not @latest)", () => {
-      expect(html).toMatch(/web3modal@1\.9\.12/);
+    test("web3modal is removed (not present)", () => {
+      expect(html).not.toMatch(/web3modal/);
     });
   });
 
@@ -208,6 +191,98 @@ describe("Frontend Build", () => {
       expect(api).not.toMatch(/\/api\/abi\//);
       expect(api).not.toMatch(/\/api\/contract_address/);
       expect(api).not.toMatch(/"\/api\/ledger"/);
+    });
+  });
+
+  // ── P0: wallet-connect.js must not static-import from CDN ────────────────
+  // Regression: jsdelivr +esm transform produced broken code (__exportStar
+  // error) for @walletconnect/ethereum-provider. Because the import was
+  // static (top-level), the entire module parse failed, cascading to
+  // wallet-modal.js → wallet.js → window.connectWallet never set.
+  //
+  // Fix: use dynamic import() with fallback CDN so a broken transform only
+  // disables WalletConnect; injected wallets (MetaMask etc.) still work.
+
+  describe("wallet-connect.js CDN import safety", () => {
+    const walletConnect = readBuilt("blockchain/wallet-connect.js");
+
+    test("does NOT static-import from an external CDN URL", () => {
+      // Static import from https:// would break the whole app if the CDN
+      // returns bad code. Dynamic import() isolates the failure.
+      expect(walletConnect).not.toMatch(
+        /import\s*\{[^}]*\}\s*from\s*["']https:\/\//,
+      );
+    });
+
+    test("uses dynamic import() for external CDN modules", () => {
+      expect(walletConnect).toMatch(/await\s+import\s*\(/);
+    });
+  });
+
+  // ── P0: studio.html must not rely on inline onclick for module functions ─
+  // Regression: onclick="connectWallet()" failed because connectWallet is
+  // defined inside an ES module (wallet.js). When wallet.js failed to load
+  // (due to the wallet-connect.js cascade), connectWallet was undefined.
+  //
+  // Fix: wire the click handler via addEventListener inside the module script.
+
+  describe("studio.html inline event handler safety", () => {
+    const html = readStudioHtml();
+
+    test("no inline onclick referencing module-scoped functions", () => {
+      // connectWallet, disconnectWallet, etc. are module-scoped and not
+      // guaranteed to exist until the module script executes. Using
+      // addEventListener inside the module is the robust pattern.
+      expect(html).not.toMatch(/onclick\s*=\s*"connectWallet\(\)"/);
+    });
+  });
+
+  // ── P0: CSP must be delivered via HTTP header, not meta tag ──────────────
+  // Regression: Content-Security-Policy-Report-Only is not valid in a
+  // <meta> element. Chrome ignored the policy entirely with:
+  //   "was delivered via a <meta> element, which is disallowed."
+  //
+  // Fix: Express middleware sets the header.
+
+  describe("studio.html CSP delivery", () => {
+    const html = readStudioHtml();
+
+    test("no CSP-Report-Only meta tag (must be HTTP header)", () => {
+      expect(html).not.toMatch(
+        /http-equiv\s*=\s*"Content-Security-Policy-Report-Only"/i,
+      );
+    });
+
+    test("no CSP enforcing meta tag with external script-src (header preferred)", () => {
+      // If a CSP meta tag exists at all, it should not contain external
+      // script sources that would complicate maintenance. The Express
+      // middleware is the single source of truth.
+      const metaCsp = html.match(
+        /http-equiv\s*=\s*"Content-Security-Policy"[^>]*>/i,
+      );
+      if (metaCsp) {
+        expect(metaCsp[0]).not.toMatch(/script-src/);
+      }
+    });
+  });
+
+  // ── P0: studio-init.js must start wallet discovery ───────────────────────
+  // Regression: EIP-6963 wallet discovery (MetaMask, Rabby, etc.) never
+  // started because initWallet() was not called. The wallet modal showed
+  // "No injected wallets detected" even when MetaMask was installed.
+  //
+  // Fix: studio-init.js calls initWallet() to register the eip6963 event
+  // listener and autoConnectWallet() to restore previous sessions.
+
+  describe("studio-init.js wallet lifecycle", () => {
+    const init = readBuilt("engine/studio-init.js");
+
+    test("calls initWallet() to start EIP-6963 discovery", () => {
+      expect(init).toMatch(/initWallet\(\)/);
+    });
+
+    test("calls autoConnectWallet() to restore previous session", () => {
+      expect(init).toMatch(/autoConnectWallet\(\)/);
     });
   });
 });

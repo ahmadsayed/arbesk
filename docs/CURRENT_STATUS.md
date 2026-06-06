@@ -1,6 +1,6 @@
 # Arbesk Current Status
 
-> Last updated: 2026-06-01  
+> Last updated: 2026-06-06  
 > Repository: <https://github.com/ahmadsayed/arbesk>  
 > Default branch: `main`
 
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Arbesk is now a working local-first MVP for a Filecoin FEVM-backed, private-IPFS, versioned 3D world platform.
+Arbesk is now a working local-first MVP for a EVM-backed, private-IPFS, versioned 3D world platform.
 
 Completed capabilities include:
 
@@ -35,7 +35,7 @@ Completed capabilities include:
 |---|---:|---|
 | Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | Backend API, private IPFS, mock generation, manifest writes |
 | Phase 2: Parametric Versions & Babylon Rendering | ✅ Complete | Scene graph, time travel, parametric preview/save, model centering |
-| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | FEVM contract, tx validation, replay prevention, Hardhat Docker |
+| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | EVM contract, tx validation, replay prevention, Hardhat Docker |
 | Phase 4: UI Assembly & Workspace Studio | ✅ Complete | Studio shell, wallet, gallery, minting, team editor panel |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Optional WebP thumbnails, gallery thumbnails, on-demand IPFS cache |
 | **Phase 5.1: Token ID-Based Child Worlds** | **✅ Complete** | `child_ref` schema, token resolver, drag/drop, scene graph rendering, persistence, inspector, external chain support, tests |
@@ -54,7 +54,7 @@ Completed capabilities include:
 - **#5** ✅ Persist: Save `child_ref` nodes to IPFS manifest; merge with existing nodes on save
 - **#6** ✅ Safety: Pulsing loading placeholders, error placeholders, duplicate rejection, self-reference detection
 - **#7** ✅ Inspector: Read-only token child info panel showing token ID, contract, chain, CID
-- **#8** ✅ External: Known RPC endpoints for cross-chain resolution (local Hardhat, Filecoin Calibration, Ethereum, Sepolia)
+- **#8** ✅ External: Known RPC endpoints for cross-chain resolution (local Hardhat, Calibration testnet, Ethereum, Sepolia)
 - **#9** ✅ Tests: 11 unit tests (normalizeTokenURI + schema validation), 3 integration tests (child ref save, mixed manifests, publish with thumbnail)
 - **#10** ✅ Docs: AGENTS.md, CURRENT_STATUS.md updated
 
@@ -116,7 +116,7 @@ All 10 issues completed:
 5. ✅ Save/publish merges pending child refs into manifests
 6. ✅ Loading placeholders (pulsing), error placeholders, duplicate/cycle rejection
 7. ✅ Inspector shows read-only token child info (token ID, contract, chain, CID)
-8. ✅ External chain RPC support (Hardhat, Filecoin Calibration, Ethereum, Sepolia)
+8. ✅ External chain RPC support (Hardhat, Calibration testnet, Ethereum, Sepolia)
 9. ✅ 15 unit + 3 integration tests
 10. ✅ Documentation updated
 
@@ -133,10 +133,14 @@ All 10 issues completed:
    - 🔲 Ledger panel not yet wired to show per-asset filtering via `manifestId` (uses global view)
    - 🔲 Snapshots and digital signatures deferred to Phase 5b
 
+### Recent Changes
+
+11. **Documentation cleanup (2026-06-06)** — All Filecoin-specific references removed from project documentation (AGENTS.md, README.md, ARCHITECTURE.md, CURRENT_STATUS.md, ZED_AGENT_GUIDE.md, SECURITY.md, skill files). Project now describes a generic EVM-compatible target. Hardhat network names and RPC configs in code remain intact.
+
 ### Deferred
 
-6. **Production adapters** — Tripo3D, Meshy, and Hunyuan3D are described by the architecture but not implemented; current generation uses the mock adapter unless cloud adapters are added.
-7. **Auth/payment hardening** — further align signed wallet address, tx sender, event payload, prompt, and node ID.
-8. **Frontend automated tests** — no E2E/browser automation is currently committed.
-9. **OpenSCAD WASM** — schema-compatible but deferred post-MVP.
-10. **Thumbnail quality controls** — currently captures a fixed `512x288` WebP snapshot at publish time; future UI could allow recapture/crop/disable controls.
+12. **Production adapters** — Tripo3D, Meshy, and Hunyuan3D are described by the architecture but not implemented; current generation uses the mock adapter unless cloud adapters are added.
+13. **Auth/payment hardening** — further align signed wallet address, tx sender, event payload, prompt, and node ID.
+14. **Frontend automated tests** — no E2E/browser automation is currently committed.
+15. **OpenSCAD WASM** — schema-compatible but deferred post-MVP.
+16. **Thumbnail quality controls** — currently captures a fixed `512x288` WebP snapshot at publish time; future UI could allow recapture/crop/disable controls.

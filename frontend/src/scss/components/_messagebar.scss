@@ -83,11 +83,21 @@
   border: 2px solid var(--accent-fg);
   border-top-color: transparent;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@media (prefers-reduced-motion: no-preference) {
+  .messagebar-spinner {
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messagebar-spinner {
+    opacity: 0.6;
+  }
 }
 
 .messagebar-hint {

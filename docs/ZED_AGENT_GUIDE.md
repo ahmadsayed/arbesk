@@ -97,7 +97,7 @@ Recommended task order for normal development:
   - Frontend JS/SCSS/Pug edits: `Build frontend`
   - **Contract edits: follow the MANDATORY workflow above**
 - Do not start long-running servers unless explicitly needed; use Zed tasks or bounded terminal runs.
-- Preserve the private-IPFS + Filecoin FEVM assumptions. Do not swap to public IPFS or a different EVM chain without explicit instruction.
+- Preserve the private-IPFS + EVM assumptions. Do not swap to public IPFS or a different EVM chain without explicit instruction.
 
 ## Important Runtime Notes
 

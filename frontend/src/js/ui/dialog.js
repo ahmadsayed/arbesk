@@ -86,6 +86,46 @@ export function showDialog(title, body, defaultValue = "") {
         closeDialog(value || null);
       }
 
+      // ── Focus trap ──────────────────────────────────────────────────
+      function trapFocus(dialog) {
+        const focusable = dialog.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        function handleTab(e) {
+          if (e.key !== "Tab") return;
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+        dialog.addEventListener("keydown", handleTab);
+
+        // Pull focus back if MetaMask or other overlay steals it
+        function handleFocusIn(e) {
+          if (!dialog.contains(e.target)) {
+            e.preventDefault();
+            input.focus();
+          }
+        }
+        document.addEventListener("focusin", handleFocusIn);
+
+        return () => {
+          dialog.removeEventListener("keydown", handleTab);
+          document.removeEventListener("focusin", handleFocusIn);
+        };
+      }
+      const removeTrap = trapFocus(dialog);
+
       // ── Event listeners ─────────────────────────────────────────────
       cancelBtn.addEventListener("click", () => closeDialog(null));
 
@@ -114,6 +154,13 @@ export function showDialog(title, body, defaultValue = "") {
         }
       }
       document.addEventListener("keydown", globalKey);
+
+      // Override cleanup to remove focus trap
+      const originalCleanup = cleanup;
+      cleanup = function() {
+        originalCleanup();
+        removeTrap();
+      };
     } catch (err) {
       console.error("[DIALOG] error creating dialog:", err);
       resolve(null);

@@ -151,6 +151,7 @@ export default () => {
         process.env.IPFS_GATEWAY_URL || "http://127.0.0.1:8080/ipfs/",
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
+      walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,
     });
   });
 

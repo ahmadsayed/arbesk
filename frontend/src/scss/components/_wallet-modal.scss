@@ -1,0 +1,127 @@
+// ═══════════════════════════════════════════════════════════════════
+// Wallet Picker Modal
+// GNOME HIG-styled modal for selecting a wallet to connect.
+// ═══════════════════════════════════════════════════════════════════
+
+.wallet-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 35%);
+  backdrop-filter: blur(4px);
+  animation: dialog-backdrop-in var(--duration-moderate) var(--ease-out-3);
+}
+
+.wallet-modal {
+  width: min(360px, calc(100vw - var(--size-7) * 2));
+  max-height: calc(100vh - var(--size-10) * 2);
+  overflow-y: auto;
+  background: var(--popover-bg);
+  color: var(--popover-fg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-3);
+  box-shadow: var(--shadow-5);
+  animation: dialog-in var(--duration-moderate) var(--ease-out-3);
+  display: flex;
+  flex-direction: column;
+}
+
+.wallet-modal-header {
+  padding: var(--size-5) var(--size-5) 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-3);
+    font-weight: var(--font-weight-7);
+    line-height: var(--font-lineheight-2);
+  }
+}
+
+.wallet-modal-body {
+  padding: var(--size-4) var(--size-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+
+.wallet-modal-subtitle {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  margin: 0 0 var(--size-2);
+}
+
+// Individual wallet option row
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  padding: var(--size-3);
+  border-radius: var(--radius-2);
+  border: var(--border-size-1) solid transparent;
+  background: transparent;
+  color: var(--popover-fg);
+  cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out-3),
+              border-color var(--duration-quick) var(--ease-out-3);
+  text-align: left;
+  width: 100%;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
+
+  &:hover {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+
+  img,
+  svg {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-2);
+    flex-shrink: 0;
+    object-fit: contain;
+  }
+
+  // Placeholder icon when no wallet icon available
+  .wallet-option-icon-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-2);
+    background: var(--accent-bg);
+    color: var(--accent-fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-2);
+    font-weight: var(--font-weight-7);
+    flex-shrink: 0;
+  }
+
+}
+
+// Empty state when no wallets detected
+.wallet-modal-empty {
+  text-align: center;
+  padding: var(--size-5);
+  color: var(--dim-fg);
+  font-size: var(--font-size-0);
+}
+
+// Reduce motion
+@media (prefers-reduced-motion: reduce) {
+  .wallet-modal-backdrop,
+  .wallet-modal {
+    animation: none;
+  }
+}

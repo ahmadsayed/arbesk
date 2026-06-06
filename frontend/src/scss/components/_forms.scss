@@ -118,6 +118,19 @@
   }
 }
 
+// Error states
+.form-input.is-invalid,
+.form-select.is-invalid {
+  border-color: var(--destructive-bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive-bg) 25%, transparent);
+}
+
+.form-error {
+  font-size: var(--font-size-0);
+  color: var(--destructive-bg);
+  margin-top: var(--size-1);
+}
+
 // Help text
 .form-help {
   font-size: var(--font-size-0);

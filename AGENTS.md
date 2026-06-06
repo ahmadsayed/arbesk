@@ -12,7 +12,7 @@ This file contains conventions, key file references, and practical guidance for 
 **License**: ISC
 
 **Key Constraints:**
-- **Blockchain**: Filecoin FEVM (not Base/Arbitrum)
+- **Blockchain**: EVM-compatible (Hardhat local dev, extensible to any EVM L1/L2)
 - **IPFS**: Private Dockerized Kubo node (no public DHT, no external peers)
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for testing using local SukaVerse-style assets (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`; external GLB assets may also be configured)
@@ -90,7 +90,7 @@ This file contains conventions, key file references, and practical guidance for 
 | 3D Renderer | Babylon.js |
 | Frontend JS | Vanilla JavaScript (ES modules) |
 | Web3 | Web3.js + Web3Modal |
-| Blockchain | **Filecoin FEVM** |
+| Blockchain | **EVM-compatible** |
 | Smart Contracts | Solidity 0.8.24, OpenZeppelin v5 |
 | Blockchain Dev | **Hardhat (Dockerized)** |
 | 3D Generation | Tripo3D / Meshy / Hunyuan3D APIs; **Mock adapters** for dev |
@@ -163,14 +163,14 @@ docker-compose run --rm hardhat npx hardhat compile
 # Deploy contracts to local Hardhat network
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
-# Deploy to Filecoin Calibration testnet
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network filecoinCalibration
+# Deploy to testnet (configure network in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network <your_testnet>
 
-# Deploy to Filecoin Mainnet
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network filecoin
+# Deploy to mainnet (configure network in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network <your_mainnet>
 
-# Verify contract on Filfox
-docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network filecoinCalibration
+# Verify contract (configure verifier in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network <your_network>
 
 # Recompile and redeploy after contract changes (captures ABI + address)
 docker-compose run --rm hardhat npx hardhat compile
@@ -238,9 +238,8 @@ cp blockchain/.env.example blockchain/.env
 ```
 
 ```ini
-# Filecoin RPC endpoints
-API_URL=https://api.calibration.node.glif.io/rpc/v1
-# For mainnet: https://api.node.glif.io/rpc/v1
+# RPC endpoints (configure for your target network)
+API_URL=<your_rpc_endpoint>
 
 PRIVATE_KEY=<0x...>
 PUBLIC_KEY=<0x...>
@@ -303,7 +302,7 @@ HARDHAT_RPC_URL=http://127.0.0.1:8545
 - **Version**: `^0.8.0`
 - **Style**: OpenZeppelin-based. Use `require()` for validation, emit events for state changes.
 - **Comments**: NatSpec (`@dev`, `@param`, `@return`) is preferred.
-- **Target**: Filecoin FEVM — EVM-compatible but gas economics differ from Ethereum L1. Optimize for storage reads over writes.
+- **Target**: EVM-compatible chains. Optimize for storage reads over writes.
 
 ### Pug / SCSS
 
@@ -663,17 +662,14 @@ If session creation fails (e.g., user denies the session signature), `generateAs
 
 ---
 
-## 14. Filecoin FEVM Notes
+## 14. EVM Deployment Notes
 
-- **RPC Endpoints**:
-  - Calibration: `https://api.calibration.node.glif.io/rpc/v1`
-  - Mainnet: `https://api.node.glif.io/rpc/v1`
 - **Local Dev (Hardhat container)**: `http://127.0.0.1:8545`
-- **Native Token**: FIL (used for gas)
+- **Native Token**: Chain-native token (e.g. ETH, FIL, etc.) — used for gas
 - **EVM Compatibility**: Standard Solidity contracts work unmodified
-- **Gas Economics**: Different from Ethereum — test thoroughly on Calibration before mainnet
-- **Block Time**: ~30 seconds (Filecoin tipsets)
-- **Wallet Support**: MetaMask, Rabby (add Filecoin network manually)
+- **Gas Economics**: Varies by chain — test thoroughly on target testnet before mainnet
+- **Block Time**: Varies by network (~12s for Ethereum L1, ~2s for L2s, slower on some L1s)
+- **Wallet Support**: MetaMask, Rabby, or any EVM-compatible wallet (add target network manually)
 
 ---
 

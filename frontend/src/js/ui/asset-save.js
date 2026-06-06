@@ -19,6 +19,7 @@ import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 import { decomposeAndStore, isComposite } from "../gltf/decomposer.js";
 import { editCompositeColors } from "../gltf/material-editor.js";
 import { updateBurnButton } from "./collaborators.js";
+import { showToast } from "./toasts.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -29,6 +30,15 @@ const assetStatusMeta = document.getElementById("assetStatusMeta");
 
 let isSaving = false;
 let isPublishing = false;
+
+function announceStatus(message) {
+  const el = document.getElementById("srStatus");
+  if (el) {
+    el.textContent = "";
+    // Force screen reader announcement by clearing then setting
+    requestAnimationFrame(() => { el.textContent = message; });
+  }
+}
 
 function updateAssetStatus(name, meta) {
   if (assetStatusName) assetStatusName.textContent = name;
@@ -47,11 +57,11 @@ function updateButtonState() {
   if (saveBtnText) saveBtnText.textContent = "Save";
   if (saveBtn) saveBtn.title = "Save Draft (Ctrl+S)";
   if (publishBtnText) {
-    publishBtnText.textContent = window.activeAssetTokenId ? "Update" : "Publish";
+    publishBtnText.textContent = window.activeAssetTokenId ? "Republish" : "Publish";
   }
   if (publishBtn) {
     publishBtn.title = window.activeAssetTokenId
-      ? "Update the asset token URI to the latest manifest CID"
+      ? "Republish the asset with the latest manifest CID"
       : "Publish this asset as a token";
   }
 
@@ -311,7 +321,10 @@ async function prepareManifestForWrite(assetName) {
 
 async function onSaveAssetDraft() {
   if (isSaving) return;
-  if (!window.walletAddress) return alert("Please connect your wallet first.");
+  if (!window.walletAddress) {
+    showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
+    return;
+  }
 
   isSaving = true;
   if (saveBtn) {
@@ -319,14 +332,18 @@ async function onSaveAssetDraft() {
     saveBtn.title = "Saving…";
   }
   if (saveBtnText) saveBtnText.textContent = "Saving…";
+  announceStatus("Saving draft…");
 
   try {
     const assetName = await resolveAssetName();
     const prepared = await prepareManifestForWrite(assetName);
     if (!prepared) {
-      alert(
-        "No asset data to save. Generate an asset or add linked worlds first."
-      );
+      announceStatus("No asset data to save.");
+      showToast({
+        type: "warning",
+        title: "Nothing to Save",
+        message: "Generate an asset or add linked worlds first.",
+      });
       return;
     }
 
@@ -348,9 +365,16 @@ async function onSaveAssetDraft() {
         ? `Asset Token #${window.activeAssetTokenId}`
         : "Draft Scene"
     );
+    announceStatus("Draft saved.");
   } catch (err) {
     console.error("Save asset draft failed:", err);
-    alert("Save failed: " + err.message);
+    announceStatus("Save failed: " + err.message);
+    showToast({
+      type: "error",
+      title: "Save Failed",
+      message: err.message,
+      actions: [{ label: "Retry", onClick: onSaveAssetDraft }],
+    });
   } finally {
     isSaving = false;
     if (saveBtn) {
@@ -363,17 +387,21 @@ async function onSaveAssetDraft() {
 
 async function onPublishAsset() {
   if (isPublishing) return;
-  if (!window.walletAddress) return alert("Please connect your wallet first.");
+  if (!window.walletAddress) {
+    showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
+    return;
+  }
 
   isPublishing = true;
   if (publishBtn) {
     publishBtn.disabled = true;
-    publishBtn.title = window.activeAssetTokenId ? "Updating…" : "Publishing…";
+    publishBtn.title = window.activeAssetTokenId ? "Republishing…" : "Publishing…";
   }
   if (publishBtnText)
     publishBtnText.textContent = window.activeAssetTokenId
-      ? "Updating…"
+      ? "Republishing…"
       : "Publishing…";
+  announceStatus(window.activeAssetTokenId ? "Republishing asset…" : "Publishing asset…");
 
   try {
     const assetName = await ensureExplicitName();
@@ -385,9 +413,12 @@ async function onPublishAsset() {
     }
     const prepared = await prepareManifestForWrite(assetName);
     if (!prepared) {
-      alert(
-        "No asset data to publish. Generate an asset or add linked worlds first."
-      );
+      announceStatus("No asset data to publish.");
+      showToast({
+        type: "warning",
+        title: "Nothing to Publish",
+        message: "Generate an asset or add linked worlds first.",
+      });
       return;
     }
 
@@ -405,11 +436,13 @@ async function onPublishAsset() {
       );
     }
 
+    announceStatus("Confirm transaction in MetaMask…");
     const { cid } = await publishManifest(prepared.prevCid, prepared.manifest);
 
     if (window.activeAssetTokenId) {
       const txHash = await updateAssetURI(window.activeAssetTokenId, cid);
-      if (!txHash) throw new Error("Update transaction failed");
+      if (!txHash) throw new Error("Republish transaction failed");
+      announceStatus("Asset republished successfully.");
     } else {
       const tokenId =
         "0x" +
@@ -424,6 +457,7 @@ async function onPublishAsset() {
 
       const { showAssetEditors } = await import("./asset-editors.js");
       showAssetEditors(tokenId);
+      announceStatus("Asset published and minted.");
     }
 
     window.latestAssetManifestCid = window.activeAssetManifestCid;
@@ -440,13 +474,19 @@ async function onPublishAsset() {
     updateAssetStatus(assetName, `Asset Token #${window.activeAssetTokenId}`);
   } catch (err) {
     console.error("Publish asset failed:", err);
-    alert("Publish failed: " + err.message);
+    announceStatus("Publish failed: " + err.message);
+    showToast({
+      type: "error",
+      title: "Publish Failed",
+      message: err.message,
+      actions: [{ label: "Retry", onClick: onPublishAsset }],
+    });
   } finally {
     isPublishing = false;
     if (publishBtn) {
       publishBtn.disabled = false;
       publishBtn.title = window.activeAssetTokenId
-        ? "Update the asset token URI to the latest manifest CID"
+        ? "Republish the asset with the latest manifest CID"
         : "Publish this asset as a token";
     }
     updateButtonState();
