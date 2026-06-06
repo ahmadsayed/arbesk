@@ -24,13 +24,14 @@ export const state = {
   /** @type {Array<Object>} */
   pendingChildRefs: [],
   /**
-   * Appearance edits (color/scale) the user has made in the inspector
-   * but not yet persisted via Save Draft / Publish. Keyed by node_id;
-   * each value is { color?, scale?: {x,y,z} }. Picked up by
+   * Post-processor edits (color/scale/meshOverrides) accumulated in the
+   * inspector but not yet persisted. Keyed by node_id. Picked up by
    * `asset-save.js → prepareManifestForWrite` and cleared on save.
-   * @type {Map<string, {color?: string, scale?: {x:number,y:number,z:number}}>}
+   * For decomposed glTFs, edits are baked into the composite JSON;
+   * for monolithic glTFs, they're stored as `node.post_processor`.
+   * @type {Map<string, {color?: string, scale?: {x:number,y:number,z:number}, meshOverrides?: object}>}
    */
-  pendingAppearanceEdits: new Map(),
+  pendingPostProcessorEdits: new Map(),
   /** @type {BABYLON.StandardMaterial|null} */
   defaultWoodMaterial: null,
   /** @type {Function|null} */
@@ -43,6 +44,8 @@ export const state = {
   highlightLayer: null,
   /** @type {string|null} */
   highlightedNodeId: null,
+  /** @type {string|null} Name of the currently selected sub-mesh within highlightedNodeId */
+  highlightedSubMeshName: null,
   /** @type {BABYLON.ArcRotateCamera|null} */
   camera: null,
 };

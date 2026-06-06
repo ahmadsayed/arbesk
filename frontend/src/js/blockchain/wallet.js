@@ -3,7 +3,7 @@
  *
  * Web3Modal + Web3.js for Filecoin FEVM.
  * Handles connection, network switching, generation payment, NFT minting,
- * tokenURI updates, and editor management.
+ * tokenURI updates, editor management, role-based collaboration, and burn.
  */
 
 // Filecoin FEVM network configurations
@@ -706,6 +706,251 @@ async function removeEditor(tokenId, editorAddress) {
   }
 }
 
+// ── Role-Based Collaboration (Phase 5.1) ──
+
+/**
+ * CollaboratorRole enum values matching the Solidity contract.
+ */
+const CollaboratorRole = Object.freeze({
+  None: 0,
+  Viewer: 1,
+  Editor: 2,
+});
+
+/**
+ * Add a collaborator with a specific role. Owner only.
+ * @param {number|string} tokenId
+ * @param {string} collaboratorAddress
+ * @param {number} role — CollaboratorRole.Viewer (1) or CollaboratorRole.Editor (2)
+ * @returns {string|null} txHash on success
+ */
+async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
+  const c = _getContract();
+  const w3 = _getWeb3();
+  if (!w3 || !window.walletAddress || !c) {
+    console.error("Wallet or contract not ready");
+    return null;
+  }
+
+  try {
+    const tx = c.methods.addEditor(tokenId, collaboratorAddress, role);
+    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const receipt = await tx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(gas) * 1.2),
+    });
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("addCollaboratorWithRole failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Change a collaborator's role. Owner only.
+ * @param {number|string} tokenId
+ * @param {string} collaboratorAddress
+ * @param {number} role — CollaboratorRole.Viewer (1) or CollaboratorRole.Editor (2);
+ *                         CollaboratorRole.None (0) removes the collaborator.
+ * @returns {string|null} txHash on success
+ */
+async function setCollaboratorRole(tokenId, collaboratorAddress, role) {
+  const c = _getContract();
+  const w3 = _getWeb3();
+  if (!w3 || !window.walletAddress || !c) {
+    console.error("Wallet or contract not ready");
+    return null;
+  }
+
+  try {
+    const tx = c.methods.setCollaboratorRole(
+      tokenId,
+      collaboratorAddress,
+      role
+    );
+    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const receipt = await tx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(gas) * 1.2),
+    });
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("setCollaboratorRole failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Get a collaborator's role for a token. Read-only call.
+ * @param {number|string} tokenId
+ * @param {string} collaboratorAddress
+ * @returns {number|null} CollaboratorRole enum value, or null on error
+ */
+async function getCollaboratorRole(tokenId, collaboratorAddress) {
+  const c = _getContract();
+  if (!c) {
+    console.error("Contract not ready");
+    return null;
+  }
+
+  try {
+    const role = await c.methods
+      .getCollaboratorRole(tokenId, collaboratorAddress)
+      .call();
+    return Number(role);
+  } catch (error) {
+    console.error("getCollaboratorRole failed:", error);
+    return null;
+  }
+}
+
+/**
+ * List collaborators filtered by role. Read-only call.
+ * @param {number|string} tokenId
+ * @param {number} role — CollaboratorRole.Viewer (1) or CollaboratorRole.Editor (2)
+ * @returns {string[]|null} Array of collaborator addresses, or null on error
+ */
+async function listCollaboratorsByRole(tokenId, role) {
+  const c = _getContract();
+  if (!c) {
+    console.error("Contract not ready");
+    return null;
+  }
+
+  try {
+    const addrs = await c.methods.listCollaboratorsByRole(tokenId, role).call();
+    return addrs;
+  } catch (error) {
+    console.error("listCollaboratorsByRole failed:", error);
+    return null;
+  }
+}
+
+// ── Burn ──
+
+/**
+ * Burn (destroy) a token. Owner or Editor with burn permission.
+ * Before burning, resolves the token's manifest CID so we can unpin
+ * all IPFS content after the on-chain burn succeeds.
+ * @param {number|string} tokenId
+ * @returns {string|null} txHash on success
+ */
+async function burn(tokenId) {
+  const c = _getContract();
+  const w3 = _getWeb3();
+  if (!w3 || !window.walletAddress || !c) {
+    console.error("Wallet or contract not ready");
+    return null;
+  }
+
+  // Resolve manifest CID before burning (after burn, tokenURI may revert)
+  let manifestCid = null;
+  try {
+    manifestCid = await c.methods.tokenURI(tokenId).call();
+    console.log(
+      `[BURN] token ${tokenId} manifest CID → ${manifestCid || "none"}`
+    );
+  } catch (e) {
+    console.warn(
+      `[BURN] could not resolve manifest CID for token ${tokenId}:`,
+      e.message
+    );
+    // Continue with burn even if resolution fails — unpin is best-effort
+  }
+
+  try {
+    const tx = c.methods.burn(tokenId);
+    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const receipt = await tx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(gas) * 1.2),
+    });
+
+    document.dispatchEvent(
+      new CustomEvent("asset:burned", {
+        detail: { tokenId, txHash: receipt.transactionHash },
+      })
+    );
+
+    // Unpin all IPFS content for this manifest chain (best-effort, non-blocking)
+    if (manifestCid) {
+      console.log(`[BURN] unpinning IPFS content for ${manifestCid}…`);
+      const { unpinAssetCids } = await import("../services/api.js");
+      unpinAssetCids(manifestCid, window.walletAddress)
+        .then((result) => {
+          console.log(
+            `[BURN] unpinned ${result.count} CIDs for token ${tokenId}`
+          );
+          if (result.errors?.length) {
+            console.warn(`[BURN] unpin errors:`, result.errors);
+          }
+        })
+        .catch((err) => {
+          console.warn(`[BURN] unpin failed (non-fatal):`, err.message);
+        });
+    }
+
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("burn failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Grant or revoke burn permission for a collaborator. Owner only.
+ * @param {number|string} tokenId
+ * @param {string} collaboratorAddress
+ * @param {boolean} canBurnFlag
+ * @returns {string|null} txHash on success
+ */
+async function setBurnPermission(tokenId, collaboratorAddress, canBurnFlag) {
+  const c = _getContract();
+  const w3 = _getWeb3();
+  if (!w3 || !window.walletAddress || !c) {
+    console.error("Wallet or contract not ready");
+    return null;
+  }
+
+  try {
+    const tx = c.methods.setBurnPermission(
+      tokenId,
+      collaboratorAddress,
+      canBurnFlag
+    );
+    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const receipt = await tx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(gas) * 1.2),
+    });
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("setBurnPermission failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Check if an address can burn a token. Read-only call.
+ * @param {number|string} tokenId
+ * @param {string} address
+ * @returns {boolean|null} True if can burn, false otherwise, null on error
+ */
+async function canBurn(tokenId, address) {
+  const c = _getContract();
+  if (!c) {
+    console.error("Contract not ready");
+    return null;
+  }
+
+  try {
+    return await c.methods.canBurn(tokenId, address).call();
+  } catch (error) {
+    console.error("canBurn failed:", error);
+    return null;
+  }
+}
+
 // Retain mock flow for offline development when contract is not deployed
 async function _mockPayForGeneration(nodeId, prompt) {
   const w3 = _getWeb3();
@@ -735,7 +980,15 @@ window.publishAsset = publishAsset;
 window.updateAssetURI = updateAssetURI;
 window.addEditor = addEditor;
 window.removeEditor = removeEditor;
+window.addCollaboratorWithRole = addCollaboratorWithRole;
+window.setCollaboratorRole = setCollaboratorRole;
+window.getCollaboratorRole = getCollaboratorRole;
+window.listCollaboratorsByRole = listCollaboratorsByRole;
+window.burn = burn;
+window.setBurnPermission = setBurnPermission;
+window.canBurn = canBurn;
 window.switchNetwork = switchNetwork;
+window.CollaboratorRole = CollaboratorRole;
 
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(async () => {
@@ -754,9 +1007,17 @@ export {
   updateAssetURI,
   addEditor,
   removeEditor,
+  addCollaboratorWithRole,
+  setCollaboratorRole,
+  getCollaboratorRole,
+  listCollaboratorsByRole,
+  burn,
+  setBurnPermission,
+  canBurn,
   switchNetwork,
   initWallet,
   autoConnectWallet,
+  CollaboratorRole,
   web3,
   contract,
 };

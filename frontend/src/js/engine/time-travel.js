@@ -18,27 +18,37 @@ const chainCache = new Map();
 /**
  * Apply a color to meshes.
  */
-function applyColor(meshes, colorHex) {
-  if (!colorHex) return;
-  const color = BABYLON.Color3.FromHexString(colorHex);
+function applyColor(meshes, colorHex, meshOverrides = null) {
+  if (!colorHex && !meshOverrides) return;
+  const defaultColor = colorHex ? BABYLON.Color3.FromHexString(colorHex) : null;
+
   for (const mesh of meshes) {
+    // Determine the effective color for this mesh:
+    // meshOverrides take precedence, then fall back to the node default.
+    let effectiveColor = defaultColor;
+    if (meshOverrides && mesh.name && meshOverrides[mesh.name]?.color) {
+      effectiveColor = BABYLON.Color3.FromHexString(
+        meshOverrides[mesh.name].color
+      );
+    }
+
+    if (!effectiveColor) continue;
+
     if (mesh.material) {
       if (mesh.material.diffuseColor) {
-        mesh.material.diffuseColor = color;
+        mesh.material.diffuseColor = effectiveColor;
       } else if (mesh.material.albedoColor) {
-        mesh.material.albedoColor = color;
+        mesh.material.albedoColor = effectiveColor;
       }
-      // Also handle multi-materials
       if (mesh.material.getSubMeshMaterials) {
         for (const mat of mesh.material.getSubMeshMaterials()) {
-          if (mat.diffuseColor) mat.diffuseColor = color;
-          else if (mat.albedoColor) mat.albedoColor = color;
+          if (mat.diffuseColor) mat.diffuseColor = effectiveColor;
+          else if (mat.albedoColor) mat.albedoColor = effectiveColor;
         }
       }
     }
-    // Recurse to children
     for (const child of mesh.getChildMeshes()) {
-      applyColor([child], colorHex);
+      applyColor([child], colorHex, meshOverrides);
     }
   }
 }
@@ -81,8 +91,8 @@ async function walkManifestChain(startCid, maxDepth = 50) {
       chain.unshift({
         cid,
         version: manifest.version || 0,
-        color: firstNode.appearance?.color || null,
-        scale: firstNode.appearance?.scale || { x: 1, y: 1, z: 1 },
+        color: firstNode.post_processor?.color || null,
+        scale: firstNode.post_processor?.scale || { x: 1, y: 1, z: 1 },
         sourceCid: firstNode.source?.cid || null,
       });
 
@@ -117,10 +127,11 @@ async function applyManifestVersion(nodeId, manifestCid) {
     return;
   }
 
+  const pp = node.post_processor;
   const meshes = getNodeMeshes(nodeId);
   if (meshes) {
-    applyColor(meshes, node.appearance?.color);
-    applyScale(meshes, node.appearance?.scale);
+    applyColor(meshes, pp?.color, pp?.meshOverrides || null);
+    applyScale(meshes, pp?.scale);
   }
 }
 

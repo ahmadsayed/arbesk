@@ -189,9 +189,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       );
       const node = (manifestData.scene?.nodes || [])[0];
       expect(node).toBeDefined();
-      expect(node).toHaveProperty("appearance");
-      expect(node.appearance).toHaveProperty("color");
-      expect(node.appearance).toHaveProperty("scale");
+      expect(node).toHaveProperty("post_processor");
+      expect(node.post_processor).toHaveProperty("color");
+      expect(node.post_processor).toHaveProperty("scale");
       expect(node.source).toMatchObject({
         cid: expect.any(String),
         path: expect.any(String),
@@ -678,7 +678,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
                 path: "asset.glb",
                 format: "glb",
               },
-              appearance: { color: null, scale: { x: 1, y: 1, z: 1 } },
+              post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
             },
           ],
         },
@@ -688,7 +688,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       // v2: modified color on the node, chained off v1.
       // The /variants endpoint was removed; the regular /manifests
-      // POST now carries the full manifest with the new appearance.
+      // POST now carries the full manifest with the new post_processor.
       const v2 = {
         ...v1,
         version: 2,
@@ -698,7 +698,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             {
               node_id: "node_hist_001",
               source: v1.scene.nodes[0].source,
-              appearance: {
+              post_processor: {
                 color: "#111111",
                 scale: { x: 1, y: 1, z: 1 },
               },
@@ -719,7 +719,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             {
               node_id: "node_hist_001",
               source: v1.scene.nodes[0].source,
-              appearance: {
+              post_processor: {
                 color: "#222222",
                 scale: { x: 1, y: 1, z: 1 },
               },
@@ -797,7 +797,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             {
               node_id: "node_tok_001",
               source: { cid: "QmSomeMesh", path: "asset.glb", format: "glb" },
-              appearance: { color: null, scale: { x: 1, y: 1, z: 1 } },
+              post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
             },
           ],
         },
@@ -1120,7 +1120,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             {
               node_id: "node_resave_001",
               source: { cid: "QmTestCid", path: "test.glb", format: "glb" },
-              appearance: { color: "#FF0000", scale: { x: 1, y: 1, z: 1 } },
+              post_processor: { color: "#FF0000", scale: { x: 1, y: 1, z: 1 } },
             },
           ],
         },
@@ -1139,7 +1139,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const stored = JSON.parse(ipfsStorage.get(res2.body.cid));
       expect(stored.scene.nodes).toHaveLength(1);
       expect(stored.scene.nodes[0].node_id).toBe("node_resave_001");
-      expect(stored.scene.nodes[0].appearance.color).toBe("#FF0000");
+      expect(stored.scene.nodes[0].post_processor.color).toBe("#FF0000");
     });
 
     it("GET /api/v1/config returns the configured address", async () => {

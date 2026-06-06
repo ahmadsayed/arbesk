@@ -1,6 +1,6 @@
 # Arbesk API Specification
 
-> Version: 0.4.0 — aligned with the current Express implementation  
+> Version: 0.5.0 — aligned with the current Express implementation  
 > Base URL: `/api`  
 > Content-Type: `application/json` unless noted
 
@@ -379,8 +379,62 @@ blockchain/artifacts/contracts/ArbeskWorld.sol/ArbeskWorld.json
 6. Parametric edits call `POST /api/parametric-version` directly.
 7. Save calls `POST /api/save-manifest`.
 8. Publish captures an optional WebP thumbnail and calls `POST /api/push-ipfs`.
-9. Frontend calls `mintWorld(tokenURI, tokenId)` for new worlds or `updateTokenURI(tokenId, newTokenURI)` for existing worlds.
+9. Frontend calls `publishAsset(tokenURI, tokenId)` for new worlds or `updateAssetURI(tokenId, newTokenURI)` for existing worlds.
 10. Gallery fetches token URIs from the contract, loads manifests, and displays names/thumbnails.
+11. Owner adds collaborators via `addEditor(tokenId, address, role)` and manages burn permissions via `setBurnPermission()`.
+12. Owner or permitted editors burn tokens via `burn(tokenId)`, which frees `MAX_TOKENS_PER_EDITOR` slots.
+
+---
+
+## Collaboration Contract Endpoints (v0.5.0)
+
+These are on-chain functions exposed by the `ArbeskAsset` contract. The frontend calls them directly via Web3.js — the backend does NOT proxy these. Documented here for completeness.
+
+### Role-Based Collaboration
+
+| Contract Function | Access | Description |
+|---|---|---|
+| `addEditor(uint256,address)` | Owner | Add collaborator with default Editor role |
+| `addEditor(uint256,address,uint8)` | Owner | Add collaborator with explicit role (1=Viewer, 2=Editor) |
+| `addEditor(uint256,address[])` | Owner | Batch add collaborators with Editor role |
+| `setCollaboratorRole(uint256,address,uint8)` | Owner | Change role of existing collaborator (1=Viewer, 2=Editor); 0=None removes |
+| `getCollaboratorRole(uint256,address)` | Public | Returns 0 (None), 1 (Viewer), or 2 (Editor) |
+| `listEditors(uint256)` | Public | Returns all collaborator addresses (Viewers + Editors) |
+| `listCollaboratorsByRole(uint256,uint8)` | Public | Returns addresses filtered by role |
+| `removeEditor(uint256,address)` | Owner | Remove a collaborator entirely |
+
+**CollaboratorRole enum:**
+
+| Value | Name | Permissions |
+|:---:|---|---|
+| 0 | None | Not a collaborator |
+| 1 | Viewer | Recognized collaborator, read-only |
+| 2 | Editor | Can update asset URI via `updateAssetURI()` |
+
+The token **owner** always has implicit full permissions regardless of role.
+
+### Burn
+
+| Contract Function | Access | Description |
+|---|---|---|
+| `burn(uint256)` | Owner or Editor+Burn | Destroy a token; cleans up all collaborators and frees `MAX_TOKENS_PER_EDITOR` slots |
+| `setBurnPermission(uint256,address,bool)` | Owner | Grant/revoke burn permission on an Editor-role collaborator |
+| `canBurn(uint256,address)` | Public | Returns `true` if address can burn the token |
+
+**Burn permission rules:**
+- Token owner can always burn
+- Editor-role collaborators need explicit `canBurn` flag
+- Viewers can never burn
+- Setting `canBurn=true` on a Viewer or non-collaborator reverts
+- Burning frees `MAX_TOKENS_PER_EDITOR` slots for all collaborators on the token
+
+**New Events:**
+
+| Event | Signature |
+|---|---|
+| `CollaboratorRoleChanged` | `(uint256 indexed tokenId, address indexed collaborator, uint8 role)` |
+| `BurnPermissionChanged` | `(uint256 indexed tokenId, address indexed collaborator, bool canBurn)` |
+| `AssetBurned` | `(uint256 indexed tokenId, address indexed burner)` |
 
 ---
 

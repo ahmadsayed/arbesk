@@ -406,6 +406,36 @@ export async function getTokenManifest(tokenId) {
   return data;
 }
 
+// ─── IPFS Unpin ────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/ipfs/unpin
+ * Unpin all CIDs in a manifest chain (called after token burn).
+ * @param {string} cid — Manifest CID to start unpinning from
+ * @param {string} [actorAddress] — Wallet address of the burner
+ * @returns {Promise<{unpinned: string[], count: number, errors?: string[]}>}
+ */
+export async function unpinAssetCids(cid, actorAddress) {
+  const response = await fetch(`${API_BASE}/ipfs/unpin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cid, ...(actorAddress && { actorAddress }) }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Unpin failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+
+  return data;
+}
+
 // ─── Ledger ──────────────────────────────────────────────────────────────────
 
 /**
@@ -459,5 +489,6 @@ window.saveManifest = saveManifest;
 window.publishManifest = publishManifest;
 window.getManifestHistory = getManifestHistory;
 window.getTokenManifest = getTokenManifest;
+window.unpinAssetCids = unpinAssetCids;
 window.queryLedger = queryLedger;
 window.getLedgerStats = getLedgerStats;

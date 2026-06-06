@@ -188,6 +188,14 @@ export default function generateAssetNode(ipfs) {
         const { cid: sourceCid } = await ipfs.add(assetPayload);
         const sourceAssetCid = sourceCid.toString();
         console.log(`[IPFS] add source asset → ${sourceAssetCid}`);
+        try {
+          await ipfs.pin.add(sourceAssetCid);
+          console.log(`[IPFS] pin source asset → ${sourceAssetCid}`);
+        } catch (pinErr) {
+          console.warn(
+            `[IPFS] pin source asset failed (non-fatal): ${pinErr.message}`,
+          );
+        }
 
         let manifest = null;
         if (prevAssetManifestCid) {
@@ -258,7 +266,7 @@ export default function generateAssetNode(ipfs) {
         };
 
         node.source = source;
-        node.appearance = { color: null, scale: { x: 1, y: 1, z: 1 } };
+        node.post_processor = { color: null, scale: { x: 1, y: 1, z: 1 } };
         bumpManifestVersion(manifest, prevAssetManifestCid || null);
 
         console.log(
@@ -269,6 +277,14 @@ export default function generateAssetNode(ipfs) {
         );
         const assetManifestCid = newAssetManifestCid.toString();
         console.log(`[IPFS] add asset manifest → ${assetManifestCid}`);
+        try {
+          await ipfs.pin.add(assetManifestCid);
+          console.log(`[IPFS] pin asset manifest → ${assetManifestCid}`);
+        } catch (pinErr) {
+          console.warn(
+            `[IPFS] pin asset manifest failed (non-fatal): ${pinErr.message}`,
+          );
+        }
 
         usedTxHashes.add(effectiveTxHash);
         console.log(

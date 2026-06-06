@@ -10,6 +10,10 @@
  * Closing the inspector (X) discards pending edits for the active node
  * and reverts the live preview to the last committed appearance.
  *
+ * Per-component: when a GLTF node contains multiple named sub-meshes, the
+ * inspector shows a "Components" section with individual color swatches.
+ * Sub-mesh colors are stored in `appearance.meshOverrides` on the manifest.
+ *
  * History timeline walks the manifest chain via `prev_asset_manifest_cid`
  * links. Timeline scrubs are view-only — they do not create pending edits.
  */
@@ -22,11 +26,12 @@ import {
 } from "./time-travel.js";
 import {
   getNodeMeshes,
+  getNodeSubMeshes,
   getNodeChildRef,
   deselectAll,
   selectNodeById,
-  getPendingAppearanceEdits,
-  clearPendingAppearanceEdit,
+  getPendingPostProcessorEdits,
+  clearPendingPostProcessorEdit,
 } from "./scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
@@ -38,6 +43,9 @@ const nodeColorInput = document.getElementById("nodeColor");
 const nodeScaleX = document.getElementById("nodeScaleX");
 const nodeScaleY = document.getElementById("nodeScaleY");
 const nodeScaleZ = document.getElementById("nodeScaleZ");
+
+// Component list container (dynamically built)
+const componentList = document.getElementById("componentList");
 
 const timeline = document.getElementById("timeline");
 const versionSlider = document.getElementById("versionSlider");
@@ -56,6 +64,8 @@ let activeNodeId = null;
 // preview when the inspector closes without saving. Re-seeded on
 // `asset:draftSaved` so close-after-save-and-edit reverts correctly.
 let committedState = null;
+// Per-component color overrides currently shown in the UI (keyed by mesh name)
+let activeMeshOverrides = {};
 
 // Cached manifest chain for the currently open node (used by timeline slider)
 let currentChain = [];
@@ -66,6 +76,7 @@ let currentChain = [];
 function showTokenChildInfo(nodeId) {
   if (parametricEditor) parametricEditor.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = false;
+  if (componentList) componentList.hidden = true;
 
   const childRef = getNodeChildRef(nodeId);
   if (childRef && tokenChildIdEl) {
@@ -96,10 +107,82 @@ function showTokenChildInfo(nodeId) {
 }
 
 /**
+ * Build the component color picker list from the active node's sub-meshes.
+ */
+function buildComponentList(nodeId) {
+  if (!componentList) return;
+
+  const subMeshes = getNodeSubMeshes(nodeId);
+
+  if (subMeshes.length <= 1) {
+    componentList.hidden = true;
+    componentList.innerHTML = "";
+    return;
+  }
+
+  componentList.hidden = false;
+
+  let html = '<div class="inspector-section-title">Components</div>';
+
+  for (const { name } of subMeshes) {
+    const color =
+      activeMeshOverrides[name] || nodeColorInput?.value || "#ffffff";
+    const isActive = false; // highlight active sub-mesh? We don't use this yet
+    html += `
+      <div class="component-row${isActive ? " component-row--active" : ""}">
+        <label class="form-label component-label" for="meshColor_${name}">${escapeHtml(
+      name
+    )}</label>
+        <input
+          id="meshColor_${name}"
+          class="form-color component-color"
+          type="color"
+          value="${color}"
+          data-mesh-name="${escapeHtml(name)}"
+        />
+      </div>`;
+  }
+
+  componentList.innerHTML = html;
+
+  // Bind change events
+  for (const { name } of subMeshes) {
+    const input = document.getElementById(`meshColor_${name}`);
+    if (input) {
+      input.addEventListener("input", onComponentColorChange);
+    }
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/**
+ * Collect current mesh override colors from the DOM inputs.
+ */
+function readMeshOverrides() {
+  const overrides = {};
+  if (!componentList || componentList.hidden) return overrides;
+
+  const inputs = componentList.querySelectorAll(".component-color");
+  for (const input of inputs) {
+    const name = input.dataset.meshName;
+    if (name) {
+      overrides[name] = { color: input.value };
+    }
+  }
+  return overrides;
+}
+
+/**
  * Show the parametric editor for a regular node.
  */
 async function openInspector(nodeId) {
   activeNodeId = nodeId;
+  activeMeshOverrides = {};
 
   // Check if this is a token child node
   const childRef = getNodeChildRef(nodeId);
@@ -125,8 +208,12 @@ async function openInspector(nodeId) {
         (n) => n.node_id === nodeId
       );
       if (node) {
-        if (node.appearance?.color) currentColor = node.appearance.color;
-        if (node.appearance?.scale) currentScale = { ...node.appearance.scale };
+        const pp = node.post_processor || {};
+        if (pp.color) currentColor = pp.color;
+        if (pp.scale) currentScale = { ...pp.scale };
+        if (pp.meshOverrides) {
+          activeMeshOverrides = { ...pp.meshOverrides };
+        }
       }
     } catch (err) {
       console.warn(
@@ -139,6 +226,7 @@ async function openInspector(nodeId) {
   committedState = {
     color: currentColor,
     scale: { ...currentScale },
+    meshOverrides: { ...activeMeshOverrides },
   };
 
   // Set inputs
@@ -146,6 +234,9 @@ async function openInspector(nodeId) {
   if (nodeScaleX) nodeScaleX.value = currentScale.x;
   if (nodeScaleY) nodeScaleY.value = currentScale.y;
   if (nodeScaleZ) nodeScaleZ.value = currentScale.z;
+
+  // Build component list (async — getNodeSubMeshes is sync)
+  buildComponentList(nodeId);
 
   // Show inspector
   inspector.classList.remove("collapsed");
@@ -157,25 +248,33 @@ async function openInspector(nodeId) {
 /**
  * Close the inspector: revert the live preview to the last committed
  * appearance and discard any pending edits for the active node.
- * Save Draft / Publish is the only path to persistence now.
  */
 function closeInspector() {
   if (activeNodeId && committedState) {
     const meshes = getNodeMeshes(activeNodeId);
     if (meshes) {
-      applyColor(meshes, committedState.color);
+      applyColor(
+        meshes,
+        committedState.color,
+        committedState.meshOverrides || null
+      );
       applyScale(meshes, committedState.scale);
     }
-    clearPendingAppearanceEdit(activeNodeId);
+    clearPendingPostProcessorEdit(activeNodeId);
   }
 
   activeNodeId = null;
   committedState = null;
+  activeMeshOverrides = {};
   currentChain = [];
   inspector.classList.add("collapsed");
   timeline.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
+  if (componentList) {
+    componentList.hidden = true;
+    componentList.innerHTML = "";
+  }
   deselectAll();
 }
 
@@ -213,28 +312,60 @@ function readScaleInputs() {
 }
 
 /**
- * Write the current color + scale inputs into the pending-edits map for
- * the active node. Both fields are always written together so that
- * Save Draft / Publish applies them atomically (no partial updates).
+ * Write the current color + scale + meshOverrides into the pending-edits map.
  */
 function recordPendingEdit() {
   if (!activeNodeId) return;
-  const pending = getPendingAppearanceEdits();
+  const pending = getPendingPostProcessorEdits();
   const prev = pending.get(activeNodeId) || {};
+  const meshOverrides = readMeshOverrides();
   pending.set(activeNodeId, {
     color: nodeColorInput ? nodeColorInput.value : prev.color ?? "#ffffff",
     scale: readScaleInputs(),
+    meshOverrides:
+      Object.keys(meshOverrides).length > 0
+        ? meshOverrides
+        : prev.meshOverrides || undefined,
   });
 }
 
 /**
  * Live preview: update mesh color from input and record the edit.
+ * Applies both the node-level color and any mesh overrides.
  */
 function onColorChange() {
   if (!activeNodeId) return;
   const color = nodeColorInput ? nodeColorInput.value : null;
+  const meshOverrides = readMeshOverrides();
   const meshes = getNodeMeshes(activeNodeId);
-  applyColor(meshes, color);
+  applyColor(
+    meshes,
+    color,
+    Object.keys(meshOverrides).length > 0 ? meshOverrides : null
+  );
+  recordPendingEdit();
+}
+
+/**
+ * Live preview: per-component color changed.
+ */
+function onComponentColorChange(e) {
+  if (!activeNodeId) return;
+  const meshName = e.target?.dataset?.meshName;
+  if (!meshName) return;
+
+  // Update the in-memory map
+  activeMeshOverrides[meshName] = { color: e.target.value };
+
+  // Re-apply all colors
+  const color = nodeColorInput ? nodeColorInput.value : null;
+  const meshOverrides = readMeshOverrides();
+  const meshes = getNodeMeshes(activeNodeId);
+  applyColor(
+    meshes,
+    color,
+    Object.keys(meshOverrides).length > 0 ? meshOverrides : null
+  );
   recordPendingEdit();
 }
 
@@ -251,9 +382,6 @@ function onScaleChange() {
 
 /**
  * Timeline slider change handler.
- * Uses the cached manifest chain to apply the selected version's
- * color + scale to the active node without re-fetching. This is a
- * view-only operation — it does not create a pending edit.
  */
 function onTimelineChange() {
   if (!activeNodeId || currentChain.length === 0) return;
@@ -272,6 +400,24 @@ function onNodeSelected(e) {
 }
 document.addEventListener("node:selected", onNodeSelected);
 document.addEventListener("outliner:nodeSelected", onNodeSelected);
+
+// Sub-mesh selected: update component list highlight
+document.addEventListener("submesh:selected", (e) => {
+  if (!componentList || componentList.hidden) return;
+  const meshName = e.detail?.meshName;
+  if (!meshName) return;
+
+  // Remove active class from all rows
+  for (const row of componentList.querySelectorAll(".component-row--active")) {
+    row.classList.remove("component-row--active");
+  }
+  // Highlight the matching row
+  const input = document.getElementById(`meshColor_${meshName}`);
+  if (input) {
+    const row = input.closest(".component-row");
+    if (row) row.classList.add("component-row--active");
+  }
+});
 
 // Inspector close button
 const inspectorCloseBtn = document.getElementById("inspectorCloseBtn");
@@ -294,13 +440,12 @@ if (diveBtn) {
 }
 
 // After a save, the values in the inputs are now the committed values.
-// Refresh `committedState` so a subsequent edit + close reverts to the
-// just-saved state, not the pre-save one.
 document.addEventListener("asset:draftSaved", () => {
   if (activeNodeId) {
     committedState = {
       color: nodeColorInput ? nodeColorInput.value : "#ffffff",
       scale: readScaleInputs(),
+      meshOverrides: { ...activeMeshOverrides },
     };
   }
 });

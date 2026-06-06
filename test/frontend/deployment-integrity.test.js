@@ -65,7 +65,14 @@ const REQUIRED_ABI_FUNCTIONS = [
   "addEditor",
   "removeEditor",
   "listEditors",
+  "listCollaboratorsByRole",
   "listTokens",
+  "getCollaboratorRole",
+  "setCollaboratorRole",
+  "getAssetManifest",
+  "burn",
+  "canBurn",
+  "setBurnPermission",
   "totalSupply",
 ];
 

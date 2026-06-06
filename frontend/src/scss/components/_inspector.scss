@@ -134,3 +134,46 @@
   color: var(--dim-fg);
   line-height: 1.4;
 }
+
+// Component list — per-mesh color overrides
+.component-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-1) var(--size-2);
+  border-radius: var(--radius-0);
+  transition: background-color var(--duration-fast) var(--ease-out-1);
+
+  &--active {
+    background-color: var(--highlight-bg);
+  }
+}
+
+.component-label {
+  font-size: var(--font-size-0);
+  color: var(--sidebar-fg);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.component-color {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-0);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+
+  &::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
+  }
+}

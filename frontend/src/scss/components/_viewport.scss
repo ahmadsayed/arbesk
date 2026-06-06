@@ -6,7 +6,7 @@
   flex: 1;
   position: relative;
   min-height: 0;
-  background-color: var(--choco-12); // always dark for 3D canvas
+  background-color: var(--viewport-bg); // matches Babylon scene clearColor
   border: var(--border-size-1) solid var(--border-color);
   border-radius: var(--radius-3);
   overflow: hidden;
@@ -113,7 +113,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 // ── Viewport orientation gizmo ─────────────────────────────────────

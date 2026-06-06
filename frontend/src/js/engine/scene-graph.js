@@ -9,7 +9,7 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
-import { convertToDataURI } from "../gltf/uri_to_cid.js";
+import { composeGlTF } from "../gltf/composer.js";
 import {
   resolveChildRef,
   clearResolutionCache,
@@ -36,9 +36,9 @@ import {
   clearScene,
   clearPendingChildRefs,
   getPendingChildRefs,
-  getPendingAppearanceEdits,
-  clearPendingAppearanceEdits,
-  clearPendingAppearanceEdit,
+  getPendingPostProcessorEdits,
+  clearPendingPostProcessorEdits,
+  clearPendingPostProcessorEdit,
 } from "./cleanup.js";
 
 // Re-export state and constants
@@ -65,9 +65,9 @@ export {
   clearScene,
   clearPendingChildRefs,
   getPendingChildRefs,
-  getPendingAppearanceEdits,
-  clearPendingAppearanceEdits,
-  clearPendingAppearanceEdit,
+  getPendingPostProcessorEdits,
+  clearPendingPostProcessorEdits,
+  clearPendingPostProcessorEdit,
 } from "./cleanup.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -203,7 +203,22 @@ function initEngine() {
       let target = mesh;
       while (target) {
         if (target.metadata?.nodeId) {
-          selectNode(target.metadata.nodeId, target);
+          const nodeId = target.metadata.nodeId;
+
+          if (nodeId === state.highlightedNodeId) {
+            // Already selected this node — check for sub-mesh toggle
+            if (mesh.name) {
+              if (state.highlightedSubMeshName === mesh.name) {
+                // Deselect sub-mesh, back to node-level
+                selectNode(nodeId, target);
+              } else {
+                selectSubMesh(nodeId, mesh.name);
+              }
+            }
+            return;
+          }
+
+          selectNode(nodeId, target);
           return;
         }
         target = target.parent;
@@ -272,30 +287,47 @@ function initEngine() {
 }
 
 function selectNode(nodeId, mesh) {
-  if (nodeId === state.highlightedNodeId) return; // already selected
-
-  // Clear previous highlight
+  if (nodeId === state.highlightedNodeId && !state.highlightedSubMeshName)
+    return;
   clearHighlight();
-
-  // Add all meshes belonging to this node to the highlight layer
+  state.highlightedSubMeshName = null;
   const meshes = state.nodeMeshes.get(nodeId);
   if (meshes && state.highlightLayer) {
+    const amber =
+      hexToColor3(getCssVar("--highlight-amber")) ||
+      BABYLON.Color3.FromHexString("#D4A017");
     for (const m of meshes) {
-      if (m && !m.isDisposed()) {
-        const amber =
-          hexToColor3(getCssVar("--highlight-amber")) ||
-          BABYLON.Color3.FromHexString("#D4A017");
-        state.highlightLayer.addMesh(m, amber);
-      }
+      if (m && !m.isDisposed()) state.highlightLayer.addMesh(m, amber);
     }
   }
-
   state.highlightedNodeId = nodeId;
   window.selectedNodeId = nodeId;
   document.dispatchEvent(
-    new CustomEvent("node:selected", {
-      detail: { nodeId, mesh },
-    })
+    new CustomEvent("node:selected", { detail: { nodeId, mesh } })
+  );
+}
+
+function selectSubMesh(nodeId, meshName) {
+  if (nodeId !== state.highlightedNodeId) {
+    clearHighlight();
+    state.highlightedNodeId = nodeId;
+    window.selectedNodeId = nodeId;
+  } else {
+    clearHighlight();
+  }
+  const meshes = state.nodeMeshes.get(nodeId);
+  if (meshes && state.highlightLayer) {
+    const amber =
+      hexToColor3(getCssVar("--highlight-amber")) ||
+      BABYLON.Color3.FromHexString("#D4A017");
+    for (const m of meshes) {
+      if (m && !m.isDisposed() && m.name === meshName)
+        state.highlightLayer.addMesh(m, amber);
+    }
+  }
+  state.highlightedSubMeshName = meshName;
+  document.dispatchEvent(
+    new CustomEvent("submesh:selected", { detail: { nodeId, meshName } })
   );
 }
 
@@ -334,6 +366,7 @@ function clearHighlight() {
 function deselectAll() {
   clearHighlight();
   state.highlightedNodeId = null;
+  state.highlightedSubMeshName = null;
   window.selectedNodeId = null;
   document.dispatchEvent(new CustomEvent("node:deselected"));
 }
@@ -549,7 +582,6 @@ async function loadAsset(src, parentNode, nodeId) {
         parentNode,
         result.transformNodes || []
       );
-      applyDefaultMaterial(result.meshes);
       return result.meshes;
     } else {
       console.log(`[SCENE] fetching glTF JSON from gateway | cid=${cid}`);
@@ -560,7 +592,7 @@ async function loadAsset(src, parentNode, nodeId) {
         }`
       );
 
-      const resolvedGltf = await convertToDataURI(gltfJson);
+      const resolvedGltf = await composeGlTF(gltfJson);
       const gltfString = JSON.stringify(resolvedGltf);
       console.log(`[SCENE] glTF stringified | chars=${gltfString.length}`);
 
@@ -583,7 +615,6 @@ async function loadAsset(src, parentNode, nodeId) {
         parentNode,
         result.transformNodes || []
       );
-      applyDefaultMaterial(result.meshes);
       return result.meshes;
     }
   } catch (error) {
@@ -748,9 +779,10 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
     );
   }
 
-  if (meshes.length > 0 && node.appearance) {
-    applyColor(meshes, node.appearance.color);
-    applyScale(meshes, node.appearance.scale);
+  const pp = node.post_processor;
+  if (meshes.length > 0 && pp) {
+    applyColor(meshes, pp.color, pp.meshOverrides || null);
+    applyScale(meshes, pp.scale);
   }
 
   return { anchor, meshes };
@@ -931,6 +963,24 @@ function getNodeMeshes(nodeId) {
   return state.nodeMeshes.get(nodeId) || [];
 }
 
+/**
+ * Return distinct sub-mesh names for a node. Only useful when a GLTF
+ * import produced multiple named meshes (e.g. "flowercenter", "Sphere").
+ */
+function getNodeSubMeshes(nodeId) {
+  const meshes = state.nodeMeshes.get(nodeId);
+  if (!meshes) return [];
+  const seen = new Set();
+  const result = [];
+  for (const m of meshes) {
+    if (m && !m.isDisposed() && m.name && !seen.has(m.name)) {
+      seen.add(m.name);
+      result.push({ name: m.name, mesh: m });
+    }
+  }
+  return result;
+}
+
 function getNodeChildRef(nodeId) {
   if (nodeId && nodeId.startsWith("child_token_")) {
     const anchor = state.nodeAnchors.get(nodeId);
@@ -1083,6 +1133,7 @@ export {
   loadAsset,
   getNodeAnchor,
   getNodeMeshes,
+  getNodeSubMeshes,
   getNodeChildRef,
   registerMockNode,
   captureAssetThumbnail,

@@ -330,6 +330,8 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 | `[TOKEN]` | Token child ref resolution | `[TOKEN] resolving child token #42 at 0x...` → `[TOKEN] resolved → Qm...` |
 | `[SESSION]` | Session auth operations | `[SESSION] created — token=abc123... address=0x...` |
 | `[LEDGER]` | Micro-ledger operations | `[LEDGER] append GENERATION | manifestId=asset_... cid=Qm...` |
+| `[UNPIN]` | IPFS unpin operations | `[UNPIN] collected 42 CIDs across 5 manifest(s)` |
+| `[BURN]` | Token burn operations | `[BURN] token 42 manifest CID → Qm...` |
 
 **Rules for adding new logs:**
 1. Always prefix with `[TAG]` in UPPERCASE.

@@ -8,15 +8,18 @@
  * Replaces the previous in-scene X-Y-Z axis arrows.
  */
 
+import { getCssVar } from "../engine/theme.js";
+
 const GIZMO_SIZE = 84; // CSS pixels
 const GIZMO_MARGIN = 12;
 const AXIS_LENGTH = 26; // pixels from center to tip
 const LABEL_OFFSET = 7; // pixels past the line tip
 
-// Blender-style axis colors (match Arbesk palette but slightly punchier for a small widget)
-const COLOR_X = "#e22b30"; // red
-const COLOR_Y = "#43c142"; // green
-const COLOR_Z = "#3478eb"; // blue
+// Axis colors are read from CSS tokens (--axis-x / --axis-y / --axis-z)
+// during init, with hardcoded Blender-style fallbacks if the tokens are missing.
+let COLOR_X = "#e22b30"; // red
+let COLOR_Y = "#43c142"; // green
+let COLOR_Z = "#3478eb"; // blue
 
 const AXIS_LABELS = { x: "X", y: "Y", z: "Z" };
 
@@ -26,6 +29,14 @@ let observer = null;
 let dpr = 1;
 
 function initViewportGizmo(scene, camera) {
+  // Pull axis colors from the SCSS token system.
+  const ax = getCssVar("--axis-x");
+  const ay = getCssVar("--axis-y");
+  const az = getCssVar("--axis-z");
+  if (ax) COLOR_X = ax;
+  if (ay) COLOR_Y = ay;
+  if (az) COLOR_Z = az;
+
   gizmoCanvas = document.getElementById("viewportGizmo");
   if (!gizmoCanvas) {
     console.warn("[GIZMO] #viewportGizmo canvas not found in DOM");

@@ -17,6 +17,9 @@ describe("ArbeskAsset", function () {
   // Tier enum values (Solidity enum indices)
   const Tier = { Basic: 0, Standard: 1, Premium: 2, Pro: 3 };
 
+  // CollaboratorRole enum values (Solidity enum indices)
+  const CollaboratorRole = { None: 0, Viewer: 1, Editor: 2 };
+
   beforeEach(async () => {
     [owner, treasury, user, editor] = await ethers.getSigners();
 
@@ -74,7 +77,7 @@ describe("ArbeskAsset", function () {
       const Factory = await ethers.getContractFactory("ArbeskAsset");
       await expect(
         Factory.deploy(ethers.ZeroAddress, await usdc.getAddress())
-      ).to.be.revertedWith("Treasury cannot be zero address");
+      ).to.be.revertedWithCustomError(Factory, "ZeroAddress");
     });
 
     it("allows zero USDC address (USDC payments disabled)", async () => {
@@ -130,14 +133,14 @@ describe("ArbeskAsset", function () {
         asset.connect(user).payForGeneration(nodeId, "prompt", {
           value: ethers.parseEther("0.02"),
         })
-      ).to.be.revertedWith("Incorrect payment amount");
+      ).to.be.revertedWithCustomError(asset, "IncorrectPaymentAmount");
     });
 
     it("reverts if prompt is empty", async () => {
       const nodeId = ethers.encodeBytes32String("node_001");
       await expect(
         asset.connect(user).payForGeneration(nodeId, "", { value: COST })
-      ).to.be.revertedWith("Invalid prompt length");
+      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
     });
 
     it("reverts if prompt exceeds 500 bytes", async () => {
@@ -147,7 +150,7 @@ describe("ArbeskAsset", function () {
         asset
           .connect(user)
           .payForGeneration(nodeId, longPrompt, { value: COST })
-      ).to.be.revertedWith("Invalid prompt length");
+      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
     });
 
     it("reverts if nodeId is zero", async () => {
@@ -155,7 +158,7 @@ describe("ArbeskAsset", function () {
         asset
           .connect(user)
           .payForGeneration(ethers.ZeroHash, "prompt", { value: COST })
-      ).to.be.revertedWith("Invalid nodeId");
+      ).to.be.revertedWithCustomError(asset, "InvalidNodeId");
     });
 
     it("prevents replay via paymentKey mapping", async () => {
@@ -284,7 +287,7 @@ describe("ArbeskAsset", function () {
         noUsdc
           .connect(user)
           .payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
-      ).to.be.revertedWith("USDC payments disabled");
+      ).to.be.revertedWithCustomError(noUsdc, "UsdcPaymentsDisabled");
     });
 
     it("reverts if caller has not approved USDC", async () => {
@@ -313,7 +316,7 @@ describe("ArbeskAsset", function () {
         .approve(await asset.getAddress(), TIER_COSTS.Basic);
       await expect(
         asset.connect(user).payForGenerationWithUSDC(nodeId, "", Tier.Basic)
-      ).to.be.revertedWith("Invalid prompt length");
+      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
     });
 
     it("reverts if prompt exceeds 500 bytes", async () => {
@@ -325,7 +328,7 @@ describe("ArbeskAsset", function () {
         asset
           .connect(user)
           .payForGenerationWithUSDC(nodeId, longPrompt, Tier.Basic)
-      ).to.be.revertedWith("Invalid prompt length");
+      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
     });
 
     it("reverts if nodeId is zero", async () => {
@@ -336,7 +339,7 @@ describe("ArbeskAsset", function () {
         asset
           .connect(user)
           .payForGenerationWithUSDC(ethers.ZeroHash, prompt, Tier.Basic)
-      ).to.be.revertedWith("Invalid nodeId");
+      ).to.be.revertedWithCustomError(asset, "InvalidNodeId");
     });
 
     it("reverts when paused", async () => {
@@ -446,7 +449,10 @@ describe("ArbeskAsset", function () {
     });
 
     it("reverts if cost is 0", async () => {
-      await expect(asset.setCost(0)).to.be.revertedWith("Cost must be > 0");
+      await expect(asset.setCost(0)).to.be.revertedWithCustomError(
+        asset,
+        "InvalidCost"
+      );
     });
   });
 
@@ -463,9 +469,9 @@ describe("ArbeskAsset", function () {
     });
 
     it("reverts if new wallet is zero address", async () => {
-      await expect(asset.setTreasury(ethers.ZeroAddress)).to.be.revertedWith(
-        "Treasury cannot be zero address"
-      );
+      await expect(
+        asset.setTreasury(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(asset, "ZeroAddress");
     });
   });
 
@@ -486,9 +492,9 @@ describe("ArbeskAsset", function () {
     });
 
     it("reverts if cost is 0", async () => {
-      await expect(asset.setTierCost(Tier.Basic, 0)).to.be.revertedWith(
-        "Tier cost must be > 0"
-      );
+      await expect(
+        asset.setTierCost(Tier.Basic, 0)
+      ).to.be.revertedWithCustomError(asset, "InvalidCost");
     });
 
     it("allows updating all tiers independently", async () => {
@@ -504,10 +510,9 @@ describe("ArbeskAsset", function () {
     });
 
     it("cannot set tier cost to zero", async () => {
-      // Setting to 0 should revert (must be > 0)
-      await expect(asset.setTierCost(Tier.Standard, 0)).to.be.revertedWith(
-        "Tier cost must be > 0"
-      );
+      await expect(
+        asset.setTierCost(Tier.Standard, 0)
+      ).to.be.revertedWithCustomError(asset, "InvalidCost");
     });
   });
 
@@ -533,16 +538,18 @@ describe("ArbeskAsset", function () {
 
   describe("withdraw", () => {
     it("sends stray balance to treasury", async () => {
-      await expect(asset.withdraw()).to.be.revertedWith(
-        "No balance to withdraw"
+      await expect(asset.withdraw()).to.be.revertedWithCustomError(
+        asset,
+        "NoBalanceToWithdraw"
       );
     });
   });
 
   describe("withdrawUSDC", () => {
     it("reverts when no USDC to withdraw", async () => {
-      await expect(asset.withdrawUSDC()).to.be.revertedWith(
-        "No USDC to withdraw"
+      await expect(asset.withdrawUSDC()).to.be.revertedWithCustomError(
+        asset,
+        "NoBalanceToWithdraw"
       );
     });
 
@@ -562,8 +569,9 @@ describe("ArbeskAsset", function () {
 
     it("reverts if USDC token is not set", async () => {
       await asset.setUsdcToken(ethers.ZeroAddress);
-      await expect(asset.withdrawUSDC()).to.be.revertedWith(
-        "USDC token not set"
+      await expect(asset.withdrawUSDC()).to.be.revertedWithCustomError(
+        asset,
+        "UsdcTokenNotSet"
       );
     });
   });
@@ -572,7 +580,7 @@ describe("ArbeskAsset", function () {
     it("reverts direct ETH transfers", async () => {
       await expect(
         owner.sendTransaction({ to: await asset.getAddress(), value: 1 })
-      ).to.be.revertedWith("Use payForGeneration()");
+      ).to.be.revertedWithCustomError(asset, "DirectTransferNotAllowed");
     });
   });
 
@@ -598,9 +606,9 @@ describe("ArbeskAsset", function () {
     it("reverts on duplicate tokenId", async () => {
       const tokenId = 1;
       await asset.connect(user).publishAsset("uri1", tokenId);
-      await expect(
-        asset.connect(user).publishAsset("uri2", tokenId)
-      ).to.be.revertedWith("ArbeskAsset: tokenId already minted");
+      await expect(asset.connect(user).publishAsset("uri2", tokenId))
+        .to.be.revertedWithCustomError(asset, "TokenAlreadyMinted")
+        .withArgs(tokenId);
     });
 
     it("mints with initial editors", async () => {
@@ -624,7 +632,9 @@ describe("ArbeskAsset", function () {
     it("only owner can add editor", async () => {
       await expect(
         asset.connect(editor)["addEditor(uint256,address)"](1, editor.address)
-      ).to.be.revertedWith("ArbeskAsset: Only owner can add editor");
+      )
+        .to.be.revertedWithCustomError(asset, "NotTokenOwner")
+        .withArgs(1, editor.address);
     });
 
     it("adds editor and updates reverse mapping", async () => {
@@ -682,7 +692,9 @@ describe("ArbeskAsset", function () {
       const extra = ethers.Wallet.createRandom();
       await expect(
         asset.connect(user)["addEditor(uint256,address)"](1, extra.address)
-      ).to.be.revertedWith("ArbeskAsset: max editors reached");
+      )
+        .to.be.revertedWithCustomError(asset, "MaxEditorsReached")
+        .withArgs(1);
     });
 
     it("reverts when exceeding MAX_TOKENS_PER_EDITOR", async () => {
@@ -692,18 +704,18 @@ describe("ArbeskAsset", function () {
       }
       expect((await asset.listTokens(user.address)).length).to.equal(cap);
 
-      await expect(
-        asset.connect(user).publishAsset("ipfs://QmToken501", 501)
-      ).to.be.revertedWith("ArbeskAsset: max tokens per editor reached");
+      await expect(asset.connect(user).publishAsset("ipfs://QmToken501", 501))
+        .to.be.revertedWithCustomError(asset, "MaxTokensPerEditorReached")
+        .withArgs(user.address);
     });
 
     it("only owner can remove editor", async () => {
       await asset
         .connect(user)
         ["addEditor(uint256,address)"](1, editor.address);
-      await expect(
-        asset.connect(editor).removeEditor(1, editor.address)
-      ).to.be.revertedWith("ArbeskAsset: Only owner can remove editor");
+      await expect(asset.connect(editor).removeEditor(1, editor.address))
+        .to.be.revertedWithCustomError(asset, "NotTokenOwner")
+        .withArgs(1, editor.address);
     });
 
     it("silently no-ops when removing a non-editor", async () => {
@@ -733,6 +745,429 @@ describe("ArbeskAsset", function () {
     });
   });
 
+  describe("collaborator roles (Viewer / Editor)", () => {
+    beforeEach(async () => {
+      await asset.connect(user).publishAsset("uri", 1);
+    });
+
+    it("adds editor with explicit Editor role and emits CollaboratorRoleChanged", async () => {
+      await expect(
+        asset
+          .connect(user)
+          ["addEditor(uint256,address,uint8)"](
+            1,
+            editor.address,
+            CollaboratorRole.Editor
+          )
+      )
+        .to.emit(asset, "EditorAdded")
+        .withArgs(1, editor.address)
+        .and.to.emit(asset, "CollaboratorRoleChanged")
+        .withArgs(1, editor.address, CollaboratorRole.Editor);
+    });
+
+    it("adds viewer with explicit Viewer role", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          editor.address,
+          CollaboratorRole.Viewer
+        );
+
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.Viewer
+      );
+    });
+
+    it("viewer cannot update tokenURI", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          editor.address,
+          CollaboratorRole.Viewer
+        );
+
+      await expect(asset.connect(editor).updateAssetURI(1, "viewerTry"))
+        .to.be.revertedWithCustomError(asset, "NotOwnerOrEditor")
+        .withArgs(1, editor.address);
+    });
+
+    it("editor (default) can update tokenURI", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await asset.connect(editor).updateAssetURI(1, "editorURI");
+      expect(await asset.tokenURI(1)).to.equal("editorURI");
+    });
+
+    it("getCollaboratorRole returns correct values", async () => {
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.None
+      );
+
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          editor.address,
+          CollaboratorRole.Viewer
+        );
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.Viewer
+      );
+
+      await asset
+        .connect(user)
+        .setCollaboratorRole(1, editor.address, CollaboratorRole.Editor);
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.Editor
+      );
+    });
+
+    it("setCollaboratorRole changes Viewer to Editor", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          editor.address,
+          CollaboratorRole.Viewer
+        );
+
+      await expect(
+        asset
+          .connect(user)
+          .setCollaboratorRole(1, editor.address, CollaboratorRole.Editor)
+      )
+        .to.emit(asset, "CollaboratorRoleChanged")
+        .withArgs(1, editor.address, CollaboratorRole.Editor);
+
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.Editor
+      );
+    });
+
+    it("setCollaboratorRole downgrades Editor to Viewer", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await asset
+        .connect(user)
+        .setCollaboratorRole(1, editor.address, CollaboratorRole.Viewer);
+
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.Viewer
+      );
+
+      // Downgraded viewer can no longer update
+      await expect(asset.connect(editor).updateAssetURI(1, "downgraded"))
+        .to.be.revertedWithCustomError(asset, "NotOwnerOrEditor")
+        .withArgs(1, editor.address);
+    });
+
+    it("setCollaboratorRole to None removes collaborator", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await expect(
+        asset
+          .connect(user)
+          .setCollaboratorRole(1, editor.address, CollaboratorRole.None)
+      )
+        .to.emit(asset, "EditorRemoved")
+        .withArgs(1, editor.address);
+
+      expect(await asset.getCollaboratorRole(1, editor.address)).to.equal(
+        CollaboratorRole.None
+      );
+      expect(await asset.listEditors(1)).to.not.include(editor.address);
+    });
+
+    it("setCollaboratorRole reverts on non-collaborator", async () => {
+      await expect(
+        asset
+          .connect(user)
+          .setCollaboratorRole(1, editor.address, CollaboratorRole.Editor)
+      )
+        .to.be.revertedWithCustomError(asset, "NotCollaborator")
+        .withArgs(1, editor.address);
+    });
+
+    it("setCollaboratorRole only owner can call", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await expect(
+        asset
+          .connect(editor)
+          .setCollaboratorRole(1, editor.address, CollaboratorRole.Viewer)
+      )
+        .to.be.revertedWithCustomError(asset, "NotTokenOwner")
+        .withArgs(1, editor.address);
+    });
+
+    it("listCollaboratorsByRole filters correctly", async () => {
+      const [, , , e1, e2, e3] = await ethers.getSigners();
+
+      // e1 = Editor, e2 = Viewer, e3 = Viewer
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          e1.address,
+          CollaboratorRole.Editor
+        );
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          e2.address,
+          CollaboratorRole.Viewer
+        );
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          e3.address,
+          CollaboratorRole.Viewer
+        );
+
+      const editors = await asset.listCollaboratorsByRole(
+        1,
+        CollaboratorRole.Editor
+      );
+      expect(editors).to.include(e1.address);
+      expect(editors).to.not.include(e2.address);
+      expect(editors).to.not.include(e3.address);
+      expect(editors).to.include(user.address); // owner auto-added as Editor
+
+      const viewers = await asset.listCollaboratorsByRole(
+        1,
+        CollaboratorRole.Viewer
+      );
+      expect(viewers).to.include(e2.address);
+      expect(viewers).to.include(e3.address);
+      expect(viewers).to.not.include(e1.address);
+      expect(viewers).to.not.include(user.address);
+    });
+
+    it("listCollaboratorsByRole reverts on None role", async () => {
+      await expect(
+        asset.listCollaboratorsByRole(1, CollaboratorRole.None)
+      ).to.be.revertedWithCustomError(asset, "InvalidCollaboratorRole");
+    });
+
+    it("addEditor with None role reverts", async () => {
+      await expect(
+        asset
+          .connect(user)
+          ["addEditor(uint256,address,uint8)"](
+            1,
+            editor.address,
+            CollaboratorRole.None
+          )
+      ).to.be.revertedWithCustomError(asset, "InvalidCollaboratorRole");
+    });
+
+    it("uses new _isEditor gate for Viewer vs Editor access", async () => {
+      // Add as Viewer first — should NOT be able to update
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          editor.address,
+          CollaboratorRole.Viewer
+        );
+
+      await expect(
+        asset.connect(editor).updateAssetURI(1, "viewerFail")
+      ).to.be.revertedWithCustomError(asset, "NotOwnerOrEditor");
+
+      // Upgrade to Editor — should be able to update
+      await asset
+        .connect(user)
+        .setCollaboratorRole(1, editor.address, CollaboratorRole.Editor);
+      await asset.connect(editor).updateAssetURI(1, "editorOK");
+      expect(await asset.tokenURI(1)).to.equal("editorOK");
+    });
+  });
+
+  describe("burn", () => {
+    beforeEach(async () => {
+      await asset.connect(user).publishAsset("uri", 1);
+    });
+
+    it("owner can burn their own token", async () => {
+      await expect(asset.connect(user).burn(1))
+        .to.emit(asset, "AssetBurned")
+        .withArgs(1, user.address);
+
+      // Token should no longer exist
+      await expect(asset.ownerOf(1)).to.be.reverted;
+    });
+
+    it("owner can burn with collaborators present", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      expect(await asset.listEditors(1)).to.include(editor.address);
+
+      await asset.connect(user).burn(1);
+
+      // All collaborators should be cleaned up
+      await expect(asset.ownerOf(1)).to.be.reverted;
+      expect(await asset.listTokens(editor.address)).to.not.include(1n);
+    });
+
+    it("Editor with burn permission can burn", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+      await asset.connect(user).setBurnPermission(1, editor.address, true);
+
+      await expect(asset.connect(editor).burn(1))
+        .to.emit(asset, "AssetBurned")
+        .withArgs(1, editor.address);
+    });
+
+    it("Editor without burn permission cannot burn", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await expect(asset.connect(editor).burn(1))
+        .to.be.revertedWithCustomError(asset, "CannotBurn")
+        .withArgs(1, editor.address);
+    });
+
+    it("Viewer cannot burn even with burn flag", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address,uint8)"](
+          1,
+          editor.address,
+          CollaboratorRole.Viewer
+        );
+
+      // setBurnPermission should revert for a Viewer
+      await expect(
+        asset.connect(user).setBurnPermission(1, editor.address, true)
+      ).to.be.revertedWithCustomError(asset, "NotCollaborator");
+    });
+
+    it("non-collaborator cannot burn", async () => {
+      await expect(asset.connect(treasury).burn(1))
+        .to.be.revertedWithCustomError(asset, "CannotBurn")
+        .withArgs(1, treasury.address);
+    });
+
+    it("reverts on nonexistent token", async () => {
+      await expect(asset.connect(user).burn(999))
+        .to.be.revertedWithCustomError(asset, "NonexistentToken")
+        .withArgs(999);
+    });
+
+    it("setBurnPermission revokes correctly", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+      await asset.connect(user).setBurnPermission(1, editor.address, true);
+      expect(await asset.canBurn(1, editor.address)).to.be.true;
+
+      await asset.connect(user).setBurnPermission(1, editor.address, false);
+      expect(await asset.canBurn(1, editor.address)).to.be.false;
+
+      await expect(asset.connect(editor).burn(1)).to.be.revertedWithCustomError(
+        asset,
+        "CannotBurn"
+      );
+    });
+
+    it("setBurnPermission only owner can call", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await expect(
+        asset.connect(editor).setBurnPermission(1, editor.address, true)
+      )
+        .to.be.revertedWithCustomError(asset, "NotTokenOwner")
+        .withArgs(1, editor.address);
+    });
+
+    it("setBurnPermission emits event", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      await expect(
+        asset.connect(user).setBurnPermission(1, editor.address, true)
+      )
+        .to.emit(asset, "BurnPermissionChanged")
+        .withArgs(1, editor.address, true);
+    });
+
+    it("canBurn returns false for default state", async () => {
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+
+      expect(await asset.canBurn(1, user.address)).to.be.true; // owner always
+      expect(await asset.canBurn(1, editor.address)).to.be.false; // no burn perm yet
+      expect(await asset.canBurn(1, treasury.address)).to.be.false; // non-collaborator
+    });
+
+    it("burns decrement total supply", async () => {
+      expect(await asset.totalSupply()).to.equal(1);
+      await asset.connect(user).burn(1);
+      expect(await asset.totalSupply()).to.equal(0);
+    });
+
+    it("cant burn twice", async () => {
+      await asset.connect(user).burn(1);
+      await expect(asset.connect(user).burn(1))
+        .to.be.revertedWithCustomError(asset, "NonexistentToken")
+        .withArgs(1);
+    });
+
+    it("burning frees MAX_TOKENS_PER_EDITOR slot for all collaborators", async () => {
+      // Publish 3 tokens — owner auto-added as Editor on each
+      await asset.connect(user).publishAsset("uri2", 2);
+      await asset.connect(user).publishAsset("uri3", 3);
+
+      // Add editor as collaborator on all 3 tokens
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](1, editor.address);
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](2, editor.address);
+      await asset
+        .connect(user)
+        ["addEditor(uint256,address)"](3, editor.address);
+
+      expect((await asset.listTokens(user.address)).length).to.equal(3);
+      expect((await asset.listTokens(editor.address)).length).to.equal(3);
+
+      // Burn token 1 — should free a slot for both owner and editor
+      await asset.connect(user).setBurnPermission(1, editor.address, true);
+      await asset.connect(editor).burn(1);
+
+      expect((await asset.listTokens(user.address)).length).to.equal(2);
+      expect((await asset.listTokens(editor.address)).length).to.equal(2);
+
+      // Owner should now be able to publish a new token (was at cap minus 1)
+      await asset.connect(user).publishAsset("uri4", 4);
+      expect((await asset.listTokens(user.address)).length).to.equal(3);
+    });
+  });
+
   describe("updateAssetURI", () => {
     beforeEach(async () => {
       await asset.connect(user).publishAsset("uri", 1);
@@ -752,9 +1187,9 @@ describe("ArbeskAsset", function () {
     });
 
     it("non-editor cannot update tokenURI", async () => {
-      await expect(
-        asset.connect(treasury).updateAssetURI(1, "x")
-      ).to.be.revertedWith("ArbeskAsset: Only owner or editor can update");
+      await expect(asset.connect(treasury).updateAssetURI(1, "x"))
+        .to.be.revertedWithCustomError(asset, "NotOwnerOrEditor")
+        .withArgs(1, treasury.address);
     });
 
     it("emits AssetURIUpdated", async () => {
@@ -764,9 +1199,9 @@ describe("ArbeskAsset", function () {
     });
 
     it("reverts on nonexistent token", async () => {
-      await expect(
-        asset.connect(user).updateAssetURI(999, "x")
-      ).to.be.revertedWith("ArbeskAsset: nonexistent token");
+      await expect(asset.connect(user).updateAssetURI(999, "x"))
+        .to.be.revertedWithCustomError(asset, "NonexistentToken")
+        .withArgs(999);
     });
   });
 
@@ -822,9 +1257,9 @@ describe("ArbeskAsset", function () {
         .connect(user)
         .safeTransferFrom(user.address, treasury.address, 1);
 
-      await expect(
-        asset.connect(user).updateAssetURI(1, "ipfs://QmHijack")
-      ).to.be.revertedWith("ArbeskAsset: Only owner or editor can update");
+      await expect(asset.connect(user).updateAssetURI(1, "ipfs://QmHijack"))
+        .to.be.revertedWithCustomError(asset, "NotOwnerOrEditor")
+        .withArgs(1, user.address);
 
       const editors = await asset.listEditors(1);
       expect(editors).to.not.include(user.address);

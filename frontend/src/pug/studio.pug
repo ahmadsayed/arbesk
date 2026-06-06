@@ -52,6 +52,12 @@ html(lang="en")
               path(d="M7 8l5-5 5 5")
               path(d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4")
             span#publishAssetBtnText Publish Asset
+          button#burnAssetBtn.btn.btn-danger.btn-sm.headerbar-delete(hidden aria-label="Burn asset" title="Burn (delete) this token")
+            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M3 6h18")
+              path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
+              path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
+            span#burnAssetBtnText Burn
           button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet" onclick="connectWallet()")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
@@ -132,12 +138,16 @@ html(lang="en")
                       .form-help Higher tiers produce better quality meshes.
                     #teamPanel.team-section(hidden)
                       .team-header
-                        h5 Asset Editors
+                        h5 Collaborators
                         span#teamOwnerBadge.owner-badge(hidden) Owner
                       #teamList.team-list
                       .team-add
                         input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
-                        button#teamAddBtn.btn.btn-sm Add Editor
+                        select#teamRoleSelect.form-select
+                          option(value="2" selected) Editor
+                          option(value="1") Viewer
+                        button#teamAddBtn.btn.btn-sm Add
+                        button#teamBurnPermBtn.btn.btn-sm.btn-warning(hidden title="Toggle burn permission for selected") 🔥 Burn
                 #chatHistory.chat-history
                   .chat-welcome
                     .welcome-icon ✦
@@ -280,6 +290,7 @@ html(lang="en")
                   input#nodeScaleZ.form-range(type="range", min="0.1", max="5", step="0.1", value="1")
               .inspector-actions
                 p.inspector-hint Color and scale changes are saved together with the next Save Draft or Publish.
+              #componentList.inspector-section(hidden)
 
       //- ═══════════════════════════════════════════════════════════
       //- Bottom Bar
@@ -304,6 +315,7 @@ html(lang="en")
     script(type="module", src="/js/ui/sidebar.js")
     script(type="module", src="/js/ui/outliner.js")
     script(type="module", src="/js/ui/nesting.js")
+    script(type="module", src="/js/ui/collaborators.js")
     script(type="module").
       import { initAssetLibrary } from '/js/ui/asset-library.js';
       initAssetLibrary();
@@ -319,6 +331,9 @@ html(lang="en")
 
       import { initNesting } from "/js/ui/nesting.js";
       initNesting();
+
+      import { initCollaborators } from '/js/ui/collaborators.js';
+      initCollaborators();
 
       document.addEventListener('wallet:connected', () => {
         const c = document.getElementById('connectWalletBtn');

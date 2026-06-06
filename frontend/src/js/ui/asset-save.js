@@ -12,10 +12,13 @@ import {
   showWelcomeOverlay,
   getPendingChildRefs,
   clearPendingChildRefs,
-  getPendingAppearanceEdits,
-  clearPendingAppearanceEdits,
+  getPendingPostProcessorEdits,
+  clearPendingPostProcessorEdits,
 } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
+import { decomposeAndStore, isComposite } from "../gltf/decomposer.js";
+import { editCompositeColors } from "../gltf/material-editor.js";
+import { updateBurnButton } from "./collaborators.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -52,6 +55,9 @@ function updateButtonState() {
       ? "Update the asset token URI to the latest manifest CID"
       : "Publish this asset as a token";
   }
+
+  // Show burn button only for published (tokenized) assets
+  updateBurnButton();
 }
 
 async function fetchAssetName(tokenId) {
@@ -122,14 +128,77 @@ function advanceManifestVersion(manifest, latestCid) {
     latestCid || window.activeAssetManifestCid || null;
 }
 
+/**
+ * Decompose all monolithic glTF source nodes in a manifest.
+ * Fetches each glTF, decomposes buffers/images to separate IPFS CIDs,
+ * and updates node.source.cid to point to the composite JSON.
+ * Already-composite nodes (ipfs:// URIs) are skipped.
+ *
+ * @param {object} manifest - The manifest being prepared for write
+ * @returns {Promise<number>} Count of nodes decomposed
+ */
+async function decomposeManifestNodes(manifest) {
+  let decomposed = 0;
+  const nodes = manifest.scene?.nodes || [];
+
+  for (const node of nodes) {
+    // Only process nodes with a glTF source (not token children, not GLB)
+    if (!node.source?.cid) continue;
+    if (node.source.format === "glb") continue;
+    if (node.child_ref) continue;
+
+    const cid = node.source.cid;
+    console.log(
+      `[DECOMPOSE-SAVE] checking node ${node.node_id} | sourceCid=${cid}`
+    );
+
+    try {
+      const gltf = await getFromRemoteIPFS(cid);
+
+      // Validate it looks like a glTF
+      if (!gltf.asset || !gltf.asset.version) {
+        console.log(`[DECOMPOSE-SAVE] CID ${cid} is not a glTF, skipping`);
+        continue;
+      }
+
+      // Skip if already composite
+      if (isComposite(gltf)) {
+        console.log(
+          `[DECOMPOSE-SAVE] node ${node.node_id} already composite, skipping`
+        );
+        continue;
+      }
+
+      // Decompose and store
+      const { compositeCid } = await decomposeAndStore(gltf);
+
+      // Update the node's source to point to the composite
+      node.source.cid = compositeCid;
+      node.source.path = "composite.gltf";
+      decomposed++;
+      console.log(
+        `[DECOMPOSE-SAVE] node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
+      );
+    } catch (err) {
+      console.warn(
+        `[DECOMPOSE-SAVE] failed to decompose node ${node.node_id}:`,
+        err.message
+      );
+      // Continue with other nodes — don't block the save
+    }
+  }
+
+  return decomposed;
+}
+
 async function prepareManifestForWrite(assetName) {
   let manifest;
   const pendingRefs = getPendingChildRefs();
-  const pendingAppearance = getPendingAppearanceEdits();
+  const pendingPP = getPendingPostProcessorEdits();
 
   if (window.activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(window.activeAssetManifestCid);
-  } else if (pendingRefs.length > 0 || pendingAppearance.size > 0) {
+  } else if (pendingRefs.length > 0 || pendingPP.size > 0) {
     manifest = {
       name: assetName,
       asset_id: `asset_${Date.now()}`,
@@ -138,7 +207,7 @@ async function prepareManifestForWrite(assetName) {
       scene: { nodes: [] },
     };
     console.log(
-      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingAppearance.size} pending appearance edits`
+      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits`
     );
   } else {
     return null;
@@ -155,21 +224,76 @@ async function prepareManifestForWrite(assetName) {
     }
   }
 
-  // Apply inspector appearance edits (color / scale) the same way any
-  // other scene mutation is applied. The pending map is cleared by the
-  // caller after a successful write.
-  if (pendingAppearance.size > 0) {
-    for (const [nodeId, appearance] of pendingAppearance) {
+  // Apply post-processor edits.
+  // Decomposed nodes: bake colors directly into the composite glTF.
+  // Monolithic nodes: store as node.post_processor (runtime overlay).
+  if (pendingPP.size > 0) {
+    for (const [nodeId, pp] of pendingPP) {
       const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
       if (!node) continue;
-      node.appearance ||= {};
-      if (appearance.color !== undefined)
-        node.appearance.color = appearance.color;
-      if (appearance.scale !== undefined)
-        node.appearance.scale = { ...appearance.scale };
+
+      const isDecomposed =
+        node.source?.path === "composite.gltf" && node.source?.cid;
+
+      if (isDecomposed && (pp.color || pp.meshOverrides)) {
+        // Bake colors into the composite glTF (only the JSON changes)
+        try {
+          const result = await editCompositeColors(
+            node.source.cid,
+            pp.meshOverrides || null,
+            pp.color || null
+          );
+          node.source.cid = result.compositeCid;
+          console.log(
+            `[SAVE] baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
+          );
+        } catch (err) {
+          console.warn(
+            `[SAVE] failed to bake colors into composite glTF for ${nodeId}:`,
+            err.message
+          );
+        }
+
+        // Scale still goes to post_processor (geometry, not material)
+        if (
+          pp.scale &&
+          (pp.scale.x !== 1 || pp.scale.y !== 1 || pp.scale.z !== 1)
+        ) {
+          node.post_processor ||= {};
+          node.post_processor.scale = { ...pp.scale };
+        } else if (node.post_processor) {
+          delete node.post_processor.scale;
+        }
+        // Clean up empty post_processor
+        if (
+          node.post_processor &&
+          Object.keys(node.post_processor).length === 0
+        ) {
+          delete node.post_processor;
+        }
+      } else {
+        // Monolithic node — store as post_processor overlay
+        node.post_processor ||= {};
+        if (pp.color !== undefined) node.post_processor.color = pp.color;
+        if (pp.scale !== undefined) node.post_processor.scale = { ...pp.scale };
+        if (pp.meshOverrides && Object.keys(pp.meshOverrides).length > 0)
+          node.post_processor.meshOverrides = { ...pp.meshOverrides };
+        else if (node.post_processor.meshOverrides)
+          delete node.post_processor.meshOverrides;
+      }
     }
     console.log(
-      `[SAVE] applied ${pendingAppearance.size} pending appearance edit(s)`
+      `[SAVE] applied ${pendingPP.size} pending post-processor edit(s)`
+    );
+  }
+
+  // Decompose monolithic glTF nodes into composite (ipfs://) format.
+  // Only affects glTF nodes that haven't been decomposed yet.
+  // Runs on both Save Draft and Publish.
+  const decomposedCount = await decomposeManifestNodes(manifest);
+  if (decomposedCount > 0) {
+    console.log(
+      `[SAVE] decomposed ${decomposedCount} glTF node(s) to composite format`
     );
   }
 
@@ -209,7 +333,7 @@ async function onSaveAssetDraft() {
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
-    clearPendingAppearanceEdits();
+    clearPendingPostProcessorEdits();
 
     updateUrlManifest(cid, window.activeAssetTokenId || null);
 
@@ -298,7 +422,7 @@ async function onPublishAsset() {
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
-    clearPendingAppearanceEdits();
+    clearPendingPostProcessorEdits();
 
     document.dispatchEvent(
       new CustomEvent("asset:published", {

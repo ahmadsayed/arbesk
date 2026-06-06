@@ -16,20 +16,20 @@ export function getPendingChildRefs() {
 }
 
 /**
- * Pending appearance edits (color/scale) accumulated in the inspector.
- * Mirrors `getPendingChildRefs` / `clearPendingChildRefs` so that
- * Save Draft / Publish can pick both up in one pass.
+ * Pending post-processor edits (color/scale/meshOverrides) accumulated
+ * in the inspector. Mirrors `getPendingChildRefs` / `clearPendingChildRefs`
+ * so that Save Draft / Publish can pick both up in one pass.
  */
-export function getPendingAppearanceEdits() {
-  return state.pendingAppearanceEdits;
+export function getPendingPostProcessorEdits() {
+  return state.pendingPostProcessorEdits;
 }
 
-export function clearPendingAppearanceEdits() {
-  state.pendingAppearanceEdits.clear();
+export function clearPendingPostProcessorEdits() {
+  state.pendingPostProcessorEdits.clear();
 }
 
-export function clearPendingAppearanceEdit(nodeId) {
-  state.pendingAppearanceEdits.delete(nodeId);
+export function clearPendingPostProcessorEdit(nodeId) {
+  state.pendingPostProcessorEdits.delete(nodeId);
 }
 
 /**
@@ -131,7 +131,7 @@ export function clearScene() {
   window.latestAssetManifestCid = null;
 
   state.pendingChildRefs.length = 0;
-  state.pendingAppearanceEdits.clear();
+  state.pendingPostProcessorEdits.clear();
 
   // Clear selection highlight state
   state.highlightedNodeId = null;

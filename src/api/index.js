@@ -93,6 +93,14 @@ async function persistEmbeddedThumbnail(manifest) {
     );
     const { cid } = await ipfs.add(buffer);
     const thumbnailCid = cid.toString();
+    try {
+      await ipfs.pin.add(thumbnailCid);
+      console.log(`[IPFS] pin thumbnail → ${thumbnailCid}`);
+    } catch (pinErr) {
+      console.warn(
+        `[IPFS] pin thumbnail failed (non-fatal): ${pinErr.message}`,
+      );
+    }
     const format = thumbnailExtension(mime);
     manifest.thumbnail = {
       type: "snapshot",
@@ -183,6 +191,14 @@ export default () => {
 
       const { cid } = await ipfs.add(JSON.stringify(manifest));
       const resultCid = cid.toString();
+      try {
+        await ipfs.pin.add(resultCid);
+        console.log(`[IPFS] pin manifest → ${resultCid}`);
+      } catch (pinErr) {
+        console.warn(
+          `[IPFS] pin manifest failed (non-fatal): ${pinErr.message}`,
+        );
+      }
       console.log(
         `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"}`,
       );
@@ -226,6 +242,14 @@ export default () => {
       );
       const { cid } = await ipfs.add(payload);
       const resultCid = cid.toString();
+      try {
+        await ipfs.pin.add(resultCid);
+        console.log(`[IPFS] pin publish → ${resultCid}`);
+      } catch (pinErr) {
+        console.warn(
+          `[IPFS] pin publish failed (non-fatal): ${pinErr.message}`,
+        );
+      }
       console.log(`[IPFS] add publish | cid=${resultCid}`);
 
       // Record to micro-ledger
@@ -372,6 +396,138 @@ export default () => {
     } catch (error) {
       console.error("[TOKEN] error:", error.message);
       sendError(res, 500, "TOKEN_RESOLUTION_FAILED", error.message);
+    }
+  });
+
+  // ─── IPFS Unpin ──────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/v1/ipfs/unpin
+   *
+   * Unpin all IPFS CIDs owned by a manifest chain. Called after token burn.
+   * Walks prev_asset_manifest_cid backward, collecting manifest CIDs,
+   * source asset CIDs (from every history entry), and thumbnail CIDs,
+   * then unpins them all so they become eligible for garbage collection.
+   *
+   * Body: { cid: "Qm..." }
+   */
+  v1.post("/ipfs/unpin", async (req, res) => {
+    const startTime = Date.now();
+    try {
+      const { cid: startCid } = req.body || {};
+      if (!startCid || typeof startCid !== "string") {
+        console.log(`[UNPIN] rejected — cid required`);
+        return sendError(res, 400, "MISSING_CID", "CID is required in body");
+      }
+
+      console.log(`[UNPIN] starting from ${startCid}`);
+
+      const toUnpin = new Set();
+      const visited = new Set();
+      const errors = [];
+      let currentCid = startCid;
+      const MAX_DEPTH = 100;
+
+      // Walk the manifest chain and collect all owned CIDs
+      while (currentCid && visited.size < MAX_DEPTH) {
+        if (visited.has(currentCid)) {
+          console.log(`[UNPIN] circular link at ${currentCid}, stopping`);
+          break;
+        }
+        visited.add(currentCid);
+
+        let manifest;
+        try {
+          const raw = await catManifest(ipfs, currentCid);
+          manifest = JSON.parse(raw);
+        } catch (e) {
+          console.warn(`[UNPIN] cannot read ${currentCid}: ${e.message}`);
+          errors.push(`read ${currentCid}: ${e.message}`);
+          break;
+        }
+
+        // Collect this manifest CID
+        toUnpin.add(currentCid);
+
+        // Collect thumbnail CID
+        const thumbnailCid = manifest?.thumbnail?.cid;
+        if (thumbnailCid && typeof thumbnailCid === "string") {
+          toUnpin.add(thumbnailCid);
+        }
+
+        // Collect source asset CIDs from nodes (current sources + history)
+        const nodes = getSceneNodes(manifest);
+        for (const node of nodes) {
+          // Current source CID
+          if (node?.source?.cid && typeof node.source.cid === "string") {
+            toUnpin.add(node.source.cid);
+          }
+          // History entries — each has its own source CID
+          if (Array.isArray(node?.history)) {
+            for (const entry of node.history) {
+              if (entry?.src?.cid && typeof entry.src.cid === "string") {
+                toUnpin.add(entry.src.cid);
+              }
+            }
+          }
+        }
+
+        // Follow the chain backward
+        currentCid = manifest.prev_asset_manifest_cid || null;
+      }
+
+      console.log(
+        `[UNPIN] collected ${toUnpin.size} CIDs across ${visited.size} manifest(s)`,
+      );
+
+      // Unpin each collected CID
+      const unpinned = [];
+      for (const cid of toUnpin) {
+        try {
+          await ipfs.pin.rm(cid);
+          unpinned.push(cid);
+          console.log(`[UNPIN] unpinned → ${cid}`);
+        } catch (e) {
+          // "not pinned" is fine — the content may already be unpinned
+          if (e.message?.includes("not pinned")) {
+            unpinned.push(cid);
+            console.log(`[UNPIN] already unpinned → ${cid}`);
+          } else {
+            console.warn(`[UNPIN] failed to unpin ${cid}: ${e.message}`);
+            errors.push(`unpin ${cid}: ${e.message}`);
+          }
+        }
+      }
+
+      const elapsed = Date.now() - startTime;
+      console.log(
+        `[UNPIN] done — ${unpinned.length} unpinned, ${errors.length} errors (${elapsed}ms)`,
+      );
+
+      // Record to micro-ledger
+      appendEntry(
+        createLedgerEntry({
+          opType: "UNPIN",
+          manifestId: startCid,
+          cid: startCid,
+          actorAddress: req.body.actorAddress || "system",
+          payload: {
+            unpinnedCount: unpinned.length,
+            totalCIDs: toUnpin.size,
+            manifestCount: visited.size,
+            errors: errors.length > 0 ? errors : undefined,
+          },
+        }),
+      );
+
+      res.json({
+        unpinned,
+        count: unpinned.length,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error) {
+      console.error("[UNPIN] error:", error.message);
+      sendError(res, 500, "UNPIN_FAILED", error.message);
     }
   });
 
