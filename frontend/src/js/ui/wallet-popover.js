@@ -149,8 +149,8 @@ function updateContent() {
 function getNetworkKey(chainId) {
   const map = {
     31415822: "hardhat",
-    314159: "calibration",
-    314: "mainnet",
+    84532: "baseSepolia",
+    80002: "polygonAmoy",
   };
   return map[Number(chainId)] || "";
 }

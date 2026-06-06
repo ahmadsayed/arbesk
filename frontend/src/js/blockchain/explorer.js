@@ -10,28 +10,16 @@ import { switchNetwork } from "./wallet.js";
 const EXPLORER_URLS = {
   // Hardhat local — no explorer
   31415822: null,
-  // Ethereum mainnet
-  1: "https://etherscan.io",
-  // Sepolia testnet
-  11155111: "https://sepolia.etherscan.io",
-  // Polygon
-  137: "https://polygonscan.com",
-  // Base
-  8453: "https://basescan.org",
-  // Filecoin Calibration
-  314159: "https://calibration.filfox.info",
-  // Filecoin Mainnet
-  314: "https://filfox.info",
+  // Base Sepolia testnet
+  84532: "https://sepolia.basescan.org",
+  // Polygon Amoy testnet
+  80002: "https://amoy.polygonscan.com",
 };
 
 const NETWORK_NAMES = {
   31415822: "Hardhat Local",
-  1: "Ethereum Mainnet",
-  11155111: "Sepolia",
-  137: "Polygon",
-  8453: "Base",
-  314159: "Filecoin Calibration",
-  314: "Filecoin Mainnet",
+  84532: "Base Sepolia",
+  80002: "Polygon Amoy",
 };
 
 /**

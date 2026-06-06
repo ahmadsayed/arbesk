@@ -57,7 +57,7 @@ document.addEventListener("wallet:connected", (e) => {
   if (badge) {
     badge.classList.remove("hidden");
     const chainId = e.detail?.chainId;
-    const names = { 31415822: "Hardhat", 314159: "Calibration", 314: "Mainnet" };
+    const names = { 31415822: "Hardhat", 84532: "Base Sepolia", 80002: "Polygon Amoy" };
     badge.textContent = names[chainId] || (chainId ? `Chain ${chainId}` : "Unknown");
   }
 });

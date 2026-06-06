@@ -23,8 +23,8 @@ const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 // Well-known RPC endpoints for common chains
 const KNOWN_RPC_ENDPOINTS = {
   31415822: "http://127.0.0.1:8545", // Hardhat local dev node
-  1: "https://eth.llamarpc.com", // Ethereum mainnet (public fallback)
-  11155111: "https://ethereum-sepolia.publicnode.com", // Sepolia testnet
+  84532: "https://sepolia.base.org", // Base Sepolia testnet
+  80002: "https://rpc-amoy.polygon.technology", // Polygon Amoy testnet
 };
 
 /**

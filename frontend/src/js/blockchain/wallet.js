@@ -34,40 +34,19 @@ const NETWORKS = {
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: [],
   },
-  ethereum: {
-    chainId: "0x1",
-    chainName: "Ethereum Mainnet",
-    rpcUrls: ["https://eth.llamarpc.com"],
+  baseSepolia: {
+    chainId: "0x14a34", // 84532 in hex
+    chainName: "Base Sepolia",
+    rpcUrls: ["https://sepolia.base.org"],
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://etherscan.io"],
+    blockExplorerUrls: ["https://sepolia.basescan.org"],
   },
-  sepolia: {
-    chainId: "0xaa36a7",
-    chainName: "Sepolia",
-    rpcUrls: ["https://ethereum-sepolia.publicnode.com"],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://sepolia.etherscan.io"],
-  },
-  polygon: {
-    chainId: "0x89",
-    chainName: "Polygon",
-    rpcUrls: ["https://polygon-rpc.com"],
+  polygonAmoy: {
+    chainId: "0x13882", // 80002 in hex
+    chainName: "Polygon Amoy",
+    rpcUrls: ["https://rpc-amoy.polygon.technology"],
     nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-    blockExplorerUrls: ["https://polygonscan.com"],
-  },
-  base: {
-    chainId: "0x2105",
-    chainName: "Base",
-    rpcUrls: ["https://mainnet.base.org"],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://basescan.org"],
-  },
-  calibration: {
-    chainId: "0x4cb2f",
-    chainName: "Filecoin Calibration",
-    rpcUrls: ["https://rpc.ankr.com/filecoin_testnet"],
-    nativeCurrency: { name: "tFIL", symbol: "tFIL", decimals: 18 },
-    blockExplorerUrls: ["https://calibration.filfox.info"],
+    blockExplorerUrls: ["https://amoy.polygonscan.com"],
   },
 };
 
