@@ -83,13 +83,17 @@
 }
 
 .owner-badge {
+  display: inline-block;
+  flex-shrink: 0;
   font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 1px var(--size-2);
+  padding: 2px var(--size-2);
   background-color: var(--accent-bg);
   color: var(--accent-fg);
   border-radius: var(--radius-2);
+  white-space: nowrap;
 
   &[hidden] {
     display: none;
@@ -109,6 +113,65 @@
   padding: var(--size-1) 0;
 }
 
+.team-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  min-width: 0;
+  padding: var(--size-1) var(--size-2);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--card-bg);
+  }
+
+  &.team-item-selected {
+    background-color: color-mix(in srgb, var(--accent-bg) 12%, var(--card-bg));
+    outline: 1px solid color-mix(in srgb, var(--accent-bg) 30%, transparent);
+  }
+}
+
+.team-role-badge {
+  flex-shrink: 0;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  padding: 1px var(--size-1);
+  border-radius: var(--radius-1);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+
+  &.team-role-editor {
+    background-color: color-mix(in srgb, var(--accent-bg) 20%, transparent);
+    color: var(--accent-bg);
+  }
+
+  &.team-role-viewer {
+    background-color: color-mix(in srgb, var(--dim-fg) 15%, transparent);
+    color: var(--dim-fg);
+  }
+}
+
+.team-addr {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  flex-shrink: 0;
+}
+
 .team-row {
   display: flex;
   align-items: center;
@@ -125,11 +188,18 @@
 
 .team-add {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--size-1);
 
-  input {
-    flex: 1;
+  input,
+  select {
+    flex: 1 1 120px;
+    min-width: 0;
     font-size: var(--font-size-0);
+  }
+
+  button {
+    flex-shrink: 0;
   }
 }
 

@@ -24,6 +24,21 @@
   text-overflow: ellipsis;
 }
 
+// ── Wide-to-medium screens (1100px and below) ──
+// Headerbar action text collapses to icon-only to reduce crowding
+
+@media (max-width: 1100px) {
+  .headerbar-actions .btn-text {
+    display: none;
+  }
+
+  // Collapse text+icon buttons to square icon-only sizing for consistency
+  .headerbar-actions .btn:not(.btn-icon) {
+    padding-left: var(--size-2);
+    padding-right: var(--size-2);
+  }
+}
+
 // ── Medium screens (480px - 900px) ──
 // Sidebar and inspector overlay content instead of pushing it
 

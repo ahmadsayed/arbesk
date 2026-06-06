@@ -44,11 +44,10 @@ function updateButtonState() {
   if (saveBtn) saveBtn.hidden = !visible;
   if (publishBtn) publishBtn.hidden = !visible;
 
-  if (saveBtnText) saveBtnText.textContent = "Save Draft";
+  if (saveBtnText) saveBtnText.textContent = "Save";
+  if (saveBtn) saveBtn.title = "Save Draft (Ctrl+S)";
   if (publishBtnText) {
-    publishBtnText.textContent = window.activeAssetTokenId
-      ? "Update Published Asset"
-      : "Publish Asset";
+    publishBtnText.textContent = window.activeAssetTokenId ? "Update" : "Publish";
   }
   if (publishBtn) {
     publishBtn.title = window.activeAssetTokenId
@@ -315,7 +314,10 @@ async function onSaveAssetDraft() {
   if (!window.walletAddress) return alert("Please connect your wallet first.");
 
   isSaving = true;
-  if (saveBtn) saveBtn.disabled = true;
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.title = "Saving…";
+  }
   if (saveBtnText) saveBtnText.textContent = "Saving…";
 
   try {
@@ -351,7 +353,10 @@ async function onSaveAssetDraft() {
     alert("Save failed: " + err.message);
   } finally {
     isSaving = false;
-    if (saveBtn) saveBtn.disabled = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.title = "Save Draft (Ctrl+S)";
+    }
     updateButtonState();
   }
 }
@@ -361,7 +366,10 @@ async function onPublishAsset() {
   if (!window.walletAddress) return alert("Please connect your wallet first.");
 
   isPublishing = true;
-  if (publishBtn) publishBtn.disabled = true;
+  if (publishBtn) {
+    publishBtn.disabled = true;
+    publishBtn.title = window.activeAssetTokenId ? "Updating…" : "Publishing…";
+  }
   if (publishBtnText)
     publishBtnText.textContent = window.activeAssetTokenId
       ? "Updating…"
@@ -435,7 +443,12 @@ async function onPublishAsset() {
     alert("Publish failed: " + err.message);
   } finally {
     isPublishing = false;
-    if (publishBtn) publishBtn.disabled = false;
+    if (publishBtn) {
+      publishBtn.disabled = false;
+      publishBtn.title = window.activeAssetTokenId
+        ? "Update the asset token URI to the latest manifest CID"
+        : "Publish this asset as a token";
+    }
     updateButtonState();
   }
 }

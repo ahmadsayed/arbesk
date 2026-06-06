@@ -25,8 +25,26 @@
   flex-shrink: 0;
 
   img {
-    height: 28px;
+    height: 36px;
     width: auto;
+  }
+
+  .logo-light {
+    display: block;
+  }
+
+  .logo-dark {
+    display: none;
+  }
+}
+
+[data-theme="dark"] .headerbar-brand {
+  .logo-light {
+    display: none;
+  }
+
+  .logo-dark {
+    display: block;
   }
 }
 
@@ -118,6 +136,11 @@
   align-items: center;
   gap: var(--size-2);
   flex-shrink: 0;
+
+  // Icon-only buttons in the headerbar sit flush together
+  .btn-icon + .btn-icon {
+    margin-left: 0;
+  }
 }
 
 // Publish button visibility
@@ -130,9 +153,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--size-1);
-  height: 30px;
+  height: 36px;
   padding: 0 var(--size-3);
-  font-size: var(--font-size-0);
+  font-size: var(--font-size-1);
   font-weight: var(--font-weight-6);
   font-family: var(--font-mono);
   color: var(--accent-fg);

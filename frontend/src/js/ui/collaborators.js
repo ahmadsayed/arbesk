@@ -28,10 +28,7 @@ let teamAddInput = null;
 let teamRoleSelect = null;
 let teamAddBtn = null;
 let teamOwnerBadge = null;
-let teamBurnPermBtn = null;
 let burnAssetBtn = null;
-
-let selectedCollaborator = null;
 
 // ─── Init ──────────────────────────────────────────────────────────────
 
@@ -42,15 +39,10 @@ function initCollaborators() {
   teamRoleSelect = document.getElementById("teamRoleSelect");
   teamAddBtn = document.getElementById("teamAddBtn");
   teamOwnerBadge = document.getElementById("teamOwnerBadge");
-  teamBurnPermBtn = document.getElementById("teamBurnPermBtn");
   burnAssetBtn = document.getElementById("burnAssetBtn");
 
   if (teamAddBtn) {
     teamAddBtn.addEventListener("click", onAddCollaborator);
-  }
-
-  if (teamBurnPermBtn) {
-    teamBurnPermBtn.addEventListener("click", onToggleBurnPermission);
   }
 
   if (burnAssetBtn) {
@@ -97,13 +89,7 @@ async function refreshTeamPanel() {
   // Mark owner
   if (teamOwnerBadge) {
     teamOwnerBadge.hidden = false;
-    teamOwnerBadge.textContent =
-      window.walletAddress.length > 12
-        ? `Owner: ${window.walletAddress.slice(
-            0,
-            6
-          )}…${window.walletAddress.slice(-4)}`
-        : `Owner: ${window.walletAddress}`;
+    teamOwnerBadge.textContent = "Owner";
   }
 
   try {
@@ -147,9 +133,6 @@ function renderTeamList(editors, viewers, burnPerms) {
     const roleBadge = document.createElement("span");
     roleBadge.className = `team-role-badge team-role-${roleLabel.toLowerCase()}`;
     roleBadge.textContent = roleLabel;
-    if (canBurnFlag && role === CollaboratorRole.Editor) {
-      roleBadge.textContent += " 🔥";
-    }
 
     const addrSpan = document.createElement("span");
     addrSpan.className = "team-addr";
@@ -216,11 +199,6 @@ function renderTeamList(editors, viewers, burnPerms) {
         .querySelectorAll(".team-item")
         .forEach((i) => i.classList.remove("team-item-selected"));
       el.classList.add("team-item-selected");
-      selectedCollaborator = addr;
-
-      if (teamBurnPermBtn) {
-        teamBurnPermBtn.hidden = role !== CollaboratorRole.Editor;
-      }
     });
 
     return el;
@@ -249,6 +227,13 @@ function renderTeamList(editors, viewers, burnPerms) {
     );
   });
 
+  if (!fragment.childNodes.length) {
+    const empty = document.createElement("p");
+    empty.className = "team-empty";
+    empty.textContent = "No collaborators yet.";
+    fragment.appendChild(empty);
+  }
+
   teamList.appendChild(fragment);
 }
 
@@ -273,14 +258,6 @@ async function onAddCollaborator() {
     teamAddInput.value = "";
     refreshTeamPanel();
   }
-}
-
-async function onToggleBurnPermission() {
-  if (!selectedCollaborator || !tokenId()) return;
-
-  const current = await canBurn(tokenId(), selectedCollaborator);
-  await setBurnPermission(tokenId(), selectedCollaborator, !current);
-  refreshTeamPanel();
 }
 
 async function onBurnAsset() {
@@ -312,3 +289,4 @@ async function onBurnAsset() {
 // ─── Exports ───────────────────────────────────────────────────────────
 
 export { initCollaborators, refreshTeamPanel, updateBurnButton };
+

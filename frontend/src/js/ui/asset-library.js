@@ -298,7 +298,6 @@ document.addEventListener("asset:openByTokenId", (e) => {
 
 document.addEventListener("wallet:connected", async () => {
   await refreshAssetLibrary();
-  switchView("library");
 
   const assetTokenId = new URLSearchParams(window.location.search).get("asset");
   if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId);

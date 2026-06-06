@@ -27,6 +27,10 @@ const tierSelect = document.getElementById("tierSelect");
 // ─── Chat Messages ───
 
 function addChatMessage(role, text) {
+  // Hide welcome text on first real message
+  const welcome = chatHistory?.querySelector(".chat-welcome");
+  if (welcome) welcome.hidden = true;
+
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble chat-bubble-${role}`;
   bubble.textContent = text;

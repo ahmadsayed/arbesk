@@ -228,3 +228,47 @@
     --shadow-5: none;
   }
 }
+
+// ── Manual override (takes precedence over system preference) ────────
+
+:root[data-theme="light"] {
+  --window-bg: var(--window-bg-light);
+  --window-fg: var(--window-fg-light);
+  --view-bg: var(--view-bg-light);
+  --view-fg: var(--view-fg-light);
+  --headerbar-bg: var(--headerbar-bg-light);
+  --headerbar-fg: var(--headerbar-fg-light);
+  --sidebar-bg: var(--sidebar-bg-light);
+  --sidebar-fg: var(--sidebar-fg-light);
+  --card-bg: var(--card-bg-light);
+  --card-fg: var(--card-fg-light);
+  --popover-bg: var(--popover-bg-light);
+  --popover-fg: var(--popover-fg-light);
+  --border-color: var(--border-light);
+  --accent-bg: var(--accent-bg-light);
+  --accent-fg: var(--accent-fg-light);
+  --destructive-bg: var(--destructive-bg-light);
+  --destructive-fg: var(--destructive-fg-light);
+  --dim-fg: var(--dim-fg-light);
+}
+
+:root[data-theme="dark"] {
+  --window-bg: var(--window-bg-dark);
+  --window-fg: var(--window-fg-dark);
+  --view-bg: var(--view-bg-dark);
+  --view-fg: var(--view-fg-dark);
+  --headerbar-bg: var(--headerbar-bg-dark);
+  --headerbar-fg: var(--headerbar-fg-dark);
+  --sidebar-bg: var(--sidebar-bg-dark);
+  --sidebar-fg: var(--sidebar-fg-dark);
+  --card-bg: var(--card-bg-dark);
+  --card-fg: var(--card-fg-dark);
+  --popover-bg: var(--popover-bg-dark);
+  --popover-fg: var(--popover-fg-dark);
+  --border-color: var(--border-dark);
+  --accent-bg: var(--accent-bg-dark);
+  --accent-fg: var(--accent-fg-dark);
+  --destructive-bg: var(--destructive-bg-dark);
+  --destructive-fg: var(--destructive-fg-dark);
+  --dim-fg: var(--dim-fg-dark);
+}

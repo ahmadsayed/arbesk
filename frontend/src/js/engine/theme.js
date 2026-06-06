@@ -51,3 +51,64 @@ function normalizeHex(hex) {
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
   return h.toLowerCase();
 }
+
+// ── Theme toggle ─────────────────────────────────────────────────────
+
+const THEME_STORAGE_KEY = "arbesk-theme";
+
+/**
+ * Initialize theme on page load. Reads saved preference from localStorage,
+ * falls back to system preference, and sets data-theme on <html>.
+ */
+export function initTheme() {
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved === "light" || saved === "dark") {
+    applyTheme(saved);
+  } else {
+    applySystemTheme();
+  }
+
+  window
+    .matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", () => {
+      if (!localStorage.getItem(THEME_STORAGE_KEY)) {
+        applySystemTheme();
+      }
+    });
+}
+
+function applySystemTheme() {
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(isDark ? "dark" : "light");
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  document.dispatchEvent(
+    new CustomEvent("theme:changed", { detail: { theme } })
+  );
+}
+
+/** Persist and apply a specific theme ("light" or "dark"). */
+export function setTheme(theme) {
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  applyTheme(theme);
+}
+
+/** Clear saved preference and revert to system preference. */
+export function clearTheme() {
+  localStorage.removeItem(THEME_STORAGE_KEY);
+  applySystemTheme();
+}
+
+/** Toggle between light and dark. */
+export function toggleTheme() {
+  const current =
+    document.documentElement.getAttribute("data-theme") || "light";
+  setTheme(current === "dark" ? "light" : "dark");
+}
+
+/** Return the currently applied theme. */
+export function getTheme() {
+  return document.documentElement.getAttribute("data-theme") || "light";
+}

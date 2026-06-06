@@ -72,6 +72,10 @@
     background-color: var(--accent-bg);
     color: var(--accent-fg);
   }
+
+  &:active:not(:disabled) {
+    filter: brightness(0.9);
+  }
 }
 
 // Destructive
@@ -81,6 +85,10 @@
 
   &:hover:not(:disabled) {
     filter: brightness(1.1);
+  }
+
+  &:active:not(:disabled) {
+    filter: brightness(0.9);
   }
 }
 
@@ -94,9 +102,20 @@
     background-color: var(--card-bg);
     color: var(--sidebar-fg);
   }
+
+  &:active:not(:disabled) {
+    background-color: var(--border-color);
+  }
 }
 
 // Sizes
+.btn-xs {
+  padding: 2px var(--size-1);
+  font-size: var(--font-size-0);
+  min-height: 22px;
+  border-radius: var(--radius-1);
+}
+
 .btn-sm {
   padding: var(--size-1) var(--size-2);
   font-size: var(--font-size-0);
@@ -121,4 +140,15 @@
     min-width: 28px;
     min-height: 28px;
   }
+
+  &.btn-xs {
+    padding: 2px;
+    min-width: 22px;
+    min-height: 22px;
+  }
+}
+
+// Text span inside icon buttons — visible by default, collapsible at narrow widths
+.btn-text {
+  display: inline;
 }

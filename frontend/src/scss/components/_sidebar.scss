@@ -38,6 +38,7 @@
   margin-top: auto;
   display: flex;
   justify-content: center;
+  gap: var(--size-1);
   padding: var(--size-1) 0;
   border-top: var(--border-size-1) solid var(--border-color);
 }
@@ -144,6 +145,11 @@
   padding: 0 var(--size-3) var(--size-3);
 }
 
+// Primary action row at the top of a sidebar view (e.g. New Asset in Create view)
+.sidebar-action-row {
+  padding: var(--size-2) 0;
+}
+
 // Sidebar toggle (collapse/expand)
 .sidebar-toggle {
   display: flex;
@@ -163,6 +169,20 @@
     outline: 2px solid var(--accent-bg);
     outline-offset: 2px;
   }
+}
+
+// Theme toggle icons — show the opposite of current theme
+.theme-icon-light,
+.theme-icon-dark {
+  display: none;
+}
+
+[data-theme="light"] .theme-icon-dark {
+  display: block;
+}
+
+[data-theme="dark"] .theme-icon-light {
+  display: block;
 }
 
 // Show sidebar button (visible when collapsed)

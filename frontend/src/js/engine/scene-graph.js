@@ -189,6 +189,16 @@ function initEngine() {
   state.engine.runRenderLoop(() => state.scene.render());
 
   window.addEventListener("resize", () => state.engine.resize());
+
+  // Re-sync viewport background when the user toggles light / dark mode
+  document.addEventListener("theme:changed", () => {
+    if (state.scene) {
+      const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
+      state.scene.clearColor =
+        hexToColor4(viewportBg, 1) ||
+        new BABYLON.Color4(0.118, 0.118, 0.118, 1);
+    }
+  });
   state.resizeEngineHandler = () => state.engine.resize();
   state.resizeObserverInstance = new ResizeObserver(() =>
     state.engine.resize()
@@ -1224,8 +1234,8 @@ export {
         }, 100);
     }
 
-    // Both the welcome-overlay button and the persistent header button.
-    ["newAssetBtn", "newAssetTopBtn"].forEach(function (id) {
+    // Welcome-overlay button, header button (legacy), and sidebar Create view.
+    ["newAssetBtn", "newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (id) {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener("click", startNewAsset);
     });

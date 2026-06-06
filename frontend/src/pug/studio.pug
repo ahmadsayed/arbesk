@@ -4,9 +4,15 @@ html(lang="en")
     title Arbesk Studio
     meta(charset="utf-8")
     meta(name="viewport", content="width=device-width, initial-scale=1")
-    link(rel="icon", type="image/png", href="/logo.png")
-    link(rel="apple-touch-icon", href="/apple-touch-icon.png")
+    link(rel="icon", type="image/webp", href="/logo.webp")
+    link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
+    script.
+      (function(){
+        const s = localStorage.getItem('arbesk-theme');
+        const t = s || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', t);
+      })();
     script(src="https://cdn.babylonjs.com/babylon.js")
     script(src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js")
     script(src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js")
@@ -19,17 +25,12 @@ html(lang="en")
       //- ═══════════════════════════════════════════════════════════
       header.headerbar
         .headerbar-brand
-          img(src="/logo.png", alt="Arbesk")
+          img.logo-light(src="/logo.webp", alt="Arbesk")
+          img.logo-dark(src="/logo-dark.webp", alt="Arbesk")
 
         button#backBtn.headerbar-back.hidden(aria-label="Go back to parent world", title="Go back (Alt+Left)")
           svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
             path(d="M15 18l-6-6 6-6")
-
-        button#newAssetTopBtn.btn.btn-secondary.btn-sm.headerbar-new(aria-label="New asset", title="New asset (Ctrl+N)")
-          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-            line(x1="12" y1="5" x2="12" y2="19")
-            line(x1="5" y1="12" x2="19" y2="12")
-          span New
 
         .headerbar-title
           nav#pathBar.pathbar.hidden(aria-label="World path")
@@ -40,24 +41,37 @@ html(lang="en")
           .history-track
 
         .headerbar-actions
-          button#saveAssetBtn.btn.btn-secondary.btn-sm(hidden)
+          button#saveAssetBtn.btn.btn-secondary(hidden aria-label="Save Draft" title="Save Draft (Ctrl+S)")
             svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
               path(d="M17 21v-8H7v8")
               path(d="M7 3v5h8")
-            span#saveAssetBtnText Save Draft
-          button#publishAssetBtn.btn.btn-primary.btn-sm.headerbar-publish(hidden)
+            span#saveAssetBtnText.btn-text Save
+          button#publishAssetBtn.btn.btn-primary.headerbar-publish(hidden)
             svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M12 3v12")
               path(d="M7 8l5-5 5 5")
               path(d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4")
-            span#publishAssetBtnText Publish Asset
-          button#burnAssetBtn.btn.btn-danger.btn-sm.headerbar-delete(hidden aria-label="Burn asset" title="Burn (delete) this token")
+            span#publishAssetBtnText.btn-text Publish
+          button#burnAssetBtn.btn.btn-danger.headerbar-delete(hidden aria-label="Burn asset" title="Burn (delete) this token")
             svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M3 6h18")
               path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
               path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
-            span#burnAssetBtnText Burn
+            span#burnAssetBtnText.btn-text Burn
+          button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
+            svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+              circle(cx="12" cy="12" r="5")
+              line(x1="12" y1="1" x2="12" y2="3")
+              line(x1="12" y1="21" x2="12" y2="23")
+              line(x1="4.22" y1="4.22" x2="5.64" y2="5.64")
+              line(x1="18.36" y1="18.36" x2="19.78" y2="19.78")
+              line(x1="1" y1="12" x2="3" y2="12")
+              line(x1="21" y1="12" x2="23" y2="12")
+              line(x1="4.22" y1="19.78" x2="5.64" y2="18.36")
+              line(x1="18.36" y1="5.64" x2="19.78" y2="4.22")
+            svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+              path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
           button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet" onclick="connectWallet()")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
@@ -111,6 +125,12 @@ html(lang="en")
               .sidebar-view-header
                 h2 Create
               .sidebar-view-body
+                .sidebar-action-row
+                  button#newAssetSidebarBtn.btn.btn-primary(style="width:100%")
+                    svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                      line(x1="12" y1="5" x2="12" y2="19")
+                      line(x1="5" y1="12" x2="19" y2="12")
+                    span New Asset
                 #assetDefinition.asset-definition-section
                   .asset-def-header
                     button#toggleAssetDef.asset-def-toggle(aria-label="Toggle settings")
@@ -142,12 +162,11 @@ html(lang="en")
                         span#teamOwnerBadge.owner-badge(hidden) Owner
                       #teamList.team-list
                       .team-add
-                        input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
-                        select#teamRoleSelect.form-select
+                        input#teamAddInput.form-control(type="text", placeholder="0x… wallet address", aria-label="Collaborator wallet address")
+                        select#teamRoleSelect.form-select(aria-label="Collaborator role")
                           option(value="2" selected) Editor
                           option(value="1") Viewer
-                        button#teamAddBtn.btn.btn-sm Add
-                        button#teamBurnPermBtn.btn.btn-sm.btn-warning(hidden title="Toggle burn permission for selected") 🔥 Burn
+                        button#teamAddBtn.btn.btn-secondary.btn-sm Add
                 #chatHistory.chat-history
                   .chat-welcome
                     .welcome-icon ✦
@@ -334,6 +353,10 @@ html(lang="en")
 
       import { initCollaborators } from '/js/ui/collaborators.js';
       initCollaborators();
+
+      import { initTheme, toggleTheme } from '/js/engine/theme.js';
+      initTheme();
+      document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
 
       document.addEventListener('wallet:connected', () => {
         const c = document.getElementById('connectWalletBtn');
