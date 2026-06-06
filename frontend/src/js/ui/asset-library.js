@@ -139,7 +139,7 @@ function createAssetCard(tokenId, role) {
   item.draggable = true;
 
   item.addEventListener("dragstart", (event) => {
-    const chainId = Number(window.chainId || window.walletChainId || 314159);
+    const chainId = Number(window.chainId || window.walletChainId || 84532);
     const contractAddr =
       window.contractAddress || window._contractAddress || null;
     const payload = {
@@ -183,7 +183,7 @@ function createAssetCard(tokenId, role) {
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {
-    const chainId = Number(window.chainId || window.walletChainId || 314159);
+    const chainId = Number(window.chainId || window.walletChainId || 84532);
     const contractAddr =
       window.contractAddress || window._contractAddress || null;
     document.dispatchEvent(

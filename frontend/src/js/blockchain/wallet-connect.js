@@ -17,8 +17,8 @@ let provider = null;
 let initPromise = null;
 let EthereumProvider = null;
 
-// Default chains supported by WalletConnect
-const DEFAULT_CHAINS = [1, 11155111, 137, 8453, 31415822];
+// Default chains supported by WalletConnect (testnets only)
+const DEFAULT_CHAINS = [31415822, 84532, 80002];
 
 const DEFAULT_METHODS = ["eth_sendTransaction", "personal_sign", "eth_signTypedData_v4"];
 const DEFAULT_EVENTS = ["chainChanged", "accountsChanged"];
