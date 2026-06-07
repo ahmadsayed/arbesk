@@ -25,7 +25,7 @@ Completed capabilities include:
 - Browser-side on-demand IPFS cache using memory + IndexedDB
 - Optional WebP world thumbnails captured during publish and stored by CID in manifests
 
-**Current active phase**: Phase 5.1 — Token ID-Based Child Worlds (11 issues, MVP spans #1–#6). Phase 5 micro-ledger remains the next planned focus after 5.1 completes.
+**Current active phase**: Phase 5.1 — Token ID-Based Child Worlds (all 10 issues complete). Server-side micro-ledger removed; activity tracking is now client-side only.
 
 ---
 
@@ -39,7 +39,6 @@ Completed capabilities include:
 | Phase 4: UI Assembly & Workspace Studio | ✅ Complete | Studio shell, wallet, gallery, minting, team editor panel |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Optional WebP thumbnails, gallery thumbnails, on-demand IPFS cache |
 | **Phase 5.1: Token ID-Based Child Worlds** | **✅ Complete** | `child_ref` schema, token resolver, drag/drop, scene graph rendering, persistence, inspector, external chain support, tests |
-| **Phase 5: Micro-Ledger & Audit Infrastructure** | **🔄 In Progress** | Schema & JSONL store done, API mounted, operations hooked, `anchorManifest()` in contract, frontend ledger panel built |
 
 ---
 
@@ -120,18 +119,9 @@ All 10 issues completed:
 9. ✅ 15 unit + 3 integration tests
 10. ✅ Documentation updated
 
-### Upcoming (Phase 5)
+### Upcoming
 
-5. **Micro-ledger** — ✅ Phase 5a (MVP) in progress:
-   - ✅ `src/ledger/schema.js` — LedgerEntry types and validation
-   - ✅ `src/ledger/store.js` — JSONL append-only store with query support
-   - ✅ `src/api/ledger.js` — Query API (`GET /api/ledger`, `GET /api/ledger/stats`)
-   - ✅ Routes mounted and operations hooked (GENERATION, PARAMETRIC, SAVE, PUBLISH)
-   - ✅ `ArbeskAsset.sol` — `anchorManifest()` function + `ManifestAnchored` event
-   - ✅ Contract tests (5 tests for anchoring)
-   - ✅ `frontend/src/js/ui/ledger-panel.js` — Collapsible audit trail panel with filter + anchor
-   - 🔲 Ledger panel not yet wired to show per-asset filtering via `manifestId` (uses global view)
-   - 🔲 Snapshots and digital signatures deferred to Phase 5b
+5. **Manifest-driven activity panel** — The ledger panel derives its feed entirely from the asset manifest chain (`prev_manifest_cid` + `nodes[].history[]`). No localStorage, no server-side ledger, no event accumulation.
 
 ### Recent Changes
 

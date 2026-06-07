@@ -4,7 +4,6 @@ import http from "http";
 import url from "url";
 import * as dotenv from "dotenv";
 import bodyParser from "body-parser";
-import { loadLedger } from "./ledger/store.js";
 
 const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -71,10 +70,6 @@ app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 app.use("/api", api());
 
 if (process.env.NODE_ENV !== "test") {
-  // Initialize the micro-ledger (loads from disk)
-  const ledgerCount = loadLedger();
-  console.log(`[BOOT] micro-ledger ready — ${ledgerCount} entries`);
-
   server.listen(port);
   console.log("[BOOT] Server started at http://localhost:" + port);
   console.log(

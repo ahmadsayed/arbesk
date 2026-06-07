@@ -14,11 +14,8 @@ const { CONTRACT_ADDRESS, ASSETS_IPFS, IPFS_API_URL, HARDHAT_RPC_URL, web3 } =
 import generateAssetNode from "./assets/generate-node.js";
 import abiRouter from "./abi-router.js";
 import rateLimit from "./rate-limiter.js";
-import ledgerRouter from "./ledger.js";
 import sessionRouter from "./sessions.js";
 import openapiSpec from "./openapi.json" with { type: "json" };
-import { createLedgerEntry } from "../ledger/schema.js";
-import { appendEntry } from "../ledger/store.js";
 import { getSceneNodes } from "./manifest-utils.js";
 import { catManifest } from "./ipfs-utils.js";
 
@@ -205,20 +202,6 @@ export default () => {
       );
       console.log(`[SAVE] asset_id=${manifest.asset_id} → cid=${resultCid}`);
 
-      // Record to micro-ledger
-      appendEntry(
-        createLedgerEntry({
-          opType: "SAVE",
-          manifestId: manifest.asset_id,
-          cid: resultCid,
-          prevCid: manifest.prev_asset_manifest_cid || null,
-          actorAddress: req.body.actorAddress || "system",
-          payload: {
-            version: manifest.version,
-            nodeCount: manifest.scene.nodes.length,
-          },
-        }),
-      );
 
       res.status(201).json({
         cid: resultCid,
@@ -253,22 +236,6 @@ export default () => {
       }
       console.log(`[IPFS] add publish | cid=${resultCid}`);
 
-      // Record to micro-ledger
-      appendEntry(
-        createLedgerEntry({
-          opType: "PUBLISH",
-          manifestId: manifest.asset_id || manifest.name || "unknown",
-          cid: resultCid,
-          prevCid: manifest.prev_asset_manifest_cid || null,
-          actorAddress: req.body.actorAddress || "system",
-          payload: {
-            publishedCid: resultCid,
-            thumbnailCid: manifest?.thumbnail?.cid || null,
-            thumbnailMime: manifest?.thumbnail?.mime || null,
-            thumbnailBytes: manifest?.thumbnail?.bytes || null,
-          },
-        }),
-      );
 
       res.status(200).json({ cid: resultCid });
     } catch (error) {
@@ -505,21 +472,6 @@ export default () => {
         `[UNPIN] done — ${unpinned.length} unpinned, ${errors.length} errors (${elapsed}ms)`,
       );
 
-      // Record to micro-ledger
-      appendEntry(
-        createLedgerEntry({
-          opType: "UNPIN",
-          manifestId: startCid,
-          cid: startCid,
-          actorAddress: req.body.actorAddress || "system",
-          payload: {
-            unpinnedCount: unpinned.length,
-            totalCIDs: toUnpin.size,
-            manifestCount: visited.size,
-            errors: errors.length > 0 ? errors : undefined,
-          },
-        }),
-      );
 
       res.json({
         unpinned,
@@ -542,9 +494,6 @@ export default () => {
     abiRouterInstance(req, res);
   });
 
-  // ─── Ledger ───────────────────────────────────────────────────────────────
-
-  v1.use("/ledger", ledgerRouter());
   // ─── OpenAPI Specification ─────────────────────────────────────────────────
 
   v1.get("/openapi.json", (req, res) => {

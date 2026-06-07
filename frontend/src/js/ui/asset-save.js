@@ -138,6 +138,21 @@ function advanceManifestVersion(manifest, latestCid) {
 }
 
 /**
+ * Compare two manifests for semantic equality, ignoring auto-generated fields.
+ */
+function manifestsSemanticallyEqual(a, b) {
+  if (!a || !b) return false;
+  const strip = (m) => {
+    const copy = JSON.parse(JSON.stringify(m));
+    delete copy.timestamp;
+    delete copy.version;
+    delete copy.prev_asset_manifest_cid;
+    return copy;
+  };
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+}
+
+/**
  * Decompose all monolithic glTF source nodes in a manifest.
  * Fetches each glTF, decomposes buffers/images to separate IPFS CIDs,
  * and updates node.source.cid to point to the composite JSON.
@@ -307,16 +322,17 @@ async function prepareManifestForWrite(assetName) {
   }
 
   const prevCid = window.activeAssetManifestCid;
+  let prevManifest = null;
   if (prevCid) {
     try {
-      const prevManifest = await getFromRemoteIPFS(prevCid);
+      prevManifest = await getFromRemoteIPFS(prevCid);
       manifest.version = (prevManifest.version || 0) + 1;
       manifest.prev_asset_manifest_cid = prevCid;
     } catch {
       advanceManifestVersion(manifest, prevCid);
     }
   }
-  return { manifest, prevCid };
+  return { manifest, prevCid, prevManifest };
 }
 
 async function onSaveAssetDraft() {
@@ -344,6 +360,22 @@ async function onSaveAssetDraft() {
         title: "Nothing to Save",
         message: "Generate an asset or add linked worlds first.",
       });
+      return;
+    }
+
+    if (
+      prepared.prevManifest &&
+      manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
+    ) {
+      showToast({
+        type: "info",
+        title: "No Changes",
+        message: "Nothing new to save.",
+      });
+      isSaving = false;
+      if (saveBtn) saveBtn.disabled = false;
+      if (saveBtnText) saveBtnText.textContent = "Save Draft";
+      updateButtonState();
       return;
     }
 
@@ -434,6 +466,25 @@ async function onPublishAsset() {
         "[PUBLISH] thumbnail capture skipped:",
         thumbnailError.message
       );
+    }
+
+    if (
+      prepared.prevManifest &&
+      manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
+    ) {
+      showToast({
+        type: "info",
+        title: "No Changes",
+        message: "Nothing new to publish.",
+      });
+      isPublishing = false;
+      if (publishBtn) publishBtn.disabled = false;
+      if (publishBtnText)
+        publishBtnText.textContent = window.activeAssetTokenId
+          ? "Republish"
+          : "Publish";
+      updateButtonState();
+      return;
     }
 
     announceStatus("Confirm transaction in MetaMask…");

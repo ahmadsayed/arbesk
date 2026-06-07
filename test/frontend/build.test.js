@@ -82,8 +82,6 @@ describe("Frontend Build", () => {
       "publishManifest",
       "getManifestHistory",
       "getTokenManifest",
-      "queryLedger",
-      "getLedgerStats",
     ];
 
     for (const name of requiredExports) {

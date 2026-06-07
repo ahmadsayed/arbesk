@@ -30,8 +30,7 @@ This file contains conventions, key file references, and practical guidance for 
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ DONE | `ArbeskWorld.sol`, tx validation, replay prevention |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ DONE | Studio shell, wallet wiring, team panel, minting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ DONE | WebP thumbnails, gallery thumbnails, on-demand IPFS cache, one-node scene cleanup |
-| **Phase 5.1: Token ID-Based Child Worlds** | 🔄 **IN PROGRESS** | Token ref schema, resolver, drag/drop child worlds, scene graph rendering |
-| Phase 5: Micro-Ledger & Audit Infrastructure | 🔄 **UPCOMING** | Structured operation logging, manifest audit trail, on-chain attestations |
+| **Phase 5.1: Token ID-Based Child Worlds** | ✅ **DONE** | Token ref schema, resolver, drag/drop child worlds, scene graph rendering |
 
 ---
 
@@ -62,10 +61,7 @@ This file contains conventions, key file references, and practical guidance for 
 | API service layer | `frontend/src/js/services/api.js` |
 | Token resolver | `frontend/src/js/blockchain/token-resolver.js` |
 | URI utilities | `frontend/src/js/blockchain/uri-utils.js` |
-| **Micro-ledger schema** | `src/ledger/schema.js` |
-| **Micro-ledger store** | `src/ledger/store.js` |
-| **Ledger API** | `src/api/ledger.js` |
-| **Ledger panel** | `frontend/src/js/ui/ledger-panel.js` |
+| **Activity panel** | `frontend/src/js/ui/ledger-panel.js` |
 | Smart contracts | `blockchain/contracts/` |
 | Hardhat config | `blockchain/hardhat.config.js` |
 | Contract tests | `blockchain/test/` |
@@ -328,7 +324,6 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 | `[ABI]` | ABI serving | `[ABI] serving /path/to/ArbeskAsset.json` |
 | `[TOKEN]` | Token child ref resolution | `[TOKEN] resolving child token #42 at 0x...` → `[TOKEN] resolved → Qm...` |
 | `[SESSION]` | Session auth operations | `[SESSION] created — token=abc123... address=0x...` |
-| `[LEDGER]` | Micro-ledger operations | `[LEDGER] append GENERATION | manifestId=asset_... cid=Qm...` |
 | `[UNPIN]` | IPFS unpin operations | `[UNPIN] collected 42 CIDs across 5 manifest(s)` |
 | `[BURN]` | Token burn operations | `[BURN] token 42 manifest CID → Qm...` |
 
@@ -357,7 +352,7 @@ Every manifest includes a `prev_manifest_cid` that points to the previous versio
 - `GET /api/manifest-chain` — the backend walks `prev_manifest_cid` links up to 50 entries deep.
 - **History timeline UI** — a draggable circular-node scrubber in the topbar for version switching.
 - **Replay prevention** — the backend scans manifest history for duplicate `txHash` values.
-- **Micro-ledger (Phase 5)** — each manifest CID is recorded as an append-only log entry.
+- **Client-side activity log** — browser events are recorded in localStorage for the current session.
 
 **Optional Manifest Thumbnail:**
 ```json
@@ -451,7 +446,7 @@ Key rules for token child nodes:
 - Every token child node **must** have a `transform_matrix` (identity matrix is the default for first drag/drop).
 - Token child nodes do **not** include local `history` arrays — the referenced token's own manifest owns the history.
 - Legacy `child_manifest_id` is replaced by `child_ref`; no backward-compat conditionals for this phase.
-- Parent-local child events (added, moved, removed) are tracked later through the micro-ledger.
+- Parent-local child events (added, moved, removed) are tracked client-side in the activity panel.
 - Cycle/depth protection prevents self-references and caps child depth at `MAX_CHILD_WORLD_DEPTH = 5`.
 
 ---
@@ -738,35 +733,33 @@ Current state: Child worlds are linked via static `child_manifest_id` / `linked_
 
 ---
 
-## 17. Phase 5: Micro-Ledger & Audit Infrastructure (Upcoming)
+## 17. Manifest-Driven Activity Panel
 
-> **Status**: Planned — not yet implemented.  
-> **Goal**: Build a structured, queryable audit trail for every manifest mutation, generation, and parametric edit. The micro-ledger decouples operational logging from the Babylon.js display layer so the system can be ported to XR/immersive environments with zero refactoring.
+> **Status**: Implemented — server-side micro-ledger removed.  
+> **Goal**: Provide an accurate activity feed derived solely from the asset manifest file.
 
-### 15.1 Why a Micro-Ledger?
+### Why Manifest-Only?
 
-Current state: The backend logs operations to `console.log()` with tagged prefixes. This is sufficient for development but not for:
-- **Forensic audit** — "Who changed what, when?"
-- **Cross-session replay** — Server restart clears `usedTxHashes` and in-memory state
-- **Analytics** — "Which prompts produce the most parametric edits?"
-- **Immersive ports** — XR headsets need the same audit trail without browser console access
+The manifest is the single source of truth. Every generation, parametric edit, save, and publish is already recorded inside it:
+- **Per-node `history[]`** — Each node stores its generation and parametric versions with timestamps, prompts, and transaction hashes.
+- **Manifest chain** — `prev_manifest_cid` links every version backward in time.
+- **No shadow log** — No localStorage, no server JSONL, no duplicate state. The panel simply reads what the manifest already says.
 
-### 15.2 Proposed Scope
+### How It Works
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Structured log schema | `src/ledger/` | Typed operation records (save, generate, parametric, mint) |
-| Log persistence | Append-only JSONL or SQLite | Queryable audit trail per manifest / per user |
-| Log API | `GET /api/ledger?manifestId=` | Fetch operation history for a manifest |
-| On-chain attestation | `ArbeskWorld.sol` extension | Anchor manifest root CIDs to the contract for immutability proof |
-| Frontend ledger panel | `frontend/src/js/ui/ledger-panel.js` | Visual audit trail in the studio |
+1. When an asset loads (`scene:ready`), the panel fetches the manifest chain via `GET /api/v1/manifests/:cid/history`.
+2. The backend walks `prev_manifest_cid` links (up to 50 deep) and returns every version.
+3. The panel extracts two kinds of entries:
+   - **Manifest-level** — Each version in the chain becomes a `SAVE` (first version) or `LOAD` (subsequent versions).
+   - **Node-level** — Each entry in `nodes[].history[]` becomes a `GENERATION` or `PARAMETRIC` activity.
+4. Entries are sorted by timestamp (newest first) and rendered.
 
-### 15.3 Design Principles
+### Design Principles
 
-1. **Append-only**: Never mutate or delete log entries. Invalidations are new entries.
-2. **Content-addressed**: Log entries reference manifests by CID, not mutable IDs.
-3. **Offline-replayable**: A log file + IPFS CIDs = full scene reconstruction without the backend.
-4. **Display-agnostic**: The ledger has no dependency on Babylon.js or the DOM.
+1. **Single source of truth**: The manifest owns the history; the panel only displays it.
+2. **Thin server**: The history endpoint merely follows IPFS CID links. No separate ledger store.
+3. **Cross-session accurate**: Because data comes from IPFS (via the manifest chain), the activity feed is identical on every browser, every session.
+4. **Tamper-evident**: Altering any manifest version breaks its CID, invalidating the chain.
 
 ---
 

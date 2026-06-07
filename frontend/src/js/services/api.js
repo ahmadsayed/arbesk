@@ -503,43 +503,7 @@ export async function unpinAssetCids(cid, actorAddress) {
 
 // ─── Ledger ──────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/v1/ledger
- * Query the micro-ledger audit trail.
- * @param {Object} params
- * @returns {Promise<{entries: Array, total: number, limit: number, offset: number}>}
- */
-export async function queryLedger({ manifestId, opType, limit } = {}) {
-  const queryParams = new URLSearchParams({ limit: String(limit || 50) });
-  if (manifestId) queryParams.set("manifestId", manifestId);
-  if (opType) queryParams.set("opType", opType);
 
-  const response = await fetch(`${API_BASE}/ledger?${queryParams}`);
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Ledger query failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-
-  return data;
-}
-
-/**
- * GET /api/v1/ledger/stats
- * Get aggregated ledger analytics.
- * @returns {Promise<Object>}
- */
-export async function getLedgerStats() {
-  const response = await fetch(`${API_BASE}/ledger/stats`);
-  if (!response.ok) return null;
-  return response.json();
-}
 
 // ─── Global Exports (for non-module <script> loading) ───────────────────────
 
@@ -555,5 +519,3 @@ window.publishManifest = publishManifest;
 window.getManifestHistory = getManifestHistory;
 window.getTokenManifest = getTokenManifest;
 window.unpinAssetCids = unpinAssetCids;
-window.queryLedger = queryLedger;
-window.getLedgerStats = getLedgerStats;

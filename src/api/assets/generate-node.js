@@ -3,8 +3,6 @@ import { CONTRACT_ADDRESS, API_URL, web3 } from "../../config.js";
 import { mockGenerate } from "../adapters/mock-adapter.js";
 import authenticate from "../authentication.js";
 import rateLimit from "../rate-limiter.js";
-import { createLedgerEntry } from "../../ledger/schema.js";
-import { appendEntry } from "../../ledger/store.js";
 
 import { getSceneNodes, bumpManifestVersion } from "../manifest-utils.js";
 import { catManifest } from "../ipfs-utils.js";
@@ -288,32 +286,6 @@ export default function generateAssetNode(ipfs) {
           `[GEN] success — manifest=${assetManifestCid} sourceAsset=${sourceAssetCid}`,
         );
 
-        // Record to micro-ledger
-        appendEntry(
-          createLedgerEntry({
-            opType: "GENERATION",
-            manifestId: manifest.asset_id,
-            cid: assetManifestCid,
-            prevCid: prevAssetManifestCid || null,
-            actorAddress:
-              req.body.walletAddress || res.locals.actorAddress || "system",
-            payload: {
-              prompt,
-              provider: result.provider || provider || "mock",
-              txHash: effectiveTxHash,
-              nodeId,
-              sourceAssetCid,
-              ...(req.body.tier !== undefined &&
-                req.body.tier !== null && {
-                  tier: Number(req.body.tier),
-                  tierName:
-                    ["Basic", "Standard", "Premium", "Pro"][
-                      Number(req.body.tier)
-                    ] || "Unknown",
-                }),
-            },
-          }),
-        );
 
         res.json({
           assetManifestCid,
