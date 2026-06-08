@@ -11,7 +11,7 @@ import { web3 } from "../config.js";
 const usedNonces = new Map();
 const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MESSAGE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
-const SUPPORTED_CHAIN_IDS = [1, 11155111, 137, 8453, 31415822, 314159, 314];
+const SUPPORTED_CHAIN_IDS = [1, 11155111, 137, 8453, 84532, 31415822, 314159, 314];
 
 /**
  * Clean expired nonces from the store.

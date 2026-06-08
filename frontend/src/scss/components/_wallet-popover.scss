@@ -1,14 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════
 // Wallet Popover
 //
-// Dropdown attached to the connected wallet button.
-// GNOME-style popover surface with shadow and border.
+// GNOME-style popover attached to the connected wallet button.
+// Minimal: address, explorer link, disconnect.
+// Network switching lives in the headerbar — not duplicated here.
 // ═══════════════════════════════════════════════════════════════════
 
 .wallet-popover {
   position: fixed;
   z-index: 200;
-  width: 280px;
+  width: 260px;
   background-color: var(--popover-bg);
   color: var(--popover-fg);
   border: var(--border-size-1) solid var(--border-color);
@@ -74,31 +75,6 @@
   }
 }
 
-// ── Network badge row ────────────────────────────────────────────────
-
-.wallet-popover-network {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-}
-
-.wallet-popover-network-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px var(--size-2);
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-6);
-  color: var(--accent-fg);
-  background-color: var(--accent-bg);
-  border-radius: var(--radius-round);
-}
-
-.wallet-popover-chain-id {
-  font-size: var(--font-size-0);
-  color: var(--dim-fg);
-  font-family: var(--font-mono);
-}
-
 // ── Explorer link ────────────────────────────────────────────────────
 
 .wallet-popover-explorer {
@@ -135,43 +111,6 @@
   border-top: var(--border-size-1) solid var(--border-color);
 }
 
-.wallet-popover-network-select {
-  width: 100%;
-  padding: var(--size-2) var(--size-3);
-  font-size: var(--font-size-1);
-  font-family: var(--font-family);
-  color: var(--view-fg);
-  background-color: var(--view-bg);
-  border: var(--border-size-1) solid var(--border-color);
-  border-radius: var(--radius-2);
-  cursor: pointer;
-
-  &:focus {
-    outline: none;
-    border-color: var(--accent-bg);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
-  }
-}
-
 .wallet-popover-disconnect {
   width: 100%;
-}
-
-// ── Headerbar network badge (small pill next to wallet button) ───────
-
-.headerbar-network-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  font-size: 0.6875rem; // 11px
-  font-weight: var(--font-weight-6);
-  color: var(--accent-fg);
-  background-color: var(--accent-bg);
-  border-radius: var(--radius-round);
-  white-space: nowrap;
-  flex-shrink: 0;
-
-  &.hidden {
-    display: none;
-  }
 }

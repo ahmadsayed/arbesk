@@ -1,16 +1,14 @@
 /**
  * Arbesk Wallet Popover
  *
- * Dropdown popover for the connected wallet button.
- * Shows: address (with copy), network badge, explorer link,
- * network switcher, and disconnect action.
+ * GNOME HIG-compliant dropdown for the connected wallet button.
+ * Shows: address (with copy), explorer link, disconnect action.
+ * Network switching lives in the headerbar — not duplicated here.
  */
 
 import {
-  getNetworkName,
   getAddressExplorerUrl,
   copyToClipboard,
-  switchNetwork,
 } from "../blockchain/explorer.js";
 import { disconnectWallet } from "../blockchain/wallet.js";
 
@@ -24,10 +22,7 @@ function getElements() {
     popover: document.getElementById("walletPopover"),
     address: document.getElementById("walletPopoverAddress"),
     copyBtn: document.getElementById("walletPopoverCopy"),
-    networkBadge: document.getElementById("walletPopoverNetworkBadge"),
-    chainId: document.getElementById("walletPopoverChainId"),
     explorerLink: document.getElementById("walletPopoverExplorer"),
-    networkSelect: document.getElementById("walletPopoverNetworkSelect"),
     disconnectBtn: document.getElementById("walletPopoverDisconnect"),
     walletBtn: document.getElementById("disconnectWalletBtn"),
   };
@@ -120,14 +115,6 @@ function updateContent() {
     els.copyBtn.classList.remove("copied");
   }
 
-  // Network badge
-  if (els.networkBadge) {
-    els.networkBadge.textContent = getNetworkName(chainId);
-  }
-  if (els.chainId) {
-    els.chainId.textContent = chainId ? `Chain ID: ${chainId}` : "";
-  }
-
   // Explorer link
   if (els.explorerLink) {
     const url = getAddressExplorerUrl(chainId, address);
@@ -138,21 +125,6 @@ function updateContent() {
       els.explorerLink.classList.add("hidden");
     }
   }
-
-  // Network select — sync current value
-  if (els.networkSelect) {
-    const key = getNetworkKey(chainId);
-    if (key) els.networkSelect.value = key;
-  }
-}
-
-function getNetworkKey(chainId) {
-  const map = {
-    31415822: "hardhat",
-    84532: "baseSepolia",
-    80002: "polygonAmoy",
-  };
-  return map[Number(chainId)] || "";
 }
 
 // ─── Event Handlers ──────────────────────────────────────────────────
@@ -171,17 +143,6 @@ async function onCopy() {
         els.copyBtn.classList.remove("copied");
       }
     }, 1500);
-  }
-}
-
-async function onSwitchNetwork(e) {
-  const key = e.target.value;
-  if (!key) return;
-  closePopover();
-  try {
-    await switchNetwork(key);
-  } catch (err) {
-    console.error("Network switch failed:", err);
   }
 }
 
@@ -226,9 +187,6 @@ function initWalletPopover() {
 
   if (els.copyBtn) {
     els.copyBtn.addEventListener("click", onCopy);
-  }
-  if (els.networkSelect) {
-    els.networkSelect.addEventListener("change", onSwitchNetwork);
   }
   if (els.disconnectBtn) {
     els.disconnectBtn.addEventListener("click", onDisconnect);

@@ -29,7 +29,28 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 
 import { initWalletPopover } from "/js/ui/wallet-popover.js";
 
-import { initWallet, autoConnectWallet, connectWallet } from "/js/blockchain/wallet.js";
+import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
+
+// ── Headerbar network selector ──
+const networkSelect = document.getElementById("headerbarNetworkSelect");
+if (networkSelect) {
+  networkSelect.addEventListener("change", async (e) => {
+    const key = e.target.value;
+    if (!key) return;
+    // If wallet is connected, trigger the network switch in the wallet
+    if (window.walletAddress) {
+      try {
+        await switchNetwork(key);
+      } catch (err) {
+        console.error("Network switch failed:", err);
+      }
+    } else {
+      // Not connected yet — just store preference for when we connect
+      localStorage.setItem("arbesk-preferred-network", key);
+      console.log("[NETWORK] Preferred network set to:", key);
+    }
+  });
+}
 
 // Start EIP-6963 wallet discovery (so MetaMask etc. are detected)
 initWallet();
@@ -43,7 +64,7 @@ initWalletPopover();
 document.addEventListener("wallet:connected", (e) => {
   const c = document.getElementById("connectWalletBtn");
   const d = document.getElementById("disconnectWalletBtn");
-  const badge = document.getElementById("headerbarNetworkBadge");
+  const netSel = document.getElementById("headerbarNetworkSelect");
   if (c) {
     c.classList.add("hidden");
     c.classList.remove("disconnected");
@@ -54,18 +75,20 @@ document.addEventListener("wallet:connected", (e) => {
     const text = d.querySelector("span") || d;
     if (text) text.textContent = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "Wallet";
   }
-  if (badge) {
-    badge.classList.remove("hidden");
+  // Green dot + sync network selector to current chain
+  if (netSel) {
+    netSel.classList.add("connected");
     const chainId = e.detail?.chainId;
-    const names = { 31415822: "Hardhat", 84532: "Base Sepolia", 80002: "Polygon Amoy" };
-    badge.textContent = names[chainId] || (chainId ? `Chain ${chainId}` : "Unknown");
+    const keyMap = { 31415822: "hardhat", 84532: "baseSepolia", 80002: "polygonAmoy" };
+    const key = keyMap[chainId];
+    if (key) netSel.value = key;
   }
 });
 
 document.addEventListener("wallet:disconnected", () => {
   const c = document.getElementById("connectWalletBtn");
   const d = document.getElementById("disconnectWalletBtn");
-  const badge = document.getElementById("headerbarNetworkBadge");
+  const netSel = document.getElementById("headerbarNetworkSelect");
   if (c) {
     c.classList.remove("hidden");
     c.classList.add("disconnected");
@@ -75,5 +98,6 @@ document.addEventListener("wallet:disconnected", () => {
     const text = d.querySelector("span");
     if (text) text.textContent = "Disconnect";
   }
-  if (badge) badge.classList.add("hidden");
+  // Gray dot when disconnected
+  if (netSel) netSel.classList.remove("connected");
 });

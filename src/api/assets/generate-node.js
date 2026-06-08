@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { CONTRACT_ADDRESS, API_URL, web3 } from "../../config.js";
+import {
+  CONTRACT_ADDRESS,
+  API_URL,
+  web3,
+  getContractAddress,
+  getWeb3,
+} from "../../config.js";
 import { mockGenerate } from "../adapters/mock-adapter.js";
 import authenticate from "../authentication.js";
 import rateLimit from "../rate-limiter.js";
@@ -30,10 +36,11 @@ export default function generateAssetNode(ipfs) {
           assetId,
           prevAssetManifestCid,
           transform_matrix,
+          chainId,
         } = req.body;
 
         console.log(
-          `[GEN] prompt="${prompt}" nodeId=${nodeId} tx=${txHash || res.locals.txHash || "none"} provider=${provider || "default"}`,
+          `[GEN] prompt="${prompt}" nodeId=${nodeId} tx=${txHash || res.locals.txHash || "none"} provider=${provider || "default"} chain=${chainId || "default"}`,
         );
         if (!prompt || !nodeId) {
           console.log("[GEN] rejected — prompt and nodeId required");
@@ -46,11 +53,17 @@ export default function generateAssetNode(ipfs) {
         }
 
         const effectiveTxHash = txHash || res.locals.txHash;
-        console.log(`[GEN] validating tx ${effectiveTxHash} on ${API_URL}`);
-        const receipt = await web3.eth.getTransactionReceipt(effectiveTxHash);
+        const effectiveChainId = chainId || req.headers["x-chain-id"];
+        const txWeb3 = effectiveChainId ? getWeb3(effectiveChainId) : web3;
+        const contractAddr = getContractAddress(effectiveChainId);
+
+        console.log(
+          `[GEN] validating tx ${effectiveTxHash} on chain ${effectiveChainId || "default"} rpc=${txWeb3.currentProvider?.host || "?"} contract=${contractAddr}`,
+        );
+        const receipt = await txWeb3.eth.getTransactionReceipt(effectiveTxHash);
         if (!receipt || Number(receipt.status) !== 1) {
           console.log(
-            `[GEN] tx validation failed — receipt=${!!receipt} status=${receipt ? receipt.status : "n/a"}`,
+            `[GEN] tx validation failed — receipt=${!!receipt} status=${receipt ? receipt.status : "n/a"} to=${receipt?.to || "n/a"}`,
           );
           return res.status(403).json({
             error: {
@@ -60,16 +73,37 @@ export default function generateAssetNode(ipfs) {
           });
         }
         console.log(
-          `[GEN] tx ${effectiveTxHash} confirmed (block ${receipt.blockNumber})`,
+          `[GEN] tx ${effectiveTxHash} confirmed (block ${receipt.blockNumber}, to=${receipt.to})`,
         );
 
+        // Verify the transaction interacted with the correct contract.
+        // For direct calls: receipt.to === contract address.
+        // For smart accounts / ERC-4337 / proxy wallets: receipt.to is the
+        // intermediary, but the payment event must come from the contract.
+        const nativeEventSig = txWeb3.utils.keccak256(
+          "AssetGenerationPaid(address,bytes32,string,uint256,uint256)",
+        );
+        const usdcEventSig = txWeb3.utils.keccak256(
+          "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)",
+        );
+        const contractAddrLower = contractAddr?.toLowerCase();
+        const hasPaymentEvent = contractAddr
+          ? receipt.logs.some(
+              (log) =>
+                (log.topics[0] === nativeEventSig ||
+                  log.topics[0] === usdcEventSig) &&
+                log.address.toLowerCase() === contractAddrLower,
+            )
+          : false;
+
         if (
-          CONTRACT_ADDRESS &&
+          contractAddr &&
           receipt.to &&
-          receipt.to.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()
+          receipt.to.toLowerCase() !== contractAddrLower &&
+          !hasPaymentEvent
         ) {
           console.log(
-            `[GEN] contract mismatch — receipt.to=${receipt.to} CONTRACT_ADDRESS=${CONTRACT_ADDRESS}`,
+            `[GEN] CONTRACT MISMATCH — receipt.to=${receipt.to} (not ${contractAddr}) and no payment event from contract`,
           );
           return res.status(403).json({
             error: {
@@ -79,32 +113,17 @@ export default function generateAssetNode(ipfs) {
           });
         }
 
-        if (CONTRACT_ADDRESS) {
-          // Check for both native-token and USDC (tiered) payment events
-          // USDC event now includes Tier (uint8) as 6th indexed param
-          const nativeEventSig = web3.utils.keccak256(
-            "AssetGenerationPaid(address,bytes32,string,uint256,uint256)",
-          );
-          const usdcEventSig = web3.utils.keccak256(
-            "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)",
-          );
-          const contractAddr = CONTRACT_ADDRESS.toLowerCase();
-          const hasPaymentEvent = receipt.logs.some(
-            (log) =>
-              (log.topics[0] === nativeEventSig ||
-                log.topics[0] === usdcEventSig) &&
-              log.address.toLowerCase() === contractAddr,
-          );
-          if (!hasPaymentEvent) {
-            console.log("[GEN] payment event not found in tx logs");
-            return res.status(403).json({
-              error: {
-                code: "EVENT_NOT_FOUND",
-                message:
-                  "Transaction did not emit expected payment event (AssetGenerationPaid or AssetGenerationPaidUSDC)",
-              },
-            });
-          }
+        if (contractAddr && !hasPaymentEvent) {
+          console.log("[GEN] payment event not found in tx logs");
+          return res.status(403).json({
+            error: {
+              code: "EVENT_NOT_FOUND",
+              message:
+                "Transaction did not emit expected payment event (AssetGenerationPaid or AssetGenerationPaidUSDC)",
+            },
+          });
+        }
+        if (contractAddr) {
           console.log("[GEN] payment event verified (native or USDC tiered)");
 
           // If request specifies a tier, validate it against the on-chain event.
@@ -115,11 +134,11 @@ export default function generateAssetNode(ipfs) {
             const usdcLog = receipt.logs.find(
               (log) =>
                 log.topics[0] === usdcEventSig &&
-                log.address.toLowerCase() === contractAddr,
+                log.address.toLowerCase() === contractAddrLower,
             );
             if (usdcLog) {
               // Decode event data: (string prompt, uint256 amount, uint256 timestamp, uint8 tier)
-              const decoded = web3.eth.abi.decodeParameters(
+              const decoded = txWeb3.eth.abi.decodeParameters(
                 ["string", "uint256", "uint256", "uint8"],
                 usdcLog.data,
               );
@@ -285,7 +304,6 @@ export default function generateAssetNode(ipfs) {
         console.log(
           `[GEN] success — manifest=${assetManifestCid} sourceAsset=${sourceAssetCid}`,
         );
-
 
         res.json({
           assetManifestCid,

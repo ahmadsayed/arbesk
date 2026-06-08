@@ -6,6 +6,10 @@
  */
 
 import { web3 } from "../blockchain/wallet.js";
+import {
+  getContractAddress as getNetworkContractAddress,
+  getNetworkConfig,
+} from "../blockchain/network-config.js";
 
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
@@ -226,10 +230,14 @@ export async function getConfig() {
 
 /**
  * GET /api/v1/config → contractAddress only
+ * Prefers network-config for the current chain, falls back to backend.
  * @returns {Promise<string|null>}
  */
 export async function getContractAddress() {
   try {
+    const chainId = Number(await web3.eth.getChainId());
+    const networkAddr = getNetworkContractAddress(chainId);
+    if (networkAddr) return networkAddr;
     const config = await getConfig();
     return config?.contractAddress || null;
   } catch {
@@ -293,11 +301,17 @@ export async function generateAsset({
     authHeader = `Bearer ${bearerToken}`;
   }
 
+  const chainId =
+    typeof window !== "undefined" && window.chainId
+      ? Number(window.chainId)
+      : null;
+
   const body = {
     prompt,
     nodeId,
     txHash,
     provider,
+    ...(chainId && { chainId }),
     ...(assetId && { assetId }),
     ...(prevAssetManifestCid && { prevAssetManifestCid }),
     ...(transformMatrix && { transform_matrix: transformMatrix }),
@@ -310,6 +324,7 @@ export async function generateAsset({
       headers: {
         "Content-Type": "application/json",
         Authorization: authorization,
+        ...(chainId && { "x-chain-id": String(chainId) }),
       },
       body: JSON.stringify(body),
     });

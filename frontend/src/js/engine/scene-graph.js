@@ -82,6 +82,22 @@ const VIEW_TOP = { name: "Top", alpha: 0, beta: 0.01 };
 // Engine initialization
 // ═══════════════════════════════════════════════════════════════════════════
 
+function createAnchorNode(name, scene) {
+  if (
+    typeof BABYLON !== "undefined" &&
+    typeof BABYLON.TransformNode === "function"
+  ) {
+    return new BABYLON.TransformNode(name, scene);
+  }
+  console.warn(
+    "[SCENE] BABYLON.TransformNode not available, using invisible Mesh fallback"
+  );
+  const fallback = BABYLON.MeshBuilder.CreateBox(name, { size: 0.001 }, scene);
+  fallback.isVisible = false;
+  fallback.isPickable = false;
+  return fallback;
+}
+
 function initEngine() {
   const canvas = document.getElementById("renderCanvas");
   if (!canvas) {
@@ -719,7 +735,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       `[SCENE] token child node ${node.node_id} resolved → ${resolution.manifestCid}`
     );
 
-    const childAnchor = new BABYLON.TransformNode(
+    const childAnchor = createAnchorNode(
       `child_anchor_${node.node_id}`,
       state.scene
     );
@@ -761,10 +777,7 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
       node.source
     )} childRef=${!!node.child_ref}`
   );
-  const anchor = new BABYLON.TransformNode(
-    `anchor_${node.node_id}`,
-    state.scene
-  );
+  const anchor = createAnchorNode(`anchor_${node.node_id}`, state.scene);
   anchor.parent = parentNode;
   applyTransformMatrix(anchor, node.transform_matrix);
   state.nodeAnchors.set(node.node_id, anchor);
@@ -832,7 +845,7 @@ async function loadAssetManifest(
   }
 
   const rootAnchor =
-    parentAnchor || new BABYLON.TransformNode("root_anchor", state.scene);
+    parentAnchor || createAnchorNode("root_anchor", state.scene);
   if (!parentAnchor) {
     state.rootSceneAnchor = rootAnchor;
   }
@@ -1123,7 +1136,7 @@ async function captureAssetThumbnail(options = {}) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function registerMockNode(nodeId, mesh, _history = []) {
-  const anchor = new BABYLON.TransformNode(`anchor_${nodeId}`, state.scene);
+  const anchor = createAnchorNode(`anchor_${nodeId}`, state.scene);
   mesh.parent = anchor;
   mesh.metadata = {
     nodeId,
@@ -1235,7 +1248,9 @@ export {
     }
 
     // Welcome-overlay button, header button (legacy), and sidebar Create view.
-    ["newAssetBtn", "newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (id) {
+    ["newAssetBtn", "newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (
+      id
+    ) {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener("click", startNewAsset);
     });

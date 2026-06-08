@@ -13,7 +13,7 @@
  *    Eliminates the per-generation MetaMask pop-up.
  */
 
-import { web3 } from "../config.js";
+import { web3, getWeb3 } from "../config.js";
 import { validateSession } from "./sessions.js";
 
 export default async function authorize(request, response, next) {
@@ -100,10 +100,14 @@ export default async function authorize(request, response, next) {
     response.locals.txHash = txHash;
     console.log(`[AUTH] recovered address=${address} tx=${txHash}`);
 
-    // Validate txHash on-chain
-    const receipt = await web3.eth.getTransactionReceipt(txHash);
+    // Validate txHash on-chain (chain-aware)
+    const chainId = request.headers["x-chain-id"];
+    const txWeb3 = chainId ? getWeb3(chainId) : web3;
+    const receipt = await txWeb3.eth.getTransactionReceipt(txHash);
     if (!receipt || Number(receipt.status) !== 1) {
-      console.log(`[AUTH] tx ${txHash} not found or failed`);
+      console.log(
+        `[AUTH] tx ${txHash} not found or failed on chain ${chainId || "default"}`,
+      );
       return response.status(403).json({
         error: {
           code: "INVALID_TRANSACTION",
@@ -111,7 +115,9 @@ export default async function authorize(request, response, next) {
         },
       });
     }
-    console.log(`[AUTH] tx ${txHash} verified (block ${receipt.blockNumber})`);
+    console.log(
+      `[AUTH] tx ${txHash} verified on chain ${chainId || "default"} (block ${receipt.blockNumber})`,
+    );
 
     next();
   } catch (error) {

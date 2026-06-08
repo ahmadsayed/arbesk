@@ -8,8 +8,16 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 // Dynamic import to ensure process.env is populated before config.js reads it.
 // api/index.js is loaded via dynamic import() from index.js after dotenv runs.
-const { CONTRACT_ADDRESS, ASSETS_IPFS, IPFS_API_URL, HARDHAT_RPC_URL, web3 } =
-  await import("../config.js");
+const {
+  CONTRACT_ADDRESS,
+  ASSETS_IPFS,
+  IPFS_API_URL,
+  HARDHAT_RPC_URL,
+  NETWORK_CONFIGS,
+  getContractAddress,
+  getWeb3,
+  web3,
+} = await import("../config.js");
 
 import generateAssetNode from "./assets/generate-node.js";
 import abiRouter from "./abi-router.js";
@@ -144,6 +152,7 @@ export default () => {
   v1.get("/config", (req, res) => {
     res.json({
       contractAddress: CONTRACT_ADDRESS,
+      networkConfigs: NETWORK_CONFIGS,
       ipfsGatewayUrl:
         process.env.IPFS_GATEWAY_URL || "http://127.0.0.1:8080/ipfs/",
       hardhatRpcUrl: HARDHAT_RPC_URL,
@@ -310,13 +319,17 @@ export default () => {
   v1.get("/tokens/:tokenId/manifest", async (req, res) => {
     try {
       const { tokenId } = req.params;
+      const chainId = req.query.chainId;
       if (!tokenId) {
         console.log(`[TOKEN] rejected — tokenId required`);
         return sendError(res, 400, "MISSING_TOKEN_ID", "tokenId is required");
       }
 
-      if (!CONTRACT_ADDRESS) {
-        console.log(`[TOKEN] rejected — CONTRACT_ADDRESS not configured`);
+      const contractAddr = getContractAddress(chainId);
+      if (!contractAddr) {
+        console.log(
+          `[TOKEN] rejected — CONTRACT_ADDRESS not configured for chain ${chainId || "default"}`,
+        );
         return sendError(
           res,
           503,
@@ -344,7 +357,8 @@ export default () => {
         );
       }
 
-      const contract = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
+      const w3 = chainId ? getWeb3(chainId) : web3;
+      const contract = new w3.eth.Contract(abi, contractAddr);
       const manifestCid = await contract.methods.tokenURI(tokenId).call();
       if (!manifestCid) {
         console.log(`[TOKEN] no manifest URI for token ${tokenId}`);

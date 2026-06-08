@@ -34,6 +34,63 @@ This file contains conventions, key file references, and practical guidance for 
 
 ---
 
+## 1.5 Client-Side First Architecture
+
+**Default rule: keep logic in the browser unless there is a specific, unavoidable reason to put it on the server.**
+
+Arbesk is designed as a thick client — the browser owns as much of the pipeline as possible. The Express backend is a thin gatekeeper, not a thick orchestrator. When adding new features, always ask: *"Can this run in the browser?"* Only move it to the server if the answer is definitively no.
+
+### What stays client-side
+
+| Concern | Why it lives in the browser | Key files |
+|---------|----------------------------|-----------|
+| **3D rendering & scene graph** | Babylon.js needs the GPU canvas | `frontend/src/js/engine/` |
+| **Parametric editing** | Color/scale preview must be real-time (< 16 ms); no round-trip latency | `frontend/src/js/engine/parametric-preview.js` |
+| **glTF decomposition** | Breaking buffers/images into separate IPFS CIDs is a data-structure transform, not a security boundary | `frontend/src/js/gltf/decomposer.js` |
+| **glTF material edits** | Baking color changes into composite JSON only mutates metadata; buffers stay put | `frontend/src/js/gltf/material-editor.js` |
+| **IPFS reads** | Browser fetches directly from the Kubo gateway (`127.0.0.1:8080`) | `frontend/src/js/ipfs/remote-ipfs.js` |
+| **IPFS writes (raw assets)** | Browser POSTs directly to Kubo API (`127.0.0.1:5001`) for buffers, images, and composite JSON | `frontend/src/js/ipfs/write-to-ipfs.js` |
+| **Wallet interactions** | Private keys never leave MetaMask / WalletConnect | `frontend/src/js/blockchain/wallet.js` |
+| **Token resolution** | `tokenURI()` calls can hit any RPC; browser already has Web3 provider | `frontend/src/js/blockchain/token-resolver.js` |
+| **UI state & activity feed** | No server-side ledger; manifest is the single source of truth | `frontend/src/js/ui/ledger-panel.js` |
+
+### What must be server-side (and why)
+
+| Concern | Why it needs the server | Key files |
+|---------|------------------------|-----------|
+| **Auth & signature verification** | Browser cannot cryptographically verify its own signatures; server holds the canonical Web3 instance to recover addresses and validate tx receipts | `src/api/authentication.js`, `src/api/siwe-verify.js` |
+| **Transaction replay prevention** | `usedTxHashes` Set must be global across all clients | `src/api/assets/generate-node.js` |
+| **Rate limiting** | Per-wallet counters cannot be enforced client-side | `src/api/rate-limiter.js` |
+| **Manifest persistence** | The server is the final authority that pins the manifest JSON and extracts embedded thumbnails to IPFS | `src/api/index.js` |
+| **Manifest chain walking** | The history endpoint is a convenience, but the canonical chain lives on IPFS; server just follows CIDs | `src/api/index.js` |
+| **ABI & config serving** | Compiled artifacts and env vars live on the host filesystem | `src/api/abi-router.js` |
+| **Unpin lifecycle** | Post-burn garbage collection must walk the full chain and call `ipfs.pin.rm` with cleanup logic | `src/api/index.js` |
+
+### The hybrid save flow (a concrete example)
+
+When a user clicks **Save Draft**, the pipeline is deliberately split:
+
+1. **Browser** decomposes monolithic glTFs → writes buffers/images/composite JSON **directly** to Kubo (`:5001`).
+2. **Browser** sends the manifest JSON (now referencing those CIDs) to `POST /api/v1/manifests`.
+3. **Server** extracts any embedded thumbnail base64 → uploads it to IPFS.
+4. **Server** uploads the manifest JSON to IPFS and pins it.
+5. **Server** returns the new manifest CID.
+
+The server never sees the raw buffer bytes. It only handles the manifest envelope and thumbnail metadata.
+
+### Decision checklist for new features
+
+Before adding a server route or backend handler, confirm at least one of the following is true:
+
+- [ ] It validates signatures, transactions, or session tokens.
+- [ ] It enforces a global rate limit or replay guard.
+- [ ] It accesses files or secrets that cannot be exposed to the browser (`.env`, compiled ABIs).
+- [ ] It performs a cross-user or administrative action (unpin, admin config).
+
+If none apply, **implement it in the browser**.
+
+---
+
 ## 2. Repository Layout Cheat Sheet
 
 | What you need | Where to look |
@@ -333,6 +390,29 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 3. Log the **outcome** on completion (success CID, error message).
 4. Include relevant identifiers (CID, txHash, nodeId, version) for traceability.
 5. Use `console.error()` only for actual exceptions; use `console.log()` for operational flow.
+
+---
+
+## 6.5 Agent Decision-Making and User Choice
+
+When a task, feature, or fix presents **multiple valid implementation options**, the agent **must not** proceed unilaterally with a single choice. Follow this protocol:
+
+1. **Enumerate all viable options** — List every reasonable approach with a concise description and its trade-offs (e.g., complexity, performance, maintenance cost, compatibility).
+2. **Highlight the recommendation** — Clearly mark one option as **(Recommended)** based on the project's existing conventions, simplicity, and long-term maintainability.
+3. **Wait for explicit user choice** — Do not write code, modify files, or execute commands that implement any option until the user has explicitly selected one.
+
+**This rule applies to (but is not limited to):**
+- Architectural or structural changes
+- Library or dependency choices
+- UI layout or interaction patterns
+- Refactoring strategies
+- Deployment or configuration targets
+- Algorithm or data-structure selections
+
+**Exceptions:**
+- Trivial decisions (e.g., local variable naming, minor formatting adjustments)
+- Situations where the user has already explicitly specified an approach in their request
+- Emergency fixes where only one option is technically viable (still briefly explain why)
 
 ---
 

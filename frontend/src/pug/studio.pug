@@ -3,13 +3,13 @@ html(lang="en")
   head
     title Arbesk Studio
     meta(charset="utf-8")
-    
+
     meta(name="viewport", content="width=device-width, initial-scale=1")
     link(rel="icon", type="image/webp", href="/logo.webp")
     link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
     script(src="/js/engine/theme-init.js")
-    script(src="https://cdn.babylonjs.com/babylon.js" integrity="sha384-N21flNeAtF0n//TBAE8EFPYqxs5Jgstw59zMEuXA3FdEZ9arMLbIs+feJuhzD93+" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/babylon.js" integrity="sha384-slRu7IAEyE98CXZXQ3Oz6Tv7vFeue+ugfvs3AjHaSo3k37uG8tQCuD1A+GZ68z20" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js" integrity="sha384-M635DZboqtaFk/2MVCxG79NnqAol4w41P3RRqOV1hmoi7/eM1EKQfA5Szdr5l0Ss" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js" integrity="sha384-CxROuhjlFK/sd8r58hLhsdPLke/MeT6KBGOlb7J3YFw5hf+4Gv5Dc4aGrh4FbUU/" crossorigin="anonymous")
     script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" integrity="sha384-uDUzAob8VRybYi68YL5W/y5Uel6PtqYSI0YHiTQB400WGPc/TVqL2dHYDkGKdBnw" crossorigin="anonymous")
@@ -68,7 +68,10 @@ html(lang="en")
               line(x1="18.36" y1="5.64" x2="19.78" y2="4.22")
             svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
-          span#headerbarNetworkBadge.headerbar-network-badge.hidden
+          select#headerbarNetworkSelect.headerbar-network-select(aria-label="Select network" title="Select network")
+            option(value="hardhat" selected) Hardhat Local
+            option(value="baseSepolia") Base Sepolia
+            option(value="polygonAmoy") Polygon Amoy
           button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
@@ -322,9 +325,6 @@ html(lang="en")
         .wallet-popover-header
           span#walletPopoverAddress.wallet-popover-address —
           button#walletPopoverCopy.wallet-popover-copy(type="button") Copy
-        .wallet-popover-network
-          span#walletPopoverNetworkBadge.wallet-popover-network-badge Unknown
-          span#walletPopoverChainId.wallet-popover-chain-id
         a#walletPopoverExplorer.wallet-popover-explorer.hidden(href="#" target="_blank" rel="noopener noreferrer")
           | View on Explorer
           svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
@@ -332,11 +332,7 @@ html(lang="en")
             polyline(points="15 3 21 3 21 9")
             line(x1="10" y1="14" x2="21" y2="3")
         .wallet-popover-actions
-          select#walletPopoverNetworkSelect.wallet-popover-network-select(aria-label="Switch network")
-            option(value="hardhat") Hardhat Local
-            option(value="baseSepolia") Base Sepolia
-            option(value="polygonAmoy") Polygon Amoy
-          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Disconnect
+          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Disconnect Wallet
 
       //- Toast Container
       #toastContainer(role="region" aria-label="Notifications")

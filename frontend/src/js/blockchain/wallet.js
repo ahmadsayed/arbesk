@@ -24,6 +24,11 @@ import {
   isWalletConnectConnected,
 } from "./wallet-connect.js";
 import { showWalletModal } from "../ui/wallet-modal.js";
+import {
+  getContractAddress as getNetworkContractAddress,
+  getUsdcToken as getNetworkUsdcToken,
+  getNetworkConfig,
+} from "./network-config.js";
 
 // Supported networks
 const NETWORKS = {
@@ -51,9 +56,8 @@ const NETWORKS = {
 };
 
 const HARHAT_CHAIN_ID_DEC = 31415822;
-// Only Hardhat is supported for now — the contract is only deployed there.
-// Add other chain IDs here after deploying to mainnet/sepolia/polygon/etc.
-const SUPPORTED_CHAIN_IDS = [HARHAT_CHAIN_ID_DEC];
+// Hardhat local + Base Sepolia testnet
+const SUPPORTED_CHAIN_IDS = [HARHAT_CHAIN_ID_DEC, 84532];
 
 /** @type {string|null} 'injected' | 'walletconnect' | null */
 let activeConnectionSource = null;
@@ -79,13 +83,30 @@ function initWallet() {
 
 /**
  * Initialize contract instance if ABI and address are available.
+ * Uses network-aware configuration: picks the contract address
+ * based on the wallet's current chainId.
  */
 async function _initContract() {
   try {
-    const [addr, abiData] = await Promise.all([
-      getContractAddress(),
-      getContractArtifact("ArbeskAsset"),
-    ]);
+    const chainId = Number(await web3.eth.getChainId());
+    const network = getNetworkConfig(chainId);
+
+    let addr = getNetworkContractAddress(chainId);
+    if (!addr) {
+      // Fallback to backend config for unknown networks
+      addr = await getContractAddress();
+      console.warn(
+        `[CONTRACT] No network config for chain ${chainId}. ` +
+          `Falling back to backend address: ${addr}`
+      );
+    } else {
+      console.log(
+        `[CONTRACT] Using ${network.name} config — ` +
+          `contract=${addr} usdc=${network.usdcToken}`
+      );
+    }
+
+    const abiData = await getContractArtifact("ArbeskAsset");
     if (!addr) return;
     if (!abiData?.abi) return;
 
@@ -94,7 +115,7 @@ async function _initContract() {
     if (!code || code === "0x" || code === "0x0") {
       console.warn(
         `[CONTRACT] No bytecode at ${addr}. ` +
-          `Wrong network? Current chain: ${await web3.eth.getChainId()}`
+          `Wrong network? Current chain: ${chainId}`
       );
       contractAddress = null;
       contract = null;
@@ -304,7 +325,9 @@ async function _finishWalletSetup(address) {
 
   // Prompt network switch if not on a supported chain
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
-    const switched = await _promptNetworkSwitch("hardhat");
+    const preferred =
+      localStorage.getItem("arbesk-preferred-network") || "hardhat";
+    const switched = await _promptNetworkSwitch(preferred);
     if (switched) {
       // Re-read chainId after switch
       chainId = Number(await web3.eth.getChainId());
@@ -553,8 +576,13 @@ async function payWithUSDC(nodeId, prompt, tier) {
       "[USDC] tier=" + TIER_NAMES[tier] + " cost=" + tierCostUSDC + " USDC"
     );
 
-    const usdcAddr = await c.methods.usdcToken().call();
-    if (usdcAddr === "0x0000000000000000000000000000000000000000") {
+    const chainId = Number(await w3.eth.getChainId());
+    const usdcAddr =
+      getNetworkUsdcToken(chainId) || (await c.methods.usdcToken().call());
+    if (
+      !usdcAddr ||
+      usdcAddr === "0x0000000000000000000000000000000000000000"
+    ) {
       showToast({
         type: "warning",
         title: "USDC Disabled",
@@ -577,8 +605,74 @@ async function payWithUSDC(nodeId, prompt, tier) {
         outputs: [{ name: "", type: "bool" }],
         type: "function",
       },
+      {
+        constant: true,
+        inputs: [
+          { name: "owner", type: "address" },
+          { name: "spender", type: "address" },
+        ],
+        name: "allowance",
+        outputs: [{ name: "", type: "uint256" }],
+        type: "function",
+      },
+      {
+        constant: true,
+        inputs: [{ name: "account", type: "address" }],
+        name: "balanceOf",
+        outputs: [{ name: "", type: "uint256" }],
+        type: "function",
+      },
     ];
     const usdcContract = new w3.eth.Contract(usdcAbi, usdcAddr);
+
+    // Check USDC balance before attempting payment
+    const balance = await usdcContract.methods
+      .balanceOf(window.walletAddress)
+      .call();
+    if (BigInt(balance) < BigInt(tierCostWei)) {
+      const balanceUSDC = Number(balance) / 1e6;
+      showToast({
+        type: "warning",
+        title: "Insufficient USDC Balance",
+        message: `You need ${tierCostUSDC} USDC but only have ${balanceUSDC} USDC. Get testnet USDC from a faucet.`,
+        duration: 0,
+      });
+      return null;
+    }
+    console.log(
+      "[USDC] balance:",
+      (Number(balance) / 1e6).toFixed(2),
+      "USDC (need",
+      tierCostUSDC,
+      "USDC)"
+    );
+
+    // Reset allowance to 0 first if there's a stale non-zero allowance.
+    // Some ERC20 tokens require this to prevent front-running; USDC doesn't
+    // but it's a safe practice that costs minimal gas.
+    const currentAllowance = await usdcContract.methods
+      .allowance(window.walletAddress, contractAddress)
+      .call();
+    if (BigInt(currentAllowance) > BigInt(0)) {
+      console.log(
+        "[USDC] resetting existing allowance:",
+        (Number(currentAllowance) / 1e6).toFixed(6),
+        "USDC → 0"
+      );
+      const resetTx = usdcContract.methods.approve(contractAddress, "0");
+      let resetGas;
+      try {
+        resetGas = await resetTx.estimateGas({ from: window.walletAddress });
+      } catch {
+        resetGas = 80000;
+      }
+      await resetTx.send({
+        from: window.walletAddress,
+        gas: Math.floor(Number(resetGas) * 1.2),
+      });
+      console.log("[USDC] allowance reset to 0");
+    }
+
     const approveTx = usdcContract.methods.approve(
       contractAddress,
       tierCostWei
@@ -597,6 +691,30 @@ async function payWithUSDC(nodeId, prompt, tier) {
     });
     console.log("[USDC] approval confirmed");
 
+    // Verify the allowance was actually set (critical for OP Stack L2s where
+    // sequencer state may lag behind). Retry up to 5 times with a 500ms delay.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const allowed = await usdcContract.methods
+        .allowance(window.walletAddress, contractAddress)
+        .call();
+      if (BigInt(allowed) >= BigInt(tierCostWei)) {
+        console.log("[USDC] allowance verified:", allowed.toString());
+        break;
+      }
+      if (attempt < 4) {
+        console.log(
+          `[USDC] allowance not yet visible (attempt ${
+            attempt + 1
+          }/5), waiting 500ms...`
+        );
+        await new Promise((r) => setTimeout(r, 500));
+      } else {
+        console.warn(
+          "[USDC] allowance still not visible after 5 attempts. Proceeding anyway — the payment tx may revert if the RPC is stale."
+        );
+      }
+    }
+
     // Step 2: Pay for generation
     console.log("[USDC] calling payForGenerationWithUSDC...");
     const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
@@ -606,11 +724,23 @@ async function payWithUSDC(nodeId, prompt, tier) {
       tier
     );
 
+    // L2 chains (Base, Optimism, Arbitrum) need higher gas defaults because
+    // external calls (safeTransferFrom) consume more gas on OP stack.
+    // Also, estimateGas may fail on public RPCs due to stale sequencer state.
     let payGas;
     try {
       payGas = await payTx.estimateGas({ from: window.walletAddress });
-    } catch {
-      payGas = 300000;
+      console.log("[USDC] estimated pay gas:", payGas);
+    } catch (estErr) {
+      // On L2 chains, estimateGas often fails when the approval tx hasn't
+      // been indexed by the RPC's simulation state. Use a generous default.
+      const isL2 = [84532, 8453, 10, 42161, 421614].includes(chainId);
+      payGas = isL2 ? 500000 : 300000;
+      console.log(
+        `[USDC] pay estimateGas failed (${
+          estErr.message || "unknown"
+        }), using default ${payGas}`
+      );
     }
 
     const receipt = await payTx.send({
@@ -642,11 +772,30 @@ async function payWithUSDC(nodeId, prompt, tier) {
       error.code === 4001
     ) {
       // silent
-    } else if (msg.includes("insufficient")) {
+    } else if (
+      msg.includes("insufficient") ||
+      msg.includes("exceeds") ||
+      msg.includes("exceed")
+    ) {
       showToast({
         type: "warning",
         title: "Insufficient USDC",
-        message: "Insufficient USDC balance or allowance.",
+        message:
+          "Insufficient USDC balance or allowance. Top up your testnet USDC and try again.",
+        duration: 0,
+      });
+    } else if (
+      msg.includes("reverted") ||
+      msg.includes("revert") ||
+      msg.includes("VM Exception")
+    ) {
+      // Transaction mined but reverted — usually balance/allowance related.
+      // Check on-chain state for the specific reason.
+      showToast({
+        type: "error",
+        title: "Transaction Reverted",
+        message:
+          "The transaction was mined but reverted. This usually means insufficient USDC balance or allowance. Check your testnet USDC balance.",
         duration: 0,
       });
     } else {
