@@ -1,11 +1,6 @@
----
-name: babylon-memory-leaks
-description: Diagnose and fix GPU memory leaks in Babylon.js when the browser bloats or crashes after repeated scene loads, asset switching, or dive/ascend navigation. Covers mesh.dispose vs material.dispose parameter traps, isDisposed API inconsistencies, and safe cleanup strategies for GLTF imports.
----
+# GPU Memory Leak Diagnosis & Fix
 
-# Babylon.js GPU Memory Leak Diagnosis & Fix
-
-Use this skill when the browser tab bloats, slows, or crashes after repeated:
+Use this guide when the browser tab bloats, slows, or crashes after repeated:
 - Scene loads (`clearScene` → `loadAssetManifest`)
 - Asset switching (opening different worlds from the gallery)
 - Diving into / ascending from child worlds
@@ -37,8 +32,8 @@ Babylon.js `dispose()` has **different parameter semantics** on different classe
 | `TransformNode` / `Node` | `dispose(doNotRecurse=false)` — second param ignored |
 | `Material` | `dispose(forceDisposeTextures=false, forceDisposeEffects=false, …)` |
 
-**Critical:** `mesh.dispose(false, true)` means "recurse + free materials" (correct).  
-But `material.dispose(false, true)` means "**don't** free textures, **do** free shared shader effects" (wrong!).  
+**Critical:** `mesh.dispose(false, true)` means "recurse + free materials" (correct).
+But `material.dispose(false, true)` means "**don't** free textures, **do** free shared shader effects" (wrong!).
 Calling `material.dispose(false, true)` destroys shared shader programs used by the entire render pipeline.
 
 ### Correct pattern per class
@@ -113,7 +108,7 @@ if (state.defaultWoodMaterial) {
 
 2. **Do NOT call `material.dispose(false, true)`** — This means `forceDisposeTextures=false, forceDisposeEffects=true`, which destroys shared shader programs.
 
-3. **Do NOT call `texture.isDisposed()` or `material.isDisposed()`** without try-catch — These may not exist as callable methods on all Babylon.js classes.
+3. **Do NOT call `texture.isDisposed()` or `material.isDisposed()` without try-catch** — These may not exist as callable methods on all Babylon.js classes.
 
 4. **Do NOT use `mesh.dispose(false, true)` on meshes sharing `defaultWoodMaterial`** — The first mesh's disposal would destroy the shared material, breaking other meshes.
 
