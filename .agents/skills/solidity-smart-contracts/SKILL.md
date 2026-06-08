@@ -1,11 +1,11 @@
 ---
 name: solidity-smart-contracts
-description: Expert guidance on Solidity smart contract architecture, deployment, debugging, and address alignment verification. Covers ERC721 NFTs, PayGo payment patterns, OpenZeppelin v5, Hardhat tooling, multi-network deployment, and the full compile→deploy→verify→integrate pipeline. Use when asked to "debug the contract", "check contract address alignment", "deploy contracts", "audit the contract", "add a function to the contract", "explain the payment flow", or any Solidity/smart-contract question.
+description: Expert guidance on Solidity smart contract architecture, deployment, debugging, and address alignment verification. Covers ERC721 NFTs, PayGo payment patterns, OpenZeppelin v5, Hardhat tooling, multi-network deployment, smart account (ERC-4337) proxy validation, session auth debugging, and the full compile→deploy→verify→integrate pipeline. Use when asked to "debug the contract", "check contract address alignment", "deploy contracts", "audit the contract", "add a function to the contract", "explain the payment flow", "smart account", "proxy contract", "session auth", or any Solidity/smart-contract question.
 ---
 
 # Solidity Smart Contract Expertise
 
-Use this skill for any task involving Solidity smart contracts: architecture review, function implementation, deployment, debugging, address alignment, event verification, test coverage, or security audit. This skill is generic enough for any project but includes detailed knowledge of the Arbesk contract as a reference implementation.
+Use this skill for any task involving Solidity smart contracts: architecture review, function implementation, deployment, debugging, address alignment, event verification, smart account proxy handling, session authentication debugging, test coverage, or security audit. This skill is generic enough for any project but includes detailed knowledge of the Arbesk contract as a reference implementation.
 
 ## 1. General Solidity Expertise
 
@@ -429,6 +429,9 @@ const paidEvents = events.filter(e => e.name === 'AssetGenerationPaid');
 | `c.methods.X is not a function` | Stale ABI | Recompile |
 | `Transaction reverted` | Wrong contract address or network | Run `npm run test:frontend` |
 | `WRONG_CONTRACT` from backend | `receipt.to` ≠ `CONTRACT_ADDRESS` | Check root `.env` matches deployed address |
+| `WRONG_CONTRACT` with smart account | MetaMask routed tx through proxy | See Section 9: Smart Account Proxy Validation |
+| `ERC20: transfer amount exceeds allowance` | USDC `approve()` not confirmed before `payForGenerationWithUSDC()` | Check approval tx succeeded, allowance ≥ cost |
+| Session signing every request | Address case mismatch in localStorage | See Section 10: Session Authentication Pitfalls |
 
 ### On-Chain State Inspection (Backend Side)
 
@@ -564,6 +567,8 @@ After any contract change, run through this checklist:
 | `src/api/assets/generate-node.js` | Backend: validates tx receipt, contract address, payment events, replay |
 | `src/api/authentication.js` | Backend: session + bearer auth, validates tx on-chain |
 | `frontend/src/js/blockchain/wallet.js` | Frontend: Web3Modal, contract init, payForGeneration*, publishAsset |
+| `frontend/src/js/services/api.js` | Frontend: session caching, generation API calls, auth headers |
+| `frontend/src/js/blockchain/network-config.js` | Frontend: per-chain contract addresses, RPCs, USDC tokens |
 
 ---
 
@@ -605,7 +610,256 @@ When asked to add a function:
 
 ---
 
-## 8. Quick Reference Card
+## 8. Multi-Network Deployment (Hardhat Local + Base Sepolia)
+
+### Why Per-Network Config?
+
+Different networks have different contract addresses, USDC tokens, and RPC endpoints. Hard-coding a single `CONTRACT_ADDRESS` in `.env` breaks when users switch networks. The solution is a `NETWORK_CONFIGS` map keyed by `chainId`.
+
+### Network Configurations
+
+```javascript
+// frontend/src/js/blockchain/network-config.js
+// src/config.js (backend)
+export const NETWORK_CONFIGS = {
+  31415822: {
+    name: "Hardhat Local",
+    chainId: 31415822,
+    contractAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    usdcToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    rpcUrl: "http://127.0.0.1:8545",
+    blockExplorer: null,
+  },
+  84532: {
+    name: "Base Sepolia",
+    chainId: 84532,
+    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
+    usdcToken: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcUrl: "https://sepolia.base.org",
+    blockExplorer: "https://sepolia.basescan.org",
+  },
+};
+```
+
+### Backend Chain-Aware Validation
+
+The backend must use the correct RPC and contract address for the chain the user is on:
+
+```javascript
+// src/api/assets/generate-node.js
+const { chainId } = req.body;
+const effectiveChainId = chainId || req.headers["x-chain-id"];
+const txWeb3 = effectiveChainId ? getWeb3(effectiveChainId) : web3;
+const contractAddr = getContractAddress(effectiveChainId);
+```
+
+**Critical:** Pass `chainId` in both the request body AND `x-chain-id` header for redundancy.
+
+### Base Sepolia Specifics
+
+- **Chain ID:** 84532
+- **Currency:** ETH (for gas), USDC (for payments)
+- **USDC Token:** `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle's official Base Sepolia USDC)
+- **Block Time:** ~2 seconds
+- **Faucet:** https://www.coinbase.com/faucets/base-sepolia-faucet
+- **Explorer:** https://sepolia.basescan.org
+
+### Adding a New Network
+
+1. Add entry to `NETWORK_CONFIGS` in both frontend and backend
+2. Deploy contract to the new network
+3. Update contract address and USDC token in the config
+4. Add chain ID to `SUPPORTED_CHAIN_IDS` in `src/api/siwe-verify.js`
+5. Update `hardhat.config.js` with the new network RPC
+
+---
+
+## 9. Smart Accounts (ERC-4337) & Proxy Contract Validation
+
+### The Problem
+
+MetaMask's **"Smart Transactions"** feature (and other ERC-4337 wallets) route user transactions through a **proxy/bundler contract** rather than calling the dapp contract directly. This means:
+
+- `receipt.to` is the **proxy address**, NOT the dapp contract address
+- `receipt.from` is the **bundler/entrypoint**, NOT the user's EOA
+- Standard `receipt.to === CONTRACT_ADDRESS` validation **fails**
+
+**Symptom:** Backend returns `WRONG_CONTRACT` even though the user successfully paid.
+
+### The Solution: Event-Based Validation
+
+Instead of validating `receipt.to`, validate that the transaction contains a valid payment event **emitted by the contract**:
+
+```javascript
+// src/api/assets/generate-node.js
+const nativeEventSig = txWeb3.utils.keccak256(
+  "AssetGenerationPaid(address,bytes32,string,uint256,uint256)"
+);
+const usdcEventSig = txWeb3.utils.keccak256(
+  "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)"
+);
+const contractAddrLower = contractAddr?.toLowerCase();
+
+const hasPaymentEvent = contractAddr
+  ? receipt.logs.some(
+      (log) =>
+        (log.topics[0] === nativeEventSig || log.topics[0] === usdcEventSig) &&
+        log.address.toLowerCase() === contractAddrLower
+    )
+  : false;
+
+// Smart account support: accept if direct call OR payment event from contract
+if (
+  contractAddr &&
+  receipt.to &&
+  receipt.to.toLowerCase() !== contractAddrLower &&
+  !hasPaymentEvent
+) {
+  return res.status(403).json({
+    code: "WRONG_CONTRACT",
+    message: "Transaction not sent to ArbeskAsset contract",
+  });
+}
+
+if (contractAddr && !hasPaymentEvent) {
+  return res.status(403).json({
+    code: "EVENT_NOT_FOUND",
+    message: "No valid payment event found in transaction logs",
+  });
+}
+```
+
+### Key Rules for Smart Account Support
+
+1. **Always emit an event** for every payment — this is your proof
+2. **Validate `log.address`** not `receipt.to` — `log.address` is the contract that emitted the event
+3. **Check event signature** (topic[0]) to ensure it's the right event type
+4. **Support both paths:** direct EOA calls AND proxy/bundler calls
+5. **Log proxy detection** for debugging — log `receipt.to` vs expected contract
+
+### MetaMask Smart Transaction Settings
+
+In MetaMask Settings → Advanced:
+- **"Smart Transactions"** — ON (routes through MetaMask's bundler)
+- **"Smart account requests from dapps"** — ON (enables ERC-4337)
+
+When these are enabled, the transaction flow is:
+```
+User → MetaMask → Bundler Proxy (0xdb9b...7db3) → EntryPoint → ArbeskAsset
+```
+
+When disabled:
+```
+User → MetaMask → ArbeskAsset (direct)
+```
+
+### Detecting Smart Account Transactions
+
+```javascript
+function isSmartAccountTx(receipt, contractAddr) {
+  const isDirectCall =
+    receipt.to && receipt.to.toLowerCase() === contractAddr.toLowerCase();
+  const hasContractEvent = receipt.logs.some(
+    (log) => log.address.toLowerCase() === contractAddr.toLowerCase()
+  );
+  return !isDirectCall && hasContractEvent;
+}
+```
+
+### Brave Wallet Note
+
+Brave Wallet also supports smart accounts and may route through proxies. The same event-based validation applies. If users report `WRONG_CONTRACT` or `-32603` errors with Brave Wallet, check if smart account features are enabled.
+
+---
+
+## 10. Session Authentication Pitfalls
+
+### The Session Flow
+
+Arbesk uses SIWE (EIP-4361) for session auth to reduce MetaMask pop-ups:
+
+| Generation | Pop-ups | What Happens |
+|------------|---------|-------------|
+| 1st | 3 | USDC approve + PayGo payment + SIWE session sign |
+| 2nd+ | 2 | USDC approve + PayGo payment (session token reused) |
+
+### The Caching Bug (Case-Sensitive Addresses)
+
+**Root cause:** Ethereum addresses have two formats:
+- **Checksummed:** `0x52997428F4DB7D6646E3ff135C64cdca5196a1B0` (mixed case, valid per EIP-55)
+- **Lowercase:** `0x52997428f4db7d6646e3ff135c64cdca5196a1b0`
+
+**The bug:** Session was stored with checksummed address but compared against lowercased `window.walletAddress`. JavaScript string comparison is case-sensitive, so they never matched.
+
+```javascript
+// BUGGY CODE (before fix):
+function cacheSession(token, expiresAt, address) {
+  localStorage.setItem("arbesk_session",
+    JSON.stringify({ token, expiresAt, address })  // ← stored as-is (checksummed)
+  );
+}
+// Comparison:
+if (cached.address === window.walletAddress?.toLowerCase())  // ← NEVER MATCHES
+
+// FIXED CODE:
+function cacheSession(token, expiresAt, address) {
+  localStorage.setItem("arbesk_session",
+    JSON.stringify({ token, expiresAt, address: address.toLowerCase() })  // ← normalized
+  );
+}
+```
+
+### Session Implementation Rules
+
+1. **Always lowercase addresses** when storing or comparing
+2. **Include expiry grace period** (60s) for clock skew
+3. **Bind token to wallet address** — validate on every use
+4. **Clear on disconnect** — listen for `wallet:disconnected` event
+5. **Auto-retry on 401** — if backend restarts and loses sessions, create fresh one
+6. **Log session state** — `[SESSION] reused cached token` vs `[SESSION] no cached token`
+
+### Backend Session Store
+
+```javascript
+// src/api/sessions.js
+const sessions = new Map();  // In-memory, resets on server restart
+const SESSION_TTL = 24 * 60 * 60 * 1000;  // 24 hours
+
+function createSession(address) {
+  const token = crypto.randomUUID();
+  sessions.set(token, {
+    address: address.toLowerCase(),  // ← normalize here too
+    createdAt: Date.now(),
+    expiresAt: Date.now() + SESSION_TTL,
+  });
+  return token;
+}
+```
+
+**Note:** The backend session store is in-memory. If the Node server restarts, all sessions are lost. The frontend auto-retry logic handles this gracefully by creating a new session.
+
+### SIWE Chain ID Support
+
+When adding a new network, update `SUPPORTED_CHAIN_IDS` in `src/api/siwe-verify.js`:
+
+```javascript
+const SUPPORTED_CHAIN_IDS = [
+  1,        // Ethereum Mainnet
+  11155111, // Sepolia
+  137,      // Polygon
+  8453,     // Base Mainnet
+  84532,    // Base Sepolia ← ADD THIS
+  31415822, // Hardhat Local
+  314159,   // Filecoin Calibration
+  314,      // Filecoin Mainnet
+];
+```
+
+If the chain ID is not in this list, session creation returns `400 Bad Request`.
+
+---
+
+## 11. Quick Reference Card
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
@@ -628,6 +882,23 @@ When asked to add a function:
 │  TokenURI:            IPFS CIDs (content-addressed)     │
 │  Pausable:            Yes (emergency stop)              │
 │  Admin:               Single owner (multisig for prod)  │
+├─────────────────────────────────────────────────────────┤
+│  SMART ACCOUNT SUPPORT                                │
+│  • Validate events, not receipt.to                    │
+│  • Check log.address === contractAddress              │
+│  • Support both direct and proxy/bundler paths        │
+├─────────────────────────────────────────────────────────┤
+│  NETWORK CONFIG (Base Sepolia)                        │
+│  • Chain ID: 84532                                    │
+│  • Contract: 0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B│
+│  • USDC:     0x036CbD53842c5426634e7929541eC2318f3dCF7e│
+│  • RPC:      https://sepolia.base.org                 │
+├─────────────────────────────────────────────────────────┤
+│  SESSION AUTH RULES                                   │
+│  • Lowercase ALL addresses in storage/comparison      │
+│  • 24h TTL, 60s grace period                          │
+│  • Auto-retry on 401 (backend restart)                │
+│  • Clear on wallet disconnect                         │
 ├─────────────────────────────────────────────────────────┤
 │  DEPLOY:              docker-compose run --rm hardhat   │
 │                        npx hardhat run scripts/deploy.js│
