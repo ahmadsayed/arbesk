@@ -120,7 +120,7 @@ function cacheSession(token, expiresAt, address) {
   try {
     localStorage.setItem(
       SESSION_STORAGE_KEY,
-      JSON.stringify({ token, expiresAt, address })
+      JSON.stringify({ token, expiresAt, address: address.toLowerCase() })
     );
   } catch {
     // localStorage may be full or unavailable
