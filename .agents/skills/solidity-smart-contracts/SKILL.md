@@ -11,12 +11,12 @@ Use this skill for any task involving Solidity smart contracts: architecture rev
 
 | Question | Action |
 |----------|--------|
-| `c.methods.X is not a function`? | Stale ABI. Recompile: `docker-compose run --rm hardhat npx hardhat compile`. See [→ Deployment Pipeline](./deployment-pipeline.md) |
-| `Transaction reverted` / `WRONG_CONTRACT`? | Address mismatch. Check root `.env` vs `blockchain/.env`. See [→ Deployment Pipeline](./deployment-pipeline.md) |
-| `WRONG_CONTRACT` with MetaMask? | Smart account proxy. Validate events, not `receipt.to`. See [→ Smart Accounts](./smart-accounts.md) |
-| Session signing every request? | Case-sensitive address bug in localStorage. See [→ Session Auth](./session-auth.md) |
-| Need to add a contract function? | Write Solidity → add tests → add to `REQUIRED_ABI_FUNCTIONS` → recompile → redeploy → sync `.env`. See [→ Deployment Pipeline](./deployment-pipeline.md) |
-| Debugging a failed generation tx? | Check `[GEN]` logs, validate receipt, decode events. See [→ Debugging](./debugging.md) |
+| `c.methods.X is not a function`? | Stale ABI. Recompile: `docker-compose run --rm hardhat npx hardhat compile`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| `Transaction reverted` / `WRONG_CONTRACT`? | Address mismatch. Check root `.env` vs `blockchain/.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| `WRONG_CONTRACT` with MetaMask? | Smart account proxy. Validate events, not `receipt.to`. See [→ Smart Accounts](./references/smart-accounts.md) |
+| Session signing every request? | Case-sensitive address bug in localStorage. See [→ Session Auth](./references/session-auth.md) |
+| Need to add a contract function? | Write Solidity → add tests → add to `REQUIRED_ABI_FUNCTIONS` → recompile → redeploy → sync `.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| Debugging a failed generation tx? | Check `[GEN]` logs, validate receipt, decode events. See [→ Debugging](./references/debugging.md) |
 
 ## Contract Overview
 
@@ -78,26 +78,26 @@ AssetURIUpdated(uint256,string)
 
 | File | Role | Details |
 |------|------|---------|
-| `blockchain/contracts/ArbeskAsset.sol` | Main contract | [→ Contract Deep Dive](./contract-deep-dive.md) |
-| `blockchain/contracts/mock/MockUSDC.sol` | Local testing USDC | [→ Contract Deep Dive](./contract-deep-dive.md) |
-| `blockchain/hardhat.config.js` | Hardhat config | [→ Deployment Pipeline](./deployment-pipeline.md) |
-| `blockchain/scripts/deploy.js` | Deploy script | [→ Deployment Pipeline](./deployment-pipeline.md) |
-| `blockchain/scripts/verify.js` | Block explorer verify | [→ Deployment Pipeline](./deployment-pipeline.md) |
-| `blockchain/test/ArbeskAsset.test.js` | Contract test suite | [→ Debugging](./debugging.md) |
-| `test/frontend/deployment-integrity.test.js` | Address + ABI integrity | [→ Checklists](./checklists.md) |
-| `src/api/assets/generate-node.js` | Tx validation backend | [→ Smart Accounts](./smart-accounts.md) |
-| `src/api/sessions.js` | Session store | [→ Session Auth](./session-auth.md) |
-| `frontend/src/js/blockchain/wallet.js` | Web3Modal, contract init | [→ Session Auth](./session-auth.md) |
+| `blockchain/contracts/ArbeskAsset.sol` | Main contract | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
+| `blockchain/contracts/mock/MockUSDC.sol` | Local testing USDC | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
+| `blockchain/hardhat.config.js` | Hardhat config | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| `blockchain/scripts/deploy.js` | Deploy script | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| `blockchain/scripts/verify.js` | Block explorer verify | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| `blockchain/test/ArbeskAsset.test.js` | Contract test suite | [→ Debugging](./references/debugging.md) |
+| `test/frontend/deployment-integrity.test.js` | Address + ABI integrity | [→ Checklists](./references/checklists.md) |
+| `src/api/assets/generate-node.js` | Tx validation backend | [→ Smart Accounts](./references/smart-accounts.md) |
+| `src/api/sessions.js` | Session store | [→ Session Auth](./references/session-auth.md) |
+| `frontend/src/js/blockchain/wallet.js` | Web3Modal, contract init | [→ Session Auth](./references/session-auth.md) |
 
 ## Deep Reference
 
 | Topic | File |
 |-------|------|
-| General Solidity, OZ v5, Patterns, Gas | [→ Deep Dive](./deep-dive.md) |
-| Arbesk Contract: Storage, Functions, Events, Tiers | [→ Contract Deep Dive](./contract-deep-dive.md) |
-| Compile → Deploy → Address Sync → Multi-Network | [→ Deployment Pipeline](./deployment-pipeline.md) |
-| Hardhat Console, Event Decoding, Common Scenarios | [→ Debugging](./debugging.md) |
-| 5-Phase Integration Verification | [→ Checklists](./checklists.md) |
-| ERC-4337 Proxy / Smart Account Validation | [→ Smart Accounts](./smart-accounts.md) |
-| SIWE Sessions, Case-Sensitive Address Bug | [→ Session Auth](./session-auth.md) |
-| ASCII Quick Reference Card | [→ Quick Reference](./quick-reference.md) |
+| General Solidity, OZ v5, Patterns, Gas | [→ Deep Dive](./references/deep-dive.md) |
+| Arbesk Contract: Storage, Functions, Events, Tiers | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
+| Compile → Deploy → Address Sync → Multi-Network | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| Hardhat Console, Event Decoding, Common Scenarios | [→ Debugging](./references/debugging.md) |
+| 5-Phase Integration Verification | [→ Checklists](./references/checklists.md) |
+| ERC-4337 Proxy / Smart Account Validation | [→ Smart Accounts](./references/smart-accounts.md) |
+| SIWE Sessions, Case-Sensitive Address Bug | [→ Session Auth](./references/session-auth.md) |
+| ASCII Quick Reference Card | [→ Quick Reference](./references/quick-reference.md) |

@@ -11,10 +11,10 @@ Use this skill when working with any IPFS-related code in the Arbesk project —
 
 | Question | Action |
 |----------|--------|
-| Content not found after `ipfs.add()`? | Check if node initialized, repo corrupted, or `StorageMax` too low. See [→ Troubleshooting](./troubleshooting.md) |
-| Frontend IPFS writes fail with CORS? | CORS headers set in entrypoint. See [→ Docker Config](./docker-config.md) |
+| Content not found after `ipfs.add()`? | Check if node initialized, repo corrupted, or `StorageMax` too low. See [→ Troubleshooting](./references/troubleshooting.md) |
+| Frontend IPFS writes fail with CORS? | CORS headers set in entrypoint. See [→ Docker Config](./references/docker-config.md) |
 | `WRONG_CONTRACT` with smart account? | Validate events, not `receipt.to`. See `solidity-smart-contracts` skill |
-| Need to manually unpin after burn? | `POST /api/v1/ipfs/unpin` with manifest CID. See [→ API Reference](./api-reference.md) |
+| Need to manually unpin after burn? | `POST /api/v1/ipfs/unpin` with manifest CID. See [→ API Reference](./references/api-reference.md) |
 
 ## Key Rules
 
@@ -33,20 +33,20 @@ Use this skill when working with any IPFS-related code in the Arbesk project —
 
 | File | Role | Details |
 |------|------|---------|
-| `src/api/index.js` | Backend routes: save, publish, unpin, chain, token resolver | [→ Deep Dive](./deep-dive.md) |
-| `src/api/ipfs-utils.js` | `catManifest()` — IPFS read with timeout | [→ Deep Dive](./deep-dive.md) |
-| `src/api/assets/generate-node.js` | Generation pipeline: add asset, build manifest, pin | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS writer | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS reader with cache | [→ Deep Dive](./deep-dive.md) |
-| `docker/Dockerfile` | Kubo IPFS container image | [→ Docker Config](./docker-config.md) |
-| `docker/entrypoint.sh` | IPFS node init and isolation config | [→ Docker Config](./docker-config.md) |
-| `docker-compose.yml` | Orchestration: IPFS + Hardhat | [→ Docker Config](./docker-config.md) |
+| `src/api/index.js` | Backend routes: save, publish, unpin, chain, token resolver | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/ipfs-utils.js` | `catManifest()` — IPFS read with timeout | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/assets/generate-node.js` | Generation pipeline: add asset, build manifest, pin | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS writer | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS reader with cache | [→ Deep Dive](./references/deep-dive.md) |
+| `docker/Dockerfile` | Kubo IPFS container image | [→ Docker Config](./references/docker-config.md) |
+| `docker/entrypoint.sh` | IPFS node init and isolation config | [→ Docker Config](./references/docker-config.md) |
+| `docker-compose.yml` | Orchestration: IPFS + Hardhat | [→ Docker Config](./references/docker-config.md) |
 
 ## Deep Reference
 
 | Topic | File |
 |-------|------|
-| Architecture, Pinning, Write/Read Paths, Cache, Chain Model | [→ Deep Dive](./deep-dive.md) |
-| Unpin Endpoint Spec | [→ API Reference](./api-reference.md) |
-| Docker Config, Isolation, Volumes | [→ Docker Config](./docker-config.md) |
-| Manual Operations, Symptom/Cause/Fix | [→ Troubleshooting](./troubleshooting.md) |
+| Architecture, Pinning, Write/Read Paths, Cache, Chain Model | [→ Deep Dive](./references/deep-dive.md) |
+| Unpin Endpoint Spec | [→ API Reference](./references/api-reference.md) |
+| Docker Config, Isolation, Volumes | [→ Docker Config](./references/docker-config.md) |
+| Manual Operations, Symptom/Cause/Fix | [→ Troubleshooting](./references/troubleshooting.md) |

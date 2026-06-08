@@ -13,10 +13,10 @@ The goal of every change: **make the interface feel like a native GNOME applicat
 
 | Question | Action |
 |----------|--------|
-| Adding a new panel? | Follow the 7-step checklist. See [→ Checklists](./checklists.md) |
-| Adding a keyboard shortcut? | Add to `scene-graph.js` keydown switch with form-field guard. See [→ Checklists](./checklists.md) |
-| Need a reusable pattern? | Empty state, drop zone, or spinner. See [→ Patterns](./patterns.md) |
-| Something feels off? | Check ortho frustum, HighlightLayer stencil, mesh disposal, form guards. See [→ Pitfalls](./pitfalls.md) |
+| Adding a new panel? | Follow the 7-step checklist. See [→ Checklists](./references/checklists.md) |
+| Adding a keyboard shortcut? | Add to `scene-graph.js` keydown switch with form-field guard. See [→ Checklists](./references/checklists.md) |
+| Need a reusable pattern? | Empty state, drop zone, or spinner. See [→ Patterns](./references/patterns.md) |
+| Something feels off? | Check ortho frustum, HighlightLayer stencil, mesh disposal, form guards. See [→ Pitfalls](./references/pitfalls.md) |
 
 ## Key Rules
 
@@ -35,21 +35,21 @@ The goal of every change: **make the interface feel like a native GNOME applicat
 
 | File | Role | Details |
 |------|------|---------|
-| `frontend/src/pug/studio.pug` | The **only** Pug file | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/scss/styles.scss` | Imports all component files | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/engine/scene-graph.js` | Babylon engine, camera, selection, keyboard | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/engine/state.js` | Shared mutable `state` object | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/engine/parametric-preview.js` | Inspector live editing | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ui/asset-library.js` | Gallery of saved assets | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ui/asset-drop-zone.js` | Drop target for dragged cards | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ui/asset-save.js` | Save Draft / Publish wiring | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ui/outliner.js` | Scene graph tree | [→ Deep Dive](./deep-dive.md) |
+| `frontend/src/pug/studio.pug` | The **only** Pug file | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/scss/styles.scss` | Imports all component files | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/scene-graph.js` | Babylon engine, camera, selection, keyboard | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/state.js` | Shared mutable `state` object | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/parametric-preview.js` | Inspector live editing | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ui/asset-library.js` | Gallery of saved assets | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ui/asset-drop-zone.js` | Drop target for dragged cards | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ui/asset-save.js` | Save Draft / Publish wiring | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ui/outliner.js` | Scene graph tree | [→ Deep Dive](./references/deep-dive.md) |
 
 ## Deep Reference
 
 | Topic | File |
 |-------|------|
-| Architecture, Shell, HIG Principles, State, Events, Babylon, SCSS | [→ Deep Dive](./deep-dive.md) |
-| Keyboard Shortcuts, New Panel Checklist | [→ Checklists](./checklists.md) |
-| Empty State, Drop Zone, Spinner Patterns | [→ Patterns](./patterns.md) |
-| Common Mistakes & Anti-Patterns | [→ Pitfalls](./pitfalls.md) |
+| Architecture, Shell, HIG Principles, State, Events, Babylon, SCSS | [→ Deep Dive](./references/deep-dive.md) |
+| Keyboard Shortcuts, New Panel Checklist | [→ Checklists](./references/checklists.md) |
+| Empty State, Drop Zone, Spinner Patterns | [→ Patterns](./references/patterns.md) |
+| Common Mistakes & Anti-Patterns | [→ Pitfalls](./references/pitfalls.md) |

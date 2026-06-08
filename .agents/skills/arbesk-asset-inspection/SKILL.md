@@ -16,10 +16,10 @@ Use this skill when you need to:
 
 | Question | Action |
 |----------|--------|
-| "Get asset X" where X is a number? | `GET /api/v1/tokens/X/manifest`. See [→ API Reference](./api-reference.md) |
-| "How many children in asset X?" | Fetch manifest, count nodes with `child_ref` or `child_manifest_id`. See [→ Manifest Structure](./manifest-structure.md) |
-| "Show version history of asset X" | Get manifest CID, then `GET /api/v1/manifests/:cid/history`. See [→ API Reference](./api-reference.md) |
-| "What's in the manifest at CID X?" | `curl` via token endpoint, or `ipfs cat` directly. See [→ API Reference](./api-reference.md) |
+| "Get asset X" where X is a number? | `GET /api/v1/tokens/X/manifest`. See [→ API Reference](./references/api-reference.md) |
+| "How many children in asset X?" | Fetch manifest, count nodes with `child_ref` or `child_manifest_id`. See [→ Manifest Structure](./references/manifest-structure.md) |
+| "Show version history of asset X" | Get manifest CID, then `GET /api/v1/manifests/:cid/history`. See [→ API Reference](./references/api-reference.md) |
+| "What's in the manifest at CID X?" | `curl` via token endpoint, or `ipfs cat` directly. See [→ API Reference](./references/api-reference.md) |
 
 ## Key Rules
 
@@ -31,17 +31,17 @@ Use this skill when you need to:
 
 | File | Role | Details |
 |------|------|---------|
-| `src/api/index.js` | Token manifest + history routes | [→ Deep Dive](./deep-dive.md) |
-| `src/api/ipfs-utils.js` | `catManifest()` — IPFS read with timeout | [→ Deep Dive](./deep-dive.md) |
-| `src/api/manifest-utils.js` | `getSceneNodes()`, `bumpManifestVersion()` | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/blockchain/token-resolver.js` | `resolveChildRef()` — frontend token → CID | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/blockchain/uri-utils.js` | `normalizeTokenURI()` — CID extraction | [→ Deep Dive](./deep-dive.md) |
-| `blockchain/contracts/ArbeskAsset.sol` | `tokenURI(uint256)` — on-chain CID lookup | [→ Deep Dive](./deep-dive.md) |
+| `src/api/index.js` | Token manifest + history routes | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/ipfs-utils.js` | `catManifest()` — IPFS read with timeout | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/manifest-utils.js` | `getSceneNodes()`, `bumpManifestVersion()` | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/blockchain/token-resolver.js` | `resolveChildRef()` — frontend token → CID | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/blockchain/uri-utils.js` | `normalizeTokenURI()` — CID extraction | [→ Deep Dive](./references/deep-dive.md) |
+| `blockchain/contracts/ArbeskAsset.sol` | `tokenURI(uint256)` — on-chain CID lookup | [→ Deep Dive](./references/deep-dive.md) |
 
 ## Deep Reference
 
 | Topic | File |
 |-------|------|
-| API Endpoints (curl, responses, errors) | [→ API Reference](./api-reference.md) |
-| Manifest Schema & Node Types | [→ Manifest Structure](./manifest-structure.md) |
-| Token Resolution, Patterns, Dependencies | [→ Deep Dive](./deep-dive.md) |
+| API Endpoints (curl, responses, errors) | [→ API Reference](./references/api-reference.md) |
+| Manifest Schema & Node Types | [→ Manifest Structure](./references/manifest-structure.md) |
+| Token Resolution, Patterns, Dependencies | [→ Deep Dive](./references/deep-dive.md) |

@@ -11,10 +11,10 @@ Use this skill when working with any glTF or GLB-related code in the Arbesk proj
 
 | Question | Action |
 |----------|--------|
-| glTF loading failure? | Check composite → monolithic → legacy CID-prefix → valid CID. See [→ Troubleshooting](./troubleshooting.md) |
-| Colors not applying after save? | Check if node is decomposed (`source.path === "composite.gltf"`). See [→ Troubleshooting](./troubleshooting.md) |
-| Need to add a new material property? | Add setter in `material-editor.js`, wire to inspector, update save flow. See [→ Deep Dive](./deep-dive.md) |
-| Need to add OBJ/FBX support? | Update `detectAssetFormat()`, `loadAsset()`, and save flow. See [→ Deep Dive](./deep-dive.md) |
+| glTF loading failure? | Check composite → monolithic → legacy CID-prefix → valid CID. See [→ Troubleshooting](./references/troubleshooting.md) |
+| Colors not applying after save? | Check if node is decomposed (`source.path === "composite.gltf"`). See [→ Troubleshooting](./references/troubleshooting.md) |
+| Need to add a new material property? | Add setter in `material-editor.js`, wire to inspector, update save flow. See [→ Deep Dive](./references/deep-dive.md) |
+| Need to add OBJ/FBX support? | Update `detectAssetFormat()`, `loadAsset()`, and save flow. See [→ Deep Dive](./references/deep-dive.md) |
 
 ## Key Rules
 
@@ -31,19 +31,19 @@ Use this skill when working with any glTF or GLB-related code in the Arbesk proj
 
 | File | Role | Details |
 |------|------|---------|
-| `frontend/src/js/gltf/composer.js` | Resolves `ipfs://` URIs → base64 for Babylon.js | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/gltf/decomposer.js` | Extracts data URIs → stores on IPFS | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/gltf/material-editor.js` | Modifies PBR props, commits new CID | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatcher, `loadNode()` orchestration | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` runtime overlays | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/engine/parametric-preview.js` | Inspector UI for color/scale/mesh overrides | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ui/asset-save.js` | `prepareManifestForWrite()` — save flow | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS write | [→ Deep Dive](./deep-dive.md) |
-| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS read | [→ Deep Dive](./deep-dive.md) |
+| `frontend/src/js/gltf/composer.js` | Resolves `ipfs://` URIs → base64 for Babylon.js | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/gltf/decomposer.js` | Extracts data URIs → stores on IPFS | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/gltf/material-editor.js` | Modifies PBR props, commits new CID | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatcher, `loadNode()` orchestration | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` runtime overlays | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/parametric-preview.js` | Inspector UI for color/scale/mesh overrides | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ui/asset-save.js` | `prepareManifestForWrite()` — save flow | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS write | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS read | [→ Deep Dive](./references/deep-dive.md) |
 
 ## Deep Reference
 
 | Topic | File |
 |-------|------|
-| Architecture, URI Formats, Compose/Decompose, Scene Graph, Post-Processor, Materials, Save Flow | [→ Deep Dive](./deep-dive.md) |
-| Debug Loading, Debug Colors, Add Properties, Add Formats, Force Re-decomposition | [→ Troubleshooting](./troubleshooting.md) |
+| Architecture, URI Formats, Compose/Decompose, Scene Graph, Post-Processor, Materials, Save Flow | [→ Deep Dive](./references/deep-dive.md) |
+| Debug Loading, Debug Colors, Add Properties, Add Formats, Force Re-decomposition | [→ Troubleshooting](./references/troubleshooting.md) |

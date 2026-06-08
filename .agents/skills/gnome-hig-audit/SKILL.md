@@ -13,10 +13,10 @@ Use this skill when asked to audit, evaluate, or review the Arbesk Studio fronte
 
 | Question | Action |
 |----------|--------|
-| Full audit requested? | Run all 10 categories (A–J). See [→ Checklists](./checklists.md) |
-| Quick triage only? | Check the 7 high-signal items. See [→ Quick Audit](./quick-audit.md) |
-| Need to write a report? | Use the scored report template. See [→ Report Template](./report-template.md) |
-| Which app to compare against? | **GNOME Builder** for IDE-like layout; **Nautilus** for sidebar; **GNOME Text Editor** for header bar. See [→ Quick Audit](./quick-audit.md) |
+| Full audit requested? | Run all 10 categories (A–J). See [→ Checklists](./references/checklists.md) |
+| Quick triage only? | Check the 7 high-signal items. See [→ Quick Audit](./references/quick-audit.md) |
+| Need to write a report? | Use the scored report template. See [→ Report Template](./references/report-template.md) |
+| Which app to compare against? | **GNOME Builder** for IDE-like layout; **Nautilus** for sidebar; **GNOME Text Editor** for header bar. See [→ Quick Audit](./references/quick-audit.md) |
 
 ## Audit Categories
 
@@ -47,6 +47,6 @@ Use this skill when asked to audit, evaluate, or review the Arbesk Studio fronte
 
 | Topic | File |
 |-------|------|
-| Full 10-Category Checklists (A–J), Scoring, How to Run | [→ Checklists](./checklists.md) |
-| Scored Report Markdown Template | [→ Report Template](./report-template.md) |
-| 5-Minute Triage & GNOME Reference Apps | [→ Quick Audit](./quick-audit.md) |
+| Full 10-Category Checklists (A–J), Scoring, How to Run | [→ Checklists](./references/checklists.md) |
+| Scored Report Markdown Template | [→ Report Template](./references/report-template.md) |
+| 5-Minute Triage & GNOME Reference Apps | [→ Quick Audit](./references/quick-audit.md) |
