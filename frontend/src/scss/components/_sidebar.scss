@@ -103,6 +103,30 @@
   }
 }
 
+// Subtle pulse on the Create button for empty-state guidance.
+// Auto-dismissed on first user interaction (create, generate, open, drop).
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-switcher-btn.pulse {
+    animation: create-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes create-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(var(--accent-bg-rgb, 52 152 219) / 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(var(--accent-bg-rgb, 52 152 219) / 0);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-switcher-btn.pulse {
+    outline: 2px solid var(--accent-bg);
+    outline-offset: 2px;
+  }
+}
+
 // Sidebar content area
 .sidebar-content {
   flex: 1;
@@ -145,9 +169,28 @@
   padding: 0 var(--size-3) var(--size-3);
 }
 
-// Primary action row at the top of a sidebar view (e.g. New Asset in Create view)
+// Primary action row at the top of a sidebar view (e.g. New Asset in Asset view)
 .sidebar-action-row {
   padding: var(--size-2) 0;
+}
+
+// Asset lifecycle buttons (Save / Publish / Burn) in the Asset sidebar view
+.asset-lifecycle-row {
+  display: flex;
+  gap: var(--size-2);
+  padding: 0 0 var(--size-2);
+
+  .btn {
+    flex: 1;
+    justify-content: center;
+    padding: var(--size-2) var(--size-1);
+    font-size: var(--font-size-0);
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
 }
 
 // Sidebar toggle (collapse/expand)

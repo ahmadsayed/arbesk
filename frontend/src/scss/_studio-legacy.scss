@@ -1006,59 +1006,7 @@ body::-webkit-scrollbar {
     }
 }
 
-// ─── Welcome Overlay ───
-.welcome-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(61, 40, 23, 0.92);
-    z-index: 10;
-    border-radius: 0.75rem;
 
-    &[hidden] {
-        display: none;
-    }
-}
-
-.welcome-content {
-    text-align: center;
-    max-width: 360px;
-    padding: 2rem;
-
-    .welcome-icon-large {
-        font-size: 3rem;
-        color: var(--arabesque-accent);
-        margin-bottom: 1rem;
-    }
-
-    h2 {
-        color: var(--arabesque-accent);
-        margin-bottom: 0.5rem;
-        font-size: 1.5rem;
-    }
-
-    p {
-        color: var(--arabesque-text-muted);
-        margin-bottom: 1.5rem;
-    }
-}
-
-.welcome-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-
-    .load-asset {
-        display: flex;
-        gap: 0.5rem;
-
-        input {
-            flex: 1;
-        }
-    }
-}
 
 // ─── Settings Section ───
 .asset-definition-section {
@@ -1570,13 +1518,6 @@ body::-webkit-scrollbar {
         color: var(--arabesque-accent);
         border: 1px solid var(--arabesque-accent);
     }
-}
-
-// ─── Welcome Overlay tweaks ───
-.welcome-hint {
-    font-size: 0.8125rem;
-    color: var(--arabesque-text-muted);
-    margin: 0.75rem 0 0;
 }
 
 // ─── Responsive ───

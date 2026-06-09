@@ -9,7 +9,7 @@ import { showDialog } from "./dialog.js";
 import {
   clearScene,
   captureAssetThumbnail,
-  showWelcomeOverlay,
+  dismissCreatePulse,
   getPendingChildRefs,
   clearPendingChildRefs,
   getPendingPostProcessorEdits,

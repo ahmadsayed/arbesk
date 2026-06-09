@@ -6,7 +6,7 @@
 import {
   loadAssetManifest,
   clearScene,
-  hideWelcomeOverlay,
+  dismissCreatePulse,
 } from "../engine/scene-graph.js";
 import { contract as walletContract } from "../blockchain/wallet.js";
 import {
@@ -59,8 +59,7 @@ async function fetchAssetLibrary(address) {
 async function openAssetByTokenId(tokenId) {
   const contract = getContract();
   if (!contract) {
-    const overlay = document.getElementById("welcomeOverlay");
-    if (overlay) overlay.hidden = false;
+    console.warn("[LIBRARY] No contract available to open asset");
     return;
   }
 
@@ -76,7 +75,7 @@ async function openAssetByTokenId(tokenId) {
     window.activeAssetManifestCid = cid;
     window.latestAssetManifestCid = cid;
 
-    hideWelcomeOverlay();
+    dismissCreatePulse();
     updateUrlAsset(tokenId);
     await loadAssetManifest(cid);
 

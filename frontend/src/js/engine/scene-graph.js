@@ -191,8 +191,42 @@ function initEngine() {
     console.warn("[SCENE] grid failed:", e.message);
   }
 
-  // Initialize the Blender-style 2D orientation gizmo (top-right corner overlay).
-  // The sole orientation reference — world axes are not drawn in the scene.
+  // Blender-style in-scene axes (cross on the ground plane).
+  // Uses the same color scheme as the corner viewport gizmo for consistency.
+  try {
+    const AXIS_LEN = 20;
+    const AXIS_Y = 0.02; // slightly above grid to prevent z-fighting
+    const axisColors = {
+      x: new BABYLON.Color3(0.886, 0.169, 0.188), // #e22b30 red
+      z: new BABYLON.Color3(0.204, 0.471, 0.922), // #3478eb blue
+    };
+
+    // X axis (red) — full width cross through origin
+    const xAxis = BABYLON.MeshBuilder.CreateLines(
+      "axisX",
+      { points: [new BABYLON.Vector3(-AXIS_LEN, AXIS_Y, 0), new BABYLON.Vector3(AXIS_LEN, AXIS_Y, 0)] },
+      state.scene
+    );
+    xAxis.color = axisColors.x;
+    xAxis.isPickable = false;
+    xAxis.metadata = { isViewportChrome: true };
+
+    // Z axis (blue) — full depth cross through origin
+    const zAxis = BABYLON.MeshBuilder.CreateLines(
+      "axisZ",
+      { points: [new BABYLON.Vector3(0, AXIS_Y, -AXIS_LEN), new BABYLON.Vector3(0, AXIS_Y, AXIS_LEN)] },
+      state.scene
+    );
+    zAxis.color = axisColors.z;
+    zAxis.isPickable = false;
+    zAxis.metadata = { isViewportChrome: true };
+
+    console.log("[SCENE] in-scene axes created");
+  } catch (e) {
+    console.warn("[SCENE] axes failed:", e.message);
+  }
+
+  // Blender-style 2D orientation gizmo (top-right corner overlay).
   import("../ui/viewport-gizmo.js")
     .then(({ initViewportGizmo }) => {
       initViewportGizmo(state.scene, camera);
@@ -1042,17 +1076,13 @@ function getNodeChildRef(nodeId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Welcome overlay
+// Create-button pulse — subtle empty-state hint on the sidebar Create icon.
+// Auto-dismissed on first meaningful interaction.
 // ═══════════════════════════════════════════════════════════════════════════
 
-function showWelcomeOverlay() {
-  const overlay = document.getElementById("welcomeOverlay");
-  if (overlay) overlay.hidden = false;
-}
-
-function hideWelcomeOverlay() {
-  const overlay = document.getElementById("welcomeOverlay");
-  if (overlay) overlay.hidden = true;
+function dismissCreatePulse() {
+  const createBtn = document.querySelector('.sidebar-switcher-btn[data-view="create"]');
+  if (createBtn) createBtn.classList.remove("pulse");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1160,8 +1190,7 @@ export {
   getNodeChildRef,
   registerMockNode,
   captureAssetThumbnail,
-  showWelcomeOverlay,
-  hideWelcomeOverlay,
+  dismissCreatePulse,
   deselectAll,
   selectNodeById,
 };
@@ -1200,7 +1229,7 @@ export {
       window.activeAssetManifestCid = manifestCid;
       window.latestAssetManifestCid = manifestCid;
       loadAssetManifest(manifestCid);
-      hideWelcomeOverlay();
+      dismissCreatePulse();
     }
 
     async function startNewAsset() {
@@ -1212,7 +1241,6 @@ export {
       }
 
       clearScene();
-      showWelcomeOverlay();
       window.activeAssetManifestCid = null;
       window.latestAssetManifestCid = null;
       window.activeAssetTokenId = null;
@@ -1247,10 +1275,8 @@ export {
         }, 100);
     }
 
-    // Welcome-overlay button, header button (legacy), and sidebar Create view.
-    ["newAssetBtn", "newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (
-      id
-    ) {
+    // Header button (legacy) and sidebar Create view.
+    ["newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (id) {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener("click", startNewAsset);
     });
@@ -1263,13 +1289,13 @@ export {
       }
     });
 
-    // Esc — dismiss the welcome overlay (priority chain for future: deselect, close inspector).
+    // Esc — dismiss the create pulse, then future: deselect, close inspector.
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
-      const overlay = document.getElementById("welcomeOverlay");
-      if (overlay && !overlay.hidden) {
+      const createBtn = document.querySelector('.sidebar-switcher-btn[data-view="create"]');
+      if (createBtn && createBtn.classList.contains("pulse")) {
         e.preventDefault();
-        hideWelcomeOverlay();
+        dismissCreatePulse();
       }
     });
 

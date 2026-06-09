@@ -81,6 +81,24 @@
   }
 }
 
+// Outline — danger variant (prevents hover from falling back to accent brown)
+.btn-outline.btn-danger {
+  background: transparent;
+  color: var(--destructive-bg);
+  border-color: var(--destructive-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--destructive-bg);
+    color: var(--destructive-fg);
+  }
+
+  &:active:not(:disabled) {
+    background-color: color-mix(in srgb, var(--destructive-bg) 12%, transparent);
+    border-color: var(--destructive-bg);
+    filter: none;
+  }
+}
+
 // Destructive
 .btn-danger {
   background-color: var(--destructive-bg);

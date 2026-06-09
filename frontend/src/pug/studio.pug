@@ -9,7 +9,7 @@ html(lang="en")
     link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
     script(src="/js/engine/theme-init.js")
-    script(src="https://cdn.babylonjs.com/babylon.js" integrity="sha384-slRu7IAEyE98CXZXQ3Oz6Tv7vFeue+ugfvs3AjHaSo3k37uG8tQCuD1A+GZ68z20" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/babylon.js" integrity="sha384-U7cLQF/pb0MbZAiAbRGMzpSgiNRQIkK0N4c3Ig/Ulb305cTlQkEmFRsmfyvCLMGb" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js" integrity="sha384-M635DZboqtaFk/2MVCxG79NnqAol4w41P3RRqOV1hmoi7/eM1EKQfA5Szdr5l0Ss" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js" integrity="sha384-CxROuhjlFK/sd8r58hLhsdPLke/MeT6KBGOlb7J3YFw5hf+4Gv5Dc4aGrh4FbUU/" crossorigin="anonymous")
     script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" integrity="sha384-uDUzAob8VRybYi68YL5W/y5Uel6PtqYSI0YHiTQB400WGPc/TVqL2dHYDkGKdBnw" crossorigin="anonymous")
@@ -37,24 +37,6 @@ html(lang="en")
           .history-track
 
         .headerbar-actions
-          button#saveAssetBtn.btn.btn-secondary(hidden aria-label="Save Draft" title="Save Draft (Ctrl+S)")
-            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
-              path(d="M17 21v-8H7v8")
-              path(d="M7 3v5h8")
-            span#saveAssetBtnText.btn-text Save
-          button#publishAssetBtn.btn.btn-primary.headerbar-publish(hidden)
-            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M12 3v12")
-              path(d="M7 8l5-5 5 5")
-              path(d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4")
-            span#publishAssetBtnText.btn-text Publish
-          button#burnAssetBtn.btn.btn-danger.headerbar-delete(hidden aria-label="Burn asset" title="Burn (delete) this token")
-            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M3 6h18")
-              path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
-              path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
-            span#burnAssetBtnText.btn-text Burn
           button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
             svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               circle(cx="12" cy="12" r="5")
@@ -92,7 +74,7 @@ html(lang="en")
         //- Unified Sidebar with View Switcher
         aside.sidebar#sidebar
           .sidebar-switcher(role="tablist")
-            button.sidebar-switcher-btn.active(data-view="create" role="tab" aria-selected="true" tabindex="0" aria-label="Create" title="Create (Ctrl+1)")
+            button.sidebar-switcher-btn.active.pulse(data-view="create" role="tab" aria-selected="true" tabindex="0" aria-label="Asset" title="Asset (Ctrl+1)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M12 20h9")
                 path(d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z")
@@ -120,10 +102,10 @@ html(lang="en")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                   polyline(points="15 18 9 12 15 6")
           .sidebar-content
-            //- View: Create
+            //- View: Asset
             .sidebar-view(data-view="create")
               .sidebar-view-header
-                h3 Create
+                h3 Asset
               .sidebar-view-body
                 .sidebar-action-row
                   button#newAssetSidebarBtn.btn.btn-primary(style="width:100%")
@@ -131,6 +113,25 @@ html(lang="en")
                       line(x1="12" y1="5" x2="12" y2="19")
                       line(x1="5" y1="12" x2="19" y2="12")
                     span New Asset
+                .sidebar-action-row.asset-lifecycle-row
+                  button#saveAssetBtn.btn.btn-primary(hidden aria-label="Save Draft" title="Save Draft (Ctrl+S)")
+                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                      path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
+                      path(d="M17 21v-8H7v8")
+                      path(d="M7 3v5h8")
+                    span Save
+                  button#publishAssetBtn.btn.btn-secondary(hidden aria-label="Publish asset" title="Publish asset")
+                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                      path(d="M12 3v12")
+                      path(d="M7 8l5-5 5 5")
+                      path(d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4")
+                    span Publish
+                  button#burnAssetBtn.btn.btn-outline.btn-danger(hidden aria-label="Burn asset" title="Burn (delete) this token")
+                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                      path(d="M3 6h18")
+                      path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
+                      path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
+                    span Burn
                 #assetDefinition.asset-definition-section
                   .asset-def-header
                     button#toggleAssetDef.asset-def-toggle(aria-label="Toggle settings")
@@ -140,7 +141,7 @@ html(lang="en")
                   .asset-def-body(hidden)
                     .form-group
                       label.form-label Asset Name
-                      #assetNameDisplay.form-input(style="background:transparent;border:none;padding:var(--size-2) 0") Untitled Asset
+                      #assetNameDisplay.form-input Untitled Asset
                     .form-group
                       label.form-label(for="providerSelect") Generation Provider
                       select#providerSelect.form-select
@@ -161,12 +162,13 @@ html(lang="en")
                         h4 Collaborators
                         span#teamOwnerBadge.owner-badge(hidden) Owner
                       #teamList.team-list
+                      label.form-label(for="teamAddInput") Wallet Address
                       .team-add
-                        input#teamAddInput.form-control(type="text", placeholder="0x… wallet address", aria-label="Collaborator wallet address")
+                        input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
                         select#teamRoleSelect.form-select(aria-label="Collaborator role")
                           option(value="2" selected) Editor
                           option(value="1") Viewer
-                        button#teamAddBtn.btn.btn-secondary.btn-sm Add
+                        button#teamAddBtn.btn.btn-secondary Add
                 #chatHistory.chat-history
                   .chat-welcome
                     .welcome-icon ✦
@@ -236,15 +238,6 @@ html(lang="en")
           #viewport.viewport
             canvas#renderCanvas(aria-label="3D viewport" role="img")
             canvas#viewportGizmo(aria-label="Viewport orientation gizmo" title="X Y Z orientation")
-
-            #welcomeOverlay.viewport-empty
-              .viewport-empty-content
-                .viewport-empty-icon ✦
-                h2 Welcome to Arbesk
-                p Create, compose, and publish tokenized 3D assets.
-                .viewport-empty-actions
-                  button#newAssetBtn.btn.btn-primary Start New Asset
-                  p(style="font-size:var(--font-size-0);color:var(--choco-4);margin-top:var(--size-2)") Generate an asset, open one from your library, or drag an asset into the scene.
 
             #assetDropOverlay.viewport-drop-indicator
               div(style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent-bg);font-weight:600")

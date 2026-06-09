@@ -1,6 +1,6 @@
 # Arbesk Current Status
 
-> Last updated: 2026-06-06  
+> Last updated: 2026-06-09  
 > Repository: <https://github.com/ahmadsayed/arbesk>  
 > Default branch: `main`
 
@@ -22,6 +22,7 @@ Completed capabilities include:
 - Parametric color/scale versions without payment or cloud generation
 - Timeline/history browser for manifest versions
 - Wallet, minting, token URI update, gallery, and team editor UI
+- Session-based authentication (SIWE) reducing per-generation pop-ups from 3 to 2 after first use
 - Browser-side on-demand IPFS cache using memory + IndexedDB
 - Optional WebP world thumbnails captured during publish and stored by CID in manifests
 
@@ -53,8 +54,8 @@ Completed capabilities include:
 - **#5** ✅ Persist: Save `child_ref` nodes to IPFS manifest; merge with existing nodes on save
 - **#6** ✅ Safety: Pulsing loading placeholders, error placeholders, duplicate rejection, self-reference detection
 - **#7** ✅ Inspector: Read-only token child info panel showing token ID, contract, chain, CID
-- **#8** ✅ External: Known RPC endpoints for cross-chain resolution (local Hardhat, Calibration testnet, Ethereum, Sepolia)
-- **#9** ✅ Tests: 11 unit tests (normalizeTokenURI + schema validation), 3 integration tests (child ref save, mixed manifests, publish with thumbnail)
+- **#8** ✅ External: Known RPC endpoints for cross-chain resolution (Hardhat local, Base Sepolia, Polygon Amoy)
+- **#9** ✅ Tests: 15 unit tests (11 normalizeTokenURI + 4 schema validation) + 6 integration tests (child ref save, mixed manifest, publish with thumbnail, token resolution, 404, 503 guard)
 - **#10** ✅ Docs: AGENTS.md, CURRENT_STATUS.md updated
 
 MVP cutoff was #1–#6. Full epic (#1–#10) completed.
@@ -96,7 +97,7 @@ npm run build:frontend
 
 Result:
 
-- `test/api.test.js`: 16 tests passed (3 new child_ref integration tests)
+- `test/api.test.js`: 44 tests passed (3 child_ref manifest integration tests + 3 token resolution tests + existing API tests)
 - `test/token-resolver.test.js`: 15 tests passed (11 normalizeTokenURI + 4 schema validation)
 - Frontend build passed
 - Zed diagnostics: no errors or warnings
@@ -115,22 +116,24 @@ All 10 issues completed:
 5. ✅ Save/publish merges pending child refs into manifests
 6. ✅ Loading placeholders (pulsing), error placeholders, duplicate/cycle rejection
 7. ✅ Inspector shows read-only token child info (token ID, contract, chain, CID)
-8. ✅ External chain RPC support (Hardhat, Calibration testnet, Ethereum, Sepolia)
-9. ✅ 15 unit + 3 integration tests
+8. ✅ External chain RPC support (Hardhat local, Base Sepolia, Polygon Amoy)
+9. ✅ 15 unit tests (normalizeTokenURI + schema validation) + 6 integration tests (child ref manifest save, mixed manifest, publish with thumbnail, token resolution, 404, 503 guard)
 10. ✅ Documentation updated
-
-### Upcoming
-
-5. **Manifest-driven activity panel** — The ledger panel derives its feed entirely from the asset manifest chain (`prev_manifest_cid` + `nodes[].history[]`). No localStorage, no server-side ledger, no event accumulation.
 
 ### Recent Changes
 
-11. **Documentation cleanup (2026-06-06)** — All Filecoin-specific references removed from project documentation (AGENTS.md, README.md, ARCHITECTURE.md, CURRENT_STATUS.md, ZED_AGENT_GUIDE.md, SECURITY.md, skill files). Project now describes a generic EVM-compatible target. Hardhat network names and RPC configs in code remain intact.
+- **Manifest-driven activity panel (2026-06-08)** — The ledger panel now derives its feed entirely from the asset manifest chain (`prev_manifest_cid` + `nodes[].history[]`). No localStorage, no server-side ledger, no event accumulation. The previous server-side micro-ledger was removed.
+
+- **Documentation cleanup (2026-06-06)** — All Filecoin-specific references removed from project documentation (AGENTS.md, README.md, ARCHITECTURE.md, CURRENT_STATUS.md, ZED_AGENT_GUIDE.md, SECURITY.md, skill files). Project now describes a generic EVM-compatible target. Hardhat network names and RPC configs in code remain intact.
+
+### Upcoming
+
+No specific upcoming phases are currently planned. Deferred items remain in the list below.
 
 ### Deferred
 
-12. **Production adapters** — Tripo3D, Meshy, and Hunyuan3D are described by the architecture but not implemented; current generation uses the mock adapter unless cloud adapters are added.
-13. **Auth/payment hardening** — further align signed wallet address, tx sender, event payload, prompt, and node ID.
-14. **Frontend automated tests** — no E2E/browser automation is currently committed.
-15. **OpenSCAD WASM** — schema-compatible but deferred post-MVP.
-16. **Thumbnail quality controls** — currently captures a fixed `512x288` WebP snapshot at publish time; future UI could allow recapture/crop/disable controls.
+- **Production adapters** — Tripo3D, Meshy, and Hunyuan3D are described by the architecture but not implemented; current generation uses the mock adapter unless cloud adapters are added.
+- **Auth/payment hardening** — further align signed wallet address, tx sender, event payload, prompt, and node ID.
+- **Frontend automated tests** — no E2E/browser automation is currently committed.
+- **OpenSCAD WASM** — schema-compatible but deferred post-MVP.
+- **Thumbnail quality controls** — currently captures a fixed `512x288` WebP snapshot at publish time; future UI could allow recapture/crop/disable controls.

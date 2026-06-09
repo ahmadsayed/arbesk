@@ -8,7 +8,7 @@
 import {
   loadAssetManifest,
   clearScene,
-  hideWelcomeOverlay,
+  dismissCreatePulse,
 } from "../engine/scene-graph.js";
 import { payForGenerationWithUSDC } from "../blockchain/wallet.js";
 import { generateAsset, ApiError } from "../services/api.js";
@@ -147,7 +147,7 @@ async function onGenerate() {
     window.history.pushState({}, "", url);
 
     await loadAssetManifest(result.assetManifestCid);
-    hideWelcomeOverlay();
+    dismissCreatePulse();
 
     addChatMessage("system", `Model carved via ${getProvider()}.`);
   } catch (err) {
