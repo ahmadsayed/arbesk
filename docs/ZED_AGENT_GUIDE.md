@@ -5,22 +5,28 @@ This project is initialized for Zed's coding agent workflow.
 ## Agent Entry Points
 
 - Primary instructions: [`../AGENTS.md`](../AGENTS.md)
-- Current status: [`CURRENT_STATUS.md`](CURRENT_STATUS.md)
-- Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- API truth source: [`API_SPEC.md`](API_SPEC.md)
+- Current status (source of truth): [`CURRENT_STATUS.md`](CURRENT_STATUS.md)
+- Architecture reference: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- API reference: [`API_SPEC.md`](API_SPEC.md)
 
-When working in Zed, the agent should first read `AGENTS.md` and then use `docs/CURRENT_STATUS.md` for the latest implementation snapshot.
+**When working in Zed, the agent should first read `AGENTS.md`, then `docs/CURRENT_STATUS.md` for the latest implementation snapshot.** `CURRENT_STATUS.md` is generated from the actual codebase and takes precedence over older architecture docs when there is conflict.
 
-## Active Phase: Micro-Ledger & Audit Infrastructure (Phase 5)
+---
 
-The current focus is the append-only micro-ledger for structured audit logging. Key context:
+## Active Phase Status
 
-- **Schema**: Typed `LedgerEntry` records in `src/ledger/schema.js`.
-- **Store**: JSONL append-only store in `src/ledger/store.js`.
-- **API**: Query and stats endpoints in `src/api/ledger.js`.
-- **Contract**: `anchorManifest()` in `ArbeskAsset.sol` for on-chain proof of manifest CIDs.
-- **Frontend**: `frontend/src/js/ui/ledger-panel.js` — collapsible audit trail panel.
-- **Status**: MVP implemented (schema, store, API, hooks, contract anchor, panel). Per-asset filtering and digital signatures deferred to Phase 5b.
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution, drag/drop, depth/cycle protection |
+| Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js`; no schema, store, or API |
+
+**Do not claim the micro-ledger is implemented.** The following files do **not** exist:
+- `src/ledger/schema.js`
+- `src/ledger/store.js`
+- `src/api/ledger.js`
+- `anchorManifest()` in the contract
+
+---
 
 ## Contract Edit Workflow (MANDATORY)
 
@@ -51,6 +57,10 @@ The `test/frontend/deployment-integrity.test.js` suite validates:
 
 **Skipping any step causes `c.methods.X is not a function` or `Transaction reverted` errors.**
 
+> **Note:** `blockchain/scripts/verify.js` has a known bug — it passes only `[treasury]` as constructor args, but `ArbeskAsset` expects `(_treasury, _usdcToken)`. Fix before using on live networks.
+
+---
+
 ## File Map
 
 | Purpose | File |
@@ -62,8 +72,8 @@ The `test/frontend/deployment-integrity.test.js` suite validates:
 | Token resolver | `frontend/src/js/blockchain/token-resolver.js` |
 | URI utilities | `frontend/src/js/blockchain/uri-utils.js` |
 | Asset drop zone | `frontend/src/js/ui/asset-drop-zone.js` |
-| Gallery / asset library | `frontend/src/js/ui/asset-library.js` |
-| Asset editors | `frontend/src/js/ui/asset-editors.js` |
+| Asset library (gallery) | `frontend/src/js/ui/asset-library.js` |
+| Asset editors (team) | `frontend/src/js/ui/asset-editors.js` |
 | Asset history / timeline | `frontend/src/js/ui/asset-history.js` |
 | Asset save / publish | `frontend/src/js/ui/asset-save.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
@@ -71,10 +81,9 @@ The `test/frontend/deployment-integrity.test.js` suite validates:
 | Team service | `frontend/src/js/services/team.js` |
 | IPFS read/write | `frontend/src/js/ipfs/` |
 | glTF CID translation | `frontend/src/js/gltf/` |
-| Micro-ledger schema | `src/ledger/schema.js` |
-| Micro-ledger store | `src/ledger/store.js` |
-| Ledger API | `src/api/ledger.js` |
-| Ledger panel | `frontend/src/js/ui/ledger-panel.js` |
+| Ledger panel (manifest-derived) | `frontend/src/js/ui/ledger-panel.js` |
+
+---
 
 ## Zed Tasks
 
@@ -89,6 +98,8 @@ Recommended task order for normal development:
 5. `Run backend tests`
 6. `Start backend`
 
+---
+
 ## Safety Rules for Agents
 
 - Do not commit `.env`, `node_modules`, generated frontend `dist`, or Hardhat `artifacts/cache` output.
@@ -99,9 +110,14 @@ Recommended task order for normal development:
 - Do not start long-running servers unless explicitly needed; use Zed tasks or bounded terminal runs.
 - Preserve the private-IPFS + EVM assumptions. Do not swap to public IPFS or a different EVM chain without explicit instruction.
 
+---
+
 ## Important Runtime Notes
 
 - The backend serves `frontend/dist`, so frontend changes require `Build frontend` before `Start backend` for browser verification.
 - The private IPFS gateway is expected at `http://127.0.0.1:8080/ipfs/`.
 - The local Hardhat RPC is expected at `http://127.0.0.1:8545`.
 - Current generation is mock-backed unless production cloud adapters are implemented and enabled.
+- **Contract name is `ArbeskAsset`, not `ArbeskWorld`.**
+- **Backend routes are under `/api/v1/`, not `/api/`.**
+- **Parametric editing is client-side only; there is no `POST /api/parametric-version` backend route.**

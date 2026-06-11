@@ -40,37 +40,37 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  └─ Team editor panel                                               │
 │                                                                    │
 │  Frontend services                                                  │
-│  ├─ wallet.js: Web3Modal/Web3 + ArbeskWorld calls                   │
+│  ├─ wallet.js: Web3Modal/Web3 + ArbeskAsset calls                   │
 │  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache          │
-│  └─ save-world.js: save/publish + WebP thumbnail capture            │
+│  └─ asset-save.js: save/publish + WebP thumbnail capture            │
 └───────────────────────────────┬────────────────────────────────────┘
                                 │ HTTP + wallet txs
                                 ▼
 ┌────────────────────────────────────────────────────────────────────┐
 │                           Express Backend                           │
 │                                                                    │
-│  /api/generate-asset-node                                           │
+│  /api/v1/generations                                           │
 │  ├─ Bearer txHash signature auth                                    │
 │  ├─ EVM/Hardhat receipt validation                                 │
 │  ├─ AssetGenerationPaid event validation                            │
 │  ├─ Mock generation adapter                                         │
 │  └─ IPFS asset + manifest writes                                    │
 │                                                                    │
-│  /api/parametric-version                                            │
-│  └─ Free color/scale history entries                                │
+│  *(parametric edits are client-side)*                               │
+│  └─ Free color/scale history entries applied in browser             │
 │                                                                    │
-│  /api/save-manifest, /api/push-ipfs                                 │
+│  /api/v1/manifests, /api/v1/manifests/:cid/publish                                 │
 │  └─ Manifest writes + optional thumbnail normalization              │
 │                                                                    │
-│  /api/manifest-chain, /api/manifest-by-token, /api/abi              │
+│  /api/v1/manifests/:cid/history, /api/v1/tokens/:tokenId/manifest, /api/v1/contracts/:name/abi              │
 └───────────────┬───────────────────────────────┬────────────────────┘
                 │                               │
                 ▼                               ▼
 ┌──────────────────────────────┐   ┌─────────────────────────────────┐
 │ Private Kubo/IPFS             │   │ EVM / Hardhat          │
-│ 127.0.0.1:5001 API            │   │ ArbeskWorld.sol                  │
+│ 127.0.0.1:5001 API            │   │ ArbeskAsset.sol                  │
 │ 127.0.0.1:8080 gateway        │   │ ├─ payForGeneration              │
-│ No DHT / no bootstrap peers   │   │ ├─ mintWorld / updateTokenURI    │
+│ No DHT / no bootstrap peers   │   │ ├─ publishAsset / updateAssetURI │
 │ Stores assets, manifests,     │   │ └─ addEditor / removeEditor      │
 │ thumbnails                    │   │ Local RPC: 127.0.0.1:8545       │
 └──────────────────────────────┘   └─────────────────────────────────┘
@@ -86,11 +86,11 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 |---|---|
 | `src/index.js` | Express app, static frontend serving, request logging, body limits |
 | `src/api/index.js` | Route registry, IPFS helper reads, manifest save/publish, thumbnail normalization |
-| `src/api/generate-asset-node.js` | Authenticated PayGo generation route, tx/event validation, mock adapter, manifest updates |
-| `src/api/parametric-version.js` | Free color/scale version route |
+| `src/api/assets/generate-node.js` | Authenticated PayGo generation route, tx/event validation, mock adapter, manifest updates |
+| *(client-side only)* | Parametric editing happens in browser; no dedicated backend route |
 | `src/api/authentication.js` | Bearer signature parsing, wallet recovery, tx receipt verification |
 | `src/api/rate-limiter.js` | In-memory route rate limiter |
-| `src/api/abi-router.js` | Serves compiled `ArbeskWorld` artifact |
+| `src/api/abi-router.js` | Serves compiled `ArbeskAsset` artifact |
 | `src/api/adapters/mock-adapter.js` | Deterministic local asset generation for development/tests |
 
 ### 3.2 Frontend (`frontend/src/js/`)
@@ -103,13 +103,13 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | IPFS | `ipfs/remote-ipfs.js` | Private gateway reads with memory + IndexedDB cache |
 | glTF | `gltf/uri_to_cid.js` | Rehydrates CID-based glTF buffer URIs for rendering |
 | Blockchain | `blockchain/wallet.js` | Web3Modal, wallet connection, EVM switching, PayGo, mint/update URI, editor calls |
-| UI | `ui/chat-studio.js` | Prompt flow and asset definition controls |
-| UI | `ui/save-world.js` | Save/publish lifecycle, WebP thumbnail capture, token mint/update calls |
-| UI | `ui/gallery.js` | Token gallery, manifest metadata reads, thumbnail rendering |
-| UI | `ui/history-browser.js` | Manifest-chain timeline browser |
-| UI | `ui/team-panel.js` | Editor list/add/remove UI |
+| UI | `ui/create-panel.js` | Prompt flow and asset definition controls |
+| UI | `ui/asset-save.js` | Save/publish lifecycle, WebP thumbnail capture, token mint/update calls |
+| UI | `ui/asset-library.js` | Token gallery, manifest metadata reads, thumbnail rendering |
+| UI | `ui/asset-history.js` | Manifest-chain timeline browser |
+| UI | `ui/asset-editors.js` | Editor list/add/remove UI |
 
-### 3.3 Smart Contract (`blockchain/contracts/ArbeskWorld.sol`)
+### 3.3 Smart Contract (`blockchain/contracts/ArbeskAsset.sol`)
 
 Current contract responsibilities:
 
@@ -220,7 +220,7 @@ Manifest v1 (CID: QmA...)  ←──  Manifest v2 (CID: QmB...)  ←──  Mani
 
 | Consumer | Description |
 |---|---|
-| `GET /api/manifest-chain` | Backend walks up to 50 entries and returns lightweight summaries (CID, version, name, node count, timestamp) |
+| `GET /api/v1/manifests/:cid/history` | Backend walks up to 50 entries and returns lightweight summaries (CID, version, name, node count, timestamp) |
 | History timeline UI | Frontend fetches the chain and renders a draggable circular-node scrubber for version switching |
 | Replay prevention | Backend scans manifest history entries for duplicate `txHash` values to prevent generation replay |
 | Micro-ledger (Phase 5) | The ledger records each manifest CID as an append-only log entry, with optional on-chain anchoring via `anchorManifest()` |
@@ -237,10 +237,10 @@ Manifest v1 (CID: QmA...)  ←──  Manifest v2 (CID: QmB...)  ←──  Mani
 During publish:
 
 1. `scene-graph.js` captures the Babylon canvas into a WebP `dataUrl`.
-2. `save-world.js` attaches it to `manifest.thumbnail`.
+2. `asset-save.js` attaches it to `manifest.thumbnail`.
 3. `src/api/index.js` uploads the image bytes to IPFS.
 4. The stored manifest receives only thumbnail metadata + CID.
-5. `gallery.js` reads `manifest.thumbnail.cid` and renders it through `getBlobFromRemoteIPFS()`.
+5. `asset-library.js` reads `manifest.thumbnail.cid` and renders it through the IPFS gateway.
 
 ---
 
@@ -252,7 +252,7 @@ During publish:
 User prompt
   → wallet.payForGeneration(nodeId, prompt)
   → signed txHash Bearer token
-  → POST /api/generate-asset-node
+  → POST /api/v1/generations
   → backend verifies tx receipt + AssetGenerationPaid event
   → mock adapter returns asset bytes
   → asset bytes added to private IPFS
@@ -265,9 +265,9 @@ User prompt
 ```text
 User selects node
   → inspector live-previews color/scale in Babylon.js
-  → POST /api/parametric-version
-  → backend validates color/scale
-  → backend appends parametric history entry
+  → browser applies color/scale to meshes
+  → browser appends parametric history entry to manifest
+  → POST /api/v1/manifests (save draft) or publish flow
   → updated manifest added to IPFS
   → frontend updates active/latest manifest CID
 ```
@@ -278,14 +278,14 @@ User selects node
 Save
   → fetch active manifest from IPFS gateway/cache
   → set name/version/prev link as needed
-  → POST /api/save-manifest
+  → POST /api/v1/manifests
   → update active/latest manifest CID
 
 Publish
   → fetch active manifest
   → capture optional WebP thumbnail
-  → POST /api/push-ipfs
-  → mintWorld(new token) or updateTokenURI(existing token)
+  → POST /api/v1/manifests/:cid/publish
+  → publishAsset(new token) or updateAssetURI(existing token)
   → refresh gallery/history
 ```
 
@@ -363,7 +363,7 @@ Generate / Parametric / Save / Publish / Mint / Team edit
   → Query API: GET /api/ledger
   → Optional stats/export
   → Optional IPFS snapshots
-  → Optional ArbeskWorld manifest anchoring
+  → Optional on-chain manifest anchoring (not yet implemented)
   → Frontend ledger panel
 ```
 

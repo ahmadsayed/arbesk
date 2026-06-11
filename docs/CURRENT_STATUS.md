@@ -1,139 +1,466 @@
-# Arbesk Current Status
+# Arbesk — Current Implementation Status
 
-> Last updated: 2026-06-09  
-> Repository: <https://github.com/ahmadsayed/arbesk>  
-> Default branch: `main`
-
----
-
-## Executive Summary
-
-Arbesk is now a working local-first MVP for a EVM-backed, private-IPFS, versioned 3D world platform.
-
-Completed capabilities include:
-
-- Private Dockerized Kubo/IPFS infrastructure
-- Dockerized Hardhat local EVM
-- `ArbeskWorld.sol` PayGo + ERC721 world ownership + team editor contract
-- Mock 3D generation pipeline backed by local SukaVerse-style GLTF assets
-- Fractal manifest storage on private IPFS
-- Babylon.js scene graph loading for GLB/GLTF assets with automatic model centering
-- One-node-per-world replacement behavior for generation history
-- Parametric color/scale versions without payment or cloud generation
-- Timeline/history browser for manifest versions
-- Wallet, minting, token URI update, gallery, and team editor UI
-- Session-based authentication (SIWE) reducing per-generation pop-ups from 3 to 2 after first use
-- Browser-side on-demand IPFS cache using memory + IndexedDB
-- Optional WebP world thumbnails captured during publish and stored by CID in manifests
-
-**Current active phase**: Phase 5.1 — Token ID-Based Child Worlds (all 10 issues complete). Server-side micro-ledger removed; activity tracking is now client-side only.
+> **Generated:** 2026-06-10  
+> **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.  
+> **Contract:** `ArbeskAsset` (not `ArbeskWorld` — that name only exists in older docs).  
+> **Frontend build:** Custom Node.js scripts (no bundler).  
 
 ---
 
-## Phase Status
+## 1. Phase Completion Snapshot
 
-| Phase | Status | Notes |
-|---|---:|---|
-| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | Backend API, private IPFS, mock generation, manifest writes |
-| Phase 2: Parametric Versions & Babylon Rendering | ✅ Complete | Scene graph, time travel, parametric preview/save, model centering |
-| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | EVM contract, tx validation, replay prevention, Hardhat Docker |
-| Phase 4: UI Assembly & Workspace Studio | ✅ Complete | Studio shell, wallet, gallery, minting, team editor panel |
-| Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Optional WebP thumbnails, gallery thumbnails, on-demand IPFS cache |
-| **Phase 5.1: Token ID-Based Child Worlds** | **✅ Complete** | `child_ref` schema, token resolver, drag/drop, scene graph rendering, persistence, inspector, external chain support, tests |
-
----
-
-## Token ID-Based Child Worlds (Phase 5.1)
-
-11 open GitHub issues — **all MVP (#1-#6) and polish (#7-#10) completed**:
-
-- **#1** ✅ Schema: Clean `child_ref` manifest schema with `transform_matrix` per node
-- **#2** ✅ Resolver: `tokenURI(tokenId)` → manifest CID normalization with 30s cache
-- **#3** ✅ Rendering: Scene graph loads token children recursively with cycle/depth protection (MAX_CHILD_WORLD_DEPTH=5)
-- **#4** ✅ Drag/drop: Gallery cards as drag sources; scene canvas as drop target with "Add to Scene" button
-- **#5** ✅ Persist: Save `child_ref` nodes to IPFS manifest; merge with existing nodes on save
-- **#6** ✅ Safety: Pulsing loading placeholders, error placeholders, duplicate rejection, self-reference detection
-- **#7** ✅ Inspector: Read-only token child info panel showing token ID, contract, chain, CID
-- **#8** ✅ External: Known RPC endpoints for cross-chain resolution (Hardhat local, Base Sepolia, Polygon Amoy)
-- **#9** ✅ Tests: 15 unit tests (11 normalizeTokenURI + 4 schema validation) + 6 integration tests (child ref save, mixed manifest, publish with thumbnail, token resolution, 404, 503 guard)
-- **#10** ✅ Docs: AGENTS.md, CURRENT_STATUS.md updated
-
-MVP cutoff was #1–#6. Full epic (#1–#10) completed.
+| Phase | Status | Evidence in Code |
+|-------|--------|------------------|
+| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.js`, `src/api/adapters/mock-adapter.js`, `docker-compose.yml` |
+| Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.js`, `frontend/src/js/engine/time-travel.js` |
+| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
+| Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 23 SCSS partials, sidebar/outliner/nesting |
+| Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, thumbnail extraction in `src/api/index.js`, unpin lifecycle |
+| Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
+| Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js` |
 
 ---
 
-## Current Data Model Additions
+## 2. Backend (`src/`)
 
-Published manifests may now include an optional `thumbnail` object:
+### 2.1 Actual File Layout
 
-```json
-{
-  "thumbnail": {
-    "type": "snapshot",
-    "cid": "QmThumbnailCid...",
-    "path": "thumbnail.webp",
-    "format": "webp",
-    "mime": "image/webp",
-    "width": 512,
-    "height": 288,
-    "bytes": 12345,
-    "timestamp": 1780000000
-  }
-}
+```
+src/
+├── index.js                    # Express bootstrap, CSP, request logging
+├── config.js                   # Multi-network Web3 config (Hardhat local, Base Sepolia)
+└── api/
+    ├── index.js                # Main router — all v1 routes
+    ├── assets/
+    │   └── generate-node.js    # 3D generation (mock-only)
+    ├── adapters/
+    │   └── mock-adapter.js     # Reads local .gltf files
+    ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
+    ├── authentication.js       # Bearer txHash sig OR Session token middleware
+    ├── ipfs-utils.js           # catManifest() with timeout/abort
+    ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
+    ├── rate-limiter.js         # In-memory per-wallet rate limiter (10/hr)
+    ├── sessions.js             # SIWE session create/delete (24h TTL)
+    ├── siwe-verify.js          # EIP-4361 message verification
+    └── openapi.json            # Static OpenAPI spec
 ```
 
-During publish, the browser captures a WebP snapshot from the Babylon canvas. The backend uploads the image bytes separately to private IPFS and strips the embedded `dataUrl` from the stored manifest.
+> **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits happen client-side; the browser sends the full manifest to `POST /api/v1/manifests`.
+
+### 2.2 Implemented Routes (`/api/v1`)
+
+| Method | Path | Auth | What it does |
+|--------|------|------|--------------|
+| GET | `/config` | None | Returns contract address, RPC URLs |
+| POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
+| DELETE | `/sessions` | Session | Invalidates session token |
+| POST | `/generations` | Bearer **or** Session | Validates tx, mocks asset, pins to IPFS |
+| POST | `/manifests` | None | Saves draft manifest, extracts thumbnail dataUrl → IPFS |
+| POST | `/manifests/:cid/publish` | None | Same as save but returns plain-text CID |
+| GET | `/manifests/:cid/history` | None | Walks `prev_asset_manifest_cid` chain up to 50 entries |
+| GET | `/tokens/:tokenId/manifest` | None | Calls `tokenURI()` on-chain → fetches manifest from IPFS |
+| POST | `/ipfs/unpin` | None | Walks up to 100 manifests, collects all CIDs, calls `ipfs.pin.rm` |
+| GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
+| GET | `/openapi.json` | None | Static OpenAPI spec |
+| GET | `/docs` | None | Swagger UI HTML bundle |
+
+### 2.3 Auth Details
+
+**Bearer auth** (`Authorization: Bearer <base64msg>.<base64sig>`):
+- Frontend signs a message containing the tx hash.
+- Backend recovers address, validates tx receipt (status === 1), checks contract/event alignment.
+- Used for `POST /generations` when no session exists.
+
+**Session auth** (`Authorization: Session <token>`):
+- SIWE-based (EIP-4361). Domain-bound, 5-minute message age, nonce replay protection.
+- 24-hour TTL, in-memory Map with hourly cleanup.
+- Reduces generation pop-ups from 3 to 2 after first use.
+
+### 2.4 What Works
+
+- ✅ Mock generation with tier validation (Basic/Standard/Premium/Pro)
+- ✅ Transaction replay prevention (`usedTxHashes` Set + manifest history scan)
+- ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`)
+- ✅ Manifest save with thumbnail dataUrl extraction → separate IPFS asset
+- ✅ Manifest chain walking (backward `prev_asset_manifest_cid`, cycle detection)
+- ✅ Token resolution (`tokenURI` → IPFS manifest)
+- ✅ IPFS unpin on burn (walks chain, collects CIDs, calls `pin.rm`)
+- ✅ Multi-network config (Hardhat local `31415822`, Base Sepolia `84532`)
+
+### 2.5 What Does NOT Work / Is Missing
+
+- ❌ **Cloud 3D adapters** — `generate-node.js` returns `501 NOT_IMPLEMENTED` when `MOCK_3D_GENERATION` is disabled.
+- ❌ No backend parametric route — handled entirely in browser.
+- ❌ `GET /api/health` — planned, not implemented.
+- ❌ `GET /api/manifest/:id` — planned, not implemented.
+- ❌ `GET /api/resolve-token` — planned for Phase 5.1 fallback, not implemented (browser resolver is the current path).
 
 ---
 
-## Validation Snapshot
+## 3. Frontend (`frontend/src/`)
 
-Most recent validation performed after thumbnail/publishing updates:
+### 3.1 Actual File Layout
+
+**JavaScript (46 files)**
+
+```
+frontend/src/js/
+├── engine/
+│   ├── scene-graph.js          # Babylon engine, GLB/glTF load, selection, framing, thumbnails
+│   ├── time-travel.js          # Manifest chain walk, apply version
+│   ├── parametric-preview.js   # Inspector color/scale, live preview, timeline binding
+│   ├── state.js                # Shared mutable state
+│   ├── transforms.js           # CID extraction, format detection, bounds, centering
+│   ├── cleanup.js              # Node/scene disposal
+│   ├── placeholders.js         # Loading/error meshes
+│   ├── studio-init.js          # Studio bootstrap
+│   ├── theme.js / theme-init.js# CSS → Babylon color mapping
+│   └── viewport-gizmo.js       # Corner orientation gizmo
+├── ui/
+│   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
+│   ├── asset-save.js           # Save Draft / Publish, decomposition, thumbnail capture
+│   ├── asset-library.js        # Token gallery (owned + shared), thumbnails, drag
+│   ├── asset-drop-zone.js      # Viewport drag/drop overlay
+│   ├── asset-history.js        # Draggable horizontal timeline scrubber
+│   ├── asset-editors.js        # Team panel (add/remove editors, owner badge)
+│   ├── ledger-panel.js         # Activity feed derived from manifest chain
+│   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
+│   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
+│   ├── sidebar.js              # 4-view switcher (Create/Outline/Library/Ledger)
+│   ├── collaborators.js        # Burn button visibility helper
+│   ├── dialog.js / toasts.js / wallet-modal.js / wallet-popover.js
+│   └── ...
+├── blockchain/
+│   ├── wallet.js               # Web3Modal, WalletConnect, USDC PayGo, contract calls, burn
+│   ├── token-resolver.js       # Resolve child_ref tokens to manifest CIDs
+│   ├── uri-utils.js            # Normalize tokenURIs to plain CIDs
+│   ├── siwe.js                 # EIP-4361 message builder
+│   ├── wallet-discovery.js     # EIP-6963 multi-wallet
+│   ├── wallet-connect.js       # WalletConnect v2
+│   ├── network-config.js       # Per-network contract/USDC addresses
+│   ├── error-decoder.js        # Revert reason decoding
+│   ├── explorer.js             # Block explorer links
+│   └── dev-account.js          # Hardhat dev account helper
+├── ipfs/
+│   ├── remote-ipfs.js          # Gateway reads (no caching — disabled)
+│   └── write-to-ipfs.js        # Direct Kubo API writes + pin
+├── gltf/
+│   ├── decomposer.js           # Break buffers/images into separate IPFS CIDs
+│   ├── composer.js             # Resolve ipfs:// URIs back to base64 for Babylon
+│   ├── material-editor.js      # PBR material color edits, bake to composite
+│   └── uri_to_cid.js           # Legacy helpers (mostly reference now)
+└── services/
+    ├── api.js                  # API client: sessions, generate, save, publish, history, unpin
+    ├── team.js                 # Contract wrappers for editor add/remove
+    └── url-utils.js            # URL param helpers
+```
+
+**Templates & Styles**
+- `frontend/src/pug/studio.pug` — Single consolidated studio page
+- `frontend/src/scss/` — 23 partials including layout, viewport, inspector, timeline, ledger, wallet modals
+
+> **Naming drift from older docs:** `chat-studio.js` → `create-panel.js`, `save-world.js` → `asset-save.js`, `gallery.js` → `asset-library.js`, `history-browser.js` → `asset-history.js`, `team-panel.js` → `asset-editors.js`.
+
+### 3.2 Core Systems — Verified in Code
+
+**3D Engine (`scene-graph.js`)**
+- Babylon.js init with `ArcRotateCamera`, hemispheric + directional lights, ground grid
+- Orthographic presets (1=Front, 3=Right, 7=Top) with custom wheel zoom scaling
+- Click-to-select with amber highlight layer; sub-mesh toggle on re-click
+- GLB loading via blob + `URL.createObjectURL`
+- glTF loading via JSON → `composeGlTF` resolves `ipfs://` CIDs → `ImportMeshAsync`
+- Asset centering (bounding box → shift root nodes)
+- Thumbnail capture: offscreen canvas crop → WebP blob → dataUrl
+- Keyboard: Escape (deselect), Home (frame all), F (frame selected), 1/3/7 (views), Ctrl+N (new), Ctrl+B (sidebar), Ctrl+1-4 (switch views)
+
+**Token Child Worlds (Phase 5.1)**
+- `loadTokenChildNode()` fully implemented with placeholder → async resolution
+- `MAX_CHILD_WORLD_DEPTH = 5`, circular reference detection via `Set`
+- Transform matrix applied to anchor before child loading
+- Duplicate drop prevention via `refKey`
+
+**Parametric Editing (`parametric-preview.js`, `time-travel.js`)**
+- Live color/scale preview applies immediately to Babylon meshes
+- `state.pendingPostProcessorEdits` tracks uncommitted changes
+- Inspector close reverts to last committed state
+- Component colors: per-sub-mesh overrides stored in `meshOverrides`
+- Timeline slider binds to manifest chain; scrubs are view-only
+
+**glTF Pipeline**
+- `decomposer.js`: base64 buffers/images → `writeToIPFS` → `ipfs://<CID>` URIs
+- `composer.js`: fetches `ipfs://` binaries from gateway → base64 data URIs
+- `material-editor.js`: `fetchComposite` → edit PBR factors → `commitCompositeChanges`
+- Round-trip tested: decompose → compose yields identical bytes
+
+**IPFS Layer**
+- Reads: `http://127.0.0.1:8080/ipfs/<cid>` with `cache: "no-store"`
+- Writes: Browser POSTs multipart to `http://127.0.0.1:5001/api/v0/add`, then pins
+- **Browser caching is hardcoded disabled** (`IPFS_CACHE_ENABLED = false`); no IndexedDB/memory cache active
+
+**Blockchain / Wallet (`wallet.js`)**
+- Multi-wallet: EIP-6963 discovery + WalletConnect v2 + legacy injected
+- Auto-connect from `localStorage` via silent `eth_accounts`
+- Networks: Hardhat local (`31415822`), Base Sepolia (`84532`), Polygon Amoy (`80002`)
+- Contract init with bytecode verification at address
+- USDC PayGo: approval → allowance reset → verification (5 retries) → `payForGenerationWithUSDC` with L2 gas defaults
+- Publishing: `publishAsset` (mint), `updateAssetURI` (republish), revert decoding
+- Collaboration: `addEditor`, `removeEditor`, `setCollaboratorRole`, `listCollaboratorsByRole`
+- Burn: resolves manifest CID before burn, calls `unpinAssetCids` non-blocking after on-chain success
+
+**API Service (`services/api.js`)**
+- Session auth with auto-retry on `INVALID_SESSION`
+- Fallback to per-request Bearer if session creation fails
+- Endpoints: `POST /generations`, `POST /manifests`, `POST /manifests/:cid/publish`, `GET /manifests/:cid/history`, `GET /tokens/:tokenId/manifest`, `POST /ipfs/unpin`, `GET /config`, `GET /contracts/:name/abi`
+
+**UI Systems**
+- Sidebar: 4 views persisted to `localStorage`, collapsible, responsive auto-collapse
+- Create panel: chat bubbles, prompt input, provider/tier dropdowns, generation flow
+- Asset library: owned (`balanceOf`/`tokenOfOwnerByIndex`) + shared (`listTokens`), lazy thumbnails, drag with `application/x-arbesk-linked-asset`
+- Outliner: tree with 📦/🧩 icons, click select, double-click dive, library drag
+- Nesting: breadcrumb path bar, Alt+Left ascend, depth status in bottom bar
+- History: draggable horizontal track, active vs published states
+- Ledger: derives activity from manifest chain via `/api/v1/manifests/:cid/history` — **no localStorage ledger**
+
+### 3.3 What Does NOT Work / Is Missing
+
+- ❌ **IPFS browser cache disabled** — every read hits the gateway directly.
+- ❌ `anchorManifest()` stubbed in `ledger-panel.js` — "not available in current contract".
+- ❌ `uri_to_cid.js` still has Phase 1/2 comments referencing inactive code paths.
+- ❌ Minor bug in `wallet.js` line 237: `devAddress` used but never defined in `_checkBalance()`.
+- ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
+- ❌ No automated E2E tests.
+
+---
+
+## 4. Smart Contracts (`blockchain/`)
+
+### 4.1 Contract: `ArbeskAsset.sol`
+
+**Not `ArbeskWorld.sol`** — older docs reference that name, but the only deployed contract is `ArbeskAsset`.
+
+- **Standard:** ERC-721 with Enumerable extension (`ERC721Enumerable`)
+- **Symbol:** `ARBA`
+- **Inheritance:** `ERC721Enumerable`, `Ownable`, `ReentrancyGuard`, `Pausable`
+
+**Key Functions (55 total)**
+
+| Category | Functions |
+|----------|-----------|
+| Payment (native) | `payForGeneration(bytes32 nodeId, string prompt)` — exact `msg.value`, anti-replay, forwards to treasury |
+| Payment (USDC) | `payForGenerationWithUSDC(bytes32 nodeId, string prompt, Tier tier)` — tiered pricing, `safeTransferFrom` |
+| Minting | `publishAsset(string uri, uint256 tokenId)`, `publishAsset(string uri, uint256 tokenId, address[] editors)` |
+| Queries | `tokenURI()`, `totalSupply()`, `getAssetManifest()`, `getTierCost()`, `isPaymentUsed()`, `getCollaboratorRole()`, `listEditors()`, `listCollaboratorsByRole()`, `listTokens()`, `canBurn()` |
+| Collaboration | `addEditor(uint256,address)`, `addEditor(uint256,address,uint8)`, `addEditor(uint256,address[])`, `removeEditor(uint256,address)`, `setCollaboratorRole(uint256,address,uint8)` |
+| Burn | `burn(uint256)` — owner or Editor with burn permission; cleans up collaborators |
+| Admin | `setCost()`, `setTreasury()`, `setTierCost()`, `setUsdcToken()`, `pause()`, `unpause()`, `withdraw()`, `withdrawUSDC()` |
+
+**State / Limits**
+- `costPerGeneration` = `0.01 ether` (native)
+- Tier costs: Basic=$0.75, Standard=$1.25, Premium=$1.75, Pro=$2.50 (6-decimal USDC)
+- `MAX_EDITORS_PER_TOKEN` = 50
+- `MAX_TOKENS_PER_EDITOR` = 500
+
+**Events (12 custom)**
+`AssetGenerationPaid`, `AssetGenerationPaidUSDC`, `AssetPublished`, `EditorAdded`, `EditorRemoved`, `CollaboratorRoleChanged`, `BurnPermissionChanged`, `AssetBurned`, `AssetURIUpdated`, `TreasuryUpdated`, `CostUpdated`, `TierCostUpdated`, `UsdcTokenUpdated`
+
+**Custom Errors (27)**
+Including `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`, `TreasuryTransferFailed`, `UsdcPaymentsDisabled`, `TokenAlreadyMinted`, `NotOwnerOrEditor`, `MaxEditorsReached`, `MaxTokensPerEditorReached`, `CannotBurn`, etc.
+
+### 4.2 MockUSDC
+
+- `blockchain/contracts/mock/MockUSDC.sol` — OpenZeppelin ERC20, 6 decimals, unrestricted `mint()`
+- Auto-deployed by `deploy.js` for local networks when no USDC address is configured
+
+### 4.3 Deployment Artifacts
+
+| Network | Address | Notes |
+|---------|---------|-------|
+| `hardhat` | `0x9fE4...a6e0` | Local container, MockUSDC |
+| `localhost` | `0x9fE4...a6e0` | Local container, MockUSDC |
+| `baseSepolia` | `0xFdf0...d73B` | Testnet, real Base Sepolia USDC |
+
+### 4.4 Hardhat Config
+
+- Solidity `0.8.24`, EVM `cancun`, optimizer `runs: 1000`
+- Networks: `hardhat` (31415822), `localhost` (8545), `baseSepolia` (84532), `base` (8453), `filecoinCalibration`, `filecoin`
+- Etherscan verification configured for BaseScan + Filfox
+
+### 4.5 Known Contract Issues
+
+- 🐛 **`scripts/verify.js` bug**: Passes `[treasury]` as sole constructor arg, but constructor is `constructor(address _treasury, address _usdcToken)`. Etherscan verification will fail on live networks.
+
+---
+
+## 5. Tests
+
+### 5.1 Backend / Unit Tests (`test/`)
+
+| File | Lines | Coverage |
+|------|-------|----------|
+| `test/api.test.js` | ~1,048 | All v1 routes: generation, save, publish, history chain, token resolution, auth, rate limit, thumbnails, child_ref manifests |
+| `test/decomposer-composer.test.js` | ~1,167 | glTF pure logic: composite detection, base64 round-trip, decompose, compose, URI resolution |
+| `test/scene-graph.test.js` | ~924 | Scene graph helpers: CID extraction, format detection, bounds, transform matrices, disposal, child_ref anchor walking |
+| `test/token-resolver.test.js` | ~150 | `normalizeTokenURI`, child_ref validation, `MAX_CHILD_WORLD_DEPTH` |
+
+### 5.2 Frontend Regression Tests (`test/frontend/`)
+
+| File | Lines | Coverage |
+|------|-------|----------|
+| `test/frontend/build.test.js` | ~286 | Syntax-checks built JS, verifies `window.*` exports, CDN version pinning (web3@1.10.0), wallet lifecycle |
+| `test/frontend/deployment-integrity.test.js` | ~486 | ABI exists, required function signatures, `.env` address sync, Docker volume mounts, on-chain bytecode verification |
+| `test/frontend/wallet-exports.test.js` | ~152 | Static parse of `wallet.js` export block, consumer import contracts |
+
+### 5.3 Contract Tests (`blockchain/test/`)
+
+| File | Lines | Coverage |
+|------|-------|----------|
+| `blockchain/test/ArbeskAsset.test.js` | ~1,291 | 110+ assertions: payment (native + USDC tiered), replay prevention, minting, collaborator roles (Viewer/Editor), burn permissions, transfer hooks, admin, pause |
+
+### 5.4 Test Gaps
+
+- ❌ No automated E2E tests.
+- ❌ No reentrancy attack tests (though `nonReentrant` is present).
+- ❌ No fuzzing / property-based tests.
+
+---
+
+## 6. Build System & Infrastructure
+
+### 6.1 Build Pipeline
+
+**Frontend build** (`frontend/scripts/` — custom Node.js, no Webpack/Vite):
+1. `clean` — `rm -rf frontend/dist`
+2. `build:pug` — Prettier-formatted `.pug` → `dist/*.html`
+3. `build:scss` — Sass + PostCSS/Autoprefixer → `dist/css/styles.css`
+4. `build:scripts` — `cp -R src/js dist/js` (verbatim copy, no transpilation)
+5. `build:assets` — `cp -R public/* dist/`
+6. `start` — Full build + BrowserSync + chokidar watcher (`sb-watch.js`)
+
+> Browser globals (`BABYLON`, `Web3`, `IpfsHttpClient`) come from CDN `<script>` tags in `studio.pug`.
+
+### 6.2 Docker Services (`docker-compose.yml`)
+
+| Service | Image | Ports | Config |
+|---------|-------|-------|--------|
+| `ipfs` | `ipfs/kubo:latest` | `127.0.0.1:5001`, `127.0.0.1:8080` | No DHT, no bootstrap, no NAT/relay, loopback-only swarm, 100GB cap, CORS enabled |
+| `hardhat` | `node:20-slim` | `127.0.0.1:8545` | Live-mounted `blockchain/` volume, default `npx hardhat node --hostname 0.0.0.0` |
+
+### 6.3 Dev Orchestration (`scripts/start-dev.sh`)
+
+217-line bash script that:
+1. Ensures `blockchain/.env` exists
+2. Starts Docker Compose (IPFS + Hardhat) if not running
+3. Installs `node_modules` if missing
+4. **Auto-deploys** `ArbeskAsset` + `MockUSDC` if no bytecode at `CONTRACT_ADDRESS`
+5. Syncs `CONTRACT_ADDRESS` to root `.env`
+6. Builds frontend
+7. Starts backend server
+8. Prints URLs + MetaMask setup info
+
+### 6.4 npm Scripts
+
+| Script | What it runs |
+|--------|--------------|
+| `npm start` | `node src/index.js` |
+| `npm run dev` | `./scripts/start-dev.sh` |
+| `npm run nodemon` | Build frontend + nodemon backend |
+| `npm run build:frontend` | Delegates to `frontend/package.json` build |
+| `npm test` | Jest on `test/` (excludes `blockchain/`) |
+| `npm run test:api` | Jest on `test/api.test.js` |
+| `npm run test:frontend` | Jest on `test/frontend/` |
+| `npm run test:contracts` | Hardhat tests inside container |
+| `npm run test:all` | Sequential: frontend → api → contracts |
+
+### 6.5 Environment Files
+
+| File | Status |
+|------|--------|
+| Root `.env` | ✅ Exists |
+| `blockchain/.env` | ✅ Exists |
+| `frontend/.env` | ❌ Missing (AGENTS.md mentions it, but it does not exist) |
+
+---
+
+## 7. Known Gaps & TODOs
+
+### 7.1 Unimplemented Features
+
+| Gap | Where it's felt | Notes |
+|-----|-----------------|-------|
+| Cloud 3D generation | `src/api/assets/generate-node.js` | Returns `501`. Only mock adapter works. |
+| Micro-ledger | `frontend/src/js/ui/ledger-panel.js` | Stubbed `anchorManifest()`. No append-only store. |
+| OpenSCAD WASM | Not present | Explicitly deferred post-MVP. |
+| Health check endpoint | Not present | `GET /api/health` planned, not implemented. |
+| Direct manifest fetch by ID | Not present | `GET /api/manifest/:id` planned, not implemented. |
+| Backend token resolver fallback | Not present | `GET /api/resolve-token` planned for Phase 5.1, not implemented. |
+
+### 7.2 Bugs / Issues
+
+| Issue | Location | Severity |
+|-------|----------|----------|
+| `verify.js` passes wrong constructor args | `blockchain/scripts/verify.js` | High — Etherscan verification will fail |
+| `devAddress` undefined in `_checkBalance()` | `frontend/src/js/blockchain/wallet.js` | Low — likely fallback path |
+| IPFS browser cache hardcoded disabled | `frontend/src/js/ipfs/remote-ipfs.js` | Low — intentional but no toggle UI |
+
+### 7.3 Documentation Drift
+
+| Drift | Reality |
+|-------|---------|
+| Contract name `ArbeskWorld` | Actual contract is `ArbeskAsset` |
+| File `src/api/generate-asset-node.js` | Actual path is `src/api/assets/generate-node.js` |
+| File `src/api/parametric-version.js` | Does not exist — parametric is client-side |
+| File `frontend/src/js/ui/chat-studio.js` | Actual file is `create-panel.js` |
+| File `frontend/src/js/ui/save-world.js` | Actual file is `asset-save.js` |
+| File `frontend/src/js/ui/gallery.js` | Actual file is `asset-library.js` |
+| File `frontend/src/js/ui/history-browser.js` | Actual file is `asset-history.js` |
+| File `frontend/src/js/ui/team-panel.js` | Actual file is `asset-editors.js` |
+
+---
+
+## 8. How to Verify Current State
 
 ```bash
-NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
-npm run build:frontend
+# Start infrastructure
+docker compose up -d
+
+# Full dev stack (deploys contracts if needed, builds frontend, starts backend)
+npm run dev
+
+# Run all verification tests
+npm run test:all
+
+# Or individually:
+npm run test:frontend   # Requires built dist/ + .env files
+npm run test:api        # Requires backend mocks only
+npm run test:contracts  # Requires running Hardhat container
 ```
 
-Result:
-
-- `test/api.test.js`: 44 tests passed (3 child_ref manifest integration tests + 3 token resolution tests + existing API tests)
-- `test/token-resolver.test.js`: 15 tests passed (11 normalizeTokenURI + 4 schema validation)
-- Frontend build passed
-- Zed diagnostics: no errors or warnings
+After any `.sol` change:
+```bash
+docker-compose run --rm hardhat npx hardhat compile
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+# Sync CONTRACT_ADDRESS from blockchain/.env → root .env
+npm run test:frontend
+```
 
 ---
 
-## Known Gaps / Next Work
+## 9. Summary
 
-### Completed (Phase 5.1)
+Arbesk is a **functionally complete thick-client 3D world studio** through Phase 5.1. The browser owns rendering, parametric editing, glTF decomposition, IPFS reads/writes, wallet interactions, and token resolution. The Express backend is a thin gatekeeper handling auth, generation validation, manifest persistence, and IPFS unpin lifecycle.
 
-All 10 issues completed:
-1. ✅ `child_ref` schema with `transform_matrix` per node
-2. ✅ Token resolver with 30s in-memory cache and URI normalization
-3. ✅ Scene graph renders token children recursively with cycle/depth protection
-4. ✅ Drag/drop from gallery + "Add to Scene" button
-5. ✅ Save/publish merges pending child refs into manifests
-6. ✅ Loading placeholders (pulsing), error placeholders, duplicate/cycle rejection
-7. ✅ Inspector shows read-only token child info (token ID, contract, chain, CID)
-8. ✅ External chain RPC support (Hardhat local, Base Sepolia, Polygon Amoy)
-9. ✅ 15 unit tests (normalizeTokenURI + schema validation) + 6 integration tests (child ref manifest save, mixed manifest, publish with thumbnail, token resolution, 404, 503 guard)
-10. ✅ Documentation updated
+**What is production-ready:**
+- Mock-backed generative pipeline with tx validation and replay guards
+- Full parametric editing with live Babylon.js preview
+- Token-based child world composition with depth/cycle protection
+- USDC PayGo with tiered pricing
+- SIWE session auth reducing per-generation pop-ups
+- ERC-721 minting, URI updates, role-based collaboration, burn with cleanup
+- glTF decompose/composer/material-edit pipeline
+- Private Dockerized IPFS + Hardhat local dev stack
 
-### Recent Changes
-
-- **Manifest-driven activity panel (2026-06-08)** — The ledger panel now derives its feed entirely from the asset manifest chain (`prev_manifest_cid` + `nodes[].history[]`). No localStorage, no server-side ledger, no event accumulation. The previous server-side micro-ledger was removed.
-
-- **Documentation cleanup (2026-06-06)** — All Filecoin-specific references removed from project documentation (AGENTS.md, README.md, ARCHITECTURE.md, CURRENT_STATUS.md, ZED_AGENT_GUIDE.md, SECURITY.md, skill files). Project now describes a generic EVM-compatible target. Hardhat network names and RPC configs in code remain intact.
-
-### Upcoming
-
-No specific upcoming phases are currently planned. Deferred items remain in the list below.
-
-### Deferred
-
-- **Production adapters** — Tripo3D, Meshy, and Hunyuan3D are described by the architecture but not implemented; current generation uses the mock adapter unless cloud adapters are added.
-- **Auth/payment hardening** — further align signed wallet address, tx sender, event payload, prompt, and node ID.
-- **Frontend automated tests** — no E2E/browser automation is currently committed.
-- **OpenSCAD WASM** — schema-compatible but deferred post-MVP.
-- **Thumbnail quality controls** — currently captures a fixed `512x288` WebP snapshot at publish time; future UI could allow recapture/crop/disable controls.
+**What is explicitly not implemented:**
+- Production cloud 3D adapters (returns 501)
+- Micro-ledger / append-only audit trail
+- OpenSCAD WASM
+- E2E tests

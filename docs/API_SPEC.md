@@ -18,7 +18,7 @@
 
 ## Authentication
 
-`POST /api/generate-asset-node` requires a Bearer token built from the transaction hash signature flow:
+`POST /api/v1/generations` requires a Bearer token built from the transaction hash signature flow:
 
 ```text
 Authorization: Bearer <base64(message)>.<base64(signature)>
@@ -51,7 +51,7 @@ Returns the configured `CONTRACT_ADDRESS`.
 
 ---
 
-### `POST /api/generate-asset-node`
+### `POST /api/v1/generations`
 
 Validates a paid generation transaction, generates or mocks an asset, uploads it to private IPFS, and writes a new manifest snapshot.
 
@@ -116,65 +116,41 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 
 ---
 
-### `POST /api/parametric-version`
+### `POST /api/parametric-version` — Client-Side Only
 
-Creates a new free parametric history entry for color/scale edits.
+> **This backend route does not exist.** Parametric editing (color/scale) is handled entirely in the browser.
 
-**Current behavior**
+**How parametric edits actually work:**
 
-- Does not require payment.
-- Requires `nodeId` and `prevManifestCid`.
-- Reads the previous manifest from private IPFS.
-- Finds the target node and copies `node.source` into the history entry.
-- Validates optional hex color and positive numeric scale components.
-- Writes the updated manifest to private IPFS with `prev_manifest_cid = prevManifestCid`.
+1. User selects a node and changes color/scale in the inspector.
+2. `parametric-preview.js` applies the change live to Babylon.js meshes.
+3. `asset-save.js` builds a parametric history entry and appends it to the manifest.
+4. The browser sends the full updated manifest to `POST /api/v1/manifests` (save draft) or through the publish flow.
 
-**Request Body**
+The parametric history entry structure stored in the manifest:
 
 ```json
 {
-  "nodeId": "node_table_001",
-  "prevManifestCid": "QmPreviousManifest...",
-  "color": "#FF5733",
-  "scale": { "x": 1.5, "y": 1.5, "z": 1.5 }
-}
-```
-
-**Response `200`**
-
-```json
-{
-  "newManifestCid": "QmNewManifest...",
-  "historyEntry": {
-    "v": 2,
-    "timestamp": 1780002000,
-    "src": {
-      "cid": "QmAssetCid...",
-      "path": "asset.glb",
-      "format": "glb"
-    },
-    "prompt": "Scale 1.5x,1.5x,1.5x, Color #FF5733",
-    "provider": "parametric",
-    "type": "parametric",
-    "params": {
-      "scale": { "x": 1.5, "y": 1.5, "z": 1.5 },
-      "color": "#FF5733"
-    }
+  "v": 2,
+  "timestamp": 1780002000,
+  "src": {
+    "cid": "QmAssetCid...",
+    "path": "asset.glb",
+    "format": "glb"
+  },
+  "prompt": "Scale 1.5x,1.5x,1.5x, Color #FF5733",
+  "provider": "parametric",
+  "type": "parametric",
+  "params": {
+    "scale": { "x": 1.5, "y": 1.5, "z": 1.5 },
+    "color": "#FF5733"
   }
 }
 ```
 
-**Errors**
-
-| HTTP | Meaning |
-|---:|---|
-| 400 | Missing `nodeId`/`prevManifestCid`, invalid color, invalid scale, or node has no source |
-| 404 | Node not found in manifest |
-| 500 | IPFS read/write or JSON parsing error |
-
 ---
 
-### `POST /api/save-manifest`
+### `POST /api/v1/manifests`
 
 Saves a manifest to private IPFS without blockchain interaction.
 
@@ -207,7 +183,7 @@ Any manifest JSON object.
 
 ---
 
-### `POST /api/push-ipfs`
+### `POST /api/v1/manifests/:cid/publish`
 
 Uploads a JSON payload to private IPFS. The publish flow uses this endpoint to push the final named manifest before minting or updating a token URI.
 
@@ -264,7 +240,7 @@ QmManifestCid...
 
 ---
 
-### `GET /api/manifest-chain?cid=<manifestCid>`
+### `GET /api/v1/manifests/:cid/history`
 
 Walks the **IPFS content-addressed version chain** (also called the **manifest chain**) — the backward-linked sequence of `prev_manifest_cid` pointers that connects each manifest version to its predecessor. Because every manifest CID is a cryptographic hash of its contents, the chain is tamper-evident: altering any version invalidates all subsequent CIDs.
 
@@ -309,7 +285,7 @@ Notes:
 
 ### `GET /api/manifest-by-token/:tokenId`
 
-Fetches a manifest by on-chain token ID. The backend queries `ArbeskWorld.tokenURI(tokenId)` and then fetches that manifest from private IPFS.
+Fetches a manifest by on-chain token ID. The backend queries `ArbeskAsset.tokenURI(tokenId)` and then fetches that manifest from private IPFS.
 
 **Response `200`**
 
@@ -342,12 +318,12 @@ Fetches a manifest by on-chain token ID. The backend queries `ArbeskWorld.tokenU
 
 ---
 
-### `GET /api/abi/ArbeskWorld.json`
+### `GET /api/v1/contracts/ArbeskAsset/abi`
 
 Serves the compiled contract artifact from:
 
 ```text
-blockchain/artifacts/contracts/ArbeskWorld.sol/ArbeskWorld.json
+blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json
 ```
 
 **Response `200`**
@@ -372,13 +348,13 @@ blockchain/artifacts/contracts/ArbeskWorld.sol/ArbeskWorld.json
 ## Frontend/Contract Flow Summary
 
 1. User connects wallet.
-2. For generation, frontend calls `payForGeneration(nodeId, prompt)` on `ArbeskWorld`.
-3. Frontend signs tx hash and calls `POST /api/generate-asset-node`.
+2. For generation, frontend calls `payForGeneration(nodeId, prompt)` on `ArbeskAsset`.
+3. Frontend signs tx hash and calls `POST /api/v1/generations`.
 4. Backend validates payment, uploads asset, writes manifest, returns new manifest CID.
 5. Frontend loads the manifest into Babylon.js and updates `window.activeManifestId` / `window.latestManifestId`.
-6. Parametric edits call `POST /api/parametric-version` directly.
-7. Save calls `POST /api/save-manifest`.
-8. Publish captures an optional WebP thumbnail and calls `POST /api/push-ipfs`.
+6. Parametric edits are applied client-side; the browser sends the updated manifest to `POST /api/v1/manifests`.
+7. Save calls `POST /api/v1/manifests`.
+8. Publish captures an optional WebP thumbnail and calls `POST /api/v1/manifests/:cid/publish`.
 9. Frontend calls `publishAsset(tokenURI, tokenId)` for new worlds or `updateAssetURI(tokenId, newTokenURI)` for existing worlds.
 10. Gallery fetches token URIs from the contract, loads manifests, and displays names/thumbnails.
 11. Owner adds collaborators via `addEditor(tokenId, address, role)` and manages burn permissions via `setBurnPermission()`.
@@ -470,7 +446,7 @@ The following are planned for Phase 5.1 (Token ID-Based Child Worlds) and Phase 
 
 | Route | Limit | Window | Key |
 |---|---:|---:|---|
-| `POST /api/generate-asset-node` | 10 | 1 hour | recovered wallet address |
+| `POST /api/v1/generations` | 10 | 1 hour | recovered wallet address |
 
 The generation route currently emits:
 

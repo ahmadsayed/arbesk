@@ -30,6 +30,7 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 import { initWalletPopover } from "/js/ui/wallet-popover.js";
 
 import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
+import { getCachedSession } from "/js/services/api.js";
 
 // ── Headerbar network selector ──
 const networkSelect = document.getElementById("headerbarNetworkSelect");
@@ -61,6 +62,28 @@ autoConnectWallet();
 document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
 initWalletPopover();
 
+function updateWalletButtonState(address, isAuthenticated) {
+  const d = document.getElementById("disconnectWalletBtn");
+  if (!d) return;
+
+  const text = d.querySelector("span") || d;
+  if (!address) {
+    if (text) text.textContent = "Disconnect";
+    return;
+  }
+
+  const truncated = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  if (text) {
+    text.textContent = isAuthenticated ? truncated : `${truncated} • Sign In`;
+  }
+
+  if (isAuthenticated) {
+    d.classList.remove("auth-required");
+  } else {
+    d.classList.add("auth-required");
+  }
+}
+
 document.addEventListener("wallet:connected", (e) => {
   const c = document.getElementById("connectWalletBtn");
   const d = document.getElementById("disconnectWalletBtn");
@@ -69,12 +92,12 @@ document.addEventListener("wallet:connected", (e) => {
     c.classList.add("hidden");
     c.classList.remove("disconnected");
   }
-  if (d) {
-    d.classList.remove("hidden");
-    const addr = e.detail?.address || "";
-    const text = d.querySelector("span") || d;
-    if (text) text.textContent = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "Wallet";
-  }
+
+  const address = e.detail?.address || "";
+  const cached = getCachedSession();
+  const isAuth = cached && cached.address === address.toLowerCase();
+  updateWalletButtonState(address, isAuth);
+
   // Green dot + sync network selector to current chain
   if (netSel) {
     netSel.classList.add("connected");
@@ -95,9 +118,17 @@ document.addEventListener("wallet:disconnected", () => {
   }
   if (d) {
     d.classList.add("hidden");
-    const text = d.querySelector("span");
-    if (text) text.textContent = "Disconnect";
+    d.classList.remove("auth-required");
   }
+  updateWalletButtonState(null, false);
   // Gray dot when disconnected
   if (netSel) netSel.classList.remove("connected");
+});
+
+document.addEventListener("user:authenticated", (e) => {
+  updateWalletButtonState(e.detail?.address, true);
+});
+
+document.addEventListener("user:auth-required", (e) => {
+  updateWalletButtonState(e.detail?.address, false);
 });

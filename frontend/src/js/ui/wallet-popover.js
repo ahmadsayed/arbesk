@@ -11,6 +11,7 @@ import {
   copyToClipboard,
 } from "../blockchain/explorer.js";
 import { disconnectWallet } from "../blockchain/wallet.js";
+import { getCachedSession } from "../services/api.js";
 
 let popover = null;
 let isOpen = false;
@@ -23,6 +24,7 @@ function getElements() {
     address: document.getElementById("walletPopoverAddress"),
     copyBtn: document.getElementById("walletPopoverCopy"),
     explorerLink: document.getElementById("walletPopoverExplorer"),
+    signInBtn: document.getElementById("walletPopoverSignIn"),
     disconnectBtn: document.getElementById("walletPopoverDisconnect"),
     walletBtn: document.getElementById("disconnectWalletBtn"),
   };
@@ -125,6 +127,17 @@ function updateContent() {
       els.explorerLink.classList.add("hidden");
     }
   }
+
+  // Sign In button visibility
+  if (els.signInBtn) {
+    const cached = getCachedSession();
+    const isAuth = cached && cached.address === address.toLowerCase();
+    if (address && !isAuth) {
+      els.signInBtn.classList.remove("hidden");
+    } else {
+      els.signInBtn.classList.add("hidden");
+    }
+  }
 }
 
 // ─── Event Handlers ──────────────────────────────────────────────────
@@ -143,6 +156,16 @@ async function onCopy() {
         els.copyBtn.classList.remove("copied");
       }
     }, 1500);
+  }
+}
+
+async function onSignIn() {
+  closePopover();
+  try {
+    const { getOrCreateSession } = await import("../services/api.js");
+    await getOrCreateSession();
+  } catch (err) {
+    // User rejected — state remains auth-required
   }
 }
 
@@ -187,6 +210,9 @@ function initWalletPopover() {
 
   if (els.copyBtn) {
     els.copyBtn.addEventListener("click", onCopy);
+  }
+  if (els.signInBtn) {
+    els.signInBtn.addEventListener("click", onSignIn);
   }
   if (els.disconnectBtn) {
     els.disconnectBtn.addEventListener("click", onDisconnect);

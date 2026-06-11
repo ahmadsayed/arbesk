@@ -88,7 +88,7 @@ const SESSION_STORAGE_KEY = "arbesk_session";
  * Read the cached session token from localStorage.
  * @returns {{ token: string, expiresAt: number, address: string } | null}
  */
-function getCachedSession() {
+export function getCachedSession() {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) {
@@ -197,7 +197,7 @@ export async function createSession() {
  *
  * @returns {Promise<string>} session token
  */
-async function getOrCreateSession() {
+export async function getOrCreateSession() {
   // Try cached session first
   const cached = getCachedSession();
   if (cached && cached.address === window.walletAddress?.toLowerCase()) {

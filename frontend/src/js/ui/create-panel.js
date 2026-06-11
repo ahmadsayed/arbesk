@@ -11,7 +11,7 @@ import {
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
 import { payForGenerationWithUSDC } from "../blockchain/wallet.js";
-import { generateAsset, ApiError } from "../services/api.js";
+import { generateAsset, ApiError, getOrCreateSession } from "../services/api.js";
 
 // ─── DOM References ───
 const chatHistory = document.getElementById("chatHistory");
@@ -94,6 +94,14 @@ async function onGenerate() {
 
   if (!window.walletAddress) {
     alert("Please connect your wallet first.");
+    return;
+  }
+
+  // Ensure authenticated before payment so sign popup comes first
+  try {
+    await getOrCreateSession();
+  } catch (err) {
+    showToast("Sign in to generate assets");
     return;
   }
 

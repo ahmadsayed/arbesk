@@ -349,6 +349,9 @@ async function _finishWalletSetup(address) {
 
   // Setup listeners (only once per provider)
   _attachProviderListeners();
+
+  // Eagerly authenticate (non-blocking)
+  authenticateUser();
 }
 
 /**
@@ -402,6 +405,32 @@ function _attachProviderListeners() {
     web3Provider.on("chainChanged", () => {
       window.location.reload();
     });
+  }
+}
+
+/**
+ * Eagerly authenticate the user after wallet connection.
+ * Tries to create/reuse a session token. If the user rejects the sign,
+ * dispatches user:auth-required so the UI can show a "Sign In" prompt.
+ *
+ * Uses dynamic import to avoid circular dependency with api.js
+ */
+async function authenticateUser() {
+  try {
+    const { getOrCreateSession } = await import("../services/api.js");
+    const session = await getOrCreateSession();
+    document.dispatchEvent(
+      new CustomEvent("user:authenticated", {
+        detail: { address: window.walletAddress, session },
+      })
+    );
+  } catch (err) {
+    console.warn("[AUTH] Session creation failed or rejected:", err.message);
+    document.dispatchEvent(
+      new CustomEvent("user:auth-required", {
+        detail: { address: window.walletAddress },
+      })
+    );
   }
 }
 

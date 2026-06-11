@@ -27,7 +27,7 @@ This file contains conventions, key file references, and practical guidance for 
 |-------|--------|-------|
 | Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ DONE | Backend API, IPFS pipeline, mock adapters |
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ DONE | Scene graph, time-travel, parametric preview |
-| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ DONE | `ArbeskWorld.sol`, tx validation, replay prevention |
+| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ DONE | `ArbeskAsset.sol`, tx validation, replay prevention |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ DONE | Studio shell, wallet wiring, team panel, minting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ DONE | WebP thumbnails, gallery thumbnails, on-demand IPFS cache, one-node scene cleanup |
 | **Phase 5.1: Token ID-Based Child Worlds** | ✅ **DONE** | Token ref schema, resolver, drag/drop child worlds, scene graph rendering |
@@ -97,8 +97,8 @@ If none apply, **implement it in the browser**.
 |---------------|---------------|
 | Backend server entry | `src/index.js` |
 | API routes | `src/api/index.js` |
-| Cloud generation route | `src/api/generate-asset-node.js` |
-| Parametric version route | `src/api/parametric-version.js` |
+| Cloud generation route | `src/api/assets/generate-node.js` |
+| Parametric version route | *(client-side only; no backend route)* |
 | Auth middleware | `src/api/authentication.js` |
 | Session store | `src/api/sessions.js` |
 | Rate limiter | `src/api/rate-limiter.js` |
@@ -370,8 +370,8 @@ The backend uses structured console logging with tagged prefixes. **All essentia
 | Tag | Meaning | Example |
 |-----|---------|---------|
 | `[BOOT]` | Server startup / config | `[BOOT] Server started at http://localhost:9090` |
-| `[OK]` | Successful request | `[OK] GET /api/manifest-chain?cid=... → 200 (14ms)` |
-| `[ERR]` | Failed request (4xx/5xx) | `[ERR] POST /api/save-manifest → 400 (2ms)` |
+| `[OK]` | Successful request | `[OK] GET /api/v1/manifests/:cid/history → 200 (14ms)` |
+| `[ERR]` | Failed request (4xx/5xx) | `[ERR] POST /api/v1/manifests → 400 (2ms)` |
 | `[IPFS]` | IPFS add/cat operations | `[IPFS] cat Qm... → 1240 chars` |
 | `[SAVE]` | Manifest save | `[SAVE] manifest_id=... version=5 → cid=Qm...` |
 | `[CHAIN]` | Manifest chain walk | `[CHAIN] walking from Qm...` |
@@ -423,13 +423,12 @@ Arbesk stores worlds as **fractal manifests** — JSON documents where every ass
 - A `source` object with `{ cid, path, format }` (e.g. GLB, GLTF, OBJ, FBX) OR `scad_source` (OpenSCAD code string)
 - A `transform_matrix` (4x4 column-major)
 - A `history` array of version deltas
-- A `child_manifest_id` for recursive nesting (legacy; being replaced by `child_ref` token references)
-- A `child_ref` object for token-based dynamic child world references
+- A `child_ref` object for token-based dynamic child world references (replaces legacy `child_manifest_id`)
 
 **IPFS Content-Addressed Version Chain:**
 
 Every manifest includes a `prev_manifest_cid` that points to the previous version's IPFS CID. This forms a backward-linked **manifest chain** (also called the **IPFS version chain**) walking from newest → oldest. Because each CID is a cryptographic hash of the manifest content, the chain is tamper-evident: altering any version invalidates all subsequent CIDs. The chain is consumed by:
-- `GET /api/manifest-chain` — the backend walks `prev_manifest_cid` links up to 50 entries deep.
+- `GET /api/v1/manifests/:cid/history` — the backend walks `prev_manifest_cid` links up to 50 entries deep.
 - **History timeline UI** — a draggable circular-node scrubber in the topbar for version switching.
 - **Replay prevention** — the backend scans manifest history for duplicate `txHash` values.
 - **Client-side activity log** — browser events are recorded in localStorage for the current session.
@@ -707,7 +706,14 @@ If session creation fails (e.g., user denies the session signature), `generateAs
           }
         }
       ],
-      "child_manifest_id": "nested_dollhouse_universe_02"
+      "child_ref": {
+        "type": "token",
+        "chainId": 314159,
+        "contractAddress": "0x1234567890abcdef1234567890abcdef12345678",
+        "tokenId": "7",
+        "standard": "ERC721",
+        "resolution": "latest"
+      }
     },
     {
       "node_id": "child_token_314159_0xabc_42",
@@ -767,49 +773,34 @@ This repository is initialized for Zed agent workflows.
 
 ---
 
-## 16. Phase 5.1: Token ID-Based Child Worlds (IN PROGRESS)
+## 16. Phase 5.1: Token ID-Based Child Worlds (DONE)
 
-> **Status**: 🔄 In Progress — 11 open issues tracked on GitHub  
-> **Goal**: Allow Arbesk worlds to compose other worlds by on-chain token ID, replacing static manifest CID child links with dynamic token references. Child world updates automatically reflect through the token's `tokenURI` at load time.
+> **Status**: ✅ Complete — implemented, tested, and in production use.  
+> **Source of truth:** `docs/CURRENT_STATUS.md` §3.2 and §4.2.
 
-### 15.1.1 Why Token-Based Child References?
+Child worlds are now referenced by on-chain token IDs rather than static manifest CIDs. The parent stores `chainId + contractAddress + tokenId` in a `child_ref` object; at load time the browser resolves the token's `tokenURI()` to the latest manifest CID.
 
-Current state: Child worlds are linked via static `child_manifest_id` / `linked_asset_manifest_cid` (see section 7). This means:
-- Child worlds are frozen at the CID stored at reference time.
-- Updating a child world requires manually updating the parent manifest.
-- No way to express "include the latest version of token #42" as a composition primitive.
+### What was delivered
 
-### 15.1.2 Scope
+| # | Deliverable | File |
+|---|-------------|------|
+| Schema | `child_ref` manifest schema | `docs/CURRENT_STATUS.md` §7 |
+| Resolver | Token → manifest CID | `frontend/src/js/blockchain/token-resolver.js` |
+| Rendering | Scene graph `loadTokenChildNode()` with cycle/depth protection | `frontend/src/js/engine/scene-graph.js` |
+| Drag/drop | Gallery cards → viewport drop | `frontend/src/js/ui/asset-library.js` + `asset-drop-zone.js` |
+| Persist | Save `child_ref` nodes to IPFS manifest | `frontend/src/js/ui/asset-save.js` |
+| States | Loading placeholders, error handling | `frontend/src/js/engine/placeholders.js` |
+| Inspector | Token child info panel | `frontend/src/js/engine/parametric-preview.js` |
+| Tests | Resolver, persistence, scene loading | `test/scene-graph.test.js`, `test/token-resolver.test.js`, `test/api.test.js` |
 
-| Issue | Phase | Description |
-|-------|-------|-------------|
-| #1 | Schema | Define clean `child_ref` manifest schema |
-| #2 | Resolver | Token reference resolver (`tokenURI` → manifest CID) |
-| #3 | Rendering | Scene graph support for `child_ref` nodes (cycle protection, depth limit) |
-| #4 | Drag/drop | Drag gallery world cards onto scene to add token children |
-| #5 | Persist | Save dropped token child refs to IPFS manifest |
-| #6 | States | Safety checks, loading states, placeholders, error feedback |
-| #7 | Inspector | Display token child worlds in world inspector panel |
-| #8 | External | Support external project token contracts |
-| #9 | Tests | Regression coverage for resolver, persistence, scene loading |
-| #10 | Docs | Document token ID-based world composition model |
+### Design principles (still in force)
 
-**MVP cutoff**: Issues #1–#6 are the MVP. Issues #7–#10 are polish layers.
-
-### 15.1.3 Design Principles
-
-1. **Clean slate**: Legacy `child_manifest_id` is replaced, not augmented. No backward-compat conditionals.
-2. **Token as dynamic pointer**: Parent stores `chainId + contractAddress + tokenId`, resolves to latest CIDs on load.
-3. **Parent owns placement**: `transform_matrix` on each child node determines position/rotation/scale.
-4. **No local history**: Token child nodes do not have `history` arrays. Version history belongs to the referenced token.
-5. **Isolation**: Failed child resolution shows a placeholder; does not break the parent scene.
-
-### 15.1.4 New Files
-
-| File | Purpose |
-|------|---------|
-| `frontend/src/js/blockchain/token-resolver.js` | Resolves `child_ref` → manifest CID via tokenURI |
-| `frontend/src/js/ui/asset-drop-zone.js` | Scene canvas drop target for token cards (extends existing) |
+1. **Clean slate**: Legacy `child_manifest_id` is replaced. No backward-compat conditionals.
+2. **Token as dynamic pointer**: Resolves to latest CID on every load.
+3. **Parent owns placement**: `transform_matrix` on each child node.
+4. **No local history**: Token child nodes have no `history`; history lives in the referenced token's manifest.
+5. **Isolation**: Failed resolution shows a placeholder; parent scene continues.
+6. **Depth cap**: `MAX_CHILD_WORLD_DEPTH = 5`.
 
 ---
 
