@@ -9,8 +9,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let ipfsStorage;
   let mockIPFS;
   let mockWeb3Receipt;
+  let logSpy;
 
   beforeAll(async () => {
+    // Suppress noisy production logs during API tests.
+    const originalLog = console.log;
+    console.log = () => {};
+    logSpy = { mockRestore: () => { console.log = originalLog; } };
+
     ipfsStorage = new Map();
     mockIPFS = {
       add: jest.fn(async (data) => {
@@ -144,6 +150,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   });
 
   afterAll(() => {
+    logSpy?.mockRestore();
     jest.restoreAllMocks();
     delete process.env.CONTRACT_ADDRESS;
   });
@@ -467,23 +474,18 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // The rate limiter uses res.locals.walletAddress set by authenticate.
       // Our mock auth always recovers to 0xTestAddress, so all requests count against same wallet.
       // We already made several generation requests above. Make enough to hit the 10/hour limit.
-      const logSpy = jest.spyOn(console, "log").mockImplementation();
       let lastStatus = 200;
-      try {
-        for (let i = 0; i < 15; i++) {
-          const res = await request(app)
-            .post("/api/v1/generations")
-            .set("Authorization", makeAuthHeader(`0xrate${i}`))
-            .send({
-              prompt: `Rate test ${i}`,
-              nodeId: `node_rate_${i}`,
-              txHash: `0xrate${i}`,
-            });
-          lastStatus = res.status;
-          if (res.status === 429) break;
-        }
-      } finally {
-        logSpy.mockRestore();
+      for (let i = 0; i < 15; i++) {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", makeAuthHeader(`0xrate${i}`))
+          .send({
+            prompt: `Rate test ${i}`,
+            nodeId: `node_rate_${i}`,
+            txHash: `0xrate${i}`,
+          });
+        lastStatus = res.status;
+        if (res.status === 429) break;
       }
       expect(lastStatus).toBe(429);
     });
