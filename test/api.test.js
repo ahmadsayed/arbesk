@@ -12,10 +12,17 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let logSpy;
 
   beforeAll(async () => {
-    // Suppress noisy production logs during API tests.
+    // Suppress noisy production logs/warnings during API tests.
     const originalLog = console.log;
+    const originalWarn = console.warn;
     console.log = () => {};
-    logSpy = { mockRestore: () => { console.log = originalLog; } };
+    console.warn = () => {};
+    logSpy = {
+      mockRestore: () => {
+        console.log = originalLog;
+        console.warn = originalWarn;
+      },
+    };
 
     ipfsStorage = new Map();
     mockIPFS = {
