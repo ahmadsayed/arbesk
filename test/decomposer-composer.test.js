@@ -15,6 +15,223 @@ import { jest } from "@jest/globals";
 jest.setTimeout(15000);
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Inline copies from frontend/src/js/gltf/glb-parser.js
+// (imported directly here to avoid Jest ESM transform issues with frontend files)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const GLB_MAGIC = 0x46546c67;
+const GLB_VERSION = 2;
+const CHUNK_TYPE_JSON = 0x4e4f534a;
+const CHUNK_TYPE_BIN = 0x004e4942;
+
+function isGLB(arrayBuffer) {
+  if (!arrayBuffer || arrayBuffer.byteLength < 12) return false;
+  const view = new DataView(arrayBuffer);
+  const magic = view.getUint32(0, true);
+  const version = view.getUint32(4, true);
+  return magic === GLB_MAGIC && version === GLB_VERSION;
+}
+
+function parseGLB(arrayBuffer) {
+  if (!arrayBuffer) throw new Error("parseGLB: arrayBuffer is required");
+  if (arrayBuffer.byteLength < 12) {
+    throw new Error("parseGLB: file too small to be a GLB");
+  }
+  const view = new DataView(arrayBuffer);
+  const magic = view.getUint32(0, true);
+  const version = view.getUint32(4, true);
+  const length = view.getUint32(8, true);
+  if (magic !== GLB_MAGIC) {
+    throw new Error(`parseGLB: invalid magic 0x${magic.toString(16)}`);
+  }
+  if (version !== GLB_VERSION) {
+    throw new Error(`parseGLB: unsupported GLB version ${version}`);
+  }
+  if (length !== arrayBuffer.byteLength) {
+    throw new Error(
+      `parseGLB: header length ${length} does not match buffer ${arrayBuffer.byteLength}`,
+    );
+  }
+
+  let json = null;
+  let binaryChunk = null;
+  let offset = 12;
+  while (offset < length) {
+    if (offset + 8 > length) throw new Error("parseGLB: truncated chunk header");
+    const chunkLength = view.getUint32(offset, true);
+    const chunkType = view.getUint32(offset + 4, true);
+    offset += 8;
+    if (offset + chunkLength > length) {
+      throw new Error("parseGLB: chunk exceeds file length");
+    }
+    const chunkData = arrayBuffer.slice(offset, offset + chunkLength);
+    if (chunkType === CHUNK_TYPE_JSON) {
+      const text = new TextDecoder("utf-8").decode(chunkData);
+      json = JSON.parse(text);
+    } else if (chunkType === CHUNK_TYPE_BIN) {
+      binaryChunk = chunkData;
+    }
+    offset += chunkLength;
+  }
+  if (!json) throw new Error("parseGLB: no JSON chunk found");
+  if (!json.asset || json.asset.version !== "2.0") {
+    throw new Error("parseGLB: JSON is not glTF 2.0");
+  }
+  return { json, binaryChunk };
+}
+
+// The base64ToBytes and extractDataURI helpers already appear later in this file.
+
+function detectImageMimeType(bytes) {
+  if (bytes.length < 4) return null;
+  const b = bytes;
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+    return "image/png";
+  }
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    b.length >= 12 &&
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  if (
+    b.length >= 12 &&
+    b[0] === 0xab &&
+    b[1] === 0x4b &&
+    b[2] === 0x54 &&
+    b[3] === 0x58 &&
+    b[4] === 0x20 &&
+    b[5] === 0x31 &&
+    b[6] === 0x31 &&
+    b[7] === 0xbb &&
+    b[8] === 0x0d &&
+    b[9] === 0x0a &&
+    b[10] === 0x1a &&
+    b[11] === 0x0a
+  ) {
+    return "image/ktx2";
+  }
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) {
+    return "image/gif";
+  }
+  return null;
+}
+
+function extFromMimeType(mimeType) {
+  if (!mimeType) return "bin";
+  const map = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/ktx2": "ktx2",
+    "image/gif": "gif",
+    "application/octet-stream": "bin",
+  };
+  return map[mimeType] || mimeType.split("/").pop() || "bin";
+}
+
+function resolveBufferBytes(buf, binaryChunk) {
+  if (!buf.uri) {
+    if (!binaryChunk) {
+      throw new Error("resolveBufferBytes: GLB buffer has no uri and no binary chunk");
+    }
+    return new Uint8Array(binaryChunk);
+  }
+  if (buf.uri.startsWith("data:")) {
+    const extracted = extractDataURI(buf.uri);
+    if (!extracted) throw new Error("resolveBufferBytes: failed to extract data URI");
+    return extracted.bytes;
+  }
+  return null;
+}
+
+async function decomposeGLB(arrayBuffer, writer) {
+  if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
+  const { json, binaryChunk } = parseGLB(arrayBuffer);
+  const composite = JSON.parse(JSON.stringify(json));
+
+  const bufferBytesByIndex = [];
+  const buffers = composite.buffers || [];
+  for (let i = 0; i < buffers.length; i++) {
+    const buf = buffers[i];
+    if (buf.uri && buf.uri.startsWith(CID_BUFFER_PREFIX)) {
+      const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
+      buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
+      continue;
+    }
+    if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) continue;
+    if (buf.uri && !buf.uri.startsWith("data:")) continue;
+
+    const bytes = resolveBufferBytes(buf, binaryChunk);
+    if (!bytes) {
+      console.warn(`[GLB-DECOMPOSE] buffer[${i}] could not be resolved, skipping`);
+      continue;
+    }
+    const filename = `buffer_${i}.bin`;
+    const cid = await writer(bytes, filename);
+    buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
+    bufferBytesByIndex[i] = bytes;
+  }
+
+  const images = composite.images || [];
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    if (img.uri && !img.uri.startsWith("data:")) {
+      if (!img.uri.startsWith(IPFS_URI_PREFIX)) {
+        console.log(`[GLB-DECOMPOSE] image[${i}] external URI, keeping as-is`);
+      }
+      continue;
+    }
+    let bytes = null;
+    let mimeType = img.mimeType || null;
+    if (img.uri && img.uri.startsWith("data:")) {
+      const extracted = extractDataURI(img.uri);
+      if (extracted) {
+        bytes = extracted.bytes;
+        mimeType = mimeType || extracted.mimeType;
+      }
+    } else if (img.bufferView !== undefined) {
+      const bufferView = composite.bufferViews?.[img.bufferView];
+      if (!bufferView) {
+        console.warn(`[GLB-DECOMPOSE] image[${i}] bufferView ${img.bufferView} not found`);
+        continue;
+      }
+      const srcBytes = bufferBytesByIndex[bufferView.buffer];
+      if (!srcBytes) {
+        console.warn(`[GLB-DECOMPOSE] image[${i}] buffer ${bufferView.buffer} could not be resolved`);
+        continue;
+      }
+      const byteOffset = bufferView.byteOffset || 0;
+      const byteLength = bufferView.byteLength;
+      bytes = srcBytes.subarray(byteOffset, byteOffset + byteLength);
+      if (!mimeType) mimeType = detectImageMimeType(bytes);
+    } else {
+      continue;
+    }
+    if (!bytes || bytes.length === 0) continue;
+    const ext = extFromMimeType(mimeType);
+    const filename = `texture_${i}.${ext}`;
+    const cid = await writer(bytes, filename);
+    images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
+    if (mimeType && !images[i].mimeType) images[i].mimeType = mimeType;
+  }
+
+  const compositeText = JSON.stringify(composite, null, 2);
+  const compositeCid = await writer(compositeText, "composite.gltf");
+  return { composite, compositeCid };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Inline copies from frontend/src/js/gltf/decomposer.js
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1163,5 +1380,275 @@ describe("Decompose → Compose round-trip", () => {
     expect(recomposed.buffers[1].uri).toMatch(/^data:/);
     expect(recomposed.images[0].uri).toMatch(/^data:image\/png/);
     expect(recomposed.images[1].uri).toMatch(/^data:image\/jpeg/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GLB Parser
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a GLB v2 file from a glTF JSON and a binary payload.
+ */
+function buildGLB(gltfJson, binaryBytes) {
+  const jsonText = JSON.stringify(gltfJson);
+  const jsonBytes = new TextEncoder().encode(jsonText);
+
+  // Pad JSON to 4-byte boundary with spaces
+  const jsonPadding = (4 - (jsonBytes.length % 4)) % 4;
+  const jsonChunkLength = jsonBytes.length + jsonPadding;
+  const jsonChunk = new Uint8Array(jsonChunkLength);
+  jsonChunk.set(jsonBytes);
+  for (let i = jsonBytes.length; i < jsonChunkLength; i++) {
+    jsonChunk[i] = 0x20; // space
+  }
+
+  // Pad binary to 4-byte boundary with zeros
+  const binPadding = (4 - (binaryBytes.length % 4)) % 4;
+  const binChunkLength = binaryBytes.length + binPadding;
+  const binChunk = new Uint8Array(binChunkLength);
+  binChunk.set(binaryBytes);
+
+  const headerLength = 12;
+  const chunkHeaderLength = 8;
+  const totalLength =
+    headerLength +
+    chunkHeaderLength +
+    jsonChunkLength +
+    chunkHeaderLength +
+    binChunkLength;
+
+  const buffer = new ArrayBuffer(totalLength);
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+
+  // Header
+  view.setUint32(0, 0x46546c67, true); // magic "glTF"
+  view.setUint32(4, 2, true); // version
+  view.setUint32(8, totalLength, true); // total length
+
+  let offset = 12;
+
+  // JSON chunk header
+  view.setUint32(offset, jsonChunkLength, true);
+  view.setUint32(offset + 4, 0x4e4f534a, true); // "JSON"
+  offset += 8;
+  bytes.set(jsonChunk, offset);
+  offset += jsonChunkLength;
+
+  // BIN chunk header
+  view.setUint32(offset, binChunkLength, true);
+  view.setUint32(offset + 4, 0x004e4942, true); // "BIN\0"
+  offset += 8;
+  bytes.set(binChunk, offset);
+
+  return buffer;
+}
+
+/**
+ * Build a minimal glTF 2.0 JSON whose first bufferView references mesh data
+ * and optional additional bufferViews reference image data.
+ */
+function makeGLTFJsonWithBinary(binaryLength, imageBufferViews = []) {
+  const bufferViews = [
+    {
+      buffer: 0,
+      byteOffset: 0,
+      byteLength: binaryLength,
+    },
+  ];
+  for (const img of imageBufferViews) {
+    bufferViews.push({
+      buffer: 0,
+      byteOffset: img.byteOffset,
+      byteLength: img.byteLength,
+    });
+  }
+
+  const images = imageBufferViews.map((img, i) => ({
+    bufferView: i + 1,
+    mimeType: img.mimeType,
+  }));
+
+  return {
+    asset: { version: "2.0", generator: "glb-test" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [
+      {
+        name: "TestMesh",
+        primitives: [
+          {
+            attributes: { POSITION: 0 },
+            material: 0,
+          },
+        ],
+      },
+    ],
+    materials: [
+      {
+        name: "TestMaterial",
+        pbrMetallicRoughness: {
+          baseColorFactor: [0.8, 0.2, 0.2, 1.0],
+          metallicFactor: 0.0,
+          roughnessFactor: 0.5,
+        },
+      },
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: "VEC3",
+      },
+    ],
+    bufferViews,
+    buffers: [
+      {
+        byteLength: binaryLength + imageBufferViews.reduce((s, img) => s + img.byteLength, 0),
+      },
+    ],
+    images,
+    textures: images.map((_, i) => ({ source: i })),
+    samplers: [{ magFilter: 9729, minFilter: 9987 }],
+  };
+}
+
+describe("GLB Parser — parseGLB", () => {
+  it("returns false for non-GLB data", () => {
+    expect(isGLB(new ArrayBuffer(0))).toBe(false);
+    expect(isGLB(new ArrayBuffer(20))).toBe(false);
+  });
+
+  it("parses a minimal GLB and extracts JSON + binary chunk", () => {
+    const meshBytes = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]);
+    const gltfJson = makeGLTFJsonWithBinary(meshBytes.length);
+    const glb = buildGLB(gltfJson, meshBytes);
+
+    expect(parseGLB(glb)).toEqual({
+      json: gltfJson,
+      binaryChunk: meshBytes.buffer,
+    });
+  });
+
+  it("throws on truncated GLB", () => {
+    const meshBytes = new Uint8Array([0, 1, 2, 3]);
+    const gltfJson = makeGLTFJsonWithBinary(meshBytes.length);
+    const glb = buildGLB(gltfJson, meshBytes);
+    const truncated = glb.slice(0, glb.byteLength - 4);
+
+    expect(() => parseGLB(truncated)).toThrow();
+  });
+
+  it("throws on wrong magic", () => {
+    const buffer = new ArrayBuffer(12);
+    const view = new DataView(buffer);
+    view.setUint32(0, 0x12345678, true);
+    view.setUint32(4, 2, true);
+    view.setUint32(8, 12, true);
+
+    expect(() => parseGLB(buffer)).toThrow("invalid magic");
+  });
+});
+
+describe("GLB Parser — decomposeGLB", () => {
+  // Simple deterministic mock writer
+  function makeMockWriter() {
+    let counter = 0;
+    const store = new Map();
+    return {
+      writer: async (bytes, filename) => {
+        const cid = `QmTest${String(counter++).padStart(44, "0")}${filename}`;
+        store.set(cid, bytes);
+        return cid;
+      },
+      store,
+    };
+  }
+
+  it("decomposes a GLB with a single binary buffer", async () => {
+    const meshBytes = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]);
+    const gltfJson = makeGLTFJsonWithBinary(meshBytes.length);
+    const glb = buildGLB(gltfJson, meshBytes);
+    const { writer } = makeMockWriter();
+
+    const { composite, compositeCid } = await decomposeGLB(glb, writer);
+
+    expect(composite.buffers[0].uri).toMatch(/^ipfs:\/\//);
+    expect(compositeCid).toMatch(/^Qm/);
+    expect(composite.buffers[0].byteLength).toBe(meshBytes.length);
+  });
+
+  it("decomposes a GLB with an embedded bufferView image", async () => {
+    const pngMagic = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const meshBytes = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]);
+    const imageOffset = meshBytes.length;
+    const binaryBytes = new Uint8Array(meshBytes.length + pngMagic.length);
+    binaryBytes.set(meshBytes, 0);
+    binaryBytes.set(pngMagic, imageOffset);
+
+    const gltfJson = makeGLTFJsonWithBinary(meshBytes.length, [
+      { byteOffset: imageOffset, byteLength: pngMagic.length, mimeType: "image/png" },
+    ]);
+    const glb = buildGLB(gltfJson, binaryBytes);
+    const { writer, store } = makeMockWriter();
+
+    const { composite } = await decomposeGLB(glb, writer);
+
+    expect(composite.images[0].uri).toMatch(/^ipfs:\/\//);
+    expect(composite.images[0].mimeType).toBe("image/png");
+
+    // The texture CID should point to exactly the PNG bytes
+    const textureCid = composite.images[0].uri.replace("ipfs://", "");
+    expect(store.get(textureCid)).toEqual(pngMagic);
+  });
+
+  it("keeps external image URIs as-is", async () => {
+    const meshBytes = new Uint8Array([0, 1, 2, 3]);
+    const gltfJson = makeGLTFJsonWithBinary(meshBytes.length);
+    gltfJson.images = [{ uri: "https://example.com/texture.png" }];
+    gltfJson.textures = [{ source: 0 }];
+    const glb = buildGLB(gltfJson, meshBytes);
+    const { writer } = makeMockWriter();
+
+    const { composite } = await decomposeGLB(glb, writer);
+
+    expect(composite.images[0].uri).toBe("https://example.com/texture.png");
+  });
+
+  it("detects image MIME type from magic bytes when omitted", async () => {
+    const pngMagic = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const gltfJson = makeGLTFJsonWithBinary(0, [
+      { byteOffset: 0, byteLength: pngMagic.length, mimeType: undefined },
+    ]);
+    const glb = buildGLB(gltfJson, pngMagic);
+    const { writer, store } = makeMockWriter();
+
+    const { composite } = await decomposeGLB(glb, writer);
+
+    expect(composite.images[0].mimeType).toBe("image/png");
+    const textureCid = composite.images[0].uri.replace("ipfs://", "");
+    // Filename extension should be .png
+    expect(textureCid.endsWith("texture_0.png")).toBe(true);
+    expect(store.get(textureCid)).toEqual(pngMagic);
+  });
+
+  it("decomposes a GLB with a data-URI buffer", async () => {
+    const bufferBytes = new Uint8Array([10, 20, 30, 40]);
+    const dataUri = `data:application/octet-stream;base64,${btoa(
+      String.fromCharCode(...bufferBytes),
+    )}`;
+    const gltfJson = makeGLTFJsonWithBinary(0);
+    gltfJson.buffers = [{ uri: dataUri, byteLength: bufferBytes.length }];
+    const glb = buildGLB(gltfJson, new Uint8Array(0));
+    const { writer, store } = makeMockWriter();
+
+    const { composite } = await decomposeGLB(glb, writer);
+
+    expect(composite.buffers[0].uri).toMatch(/^ipfs:\/\//);
+    const cid = composite.buffers[0].uri.replace("ipfs://", "");
+    expect(store.get(cid)).toEqual(bufferBytes);
   });
 });

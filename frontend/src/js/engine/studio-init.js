@@ -30,6 +30,7 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 import { initWalletPopover } from "/js/ui/wallet-popover.js";
 
 import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
+import { CHAIN_IDS } from "/js/constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
 
 // ── Headerbar network selector ──
@@ -102,7 +103,11 @@ document.addEventListener("wallet:connected", (e) => {
   if (netSel) {
     netSel.classList.add("connected");
     const chainId = e.detail?.chainId;
-    const keyMap = { 31415822: "hardhat", 84532: "baseSepolia", 80002: "polygonAmoy" };
+    const keyMap = {
+      [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
+      [CHAIN_IDS.OPTIMISM_SEPOLIA]: "optimismSepolia",
+      [CHAIN_IDS.OPTIMISM_MAINNET]: "optimismMainnet",
+    };
     const key = keyMap[chainId];
     if (key) netSel.value = key;
   }

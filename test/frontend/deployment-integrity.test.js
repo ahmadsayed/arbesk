@@ -1,12 +1,9 @@
 /**
  * Contract deployment integrity tests
  *
- * Validates that the compiled ABI, deployment artifacts, and environment
- * configuration are consistent. Prevents the class of regression where:
- *   - Contract functions are added but ABI isn't recompiled
- *   - Contract is redeployed but .env files aren't updated
- *   - Artifacts directory is stale/missing
- *   - Root .env and blockchain/.env have conflicting CONTRACT_ADDRESS
+ * Validates that the compiled ABIs, deployment artifacts, and environment
+ * configuration are consistent for both ArbeskAsset (paid) and
+ * ArbeskAssetFree (free tier).
  *
  * Run: npm run test:frontend
  */
@@ -16,14 +13,17 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// test/frontend/ -> test/ -> project root
 const ROOT_DIR = resolve(__dirname, "..", "..");
 
 // --- Paths ---
 
-const ARTIFACT_PATH = resolve(
+const PAID_ARTIFACT_PATH = resolve(
   ROOT_DIR,
   "blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json",
+);
+const FREE_ARTIFACT_PATH = resolve(
+  ROOT_DIR,
+  "blockchain/artifacts/contracts/ArbeskAssetFree.sol/ArbeskAssetFree.json",
 );
 const ROOT_ENV_PATH = resolve(ROOT_DIR, ".env");
 const BLOCKCHAIN_ENV_PATH = resolve(ROOT_DIR, "blockchain/.env");
@@ -49,9 +49,9 @@ function loadABI(path) {
   return artifact.abi || null;
 }
 
-// --- Essential function signatures that must exist in the ABI ---
+// --- Required functions per contract ---
 
-const REQUIRED_ABI_FUNCTIONS = [
+const REQUIRED_PAID_ABI_FUNCTIONS = [
   "balanceOf",
   "ownerOf",
   "tokenURI",
@@ -76,14 +76,43 @@ const REQUIRED_ABI_FUNCTIONS = [
   "totalSupply",
 ];
 
+const REQUIRED_FREE_ABI_FUNCTIONS = [
+  "balanceOf",
+  "ownerOf",
+  "tokenURI",
+  "tokenOfOwnerByIndex",
+  "recordGeneration",
+  "DAILY_GENERATION_LIMIT",
+  "generationCountToday",
+  "lastGenerationDay",
+  "maxEditorsPerToken",
+  "maxTokensPerEditor",
+  "publishAsset",
+  "updateAssetURI",
+  "addEditor",
+  "removeEditor",
+  "listEditors",
+  "listCollaboratorsByRole",
+  "listTokens",
+  "getCollaboratorRole",
+  "setCollaboratorRole",
+  "getAssetManifest",
+  "burn",
+  "canBurn",
+  "setBurnPermission",
+  "totalSupply",
+];
+
 describe("Deployment Pipeline Integrity", () => {
-  let abi;
+  let paidAbi;
+  let freeAbi;
   let rootEnv;
   let blockchainEnv;
   let compose;
 
   beforeAll(() => {
-    abi = loadABI(ARTIFACT_PATH);
+    paidAbi = loadABI(PAID_ARTIFACT_PATH);
+    freeAbi = loadABI(FREE_ARTIFACT_PATH);
     rootEnv = loadEnv(ROOT_ENV_PATH);
     blockchainEnv = loadEnv(BLOCKCHAIN_ENV_PATH);
     if (existsSync(COMPOSE_PATH)) {
@@ -94,34 +123,67 @@ describe("Deployment Pipeline Integrity", () => {
   });
 
   // ================================================================
-  // 1. Artifacts must exist and be fresh
+  // 1. Both ABI artifacts must exist
   // ================================================================
 
-  test("compiled ABI artifact exists on host filesystem", () => {
-    expect(existsSync(ARTIFACT_PATH)).toBe(true);
+  test("paid ABI artifact exists on host filesystem", () => {
+    expect(existsSync(PAID_ARTIFACT_PATH)).toBe(true);
   });
 
-  test("artifact contains a valid ABI array", () => {
-    expect(Array.isArray(abi)).toBe(true);
-    expect(abi.length).toBeGreaterThan(0);
+  test("free ABI artifact exists on host filesystem", () => {
+    expect(existsSync(FREE_ARTIFACT_PATH)).toBe(true);
   });
 
-  test.each(REQUIRED_ABI_FUNCTIONS)("ABI contains %s", (name) => {
-    const entry = abi.find((e) => e.type === "function" && e.name === name);
+  test("paid artifact contains a valid ABI array", () => {
+    expect(Array.isArray(paidAbi)).toBe(true);
+    expect(paidAbi.length).toBeGreaterThan(0);
+  });
+
+  test("free artifact contains a valid ABI array", () => {
+    expect(Array.isArray(freeAbi)).toBe(true);
+    expect(freeAbi.length).toBeGreaterThan(0);
+  });
+
+  test.each(REQUIRED_PAID_ABI_FUNCTIONS)("paid ABI contains %s", (name) => {
+    const entry = paidAbi.find((e) => e.type === "function" && e.name === name);
     expect(entry).toBeTruthy();
   });
 
-  // Also verify that no Solidity auto-generated overloads broke the ABI.
-  // publishAsset has a 2-arg + 3-arg (with editors[]) overload.
-  test("publishAsset has at least one entry (handles overloads)", () => {
-    const entries = abi.filter(
+  test.each(REQUIRED_FREE_ABI_FUNCTIONS)("free ABI contains %s", (name) => {
+    const entry = freeAbi.find((e) => e.type === "function" && e.name === name);
+    expect(entry).toBeTruthy();
+  });
+
+  test("paid ABI has publishAsset overloads", () => {
+    const entries = paidAbi.filter(
       (e) => e.type === "function" && e.name === "publishAsset",
     );
     expect(entries.length).toBeGreaterThanOrEqual(1);
   });
 
+  test("free ABI has publishAsset overloads", () => {
+    const entries = freeAbi.filter(
+      (e) => e.type === "function" && e.name === "publishAsset",
+    );
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("free ABI does NOT have payForGeneration", () => {
+    const entry = freeAbi.find(
+      (e) => e.type === "function" && e.name === "payForGeneration",
+    );
+    expect(entry).toBeFalsy();
+  });
+
+  test("free ABI does NOT have payForGenerationWithUSDC", () => {
+    const entry = freeAbi.find(
+      (e) => e.type === "function" && e.name === "payForGenerationWithUSDC",
+    );
+    expect(entry).toBeFalsy();
+  });
+
   // ================================================================
-  // 2. .env files must agree on CONTRACT_ADDRESS
+  // 2. .env files must have required addresses
   // ================================================================
 
   test("root .env has CONTRACT_ADDRESS", () => {
@@ -138,16 +200,57 @@ describe("Deployment Pipeline Integrity", () => {
     expect(rootEnv.CONTRACT_ADDRESS).toBe(blockchainEnv.CONTRACT_ADDRESS);
   });
 
+  test("blockchain/.env has PAID_CONTRACT_ADDRESS", () => {
+    expect(blockchainEnv.PAID_CONTRACT_ADDRESS).toBeTruthy();
+    expect(blockchainEnv.PAID_CONTRACT_ADDRESS).toMatch(/^0x[a-fA-F0-9]{40}$/);
+  });
+
+  test("root .env has PAID_CONTRACT_ADDRESS", () => {
+    expect(rootEnv.PAID_CONTRACT_ADDRESS).toBeTruthy();
+    expect(rootEnv.PAID_CONTRACT_ADDRESS).toMatch(/^0x[a-fA-F0-9]{40}$/);
+  });
+
+  test("CONTRACT_ADDRESS and PAID_CONTRACT_ADDRESS are different", () => {
+    expect(blockchainEnv.CONTRACT_ADDRESS.toLowerCase()).not.toBe(
+      blockchainEnv.PAID_CONTRACT_ADDRESS.toLowerCase(),
+    );
+  });
+
   test("blockchain/.env has USDC_TOKEN", () => {
     expect(blockchainEnv.USDC_TOKEN).toBeTruthy();
     expect(blockchainEnv.USDC_TOKEN).toMatch(/^0x[a-fA-F0-9]{40}$/);
   });
 
   // ================================================================
-  // 3. Deployment artifact matches configured .env (if deployed)
+  // 3. Deployment artifacts match configured .env (if deployed)
   // ================================================================
 
-  test("deployment artifact matches configured CONTRACT_ADDRESS (if deployed)", () => {
+  test("free deployment artifact matches configured CONTRACT_ADDRESS", () => {
+    if (!existsSync(DEPLOYMENT_DIR)) return;
+
+    let found = false;
+    const entries = readdirSync(DEPLOYMENT_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const artifactPath = resolve(
+        DEPLOYMENT_DIR,
+        entry.name,
+        "ArbeskAssetFree.json",
+      );
+      if (!existsSync(artifactPath)) continue;
+      const artifact = JSON.parse(readFileSync(artifactPath, "utf-8"));
+      if (
+        artifact.address.toLowerCase() ===
+        rootEnv.CONTRACT_ADDRESS?.toLowerCase()
+      ) {
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  test("paid deployment artifact matches configured PAID_CONTRACT_ADDRESS", () => {
     if (!existsSync(DEPLOYMENT_DIR)) return;
 
     let found = false;
@@ -163,7 +266,7 @@ describe("Deployment Pipeline Integrity", () => {
       const artifact = JSON.parse(readFileSync(artifactPath, "utf-8"));
       if (
         artifact.address.toLowerCase() ===
-        rootEnv.CONTRACT_ADDRESS?.toLowerCase()
+        rootEnv.PAID_CONTRACT_ADDRESS?.toLowerCase()
       ) {
         found = true;
         break;
@@ -191,21 +294,26 @@ describe("Deployment Pipeline Integrity", () => {
   // ================================================================
   // 5. USDC / MockUSDC regression guards
   //
-  // Catches the class of bug where CONTRACT_ADDRESS and USDC_TOKEN
-  // are accidentally set to the same value, causing the frontend to
-  // call ERC721 approve() instead of ERC20 approve() on the USDC
-  // contract. This produces the cryptic error:
-  //   "ERC721NonexistentToken(750000)"
-  // because the Basic tier cost (750000) is interpreted as a tokenId.
+  // CONTRACT_ADDRESS now points to the FREE contract, which is NOT
+  // the USDC token. The paid contract address is PAID_CONTRACT_ADDRESS.
+  // We must ensure USDC_TOKEN is distinct from BOTH contract addresses.
   // ================================================================
 
   describe("USDC token address safety", () => {
-    test("USDC_TOKEN is different from CONTRACT_ADDRESS", () => {
+    test("USDC_TOKEN is different from CONTRACT_ADDRESS (free)", () => {
       const contract = blockchainEnv.CONTRACT_ADDRESS?.toLowerCase();
       const usdc = blockchainEnv.USDC_TOKEN?.toLowerCase();
       expect(contract).toBeTruthy();
       expect(usdc).toBeTruthy();
       expect(usdc).not.toBe(contract);
+    });
+
+    test("USDC_TOKEN is different from PAID_CONTRACT_ADDRESS", () => {
+      const paid = blockchainEnv.PAID_CONTRACT_ADDRESS?.toLowerCase();
+      const usdc = blockchainEnv.USDC_TOKEN?.toLowerCase();
+      expect(paid).toBeTruthy();
+      expect(usdc).toBeTruthy();
+      expect(usdc).not.toBe(paid);
     });
 
     test("USDC_TOKEN is a valid Ethereum address", () => {
@@ -232,30 +340,24 @@ describe("Deployment Pipeline Integrity", () => {
         "blockchain/contracts/mock/MockUSDC.sol",
       );
       const content = readFileSync(mockPath, "utf-8");
-      // Must import ERC20
       expect(content).toMatch(/ERC20/);
-      // Must NOT import ERC721
       expect(content).not.toMatch(/ERC721/);
     });
 
     test("deploy script references MockUSDC for local networks", () => {
       const deployPath = resolve(ROOT_DIR, "blockchain/scripts/deploy.js");
       const content = readFileSync(deployPath, "utf-8");
-      // Must have "MockUSDC" somewhere in the local deployment path
       expect(content).toContain("MockUSDC");
-      // Must deploy MockUSDC when USDC_TOKEN is not set
       expect(content).toMatch(/No USDC_TOKEN.*deploying MockUSDC/i);
     });
 
     test("deploy script writes USDC_TOKEN to blockchain/.env after deploy", () => {
       const deployPath = resolve(ROOT_DIR, "blockchain/scripts/deploy.js");
       const content = readFileSync(deployPath, "utf-8");
-      // Regex: writes USDC_TOKEN= to the env file
       expect(content).toMatch(/USDC_TOKEN=/);
     });
 
-    test("deployment artifact records distinct usdcToken address", () => {
-      // Check all deployment artifacts for the address mismatch bug
+    test("paid deployment artifact records distinct usdcToken address", () => {
       if (!existsSync(DEPLOYMENT_DIR)) return;
       const entries = readdirSync(DEPLOYMENT_DIR, {
         withFileTypes: true,
@@ -275,7 +377,7 @@ describe("Deployment Pipeline Integrity", () => {
       }
     });
 
-    test("deployment artifact usdcToken is a valid address", () => {
+    test("paid deployment artifact usdcToken is a valid address", () => {
       if (!existsSync(DEPLOYMENT_DIR)) return;
       const entries = readdirSync(DEPLOYMENT_DIR, {
         withFileTypes: true,
@@ -296,23 +398,42 @@ describe("Deployment Pipeline Integrity", () => {
 
   // ================================================================
   // 6. On-chain contract verification
-  //
-  // Validates that the actual deployed contracts on the Hardhat node
-  // are distinct and functional. These tests are skipped if the
-  // Hardhat node is not running (no RPC available).
   // ================================================================
 
   describe("on-chain contract integrity", () => {
     const HARDHAT_RPC = "http://127.0.0.1:8545";
     let web3;
     let nodeAvailable = false;
-    let contractAddr;
+    let freeAddr;
+    let paidAddr;
     let usdcAddr;
-    let abiData;
+    let paidAbiData;
+    let freeAbiData;
 
     beforeAll(async () => {
-      contractAddr = blockchainEnv.CONTRACT_ADDRESS;
-      usdcAddr = blockchainEnv.USDC_TOKEN;
+      // Use localhost/hardhat deployment artifacts for on-chain checks,
+      // since .env may point to testnet/mainnet addresses.
+      const localhostFree = resolve(ROOT_DIR, "blockchain/deployments/localhost/ArbeskAssetFree.json");
+      const localhostPaid = resolve(ROOT_DIR, "blockchain/deployments/localhost/ArbeskAsset.json");
+      const hardhatFree = resolve(ROOT_DIR, "blockchain/deployments/hardhat/ArbeskAssetFree.json");
+      const hardhatPaid = resolve(ROOT_DIR, "blockchain/deployments/hardhat/ArbeskAsset.json");
+
+      let freeArtifact = null;
+      let paidArtifact = null;
+      if (existsSync(localhostFree)) {
+        freeArtifact = JSON.parse(readFileSync(localhostFree, "utf-8"));
+      } else if (existsSync(hardhatFree)) {
+        freeArtifact = JSON.parse(readFileSync(hardhatFree, "utf-8"));
+      }
+      if (existsSync(localhostPaid)) {
+        paidArtifact = JSON.parse(readFileSync(localhostPaid, "utf-8"));
+      } else if (existsSync(hardhatPaid)) {
+        paidArtifact = JSON.parse(readFileSync(hardhatPaid, "utf-8"));
+      }
+
+      freeAddr = freeArtifact?.address || blockchainEnv.CONTRACT_ADDRESS;
+      paidAddr = paidArtifact?.address || blockchainEnv.PAID_CONTRACT_ADDRESS;
+      usdcAddr = paidArtifact?.usdcToken || blockchainEnv.USDC_TOKEN;
 
       try {
         const Web3 = (await import("web3")).default;
@@ -320,7 +441,8 @@ describe("Deployment Pipeline Integrity", () => {
         await temp.eth.getBlockNumber();
         web3 = temp;
         nodeAvailable = true;
-        abiData = loadABI(ARTIFACT_PATH);
+        paidAbiData = loadABI(PAID_ARTIFACT_PATH);
+        freeAbiData = loadABI(FREE_ARTIFACT_PATH);
       } catch {
         nodeAvailable = false;
       }
@@ -331,10 +453,7 @@ describe("Deployment Pipeline Integrity", () => {
       return true;
     };
 
-    test("Hardhat node is running (must be up for on-chain checks)", () => {
-      // This test intentionally fails if the node is down during
-      // a regression-test run. Use --testPathPattern to skip if needed.
-      // For CI, ensure docker-compose up -d runs first.
+    test("Hardhat node is running", () => {
       if (!nodeAvailable) {
         console.warn(
           "Hardhat node not reachable at " +
@@ -342,15 +461,21 @@ describe("Deployment Pipeline Integrity", () => {
             " — skipping all on-chain tests.",
         );
       }
-      // We don't fail here — individual tests check requireNode()
       expect(true).toBe(true);
     });
 
-    test("ArbeskAsset contract has code on-chain", async () => {
+    test("free contract has code on-chain", async () => {
       if (!requireNode()) return;
-      const code = await web3.eth.getCode(contractAddr);
+      const code = await web3.eth.getCode(freeAddr);
       expect(code).toBeTruthy();
-      expect(code.length).toBeGreaterThan(4); // more than just '0x'
+      expect(code.length).toBeGreaterThan(4);
+    });
+
+    test("paid contract has code on-chain", async () => {
+      if (!requireNode()) return;
+      const code = await web3.eth.getCode(paidAddr);
+      expect(code).toBeTruthy();
+      expect(code.length).toBeGreaterThan(4);
     });
 
     test("MockUSDC contract has code on-chain", async () => {
@@ -360,44 +485,23 @@ describe("Deployment Pipeline Integrity", () => {
       expect(code.length).toBeGreaterThan(4);
     });
 
-    test("ArbeskAsset and MockUSDC have DIFFERENT bytecode", async () => {
+    test("free, paid, and USDC have mutually different bytecode", async () => {
       if (!requireNode()) return;
-      const assetCode = await web3.eth.getCode(contractAddr);
+      const freeCode = await web3.eth.getCode(freeAddr);
+      const paidCode = await web3.eth.getCode(paidAddr);
       const usdcCode = await web3.eth.getCode(usdcAddr);
-      expect(assetCode).toBeTruthy();
-      expect(usdcCode).toBeTruthy();
-      expect(assetCode).not.toBe(usdcCode);
+      expect(freeCode).not.toBe(paidCode);
+      expect(freeCode).not.toBe(usdcCode);
+      expect(paidCode).not.toBe(usdcCode);
     });
 
-    test("MockUSDC responds to ERC20 decimals()", async () => {
-      if (!requireNode()) return;
-      const result = await web3.eth.call({
-        to: usdcAddr,
-        data: "0x313ce567",
-      });
-      expect(result).toBeTruthy();
-      const decimals = parseInt(result, 16);
-      expect(Number.isInteger(decimals)).toBe(true);
-    });
-
-    test("MockUSDC decimals() returns 6", async () => {
+    test("MockUSDC responds to ERC20 decimals() = 6", async () => {
       if (!requireNode()) return;
       const result = await web3.eth.call({
         to: usdcAddr,
         data: "0x313ce567",
       });
       expect(parseInt(result, 16)).toBe(6);
-    });
-
-    test("MockUSDC responds to ERC20 symbol()", async () => {
-      if (!requireNode()) return;
-      const result = await web3.eth.call({
-        to: usdcAddr,
-        data: "0x95d89b41",
-      });
-      expect(result).toBeTruthy();
-      const decoded = web3.eth.abi.decodeParameters(["string"], result);
-      expect(decoded[0].length).toBeGreaterThan(0);
     });
 
     test("MockUSDC symbol() returns 'USDC'", async () => {
@@ -410,37 +514,44 @@ describe("Deployment Pipeline Integrity", () => {
       expect(decoded[0]).toBe("USDC");
     });
 
-    test("ArbeskAsset.usdcToken() returns the MockUSDC address", async () => {
+    test("paid contract usdcToken() returns MockUSDC address", async () => {
       if (!requireNode()) return;
-      if (!abiData) return;
-      const asset = new web3.eth.Contract(abiData, contractAddr);
+      if (!paidAbiData) return;
+      const asset = new web3.eth.Contract(paidAbiData, paidAddr);
       const usdcFromChain = await asset.methods.usdcToken().call();
       expect(usdcFromChain.toLowerCase()).toBe(usdcAddr.toLowerCase());
     });
 
-    test("ArbeskAsset.usdcToken() does NOT return its own address", async () => {
+    test("paid contract tierCosts(Basic) matches expected 750000", async () => {
       if (!requireNode()) return;
-      if (!abiData) return;
-      const asset = new web3.eth.Contract(abiData, contractAddr);
-      const usdcFromChain = await asset.methods.usdcToken().call();
-      expect(usdcFromChain.toLowerCase()).not.toBe(contractAddr.toLowerCase());
-    });
-
-    test("ArbeskAsset.tierCosts() returns non-zero for Basic tier", async () => {
-      if (!requireNode()) return;
-      if (!abiData) return;
-      const asset = new web3.eth.Contract(abiData, contractAddr);
-      const cost = await asset.methods.tierCosts(0).call();
-      expect(cost).toBeTruthy();
-      expect(Number(cost)).toBeGreaterThan(0);
-    });
-
-    test("ArbeskAsset.tierCosts(Basic) matches expected 750000", async () => {
-      if (!requireNode()) return;
-      if (!abiData) return;
-      const asset = new web3.eth.Contract(abiData, contractAddr);
+      if (!paidAbiData) return;
+      const asset = new web3.eth.Contract(paidAbiData, paidAddr);
       const cost = await asset.methods.tierCosts(0).call();
       expect(Number(cost)).toBe(750000);
+    });
+
+    test("free contract maxEditorsPerToken() returns 5", async () => {
+      if (!requireNode()) return;
+      if (!freeAbiData) return;
+      const asset = new web3.eth.Contract(freeAbiData, freeAddr);
+      const limit = await asset.methods.maxEditorsPerToken().call();
+      expect(Number(limit)).toBe(5);
+    });
+
+    test("free contract maxTokensPerEditor() returns 50", async () => {
+      if (!requireNode()) return;
+      if (!freeAbiData) return;
+      const asset = new web3.eth.Contract(freeAbiData, freeAddr);
+      const limit = await asset.methods.maxTokensPerEditor().call();
+      expect(Number(limit)).toBe(50);
+    });
+
+    test("free contract DAILY_GENERATION_LIMIT() returns 10", async () => {
+      if (!requireNode()) return;
+      if (!freeAbiData) return;
+      const asset = new web3.eth.Contract(freeAbiData, freeAddr);
+      const limit = await asset.methods.DAILY_GENERATION_LIMIT().call();
+      expect(Number(limit)).toBe(10);
     });
 
     test("deployer has USDC balance on MockUSDC", async () => {
@@ -459,7 +570,8 @@ describe("Deployment Pipeline Integrity", () => {
       try {
         await web3.eth.call({
           to: usdcAddr,
-          data: "0x6352211e0000000000000000000000000000000000000000000000000000000000000001",
+          data:
+            "0x6352211e0000000000000000000000000000000000000000000000000000000000000001",
         });
         throw new Error("should have reverted");
       } catch (e) {
@@ -467,20 +579,26 @@ describe("Deployment Pipeline Integrity", () => {
       }
     });
 
-    test("_initContract ABI is loadable and has required functions", () => {
-      // Guard: ABI must be loadable at test time
-      if (!abiData) {
-        // If no ABI, on-chain tests can't run — but static checks
-        // above should have caught this already.
-        return;
-      }
-      expect(Array.isArray(abiData)).toBe(true);
-      const fnNames = abiData
+    test("paid ABI is loadable and has required functions", () => {
+      if (!paidAbiData) return;
+      expect(Array.isArray(paidAbiData)).toBe(true);
+      const fnNames = paidAbiData
         .filter((e) => e.type === "function")
         .map((e) => e.name);
       expect(fnNames).toContain("usdcToken");
       expect(fnNames).toContain("tierCosts");
       expect(fnNames).toContain("payForGenerationWithUSDC");
+    });
+
+    test("free ABI is loadable and has required functions", () => {
+      if (!freeAbiData) return;
+      expect(Array.isArray(freeAbiData)).toBe(true);
+      const fnNames = freeAbiData
+        .filter((e) => e.type === "function")
+        .map((e) => e.name);
+      expect(fnNames).toContain("recordGeneration");
+      expect(fnNames).toContain("DAILY_GENERATION_LIMIT");
+      expect(fnNames).toContain("maxEditorsPerToken");
     });
   });
 });

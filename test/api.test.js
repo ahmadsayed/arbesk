@@ -213,6 +213,26 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.sourceAssetCid).toBeDefined();
     });
 
+    it("returns howdy.glb for cowboy prompts", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", makeAuthHeader())
+        .send({
+          prompt: "howdy cowboy",
+          nodeId: "node_cowboy_001",
+          txHash: "0xcowboy",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.sourceAssetCid).toBeDefined();
+
+      const manifestData = await fetchManifestFromIPFS(res.body.assetManifestCid);
+      const node = (manifestData.scene?.nodes || [])[0];
+      expect(node).toBeDefined();
+      expect(node.source.format).toBe("glb");
+      expect(node.source.path).toMatch(/\.glb$/);
+    });
+
     it("rejects when prompt or nodeId is missing", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
@@ -246,7 +266,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects tx sent to wrong contract address", async () => {
       const originalTo = mockWeb3Receipt.to;
+      const originalLogAddresses = mockWeb3Receipt.logs.map((l) => l.address);
       mockWeb3Receipt.to = "0xWrongAddress";
+      // Payment events must also come from the wrong address for the test
+      mockWeb3Receipt.logs.forEach((log) => {
+        log.address = "0xWrongAddress";
+      });
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", makeAuthHeader("0xwrongaddr"))
@@ -254,6 +279,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(403);
       expect(res.body.error.message).toContain("not sent to ArbeskAsset");
       mockWeb3Receipt.to = originalTo;
+      mockWeb3Receipt.logs.forEach((log, i) => {
+        log.address = originalLogAddresses[i];
+      });
     });
 
     // ─── Tier-specific tests ───

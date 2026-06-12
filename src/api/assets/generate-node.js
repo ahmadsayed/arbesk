@@ -86,12 +86,16 @@ export default function generateAssetNode(ipfs) {
         const usdcEventSig = txWeb3.utils.keccak256(
           "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)",
         );
+        const freeEventSig = txWeb3.utils.keccak256(
+          "AssetGenerationRecorded(address,bytes32,string,uint256,uint256)",
+        );
         const contractAddrLower = contractAddr?.toLowerCase();
         const hasPaymentEvent = contractAddr
           ? receipt.logs.some(
               (log) =>
                 (log.topics[0] === nativeEventSig ||
-                  log.topics[0] === usdcEventSig) &&
+                  log.topics[0] === usdcEventSig ||
+                  log.topics[0] === freeEventSig) &&
                 log.address.toLowerCase() === contractAddrLower,
             )
           : false;
@@ -119,12 +123,12 @@ export default function generateAssetNode(ipfs) {
             error: {
               code: "EVENT_NOT_FOUND",
               message:
-                "Transaction did not emit expected payment event (AssetGenerationPaid or AssetGenerationPaidUSDC)",
+                "Transaction did not emit expected generation event (AssetGenerationPaid, AssetGenerationPaidUSDC, or AssetGenerationRecorded)",
             },
           });
         }
         if (contractAddr) {
-          console.log("[GEN] payment event verified (native or USDC tiered)");
+          console.log("[GEN] payment event verified (native, USDC tiered, or free-tier recorded)");
 
           // If request specifies a tier, validate it against the on-chain event.
           // Native ETH payments (payForGeneration) do not encode tier on-chain,

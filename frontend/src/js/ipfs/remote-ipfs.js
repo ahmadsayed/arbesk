@@ -48,6 +48,16 @@ async function getBlobFromRemoteIPFS(cid) {
   return await fetchAndCacheIpfsPayload(cid, "blob");
 }
 
+async function getArrayBufferFromRemoteIPFS(cid) {
+  const url = `${GATEWAY_URL}${cid}`;
+  console.log(`[IPFS] getArrayBuffer ${url}`);
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
+  }
+  return await response.arrayBuffer();
+}
+
 /**
  * Walk a manifest chain backward via prev_asset_manifest_cid links.
  * Returns an array of { cid, version, name } summaries.
@@ -76,5 +86,6 @@ export {
   getFromRemoteIPFS,
   getBase64FromRemoteIPFS,
   getBlobFromRemoteIPFS,
+  getArrayBufferFromRemoteIPFS,
   getManifestChain,
 };

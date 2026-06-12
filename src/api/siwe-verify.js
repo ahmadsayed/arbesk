@@ -6,12 +6,12 @@
  */
 
 import { web3 } from "../config.js";
+import { SUPPORTED_CHAIN_IDS } from "../constants/chains.js";
 
 // Nonce store: Map<nonce, expiresAt> — auto-cleans on verification
 const usedNonces = new Map();
 const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MESSAGE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
-const SUPPORTED_CHAIN_IDS = [1, 11155111, 137, 8453, 84532, 31415822, 314159, 314];
 
 /**
  * Clean expired nonces from the store.

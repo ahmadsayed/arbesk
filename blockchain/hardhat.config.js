@@ -1,8 +1,7 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
-const { API_URL, PRIVATE_KEY, ETHERSCAN_API_KEY, BASESCAN_API_KEY } =
-  process.env;
+const { API_URL, PRIVATE_KEY, ETHERSCAN_API_KEY } = process.env;
 
 module.exports = {
   solidity: {
@@ -32,24 +31,24 @@ module.exports = {
       url: API_URL || "https://api.node.glif.io/rpc/v1",
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
     },
-    // ── Base L2 ──
-    baseSepolia: {
-      url: "https://sepolia.base.org",
+    // ── Optimism L2 ──
+    optimismSepolia: {
+      url: "https://sepolia.optimism.io",
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
-      chainId: 84532,
+      chainId: 11155420,
     },
-    base: {
-      url: "https://mainnet.base.org",
+    optimismMainnet: {
+      url: "https://mainnet.optimism.io",
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
-      chainId: 8453,
+      chainId: 10,
     },
   },
   etherscan: {
     apiKey: {
       filecoinCalibration: ETHERSCAN_API_KEY || "",
       filecoin: ETHERSCAN_API_KEY || "",
-      baseSepolia: BASESCAN_API_KEY || "",
-      base: BASESCAN_API_KEY || "",
+      optimismSepolia: ETHERSCAN_API_KEY || "",
+      optimismMainnet: ETHERSCAN_API_KEY || "",
     },
     customChains: [
       {
@@ -69,19 +68,19 @@ module.exports = {
         },
       },
       {
-        network: "baseSepolia",
-        chainId: 84532,
+        network: "optimismSepolia",
+        chainId: 11155420,
         urls: {
-          apiURL: "https://api-sepolia.basescan.org/api",
-          browserURL: "https://sepolia.basescan.org",
+          apiURL: "https://api-sepolia-optimism.etherscan.io/api",
+          browserURL: "https://sepolia-optimism.etherscan.io",
         },
       },
       {
-        network: "base",
-        chainId: 8453,
+        network: "optimismMainnet",
+        chainId: 10,
         urls: {
-          apiURL: "https://api.basescan.org/api",
-          browserURL: "https://basescan.org",
+          apiURL: "https://api-optimistic.etherscan.io/api",
+          browserURL: "https://optimistic.etherscan.io",
         },
       },
     ],

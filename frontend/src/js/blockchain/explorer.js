@@ -6,20 +6,21 @@
  */
 
 import { switchNetwork } from "./wallet.js";
+import { CHAIN_IDS } from "../constants/chains.js";
 
 const EXPLORER_URLS = {
   // Hardhat local — no explorer
-  31415822: null,
-  // Base Sepolia testnet
-  84532: "https://sepolia.basescan.org",
-  // Polygon Amoy testnet
-  80002: "https://amoy.polygonscan.com",
+  [CHAIN_IDS.HARDHAT_LOCAL]: null,
+  // Optimism Sepolia testnet
+  [CHAIN_IDS.OPTIMISM_SEPOLIA]: "https://sepolia-optimism.etherscan.io",
+  // Optimism mainnet
+  [CHAIN_IDS.OPTIMISM_MAINNET]: "https://optimistic.etherscan.io",
 };
 
 const NETWORK_NAMES = {
-  31415822: "Hardhat Local",
-  84532: "Base Sepolia",
-  80002: "Polygon Amoy",
+  [CHAIN_IDS.HARDHAT_LOCAL]: "Hardhat Local",
+  [CHAIN_IDS.OPTIMISM_SEPOLIA]: "Optimism Sepolia",
+  [CHAIN_IDS.OPTIMISM_MAINNET]: "Optimism Mainnet",
 };
 
 /**

@@ -3,7 +3,7 @@
  * Phase B: Updated for GNOME headerbar — buttons managed individually, no wrapper div.
  */
 
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { publishAsset, updateAssetURI } from "../blockchain/wallet.js";
 import { showDialog } from "./dialog.js";
 import {
@@ -17,7 +17,13 @@ import {
 } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 import { decomposeAndStore, isComposite } from "../gltf/decomposer.js";
+import { decomposeGLB } from "../gltf/glb-parser.js";
 import { editCompositeColors } from "../gltf/material-editor.js";
+import { editSourceColors } from "../gltf/source-color-editor.js";
+import {
+  getPendingSourceColorEdits,
+  clearPendingSourceColorEdits,
+} from "../engine/parametric-preview.js";
 import { updateBurnButton } from "./collaborators.js";
 import { showToast } from "./toasts.js";
 
@@ -166,17 +172,31 @@ async function decomposeManifestNodes(manifest) {
   const nodes = manifest.scene?.nodes || [];
 
   for (const node of nodes) {
-    // Only process nodes with a glTF source (not token children, not GLB)
+    // Only process nodes with a source (not token children)
     if (!node.source?.cid) continue;
-    if (node.source.format === "glb") continue;
     if (node.child_ref) continue;
 
     const cid = node.source.cid;
+    const format = (node.source.format || "gltf").toLowerCase();
     console.log(
-      `[DECOMPOSE-SAVE] checking node ${node.node_id} | sourceCid=${cid}`
+      `[DECOMPOSE-SAVE] checking node ${node.node_id} | sourceCid=${cid} format=${format}`
     );
 
     try {
+      if (format === "glb") {
+        const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
+        const { compositeCid } = await decomposeGLB(glbBuffer);
+
+        node.source.cid = compositeCid;
+        node.source.path = "composite.gltf";
+        node.source.format = "gltf";
+        decomposed++;
+        console.log(
+          `[DECOMPOSE-SAVE] node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
+        );
+        continue;
+      }
+
       const gltf = await getFromRemoteIPFS(cid);
 
       // Validate it looks like a glTF
@@ -219,10 +239,15 @@ async function prepareManifestForWrite(assetName) {
   let manifest;
   const pendingRefs = getPendingChildRefs();
   const pendingPP = getPendingPostProcessorEdits();
+  const pendingColors = getPendingSourceColorEdits();
 
   if (window.activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(window.activeAssetManifestCid);
-  } else if (pendingRefs.length > 0 || pendingPP.size > 0) {
+  } else if (
+    pendingRefs.length > 0 ||
+    pendingPP.size > 0 ||
+    pendingColors.size > 0
+  ) {
     manifest = {
       name: assetName,
       asset_id: `asset_${Date.now()}`,
@@ -231,7 +256,7 @@ async function prepareManifestForWrite(assetName) {
       scene: { nodes: [] },
     };
     console.log(
-      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits`
+      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingColors.size} pending source color edits`
     );
   } else {
     return null;
@@ -245,6 +270,33 @@ async function prepareManifestForWrite(assetName) {
   for (const pendingNode of pendingRefs) {
     if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
       manifest.scene.nodes.push(pendingNode);
+    }
+  }
+
+  // Apply direct source color edits.
+  // These mutate the source glTF/GLB asset and update node.source.cid.
+  if (pendingColors.size > 0) {
+    for (const [nodeId, nodeEdits] of pendingColors) {
+      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      if (!node || !node.source?.cid) continue;
+
+      const colorMap = {};
+      for (const [meshName, color] of nodeEdits) {
+        colorMap[meshName] = color;
+      }
+
+      try {
+        const result = await editSourceColors(node.source.cid, colorMap);
+        node.source.cid = result.sourceCid;
+        console.log(
+          `[SAVE] baked colors into source | node=${nodeId} newCid=${result.sourceCid} modified=${result.modified} skipped=${result.skipped}`
+        );
+      } catch (err) {
+        console.warn(
+          `[SAVE] failed to bake colors into source for ${nodeId}:`,
+          err.message
+        );
+      }
     }
   }
 
@@ -385,6 +437,7 @@ async function onSaveAssetDraft() {
 
     clearPendingChildRefs();
     clearPendingPostProcessorEdits();
+    clearPendingSourceColorEdits();
 
     updateUrlManifest(cid, window.activeAssetTokenId || null);
 

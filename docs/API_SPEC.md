@@ -1,6 +1,6 @@
 # Arbesk API Specification
 
-> Version: 0.5.0 — aligned with the current Express implementation  
+> Version: 0.6.0 — aligned with the current Express implementation  
 > Base URL: `/api`  
 > Content-Type: `application/json` unless noted
 
@@ -12,13 +12,14 @@
 - Private IPFS writes use the Kubo API from `IPFS_API_URL` (default `http://127.0.0.1:5001`).
 - The browser reads IPFS content through the gateway (`http://127.0.0.1:8080/ipfs/` by default).
 - Generation currently supports the mock adapter path. Cloud adapters are planned but return `501` until implemented.
+- The default contract is `ArbeskAssetFree` (free tier). `ArbeskAsset` (paid tier) is available via `PAID_CONTRACT_ADDRESS`. The generation route validates the contract configured in `CONTRACT_ADDRESS`.
 - Error responses are currently simple JSON objects such as `{ "error": "message" }`; they do not yet use a global typed error envelope.
 
 ---
 
 ## Authentication
 
-`POST /api/v1/generations` requires a Bearer token built from the transaction hash signature flow:
+`POST /api/v1/generations` requires a Bearer token built from the transaction hash signature flow when the configured `CONTRACT_ADDRESS` is the paid tier (`ArbeskAsset`):
 
 ```text
 Authorization: Bearer <base64(message)>.<base64(signature)>
@@ -28,8 +29,10 @@ The frontend service signs a message containing the transaction hash. The backen
 
 1. Recovers the wallet address from the signature.
 2. Extracts the tx hash from the message.
-3. Verifies the transaction receipt on the configured FEVM/Hardhat RPC.
-4. The generation route then validates the receipt target contract and expected `AssetGenerationPaid` event when `CONTRACT_ADDRESS` is configured.
+3. Verifies the transaction receipt on the configured EVM RPC (Hardhat local or Optimism).
+4. The generation route then validates the receipt target contract and expected `AssetGenerationPaid` event when `CONTRACT_ADDRESS` is the paid tier.
+
+When the configured `CONTRACT_ADDRESS` is the free tier (`ArbeskAssetFree`), the UI calls `recordGeneration()` for on-chain quota enforcement. The backend validates the `AssetGenerationRecorded` event instead of a payment event.
 
 Parametric edits, manifest saves, manifest chain reads, ABI reads, and token manifest reads do not currently require this Bearer auth.
 
@@ -57,7 +60,8 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 
 **Current behavior**
 
-- Requires Bearer auth.
+- Paid tier: requires Bearer auth tied to a PayGo transaction.
+- Free tier: validates `recordGeneration()` transaction; accepts `AssetGenerationRecorded` event.
 - Applies rate limit: 10 requests/hour per recovered wallet.
 - Requires `prompt` and `nodeId`.
 - Uses `txHash` from the body or authenticated token.
@@ -348,9 +352,10 @@ blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json
 ## Frontend/Contract Flow Summary
 
 1. User connects wallet.
-2. For generation, frontend calls `payForGeneration(nodeId, prompt)` on `ArbeskAsset`.
+2. **Paid tier generation:** frontend calls `payForGeneration(nodeId, prompt)` on `ArbeskAsset`.
+   **Free tier generation:** frontend calls `recordGeneration(nodeId, prompt)` on `ArbeskAssetFree`.
 3. Frontend signs tx hash and calls `POST /api/v1/generations`.
-4. Backend validates payment, uploads asset, writes manifest, returns new manifest CID.
+4. Backend validates payment/event, uploads asset, writes manifest, returns new manifest CID.
 5. Frontend loads the manifest into Babylon.js and updates `window.activeManifestId` / `window.latestManifestId`.
 6. Parametric edits are applied client-side; the browser sends the updated manifest to `POST /api/v1/manifests`.
 7. Save calls `POST /api/v1/manifests`.
@@ -358,13 +363,13 @@ blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json
 9. Frontend calls `publishAsset(tokenURI, tokenId)` for new worlds or `updateAssetURI(tokenId, newTokenURI)` for existing worlds.
 10. Gallery fetches token URIs from the contract, loads manifests, and displays names/thumbnails.
 11. Owner adds collaborators via `addEditor(tokenId, address, role)` and manages burn permissions via `setBurnPermission()`.
-12. Owner or permitted editors burn tokens via `burn(tokenId)`, which frees `MAX_TOKENS_PER_EDITOR` slots.
+12. Owner or permitted editors burn tokens via `burn(tokenId)`, which frees `maxTokensPerEditor()` slots.
 
 ---
 
-## Collaboration Contract Endpoints (v0.5.0)
+## Collaboration Contract Endpoints (v0.6.0)
 
-These are on-chain functions exposed by the `ArbeskAsset` contract. The frontend calls them directly via Web3.js — the backend does NOT proxy these. Documented here for completeness.
+These are on-chain functions exposed by both `ArbeskAsset` and `ArbeskAssetFree` through the shared `ArbeskAssetBase` contract. The frontend calls them directly via Web3.js — the backend does NOT proxy these. Documented here for completeness.
 
 ### Role-Based Collaboration
 
@@ -393,7 +398,7 @@ The token **owner** always has implicit full permissions regardless of role.
 
 | Contract Function | Access | Description |
 |---|---|---|
-| `burn(uint256)` | Owner or Editor+Burn | Destroy a token; cleans up all collaborators and frees `MAX_TOKENS_PER_EDITOR` slots |
+| `burn(uint256)` | Owner or Editor+Burn | Destroy a token; cleans up all collaborators and frees `maxTokensPerEditor()` slots |
 | `setBurnPermission(uint256,address,bool)` | Owner | Grant/revoke burn permission on an Editor-role collaborator |
 | `canBurn(uint256,address)` | Public | Returns `true` if address can burn the token |
 
@@ -402,7 +407,7 @@ The token **owner** always has implicit full permissions regardless of role.
 - Editor-role collaborators need explicit `canBurn` flag
 - Viewers can never burn
 - Setting `canBurn=true` on a Viewer or non-collaborator reverts
-- Burning frees `MAX_TOKENS_PER_EDITOR` slots for all collaborators on the token
+- Burning frees `maxTokensPerEditor()` slots for all collaborators on the token
 
 **New Events:**
 

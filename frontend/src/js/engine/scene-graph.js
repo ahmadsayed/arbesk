@@ -15,6 +15,7 @@ import {
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
 import { applyColor, applyScale } from "./time-travel.js";
+import { CHAIN_IDS } from "../constants/chains.js";
 
 import { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
 import { getCssVar, hexToColor3, hexToColor4 } from "./theme.js";
@@ -917,7 +918,7 @@ async function handleLinkedAssetDropped(event) {
   } = detail;
   if (!tokenId) return;
 
-  const resolvedChainId = Number(eventChainId || window.chainId || 31415822);
+  const resolvedChainId = Number(eventChainId || window.chainId || CHAIN_IDS.HARDHAT_LOCAL);
   const resolvedContractAddr =
     eventContractAddress || window.contractAddress || window._contractAddress;
 
@@ -1193,6 +1194,7 @@ export {
   dismissCreatePulse,
   deselectAll,
   selectNodeById,
+  selectSubMesh,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

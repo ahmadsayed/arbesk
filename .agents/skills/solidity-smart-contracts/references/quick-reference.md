@@ -31,11 +31,11 @@ ASCII cheat sheet with all constants, commands, and endpoints.
 │  • Check log.address === contractAddress              │
 │  • Support both direct and proxy/bundler paths        │
 ├─────────────────────────────────────────────────────────┤
-│  NETWORK CONFIG (Base Sepolia)                        │
-│  • Chain ID: 84532                                    │
-│  • Contract: 0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B│
-│  • USDC:     0x036CbD53842c5426634e7929541eC2318f3dCF7e│
-│  • RPC:      https://sepolia.base.org                 │
+│  NETWORK CONFIG (Optimism Sepolia)                    │
+│  • Chain ID: 11155420                                 │
+│  • Contract: (deploy to Optimism Sepolia first)       │
+│  • USDC:     0x5fd84259d66Cd461235407180D3B4c8d0F273e15│
+│  • RPC:      https://sepolia.optimism.io              │
 ├─────────────────────────────────────────────────────────┤
 │  SESSION AUTH RULES                                   │
 │  • Lowercase ALL addresses in storage/comparison      │

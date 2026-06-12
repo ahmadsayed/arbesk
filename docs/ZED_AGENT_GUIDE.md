@@ -18,6 +18,7 @@ This project is initialized for Zed's coding agent workflow.
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution, drag/drop, depth/cycle protection |
+| Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` default, `ArbeskAsset.sol` paid tier, owner quota bypass |
 | Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js`; no schema, store, or API |
 
 **Do not claim the micro-ledger is implemented.** The following files do **not** exist:
@@ -39,25 +40,23 @@ docker-compose run --rm hardhat npx hardhat compile
 # 2. Redeploy — updates blockchain/.env + deployment artifact
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
-# 3. Sync CONTRACT_ADDRESS from blockchain/.env to root .env
+# 3. Sync CONTRACT_ADDRESS (free tier) and PAID_CONTRACT_ADDRESS (paid tier) from blockchain/.env to root .env
 #    The deploy script updates blockchain/.env but NOT root .env.
-grep CONTRACT_ADDRESS blockchain/.env
-#    Manually update root .env to match the new address.
+grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS" blockchain/.env
+#    Manually update root .env to match the new addresses.
 
 # 4. Verify the pipeline is intact
 npm run test:frontend
 ```
 
 The `test/frontend/deployment-integrity.test.js` suite validates:
-- Compiled ABI contains every required function signature
-- Root .env and blockchain/.env agree on CONTRACT_ADDRESS
-- USDC_TOKEN is present in blockchain/.env
-- Deployment artifact matches the configured address
+- Compiled ABI contains every required function signature for both `ArbeskAsset` and `ArbeskAssetFree`
+- Root .env and blockchain/.env agree on `CONTRACT_ADDRESS` and `PAID_CONTRACT_ADDRESS`
+- `USDC_TOKEN` is present in blockchain/.env and does not collide with either contract address
+- Deployment artifacts match the configured addresses
 - Docker volume mounts for artifacts, deployments, and .env are present
 
 **Skipping any step causes `c.methods.X is not a function` or `Transaction reverted` errors.**
-
-> **Note:** `blockchain/scripts/verify.js` has a known bug — it passes only `[treasury]` as constructor args, but `ArbeskAsset` expects `(_treasury, _usdcToken)`. Fix before using on live networks.
 
 ---
 

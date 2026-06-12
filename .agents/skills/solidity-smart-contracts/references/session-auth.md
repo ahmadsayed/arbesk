@@ -74,14 +74,9 @@ When adding a new network, update `SUPPORTED_CHAIN_IDS` in `src/api/siwe-verify.
 
 ```javascript
 const SUPPORTED_CHAIN_IDS = [
-  1,        // Ethereum Mainnet
-  11155111, // Sepolia
-  137,      // Polygon
-  8453,     // Base Mainnet
-  84532,    // Base Sepolia ← ADD THIS
   31415822, // Hardhat Local
-  314159,   // Filecoin Calibration
-  314,      // Filecoin Mainnet
+  11155420, // Optimism Sepolia
+  10,       // Optimism Mainnet
 ];
 ```
 

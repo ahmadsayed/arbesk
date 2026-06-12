@@ -2,20 +2,12 @@
  * Arbesk Parametric Preview & Token Child Inspector
  *
  * Binds Node Inspector inputs to live Babylon.js material/mesh updates.
- * Color and scale edits are accumulated into `state.pendingAppearanceEdits`
- * and committed by the headerbar Save Draft / Publish buttons — the
- * inspector no longer has its own Save / Cancel buttons (per GNOME HIG:
- * one obvious save action in the headerbar, not duplicated per panel).
+ * Color edits are applied directly to the source glTF/GLB asset on Save;
+ * the inspector only keeps a lightweight pending-edit map for the live
+ * preview so the viewport stays responsive.
  *
- * Closing the inspector (X) discards pending edits for the active node
- * and reverts the live preview to the last committed appearance.
- *
- * Per-component: when a GLTF node contains multiple named sub-meshes, the
- * inspector shows a "Components" section with individual color swatches.
- * Sub-mesh colors are stored in `appearance.meshOverrides` on the manifest.
- *
- * History timeline walks the manifest chain via `prev_asset_manifest_cid`
- * links. Timeline scrubs are view-only — they do not create pending edits.
+ * Closing the inspector (X) reverts the live preview to the material colors
+ * captured when the inspector opened.
  */
 
 import {
@@ -30,8 +22,7 @@ import {
   getNodeChildRef,
   deselectAll,
   selectNodeById,
-  getPendingPostProcessorEdits,
-  clearPendingPostProcessorEdit,
+  selectSubMesh,
 } from "./scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
@@ -43,10 +34,12 @@ const nodeColorInput = document.getElementById("nodeColor");
 const nodeScaleX = document.getElementById("nodeScaleX");
 const nodeScaleY = document.getElementById("nodeScaleY");
 const nodeScaleZ = document.getElementById("nodeScaleZ");
-
-// Component list container (dynamically built)
 const componentList = document.getElementById("componentList");
-
+const componentListBody = document.getElementById("componentListBody");
+const componentEditor = document.getElementById("componentEditor");
+const selectedComponentName = document.getElementById("selectedComponentName");
+const selectedComponentSwatch = document.getElementById("selectedComponentSwatch");
+const selectedComponentColor = document.getElementById("selectedComponentColor");
 const timeline = document.getElementById("timeline");
 const versionSlider = document.getElementById("versionSlider");
 const versionLabel = document.getElementById("versionLabel");
@@ -60,98 +53,29 @@ const tokenChildCidEl = document.getElementById("tokenChildCid");
 
 // State
 let activeNodeId = null;
-// Last saved appearance for the active node — used to revert the live
-// preview when the inspector closes without saving. Re-seeded on
-// `asset:draftSaved` so close-after-save-and-edit reverts correctly.
-let committedState = null;
-// Per-component color overrides currently shown in the UI (keyed by mesh name)
-let activeMeshOverrides = {};
-
+let activeMeshName = null;
+// Original material colors captured at inspector open, used to revert on close.
+let originalMaterialColors = {};
+// Pending direct source color edits: Map<nodeId, Map<meshName, hexColor>>
+const pendingSourceColorEdits = new Map();
 // Cached manifest chain for the currently open node (used by timeline slider)
 let currentChain = [];
 
 /**
- * Show the Token Child Info panel for a child_ref node.
+ * Read the current solid color from a mesh's material (diffuse or albedo).
  */
-function showTokenChildInfo(nodeId) {
-  if (parametricEditor) parametricEditor.hidden = true;
-  if (tokenChildInfo) tokenChildInfo.hidden = false;
-  if (componentList) componentList.hidden = true;
-
-  const childRef = getNodeChildRef(nodeId);
-  if (childRef && tokenChildIdEl) {
-    tokenChildIdEl.textContent = `Token #${childRef.tokenId || "—"}`;
-  }
-  if (tokenChildContractEl) {
-    tokenChildContractEl.textContent = childRef?.contractAddress
-      ? `${childRef.contractAddress.slice(
-          0,
-          10
-        )}…${childRef.contractAddress.slice(-6)}`
-      : "—";
-  }
-  if (tokenChildChainEl) {
-    tokenChildChainEl.textContent = childRef?.chainId || "—";
-  }
-  if (tokenChildResolutionEl) {
-    tokenChildResolutionEl.textContent = childRef?.resolution || "latest";
-  }
-  if (tokenChildCidEl) {
-    tokenChildCidEl.textContent = childRef?.resolvedCid || "—";
-  }
-
-  // Hide timeline for token children (no local history)
-  timeline.hidden = true;
-
-  inspector.classList.remove("collapsed");
-}
-
-/**
- * Build the component color picker list from the active node's sub-meshes.
- */
-function buildComponentList(nodeId) {
-  if (!componentList) return;
-
-  const subMeshes = getNodeSubMeshes(nodeId);
-
-  if (subMeshes.length <= 1) {
-    componentList.hidden = true;
-    componentList.innerHTML = "";
-    return;
-  }
-
-  componentList.hidden = false;
-
-  let html = '<div class="inspector-section-title">Components</div>';
-
-  for (const { name } of subMeshes) {
-    const color =
-      activeMeshOverrides[name] || nodeColorInput?.value || "#ffffff";
-    const isActive = false; // highlight active sub-mesh? We don't use this yet
-    html += `
-      <div class="component-row${isActive ? " component-row--active" : ""}">
-        <label class="form-label component-label" for="meshColor_${name}">${escapeHtml(
-      name
-    )}</label>
-        <input
-          id="meshColor_${name}"
-          class="form-color component-color"
-          type="color"
-          value="${color}"
-          data-mesh-name="${escapeHtml(name)}"
-        />
-      </div>`;
-  }
-
-  componentList.innerHTML = html;
-
-  // Bind change events
-  for (const { name } of subMeshes) {
-    const input = document.getElementById(`meshColor_${name}`);
-    if (input) {
-      input.addEventListener("input", onComponentColorChange);
+function getMeshMaterialColor(mesh) {
+  if (!mesh?.material) return null;
+  const mat = mesh.material;
+  if (mat.diffuseColor) return mat.diffuseColor.toHexString();
+  if (mat.albedoColor) return mat.albedoColor.toHexString();
+  if (mat.getSubMeshMaterials) {
+    for (const sub of mat.getSubMeshMaterials()) {
+      if (sub?.diffuseColor) return sub.diffuseColor.toHexString();
+      if (sub?.albedoColor) return sub.albedoColor.toHexString();
     }
   }
+  return null;
 }
 
 function escapeHtml(str) {
@@ -161,20 +85,62 @@ function escapeHtml(str) {
 }
 
 /**
- * Collect current mesh override colors from the DOM inputs.
+ * Build the component list from the active node's sub-meshes.
+ * Rows are clickable selectors; the actual color editor lives in #componentEditor.
  */
-function readMeshOverrides() {
-  const overrides = {};
-  if (!componentList || componentList.hidden) return overrides;
+function buildComponentList(nodeId) {
+  if (!componentList || !componentListBody) return;
 
-  const inputs = componentList.querySelectorAll(".component-color");
-  for (const input of inputs) {
-    const name = input.dataset.meshName;
-    if (name) {
-      overrides[name] = { color: input.value };
-    }
+  const subMeshes = getNodeSubMeshes(nodeId);
+  if (subMeshes.length <= 1) {
+    componentList.hidden = true;
+    componentListBody.innerHTML = "";
+    return;
   }
-  return overrides;
+
+  componentList.hidden = false;
+
+  let html = "";
+  for (const { name, mesh } of subMeshes) {
+    const color = getMeshMaterialColor(mesh) || "#ffffff";
+    html += `
+      <div class="component-row" data-mesh-name="${escapeHtml(name)}">
+        <span class="component-label">${escapeHtml(name)}</span>
+        <span class="component-swatch" style="background-color: ${color};" aria-hidden="true"></span>
+      </div>`;
+  }
+
+  componentListBody.innerHTML = html;
+
+  for (const row of componentListBody.querySelectorAll(".component-row")) {
+    row.addEventListener("click", onComponentRowClick);
+  }
+}
+
+/**
+ * Show the Token Child Info panel for a child_ref node.
+ */
+function showTokenChildInfo(nodeId) {
+  if (parametricEditor) parametricEditor.hidden = true;
+  if (tokenChildInfo) tokenChildInfo.hidden = false;
+  if (componentList) componentList.hidden = true;
+  if (componentEditor) componentEditor.hidden = true;
+
+  const childRef = getNodeChildRef(nodeId);
+  if (childRef && tokenChildIdEl) {
+    tokenChildIdEl.textContent = `Token #${childRef.tokenId || "—"}`;
+  }
+  if (tokenChildContractEl) {
+    tokenChildContractEl.textContent = childRef?.contractAddress
+      ? `${childRef.contractAddress.slice(0, 10)}…${childRef.contractAddress.slice(-6)}`
+      : "—";
+  }
+  if (tokenChildChainEl) tokenChildChainEl.textContent = childRef?.chainId || "—";
+  if (tokenChildResolutionEl) tokenChildResolutionEl.textContent = childRef?.resolution || "latest";
+  if (tokenChildCidEl) tokenChildCidEl.textContent = childRef?.resolvedCid || "—";
+
+  timeline.hidden = true;
+  inspector.classList.remove("collapsed");
 }
 
 /**
@@ -182,90 +148,58 @@ function readMeshOverrides() {
  */
 async function openInspector(nodeId) {
   activeNodeId = nodeId;
-  activeMeshOverrides = {};
+  activeMeshName = null;
+  originalMaterialColors = {};
 
-  // Check if this is a token child node
   const childRef = getNodeChildRef(nodeId);
   if (childRef) {
     showTokenChildInfo(nodeId);
     return;
   }
 
-  // Regular node — show parametric editor
   if (parametricEditor) parametricEditor.hidden = false;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
 
-  // Read current committed values from the manifest node
-  let currentColor = "#ffffff";
-  let currentScale = { x: 1, y: 1, z: 1 };
-
-  const manifestCid =
-    window.activeAssetManifestCid || window.latestAssetManifestCid;
-  if (manifestCid) {
-    try {
-      const manifest = await getFromRemoteIPFS(manifestCid);
-      const node = (manifest.scene?.nodes || []).find(
-        (n) => n.node_id === nodeId
-      );
-      if (node) {
-        const pp = node.post_processor || {};
-        if (pp.color) currentColor = pp.color;
-        if (pp.scale) currentScale = { ...pp.scale };
-        if (pp.meshOverrides) {
-          activeMeshOverrides = { ...pp.meshOverrides };
-        }
-      }
-    } catch (err) {
-      console.warn(
-        `[PARAM] failed to fetch manifest for inspector:`,
-        err.message
-      );
-    }
+  // Capture original material colors so close() can revert the preview.
+  for (const { name, mesh } of getNodeSubMeshes(nodeId)) {
+    const color = getMeshMaterialColor(mesh);
+    if (color) originalMaterialColors[name] = color;
   }
 
-  committedState = {
-    color: currentColor,
-    scale: { ...currentScale },
-    meshOverrides: { ...activeMeshOverrides },
-  };
-
-  // Set inputs
-  if (nodeColorInput) nodeColorInput.value = currentColor;
-  if (nodeScaleX) nodeScaleX.value = currentScale.x;
-  if (nodeScaleY) nodeScaleY.value = currentScale.y;
-  if (nodeScaleZ) nodeScaleZ.value = currentScale.z;
-
-  // Build component list (async — getNodeSubMeshes is sync)
   buildComponentList(nodeId);
 
-  // Show inspector
-  inspector.classList.remove("collapsed");
+  // If there is only one component, edit it immediately; otherwise wait for
+  // the user to pick a component from the list or the viewport.
+  const subMeshes = getNodeSubMeshes(nodeId);
+  if (subMeshes.length === 1) {
+    selectComponent(subMeshes[0].name);
+  } else if (subMeshes.length > 1) {
+    if (componentEditor) componentEditor.hidden = true;
+  }
 
-  // Bind timeline
+  inspector.classList.remove("collapsed");
   bindTimeline(nodeId);
 }
 
 /**
- * Close the inspector: revert the live preview to the last committed
- * appearance and discard any pending edits for the active node.
+ * Close the inspector: revert the live preview to the colors captured at open.
  */
 function closeInspector() {
-  if (activeNodeId && committedState) {
+  if (activeNodeId) {
     const meshes = getNodeMeshes(activeNodeId);
-    if (meshes) {
-      applyColor(
-        meshes,
-        committedState.color,
-        committedState.meshOverrides || null
-      );
-      applyScale(meshes, committedState.scale);
+    if (meshes && Object.keys(originalMaterialColors).length > 0) {
+      const revertOverrides = {};
+      for (const [name, color] of Object.entries(originalMaterialColors)) {
+        revertOverrides[name] = { color };
+      }
+      applyColor(meshes, null, revertOverrides);
     }
-    clearPendingPostProcessorEdit(activeNodeId);
+    clearPendingSourceColorEdit(activeNodeId);
   }
 
   activeNodeId = null;
-  committedState = null;
-  activeMeshOverrides = {};
+  activeMeshName = null;
+  originalMaterialColors = {};
   currentChain = [];
   inspector.classList.add("collapsed");
   timeline.hidden = true;
@@ -273,17 +207,58 @@ function closeInspector() {
   if (parametricEditor) parametricEditor.hidden = false;
   if (componentList) {
     componentList.hidden = true;
-    componentList.innerHTML = "";
+    if (componentListBody) componentListBody.innerHTML = "";
   }
+  if (componentEditor) componentEditor.hidden = true;
   deselectAll();
+}
+
+/**
+ * Activate a component in the inspector: highlight its row, update the 3D
+ * selection, and show the single color editor for it.
+ */
+function selectComponent(meshName) {
+  if (!activeNodeId || !componentListBody) return;
+  if (activeMeshName === meshName) return;
+  activeMeshName = meshName;
+
+  // Update list active state.
+  for (const row of componentListBody.querySelectorAll(".component-row")) {
+    row.classList.toggle("component-row--active", row.dataset.meshName === meshName);
+  }
+
+  // Find the mesh and its color for the editor.
+  const subMeshes = getNodeSubMeshes(activeNodeId);
+  const match = subMeshes.find((s) => s.name === meshName);
+  const color = match ? getMeshMaterialColor(match.mesh) || "#ffffff" : "#ffffff";
+
+  if (selectedComponentName) selectedComponentName.textContent = meshName;
+  if (selectedComponentSwatch) selectedComponentSwatch.style.backgroundColor = color;
+  if (selectedComponentColor) {
+    selectedComponentColor.value = color;
+    selectedComponentColor.dataset.meshName = meshName;
+  }
+
+  // Reveal the editor before syncing the viewport so the submesh:selected
+  // guard sees we are already editing this component and does not recurse.
+  if (componentEditor) componentEditor.hidden = false;
+
+  // Update 3D selection to match.
+  selectSubMesh(activeNodeId, meshName);
+}
+
+function onComponentRowClick(e) {
+  const row = e.currentTarget;
+  const meshName = row?.dataset?.meshName;
+  if (!meshName || !activeNodeId) return;
+  selectComponent(meshName);
 }
 
 /**
  * Bind the timeline slider to the node's manifest chain.
  */
 async function bindTimeline(nodeId) {
-  const manifestCid =
-    window.activeAssetManifestCid || window.latestAssetManifestCid;
+  const manifestCid = window.activeAssetManifestCid || window.latestAssetManifestCid;
   if (!manifestCid) {
     timeline.hidden = true;
     return;
@@ -312,72 +287,33 @@ function readScaleInputs() {
 }
 
 /**
- * Write the current color + scale + meshOverrides into the pending-edits map.
- */
-function recordPendingEdit() {
-  if (!activeNodeId) return;
-  const pending = getPendingPostProcessorEdits();
-  const prev = pending.get(activeNodeId) || {};
-  const meshOverrides = readMeshOverrides();
-  pending.set(activeNodeId, {
-    color: nodeColorInput ? nodeColorInput.value : prev.color ?? "#ffffff",
-    scale: readScaleInputs(),
-    meshOverrides:
-      Object.keys(meshOverrides).length > 0
-        ? meshOverrides
-        : prev.meshOverrides || undefined,
-  });
-}
-
-/**
- * Live preview: update mesh color from input and record the edit.
- * Applies both the node-level color and any mesh overrides.
- */
-function onColorChange() {
-  if (!activeNodeId) return;
-  const color = nodeColorInput ? nodeColorInput.value : null;
-  const meshOverrides = readMeshOverrides();
-  const meshes = getNodeMeshes(activeNodeId);
-  applyColor(
-    meshes,
-    color,
-    Object.keys(meshOverrides).length > 0 ? meshOverrides : null
-  );
-  recordPendingEdit();
-}
-
-/**
- * Live preview: per-component color changed.
+ * Live preview: the selected component's color changed.
+ * Applies the color immediately to the viewport and records it for Save.
  */
 function onComponentColorChange(e) {
   if (!activeNodeId) return;
-  const meshName = e.target?.dataset?.meshName;
+  const meshName = e.target?.dataset?.meshName || activeMeshName;
   if (!meshName) return;
 
-  // Update the in-memory map
-  activeMeshOverrides[meshName] = { color: e.target.value };
+  const color = e.target.value;
 
-  // Re-apply all colors
-  const color = nodeColorInput ? nodeColorInput.value : null;
-  const meshOverrides = readMeshOverrides();
+  // Live preview: only touch this component.
   const meshes = getNodeMeshes(activeNodeId);
-  applyColor(
-    meshes,
-    color,
-    Object.keys(meshOverrides).length > 0 ? meshOverrides : null
-  );
-  recordPendingEdit();
-}
+  applyColor(meshes, null, { [meshName]: { color } });
 
-/**
- * Live preview: update mesh scale from inputs and record the edit.
- */
-function onScaleChange() {
-  if (!activeNodeId) return;
-  const scale = readScaleInputs();
-  const meshes = getNodeMeshes(activeNodeId);
-  applyScale(meshes, scale);
-  recordPendingEdit();
+  // Sync the list swatch to match.
+  const row = componentListBody?.querySelector(`[data-mesh-name="${CSS.escape(meshName)}"]`);
+  const swatch = row?.querySelector(".component-swatch");
+  if (swatch) swatch.style.backgroundColor = color;
+  if (selectedComponentSwatch) selectedComponentSwatch.style.backgroundColor = color;
+
+  // Record for Save/Publish to bake into the source asset.
+  let nodeEdits = pendingSourceColorEdits.get(activeNodeId);
+  if (!nodeEdits) {
+    nodeEdits = new Map();
+    pendingSourceColorEdits.set(activeNodeId, nodeEdits);
+  }
+  nodeEdits.set(meshName, color);
 }
 
 /**
@@ -393,6 +329,19 @@ function onTimelineChange() {
   versionLabel.textContent = `v${entry.version || index + 1}`;
 }
 
+// Pending source color edit accessors (consumed by asset-save.js).
+export function getPendingSourceColorEdits() {
+  return pendingSourceColorEdits;
+}
+
+export function clearPendingSourceColorEdits() {
+  pendingSourceColorEdits.clear();
+}
+
+export function clearPendingSourceColorEdit(nodeId) {
+  pendingSourceColorEdits.delete(nodeId);
+}
+
 // Event bindings
 function onNodeSelected(e) {
   selectNodeById(e.detail.nodeId);
@@ -401,28 +350,17 @@ function onNodeSelected(e) {
 document.addEventListener("node:selected", onNodeSelected);
 document.addEventListener("outliner:nodeSelected", onNodeSelected);
 
-// Sub-mesh selected: update component list highlight
+// Sub-mesh selected from the viewport: sync the inspector to that component.
 document.addEventListener("submesh:selected", (e) => {
   if (!componentList || componentList.hidden) return;
   const meshName = e.detail?.meshName;
   if (!meshName) return;
-
-  // Remove active class from all rows
-  for (const row of componentList.querySelectorAll(".component-row--active")) {
-    row.classList.remove("component-row--active");
-  }
-  // Highlight the matching row
-  const input = document.getElementById(`meshColor_${meshName}`);
-  if (input) {
-    const row = input.closest(".component-row");
-    if (row) row.classList.add("component-row--active");
-  }
+  selectComponent(meshName);
 });
 
 // Inspector close button
 const inspectorCloseBtn = document.getElementById("inspectorCloseBtn");
-if (inspectorCloseBtn)
-  inspectorCloseBtn.addEventListener("click", closeInspector);
+if (inspectorCloseBtn) inspectorCloseBtn.addEventListener("click", closeInspector);
 
 // Dive button for child worlds
 const diveBtn = document.getElementById("inspectorDiveBtn");
@@ -439,21 +377,21 @@ if (diveBtn) {
   });
 }
 
-// After a save, the values in the inputs are now the committed values.
+// After a save, the live preview colors are now the committed colors.
 document.addEventListener("asset:draftSaved", () => {
   if (activeNodeId) {
-    committedState = {
-      color: nodeColorInput ? nodeColorInput.value : "#ffffff",
-      scale: readScaleInputs(),
-      meshOverrides: { ...activeMeshOverrides },
-    };
+    for (const { name, mesh } of getNodeSubMeshes(activeNodeId)) {
+      const color = getMeshMaterialColor(mesh);
+      if (color) originalMaterialColors[name] = color;
+    }
   }
 });
 
-if (nodeColorInput) nodeColorInput.addEventListener("input", onColorChange);
-if (nodeScaleX) nodeScaleX.addEventListener("input", onScaleChange);
-if (nodeScaleY) nodeScaleY.addEventListener("input", onScaleChange);
-if (nodeScaleZ) nodeScaleZ.addEventListener("input", onScaleChange);
+if (nodeColorInput) nodeColorInput.addEventListener("input", () => {});
+if (nodeScaleX) nodeScaleX.addEventListener("input", () => {});
+if (nodeScaleY) nodeScaleY.addEventListener("input", () => {});
+if (nodeScaleZ) nodeScaleZ.addEventListener("input", () => {});
+if (selectedComponentColor) selectedComponentColor.addEventListener("input", onComponentColorChange);
 if (versionSlider) versionSlider.addEventListener("input", onTimelineChange);
 
 // Update token child CID when resolution completes and we're showing the info

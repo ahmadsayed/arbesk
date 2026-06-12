@@ -135,26 +135,44 @@ export async function decodeRevertReason(error, contractABI = null) {
   // If it's already a readable string revert, use that
   const msg = error.message || "";
 
-  // Extract revert data from various Web3.js error formats
-  let revertData = error.data;
-
-  // Web3.js v4 wraps revert data differently
-  if (!revertData && error.innerError?.data) {
-    revertData = error.innerError.data;
-  }
-
-  // Some providers nest data deeper
-  if (!revertData && error?.data?.data) {
-    revertData = error.data.data;
-  }
-
-  // MetaMask sometimes puts hex in the message
-  if (!revertData && msg.includes("0x")) {
-    const hexMatch = msg.match(/0x[0-9a-fA-F]+/);
-    if (hexMatch && hexMatch[0].length >= 10) {
-      revertData = hexMatch[0];
+  // Extract revert data from various Web3.js / provider error formats.
+  let revertData = null;
+  const dataPaths = [
+    () => error.data,
+    () => error.innerError?.data,
+    () => error.originalError?.data,
+    () => error.data?.data,
+    () => error.data?.originalError?.data,
+    () => error.cause?.data,
+    () => error.info?.error?.data,
+    () => error.payload?.data,
+  ];
+  for (const getData of dataPaths) {
+    try {
+      const d = getData();
+      if (d && typeof d === "string" && d.startsWith("0x")) {
+        revertData = d;
+        break;
+      }
+    } catch {
+      // ignore path resolution errors
     }
   }
+
+  // Last resort: the message may contain escaped JSON with the revert data.
+  // Prefer the last hex string (revert data is usually at the end) and ignore
+  // 20-byte addresses (42 chars).
+  if (!revertData && msg.includes("0x")) {
+    const hexMatches = msg.match(/0x[0-9a-fA-F]+/g);
+    if (hexMatches) {
+      revertData = hexMatches
+        .slice()
+        .reverse()
+        .find((h) => h.length >= 10 && h.length !== 42);
+    }
+  }
+
+  console.log("[ERROR-DECODER] extracted revertData:", revertData);
 
   if (!revertData || typeof revertData !== "string" || !revertData.startsWith("0x")) {
     // No revert data — return the original message or a generic fallback

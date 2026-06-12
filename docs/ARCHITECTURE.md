@@ -1,7 +1,7 @@
 # Arbesk System Architecture
 
-> Status: Current v0.4 — Phases 1–4 complete, publishing polish complete, Phase 5 planned  
-> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, EVM PayGo, and studio publishing
+> Status: Current v0.4 — Phases 1–4 complete, publishing polish complete, Phase 5.2 free tier complete, Phase 5 planned  
+> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, and studio publishing
 
 ---
 
@@ -14,10 +14,12 @@ The system currently combines:
 - **Mock-backed generative 3D flow** via Express and private IPFS
 - **Parametric versioning** for free color/scale changes
 - **Babylon.js rendering** with GLB/GLTF loading and one-node-per-world replacement behavior
-- **EVM PayGo** generation payments and ERC721 world ownership
+- **Free-tier on-chain generation quota** via `ArbeskAssetFree.recordGeneration()` (10/day per wallet, owner bypass)
+- **EVM PayGo** generation payments and ERC721 world ownership via `ArbeskAsset` (paid tier)
 - **Team collaboration** through token URI editor permissions
 - **Private Dockerized Kubo/IPFS** for local content-addressed storage
 - **Dockerized Hardhat** for reproducible local EVM development
+- **Optimism Sepolia / Optimism mainnet** as the public network targets (Hardhat local for dev)
 - **Optional WebP publish thumbnails** stored as separate IPFS assets and referenced by manifest metadata
 - **On-demand browser IPFS cache** using memory + IndexedDB
 
@@ -40,7 +42,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  └─ Team editor panel                                               │
 │                                                                    │
 │  Frontend services                                                  │
-│  ├─ wallet.js: Web3Modal/Web3 + ArbeskAsset calls                   │
+│  ├─ wallet.js: Web3Modal/Web3 + ArbeskAssetFree / ArbeskAsset calls │
 │  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache          │
 │  └─ asset-save.js: save/publish + WebP thumbnail capture            │
 └───────────────────────────────┬────────────────────────────────────┘
@@ -67,13 +69,15 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
                 │                               │
                 ▼                               ▼
 ┌──────────────────────────────┐   ┌─────────────────────────────────┐
-│ Private Kubo/IPFS             │   │ EVM / Hardhat          │
-│ 127.0.0.1:5001 API            │   │ ArbeskAsset.sol                  │
-│ 127.0.0.1:8080 gateway        │   │ ├─ payForGeneration              │
-│ No DHT / no bootstrap peers   │   │ ├─ publishAsset / updateAssetURI │
-│ Stores assets, manifests,     │   │ └─ addEditor / removeEditor      │
-│ thumbnails                    │   │ Local RPC: 127.0.0.1:8545       │
-└──────────────────────────────┘   └─────────────────────────────────┘
+│ Private Kubo/IPFS             │   │ EVM (Hardhat/Optimism)           │
+│ 127.0.0.1:5001 API            │   │ ArbeskAssetFree.sol (free tier)   │
+│ 127.0.0.1:8080 gateway        │   │ ArbeskAsset.sol (paid tier)      │
+│ No DHT / no bootstrap peers   │   │ ├─ recordGeneration              │
+│ Stores assets, manifests,     │   │ ├─ payForGeneration              │
+│ thumbnails                    │   │ ├─ publishAsset / updateAssetURI │
+└──────────────────────────────┘   │ └─ addEditor / removeEditor      │
+                                   │ Local RPC: 127.0.0.1:8545       │
+                                   └─────────────────────────────────┘
 ```
 
 ---
@@ -109,17 +113,29 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | UI | `ui/asset-history.js` | Manifest-chain timeline browser |
 | UI | `ui/asset-editors.js` | Editor list/add/remove UI |
 
-### 3.3 Smart Contract (`blockchain/contracts/ArbeskAsset.sol`)
+### 3.3 Smart Contracts (`blockchain/contracts/`)
 
-Current contract responsibilities:
+There are two concrete contracts sharing `ArbeskAssetBase.sol`:
 
+**`ArbeskAssetFree.sol` (free tier, default)**
+- `recordGeneration(bytes32 nodeId, string prompt)` — 10/day quota per wallet, owner bypass
+- All shared minting, URI, editor, and burn functions
+- No payment, no treasury, no USDC
+
+**`ArbeskAsset.sol` (paid tier)**
 - `payForGeneration(bytes32 nodeId, string promptText)`
 - emits `AssetGenerationPaid`
 - transfers generation payment directly to treasury
-- `mintWorld(string uri, uint256 tokenId)`
-- `updateTokenURI(tokenId, newURI)` for owner/editor
+- `publishAsset(string uri, uint256 tokenId)`
+- `updateAssetURI(tokenId, newURI)` for owner/editor
 - editor management: `addEditor`, `removeEditor`, `listEditors`, `listTokens`
 - admin controls: cost, treasury, pause/unpause
+
+Shared responsibilities (in `ArbeskAssetBase.sol`):
+- ERC-721 enumerable minting and URI storage
+- role-based collaboration (Viewer / Editor)
+- burn with collaborator cleanup
+- pause/unpause and ownership
 
 ### 3.4 Infrastructure
 
@@ -127,8 +143,12 @@ Current contract responsibilities:
 |---|---|---|
 | `ipfs` | Private Kubo node | `127.0.0.1:5001`, `127.0.0.1:8080` |
 | `hardhat` | Local EVM and contract tooling | `127.0.0.1:8545` |
+| `optimismSepolia` | Public testnet target | RPC via configured provider |
+| `optimismMainnet` | Public production (softnet) target | RPC via configured provider |
 
 The IPFS container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm.
+
+Public network strategy: **Hardhat local for development, Optimism Sepolia for testnet, Optimism mainnet for production**. Base and Polygon configurations are not current targets.
 
 ---
 
@@ -248,6 +268,8 @@ During publish:
 
 ### 5.1 Generation Flow
 
+**Paid tier (`ArbeskAsset`)**
+
 ```text
 User prompt
   → wallet.payForGeneration(nodeId, prompt)
@@ -259,6 +281,21 @@ User prompt
   → manifest read/update/write on private IPFS
   → frontend loads new manifest in Babylon.js
 ```
+
+**Free tier (`ArbeskAssetFree`) — implemented UI path**
+
+```text
+User prompt
+  → wallet.recordGeneration(nodeId, prompt)
+  → POST /api/v1/generations
+  → backend verifies tx receipt + AssetGenerationRecorded event
+  → mock adapter returns asset bytes
+  → asset bytes added to private IPFS
+  → manifest read/update/write on private IPFS
+  → frontend loads new manifest in Babylon.js
+```
+
+> The free tier uses on-chain quota enforcement (`recordGeneration` reverts after 10 calls/day per wallet). The contract owner bypasses the quota. `create-panel.js` auto-detects the free tier via `isFreeTierContract()` and dispatches to the correct contract method.
 
 ### 5.2 Parametric Edit Flow
 
@@ -387,3 +424,4 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 - Frontend E2E tests are not committed.
 - Phase 5 ledger is planned but not implemented.
 - `GET /api/health` and direct `GET /api/manifest/:cid` are planned routes, not current backend routes.
+- Public Optimism Sepolia/mainnet contract deployments are documented as targets but not yet deployed.

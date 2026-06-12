@@ -16,25 +16,66 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 const chainCache = new Map();
 
 /**
+ * Clone a mesh's material if it is shared with other meshes.
+ * This is required for per-component color overrides so changing one mesh
+ * does not bleed into every mesh that originally shared the material.
+ */
+function ensureUniqueMaterial(mesh) {
+  const mat = mesh.material;
+  if (!mat || typeof mat.clone !== "function") return;
+
+  const scene = mesh.getScene();
+  const isShared = scene.meshes.some(
+    (m) => m !== mesh && !m.isDisposed() && m.material === mat
+  );
+  if (!isShared) return;
+
+  const clone = mat.clone(`${mat.name || "mat"}_iso_${mesh.name}`);
+  if (!clone) return;
+
+  // MultiMaterial: the cloned multi-material still references the original
+  // sub-materials, so clone those too.
+  if (mat.getSubMeshMaterials && clone.subMaterials) {
+    const subs = mat.getSubMeshMaterials();
+    if (subs.length > 0) {
+      clone.subMaterials = subs.map((sub, i) =>
+        sub && typeof sub.clone === "function"
+          ? sub.clone(`${sub.name || "sub"}_iso_${mesh.name}_${i}`)
+          : sub
+      );
+    }
+  }
+
+  mesh.material = clone;
+}
+
+/**
  * Apply a color to meshes.
  */
 function applyColor(meshes, colorHex, meshOverrides = null) {
   if (!colorHex && !meshOverrides) return;
-  const defaultColor = colorHex ? BABYLON.Color3.FromHexString(colorHex) : null;
 
   for (const mesh of meshes) {
     // Determine the effective color for this mesh:
     // meshOverrides take precedence, then fall back to the node default.
-    let effectiveColor = defaultColor;
-    if (meshOverrides && mesh.name && meshOverrides[mesh.name]?.color) {
+    const hasOverride =
+      meshOverrides && mesh.name && meshOverrides[mesh.name]?.color;
+    let effectiveColor = null;
+    if (hasOverride) {
       effectiveColor = BABYLON.Color3.FromHexString(
         meshOverrides[mesh.name].color
       );
+    } else if (colorHex) {
+      effectiveColor = BABYLON.Color3.FromHexString(colorHex);
     }
 
     if (!effectiveColor) continue;
 
     if (mesh.material) {
+      // Per-component overrides must use a material unique to this mesh;
+      // otherwise a shared material turns every component the same color.
+      if (hasOverride) ensureUniqueMaterial(mesh);
+
       if (mesh.material.diffuseColor) {
         mesh.material.diffuseColor = effectiveColor;
       } else if (mesh.material.albedoColor) {

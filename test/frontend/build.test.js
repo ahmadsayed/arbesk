@@ -110,7 +110,7 @@ describe("Frontend Build", () => {
 
     test("_initContract calls getContractArtifact() with contract name", () => {
       expect(wallet).toMatch(/getContractArtifact\(/);
-      expect(wallet).toMatch(/"ArbeskAsset"/);
+      expect(wallet).toMatch(/"ArbeskAssetFree"/);
     });
 
     test("_initContract does NOT fetch /api/contract_address directly", () => {
@@ -144,7 +144,7 @@ describe("Frontend Build", () => {
     });
 
     test("pay fallback gas is set", () => {
-      expect(wallet).toMatch(/payGas = 300000/);
+      expect(wallet).toMatch(/payGas = isL2 \? 500000 : 300000/);
     });
   });
 

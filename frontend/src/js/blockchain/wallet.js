@@ -8,7 +8,7 @@
  * tokenURI updates, editor management, role-based collaboration, and burn.
  */
 
-import { showToast } from "../ui/toasts.js";
+import { showToast, dismissToast } from "../ui/toasts.js";
 import {
   startDiscovery,
   requestWallets,
@@ -29,35 +29,48 @@ import {
   getUsdcToken as getNetworkUsdcToken,
   getNetworkConfig,
 } from "./network-config.js";
+import { CHAIN_IDS, SUPPORTED_CHAIN_IDS } from "../constants/chains.js";
 
 // Supported networks
 const NETWORKS = {
   hardhat: {
-    chainId: "0x1df5e0e", // 31415822 in hex
+    chainId: `0x${CHAIN_IDS.HARDHAT_LOCAL.toString(16)}`,
     chainName: "Hardhat Local",
     rpcUrls: ["http://127.0.0.1:8545"],
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: [],
   },
-  baseSepolia: {
-    chainId: "0x14a34", // 84532 in hex
-    chainName: "Base Sepolia",
-    rpcUrls: ["https://sepolia.base.org"],
+  optimismSepolia: {
+    chainId: `0x${CHAIN_IDS.OPTIMISM_SEPOLIA.toString(16)}`,
+    chainName: "Optimism Sepolia",
+    rpcUrls: ["https://sepolia.optimism.io"],
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://sepolia.basescan.org"],
+    blockExplorerUrls: ["https://sepolia-optimism.etherscan.io"],
   },
-  polygonAmoy: {
-    chainId: "0x13882", // 80002 in hex
-    chainName: "Polygon Amoy",
-    rpcUrls: ["https://rpc-amoy.polygon.technology"],
-    nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-    blockExplorerUrls: ["https://amoy.polygonscan.com"],
+  optimismMainnet: {
+    chainId: `0x${CHAIN_IDS.OPTIMISM_MAINNET.toString(16)}`,
+    chainName: "Optimism Mainnet",
+    rpcUrls: ["https://mainnet.optimism.io"],
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://optimistic.etherscan.io"],
   },
 };
 
-const HARHAT_CHAIN_ID_DEC = 31415822;
-// Hardhat local + Base Sepolia testnet
-const SUPPORTED_CHAIN_IDS = [HARHAT_CHAIN_ID_DEC, 84532];
+const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
+
+/**
+ * Detect the "chain is not added to wallet" error across wallet vendors.
+ * MetaMask returns 4902; Rabby returns -32603 with "Unrecognized chain ID".
+ * @param {Object} error
+ * @returns {boolean}
+ */
+function _isChainUnknownError(error) {
+  if (!error) return false;
+  if (error.code === 4902) return true;
+  if (error.code === -32603) return true;
+  const msg = (error.message || "").toLowerCase();
+  return msg.includes("unrecognized chain") || msg.includes("unrecognized chainid");
+}
 
 /** @type {string|null} 'injected' | 'walletconnect' | null */
 let activeConnectionSource = null;
@@ -69,6 +82,7 @@ let web3Provider = null;
 let web3 = null;
 let contract = null;
 let contractAddress = null;
+let lowBalanceToastId = null;
 
 const LAST_WALLET_KEY = "arbesk-last-wallet";
 
@@ -106,7 +120,7 @@ async function _initContract() {
       );
     }
 
-    const abiData = await getContractArtifact("ArbeskAsset");
+    const abiData = await getContractArtifact("ArbeskAssetFree");
     if (!addr) return;
     if (!abiData?.abi) return;
 
@@ -150,8 +164,9 @@ async function _promptNetworkSwitch(networkKey) {
     });
     return true;
   } catch (switchError) {
-    if (switchError.code === 4902) {
+    if (_isChainUnknownError(switchError)) {
       // Chain not in wallet — try wallet_addEthereumChain first.
+      // MetaMask signals this with code 4902; Rabby uses -32603 / "Unrecognized chain ID".
       try {
         await ethereum.request({
           method: "wallet_addEthereumChain",
@@ -218,27 +233,45 @@ async function _checkBalance() {
     const balanceEth = web3.utils.fromWei(balanceWei, "ether");
     console.log("Balance:", balanceEth, "ETH");
 
-    if (parseFloat(balanceEth) < 0.1) {
-      console.warn("Low balance detected");
-      // Only warn if we're actually on Hardhat
-      let chainId = await web3.eth.getChainId();
-      chainId = Number(chainId);
-      if (chainId === HARHAT_CHAIN_ID_DEC) {
-        // Hardhat dev key for account #0
-        const { DEV_ACCOUNT_ADDRESS } = await import("./dev-account.js");
+    // Clear any previous low-balance toast before deciding again.
+    if (lowBalanceToastId) {
+      dismissToast(lowBalanceToastId);
+      lowBalanceToastId = null;
+    }
 
-        if (
-          window.walletAddress.toLowerCase() !==
-          DEV_ACCOUNT_ADDRESS.toLowerCase()
-        ) {
-          showToast({
-            type: "warning",
-            title: "Low Balance",
-            message: `Your wallet has insufficient funds on Hardhat. Import dev account: ${devAddress}`,
-            duration: 0,
-          });
-        }
+    let chainId = await web3.eth.getChainId();
+    chainId = Number(chainId);
+
+    if (chainId === HARHAT_CHAIN_ID_DEC && parseFloat(balanceEth) < 0.1) {
+      console.warn("Low balance detected on Hardhat");
+      const { DEV_ACCOUNT_ADDRESS } = await import("./dev-account.js");
+      if (
+        window.walletAddress.toLowerCase() !==
+        DEV_ACCOUNT_ADDRESS.toLowerCase()
+      ) {
+        lowBalanceToastId = showToast({
+          type: "warning",
+          title: "Low Balance",
+          message: `Your wallet has insufficient funds on Hardhat. Import dev account: ${DEV_ACCOUNT_ADDRESS}`,
+          duration: 0,
+        });
       }
+    } else if (
+      (chainId === CHAIN_IDS.OPTIMISM_SEPOLIA ||
+        chainId === CHAIN_IDS.OPTIMISM_MAINNET) &&
+      parseFloat(balanceEth) < 0.001
+    ) {
+      console.warn("Low balance detected on Optimism");
+      const netName =
+        chainId === CHAIN_IDS.OPTIMISM_SEPOLIA
+          ? "Optimism Sepolia"
+          : "Optimism Mainnet";
+      lowBalanceToastId = showToast({
+        type: "warning",
+        title: "Low Balance",
+        message: `Your wallet has very low ETH on ${netName}. You need ETH for gas. Get testnet ETH from a faucet.`,
+        duration: 0,
+      });
     }
   } catch (e) {
     console.warn("Balance check failed:", e);
@@ -519,6 +552,10 @@ async function disconnectWallet() {
   contract = null;
   contractAddress = null;
   window.walletAddress = null;
+  if (lowBalanceToastId) {
+    dismissToast(lowBalanceToastId);
+    lowBalanceToastId = null;
+  }
   localStorage.removeItem(LAST_WALLET_KEY);
   document.dispatchEvent(new CustomEvent("wallet:disconnected"));
 }
@@ -538,7 +575,7 @@ async function switchNetwork(networkKey) {
       params: [{ chainId: net.chainId }],
     });
   } catch (switchError) {
-    if (switchError.code === 4902) {
+    if (_isChainUnknownError(switchError)) {
       await ethereum.request({
         method: "wallet_addEthereumChain",
         params: [net],
@@ -547,6 +584,18 @@ async function switchNetwork(networkKey) {
       throw switchError;
     }
   }
+}
+
+// ─── Free tier detection ───
+
+/**
+ * Returns true if the currently loaded contract is the free tier
+ * (ArbeskAssetFree), which uses recordGeneration() instead of payments.
+ * @returns {boolean}
+ */
+function isFreeTierContract() {
+  const c = _getContract();
+  return !!c && typeof c.methods.recordGeneration === "function";
 }
 
 // ─── Payment (USDC only) ───
@@ -565,6 +614,100 @@ const TIER_COSTS_USDC = { 0: "0.75", 1: "1.25", 2: "1.75", 3: "2.50" };
  */
 async function payForGenerationWithUSDC(nodeId, prompt, tier) {
   return payWithUSDC(nodeId, prompt, tier);
+}
+
+// ─── Free tier generation ───
+
+/**
+ * Record a free-tier generation on-chain.
+ * The free contract enforces a daily quota (default 10/day/wallet).
+ * @param {string} nodeId
+ * @param {string} prompt
+ * @returns {string|null} txHash on success, null on failure
+ */
+async function recordGeneration(nodeId, prompt) {
+  const w3 = _getWeb3();
+  if (!w3 || !window.walletAddress) {
+    showToast({
+      type: "error",
+      title: "Wallet Not Connected",
+      message: "Please connect your wallet first.",
+    });
+    return null;
+  }
+  const c = _getContract();
+  if (!c || !contractAddress) {
+    showToast({
+      type: "error",
+      title: "Contract Not Configured",
+      message: "Cannot record generation. Contract not deployed.",
+      duration: 0,
+    });
+    return null;
+  }
+  if (!isFreeTierContract()) {
+    showToast({
+      type: "error",
+      title: "Wrong Contract",
+      message: "Current contract is not the free tier. Use paid payment instead.",
+      duration: 0,
+    });
+    return null;
+  }
+  try {
+    const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
+    const tx = c.methods.recordGeneration(nodeIdBytes32, prompt);
+
+    let gas;
+    try {
+      gas = await tx.estimateGas({ from: window.walletAddress });
+    } catch {
+      gas = 120000;
+    }
+
+    const receipt = await tx.send({
+      from: window.walletAddress,
+      gas: Math.floor(Number(gas) * 1.2),
+    });
+    console.log("[FREE-GEN] recorded! txHash =", receipt.transactionHash);
+
+    document.dispatchEvent(
+      new CustomEvent("wallet:generationPaid", {
+        detail: {
+          txHash: receipt.transactionHash,
+          nodeId,
+          prompt,
+          contractAddress,
+        },
+      })
+    );
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("recordGeneration failed:", error);
+    const msg = error.message || "";
+    if (
+      msg.includes("User denied") ||
+      msg.includes("rejected") ||
+      error.code === 4001
+    ) {
+      // silent
+    } else if (msg.includes("DailyGenerationLimitReached")) {
+      showToast({
+        type: "warning",
+        title: "Daily Limit Reached",
+        message: "You have used your free generations for today.",
+        duration: 0,
+      });
+    } else {
+      showToast({
+        type: "error",
+        title: "Generation Recording Failed",
+        message: msg || "Could not record free generation.",
+        duration: 0,
+      });
+    }
+    return null;
+  }
 }
 
 // ─── Simple USDC Payment ───
@@ -753,7 +896,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
       tier
     );
 
-    // L2 chains (Base, Optimism, Arbitrum) need higher gas defaults because
+    // L2 chains (Optimism) need higher gas defaults because
     // external calls (safeTransferFrom) consume more gas on OP stack.
     // Also, estimateGas may fail on public RPCs due to stale sequencer state.
     let payGas;
@@ -763,7 +906,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
     } catch (estErr) {
       // On L2 chains, estimateGas often fails when the approval tx hasn't
       // been indexed by the RPC's simulation state. Use a generous default.
-      const isL2 = [84532, 8453, 10, 42161, 421614].includes(chainId);
+      const isL2 = [CHAIN_IDS.OPTIMISM_SEPOLIA, CHAIN_IDS.OPTIMISM_MAINNET].includes(chainId);
       payGas = isL2 ? 500000 : 300000;
       console.log(
         `[USDC] pay estimateGas failed (${
@@ -859,7 +1002,8 @@ async function publishAsset(tokenURI, tokenId) {
   }
 
   try {
-    const tx = c.methods.publishAsset(tokenURI, tokenId);
+    // Use full signature to avoid Web3.js v1 overload resolution issues
+    const tx = c.methods["publishAsset(string,uint256)"](tokenURI, tokenId);
     const gas = await tx.estimateGas({ from: window.walletAddress });
     const receipt = await tx.send({
       from: window.walletAddress,
@@ -876,7 +1020,7 @@ async function publishAsset(tokenURI, tokenId) {
   } catch (error) {
     console.error("publishAsset failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
-    const contractAbi = (await getContractArtifact("ArbeskAsset"))?.abi || null;
+    const contractAbi = (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
     showToast({
       type: "error",
@@ -911,7 +1055,23 @@ async function updateAssetURI(tokenId, newTokenURI) {
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateAssetURI failed:", error);
-    return null;
+    const { decodeRevertReason } = await import("./error-decoder.js");
+    const contractAbi =
+      (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
+    const decodedMsg = await decodeRevertReason(error, contractAbi);
+
+    const msg = error.message || "";
+    if (
+      msg.includes("User denied") ||
+      msg.includes("rejected") ||
+      error.code === 4001
+    ) {
+      return null;
+    }
+
+    // Propagate the decoded reason so the caller shows a specific message
+    // (e.g. "Not Owner Or Editor: #123, 0xabcd…").
+    throw new Error(decodedMsg);
   }
 }
 
@@ -930,7 +1090,8 @@ async function addEditor(tokenId, editorAddress) {
   }
 
   try {
-    const tx = c.methods.addEditor(tokenId, editorAddress);
+    // Use full signature to avoid Web3.js v1 overload resolution issues
+    const tx = c.methods["addEditor(uint256,address)"](tokenId, editorAddress);
     const gas = await tx.estimateGas({ from: window.walletAddress });
     const receipt = await tx.send({
       from: window.walletAddress,
@@ -998,7 +1159,12 @@ async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
   }
 
   try {
-    const tx = c.methods.addEditor(tokenId, collaboratorAddress, role);
+    // Use full signature to avoid Web3.js v1 overload resolution issues
+    const tx = c.methods["addEditor(uint256,address,uint8)"](
+      tokenId,
+      collaboratorAddress,
+      role
+    );
     const gas = await tx.estimateGas({ from: window.walletAddress });
     const receipt = await tx.send({
       from: window.walletAddress,
@@ -1159,7 +1325,7 @@ async function burn(tokenId) {
   } catch (error) {
     console.error("burn failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
-    const contractAbi = (await getContractArtifact("ArbeskAsset"))?.abi || null;
+    const contractAbi = (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
     showToast({
       type: "error",
@@ -1236,6 +1402,8 @@ export {
   autoConnectWallet,
   switchNetwork,
   payForGenerationWithUSDC,
+  recordGeneration,
+  isFreeTierContract,
   publishAsset,
   updateAssetURI,
   addEditor,

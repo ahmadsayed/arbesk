@@ -12,7 +12,7 @@ This file contains conventions, key file references, and practical guidance for 
 **License**: ISC
 
 **Key Constraints:**
-- **Blockchain**: EVM-compatible (Hardhat local dev, extensible to any EVM L1/L2)
+- **Blockchain**: EVM-compatible (Hardhat local dev; Optimism Sepolia for testnet; Optimism mainnet for production)
 - **IPFS**: Private Dockerized Kubo node (no public DHT, no external peers)
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for testing using local SukaVerse-style assets (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`; external GLB assets may also be configured)
@@ -31,6 +31,45 @@ This file contains conventions, key file references, and practical guidance for 
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ DONE | Studio shell, wallet wiring, team panel, minting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ DONE | WebP thumbnails, gallery thumbnails, on-demand IPFS cache, one-node scene cleanup |
 | **Phase 5.1: Token ID-Based Child Worlds** | ✅ **DONE** | Token ref schema, resolver, drag/drop child worlds, scene graph rendering |
+| **Phase 5.2: Free Tier Contract** | ✅ **DONE** | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
+
+---
+
+## 1.6 Smart Contract Architecture
+
+Arbesk ships with **two production smart contracts** plus a shared abstract base. `ArbeskAssetFree` is the default contract for all new local testing and frontend interactions; the legacy paid `ArbeskAsset` remains available for users who want on-chain payment.
+
+| Contract | File | Purpose | Limits |
+|----------|------|---------|--------|
+| **ArbeskAssetBase** | `blockchain/contracts/ArbeskAssetBase.sol` | Abstract base: ERC-721, ownership, pause, collaboration (add/remove editors), burn/unpin, token URI manifest storage. Owner bypasses all collaboration quotas. | n/a |
+| **ArbeskAssetFree** | `blockchain/contracts/ArbeskAssetFree.sol` | Free tier. No USDC payment. Records generations with a daily quota. | 10 generations/day/wallet, 5 editors/token, 50 tokens/editor |
+| **ArbeskAsset** | `blockchain/contracts/ArbeskAsset.sol` | Paid tier. USDC or native-token PayGo payments, treasury withdrawals, generation tiers. | unlimited paid generations, 50 editors/token, 500 tokens/editor |
+
+**Owner quota bypass:** The contract `owner()` bypasses every quota so admin/testing wallets are never blocked:
+- Free-tier `recordGeneration()` daily limit
+- `maxEditorsPerToken` per token
+- `maxTokensPerEditor` per editor
+
+Regular users still hit the limits above.
+
+### Why an abstract base?
+
+Both tiers share ~90% of the logic (ERC-721, collaboration, burn, pause, token URI). Deduplicating via an abstract base contract keeps the free and paid contracts small, avoids copy-paste drift, and makes it easy to add new tiers later. Libraries were rejected because the shared logic is inherently stateful (mappings, token counter). Duplication was rejected because every bug fix would have to land in two places.
+
+### Env vars
+
+- `CONTRACT_ADDRESS` → **ArbeskAssetFree** (default for frontend/backend)
+- `PAID_CONTRACT_ADDRESS` → **ArbeskAsset** (legacy paid tier)
+
+Both addresses are written by `blockchain/scripts/deploy.js`.
+
+### Frontend defaults
+
+`frontend/src/js/blockchain/network-config.js` and `frontend/src/js/blockchain/wallet.js` default to the free contract. The paid contract is still wired and can be selected explicitly, but all new tests and UI flows assume the free tier unless stated otherwise.
+
+**Runtime tier dispatch:** `frontend/src/js/ui/create-panel.js` uses `wallet.isFreeTierContract()` to choose between `recordGeneration()` (free) and `payForGenerationWithUSDC()` (paid). Do not hard-code the paid path in new generation UI code.
+
+**Chain ID constants:** Use `CHAIN_IDS` from `src/constants/chains.js` (backend) and `frontend/src/js/constants/chains.js` (frontend). Do not scatter magic numbers like `31415822`, `11155420`, or `10` in feature code.
 
 ---
 
@@ -213,22 +252,25 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test
 # Compile contracts
 docker-compose run --rm hardhat npx hardhat compile
 
-# Deploy contracts to local Hardhat network
+# Deploy both contracts to local Hardhat network
+# Deploys MockUSDC (if needed), ArbeskAssetFree, and ArbeskAsset; writes both addresses to blockchain/.env
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
-# Deploy to testnet (configure network in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network <your_testnet>
+# Deploy to Optimism Sepolia testnet (configure network in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismSepolia
 
-# Deploy to mainnet (configure network in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network <your_mainnet>
+# Deploy to Optimism mainnet (configure network in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismMainnet
 
-# Verify contract (configure verifier in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network <your_network>
+# Verify contract on Optimism Etherscan (configure ETHERSCAN_API_KEY in blockchain/.env)
+# VERIFY_CONTRACT=ArbeskAssetFree verifies the free tier (no constructor args)
+# VERIFY_CONTRACT=ArbeskAsset verifies the paid tier (requires TREASURY_ADDRESS + USDC_TOKEN)
+docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network <optimismSepolia|optimismMainnet>
 
 # Recompile and redeploy after contract changes (captures ABI + address)
 docker-compose run --rm hardhat npx hardhat compile
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-# Then sync CONTRACT_ADDRESS from blockchain/.env to root .env
+# Then sync CONTRACT_ADDRESS (free tier) and PAID_CONTRACT_ADDRESS from blockchain/.env to root .env
 
 # Run deployment integrity tests to verify the pipeline is intact
 npm run test:frontend
@@ -242,8 +284,9 @@ docker-compose run --rm hardhat sh
 Every contract source change creates a **deployment pipeline** that must stay intact:
 
 ```text
-.sol change  ->  compile  ->  artifacts on host  ->  backend serves ABI
-            ->  deploy   ->  .env files update   ->  frontend gets address
+.sol change  ->  compile  ->  artifacts on host  ->  backend serves ABIs
+            ->  deploy   ->  .env files update   ->  frontend gets addresses
+            (both ArbeskAssetFree + ArbeskAsset ABIs and addresses)
 ```
 
 **If any link breaks, the frontend gets stale ABIs or wrong addresses, causing `c.methods.X is not a function` or `Transaction reverted` errors.**
@@ -257,10 +300,10 @@ docker-compose run --rm hardhat npx hardhat compile
 # 2. Redeploy to local Hardhat (updates blockchain/.env + deployment artifact)
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
-# 3. Sync CONTRACT_ADDRESS from blockchain/.env to root .env (backend reads root .env)
+# 3. Sync CONTRACT_ADDRESS (free tier) and PAID_CONTRACT_ADDRESS from blockchain/.env to root .env
 #    The deploy script updates blockchain/.env but NOT root .env.
-#    Manually copy the new CONTRACT_ADDRESS value, or run:
-grep CONTRACT_ADDRESS blockchain/.env
+#    Manually copy the new values, or run:
+grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS" blockchain/.env
 #    Then update root .env to match.
 
 # 4. Verify the pipeline is intact
@@ -268,11 +311,12 @@ npm run test:frontend
 ```
 
 **The `test/frontend/deployment-integrity.test.js` test suite catches:**
-- Missing/stale compiled ABI on host
-- Missing ABI function entries (runs `test.each` over every required function)
+- Missing/stale compiled ABI on host (both `ArbeskAsset.json` and `ArbeskAssetFree.json`)
+- Missing ABI function entries for both contracts
 - Conflicting CONTRACT_ADDRESS between root .env and blockchain/.env
-- Missing USDC_TOKEN in blockchain/.env
-- Deployment artifact not matching configured address
+- Missing PAID_CONTRACT_ADDRESS in both `.env` files
+- USDC_TOKEN colliding with either contract address
+- Deployment artifacts not matching configured addresses
 - Missing Docker volume mounts in docker-compose.yml
 
 **ALWAYS run `npm run test:frontend` after contract changes before starting the backend.**
@@ -296,7 +340,8 @@ API_URL=<your_rpc_endpoint>
 
 PRIVATE_KEY=<0x...>
 PUBLIC_KEY=<0x...>
-CONTRACT_ADDRESS=<0x...>
+CONTRACT_ADDRESS=<0x...>      # ArbeskAssetFree (free tier)
+PAID_CONTRACT_ADDRESS=<0x...> # ArbeskAsset (paid tier)
 TREASURY_ADDRESS=<0x...>
 ETHERSCAN_API_KEY=<optional>
 ASSETS_IPFS=<CID>
@@ -323,8 +368,15 @@ IPFS_GATEWAY_URL=http://127.0.0.1:8080/ipfs/
 # Hardhat local network (Docker container)
 HARDHAT_RPC_URL=http://127.0.0.1:8545
 
-# ArbeskAsset contract address (deploy via Hardhat first)
-CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+# Optimism RPC endpoints (configure for testnet / mainnet deployments)
+OPTIMISM_SEPOLIA_RPC_URL=https://sepolia.optimism.io
+OPTIMISM_MAINNET_RPC_URL=https://mainnet.optimism.io
+
+# ArbeskAssetFree contract address — default for frontend/backend (deploy via Hardhat first)
+CONTRACT_ADDRESS=0x0165878A594ca255338adfa4d48449f69242Eb8F
+
+# ArbeskAsset (paid tier) contract address
+PAID_CONTRACT_ADDRESS=0xa513E6E4b8f2a923D98304ec87F64353C4D5C853
 
 # Optional: Pinata for public gateway fallback
 PINATA_API_KEY=
@@ -337,6 +389,8 @@ PINATA_SECRET_KEY=
 # Public vars injected into frontend
 IPFS_GATEWAY_URL=http://127.0.0.1:8080/ipfs/
 HARDHAT_RPC_URL=http://127.0.0.1:8545
+OPTIMISM_SEPOLIA_RPC_URL=https://sepolia.optimism.io
+OPTIMISM_MAINNET_RPC_URL=https://mainnet.optimism.io
 ```
 
 ---
@@ -349,6 +403,25 @@ HARDHAT_RPC_URL=http://127.0.0.1:8545
 - **Frontend globals**: The builder page loads scripts in a specific order; `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` are expected to exist globally.
 - **Naming**: camelCase for variables/functions, PascalCase for classes/constructors, UPPER_SNAKE for module-level constants.
 - **No TypeScript**: The project is pure JavaScript. Add JSDoc comments when documenting new functions.
+
+### CDN Script Tags (Frontend)
+
+External libraries loaded in Pug templates (e.g., `frontend/src/pug/studio.pug`) **must not** use Subresource Integrity (`integrity="sha384-…"`) attributes.
+
+**Why:** CDNs update files in place behind versionless URLs, and versioned packages can still be recompressed or have metadata rebuilt. SRI hashes therefore break on a regular basis and block the script entirely, causing runtime errors like `BABYLON.Engine is not a constructor`.
+
+**Rules:**
+1. Pin every CDN script to an exact version in the URL.
+2. Omit the `integrity` attribute.
+3. Keep `crossorigin="anonymous"` for CORS.
+
+**Current pinned versions (update intentionally, never silently):**
+```pug
+script(src="https://cdn.babylonjs.com/v9.12.0/babylon.js" crossorigin="anonymous")
+script(src="https://cdn.babylonjs.com/v9.12.0/loaders/babylonjs.loaders.min.js" crossorigin="anonymous")
+script(src="https://cdn.babylonjs.com/v9.12.0/materialsLibrary/babylonjs.materials.min.js" crossorigin="anonymous")
+script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" crossorigin="anonymous")
+```
 
 ### Solidity
 
@@ -745,12 +818,26 @@ If session creation fails (e.g., user denies the session signature), `generateAs
 
 ## 14. EVM Deployment Notes
 
-- **Local Dev (Hardhat container)**: `http://127.0.0.1:8545`
-- **Native Token**: Chain-native token (e.g. ETH, FIL, etc.) — used for gas
-- **EVM Compatibility**: Standard Solidity contracts work unmodified
-- **Gas Economics**: Varies by chain — test thoroughly on target testnet before mainnet
-- **Block Time**: Varies by network (~12s for Ethereum L1, ~2s for L2s, slower on some L1s)
-- **Wallet Support**: MetaMask, Rabby, or any EVM-compatible wallet (add target network manually)
+**Supported targets**
+
+| Environment | Network | RPC | Purpose |
+|---|---|---|---|
+| Local dev | Hardhat (in Docker) | `http://127.0.0.1:8545` | Development + contract tests |
+| Testnet | Optimism Sepolia | `https://sepolia.optimism.io` (or private RPC) | Public testnet validation |
+| Production | Optimism Mainnet | `https://mainnet.optimism.io` (or private RPC) | Live production (softnet) |
+
+**Optimism-specific notes**
+
+- **Native gas token**: ETH (same as Ethereum L1).
+- **Governance token**: OP — not used for gas.
+- **Block time**: ~2 seconds.
+- **Gas model**: L2 execution fee + L1 data fee; total cost is usually a small fraction of L1.
+- **Recommended test path**: deploy to Optimism Sepolia, run `npm run test:frontend`, then test the full generate/save/publish flow before mainnet.
+
+**General notes**
+
+- **EVM Compatibility**: Standard Solidity contracts work unmodified.
+- **Wallet Support**: MetaMask, Rabby, Coinbase Smart Wallet, or any EVM-compatible wallet (add Optimism network manually if needed).
 
 ---
 

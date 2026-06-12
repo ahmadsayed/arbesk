@@ -9,22 +9,35 @@
  * when the user switches networks in their wallet.
  */
 
+import { CHAIN_IDS } from "../constants/chains.js";
+
 export const NETWORK_CONFIGS = {
-  31415822: {
+  [CHAIN_IDS.HARDHAT_LOCAL]: {
     name: "Hardhat Local",
-    chainId: 31415822,
-    contractAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    chainId: CHAIN_IDS.HARDHAT_LOCAL,
+    contractAddress: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+    paidContractAddress: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
     usdcToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,
   },
-  84532: {
-    name: "Base Sepolia",
-    chainId: 84532,
+  [CHAIN_IDS.OPTIMISM_SEPOLIA]: {
+    name: "Optimism Sepolia",
+    chainId: CHAIN_IDS.OPTIMISM_SEPOLIA,
     contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
-    usdcToken: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    rpcUrl: "https://sepolia.base.org",
-    blockExplorer: "https://sepolia.basescan.org",
+    paidContractAddress: "0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673",
+    usdcToken: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15", // Circle USDC on OP Sepolia
+    rpcUrl: "https://sepolia.optimism.io",
+    blockExplorer: "https://sepolia-optimism.etherscan.io",
+  },
+  [CHAIN_IDS.OPTIMISM_MAINNET]: {
+    name: "Optimism Mainnet",
+    chainId: CHAIN_IDS.OPTIMISM_MAINNET,
+    contractAddress: null, // Free tier not yet deployed to Optimism mainnet
+    paidContractAddress: null, // Paid tier not yet deployed to Optimism mainnet
+    usdcToken: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", // Circle USDC on OP Mainnet
+    rpcUrl: "https://mainnet.optimism.io",
+    blockExplorer: "https://optimistic.etherscan.io",
   },
 };
 

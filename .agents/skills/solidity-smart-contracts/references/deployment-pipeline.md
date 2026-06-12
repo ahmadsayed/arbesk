@@ -68,14 +68,14 @@ docker-compose run --rm hardhat npx hardhat compile
 # Deploy to local Hardhat
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
-# Deploy to testnet (e.g. Base Sepolia — configure in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
+# Deploy to testnet (Optimism Sepolia — configure in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismSepolia
 
-# Deploy to mainnet (e.g. Base — configure in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network base
+# Deploy to mainnet (Optimism — configure in hardhat.config.js)
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismMainnet
 
 # Verify on-chain
-docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network baseSepolia
+docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network optimismSepolia
 ```
 
 ### Address Alignment Verification
@@ -135,7 +135,7 @@ When asked to add a function:
 
 ---
 
-## 8. Multi-Network Deployment (Hardhat Local + Base Sepolia)
+## 8. Multi-Network Deployment (Hardhat Local + Optimism Sepolia)
 
 ### Why Per-Network Config?
 
@@ -155,13 +155,21 @@ export const NETWORK_CONFIGS = {
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,
   },
-  84532: {
-    name: "Base Sepolia",
-    chainId: 84532,
-    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
-    usdcToken: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    rpcUrl: "https://sepolia.base.org",
-    blockExplorer: "https://sepolia.basescan.org",
+  11155420: {
+    name: "Optimism Sepolia",
+    chainId: 11155420,
+    contractAddress: null, // Deploy to Optimism Sepolia first
+    usdcToken: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15",
+    rpcUrl: "https://sepolia.optimism.io",
+    blockExplorer: "https://sepolia-optimism.etherscan.io",
+  },
+  10: {
+    name: "Optimism Mainnet",
+    chainId: 10,
+    contractAddress: null, // Deploy to Optimism mainnet first
+    usdcToken: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+    rpcUrl: "https://mainnet.optimism.io",
+    blockExplorer: "https://optimistic.etherscan.io",
   },
 };
 ```
@@ -180,14 +188,14 @@ const contractAddr = getContractAddress(effectiveChainId);
 
 **Critical:** Pass `chainId` in both the request body AND `x-chain-id` header for redundancy.
 
-### Base Sepolia Specifics
+### Optimism Sepolia Specifics
 
-- **Chain ID:** 84532
+- **Chain ID:** 11155420
 - **Currency:** ETH (for gas), USDC (for payments)
-- **USDC Token:** `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle's official Base Sepolia USDC)
+- **USDC Token:** `0x5fd84259d66Cd461235407180D3B4c8d0F273e15` (Circle's official Optimism Sepolia USDC)
 - **Block Time:** ~2 seconds
-- **Faucet:** https://www.coinbase.com/faucets/base-sepolia-faucet
-- **Explorer:** https://sepolia.basescan.org
+- **Faucet:** https://docs.optimism.io/builders/tools/build/faucets
+- **Explorer:** https://sepolia-optimism.etherscan.io
 
 ### Adding a New Network
 

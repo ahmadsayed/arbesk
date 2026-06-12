@@ -52,7 +52,8 @@ export async function addTeamMember(tokenId, address) {
         throw new Error('Invalid Ethereum address');
     }
 
-    const tx = contract.methods.addEditor(tokenId, address);
+    // Use full signature to avoid Web3.js v1 overload resolution issues
+    const tx = contract.methods["addEditor(uint256,address)"](tokenId, address);
     const gas = await tx.estimateGas({ from: window.walletAddress });
     const receipt = await tx.send({
         from: window.walletAddress,

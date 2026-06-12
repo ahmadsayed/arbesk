@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
-    "test:contracts": "cd blockchain && npx hardhat --network hardhat test",
+    "test:contracts": "docker-compose run --rm hardhat npx hardhat test",
     "build:frontend": "cd frontend && npm run build",
     "start": "node src/index.js",
     "nodemon": "npm run build:frontend && nodemon src/index.js",

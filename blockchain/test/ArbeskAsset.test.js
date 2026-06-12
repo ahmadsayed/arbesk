@@ -624,6 +624,33 @@ describe("ArbeskAsset", function () {
     });
   });
 
+  describe("Owner quota bypass", () => {
+    it("owner can add more editors than maxEditorsPerToken", async () => {
+      await asset.connect(owner).publishAsset("uri", 1);
+      const cap = Number(await asset.maxEditorsPerToken());
+      const wallets = Array.from({ length: cap + 5 }, () =>
+        ethers.Wallet.createRandom()
+      );
+
+      await asset.connect(owner)["addEditor(uint256,address[])"](
+        1,
+        wallets.map((w) => w.address)
+      );
+
+      expect((await asset.listEditors(1)).length).to.equal(cap + 6); // + owner
+    });
+
+    it("owner can participate in more tokens than maxTokensPerEditor", async () => {
+      const cap = Number(await asset.maxTokensPerEditor());
+
+      for (let i = 1; i <= cap + 5; i++) {
+        await asset.connect(owner).publishAsset(`ipfs://QmToken${i}`, i);
+      }
+
+      expect((await asset.listTokens(owner.address)).length).to.equal(cap + 5);
+    });
+  });
+
   describe("addEditor / removeEditor", () => {
     beforeEach(async () => {
       await asset.connect(user).publishAsset("uri", 1);
@@ -676,8 +703,8 @@ describe("ArbeskAsset", function () {
       expect(occurrences).to.equal(1);
     });
 
-    it("reverts when exceeding MAX_EDITORS_PER_TOKEN", async () => {
-      const cap = Number(await asset.MAX_EDITORS_PER_TOKEN());
+    it("reverts when exceeding maxEditorsPerToken", async () => {
+      const cap = Number(await asset.maxEditorsPerToken());
       const freeSlots = cap - 1;
       const wallets = Array.from({ length: freeSlots }, () =>
         ethers.Wallet.createRandom()
@@ -697,8 +724,8 @@ describe("ArbeskAsset", function () {
         .withArgs(1);
     });
 
-    it("reverts when exceeding MAX_TOKENS_PER_EDITOR", async () => {
-      const cap = Number(await asset.MAX_TOKENS_PER_EDITOR());
+    it("reverts when exceeding maxTokensPerEditor", async () => {
+      const cap = Number(await asset.maxTokensPerEditor());
       for (let i = 2; i <= cap; i++) {
         await asset.connect(user).publishAsset(`ipfs://QmToken${i}`, i);
       }

@@ -2,8 +2,9 @@
 
 > **Generated:** 2026-06-10  
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.  
-> **Contract:** `ArbeskAsset` (not `ArbeskWorld` — that name only exists in older docs).  
+> **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).  
 > **Frontend build:** Custom Node.js scripts (no bundler).  
+> **Network targets:** Hardhat local for development; Optimism Sepolia for testnet; Optimism mainnet for production ("softnet" target).  
 
 ---
 
@@ -17,6 +18,7 @@
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 23 SCSS partials, sidebar/outliner/nesting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, thumbnail extraction in `src/api/index.js`, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
+| Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js` |
 
 ---
@@ -28,7 +30,7 @@
 ```
 src/
 ├── index.js                    # Express bootstrap, CSP, request logging
-├── config.js                   # Multi-network Web3 config (Hardhat local, Base Sepolia)
+├── config.js                   # Multi-network Web3 config (Hardhat local, Optimism Sepolia, Optimism mainnet)
 └── api/
     ├── index.js                # Main router — all v1 routes
     ├── assets/
@@ -46,6 +48,8 @@ src/
 ```
 
 > **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits happen client-side; the browser sends the full manifest to `POST /api/v1/manifests`.
+>
+> **Free tier:** `POST /api/v1/generations` validates a transaction receipt. The UI now uses `recordGeneration()` on the free tier and `payForGenerationWithUSDC()` on the paid tier; the backend accepts `AssetGenerationRecorded`, `AssetGenerationPaid`, or `AssetGenerationPaidUSDC` events.
 
 ### 2.2 Implemented Routes (`/api/v1`)
 
@@ -85,7 +89,7 @@ src/
 - ✅ Manifest chain walking (backward `prev_asset_manifest_cid`, cycle detection)
 - ✅ Token resolution (`tokenURI` → IPFS manifest)
 - ✅ IPFS unpin on burn (walks chain, collects CIDs, calls `pin.rm`)
-- ✅ Multi-network config (Hardhat local `31415822`, Base Sepolia `84532`)
+- ✅ Multi-network config (Hardhat local `31415822`, Optimism Sepolia `11155420`, Optimism mainnet `10`)
 
 ### 2.5 What Does NOT Work / Is Missing
 
@@ -200,7 +204,7 @@ frontend/src/js/
 **Blockchain / Wallet (`wallet.js`)**
 - Multi-wallet: EIP-6963 discovery + WalletConnect v2 + legacy injected
 - Auto-connect from `localStorage` via silent `eth_accounts`
-- Networks: Hardhat local (`31415822`), Base Sepolia (`84532`), Polygon Amoy (`80002`)
+- Networks: Hardhat local (`31415822`), Optimism Sepolia (`11155420`), Optimism mainnet (`10`)
 - Contract init with bytecode verification at address
 - USDC PayGo: approval → allowance reset → verification (5 retries) → `payForGenerationWithUSDC` with L2 gas defaults
 - Publishing: `publishAsset` (mint), `updateAssetURI` (republish), revert decoding
@@ -226,7 +230,7 @@ frontend/src/js/
 - ❌ **IPFS browser cache disabled** — every read hits the gateway directly.
 - ❌ `anchorManifest()` stubbed in `ledger-panel.js` — "not available in current contract".
 - ❌ `uri_to_cid.js` still has Phase 1/2 comments referencing inactive code paths.
-- ❌ Minor bug in `wallet.js` line 237: `devAddress` used but never defined in `_checkBalance()`.
+- ✅ Low-balance toast in `_checkBalance()` is now dismissed when the wallet account changes or disconnects (fixed stale warning + undefined `devAddress`).
 - ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
 - ❌ No automated E2E tests.
 
@@ -234,13 +238,24 @@ frontend/src/js/
 
 ## 4. Smart Contracts (`blockchain/`)
 
-### 4.1 Contract: `ArbeskAsset.sol`
+### 4.1 Contracts
 
-**Not `ArbeskWorld.sol`** — older docs reference that name, but the only deployed contract is `ArbeskAsset`.
+**Not `ArbeskWorld.sol`** — older docs reference that name.
+
+There are now **two** contracts:
+
+| Contract | Purpose | Symbol | Default? |
+|----------|---------|--------|----------|
+| `ArbeskAssetFree.sol` | Free tier — NFT + collaboration + free `recordGeneration()` with 10/day quota | `ARBF` | ✅ Yes (local testing + frontend default) |
+| `ArbeskAsset.sol` | Paid tier — adds USDC/native PayGo generation payments | `ARBA` | Optional paid tier |
+
+Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
+
+#### `ArbeskAsset.sol` (Paid Tier)
 
 - **Standard:** ERC-721 with Enumerable extension (`ERC721Enumerable`)
 - **Symbol:** `ARBA`
-- **Inheritance:** `ERC721Enumerable`, `Ownable`, `ReentrancyGuard`, `Pausable`
+- **Inheritance:** `ArbeskAssetBase`, `ReentrancyGuard`
 
 **Key Functions (55 total)**
 
@@ -254,38 +269,83 @@ frontend/src/js/
 | Burn | `burn(uint256)` — owner or Editor with burn permission; cleans up collaborators |
 | Admin | `setCost()`, `setTreasury()`, `setTierCost()`, `setUsdcToken()`, `pause()`, `unpause()`, `withdraw()`, `withdrawUSDC()` |
 
-**State / Limits**
+**State / Limits (paid tier)**
 - `costPerGeneration` = `0.01 ether` (native)
 - Tier costs: Basic=$0.75, Standard=$1.25, Premium=$1.75, Pro=$2.50 (6-decimal USDC)
-- `MAX_EDITORS_PER_TOKEN` = 50
-- `MAX_TOKENS_PER_EDITOR` = 500
+- `maxEditorsPerToken()` = 50
+- `maxTokensPerEditor()` = 500
 
 **Events (12 custom)**
 `AssetGenerationPaid`, `AssetGenerationPaidUSDC`, `AssetPublished`, `EditorAdded`, `EditorRemoved`, `CollaboratorRoleChanged`, `BurnPermissionChanged`, `AssetBurned`, `AssetURIUpdated`, `TreasuryUpdated`, `CostUpdated`, `TierCostUpdated`, `UsdcTokenUpdated`
 
-**Custom Errors (27)**
-Including `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`, `TreasuryTransferFailed`, `UsdcPaymentsDisabled`, `TokenAlreadyMinted`, `NotOwnerOrEditor`, `MaxEditorsReached`, `MaxTokensPerEditorReached`, `CannotBurn`, etc.
+**Custom Errors (paid tier adds)** `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`, `TreasuryTransferFailed`, `UsdcPaymentsDisabled`, `TierCostNotSet`, `InvalidCost`, `NoBalanceToWithdraw`, `WithdrawFailed`, `UsdcTokenNotSet`, `DirectTransferNotAllowed`.
 
-### 4.2 MockUSDC
+#### `ArbeskAssetFree.sol` (Free Tier)
+
+- **Symbol:** `ARBF`
+- **Inheritance:** `ArbeskAssetBase`
+- **Functions:** `recordGeneration(bytes32 nodeId, string prompt)` (10/day per wallet), plus all shared NFT/collaboration functions
+- **No payment functions, no treasury, no USDC, no ReentrancyGuard, no withdraw**
+- **Events:** `AssetGenerationRecorded(address indexed userWallet, bytes32 indexed nodeId, string prompt, uint256 timestamp, uint256 countToday)`
+
+**State / Limits (free tier)**
+- `DAILY_GENERATION_LIMIT` = 10 per wallet
+- `maxEditorsPerToken()` = 5 (10× lower than paid)
+- `maxTokensPerEditor()` = 50 (10× lower than paid)
+- Quota state (`lastGenerationDay` + `generationCountToday`) is packed into a single 256-bit storage slot to minimize gas
+
+**Gas profile (local Hardhat)**
+- `recordGeneration()` first call per day: ~50,650 gas
+- `recordGeneration()` warm call same day: ~33,430 gas
+- Packing the quota slot saves ~22,000 gas on the first call compared to two separate storage slots
+
+### 4.2 `ArbeskAssetBase.sol` (Abstract Base)
+
+- **Inheritance:** `ERC721Enumerable`, `Ownable`, `Pausable`
+- **Shared logic:** minting, URI storage, collaboration (Viewer/Editor roles), burn, pause/unpause
+- **Abstract limits:** `maxEditorsPerToken()` and `maxTokensPerEditor()` overridden by concrete contracts
+
+### 4.3 MockUSDC
 
 - `blockchain/contracts/mock/MockUSDC.sol` — OpenZeppelin ERC20, 6 decimals, unrestricted `mint()`
 - Auto-deployed by `deploy.js` for local networks when no USDC address is configured
 
-### 4.3 Deployment Artifacts
+### 4.4 Deployment Artifacts
 
-| Network | Address | Notes |
-|---------|---------|-------|
-| `hardhat` | `0x9fE4...a6e0` | Local container, MockUSDC |
-| `localhost` | `0x9fE4...a6e0` | Local container, MockUSDC |
-| `baseSepolia` | `0xFdf0...d73B` | Testnet, real Base Sepolia USDC |
+| Network | Contract | Address | Notes |
+|---------|----------|---------|-------|
+| `hardhat` | ArbeskAssetFree | `0x0165...Eb8F` | Local container, MockUSDC |
+| `hardhat` | ArbeskAsset (paid) | `0xa513...C853` | Local container, MockUSDC |
+| `localhost` | ArbeskAssetFree | `0x0165...Eb8F` | Local container, MockUSDC |
+| `localhost` | ArbeskAsset (paid) | `0xa513...C853` | Local container, MockUSDC |
+| `optimismSepolia` | ArbeskAssetFree | — | **Target testnet** — not yet deployed |
+| `optimismSepolia` | ArbeskAsset (paid) | — | **Target testnet** — not yet deployed |
+| `optimismMainnet` | ArbeskAssetFree | — | **Target production (softnet)** — not yet deployed |
+| `optimismMainnet` | ArbeskAsset (paid) | — | **Target production (softnet)** — not yet deployed |
+
+> `CONTRACT_ADDRESS` in `.env` now points to the **free** contract. The paid contract is stored in `PAID_CONTRACT_ADDRESS`.
 
 ### 4.4 Hardhat Config
 
 - Solidity `0.8.24`, EVM `cancun`, optimizer `runs: 1000`
-- Networks: `hardhat` (31415822), `localhost` (8545), `baseSepolia` (84532), `base` (8453), `filecoinCalibration`, `filecoin`
-- Etherscan verification configured for BaseScan + Filfox
+- Networks: `hardhat` (31415822), `localhost` (8545), `optimismSepolia` (11155420), `optimismMainnet` (10)
+- Etherscan verification configured for Optimism Etherscan (Sepolia + Mainnet)
 
-### 4.5 Known Contract Issues
+### 4.5 Estimated On-Chain Costs on Optimism
+
+Costs are approximate and depend on OP L1 data fees + L2 execution gas.
+
+| Operation | Gas (L2) | OP Mainnet cost @ 0.001 Gwei, ETH $1,650 | Notes |
+|---|---:|---:|---|
+| `recordGeneration()` first call/day | ~50,650 | ~$0.000084 | Quota day rollover writes one packed slot |
+| `recordGeneration()` warm call | ~33,430 | ~$0.000055 | Same-day generation |
+| `publishAsset()` mint | ~85,000–120,000 | ~$0.00014–$0.00020 | Varies by URI length/editor count |
+| `addEditor()` | ~45,000 | ~$0.000074 | Free tier: max 5 editors/token |
+| `updateAssetURI()` | ~35,000 | ~$0.000058 | Republish existing token |
+
+> OP Sepolia uses the same gas token (ETH) and ~2-second block time as OP Mainnet. Testnet ETH has no dollar value.
+
+### 4.6 Known Contract Issues
 
 - 🐛 **`scripts/verify.js` bug**: Passes `[treasury]` as sole constructor arg, but constructor is `constructor(address _treasury, address _usdcToken)`. Etherscan verification will fail on live networks.
 
@@ -314,7 +374,8 @@ Including `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`,
 
 | File | Lines | Coverage |
 |------|-------|----------|
-| `blockchain/test/ArbeskAsset.test.js` | ~1,291 | 110+ assertions: payment (native + USDC tiered), replay prevention, minting, collaborator roles (Viewer/Editor), burn permissions, transfer hooks, admin, pause |
+| `blockchain/test/ArbeskAsset.test.js` | ~1,291 | 97 assertions: payment (native + USDC tiered), replay prevention, minting, collaborator roles (Viewer/Editor), burn permissions, transfer hooks, admin, pause |
+| `blockchain/test/ArbeskAssetFree.test.js` | ~250 | 45 assertions: deployment, `recordGeneration` quota (10/day), collaboration limits (5/50), minting, roles, burn, pause, no payment functions |
 
 ### 5.4 Test Gaps
 
@@ -368,7 +429,7 @@ Including `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`,
 | `npm test` | Jest on `test/` (excludes `blockchain/`) |
 | `npm run test:api` | Jest on `test/api.test.js` |
 | `npm run test:frontend` | Jest on `test/frontend/` |
-| `npm run test:contracts` | Hardhat tests inside container |
+| `npm run test:contracts` | Hardhat tests inside Docker container |
 | `npm run test:all` | Sequential: frontend → api → contracts |
 
 ### 6.5 Environment Files
@@ -399,7 +460,7 @@ Including `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`,
 | Issue | Location | Severity |
 |-------|----------|----------|
 | `verify.js` passes wrong constructor args | `blockchain/scripts/verify.js` | High — Etherscan verification will fail |
-| `devAddress` undefined in `_checkBalance()` | `frontend/src/js/blockchain/wallet.js` | Low — likely fallback path |
+| ~`devAddress` undefined in `_checkBalance()`~ | `frontend/src/js/blockchain/wallet.js` | Fixed — stale low-balance toast is now cleared on account/network change |
 | IPFS browser cache hardcoded disabled | `frontend/src/js/ipfs/remote-ipfs.js` | Low — intentional but no toggle UI |
 
 ### 7.3 Documentation Drift
@@ -439,7 +500,7 @@ After any `.sol` change:
 ```bash
 docker-compose run --rm hardhat npx hardhat compile
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-# Sync CONTRACT_ADDRESS from blockchain/.env → root .env
+# Sync CONTRACT_ADDRESS (free) and PAID_CONTRACT_ADDRESS from blockchain/.env → root .env
 npm run test:frontend
 ```
 
@@ -453,7 +514,8 @@ Arbesk is a **functionally complete thick-client 3D world studio** through Phase
 - Mock-backed generative pipeline with tx validation and replay guards
 - Full parametric editing with live Babylon.js preview
 - Token-based child world composition with depth/cycle protection
-- USDC PayGo with tiered pricing
+- Free-tier `recordGeneration()` with packed daily quota and owner bypass
+- USDC PayGo with tiered pricing (paid tier)
 - SIWE session auth reducing per-generation pop-ups
 - ERC-721 minting, URI updates, role-based collaboration, burn with cleanup
 - glTF decompose/composer/material-edit pipeline

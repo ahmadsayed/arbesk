@@ -10,7 +10,12 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import { payForGenerationWithUSDC } from "../blockchain/wallet.js";
+import {
+  payForGenerationWithUSDC,
+  recordGeneration,
+  isFreeTierContract,
+} from "../blockchain/wallet.js";
+import { showToast } from "./toasts.js";
 import { generateAsset, ApiError, getOrCreateSession } from "../services/api.js";
 
 // ─── DOM References ───
@@ -121,8 +126,13 @@ async function onGenerate() {
   try {
     const tier = getTier();
 
-    // Always use USDC payment
-    const txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
+    // Free tier uses on-chain quota; paid tier uses USDC payment.
+    let txHash;
+    if (isFreeTierContract()) {
+      txHash = await recordGeneration(nodeId, prompt);
+    } else {
+      txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
+    }
 
     if (!txHash) {
       throw new Error("Payment was cancelled or failed.");

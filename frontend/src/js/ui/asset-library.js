@@ -15,6 +15,7 @@ import {
 } from "../ipfs/remote-ipfs.js";
 import { updateUrlAsset } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
+import { CHAIN_IDS } from "../constants/chains.js";
 
 let assetLibraryBody = null;
 
@@ -138,7 +139,7 @@ function createAssetCard(tokenId, role) {
   item.draggable = true;
 
   item.addEventListener("dragstart", (event) => {
-    const chainId = Number(window.chainId || window.walletChainId || 84532);
+    const chainId = Number(window.chainId || window.walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
     const contractAddr =
       window.contractAddress || window._contractAddress || null;
     const payload = {
@@ -182,7 +183,7 @@ function createAssetCard(tokenId, role) {
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {
-    const chainId = Number(window.chainId || window.walletChainId || 84532);
+    const chainId = Number(window.chainId || window.walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
     const contractAddr =
       window.contractAddress || window._contractAddress || null;
     document.dispatchEvent(

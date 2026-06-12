@@ -3,20 +3,22 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Deploy ArbeskAsset to the selected network.
+ * Deploy both ArbeskAsset (paid) and ArbeskAssetFree (free tier) to the selected network.
  *
- * Constructor: ArbeskAsset(address _treasury, address _usdcToken)
+ * Constructors:
+ *   ArbeskAsset(address _treasury, address _usdcToken)
+ *   ArbeskAssetFree() — no args
  *
  * USDC addresses:
- *   Base Sepolia: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
- *   Base mainnet: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+ *   Optimism Sepolia: 0x5fd84259d66Cd461235407180D3B4c8d0F273e15
+ *   Optimism mainnet: 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85
  *   Local/Hardhat: will deploy MockUSDC first unless USDC_TOKEN env is set
  */
 
 // Known USDC addresses per network
 const USDC_ADDRESSES = {
-  baseSepolia: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  optimismSepolia: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15",
+  optimismMainnet: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
 };
 
 async function main() {
@@ -58,22 +60,43 @@ async function main() {
 
   console.log("USDC token address:", usdcAddress);
 
-  // Deploy ArbeskAsset
+  // ── Deploy ArbeskAssetFree (free tier) — DEFAULT contract ──
+  const ArbeskAssetFree = await hre.ethers.getContractFactory("ArbeskAssetFree");
+  const freeAsset = await ArbeskAssetFree.deploy();
+  await freeAsset.waitForDeployment();
+  const freeAddress = await freeAsset.getAddress();
+  console.log("ArbeskAssetFree deployed to:", freeAddress);
+
+  // ── Deploy ArbeskAsset (paid tier) ──
   const ArbeskAsset = await hre.ethers.getContractFactory("ArbeskAsset");
-  const asset = await ArbeskAsset.deploy(treasury, usdcAddress);
-  await asset.waitForDeployment();
+  const paidAsset = await ArbeskAsset.deploy(treasury, usdcAddress);
+  await paidAsset.waitForDeployment();
+  const paidAddress = await paidAsset.getAddress();
+  console.log("ArbeskAsset deployed to:", paidAddress);
 
-  const address = await asset.getAddress();
-  console.log("ArbeskAsset deployed to:", address);
-
-  // Save deployment artifact
+  // ── Save deployment artifacts ──
   const deployDir = path.join(__dirname, "..", "deployments", network);
   fs.mkdirSync(deployDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(deployDir, "ArbeskAssetFree.json"),
+    JSON.stringify(
+      {
+        address: freeAddress,
+        deployer: deployer.address,
+        blockNumber: await hre.ethers.provider.getBlockNumber(),
+        timestamp: new Date().toISOString(),
+      },
+      null,
+      2
+    )
+  );
+
   fs.writeFileSync(
     path.join(deployDir, "ArbeskAsset.json"),
     JSON.stringify(
       {
-        address,
+        address: paidAddress,
         treasury,
         usdcToken: usdcAddress,
         deployer: deployer.address,
@@ -84,25 +107,36 @@ async function main() {
       2
     )
   );
-  console.log("Deployment artifact saved to deployments/" + network);
+  console.log("Deployment artifacts saved to deployments/" + network);
 
-  // Update .env with CONTRACT_ADDRESS for local networks
+  // ── Update .env for local networks ──
   if (network === "hardhat" || network === "localhost") {
     const envPath = path.join(__dirname, "..", ".env");
     let env = "";
     if (fs.existsSync(envPath)) {
       env = fs.readFileSync(envPath, "utf8");
-      env = env.replace(/CONTRACT_ADDRESS=.*/g, `CONTRACT_ADDRESS=${address}`);
+      // Free contract is the default CONTRACT_ADDRESS
+      if (env.includes("CONTRACT_ADDRESS=")) {
+        env = env.replace(/CONTRACT_ADDRESS=.*/g, `CONTRACT_ADDRESS=${freeAddress}`);
+      } else {
+        env += `\nCONTRACT_ADDRESS=${freeAddress}\n`;
+      }
+      // Paid contract stored separately
+      if (env.includes("PAID_CONTRACT_ADDRESS=")) {
+        env = env.replace(/PAID_CONTRACT_ADDRESS=.*/g, `PAID_CONTRACT_ADDRESS=${paidAddress}`);
+      } else {
+        env += `\nPAID_CONTRACT_ADDRESS=${paidAddress}\n`;
+      }
       if (!env.includes("USDC_TOKEN=")) {
         env += `\nUSDC_TOKEN=${usdcAddress}\n`;
       } else {
         env = env.replace(/USDC_TOKEN=.*/g, `USDC_TOKEN=${usdcAddress}`);
       }
     } else {
-      env = `CONTRACT_ADDRESS=${address}\nUSDC_TOKEN=${usdcAddress}\n`;
+      env = `CONTRACT_ADDRESS=${freeAddress}\nPAID_CONTRACT_ADDRESS=${paidAddress}\nUSDC_TOKEN=${usdcAddress}\n`;
     }
     fs.writeFileSync(envPath, env);
-    console.log("Updated blockchain/.env with CONTRACT_ADDRESS + USDC_TOKEN");
+    console.log("Updated blockchain/.env with CONTRACT_ADDRESS (free) + PAID_CONTRACT_ADDRESS + USDC_TOKEN");
   }
 }
 

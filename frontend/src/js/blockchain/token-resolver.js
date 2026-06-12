@@ -14,6 +14,7 @@
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { normalizeTokenURI } from "./uri-utils.js";
 import { web3 as walletWeb3 } from "./wallet.js";
+import { CHAIN_IDS } from "../constants/chains.js";
 
 /** @type {Map<string, {manifestCid: string, timestamp: number}>} */
 const resolutionCache = new Map();
@@ -22,9 +23,9 @@ const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 
 // Well-known RPC endpoints for common chains
 const KNOWN_RPC_ENDPOINTS = {
-  31415822: "http://127.0.0.1:8545", // Hardhat local dev node
-  84532: "https://sepolia.base.org", // Base Sepolia testnet
-  80002: "https://rpc-amoy.polygon.technology", // Polygon Amoy testnet
+  [CHAIN_IDS.HARDHAT_LOCAL]: "http://127.0.0.1:8545", // Hardhat local dev node
+  [CHAIN_IDS.OPTIMISM_SEPOLIA]: "https://sepolia.optimism.io", // Optimism Sepolia testnet
+  [CHAIN_IDS.OPTIMISM_MAINNET]: "https://mainnet.optimism.io", // Optimism mainnet
 };
 
 /**
