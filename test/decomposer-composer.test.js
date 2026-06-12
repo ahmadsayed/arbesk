@@ -187,9 +187,7 @@ async function decomposeGLB(arrayBuffer, writer) {
   for (let i = 0; i < images.length; i++) {
     const img = images[i];
     if (img.uri && !img.uri.startsWith("data:")) {
-      if (!img.uri.startsWith(IPFS_URI_PREFIX)) {
-        console.log(`[GLB-DECOMPOSE] image[${i}] external URI, keeping as-is`);
-      }
+      // External non-IPFS URI — kept as-is.
       continue;
     }
     let bytes = null;
