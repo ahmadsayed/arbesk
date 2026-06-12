@@ -33,6 +33,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           yield new Uint16Array(chars);
         }
       }),
+      pin: {
+        add: jest.fn(async () => {}),
+      },
     };
 
     mockWeb3Receipt = {
@@ -464,18 +467,23 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // The rate limiter uses res.locals.walletAddress set by authenticate.
       // Our mock auth always recovers to 0xTestAddress, so all requests count against same wallet.
       // We already made several generation requests above. Make enough to hit the 10/hour limit.
+      const logSpy = jest.spyOn(console, "log").mockImplementation();
       let lastStatus = 200;
-      for (let i = 0; i < 15; i++) {
-        const res = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", makeAuthHeader(`0xrate${i}`))
-          .send({
-            prompt: `Rate test ${i}`,
-            nodeId: `node_rate_${i}`,
-            txHash: `0xrate${i}`,
-          });
-        lastStatus = res.status;
-        if (res.status === 429) break;
+      try {
+        for (let i = 0; i < 15; i++) {
+          const res = await request(app)
+            .post("/api/v1/generations")
+            .set("Authorization", makeAuthHeader(`0xrate${i}`))
+            .send({
+              prompt: `Rate test ${i}`,
+              nodeId: `node_rate_${i}`,
+              txHash: `0xrate${i}`,
+            });
+          lastStatus = res.status;
+          if (res.status === 429) break;
+        }
+      } finally {
+        logSpy.mockRestore();
       }
       expect(lastStatus).toBe(429);
     });
