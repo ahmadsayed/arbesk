@@ -10,16 +10,12 @@
  * so it works as a drop-in replacement for `uri_to_cid.js → convertToDataURI`.
  */
 
-import { getBase64FromRemoteIPFS, getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { getBase64FromRemoteIPFS, getBlobFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 const CID_BUFFER_PREFIX = "data:application/cid;base64,";
 const BASE64_PREFIX = "data:application/octet-stream;base64,";
-const GATEWAY_URL = "http://127.0.0.1:8080/ipfs/";
 
-/**
- * Convert an ArrayBuffer to a base64 string.
- */
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -29,20 +25,9 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-/**
- * Fetch binary data from IPFS by CID and return as a base64 string.
- */
 async function fetchCIDAsBase64(cid) {
-  // Use the gateway for raw binary fetch
-  const url = `${GATEWAY_URL}${cid}`;
   console.log(`[COMPOSE] fetching ipfs://${cid}`);
-
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Composer: gateway returned ${response.status} for ${cid}`);
-  }
-
-  const buffer = await response.arrayBuffer();
+  const buffer = await getArrayBufferFromRemoteIPFS(cid);
   return arrayBufferToBase64(buffer);
 }
 

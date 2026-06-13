@@ -1,7 +1,7 @@
 # Arbesk System Architecture
 
-> Status: Current v0.4 — Phases 1–4 complete, publishing polish complete, Phase 5.2 free tier complete, Phase 5 planned  
-> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, and studio publishing
+> Status: Current v0.5 — Phases 1–5.2 complete (token child worlds, free-tier contract). Phase 5 micro-ledger planned.  
+> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child worlds, and studio publishing
 
 ---
 
@@ -214,7 +214,14 @@ A manifest is a complete snapshot stored on private IPFS.
           }
         }
       ],
-      "child_manifest_id": "QmNestedManifest..."
+      "child_ref": {
+        "type": "token",
+        "chainId": 314159,
+        "contractAddress": "0x1234567890abcdef1234567890abcdef12345678",
+        "tokenId": "42",
+        "standard": "ERC721",
+        "resolution": "latest"
+      }
     }
   ]
 }
@@ -389,9 +396,20 @@ No background prefetching or cache warming is performed.
 
 ---
 
-## 9. Planned Phase 5 Architecture
+## 9. Phase 5.1: Token ID-Based Child Worlds (Complete)
 
-Phase 5 introduces a display-agnostic micro-ledger:
+Child worlds are referenced by on-chain token IDs. The parent manifest stores a `child_ref` with `chainId`, `contractAddress`, and `tokenId`; at load time the browser calls `tokenURI()` to resolve the latest manifest CID.
+
+Key constraints still in force:
+- Every token child node must have a `transform_matrix`; no local `history` array
+- `MAX_CHILD_WORLD_DEPTH = 5`; cycle detection enforced in `scene-graph.js`
+- Resolver: `frontend/src/js/blockchain/token-resolver.js`
+
+---
+
+## 10. Planned: Phase 5 Micro-Ledger
+
+Phase 5 (not yet implemented) introduces a display-agnostic micro-ledger:
 
 ```text
 Generate / Parametric / Save / Publish / Mint / Team edit
@@ -408,7 +426,7 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 
 ---
 
-## 10. Zed Agent Integration
+## 11. Zed Agent Integration
 
 - `AGENTS.md` is the primary instruction file for Zed AI agents.
 - `.zed/tasks.json` defines repeatable project tasks.
@@ -417,7 +435,7 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 
 ---
 
-## 11. Known Gaps
+## 12. Known Gaps
 
 - Production cloud adapters are not implemented.
 - OpenSCAD WASM integration is schema-compatible but deferred.

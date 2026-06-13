@@ -52,6 +52,59 @@ let originalMaterialColors = {};
 // Pending direct source color edits: Map<nodeId, Map<meshName, hexColor>>
 const pendingSourceColorEdits = new Map();
 
+// ── Undo / Redo ──────────────────────────────────────────────────────────────
+
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 20;
+
+let _colorBeforeEdit = null;
+
+function _pushUndo(entry) {
+  undoStack.push(entry);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function _clearUndoRedo() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
+
+function _applyUndoEntry(entry, color) {
+  const { nodeId, meshName } = entry;
+  const meshes = getNodeMeshes(nodeId);
+  if (meshes) applyColor(meshes, null, { [meshName]: { color } });
+
+  // Sync the inspector UI if it's showing this node/mesh
+  if (activeNodeId === nodeId && activeMeshName === meshName) {
+    if (selectedComponentColor) selectedComponentColor.value = color;
+    if (selectedComponentSwatch) selectedComponentSwatch.style.backgroundColor = color;
+  }
+
+  // Keep pending edits in sync so Save writes the undone/redone color
+  let nodeEdits = pendingSourceColorEdits.get(nodeId);
+  if (!nodeEdits) {
+    nodeEdits = new Map();
+    pendingSourceColorEdits.set(nodeId, nodeEdits);
+  }
+  nodeEdits.set(meshName, color);
+}
+
+export function undoColorEdit() {
+  const entry = undoStack.pop();
+  if (!entry) return;
+  _applyUndoEntry(entry, entry.oldColor);
+  redoStack.push(entry);
+}
+
+export function redoColorEdit() {
+  const entry = redoStack.pop();
+  if (!entry) return;
+  _applyUndoEntry(entry, entry.newColor);
+  undoStack.push(entry);
+}
+
 /**
  * Read the current solid color from a mesh's material (diffuse or albedo).
  */
@@ -100,6 +153,7 @@ async function openInspector(nodeId) {
   activeNodeId = nodeId;
   activeMeshName = null;
   originalMaterialColors = {};
+  _clearUndoRedo();
 
   const childRef = getNodeChildRef(nodeId);
   if (childRef) {
@@ -147,6 +201,7 @@ function closeInspector() {
   activeNodeId = null;
   activeMeshName = null;
   originalMaterialColors = {};
+  _clearUndoRedo();
   inspector.classList.add("collapsed");
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
@@ -273,7 +328,40 @@ if (nodeColorInput) nodeColorInput.addEventListener("input", () => {});
 if (nodeScaleX) nodeScaleX.addEventListener("input", () => {});
 if (nodeScaleY) nodeScaleY.addEventListener("input", () => {});
 if (nodeScaleZ) nodeScaleZ.addEventListener("input", () => {});
-if (selectedComponentColor) selectedComponentColor.addEventListener("input", onComponentColorChange);
+if (selectedComponentColor) {
+  // Capture the color before the user starts dragging the picker
+  selectedComponentColor.addEventListener("pointerdown", () => {
+    _colorBeforeEdit = selectedComponentColor.value;
+  });
+  // Live preview while dragging
+  selectedComponentColor.addEventListener("input", onComponentColorChange);
+  // Push one undo entry when the picker closes (end of gesture)
+  selectedComponentColor.addEventListener("change", (e) => {
+    if (!activeNodeId || !activeMeshName) return;
+    const newColor = e.target.value;
+    if (_colorBeforeEdit && _colorBeforeEdit !== newColor) {
+      _pushUndo({ nodeId: activeNodeId, meshName: activeMeshName, oldColor: _colorBeforeEdit, newColor });
+    }
+    _colorBeforeEdit = null;
+  });
+}
+
+// Ctrl+Z / Ctrl+Shift+Z — undo/redo color edits
+document.addEventListener("keydown", (e) => {
+  if (!((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z"))) return;
+  const el = document.activeElement;
+  const tag = el?.tagName?.toLowerCase();
+  // Allow undo when a color input is focused; block for text fields
+  const isColorInput = tag === "input" && el.type === "color";
+  if (!isColorInput) {
+    const editing = el?.isContentEditable || tag === "textarea" || tag === "select" ||
+      (tag === "input");
+    if (editing) return;
+  }
+  e.preventDefault();
+  if (e.shiftKey) redoColorEdit();
+  else undoColorEdit();
+});
 
 // Update token child CID when resolution completes and we're showing the info
 function onTokenChildAdded(e) {

@@ -1,6 +1,6 @@
 ---
 name: arbesk-gltf-pipeline
-description: Expert guidance on the Arbesk glTF 2.0 / GLB pipeline — compose/decompose, material editing, IPFS content-addressing, buffer/image URI formats, scene graph loading, post_processor handling, and save/publish persistence. Use when asked to "fix glTF loading", "change material colors", "understand the glTF pipeline", "add a mesh override", "debug composite/decompose", "edit glTF buffers/images", "add format support (OBJ/FBX)", or any glTF/GLB question in this codebase.
+description: Expert guidance on the Arbesk glTF 2.0 / GLB pipeline — compose/decompose, material editing, IPFS content-addressing, buffer/image URI formats, scene graph loading, post_processor overlays, and save/publish persistence. Use whenever working with 3D model loading, materials, or the pipeline — "fix glTF loading", "change material colors", "3D model not showing", "texture not rendering", "mesh is black after load", "understand the glTF pipeline", "add a mesh override", "debug composite/decompose", "edit glTF buffers/images", "add OBJ/FBX support", or any glTF/GLB question. When in doubt whether a 3D rendering problem is a Babylon.js issue or a pipeline issue, invoke this skill first.
 ---
 
 # Arbesk glTF 2.0 / GLB Pipeline

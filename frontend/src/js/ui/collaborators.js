@@ -19,6 +19,7 @@ import {
   CollaboratorRole,
 } from "../blockchain/wallet.js";
 import { showConfirmDialog } from "./dialog.js";
+import { truncateAddress } from "../utils/format.js";
 
 // ─── DOM refs ──────────────────────────────────────────────────────────
 
@@ -127,8 +128,7 @@ function renderTeamList(editors, viewers, burnPerms) {
     el.className = "team-item";
     el.dataset.address = addr;
 
-    const addrDisplay =
-      addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+    const addrDisplay = truncateAddress(addr);
 
     const roleBadge = document.createElement("span");
     roleBadge.className = `team-role-badge team-role-${roleLabel.toLowerCase()}`;

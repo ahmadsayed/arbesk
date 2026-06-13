@@ -10,6 +10,7 @@ import {
   addTeamMember,
   removeTeamMember,
 } from "../services/team.js";
+import { truncateAddress as truncateAddr } from "../utils/format.js";
 
 // DOM references
 const teamPanel = document.getElementById("teamPanel");
@@ -22,10 +23,6 @@ const settingsBody = document.querySelector(".asset-def-body");
 
 let activeAssetTokenId = null;
 let owner = false;
-
-function truncateAddr(addr) {
-  return addr.slice(0, 6) + "…" + addr.slice(-4);
-}
 
 async function refreshEditors() {
   if (!teamPanel || !activeAssetTokenId) return;

@@ -46,6 +46,34 @@
   flex-shrink: 0;
 }
 
+.bottombar-help {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-7);
+  color: var(--dim-fg);
+  border-radius: var(--radius-round);
+  border: var(--border-size-1) solid var(--border-color);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration-quick) var(--ease-out-3),
+              border-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    color: var(--accent-bg);
+    border-color: var(--accent-bg);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
 .bottombar-wallet {
   display: flex;
   align-items: center;

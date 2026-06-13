@@ -38,12 +38,11 @@ async function fetchAssetLibrary(address) {
 
   try {
     const balance = await contract.methods.balanceOf(address).call();
-    for (let i = 0; i < Number(balance); i++) {
-      const tokenId = await contract.methods
-        .tokenOfOwnerByIndex(address, i)
-        .call();
-      owned.push(String(tokenId));
-    }
+    const indices = Array.from({ length: Number(balance) }, (_, i) => i);
+    const ids = await Promise.all(
+      indices.map((i) => contract.methods.tokenOfOwnerByIndex(address, i).call())
+    );
+    ids.forEach((id) => owned.push(String(id)));
 
     const memberTokens = await contract.methods.listTokens(address).call();
     for (const tokenId of memberTokens) {

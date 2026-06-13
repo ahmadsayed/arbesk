@@ -41,6 +41,12 @@ const assetStatusMeta = document.getElementById("assetStatusMeta");
 let isSaving = false;
 let isPublishing = false;
 
+function requireWallet() {
+  if (window.walletAddress) return true;
+  showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
+  return false;
+}
+
 function announceStatus(message) {
   const el = document.getElementById("srStatus");
   if (el) {
@@ -452,10 +458,7 @@ async function prepareManifestForWrite(assetName) {
 
 async function onSaveAssetDraft() {
   if (isSaving) return;
-  if (!window.walletAddress) {
-    showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
-    return;
-  }
+  if (!requireWallet()) return;
 
   isSaving = true;
   if (saveBtn) {
@@ -540,10 +543,7 @@ async function onSaveAssetDraft() {
 
 async function onPublishAsset() {
   if (isPublishing) return;
-  if (!window.walletAddress) {
-    showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
-    return;
-  }
+  if (!requireWallet()) return;
 
   isPublishing = true;
   if (publishBtn) {
@@ -663,6 +663,16 @@ export { onSaveAssetDraft, onPublishAsset };
 
 saveBtn?.addEventListener("click", onSaveAssetDraft);
 publishBtn?.addEventListener("click", onPublishAsset);
+
+document.addEventListener("keydown", (e) => {
+  if (!((e.ctrlKey || e.metaKey) && e.key === "s")) return;
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  if (document.activeElement?.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return;
+  if (saveBtn && !saveBtn.hidden) {
+    e.preventDefault();
+    onSaveAssetDraft();
+  }
+});
 
 // Asset name is set at creation time and displayed read-only in the header.
 

@@ -23,6 +23,11 @@ initNesting();
 import { initCollaborators } from "/js/ui/collaborators.js";
 initCollaborators();
 
+import { rewriteShortcutTitles } from "/js/utils/platform.js";
+rewriteShortcutTitles();
+
+import "/js/ui/keyboard-help.js";
+
 import { initTheme, toggleTheme } from "/js/engine/theme.js";
 initTheme();
 document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
@@ -32,6 +37,7 @@ import { initWalletPopover } from "/js/ui/wallet-popover.js";
 import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
 import { CHAIN_IDS } from "/js/constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
+import { truncateAddress } from "/js/utils/format.js";
 
 // ── Headerbar network selector ──
 const networkSelect = document.getElementById("headerbarNetworkSelect");
@@ -73,7 +79,7 @@ function updateWalletButtonState(address, isAuthenticated) {
     return;
   }
 
-  const truncated = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const truncated = truncateAddress(address);
   if (text) {
     text.textContent = isAuthenticated ? truncated : `${truncated} • Sign In`;
   }

@@ -1290,20 +1290,14 @@ async function burn(tokenId) {
     // Continue with burn even if resolution fails — unpin is best-effort
   }
 
-  // If we have a manifest CID, check whether it is reachable on IPFS before
-  // trying to unpin. If the local gateway cannot serve it, skip IPFS cleanup
-  // and burn the token on-chain only.
-  let shouldUnpin = false;
-  if (manifestCid) {
-    const reachable = await isIpfsCidReachable(manifestCid);
-    if (reachable) {
-      shouldUnpin = true;
-    } else {
-      console.warn(
-        `[BURN] manifest CID ${manifestCid} is not reachable on IPFS; ` +
-          `skipping unpin and burning token ${tokenId} on-chain only`
-      );
-    }
+  // Check reachability before unpin — skip IPFS cleanup if the local gateway
+  // cannot serve the manifest, and burn the token on-chain only.
+  const reachable = manifestCid && await isIpfsCidReachable(manifestCid);
+  if (manifestCid && !reachable) {
+    console.warn(
+      `[BURN] manifest CID ${manifestCid} is not reachable on IPFS; ` +
+        `skipping unpin and burning token ${tokenId} on-chain only`
+    );
   }
 
   try {
@@ -1321,7 +1315,7 @@ async function burn(tokenId) {
     );
 
     // Unpin all IPFS content for this manifest chain (best-effort, non-blocking)
-    if (shouldUnpin) {
+    if (reachable) {
       console.log(`[BURN] unpinning IPFS content for ${manifestCid}…`);
       const { unpinAssetCids } = await import("../services/api.js");
       unpinAssetCids(manifestCid, window.walletAddress)

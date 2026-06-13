@@ -1,6 +1,6 @@
 ---
 name: gnome-hig-audit
-description: Evaluate Arbesk Studio UI/UX against GNOME Human Interface Guidelines. Audits color themes (contrast ratios, dark/light mode), layout (panel sizing, spacing), typography, keyboard navigation, accessibility (ARIA, focus, reduced motion), responsive breakpoints, and interaction patterns. Use when asked to "audit the UI", "check GNOME HIG compliance", "evaluate UX", "review color themes", or "assess accessibility".
+description: Evaluate Arbesk Studio UI/UX against GNOME Human Interface Guidelines. Audits color themes (contrast ratios, dark/light mode), layout (panel sizing, spacing), typography, keyboard navigation, accessibility (ARIA, focus, reduced motion), responsive breakpoints, and interaction patterns. Use when asked to "audit the UI", "check GNOME HIG compliance", "evaluate UX", "review color themes", "assess accessibility", "score the interface", "find UI violations", "generate a UI audit report", or any broad UI/UX quality assessment of the Arbesk Studio — even if the user doesn't explicitly mention GNOME HIG.
 ---
 
 # GNOME HIG UI/UX Audit — Arbesk Studio

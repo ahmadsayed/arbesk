@@ -18,6 +18,7 @@ let initPromise = null;
 let EthereumProvider = null;
 
 import { SUPPORTED_CHAIN_IDS } from "../constants/chains.js";
+import { getConfig } from "../services/api.js";
 
 // Default chains supported by WalletConnect (Hardhat local + Optimism testnet/mainnet)
 const DEFAULT_CHAINS = SUPPORTED_CHAIN_IDS;
@@ -88,7 +89,7 @@ export async function initWalletConnect() {
     let projectId = window.__ARBESK_CONFIG__?.walletConnectProjectId;
     if (!projectId) {
       try {
-        const config = await (await fetch("/api/v1/config")).json();
+        const config = await getConfig();
         projectId = config.walletConnectProjectId;
       } catch {
         console.warn(

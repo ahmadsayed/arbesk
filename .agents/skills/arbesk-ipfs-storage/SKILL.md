@@ -1,6 +1,6 @@
 ---
 name: arbesk-ipfs-storage
-description: IPFS storage expertise for the Arbesk project. Covers the private Kubo Docker node, pin/unpin semantics, add/pin/rm API flows, manifest chain storage model, garbage collection, browser-side writes, read cache, and the unpin-on-burn lifecycle. Use when asked about IPFS pinning, unpinning, GC, storage limits, CID resolution, or any IPFS read/write operation across backend or frontend.
+description: IPFS storage expertise for the Arbesk project. Covers the private Kubo Docker node, pin/unpin semantics, add/pin/rm API flows, manifest chain storage model, garbage collection, browser-side writes, read cache, and the unpin-on-burn lifecycle. Use whenever IPFS is involved — "content not found after add", "IPFS is down", "CID won't resolve", "pinning fails", "CORS error from IPFS", "storage full", "run garbage collection", "unpin after burn", "Docker IPFS config", or any IPFS read/write/pin/unpin operation across backend or frontend. If any IPFS-related error appears in logs, invoke this skill.
 ---
 
 # Arbesk IPFS & Storage

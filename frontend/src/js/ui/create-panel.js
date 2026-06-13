@@ -112,7 +112,7 @@ async function onGenerate() {
   try {
     await getOrCreateSession();
   } catch (err) {
-    showToast("Sign in to generate assets");
+    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to generate assets." });
     return;
   }
 

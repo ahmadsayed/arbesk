@@ -14,6 +14,7 @@ import {
   onWalletsUpdated,
   getWallets,
 } from "../blockchain/wallet-discovery.js";
+import { escapeHtml } from "../utils/html.js";
 
 let backdrop = null;
 let modal = null;
@@ -236,10 +237,3 @@ function setupFocusTrap(container) {
   };
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}

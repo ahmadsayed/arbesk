@@ -10,6 +10,8 @@
  *   showTxToast({ txHash: '0x...', title: 'Publishing Asset', status: 'confirmed' });
  */
 
+import { escapeHtml } from "../utils/html.js";
+
 let container = null;
 let toastIdCounter = 0;
 const activeToasts = new Map(); // id -> { element, timeoutId, startTime, duration }
@@ -269,10 +271,3 @@ export function dismissAllToasts() {
   }
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}

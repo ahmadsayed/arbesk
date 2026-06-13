@@ -1,6 +1,6 @@
 ---
 name: babylon-3d-engine
-description: Babylon.js 3D engine expertise for the Arbesk project. Covers scene lifecycle, asset loading (GLTF/GLB), camera setup, memory management, disposal patterns, and common rendering issues. Use when asked about Babylon.js crashes, black meshes, camera framing, scene cleanup, GLTF loading, orthographic views, or any 3D engine behavior in the Arbesk Studio viewport.
+description: Babylon.js 3D engine expertise for the Arbesk project. Covers scene lifecycle, asset loading (GLTF/GLB), camera setup, memory management, disposal patterns, and common rendering issues. Use whenever working on the 3D viewport or engine — "scene not rendering", "viewport is blank", "mesh disappeared", "browser tab crashes after load", "camera is wrong or clipping", "black mesh", "memory leak", "clearScene breaks the grid", "GLTF loads but nothing shows", "orthographic view is broken", or any 3D engine behavior in the Arbesk Studio. When in doubt about a viewport or rendering problem, invoke this skill.
 ---
 
 # Babylon.js 3D Engine — Arbesk Studio

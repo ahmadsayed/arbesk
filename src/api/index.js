@@ -60,6 +60,22 @@ function sendError(res, status, code, message, details = null) {
   return res.status(status).json(body);
 }
 
+/**
+ * Add JSON to IPFS and pin it (non-fatal pin failure).
+ * Returns the CID string.
+ */
+async function addAndPin(ipfs, payload) {
+  const { cid } = await ipfs.add(payload);
+  const resultCid = cid.toString();
+  try {
+    await ipfs.pin.add(resultCid);
+    console.log(`[IPFS] pinned → ${resultCid}`);
+  } catch (pinErr) {
+    console.warn(`[IPFS] pin failed (non-fatal): ${pinErr.message}`);
+  }
+  return resultCid;
+}
+
 // ─── Thumbnail Helpers ──────────────────────────────────────────────────────
 
 const THUMBNAIL_DATA_URL_RE =
@@ -196,20 +212,10 @@ export default () => {
 
       await persistEmbeddedThumbnail(manifest);
 
-      const { cid } = await ipfs.add(JSON.stringify(manifest));
-      const resultCid = cid.toString();
-      try {
-        await ipfs.pin.add(resultCid);
-        console.log(`[IPFS] pin manifest → ${resultCid}`);
-      } catch (pinErr) {
-        console.warn(
-          `[IPFS] pin manifest failed (non-fatal): ${pinErr.message}`,
-        );
-      }
+      const resultCid = await addAndPin(ipfs, JSON.stringify(manifest));
       console.log(
-        `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"}`,
+        `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} → cid=${resultCid}`,
       );
-      console.log(`[SAVE] asset_id=${manifest.asset_id} → cid=${resultCid}`);
 
 
       res.status(201).json({
@@ -231,19 +237,10 @@ export default () => {
 
       const payload = JSON.stringify(manifest);
       console.log(
-        `[IPFS] add publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
+        `[IPFS] publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
       );
-      const { cid } = await ipfs.add(payload);
-      const resultCid = cid.toString();
-      try {
-        await ipfs.pin.add(resultCid);
-        console.log(`[IPFS] pin publish → ${resultCid}`);
-      } catch (pinErr) {
-        console.warn(
-          `[IPFS] pin publish failed (non-fatal): ${pinErr.message}`,
-        );
-      }
-      console.log(`[IPFS] add publish | cid=${resultCid}`);
+      const resultCid = await addAndPin(ipfs, payload);
+      console.log(`[IPFS] publish → ${resultCid}`);
 
 
       res.status(200).json({ cid: resultCid });

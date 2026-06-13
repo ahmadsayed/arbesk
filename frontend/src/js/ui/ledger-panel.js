@@ -7,6 +7,8 @@
  * is the single source of truth.
  */
 
+import { truncateAddress, truncateCid } from "../utils/format.js";
+
 const ACTIVITY_CONFIG = {
   GENERATION: { label: "Generation", icon: "✦" },
   PARAMETRIC: { label: "Parametric", icon: "◐" },
@@ -37,15 +39,6 @@ function formatDate(ts) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function truncateCid(cid) {
-  if (!cid) return "—";
-  return `${cid.slice(0, 8)}…${cid.slice(-6)}`;
-}
-
-function truncateAddress(addr) {
-  if (!addr || addr === "system") return addr || "—";
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
 
 function renderEntry(entry) {
   const config = ACTIVITY_CONFIG[entry.opType] || {

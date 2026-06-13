@@ -10,6 +10,7 @@ import {
   getAddressExplorerUrl,
   copyToClipboard,
 } from "../blockchain/explorer.js";
+import { truncateAddress } from "../utils/format.js";
 import { disconnectWallet } from "../blockchain/wallet.js";
 import { getCachedSession } from "../services/api.js";
 
@@ -105,9 +106,7 @@ function updateContent() {
 
   // Address with truncation
   if (els.address) {
-    els.address.textContent = address
-      ? `${address.slice(0, 6)}…${address.slice(-4)}`
-      : "—";
+    els.address.textContent = truncateAddress(address) || "—";
     els.address.title = address;
   }
 
