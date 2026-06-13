@@ -1,0 +1,54 @@
+// ═══════════════════════════════════════════════════════════════════
+// Empty State — reusable guidance pattern
+//
+// Centered icon chip + heading + dim subtext + optional action.
+// Generalized from .chat-welcome so empty views stay on-brand.
+// ═══════════════════════════════════════════════════════════════════
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--size-2);
+  padding: var(--size-7) var(--size-3);
+  color: var(--dim-fg);
+
+  // Soft accent-tinted icon chip
+  .empty-state-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--size-1);
+    border-radius: var(--radius-round);
+    background-color: color-mix(in srgb, var(--accent-bg) 12%, transparent);
+    color: var(--accent-bg);
+    font-size: var(--font-size-3);
+
+    svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  .empty-state-title {
+    margin: 0;
+    font-size: var(--font-size-2);
+    font-weight: var(--font-weight-6);
+    color: var(--sidebar-fg);
+  }
+
+  .empty-state-sub {
+    margin: 0;
+    max-width: 34ch;
+    font-size: var(--font-size-1);
+    color: var(--dim-fg);
+    line-height: var(--font-lineheight-3);
+  }
+
+  .empty-state-action {
+    margin-top: var(--size-2);
+  }
+}

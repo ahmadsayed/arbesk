@@ -30,11 +30,15 @@ html(lang="en")
 
         .headerbar-title
           nav#pathBar.pathbar.hidden(aria-label="World path")
-          span#assetStatusName.headerbar-title-text(contenteditable="true" role="textbox" aria-multiline="false" aria-label="Asset name") No asset open
+          span#assetStatusName.headerbar-title-text(aria-label="Asset name") No asset open
           span#assetStatusMeta.headerbar-title-meta Create or open an asset
 
         #assetHistory.history(hidden)
-          .history-track
+          span.history-label Version
+          .history-slider-wrap
+            input#historySlider.history-slider(type="range" min="0" max="0" step="1" value="0" aria-label="Asset version" aria-describedby="historyDetailPopover" title="Scrub asset versions")
+            #historyDetailPopover.history-detail(hidden)
+          span#historyVersionBadge.version-badge v1
 
         .headerbar-actions
           button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
@@ -85,11 +89,11 @@ html(lang="en")
                 line(x1="12" y1="17" x2="12" y2="22")
                 line(x1="2" y1="12" x2="7" y2="12")
                 line(x1="17" y1="12" x2="22" y2="12")
-            button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Library" title="Library (Ctrl+3)")
+            button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Gallery" title="Gallery (Ctrl+3)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20")
                 path(d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z")
-            button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Ledger" title="Ledger (Ctrl+4)")
+            button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+4)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z")
                 path(d="M14 2v6h6")
@@ -106,32 +110,30 @@ html(lang="en")
             .sidebar-view(data-view="create")
               .sidebar-view-header
                 h3 Asset
+                button#newAssetSidebarBtn.sidebar-header-action(type="button" aria-label="New asset" title="New asset (Ctrl+N)")
+                  svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                    line(x1="12" y1="5" x2="12" y2="19")
+                    line(x1="5" y1="12" x2="19" y2="12")
               .sidebar-view-body
-                .sidebar-action-row
-                  button#newAssetSidebarBtn.btn.btn-primary(style="width:100%")
-                    svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                      line(x1="12" y1="5" x2="12" y2="19")
-                      line(x1="5" y1="12" x2="19" y2="12")
-                    span New Asset
                 .sidebar-action-row.asset-lifecycle-row
-                  button#saveAssetBtn.btn.btn-primary(hidden aria-label="Save Draft" title="Save Draft (Ctrl+S)")
+                  button#saveAssetBtn.btn.btn-secondary(hidden aria-label="Save Draft" title="Save Draft (Ctrl+S)")
                     svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                       path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
                       path(d="M17 21v-8H7v8")
                       path(d="M7 3v5h8")
                     span Save
-                  button#publishAssetBtn.btn.btn-secondary(hidden aria-label="Publish asset" title="Publish asset")
-                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                      path(d="M12 3v12")
-                      path(d="M7 8l5-5 5 5")
-                      path(d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4")
-                    span Publish
                   button#burnAssetBtn.btn.btn-outline.btn-danger(hidden aria-label="Burn asset" title="Burn (delete) this token")
                     svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                       path(d="M3 6h18")
                       path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
                       path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
                     span Burn
+                .sidebar-action-row.besk-it-row
+                  button#publishAssetBtn.btn.btn-primary(hidden aria-label="Publish asset" title="Publish (Besk it) this asset")
+                    svg.besk-it-logo(width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                      path(d="M12.00,2.00 L21.51,15.09 L6.12,20.09 L6.12,3.91 L21.51,8.91 L12.00,22.00 L2.49,8.91 L17.88,3.91 L17.88,20.09 L2.49,15.09 Z")
+                      path(d="M12.00,7.50 L16.28,13.39 L9.35,15.64 L9.35,8.36 L16.28,10.61 L12.00,16.50 L7.72,10.61 L14.65,8.36 L14.65,15.64 L7.72,13.39 Z")
+                    span#publishAssetBtnText Besk it
                 #assetDefinition.asset-definition-section
                   .asset-def-header
                     button#toggleAssetDef.asset-def-toggle(aria-label="Toggle settings")
@@ -171,11 +173,6 @@ html(lang="en")
                     .welcome-icon ✦
                     p.welcome-text Create an asset
                     p.welcome-sub Describe the 3D asset you want to generate.
-                #timeline.timeline-section(hidden)
-                  label.timeline-label Asset Variants
-                  .timeline-slider-wrap
-                    input#versionSlider.timeline-slider(type="range", min="0", max="0", step="1")
-                    span#versionLabel.version-badge v1
 
             //- View: Outline
             .sidebar-view(data-view="outline" hidden)
@@ -197,15 +194,23 @@ html(lang="en")
             //- View: Library
             .sidebar-view(data-view="library" hidden)
               .sidebar-view-header
-                h3 Library
+                h3 Gallery
               .sidebar-view-body
                 #assetLibraryBody.asset-library-body
-                  p.asset-library-empty Connect wallet to browse your asset tokens.
+                  .empty-state
+                    .empty-state-icon
+                      svg(width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                        path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
+                        path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
+                        path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+                    p.empty-state-title No assets yet
+                    p.empty-state-sub Connect your wallet to browse and open the asset tokens you own.
+                    button#galleryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Connect Wallet
 
             //- View: Ledger
             .sidebar-view(data-view="ledger" hidden)
               .sidebar-view-header
-                h3 Ledger
+                h3 Activity
               .sidebar-view-body
                 #ledgerBody.ledger-panel-body
                   .ledger-panel-controls
@@ -243,17 +248,22 @@ html(lang="en")
 
           //- Message bar
           .messagebar
-            textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="1" aria-label="Asset generation prompt")
-            button#generateBtn.messagebar-submit(aria-label="Generate asset")
-              svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
-              .messagebar-spinner
-            p#generateHint.messagebar-hint(hidden) Connect wallet to generate
+            .messagebar-row
+              textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="1" aria-label="Asset generation prompt")
+              button#generateBtn.messagebar-submit(aria-label="Generate asset")
+                svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                  polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
+                .messagebar-spinner
+            p#generateHint.messagebar-hint(hidden)
+              svg.messagebar-hint-icon(width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                rect(x="3" y="11" width="18" height="11" rx="2" ry="2")
+                path(d="M7 11V7a5 5 0 0 1 10 0v4")
+              span Connect your wallet to start generating assets.
 
         //- Inspector — right sidebar
         aside#inspector.inspector.collapsed
           .inspector-header
-            h3 Selection Inspector
+            h3 Properties
             button#inspectorCloseBtn.btn.btn-icon.btn-sm(aria-label="Close inspector")
               svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                 line(x1="18" y1="6" x2="6" y2="18")
@@ -281,9 +291,6 @@ html(lang="en")
               .inspector-actions
                 button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open This World &rarr;
             #parametricEditor
-              #componentList.inspector-section(hidden)
-                .inspector-section-title Components
-                #componentListBody.component-list
               #componentEditor.inspector-section(hidden)
                 .inspector-section-title Color
                 .component-editor-header

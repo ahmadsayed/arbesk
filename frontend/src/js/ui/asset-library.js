@@ -104,6 +104,32 @@ function renderAssetLibrary(owned, shared) {
   }
 }
 
+function createEmptyState(title, sub) {
+  const wrap = document.createElement("div");
+  wrap.className = "empty-state";
+
+  const icon = document.createElement("div");
+  icon.className = "empty-state-icon";
+  icon.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+  </svg>`;
+  wrap.appendChild(icon);
+
+  const h = document.createElement("p");
+  h.className = "empty-state-title";
+  h.textContent = title;
+  wrap.appendChild(h);
+
+  const p = document.createElement("p");
+  p.className = "empty-state-sub";
+  p.textContent = sub;
+  wrap.appendChild(p);
+
+  return wrap;
+}
+
 function createSection(title, tokenIds, role) {
   const section = document.createElement("div");
   section.className = "asset-library-section";
@@ -114,12 +140,10 @@ function createSection(title, tokenIds, role) {
   section.appendChild(heading);
 
   if (tokenIds.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "asset-library-empty";
-    empty.textContent =
+    const empty =
       title === "My Assets"
-        ? "No assets yet. Create one!"
-        : "No shared assets yet.";
+        ? createEmptyState("No assets yet", "Create your first asset to see it here.")
+        : createEmptyState("No shared assets", "Assets shared with you will appear here.");
     section.appendChild(empty);
     return section;
   }
@@ -174,12 +198,12 @@ function createAssetCard(tokenId, role) {
   badge.textContent = role === "owner" ? "Owner" : "Editor";
 
   const openBtn = document.createElement("button");
-  openBtn.className = "btn btn-outline btn-sm";
+  openBtn.className = "btn btn-primary btn-sm";
   openBtn.textContent = "Open";
   openBtn.addEventListener("click", () => openAssetByTokenId(tokenId));
 
   const addBtn = document.createElement("button");
-  addBtn.className = "btn btn-secondary btn-sm";
+  addBtn.className = "btn btn-outline btn-sm";
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {
@@ -283,8 +307,31 @@ function highlightActiveAsset() {
   });
 }
 
+// Rich disconnected empty-state, mirrors the static markup in studio.pug so
+// the Connect affordance reappears after a disconnect.
+const DISCONNECTED_GALLERY_HTML = `
+  <div class="empty-state">
+    <div class="empty-state-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+        <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
+      </svg>
+    </div>
+    <p class="empty-state-title">No assets yet</p>
+    <p class="empty-state-sub">Connect your wallet to browse and open the asset tokens you own.</p>
+    <button id="galleryConnectBtn" class="empty-state-action btn btn-primary btn-sm" type="button">Connect Wallet</button>
+  </div>`;
+
 function initAssetLibrary() {
   assetLibraryBody = document.getElementById("assetLibraryBody");
+
+  // Delegated: the gallery Connect affordance mirrors the headerbar button.
+  assetLibraryBody?.addEventListener("click", (e) => {
+    if (e.target.closest("#galleryConnectBtn")) {
+      document.getElementById("connectWalletBtn")?.click();
+    }
+  });
 }
 
 document.addEventListener("scene:ready", highlightActiveAsset);
@@ -306,8 +353,7 @@ document.addEventListener("wallet:connected", async () => {
 
 document.addEventListener("wallet:disconnected", () => {
   if (assetLibraryBody) {
-    assetLibraryBody.innerHTML =
-      '<p class="asset-library-empty">Connect wallet to browse your asset tokens.</p>';
+    assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }
 });
 

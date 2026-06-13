@@ -49,7 +49,7 @@
   padding: var(--size-1) 0;
   font-size: var(--font-size-0);
   color: var(--dim-fg);
-  border-bottom: var(--border-size-1) solid var(--border-color);
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
   flex-shrink: 0;
 }
 
@@ -64,11 +64,11 @@
   gap: var(--size-2);
   padding: var(--size-1) var(--size-2);
   font-size: var(--font-size-0);
-  border-bottom: var(--border-size-1) solid var(--border-color);
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
   transition: background-color var(--duration-quick) var(--ease-out-3);
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
   }
 }
 

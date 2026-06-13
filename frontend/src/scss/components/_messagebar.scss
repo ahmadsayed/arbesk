@@ -4,13 +4,26 @@
 
 .messagebar {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: var(--size-2);
   min-height: var(--messagebar-min-height);
   padding: var(--size-2) var(--size-3);
   background-color: var(--card-bg);
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--border-hairline);
   flex-shrink: 0;
+  transition: box-shadow var(--duration-quick) var(--ease-out-3);
+
+  // The whole bar lights up gently while composing a prompt.
+  &:focus-within {
+    box-shadow: var(--glow-accent);
+  }
+}
+
+// Input + submit sit on one row; the hint (when shown) drops below it.
+.messagebar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-2);
 }
 
 .messagebar-input {
@@ -34,7 +47,7 @@
   &:focus {
     outline: none;
     border-color: var(--accent-bg);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
+    box-shadow: var(--focus-ring);
   }
 }
 
@@ -60,8 +73,8 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   svg {
@@ -100,11 +113,21 @@
   }
 }
 
+// Disconnected guidance — a calm centered caption under the input row,
+// not stray text beside the button. The submit button is disabled while
+// gated (see create-panel.js), so it reads muted rather than live.
 .messagebar-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-1);
   font-size: var(--font-size-0);
   color: var(--dim-fg);
-  text-align: center;
-  padding: var(--size-2) 0 0;
+
+  .messagebar-hint-icon {
+    flex-shrink: 0;
+    opacity: 0.75;
+  }
 
   &[hidden] {
     display: none;

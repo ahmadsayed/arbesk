@@ -11,12 +11,41 @@
   box-shadow: var(--shadow-1);
 }
 
+// Asset library section
+.asset-library-section {
+  margin-bottom: var(--size-4);
+}
+
+.asset-library-section-title {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim-fg);
+  margin-bottom: var(--size-3);
+  padding-bottom: var(--size-1);
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
+}
+
+.asset-library-empty {
+  font-size: var(--font-size-1);
+  color: var(--dim-fg);
+  text-align: center;
+  margin: var(--size-3) 0;
+}
+
+.asset-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+
 // Asset library card
 .asset-card {
   background-color: var(--card-bg);
   border: var(--border-size-1) solid var(--border-color);
   border-radius: var(--radius-2);
-  padding: var(--size-2);
+  padding: var(--size-3);
   cursor: pointer;
   transition: border-color var(--duration-quick) var(--ease-out-3),
               background-color var(--duration-quick) var(--ease-out-3),
@@ -24,12 +53,12 @@
 
   &:hover {
     border-color: var(--dim-fg);
-    background-color: var(--popover-bg);
+    background-color: var(--surface-overlay-hover);
   }
 
   &.active {
     border-color: var(--accent-bg);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-bg) 20%, transparent);
+    box-shadow: var(--glow-accent);
   }
 
   &[draggable="true"] {
@@ -44,7 +73,7 @@
 .asset-card-thumbnail {
   width: 100%;
   aspect-ratio: 16 / 9;
-  margin-bottom: var(--size-2);
+  margin-bottom: var(--size-3);
   border-radius: var(--radius-2);
   overflow: hidden;
   background-color: rgb(0 0 0 / 30%);
@@ -64,20 +93,11 @@
   font-size: var(--font-size-5);
 }
 
-.asset-card-id {
-  font-size: var(--font-size-2);
-  font-weight: var(--font-weight-6);
-  font-family: var(--font-mono);
-  color: var(--accent-bg);
-  margin-bottom: var(--size-1);
-}
-
 .asset-card-name {
   font-size: var(--font-size-2);
   font-weight: var(--font-weight-6);
-  font-family: var(--font-mono);
-  color: var(--accent-bg);
-  margin-bottom: var(--size-1);
+  color: var(--card-fg);
+  margin-bottom: var(--size-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,24 +115,29 @@
   font-weight: var(--font-weight-6);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 1px var(--size-1);
-  border-radius: var(--radius-2);
+  padding: 2px var(--size-2);
+  border-radius: var(--radius-round);
+  border: var(--border-size-1) solid var(--border-color);
+  background-color: transparent;
+  color: var(--dim-fg);
 
   &.badge-owner {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: color-mix(in srgb, var(--accent-bg) 15%, transparent);
+    color: var(--accent-bg);
+    border-color: color-mix(in srgb, var(--accent-bg) 40%, transparent);
   }
 
   &.badge-editor {
-    background-color: var(--popover-bg);
+    background-color: var(--surface-overlay-hover);
     color: var(--dim-fg);
+    border-color: var(--border-color);
   }
 }
 
 .asset-card-actions {
   display: flex;
-  gap: var(--size-1);
-  margin-top: var(--size-2);
+  gap: var(--size-2);
+  margin-top: var(--size-3);
 
   button {
     flex: 1;

@@ -4,7 +4,11 @@
  */
 
 import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { publishAsset, updateAssetURI } from "../blockchain/wallet.js";
+import {
+  contract as walletContract,
+  publishAsset,
+  updateAssetURI,
+} from "../blockchain/wallet.js";
 import { showDialog } from "./dialog.js";
 import {
   clearScene,
@@ -63,12 +67,10 @@ function updateButtonState() {
   if (saveBtnText) saveBtnText.textContent = "Save";
   if (saveBtn) saveBtn.title = "Save Draft (Ctrl+S)";
   if (publishBtnText) {
-    publishBtnText.textContent = window.activeAssetTokenId ? "Republish" : "Publish";
+    publishBtnText.textContent = "Besk it";
   }
   if (publishBtn) {
-    publishBtn.title = window.activeAssetTokenId
-      ? "Republish the asset with the latest manifest CID"
-      : "Publish this asset as a token";
+    publishBtn.title = "Besk it: publish this asset";
   }
 
   // Show burn button only for published (tokenized) assets
@@ -179,7 +181,7 @@ async function decomposeManifestNodes(manifest) {
     const cid = node.source.cid;
     const format = (node.source.format || "gltf").toLowerCase();
     console.log(
-      `[DECOMPOSE-SAVE] checking node ${node.node_id} | sourceCid=${cid} format=${format}`
+      `Decompose save: checking node ${node.node_id} | sourceCid=${cid} format=${format}`
     );
 
     try {
@@ -192,7 +194,7 @@ async function decomposeManifestNodes(manifest) {
         node.source.format = "gltf";
         decomposed++;
         console.log(
-          `[DECOMPOSE-SAVE] node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
+          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
         );
         continue;
       }
@@ -201,14 +203,14 @@ async function decomposeManifestNodes(manifest) {
 
       // Validate it looks like a glTF
       if (!gltf.asset || !gltf.asset.version) {
-        console.log(`[DECOMPOSE-SAVE] CID ${cid} is not a glTF, skipping`);
+        console.log(`Decompose save: CID ${cid} is not a glTF, skipping`);
         continue;
       }
 
       // Skip if already composite
       if (isComposite(gltf)) {
         console.log(
-          `[DECOMPOSE-SAVE] node ${node.node_id} already composite, skipping`
+          `Decompose save: node ${node.node_id} already composite, skipping`
         );
         continue;
       }
@@ -221,11 +223,11 @@ async function decomposeManifestNodes(manifest) {
       node.source.path = "composite.gltf";
       decomposed++;
       console.log(
-        `[DECOMPOSE-SAVE] node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
+        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
       );
     } catch (err) {
       console.warn(
-        `[DECOMPOSE-SAVE] failed to decompose node ${node.node_id}:`,
+        `Decompose save: failed to decompose node ${node.node_id}:`,
         err.message
       );
       // Continue with other nodes — don't block the save
@@ -233,6 +235,41 @@ async function decomposeManifestNodes(manifest) {
   }
 
   return decomposed;
+}
+
+/**
+ * Resolve the canonical "latest" manifest CID for versioning.
+ * Prefer the in-memory tip of the version chain (latest draft) so every
+ * Save appends linearly. Only fall back to the on-chain tokenURI for
+ * tokenized assets when no in-memory latest exists yet (e.g. on first load).
+ * For drafts without a token, fall back to the currently loaded manifest.
+ */
+async function resolveLatestManifestCid() {
+  if (window.latestAssetManifestCid) {
+    return window.latestAssetManifestCid;
+  }
+
+  const tokenId = window.activeAssetTokenId;
+  if (tokenId) {
+    try {
+      const c = walletContract || window.contract;
+      if (c) {
+        const onChainCid = await c.methods.tokenURI(String(tokenId)).call();
+        if (onChainCid) {
+          console.log(
+            `Save: using on-chain tokenURI for token #${tokenId} → ${onChainCid}`
+          );
+          return onChainCid;
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `Save: failed to read on-chain tokenURI for #${tokenId}:`,
+        err.message
+      );
+    }
+  }
+  return window.activeAssetManifestCid || null;
 }
 
 async function prepareManifestForWrite(assetName) {
@@ -256,7 +293,7 @@ async function prepareManifestForWrite(assetName) {
       scene: { nodes: [] },
     };
     console.log(
-      `[SAVE] creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingColors.size} pending source color edits`
+      `Save: creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingColors.size} pending source color edits`
     );
   } else {
     return null;
@@ -289,11 +326,11 @@ async function prepareManifestForWrite(assetName) {
         const result = await editSourceColors(node.source.cid, colorMap);
         node.source.cid = result.sourceCid;
         console.log(
-          `[SAVE] baked colors into source | node=${nodeId} newCid=${result.sourceCid} modified=${result.modified} skipped=${result.skipped}`
+          `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} modified=${result.modified} skipped=${result.skipped}`
         );
       } catch (err) {
         console.warn(
-          `[SAVE] failed to bake colors into source for ${nodeId}:`,
+          `Save: failed to bake colors into source for ${nodeId}:`,
           err.message
         );
       }
@@ -321,11 +358,11 @@ async function prepareManifestForWrite(assetName) {
           );
           node.source.cid = result.compositeCid;
           console.log(
-            `[SAVE] baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
+            `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
           );
         } catch (err) {
           console.warn(
-            `[SAVE] failed to bake colors into composite glTF for ${nodeId}:`,
+            `Save: failed to bake colors into composite glTF for ${nodeId}:`,
             err.message
           );
         }
@@ -359,7 +396,7 @@ async function prepareManifestForWrite(assetName) {
       }
     }
     console.log(
-      `[SAVE] applied ${pendingPP.size} pending post-processor edit(s)`
+      `Save: applied ${pendingPP.size} pending post-processor edit(s)`
     );
   }
 
@@ -369,22 +406,48 @@ async function prepareManifestForWrite(assetName) {
   const decomposedCount = await decomposeManifestNodes(manifest);
   if (decomposedCount > 0) {
     console.log(
-      `[SAVE] decomposed ${decomposedCount} glTF node(s) to composite format`
+      `Save: decomposed ${decomposedCount} glTF node(s) to composite format`
     );
   }
 
-  const prevCid = window.activeAssetManifestCid;
+  // Determine the manifest that supplies the version number and chain link.
+  // When the user has navigated to an older version (v2 of v1..v6), edits
+  // should still append to the tip of the chain as the next linear version
+  // (v7), not branch off as v3. Use latestAssetManifestCid as the previous
+  // link; fall back to the currently loaded manifest if no latest is tracked.
+  const activeCid = window.activeAssetManifestCid;
+  const latestCid = await resolveLatestManifestCid();
+  console.log(
+    `Save: versioning base | active=${activeCid} latest=${window.latestAssetManifestCid} onChain=${window.activeAssetTokenId || "none"} chosenPrev=${latestCid}`
+  );
+
   let prevManifest = null;
-  if (prevCid) {
+  let baseManifest = null;
+
+  // baseManifest is the currently loaded manifest (used for fallback only).
+  if (activeCid) {
     try {
-      prevManifest = await getFromRemoteIPFS(prevCid);
-      manifest.version = (prevManifest.version || 0) + 1;
-      manifest.prev_asset_manifest_cid = prevCid;
+      baseManifest = await getFromRemoteIPFS(activeCid);
     } catch {
-      advanceManifestVersion(manifest, prevCid);
+      baseManifest = null;
     }
   }
-  return { manifest, prevCid, prevManifest };
+
+  // prevManifest is the tip of the chain that supplies version + prev link
+  // and is also the baseline for no-op detection. When the user has navigated
+  // to an older version (v2 of v1..v6), edits/saves still append to the tip
+  // as the next linear version (v7), not branch off as v3.
+  if (latestCid) {
+    try {
+      prevManifest = await getFromRemoteIPFS(latestCid);
+      manifest.version = (prevManifest.version || 0) + 1;
+      manifest.prev_asset_manifest_cid = latestCid;
+    } catch {
+      advanceManifestVersion(manifest, latestCid);
+    }
+  }
+
+  return { manifest, prevCid: latestCid, prevManifest: prevManifest || baseManifest };
 }
 
 async function onSaveAssetDraft() {
@@ -432,14 +495,19 @@ async function onSaveAssetDraft() {
     }
 
     const { cid } = await saveManifest(prepared.manifest);
-    window.latestAssetManifestCid = window.activeAssetManifestCid;
+    window.latestAssetManifestCid = cid;
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
     clearPendingPostProcessorEdits();
     clearPendingSourceColorEdits();
 
-    updateUrlManifest(cid, window.activeAssetTokenId || null);
+    // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
+    // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
+    // stashing a draft manifest in query params.
+    if (!window.activeAssetTokenId) {
+      updateUrlManifest(cid);
+    }
 
     document.dispatchEvent(
       new CustomEvent("asset:draftSaved", { detail: { cid } })
@@ -480,12 +548,9 @@ async function onPublishAsset() {
   isPublishing = true;
   if (publishBtn) {
     publishBtn.disabled = true;
-    publishBtn.title = window.activeAssetTokenId ? "Republishing…" : "Publishing…";
+    publishBtn.title = "Besking…";
   }
-  if (publishBtnText)
-    publishBtnText.textContent = window.activeAssetTokenId
-      ? "Republishing…"
-      : "Publishing…";
+  if (publishBtnText) publishBtnText.textContent = "Besking…";
   announceStatus(window.activeAssetTokenId ? "Republishing asset…" : "Publishing asset…");
 
   try {
@@ -532,10 +597,7 @@ async function onPublishAsset() {
       });
       isPublishing = false;
       if (publishBtn) publishBtn.disabled = false;
-      if (publishBtnText)
-        publishBtnText.textContent = window.activeAssetTokenId
-          ? "Republish"
-          : "Publish";
+      if (publishBtnText) publishBtnText.textContent = "Besk it";
       updateButtonState();
       return;
     }
@@ -546,6 +608,8 @@ async function onPublishAsset() {
     if (window.activeAssetTokenId) {
       const txHash = await updateAssetURI(window.activeAssetTokenId, cid);
       if (!txHash) throw new Error("Republish transaction failed");
+      // Keep the URL clean and anchored to the token, not a specific manifest CID.
+      updateUrlAsset(window.activeAssetTokenId);
       announceStatus("Asset republished successfully.");
     } else {
       const tokenId =
@@ -564,7 +628,7 @@ async function onPublishAsset() {
       announceStatus("Asset published and minted.");
     }
 
-    window.latestAssetManifestCid = window.activeAssetManifestCid;
+    window.latestAssetManifestCid = cid;
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
@@ -589,9 +653,7 @@ async function onPublishAsset() {
     isPublishing = false;
     if (publishBtn) {
       publishBtn.disabled = false;
-      publishBtn.title = window.activeAssetTokenId
-        ? "Republish the asset with the latest manifest CID"
-        : "Publish this asset as a token";
+      publishBtn.title = "Besk it: publish this asset";
     }
     updateButtonState();
   }
@@ -602,61 +664,7 @@ export { onSaveAssetDraft, onPublishAsset };
 saveBtn?.addEventListener("click", onSaveAssetDraft);
 publishBtn?.addEventListener("click", onPublishAsset);
 
-// ─── Editable asset title (header bar) ───
-// `#assetStatusName` is contenteditable; commit on Enter/blur, revert on Escape,
-// and propagate the new name to the rest of the app.
-
-function hasAssetContext() {
-  return (
-    !!window.activeAssetManifestCid ||
-    !!window.activeAssetName ||
-    getPendingChildRefs().length > 0
-  );
-}
-
-function sanitizeName(raw) {
-  return (raw || "").replace(/\s+/g, " ").trim();
-}
-
-function commitAssetName() {
-  if (!assetStatusName) return;
-  const name = sanitizeName(assetStatusName.textContent);
-
-  // No open asset, or the field was cleared — restore the current label.
-  if (!hasAssetContext() || !name) {
-    assetStatusName.textContent = window.activeAssetName || "No asset open";
-    return;
-  }
-
-  window.activeAssetName = name;
-  assetStatusName.textContent = name; // normalize (strip stray newlines)
-  document.dispatchEvent(
-    new CustomEvent("asset:renamed", { detail: { name } })
-  );
-}
-
-if (assetStatusName) {
-  assetStatusName.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      assetStatusName.blur(); // commit through the blur handler
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      assetStatusName.textContent = window.activeAssetName || "No asset open";
-      assetStatusName.blur();
-    }
-  });
-
-  assetStatusName.addEventListener("blur", commitAssetName);
-
-  // Force plain-text paste (no rich HTML or line breaks).
-  assetStatusName.addEventListener("paste", (e) => {
-    e.preventDefault();
-    const text =
-      (e.clipboardData || window.clipboardData)?.getData("text") || "";
-    document.execCommand("insertText", false, text.replace(/\s+/g, " "));
-  });
-}
+// Asset name is set at creation time and displayed read-only in the header.
 
 document.addEventListener("scene:ready", (e) => {
   const manifest = e.detail?.manifest;

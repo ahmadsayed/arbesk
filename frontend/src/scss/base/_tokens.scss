@@ -172,6 +172,8 @@
 // ── Radii ─────────────────────────────────────────────────────────────
 
 :root {
+  --radius-0: 0; // square (swatches, flush rows)
+  --radius-1: 0.25rem; // 4px — tight controls (btn-xs, small swatches)
   --radius-2: 0.5rem; // cards, inputs, buttons
   --radius-3: 0.75rem; // panels, modals
   --radius-round: 999px; // pills, history nodes, badges
@@ -183,7 +185,51 @@
   --shadow-1: 0 1px 2px -1px rgb(0 0 0 / 10%); // subtle card
   --shadow-2: 0 2px 4px -2px rgb(0 0 0 / 12%); // raised card
   --shadow-3: 0 4px 8px -2px rgb(0 0 0 / 15%); // popover, dropdown
+  --shadow-4: 0 8px 16px -4px rgb(0 0 0 / 18%); // floating glass surfaces
   --shadow-5: 0 12px 24px -8px rgb(0 0 0 / 25%); // dialog, modal
+}
+
+// ── Hybrid web2/web3 flourish — glass, overlays, glow, gradients ──────
+//
+// All derived from the Layer-3 theme aliases via var(), so they resolve
+// per-element at computed-value time and track light/dark automatically.
+
+:root {
+  // RGB channels of the gold accent (gold-5 #a07848) for rgba() composition.
+  --accent-bg-rgb: 160 120 72;
+
+  // Glass / elevated floating surfaces
+  --glass-blur: 12px;
+  --popover-glass-bg: color-mix(in srgb, var(--popover-bg) 86%, transparent);
+
+  // libadwaita-style translucent hover/active overlays (theme-aware tint)
+  --surface-overlay-hover: color-mix(in srgb, var(--window-fg) 6%, transparent);
+  --surface-overlay-active: color-mix(in srgb, var(--window-fg) 10%, transparent);
+
+  // Calmer low-contrast separator (prefer over full --border-color for dividers)
+  --border-hairline: color-mix(in srgb, var(--border-color) 50%, transparent);
+
+  // Standardized focus ring + soft accent glow (consolidates inline glows)
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 35%, transparent);
+  --glow-accent: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
+  --accent-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent-bg) 55%, transparent);
+
+  // Subtle warm gradients (a few % lightness shift — not neon)
+  --gradient-accent: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-bg) 92%, white),
+    var(--accent-bg)
+  );
+  --gradient-headerbar: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--headerbar-bg) 97%, white),
+    var(--headerbar-bg)
+  );
+  --gradient-sidebar: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sidebar-bg) 97%, white),
+    var(--sidebar-bg)
+  );
 }
 
 // ── Borders ───────────────────────────────────────────────────────────
@@ -225,7 +271,19 @@
     --shadow-1: none;
     --shadow-2: none;
     --shadow-3: none;
+    --shadow-4: none;
     --shadow-5: none;
+
+    // Flatten the web2/web3 flourishes: gradients collapse to their flat
+    // base surface, decorative glow/shadow drop, but keep a solid focus ring.
+    --gradient-accent: var(--accent-bg);
+    --gradient-headerbar: var(--headerbar-bg);
+    --gradient-sidebar: var(--sidebar-bg);
+    --glow-accent: none;
+    --accent-shadow: none;
+    --popover-glass-bg: var(--popover-bg);
+    --focus-ring: 0 0 0 3px var(--accent-bg);
+    --border-hairline: currentColor;
   }
 }
 

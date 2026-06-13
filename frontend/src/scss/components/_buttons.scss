@@ -15,34 +15,46 @@
   border: var(--border-size-1) solid transparent;
   transition: background-color var(--duration-quick) var(--ease-out-3),
               color var(--duration-quick) var(--ease-out-3),
-              border-color var(--duration-quick) var(--ease-out-3);
+              border-color var(--duration-quick) var(--ease-out-3),
+              box-shadow var(--duration-quick) var(--ease-out-3),
+              transform var(--duration-quick) var(--ease-out-3);
   white-space: nowrap;
   user-select: none;
   min-height: 36px;
   min-width: 36px;
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
   }
 }
 
 // Primary
 .btn-primary {
-  background-color: var(--accent-bg);
+  background: var(--gradient-accent);
   color: var(--accent-fg);
+  box-shadow: var(--accent-shadow);
 
   &:hover:not(:disabled) {
-    filter: brightness(1.1);
+    filter: brightness(1.05);
+    box-shadow: var(--accent-shadow), var(--glow-accent);
+    transform: translateY(-1px);
   }
 
   &:active:not(:disabled) {
-    filter: brightness(0.95);
+    filter: brightness(0.97);
+    box-shadow: var(--accent-shadow);
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--accent-shadow), var(--focus-ring);
   }
 }
 
@@ -53,12 +65,12 @@
   border-color: var(--border-color);
 
   &:hover:not(:disabled) {
-    background-color: var(--popover-bg);
+    background-color: var(--surface-overlay-hover);
     border-color: var(--dim-fg);
   }
 
   &:active:not(:disabled) {
-    background-color: var(--border-color);
+    background-color: var(--surface-overlay-active);
     filter: none;
   }
 }
@@ -120,12 +132,12 @@
   border-color: transparent;
 
   &:hover:not(:disabled) {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
     color: var(--sidebar-fg);
   }
 
   &:active:not(:disabled) {
-    background-color: var(--border-color);
+    background-color: var(--surface-overlay-active);
   }
 }
 
