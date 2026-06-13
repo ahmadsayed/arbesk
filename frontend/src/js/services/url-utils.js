@@ -29,3 +29,13 @@ export function updateUrlManifest(cid, tokenId = null) {
   }
   window.history.pushState({}, "", url);
 }
+
+/**
+ * Clear ?asset and ?manifest query params from the URL without reloading.
+ */
+export function clearUrlAssetParams() {
+  const url = new URL(window.location);
+  url.searchParams.delete("asset");
+  url.searchParams.delete("manifest");
+  window.history.replaceState({}, "", url);
+}

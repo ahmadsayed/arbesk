@@ -34,6 +34,7 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 
 import { initWalletPopover } from "/js/ui/wallet-popover.js";
 
+import { on, EVENTS } from "../events/registry.js";
 import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
 import { CHAIN_IDS } from "/js/constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
@@ -91,7 +92,7 @@ function updateWalletButtonState(address, isAuthenticated) {
   }
 }
 
-document.addEventListener("wallet:connected", (e) => {
+on(EVENTS.WALLET_CONNECTED, (e) => {
   const c = document.getElementById("connectWalletBtn");
   const d = document.getElementById("disconnectWalletBtn");
   const netSel = document.getElementById("headerbarNetworkSelect");
@@ -119,7 +120,7 @@ document.addEventListener("wallet:connected", (e) => {
   }
 });
 
-document.addEventListener("wallet:disconnected", () => {
+on(EVENTS.WALLET_DISCONNECTED, () => {
   const c = document.getElementById("connectWalletBtn");
   const d = document.getElementById("disconnectWalletBtn");
   const netSel = document.getElementById("headerbarNetworkSelect");
@@ -136,10 +137,10 @@ document.addEventListener("wallet:disconnected", () => {
   if (netSel) netSel.classList.remove("connected");
 });
 
-document.addEventListener("user:authenticated", (e) => {
+on(EVENTS.USER_AUTHENTICATED, (e) => {
   updateWalletButtonState(e.detail?.address, true);
 });
 
-document.addEventListener("user:auth-required", (e) => {
+on(EVENTS.USER_AUTH_REQUIRED, (e) => {
   updateWalletButtonState(e.detail?.address, false);
 });

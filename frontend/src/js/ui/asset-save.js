@@ -30,6 +30,7 @@ import {
 } from "../engine/parametric-preview.js";
 import { updateBurnButton } from "./collaborators.js";
 import { showToast } from "./toasts.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -546,9 +547,7 @@ async function onSaveAssetDraft() {
       updateUrlManifest(cid);
     }
 
-    document.dispatchEvent(
-      new CustomEvent("asset:draftSaved", { detail: { cid } })
-    );
+    emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
     updateAssetStatus(
       assetName,
       window.activeAssetTokenId
@@ -645,11 +644,7 @@ async function onPublishAsset() {
 
     // latestCid / activeCid / pending edits were already updated by saveAssetDraftCore.
 
-    document.dispatchEvent(
-      new CustomEvent("asset:published", {
-        detail: { tokenId: window.activeAssetTokenId, cid },
-      })
-    );
+    emit(EVENTS.ASSET_PUBLISHED, { tokenId: window.activeAssetTokenId, cid });
     updateAssetStatus(assetName, `Asset Token #${window.activeAssetTokenId}`);
   } catch (err) {
     console.error("Publish asset failed:", err);
@@ -687,7 +682,7 @@ document.addEventListener("keydown", (e) => {
 
 // Asset name is set at creation time and displayed read-only in the header.
 
-document.addEventListener("scene:ready", (e) => {
+on(EVENTS.SCENE_READY, (e) => {
   const manifest = e.detail?.manifest;
   // Preserve an existing rename — don't overwrite with fallback defaults.
   const name = manifest?.name || window.activeAssetName || "Untitled Asset";
@@ -703,13 +698,13 @@ document.addEventListener("scene:ready", (e) => {
   updateButtonState();
 });
 
-document.addEventListener("scene:empty", () => {
+on(EVENTS.SCENE_EMPTY, () => {
   if (saveBtn) saveBtn.hidden = true;
   if (publishBtn) publishBtn.hidden = true;
   updateAssetStatus("No asset open", "Create or open an asset");
 });
-document.addEventListener("wallet:connected", updateButtonState);
-document.addEventListener("wallet:disconnected", () => {
+on(EVENTS.WALLET_CONNECTED, updateButtonState);
+on(EVENTS.WALLET_DISCONNECTED, () => {
   if (saveBtn) saveBtn.hidden = true;
   if (publishBtn) publishBtn.hidden = true;
 });

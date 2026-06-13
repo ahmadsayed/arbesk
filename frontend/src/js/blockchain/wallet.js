@@ -8,6 +8,7 @@
  * tokenURI updates, editor management, role-based collaboration, and burn.
  */
 
+import { emit, EVENTS } from "../events/registry.js";
 import { showToast, dismissToast } from "../ui/toasts.js";
 import {
   startDiscovery,
@@ -375,11 +376,10 @@ async function _finishWalletSetup(address) {
   window.contractAddress = contractAddress;
   await _checkBalance();
 
-  document.dispatchEvent(
-    new CustomEvent("wallet:connected", {
-      detail: { address: window.walletAddress, chainId },
-    })
-  );
+  emit(EVENTS.WALLET_CONNECTED, {
+    address: window.walletAddress,
+    chainId,
+  });
 
   // Setup listeners (only once per provider)
   _attachProviderListeners();
@@ -405,11 +405,10 @@ function _attachProviderListeners() {
       } else {
         window.walletAddress = accounts[0];
         _checkBalance();
-        document.dispatchEvent(
-          new CustomEvent("wallet:connected", {
-            detail: { address: window.walletAddress, chainId: null },
-          })
-        );
+        emit(EVENTS.WALLET_CONNECTED, {
+          address: window.walletAddress,
+          chainId: null,
+        });
       }
     });
 
@@ -428,11 +427,10 @@ function _attachProviderListeners() {
       } else {
         window.walletAddress = accounts[0];
         _checkBalance();
-        document.dispatchEvent(
-          new CustomEvent("wallet:connected", {
-            detail: { address: window.walletAddress, chainId: null },
-          })
-        );
+        emit(EVENTS.WALLET_CONNECTED, {
+          address: window.walletAddress,
+          chainId: null,
+        });
       }
     });
 
@@ -453,18 +451,13 @@ async function authenticateUser() {
   try {
     const { getOrCreateSession } = await import("../services/api.js");
     const session = await getOrCreateSession();
-    document.dispatchEvent(
-      new CustomEvent("user:authenticated", {
-        detail: { address: window.walletAddress, session },
-      })
-    );
+    emit(EVENTS.USER_AUTHENTICATED, {
+      address: window.walletAddress,
+      session,
+    });
   } catch (err) {
     console.warn("[AUTH] Session creation failed or rejected:", err.message);
-    document.dispatchEvent(
-      new CustomEvent("user:auth-required", {
-        detail: { address: window.walletAddress },
-      })
-    );
+    emit(EVENTS.USER_AUTH_REQUIRED, { address: window.walletAddress });
   }
 }
 
@@ -558,7 +551,7 @@ async function disconnectWallet() {
     lowBalanceToastId = null;
   }
   localStorage.removeItem(LAST_WALLET_KEY);
-  document.dispatchEvent(new CustomEvent("wallet:disconnected"));
+  emit(EVENTS.WALLET_DISCONNECTED);
 }
 
 /**
@@ -672,16 +665,12 @@ async function recordGeneration(nodeId, prompt) {
     });
     console.log("[FREE-GEN] recorded! txHash =", receipt.transactionHash);
 
-    document.dispatchEvent(
-      new CustomEvent("wallet:generationPaid", {
-        detail: {
-          txHash: receipt.transactionHash,
-          nodeId,
-          prompt,
-          contractAddress,
-        },
-      })
-    );
+    emit(EVENTS.WALLET_GENERATION_PAID, {
+      txHash: receipt.transactionHash,
+      nodeId,
+      prompt,
+      contractAddress,
+    });
     return receipt.transactionHash;
   } catch (error) {
     console.error("recordGeneration failed:", error);
@@ -922,19 +911,15 @@ async function payWithUSDC(nodeId, prompt, tier) {
     });
     console.log("[USDC] payment confirmed! txHash =", receipt.transactionHash);
 
-    document.dispatchEvent(
-      new CustomEvent("wallet:generationPaid", {
-        detail: {
-          txHash: receipt.transactionHash,
-          nodeId,
-          prompt,
-          tier,
-          tierCostUSDC,
-          blockNumber: receipt.blockNumber,
-          contractAddress,
-        },
-      })
-    );
+    emit(EVENTS.WALLET_GENERATION_PAID, {
+      txHash: receipt.transactionHash,
+      nodeId,
+      prompt,
+      tier,
+      tierCostUSDC,
+      blockNumber: receipt.blockNumber,
+      contractAddress,
+    });
     return receipt.transactionHash;
   } catch (error) {
     console.error("payWithUSDC failed:", error);
@@ -1011,11 +996,11 @@ async function publishAsset(tokenURI, tokenId) {
       gas: Math.floor(Number(gas) * 1.2),
     });
 
-    document.dispatchEvent(
-      new CustomEvent("asset:published", {
-        detail: { tokenId, tokenURI, txHash: receipt.transactionHash },
-      })
-    );
+    emit(EVENTS.ASSET_PUBLISHED, {
+      tokenId,
+      tokenURI,
+      txHash: receipt.transactionHash,
+    });
 
     return receipt.transactionHash;
   } catch (error) {
@@ -1298,11 +1283,10 @@ async function burn(tokenId) {
       gas: Math.floor(Number(gas) * 1.2),
     });
 
-    document.dispatchEvent(
-      new CustomEvent("asset:burned", {
-        detail: { tokenId, txHash: receipt.transactionHash },
-      })
-    );
+    emit(EVENTS.ASSET_BURNED, {
+      tokenId,
+      txHash: receipt.transactionHash,
+    });
 
     // Unpin IPFS content after burn — fully non-blocking, skipped if unreachable
     if (manifestCid) {

@@ -5,6 +5,7 @@
  * parametric version saving, and standardized error handling.
  */
 
+import { on, EVENTS } from "../events/registry.js";
 import { web3 } from "../blockchain/wallet.js";
 import {
   getContractAddress as getNetworkContractAddress,
@@ -104,7 +105,7 @@ export function clearSession() {
 }
 
 // Auto-clear session when wallet disconnects
-document.addEventListener("wallet:disconnected", () => {
+on(EVENTS.WALLET_DISCONNECTED, () => {
   clearSession();
 });
 

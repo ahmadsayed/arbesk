@@ -6,6 +6,8 @@
  * colors so a single token change themes the entire studio.
  */
 
+import { emit, EVENTS } from "../events/registry.js";
+
 /**
  * Read a CSS custom property from :root, trimmed of whitespace.
  * Returns the empty string if the variable is undefined.
@@ -84,9 +86,7 @@ function applySystemTheme() {
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  document.dispatchEvent(
-    new CustomEvent("theme:changed", { detail: { theme } })
-  );
+  emit(EVENTS.THEME_CHANGED, { theme });
 }
 
 /** Persist and apply a specific theme ("light" or "dark"). */

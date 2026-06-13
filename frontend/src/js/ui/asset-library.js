@@ -13,9 +13,10 @@ import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
-import { updateUrlAsset } from "../services/url-utils.js";
+import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
 import { CHAIN_IDS } from "../constants/chains.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 
 let assetLibraryBody = null;
 
@@ -220,17 +221,13 @@ function createAssetCard(tokenId, role) {
     const chainId = Number(window.chainId || window.walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
     const contractAddr =
       window.contractAddress || window._contractAddress || null;
-    document.dispatchEvent(
-      new CustomEvent("asset:addLinkedRequested", {
-        detail: {
-          token_id: String(tokenId),
-          standard: "ERC721",
-          resolution: "latest",
-          chainId,
-          contractAddress: contractAddr,
-        },
-      })
-    );
+    emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, {
+      token_id: String(tokenId),
+      standard: "ERC721",
+      resolution: "latest",
+      chainId,
+      contractAddress: contractAddr,
+    });
   });
 
   const meta = document.createElement("div");
@@ -359,32 +356,34 @@ function initAssetLibrary() {
   });
 }
 
-document.addEventListener("scene:ready", highlightActiveAsset);
-document.addEventListener("asset:published", async () => {
+on(EVENTS.SCENE_READY, highlightActiveAsset);
+on(EVENTS.ASSET_PUBLISHED, async () => {
   await refreshAssetLibrary();
   highlightActiveAsset();
 });
 
-document.addEventListener("asset:burned", async () => {
-  const url = new URL(window.location);
-  url.searchParams.delete("asset");
-  url.searchParams.delete("manifest");
-  window.history.replaceState({}, "", url);
+on(EVENTS.ASSET_BURNED, async () => {
+  clearUrlAssetParams();
   await refreshAssetLibrary();
 });
 
-document.addEventListener("asset:openByTokenId", (e) => {
+on(EVENTS.ASSET_CLEARED, async () => {
+  clearUrlAssetParams();
+  await refreshAssetLibrary();
+});
+
+on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
   if (e.detail?.tokenId) openAssetByTokenId(e.detail.tokenId);
 });
 
-document.addEventListener("wallet:connected", async () => {
+on(EVENTS.WALLET_CONNECTED, async () => {
   await refreshAssetLibrary();
 
   const assetTokenId = new URLSearchParams(window.location.search).get("asset");
   if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId);
 });
 
-document.addEventListener("wallet:disconnected", () => {
+on(EVENTS.WALLET_DISCONNECTED, () => {
   if (assetLibraryBody) {
     assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }

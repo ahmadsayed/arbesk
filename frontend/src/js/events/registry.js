@@ -66,6 +66,12 @@ const _listenerCounts = new Map();
 const _isDev =
   typeof location !== "undefined" && location.hostname === "localhost";
 
+// Events emitted intentionally before any consumer exists (future-only hooks).
+const _futureOnlyEvents = new Set([
+  EVENTS.NESTING_DID_DIVE,
+  EVENTS.NESTING_DID_ASCEND,
+]);
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -76,7 +82,7 @@ const _isDev =
  * @param {*} [detail]  - Optional payload
  */
 export function emit(name, detail) {
-  if (_isDev && !_listenerCounts.get(name)) {
+  if (_isDev && !_listenerCounts.get(name) && !_futureOnlyEvents.has(name)) {
     console.warn(`[EVENTS] "${name}" dispatched with no registered listeners`);
   }
   document.dispatchEvent(

@@ -10,6 +10,8 @@
  * captured when the inspector opened.
  */
 
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 import {
   applyColor,
   applyScale,
@@ -22,7 +24,6 @@ import {
   selectNodeById,
   selectSubMesh,
 } from "./scene-graph.js";
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 // DOM references
 const inspector = document.getElementById("inspector");
@@ -285,11 +286,11 @@ function onNodeSelected(e) {
   selectNodeById(e.detail.nodeId);
   openInspector(e.detail.nodeId);
 }
-document.addEventListener("node:selected", onNodeSelected);
-document.addEventListener("outliner:nodeSelected", onNodeSelected);
+on(EVENTS.NODE_SELECTED, onNodeSelected);
+on(EVENTS.OUTLINER_NODE_SELECTED, onNodeSelected);
 
 // Sub-mesh selected from the viewport: sync the inspector to that component.
-document.addEventListener("submesh:selected", (e) => {
+on(EVENTS.SUBMESH_SELECTED, (e) => {
   const meshName = e.detail?.meshName;
   if (!meshName || !activeNodeId) return;
   selectComponent(meshName);
@@ -305,17 +306,13 @@ if (diveBtn) {
   diveBtn.addEventListener("click", () => {
     const childRef = activeNodeId ? getNodeChildRef(activeNodeId) : null;
     if (childRef) {
-      document.dispatchEvent(
-        new CustomEvent("nesting:diveRequested", {
-          detail: { childRef, nodeId: activeNodeId },
-        })
-      );
+      emit(EVENTS.NESTING_DIVE_REQUESTED, { childRef, nodeId: activeNodeId });
     }
   });
 }
 
 // After a save, the live preview colors are now the committed colors.
-document.addEventListener("asset:draftSaved", () => {
+on(EVENTS.ASSET_DRAFT_SAVED, () => {
   if (activeNodeId) {
     for (const { name, mesh } of getNodeSubMeshes(activeNodeId)) {
       const color = getMeshMaterialColor(mesh);
@@ -369,6 +366,7 @@ function onTokenChildAdded(e) {
     tokenChildCidEl.textContent = e.detail.resolvedCid || "Resolving…";
   }
 }
-document.addEventListener("scene:tokenChildAdded", onTokenChildAdded);
+on(EVENTS.SCENE_TOKEN_CHILD_ADDED, onTokenChildAdded);
+on(EVENTS.SCENE_CLEARED, closeInspector);
 
 export { openInspector, closeInspector };
