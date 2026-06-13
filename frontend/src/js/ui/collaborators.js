@@ -18,7 +18,7 @@ import {
   canBurn,
   CollaboratorRole,
 } from "../blockchain/wallet.js";
-import { showDialog } from "./dialog.js";
+import { showConfirmDialog } from "./dialog.js";
 
 // ─── DOM refs ──────────────────────────────────────────────────────────
 
@@ -264,12 +264,12 @@ async function onBurnAsset() {
   const id = tokenId();
   if (!id) return;
 
-  const confirmed = await showDialog(
+  const confirmed = await showConfirmDialog(
     "Burn Asset",
     `Are you sure you want to permanently burn token #${id}? This cannot be undone. All collaborators will be removed and the token will cease to exist.`,
     [
       { text: "Cancel", value: "cancel" },
-      { text: "Burn Token", value: "burn", className: "btn-danger" },
+      { text: "Burn Token", value: "burn", className: "btn btn-danger" },
     ]
   );
 

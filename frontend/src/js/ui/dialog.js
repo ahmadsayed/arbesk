@@ -168,6 +168,148 @@ export function showDialog(title, body, defaultValue = "") {
   });
 }
 
+/**
+ * Show a confirmation-style dialog with custom buttons.
+ *
+ * Replaces the input prompt with one or more action buttons.
+ *
+ * @param {string} title
+ * @param {string} body
+ * @param {Array<{text: string, value: string, className?: string}>} [buttons=[]]
+ * @returns {Promise<string|null>} The `value` of the clicked button, or null if cancelled.
+ */
+export function showConfirmDialog(title, body, buttons = []) {
+  return new Promise((resolve) => {
+    try {
+      const backdrop = document.createElement("div");
+      backdrop.className = "dialog-backdrop";
+
+      const dialog = document.createElement("div");
+      dialog.className = "dialog";
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("aria-labelledby", "dialog-title-" + Date.now());
+
+      const buttonHtml = (buttons.length ? buttons : [
+        { text: "Cancel", value: "cancel" },
+        { text: "Confirm", value: "confirm" },
+      ])
+        .map((btn, idx) => {
+          const className =
+            btn.className ||
+            (idx === 0 ? "btn btn-secondary" : "btn btn-primary");
+          return `<button class="${escapeHtml(className)} dialog-action-btn" type="button" data-value="${escapeHtml(
+            btn.value
+          )}">${escapeHtml(btn.text)}</button>`;
+        })
+        .join("");
+
+      dialog.innerHTML = `
+      <div class="dialog-header">
+        <h2 class="dialog-title" id="dialog-title-${Date.now()}">${escapeHtml(
+          title
+        )}</h2>
+      </div>
+      <div class="dialog-body">
+        <p style="margin:0">${escapeHtml(body)}</p>
+      </div>
+      <div class="dialog-actions">
+        ${buttonHtml}
+      </div>
+    `;
+
+      backdrop.appendChild(dialog);
+      document.body.appendChild(backdrop);
+
+      const actionBtns = dialog.querySelectorAll(".dialog-action-btn");
+      const firstBtn = actionBtns[0];
+
+      let resolved = false;
+
+      function cleanup() {
+        document.removeEventListener("keydown", globalKey);
+      }
+
+      function closeDialog(value) {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        backdrop.remove();
+        resolve(value);
+      }
+
+      requestAnimationFrame(() => {
+        firstBtn?.focus();
+      });
+
+      function trapFocus(dialog) {
+        const focusable = dialog.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        function handleTab(e) {
+          if (e.key !== "Tab") return;
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+        dialog.addEventListener("keydown", handleTab);
+
+        function handleFocusIn(e) {
+          if (!dialog.contains(e.target)) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+        document.addEventListener("focusin", handleFocusIn);
+
+        return () => {
+          dialog.removeEventListener("keydown", handleTab);
+          document.removeEventListener("focusin", handleFocusIn);
+        };
+      }
+      const removeTrap = trapFocus(dialog);
+
+      actionBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          closeDialog(btn.dataset.value || null);
+        });
+      });
+
+      backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) closeDialog(null);
+      });
+
+      function globalKey(e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeDialog(null);
+        }
+      }
+      document.addEventListener("keydown", globalKey);
+
+      const originalCleanup = cleanup;
+      cleanup = function () {
+        originalCleanup();
+        removeTrap();
+      };
+    } catch (err) {
+      console.error("[DIALOG] error creating confirm dialog:", err);
+      resolve(null);
+    }
+  });
+}
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")

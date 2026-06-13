@@ -143,3 +143,53 @@
     flex: 1;
   }
 }
+
+.asset-card-error {
+  border-color: var(--error-bg, #c01c28);
+  background-color: color-mix(in srgb, var(--error-bg, #c01c28) 8%, var(--card-bg));
+
+  &:hover {
+    border-color: var(--error-bg, #c01c28);
+  }
+}
+
+.asset-card-thumbnail {
+  position: relative;
+}
+
+.asset-card-thumbnail-error {
+  color: var(--error-bg, #c01c28);
+}
+
+.asset-card-reload {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-2);
+  background-color: rgb(0 0 0 / 45%);
+  color: var(--card-fg);
+  cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover,
+  &:focus-visible {
+    background-color: rgb(0 0 0 / 60%);
+  }
+
+  &:focus-visible {
+    outline: var(--border-size-2) solid var(--accent-bg);
+    outline-offset: -2px;
+  }
+
+  svg {
+    width: 28px;
+    height: 28px;
+  }
+}

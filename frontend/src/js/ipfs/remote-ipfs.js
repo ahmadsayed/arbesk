@@ -82,10 +82,26 @@ async function getManifestChain(cid, maxDepth = 50) {
   return chain;
 }
 
+/**
+ * Lightweight reachability probe for a CID on the configured gateway.
+ * Returns true only if the gateway responds with a 2xx status.
+ */
+async function isIpfsCidReachable(cid) {
+  if (!cid) return false;
+  try {
+    const url = `${GATEWAY_URL}${cid}`;
+    const response = await fetch(url, { method: "HEAD", cache: "no-store" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export {
   getFromRemoteIPFS,
   getBase64FromRemoteIPFS,
   getBlobFromRemoteIPFS,
   getArrayBufferFromRemoteIPFS,
   getManifestChain,
+  isIpfsCidReachable,
 };

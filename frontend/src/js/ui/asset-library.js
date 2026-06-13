@@ -183,9 +183,20 @@ function createAssetCard(tokenId, role) {
   });
 
   const thumbnailEl = document.createElement("div");
-  thumbnailEl.className =
-    "asset-card-thumbnail asset-card-thumbnail-empty";
+  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
   thumbnailEl.textContent = "✦";
+
+  // Reload overlay that appears when metadata fails to load
+  const reloadBtn = document.createElement("button");
+  reloadBtn.className = "asset-card-reload";
+  reloadBtn.type = "button";
+  reloadBtn.title = "Retry loading asset metadata";
+  reloadBtn.setAttribute("aria-label", "Retry loading asset metadata");
+  reloadBtn.hidden = true;
+  reloadBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
+  </svg>`;
+  thumbnailEl.appendChild(reloadBtn);
 
   const nameEl = document.createElement("div");
   nameEl.className = "asset-card-name";
@@ -237,7 +248,12 @@ function createAssetCard(tokenId, role) {
   item.appendChild(meta);
   item.appendChild(actions);
 
-  loadAssetMetadata(tokenId, nameEl, thumbnailEl);
+  const runLoad = () => loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item);
+  reloadBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    runLoad();
+  });
+  runLoad();
   return item;
 }
 
@@ -272,9 +288,16 @@ async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
   }
 }
 
-async function loadAssetMetadata(tokenId, nameEl, thumbnailEl) {
+async function loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item) {
   const contract = getContract();
   if (!contract) return;
+
+  nameEl.textContent = `Loading… #${tokenId}`;
+  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
+  thumbnailEl.classList.remove("asset-card-thumbnail-error");
+  item?.classList.remove("asset-card-error");
+  if (reloadBtn) reloadBtn.hidden = true;
+
   try {
     const cid = await contract.methods.tokenURI(tokenId).call();
     if (!cid) {
@@ -287,7 +310,10 @@ async function loadAssetMetadata(tokenId, nameEl, thumbnailEl) {
     await renderAssetThumbnail(manifest.thumbnail, thumbnailEl, assetName);
   } catch (err) {
     console.warn("Failed to load asset metadata for token", tokenId, err);
-    nameEl.textContent = `Unnamed Asset #${tokenId}`;
+    nameEl.textContent = `Asset #${tokenId} (unreachable)`;
+    item?.classList.add("asset-card-error");
+    thumbnailEl.classList.add("asset-card-thumbnail-error");
+    if (reloadBtn) reloadBtn.hidden = false;
   }
 }
 

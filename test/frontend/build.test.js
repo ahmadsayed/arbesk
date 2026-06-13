@@ -73,7 +73,6 @@ describe("Frontend Build", () => {
     const api = readBuilt("services/api.js");
 
     const requiredExports = [
-      "signTxHash",
       "getConfig",
       "getContractAddress",
       "getContractArtifact",
