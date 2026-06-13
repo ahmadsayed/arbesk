@@ -4,6 +4,8 @@
  * this module provides the clean scene-level UX event surface.
  */
 
+import { emit, on, EVENTS } from "../events/registry.js";
+
 const MIME = "application/x-arbesk-linked-asset";
 const viewport = document.getElementById("viewport");
 const overlay = document.getElementById("assetDropOverlay");
@@ -57,22 +59,14 @@ if (viewport) {
     if (!payload) return;
 
     event.preventDefault();
-    document.dispatchEvent(
-      new CustomEvent("asset:linkedDropped", {
-        detail: {
-          ...payload,
-          clientX: event.clientX,
-          clientY: event.clientY,
-        },
-      })
-    );
+    emit(EVENTS.ASSET_LINKED_DROPPED, {
+      ...payload,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
   });
 }
 
-document.addEventListener("asset:addLinkedRequested", (event) => {
-  document.dispatchEvent(
-    new CustomEvent("asset:linkedDropped", {
-      detail: event.detail,
-    })
-  );
+on(EVENTS.ASSET_ADD_LINKED_REQUESTED, (event) => {
+  emit(EVENTS.ASSET_LINKED_DROPPED, event.detail);
 });

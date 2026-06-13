@@ -8,6 +8,7 @@
 
 import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 
 const DEPTH_INDENT = 1; // rem per level
 
@@ -36,9 +37,9 @@ function initOutliner() {
   }
 
   // Listen for scene updates
-  document.addEventListener("scene:ready", onSceneReady);
-  document.addEventListener("scene:empty", onSceneEmpty);
-  document.addEventListener("asset:draftSaved", () => refreshOutliner());
+  on(EVENTS.SCENE_READY, onSceneReady);
+  on(EVENTS.SCENE_EMPTY, onSceneEmpty);
+  on(EVENTS.ASSET_DRAFT_SAVED, () => refreshOutliner());
 
   // Drag-and-drop from library
   outlinerTree.addEventListener("dragover", (e) => {
@@ -209,9 +210,7 @@ function selectNode(nodeId) {
   if (el) el.classList.add("selected");
 
   // Dispatch for inspector / viewport sync
-  document.dispatchEvent(
-    new CustomEvent("outliner:nodeSelected", { detail: { nodeId } })
-  );
+  emit(EVENTS.OUTLINER_NODE_SELECTED, { nodeId });
 }
 
 function clearSelection() {
@@ -228,11 +227,10 @@ function clearSelection() {
 
 function diveIntoChild(node) {
   if (!node.child_ref) return;
-  document.dispatchEvent(
-    new CustomEvent("nesting:diveRequested", {
-      detail: { childRef: node.child_ref, nodeId: node.node_id },
-    })
-  );
+  emit(EVENTS.NESTING_DIVE_REQUESTED, {
+    childRef: node.child_ref,
+    nodeId: node.node_id,
+  });
 }
 
 function onAddChild() {
@@ -242,11 +240,7 @@ function onAddChild() {
 
 async function onRemoveSelected() {
   if (!selectedNodeId) return;
-  document.dispatchEvent(
-    new CustomEvent("outliner:removeRequested", {
-      detail: { nodeId: selectedNodeId },
-    })
-  );
+  emit(EVENTS.OUTLINER_REMOVE_REQUESTED, { nodeId: selectedNodeId });
 }
 
 // ─── Drag & Drop from Library ────────────────────────────────────────
@@ -275,18 +269,14 @@ function onDropFromLibrary(e) {
   try {
     const payload = JSON.parse(raw);
     if (payload?.type === "linked_asset" && payload.token_id) {
-      document.dispatchEvent(
-        new CustomEvent("asset:linkedDropped", {
-          detail: {
-            type: "linked_asset",
-            token_id: String(payload.token_id),
-            standard: payload.standard || "ERC721",
-            resolution: payload.resolution || "latest",
-            chainId: payload.chainId,
-            contractAddress: payload.contractAddress,
-          },
-        })
-      );
+      emit(EVENTS.ASSET_LINKED_DROPPED, {
+        type: "linked_asset",
+        token_id: String(payload.token_id),
+        standard: payload.standard || "ERC721",
+        resolution: payload.resolution || "latest",
+        chainId: payload.chainId,
+        contractAddress: payload.contractAddress,
+      });
     }
   } catch {
     // ignore

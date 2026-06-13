@@ -14,6 +14,7 @@
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { contract } from "../blockchain/wallet.js";
 import { getManifestHistory } from "../services/api.js";
+import { on, EVENTS } from "../events/registry.js";
 
 // ─── DOM References ───
 const historySection = document.getElementById("assetHistory");
@@ -230,7 +231,7 @@ function _initSlider() {
 
 // ─── Event Listeners ───
 
-document.addEventListener("scene:ready", (e) => {
+on(EVENTS.SCENE_READY, (e) => {
   const manifestCid = e.detail?.manifestCid || window.activeAssetManifestCid;
   if (!manifestCid) return;
 
@@ -248,23 +249,23 @@ document.addEventListener("scene:ready", (e) => {
   _refresh();
 });
 
-document.addEventListener("wallet:connected", () => {
+on(EVENTS.WALLET_CONNECTED, () => {
   if (window.activeAssetManifestCid && !isHistoryNavigation) {
     _refresh();
   }
 });
 
-document.addEventListener("asset:published", () => {
+on(EVENTS.ASSET_PUBLISHED, () => {
   // Re-check published CID after mint/update
   setTimeout(_refresh, 500);
 });
 
-document.addEventListener("asset:draftSaved", () => {
+on(EVENTS.ASSET_DRAFT_SAVED, () => {
   // Refresh chain after a new version is saved (no blockchain event)
   _refresh();
 });
 
-document.addEventListener("scene:empty", () => {
+on(EVENTS.SCENE_EMPTY, () => {
   chainCache = [];
   chainRootCid = null;
   activeCid = null;

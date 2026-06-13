@@ -7,6 +7,7 @@
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 
 const MAX_DEPTH = 5;
 
@@ -53,7 +54,7 @@ function initNesting() {
   });
 
   // Listen for dive requests
-  document.addEventListener("nesting:diveRequested", onDiveRequested);
+  on(EVENTS.NESTING_DIVE_REQUESTED, onDiveRequested);
 
   // Update publish button visibility based on depth
   updatePublishVisibility();
@@ -101,11 +102,7 @@ async function onDiveRequested(e) {
     updatePublishVisibility();
     updateBottomBarDepth();
 
-    document.dispatchEvent(
-      new CustomEvent("nesting:didDive", {
-        detail: { depth: currentDepth, name: manifest.name },
-      })
-    );
+    emit(EVENTS.NESTING_DID_DIVE, { depth: currentDepth, name: manifest.name });
   } catch (err) {
     console.error("[NESTING] dive failed:", err);
     alert("Failed to open child world: " + err.message);
@@ -134,11 +131,7 @@ async function ascendOneLevel() {
     updatePublishVisibility();
     updateBottomBarDepth();
 
-    document.dispatchEvent(
-      new CustomEvent("nesting:didAscend", {
-        detail: { depth: currentDepth, name: prev.name },
-      })
-    );
+    emit(EVENTS.NESTING_DID_ASCEND, { depth: currentDepth, name: prev.name });
   } catch (err) {
     console.error("[NESTING] ascend failed:", err);
     alert("Failed to return to parent world: " + err.message);
@@ -231,7 +224,7 @@ function resetNesting() {
   updatePublishVisibility();
 }
 
-document.addEventListener("scene:empty", resetNesting);
+on(EVENTS.SCENE_EMPTY, resetNesting);
 
 // ─── Exports ─────────────────────────────────────────────────────────
 

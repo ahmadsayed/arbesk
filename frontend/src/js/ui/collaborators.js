@@ -20,6 +20,7 @@ import {
 } from "../blockchain/wallet.js";
 import { showConfirmDialog } from "./dialog.js";
 import { truncateAddress } from "../utils/format.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 
 // ─── DOM refs ──────────────────────────────────────────────────────────
 
@@ -51,10 +52,10 @@ function initCollaborators() {
   }
 
   // Refresh team panel when asset loads or publishes
-  document.addEventListener("asset:published", () => refreshTeamPanel());
-  document.addEventListener("wallet:connected", () => refreshTeamPanel());
-  document.addEventListener("asset:draftSaved", () => refreshTeamPanel());
-  document.addEventListener("scene:ready", () => refreshTeamPanel());
+  on(EVENTS.ASSET_PUBLISHED, () => refreshTeamPanel());
+  on(EVENTS.WALLET_CONNECTED, () => refreshTeamPanel());
+  on(EVENTS.ASSET_DRAFT_SAVED, () => refreshTeamPanel());
+  on(EVENTS.SCENE_READY, () => refreshTeamPanel());
 }
 
 // ─── Visibility ────────────────────────────────────────────────────────
@@ -282,7 +283,7 @@ async function onBurnAsset() {
     window.activeAssetManifestCid = null;
     hideTeamPanel();
     if (burnAssetBtn) burnAssetBtn.hidden = true;
-    document.dispatchEvent(new CustomEvent("asset:cleared"));
+    emit(EVENTS.ASSET_CLEARED);
   }
 }
 

@@ -8,6 +8,7 @@
  */
 
 import { truncateAddress, truncateCid } from "../utils/format.js";
+import { on, EVENTS } from "../events/registry.js";
 
 const ACTIVITY_CONFIG = {
   GENERATION: { label: "Generation", icon: "✦" },
@@ -196,9 +197,9 @@ function initLedgerPanel() {
   }
 
   // Refresh when the scene changes or the asset is saved/published
-  document.addEventListener("scene:ready", () => loadActivities());
-  document.addEventListener("asset:draftSaved", () => loadActivities());
-  document.addEventListener("asset:published", () => loadActivities());
+  on(EVENTS.SCENE_READY, () => loadActivities());
+  on(EVENTS.ASSET_DRAFT_SAVED, () => loadActivities());
+  on(EVENTS.ASSET_PUBLISHED, () => loadActivities());
 
   initialized = true;
   loadActivities();

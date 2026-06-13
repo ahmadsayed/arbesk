@@ -17,6 +17,7 @@ import {
 } from "../blockchain/wallet.js";
 import { showToast } from "./toasts.js";
 import { generateAsset, ApiError, getOrCreateSession } from "../services/api.js";
+import { on, EVENTS } from "../events/registry.js";
 
 // ─── DOM References ───
 const chatHistory = document.getElementById("chatHistory");
@@ -230,20 +231,20 @@ promptInput.addEventListener("input", () => {
   promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + "px";
 });
 
-document.addEventListener("scene:ready", (event) => {
+on(EVENTS.SCENE_READY, (event) => {
   const name = event.detail?.manifest?.name || window.activeAssetName;
   if (name) syncAssetNameDisplay(name);
 });
 
-document.addEventListener("scene:empty", () => {
+on(EVENTS.SCENE_EMPTY, () => {
   syncAssetNameDisplay();
 });
 
-document.addEventListener("wallet:connected", () => {
+on(EVENTS.WALLET_CONNECTED, () => {
   updateGenerateHint();
 });
 
-document.addEventListener("wallet:disconnected", () => {
+on(EVENTS.WALLET_DISCONNECTED, () => {
   updateGenerateHint();
 });
 
