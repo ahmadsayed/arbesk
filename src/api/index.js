@@ -1,9 +1,10 @@
-import { Router } from "express";
+import express from "express";
 import path from "path";
 import url from "url";
 import fs from "fs";
 import { create } from "ipfs-http-client";
 
+const Router = express.Router;
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 // Dynamic import to ensure process.env is populated before config.js reads it.

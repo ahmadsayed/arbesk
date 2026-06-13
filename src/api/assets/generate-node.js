@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import {
   CONTRACT_ADDRESS,
   API_URL,
@@ -13,6 +13,7 @@ import rateLimit from "../rate-limiter.js";
 import { getSceneNodes, bumpManifestVersion } from "../manifest-utils.js";
 import { catManifest } from "../ipfs-utils.js";
 
+const Router = express.Router;
 const usedTxHashes = new Set();
 
 export default function generateAssetNode(ipfs) {

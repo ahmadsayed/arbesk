@@ -1,8 +1,9 @@
-import { Router } from 'express';
+import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import url from 'url';
 
+const Router = express.Router;
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const ABI_MAP = {

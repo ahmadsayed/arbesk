@@ -11,10 +11,12 @@
  * for eliminating the per-generation MetaMask pop-up.
  */
 
-import { Router } from "express";
+import express from "express";
 import crypto from "crypto";
 import { web3 } from "../config.js";
 import { verifySiwe } from "./siwe-verify.js";
+
+const Router = express.Router;
 
 // ─── Session Store ──────────────────────────────────────────────────────────
 
