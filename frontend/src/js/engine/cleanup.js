@@ -66,6 +66,15 @@ export function clearScene() {
     return;
   }
 
+  // Detach the transform gizmo before disposing its target node.
+  if (state.gizmoManager) {
+    try {
+      state.gizmoManager.attachToNode(null);
+    } catch (_) {
+      // ignore
+    }
+  }
+
   state.scene.stopAllAnimations();
 
   // Capture the shared material reference so we don't cascade-dispose it

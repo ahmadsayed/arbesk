@@ -48,4 +48,8 @@ export const state = {
   highlightedSubMeshName: null,
   /** @type {BABYLON.ArcRotateCamera|null} */
   camera: null,
+  /** @type {BABYLON.GizmoManager|null} */
+  gizmoManager: null,
+  /** @type {'translate' | 'rotate' | 'scale' | null} */
+  transformMode: null,
 };

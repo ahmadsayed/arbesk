@@ -249,6 +249,16 @@ function initEngine() {
       console.warn("[SCENE] viewport gizmo init failed:", e.message);
     });
 
+  // Transform gizmo (move/rotate/scale) for the selected node.
+  import("../ui/transform-gizmo.js")
+    .then(({ initTransformGizmo }) => {
+      initTransformGizmo(state.scene, camera);
+      console.log("[SCENE] transform gizmo initialized");
+    })
+    .catch((e) => {
+      console.warn("[SCENE] transform gizmo init failed:", e.message);
+    });
+
   state.engine.runRenderLoop(() => state.scene.render());
 
   window.addEventListener("resize", () => state.engine.resize());

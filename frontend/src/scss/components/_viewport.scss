@@ -78,6 +78,47 @@
   }
 }
 
+// ── Transform toolbar ──────────────────────────────────────────────
+// Floating mode switcher for the Babylon GizmoManager (move/rotate/scale).
+// Rendered by frontend/src/js/ui/transform-gizmo.js.
+.transform-toolbar {
+  position: absolute;
+  bottom: var(--size-3);
+  left: var(--size-3);
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: var(--size-1);
+  background-color: var(--surface-overlay);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+  z-index: 20;
+
+  .btn {
+    color: var(--dim-fg);
+
+    &:hover:not(:disabled) {
+      color: var(--sidebar-fg);
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    &.active {
+      background-color: var(--accent-bg);
+      color: var(--accent-fg);
+      border-color: var(--accent-bg);
+
+      &:hover:not(:disabled) {
+        filter: brightness(1.05);
+      }
+    }
+  }
+}
+
 // ── Viewport orientation gizmo ─────────────────────────────────────
 // Blender-style 2D X/Y/Z overlay in the top-right corner. Sits above
 // the 3D canvas but never intercepts pointer events.
