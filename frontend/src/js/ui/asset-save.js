@@ -456,6 +456,53 @@ async function prepareManifestForWrite(assetName) {
   return { manifest, prevCid: latestCid, prevManifest: prevManifest || baseManifest };
 }
 
+async function saveAssetDraftCore(assetName, { captureThumbnail = false } = {}) {
+  const prepared = await prepareManifestForWrite(assetName);
+  if (!prepared) {
+    return { ok: false, reason: "empty" };
+  }
+
+  if (captureThumbnail) {
+    try {
+      const thumbnail = await captureAssetThumbnail();
+      if (thumbnail) {
+        prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
+          ? { ...thumbnail, cid: prepared.manifest.thumbnail.cid }
+          : thumbnail;
+      }
+    } catch (thumbnailError) {
+      console.warn("[SAVE] thumbnail capture skipped:", thumbnailError.message);
+    }
+  }
+
+  if (
+    prepared.prevManifest &&
+    manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
+  ) {
+    return {
+      ok: false,
+      reason: "no-changes",
+      cid: prepared.prevCid,
+      manifest: prepared.prevManifest,
+    };
+  }
+
+  const { cid } = await saveManifest(prepared.manifest);
+  window.latestAssetManifestCid = cid;
+  window.activeAssetManifestCid = cid;
+
+  clearPendingChildRefs();
+  clearPendingPostProcessorEdits();
+  clearPendingSourceColorEdits();
+
+  return {
+    ok: true,
+    cid,
+    manifest: prepared.manifest,
+    prevCid: prepared.prevCid,
+  };
+}
+
 async function onSaveAssetDraft() {
   if (isSaving) return;
   if (!requireWallet()) return;
@@ -470,40 +517,27 @@ async function onSaveAssetDraft() {
 
   try {
     const assetName = await resolveAssetName();
-    const prepared = await prepareManifestForWrite(assetName);
-    if (!prepared) {
-      announceStatus("No asset data to save.");
-      showToast({
-        type: "warning",
-        title: "Nothing to Save",
-        message: "Generate an asset or add linked worlds first.",
-      });
+    const result = await saveAssetDraftCore(assetName);
+
+    if (!result.ok) {
+      if (result.reason === "empty") {
+        announceStatus("No asset data to save.");
+        showToast({
+          type: "warning",
+          title: "Nothing to Save",
+          message: "Generate an asset or add linked worlds first.",
+        });
+      } else if (result.reason === "no-changes") {
+        showToast({
+          type: "info",
+          title: "No Changes",
+          message: "Nothing new to save.",
+        });
+      }
       return;
     }
 
-    if (
-      prepared.prevManifest &&
-      manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
-    ) {
-      showToast({
-        type: "info",
-        title: "No Changes",
-        message: "Nothing new to save.",
-      });
-      isSaving = false;
-      if (saveBtn) saveBtn.disabled = false;
-      if (saveBtnText) saveBtnText.textContent = "Save Draft";
-      updateButtonState();
-      return;
-    }
-
-    const { cid } = await saveManifest(prepared.manifest);
-    window.latestAssetManifestCid = cid;
-    window.activeAssetManifestCid = cid;
-
-    clearPendingChildRefs();
-    clearPendingPostProcessorEdits();
-    clearPendingSourceColorEdits();
+    const { cid } = result;
 
     // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
     // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
@@ -561,50 +595,31 @@ async function onPublishAsset() {
       updateButtonState();
       return;
     }
-    const prepared = await prepareManifestForWrite(assetName);
-    if (!prepared) {
-      announceStatus("No asset data to publish.");
-      showToast({
-        type: "warning",
-        title: "Nothing to Publish",
-        message: "Generate an asset or add linked worlds first.",
-      });
-      return;
-    }
 
-    try {
-      const thumbnail = await captureAssetThumbnail();
-      if (thumbnail) {
-        prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
-          ? { ...thumbnail, cid: prepared.manifest.thumbnail.cid }
-          : thumbnail;
+    // Save first: every Besk it creates a new draft version, then publishes it.
+    const result = await saveAssetDraftCore(assetName, { captureThumbnail: true });
+
+    if (!result.ok) {
+      if (result.reason === "empty") {
+        announceStatus("No asset data to publish.");
+        showToast({
+          type: "warning",
+          title: "Nothing to Publish",
+          message: "Generate an asset or add linked worlds first.",
+        });
+      } else if (result.reason === "no-changes") {
+        showToast({
+          type: "info",
+          title: "No Changes",
+          message: "Nothing new to publish.",
+        });
       }
-    } catch (thumbnailError) {
-      console.warn(
-        "[PUBLISH] thumbnail capture skipped:",
-        thumbnailError.message
-      );
-    }
-
-    if (
-      prepared.prevManifest &&
-      manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
-    ) {
-      showToast({
-        type: "info",
-        title: "No Changes",
-        message: "Nothing new to publish.",
-      });
-      isPublishing = false;
-      if (publishBtn) publishBtn.disabled = false;
-      if (publishBtnText) publishBtnText.textContent = "Besk it";
-      updateButtonState();
       return;
     }
+
+    const { cid } = result;
 
     announceStatus("Confirm transaction in MetaMask…");
-    const { cid } = await publishManifest(prepared.prevCid, prepared.manifest);
-
     if (window.activeAssetTokenId) {
       const txHash = await updateAssetURI(window.activeAssetTokenId, cid);
       if (!txHash) throw new Error("Republish transaction failed");
@@ -628,11 +643,7 @@ async function onPublishAsset() {
       announceStatus("Asset published and minted.");
     }
 
-    window.latestAssetManifestCid = cid;
-    window.activeAssetManifestCid = cid;
-
-    clearPendingChildRefs();
-    clearPendingPostProcessorEdits();
+    // latestCid / activeCid / pending edits were already updated by saveAssetDraftCore.
 
     document.dispatchEvent(
       new CustomEvent("asset:published", {
