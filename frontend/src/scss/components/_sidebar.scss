@@ -10,9 +10,9 @@
   flex-shrink: 0;
   width: var(--sidebar-width);
   height: 100%;
-  background-color: var(--sidebar-bg);
+  background: var(--gradient-sidebar);
   color: var(--sidebar-fg);
-  border-right: var(--border-size-1) solid var(--border-color);
+  border-right: var(--border-size-1) solid var(--border-hairline);
   overflow: hidden;
   transition: width var(--duration-moderate) var(--ease-out-3);
 
@@ -30,8 +30,8 @@
   width: 48px;
   padding: var(--size-2) 0;
   gap: var(--size-1);
-  border-right: var(--border-size-1) solid var(--border-color);
-  background-color: var(--headerbar-bg);
+  border-right: var(--border-size-1) solid var(--border-hairline);
+  background: var(--gradient-headerbar);
 }
 
 .sidebar-switcher-bottom {
@@ -40,7 +40,7 @@
   justify-content: center;
   gap: var(--size-1);
   padding: var(--size-1) 0;
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--border-hairline);
 }
 
 .sidebar-switcher-toggle {
@@ -55,13 +55,13 @@
               color var(--duration-quick) var(--ease-out-3);
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
     color: var(--sidebar-fg);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   svg {
@@ -83,18 +83,19 @@
               color var(--duration-quick) var(--ease-out-3);
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
     color: var(--sidebar-fg);
   }
 
   &.active {
-    background-color: var(--accent-bg);
+    background: var(--gradient-accent);
     color: var(--accent-fg);
+    box-shadow: var(--glow-accent);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   svg {
@@ -156,7 +157,8 @@
   padding: var(--size-3) var(--size-3);
   flex-shrink: 0;
 
-  h2 {
+  h2,
+  h3 {
     font-size: var(--font-size-2);
     font-weight: var(--font-weight-6);
   }
@@ -204,13 +206,13 @@
   color: var(--dim-fg);
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
     color: var(--sidebar-fg);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 }
 

@@ -4,7 +4,11 @@
  */
 
 import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { publishAsset, updateAssetURI } from "../blockchain/wallet.js";
+import {
+  contract as walletContract,
+  publishAsset,
+  updateAssetURI,
+} from "../blockchain/wallet.js";
 import { showDialog } from "./dialog.js";
 import {
   clearScene,
@@ -235,6 +239,36 @@ async function decomposeManifestNodes(manifest) {
   return decomposed;
 }
 
+/**
+ * Resolve the canonical "latest" manifest CID for versioning.
+ * When the asset is tokenized, the blockchain is the source of truth —
+ * always use the on-chain tokenURI, ignoring any ?manifest= query param.
+ * For drafts without a token, fall back to the in-memory latest tracker.
+ */
+async function resolveLatestManifestCid() {
+  const tokenId = window.activeAssetTokenId;
+  if (tokenId) {
+    try {
+      const c = walletContract || window.contract;
+      if (c) {
+        const onChainCid = await c.methods.tokenURI(String(tokenId)).call();
+        if (onChainCid) {
+          console.log(
+            `[SAVE] using on-chain tokenURI for token #${tokenId} → ${onChainCid}`
+          );
+          return onChainCid;
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[SAVE] failed to read on-chain tokenURI for #${tokenId}:`,
+        err.message
+      );
+    }
+  }
+  return window.latestAssetManifestCid || window.activeAssetManifestCid || null;
+}
+
 async function prepareManifestForWrite(assetName) {
   let manifest;
   const pendingRefs = getPendingChildRefs();
@@ -373,18 +407,41 @@ async function prepareManifestForWrite(assetName) {
     );
   }
 
-  const prevCid = window.activeAssetManifestCid;
+  // Determine the manifest that supplies the version number and chain link.
+  // When the user has navigated to an older version (v2 of v1..v6), edits
+  // should still append to the tip of the chain as the next linear version
+  // (v7), not branch off as v3. Use latestAssetManifestCid as the previous
+  // link; fall back to the currently loaded manifest if no latest is tracked.
+  const activeCid = window.activeAssetManifestCid;
+  const latestCid = await resolveLatestManifestCid();
+  console.log(
+    `[SAVE] versioning base | active=${activeCid} latest=${window.latestAssetManifestCid} onChain=${window.activeAssetTokenId || "none"} chosenPrev=${latestCid}`
+  );
+
   let prevManifest = null;
-  if (prevCid) {
+  let baseManifest = null;
+
+  // baseManifest is what we compare against to detect no-op edits.
+  if (activeCid) {
     try {
-      prevManifest = await getFromRemoteIPFS(prevCid);
-      manifest.version = (prevManifest.version || 0) + 1;
-      manifest.prev_asset_manifest_cid = prevCid;
+      baseManifest = await getFromRemoteIPFS(activeCid);
     } catch {
-      advanceManifestVersion(manifest, prevCid);
+      baseManifest = null;
     }
   }
-  return { manifest, prevCid, prevManifest };
+
+  // prevManifest is the tip of the chain that supplies version + prev link.
+  if (latestCid) {
+    try {
+      prevManifest = await getFromRemoteIPFS(latestCid);
+      manifest.version = (prevManifest.version || 0) + 1;
+      manifest.prev_asset_manifest_cid = latestCid;
+    } catch {
+      advanceManifestVersion(manifest, latestCid);
+    }
+  }
+
+  return { manifest, prevCid: latestCid, prevManifest: baseManifest };
 }
 
 async function onSaveAssetDraft() {
@@ -432,14 +489,19 @@ async function onSaveAssetDraft() {
     }
 
     const { cid } = await saveManifest(prepared.manifest);
-    window.latestAssetManifestCid = window.activeAssetManifestCid;
+    window.latestAssetManifestCid = cid;
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();
     clearPendingPostProcessorEdits();
     clearPendingSourceColorEdits();
 
-    updateUrlManifest(cid, window.activeAssetTokenId || null);
+    // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
+    // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
+    // stashing a draft manifest in query params.
+    if (!window.activeAssetTokenId) {
+      updateUrlManifest(cid);
+    }
 
     document.dispatchEvent(
       new CustomEvent("asset:draftSaved", { detail: { cid } })
@@ -546,6 +608,8 @@ async function onPublishAsset() {
     if (window.activeAssetTokenId) {
       const txHash = await updateAssetURI(window.activeAssetTokenId, cid);
       if (!txHash) throw new Error("Republish transaction failed");
+      // Keep the URL clean and anchored to the token, not a specific manifest CID.
+      updateUrlAsset(window.activeAssetTokenId);
       announceStatus("Asset republished successfully.");
     } else {
       const tokenId =
@@ -564,7 +628,7 @@ async function onPublishAsset() {
       announceStatus("Asset published and minted.");
     }
 
-    window.latestAssetManifestCid = window.activeAssetManifestCid;
+    window.latestAssetManifestCid = cid;
     window.activeAssetManifestCid = cid;
 
     clearPendingChildRefs();

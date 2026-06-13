@@ -9,8 +9,14 @@
   min-height: var(--messagebar-min-height);
   padding: var(--size-2) var(--size-3);
   background-color: var(--card-bg);
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--border-hairline);
   flex-shrink: 0;
+  transition: box-shadow var(--duration-quick) var(--ease-out-3);
+
+  // The whole bar lights up gently while composing a prompt.
+  &:focus-within {
+    box-shadow: var(--glow-accent);
+  }
 }
 
 .messagebar-input {
@@ -34,7 +40,7 @@
   &:focus {
     outline: none;
     border-color: var(--accent-bg);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
+    box-shadow: var(--focus-ring);
   }
 }
 
@@ -60,8 +66,8 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   svg {

@@ -283,8 +283,31 @@ function highlightActiveAsset() {
   });
 }
 
+// Rich disconnected empty-state, mirrors the static markup in studio.pug so
+// the Connect affordance reappears after a disconnect.
+const DISCONNECTED_GALLERY_HTML = `
+  <div class="empty-state">
+    <div class="empty-state-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+        <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
+      </svg>
+    </div>
+    <p class="empty-state-title">No assets yet</p>
+    <p class="empty-state-sub">Connect your wallet to browse and open the asset tokens you own.</p>
+    <button id="galleryConnectBtn" class="empty-state-action btn btn-primary btn-sm" type="button">Connect Wallet</button>
+  </div>`;
+
 function initAssetLibrary() {
   assetLibraryBody = document.getElementById("assetLibraryBody");
+
+  // Delegated: the gallery Connect affordance mirrors the headerbar button.
+  assetLibraryBody?.addEventListener("click", (e) => {
+    if (e.target.closest("#galleryConnectBtn")) {
+      document.getElementById("connectWalletBtn")?.click();
+    }
+  });
 }
 
 document.addEventListener("scene:ready", highlightActiveAsset);
@@ -306,8 +329,7 @@ document.addEventListener("wallet:connected", async () => {
 
 document.addEventListener("wallet:disconnected", () => {
   if (assetLibraryBody) {
-    assetLibraryBody.innerHTML =
-      '<p class="asset-library-empty">Connect wallet to browse your asset tokens.</p>';
+    assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }
 });
 

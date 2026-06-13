@@ -24,12 +24,12 @@
 
   &:hover {
     border-color: var(--dim-fg);
-    background-color: var(--popover-bg);
+    background-color: var(--surface-overlay-hover);
   }
 
   &.active {
     border-color: var(--accent-bg);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-bg) 20%, transparent);
+    box-shadow: var(--glow-accent);
   }
 
   &[draggable="true"] {

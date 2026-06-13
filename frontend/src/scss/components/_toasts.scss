@@ -30,11 +30,12 @@
   align-items: flex-start;
   gap: var(--size-2);
   padding: var(--size-3);
-  background-color: var(--popover-bg);
+  background: var(--popover-glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
   color: var(--popover-fg);
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--border-hairline);
   border-radius: var(--radius-3);
-  box-shadow: var(--shadow-5);
+  box-shadow: var(--shadow-4);
   position: relative;
   overflow: hidden;
 
@@ -118,8 +119,8 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 }
 
@@ -144,12 +145,12 @@
 
   &:hover {
     color: var(--popover-fg);
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 }
 

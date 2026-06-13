@@ -25,12 +25,12 @@
   transition: background-color var(--duration-quick) var(--ease-out-3);
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 }
 

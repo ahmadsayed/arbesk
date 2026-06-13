@@ -23,9 +23,10 @@
   width: min(400px, calc(100vw - var(--size-7) * 2));
   max-height: calc(100vh - var(--size-10) * 2);
   overflow-y: auto;
-  background: var(--popover-bg);
+  background: var(--popover-glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
   color: var(--popover-fg);
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--border-hairline);
   border-radius: var(--radius-3);
   box-shadow: var(--shadow-5);
   animation: dialog-in var(--duration-moderate) var(--ease-out-3);

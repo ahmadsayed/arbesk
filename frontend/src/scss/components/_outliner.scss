@@ -35,17 +35,18 @@
   min-height: 32px;
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
   }
 
   &.selected {
     background-color: color-mix(in srgb, var(--accent-bg) 20%, transparent);
     color: var(--sidebar-fg);
+    box-shadow: inset 2px 0 0 var(--accent-bg);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: -2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 }
 

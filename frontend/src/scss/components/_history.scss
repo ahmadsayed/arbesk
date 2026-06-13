@@ -1,16 +1,27 @@
 // ═══════════════════════════════════════════════════════════════════
-// History Timeline — pill-shaped version scrubber in header bar
+// Asset Version Scrubber — headerbar slider + detail popover
+//
+// The single version control: a GtkScale-style slider scrubs the asset's
+// manifest chain; a glass popover surfaces per-version detail on hover/focus.
 // ═══════════════════════════════════════════════════════════════════
 
 .history {
   display: flex;
   align-items: center;
-  gap: var(--size-1);
+  gap: var(--size-2);
   padding: 0 var(--size-3);
-  overflow: hidden;
+  margin-left: auto;
+  margin-right: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 420px;
 
   &[hidden] {
     display: none;
+  }
+
+  &.loading {
+    opacity: 0.7;
   }
 }
 
@@ -22,66 +33,100 @@
   letter-spacing: 0.06em;
   white-space: nowrap;
   flex-shrink: 0;
-  margin-right: var(--size-1);
 }
 
-// Track — horizontal scrollable pill
-.history-track {
-  display: flex;
-  align-items: center;
+.history-slider-wrap {
+  position: relative;
   flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  gap: var(--size-1);
-  padding: var(--size-1) var(--size-2);
-  background-color: var(--card-bg);
-  border: var(--border-size-1) solid var(--border-color);
-  border-radius: var(--radius-round);
-  cursor: grab;
-  user-select: none;
-  min-height: 36px;
-
-  &:active {
-    cursor: grabbing;
-  }
-}
-
-// Individual version node
-.history-node {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  min-width: 80px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-7);
-  color: var(--dim-fg);
-  background-color: var(--popover-bg);
-  border: 2px solid var(--border-color);
-  cursor: pointer;
-  transition: transform var(--duration-quick) var(--ease-out-3),
-              background-color var(--duration-quick) var(--ease-out-3),
-              border-color var(--duration-quick) var(--ease-out-3);
+}
 
-  &:hover {
-    transform: scale(1.15);
-    border-color: var(--accent-bg);
-    color: var(--sidebar-fg);
+.history-slider {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  margin: 0;
+  background: var(--border-color);
+  border-radius: var(--radius-round);
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-bg);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--headerbar-bg);
+    box-shadow: var(--shadow-1);
+    transition: box-shadow var(--duration-quick) var(--ease-out-3);
+  }
+
+  &::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--accent-bg);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--headerbar-bg);
+    box-shadow: var(--shadow-1);
+    transition: box-shadow var(--duration-quick) var(--ease-out-3);
+  }
+
+  &:hover,
+  &:focus-visible,
+  &:active {
+    &::-webkit-slider-thumb {
+      box-shadow: var(--glow-accent);
+    }
+    &::-moz-range-thumb {
+      box-shadow: var(--glow-accent);
+    }
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    &::-webkit-slider-thumb {
+      box-shadow: var(--focus-ring);
+    }
+    &::-moz-range-thumb {
+      box-shadow: var(--focus-ring);
+    }
   }
+}
 
-  &.active {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
-    border-color: var(--accent-bg);
-    transform: scale(1.25);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
+// When the selected version is the one anchored on-chain, ring the thumb green.
+.history.published .history-slider {
+  &::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-4) 40%, transparent);
+  }
+  &::-moz-range-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-4) 40%, transparent);
+  }
+}
+
+// Detail popover — glass surface. Positioned via JS (position: fixed) so it
+// escapes the headerbar's overflow:hidden clipping.
+.history-detail {
+  position: fixed;
+  z-index: 300;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--font-size-0);
+  color: var(--popover-fg);
+  background: var(--popover-glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: var(--border-size-1) solid var(--border-hairline);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-4);
+  pointer-events: none;
+
+  &[hidden] {
+    display: none;
   }
 }

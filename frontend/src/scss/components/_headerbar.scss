@@ -10,9 +10,9 @@
   gap: var(--size-2);
   height: var(--headerbar-height);
   padding: 0 var(--size-3);
-  background-color: var(--headerbar-bg);
+  background: var(--gradient-headerbar);
   color: var(--headerbar-fg);
-  border-bottom: var(--border-size-1) solid var(--border-color);
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
   flex-shrink: 0;
   user-select: none;
   overflow: hidden;
@@ -60,13 +60,13 @@
   flex-shrink: 0;
 
   &:hover {
-    background-color: var(--card-bg);
+    background-color: var(--surface-overlay-hover);
     color: var(--headerbar-fg);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   &.hidden {
@@ -76,7 +76,7 @@
 
 // Document title area
 .headerbar-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -99,14 +99,13 @@
       cursor: text;
 
       &:hover {
-        background-color: var(--card-bg);
+        background-color: var(--surface-overlay-hover);
       }
 
       &:focus {
-        outline: 2px solid var(--accent-bg);
-        outline-offset: 0;
+        outline: none;
         background-color: var(--view-bg);
-        box-shadow: none;
+        box-shadow: var(--focus-ring);
       }
     }
   }
@@ -154,13 +153,15 @@
   font-weight: var(--font-weight-6);
   font-family: var(--font-mono);
   color: var(--accent-fg);
-  background-color: var(--accent-bg);
+  background: var(--gradient-accent);
   border: var(--border-size-1) solid var(--accent-bg);
   border-radius: var(--radius-round);
+  box-shadow: var(--accent-shadow);
   cursor: pointer;
   white-space: nowrap;
   transition: filter var(--duration-quick) var(--ease-out-3),
               background-color var(--duration-quick) var(--ease-out-3),
+              box-shadow var(--duration-quick) var(--ease-out-3),
               color var(--duration-quick) var(--ease-out-3);
 
   svg {
@@ -168,22 +169,25 @@
   }
 
   &:hover {
-    filter: brightness(1.08);
+    filter: brightness(1.05);
+    box-shadow: var(--accent-shadow), var(--glow-accent);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--accent-shadow), var(--focus-ring);
   }
 
   // Disconnected (idle) state — outlined, not filled
   &.disconnected {
     color: var(--accent-bg);
-    background-color: transparent;
+    background: transparent;
+    box-shadow: none;
 
     &:hover {
       filter: none;
-      background-color: color-mix(in srgb, var(--accent-bg) 12%, transparent);
+      box-shadow: none;
+      background-color: var(--surface-overlay-hover);
     }
   }
 
@@ -226,12 +230,12 @@
   }
 
   &:hover {
-    filter: brightness(1.08);
+    filter: brightness(1.05);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--accent-bg);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   option {
