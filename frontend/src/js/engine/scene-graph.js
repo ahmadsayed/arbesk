@@ -41,6 +41,9 @@ import {
   getPendingPostProcessorEdits,
   clearPendingPostProcessorEdits,
   clearPendingPostProcessorEdit,
+  getPendingTransformEdits,
+  clearPendingTransformEdits,
+  clearPendingTransformEdit,
 } from "./cleanup.js";
 
 // Re-export state and constants
@@ -70,6 +73,9 @@ export {
   getPendingPostProcessorEdits,
   clearPendingPostProcessorEdits,
   clearPendingPostProcessorEdit,
+  getPendingTransformEdits,
+  clearPendingTransformEdits,
+  clearPendingTransformEdit,
 } from "./cleanup.js";
 
 // Re-sync viewport background when the user toggles light / dark mode.

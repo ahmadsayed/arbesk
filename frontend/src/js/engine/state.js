@@ -52,4 +52,12 @@ export const state = {
   gizmoManager: null,
   /** @type {'translate' | 'rotate' | 'scale' | null} */
   transformMode: null,
+  /**
+   * Transform edits (move/rotate/scale) accumulated by the viewport gizmo
+   * but not yet persisted. Keyed by node_id. Picked up by
+   * `asset-save.js → prepareManifestForWrite` and cleared on save.
+   * Value is a 16-element column-major transform_matrix array.
+   * @type {Map<string, number[]>}
+   */
+  pendingTransformEdits: new Map(),
 };

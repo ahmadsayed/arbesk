@@ -18,6 +18,8 @@ import {
   clearPendingChildRefs,
   getPendingPostProcessorEdits,
   clearPendingPostProcessorEdits,
+  getPendingTransformEdits,
+  clearPendingTransformEdits,
 } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 import { decomposeAndStore, isComposite } from "../gltf/decomposer.js";
@@ -283,6 +285,7 @@ async function prepareManifestForWrite(assetName) {
   let manifest;
   const pendingRefs = getPendingChildRefs();
   const pendingPP = getPendingPostProcessorEdits();
+  const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
 
   if (window.activeAssetManifestCid) {
@@ -290,6 +293,7 @@ async function prepareManifestForWrite(assetName) {
   } else if (
     pendingRefs.length > 0 ||
     pendingPP.size > 0 ||
+    pendingTransforms.size > 0 ||
     pendingColors.size > 0
   ) {
     manifest = {
@@ -300,7 +304,7 @@ async function prepareManifestForWrite(assetName) {
       scene: { nodes: [] },
     };
     console.log(
-      `Save: creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingColors.size} pending source color edits`
+      `Save: creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingTransforms.size} pending transform edits / ${pendingColors.size} pending source color edits`
     );
   } else {
     return null;
@@ -407,6 +411,18 @@ async function prepareManifestForWrite(assetName) {
     );
   }
 
+  // Apply viewport gizmo transform edits.
+  // Updates node.transform_matrix so the saved manifest renders the node
+  // in its edited position/rotation/scale on next load.
+  if (pendingTransforms.size > 0) {
+    for (const [nodeId, matrixArray] of pendingTransforms) {
+      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      if (!node) continue;
+      node.transform_matrix = matrixArray;
+      console.log(`Save: applied transform edit | node=${nodeId}`);
+    }
+  }
+
   // Decompose monolithic glTF nodes into composite (ipfs://) format.
   // Only affects glTF nodes that haven't been decomposed yet.
   // Runs on both Save Draft and Publish.
@@ -494,6 +510,7 @@ async function saveAssetDraftCore(assetName, { captureThumbnail = false } = {}) 
 
   clearPendingChildRefs();
   clearPendingPostProcessorEdits();
+  clearPendingTransformEdits();
   clearPendingSourceColorEdits();
 
   return {

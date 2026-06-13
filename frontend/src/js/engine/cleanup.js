@@ -33,6 +33,18 @@ export function clearPendingPostProcessorEdit(nodeId) {
   state.pendingPostProcessorEdits.delete(nodeId);
 }
 
+export function getPendingTransformEdits() {
+  return state.pendingTransformEdits;
+}
+
+export function clearPendingTransformEdits() {
+  state.pendingTransformEdits.clear();
+}
+
+export function clearPendingTransformEdit(nodeId) {
+  state.pendingTransformEdits.delete(nodeId);
+}
+
 /**
  * Dispose all meshes and anchors for a single node.
  */
@@ -142,6 +154,7 @@ export function clearScene() {
 
   state.pendingChildRefs.length = 0;
   state.pendingPostProcessorEdits.clear();
+  state.pendingTransformEdits.clear();
 
   // Clear selection highlight state
   state.highlightedNodeId = null;

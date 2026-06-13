@@ -2,8 +2,9 @@
  * Arbesk Transform Gizmo
  *
  * Viewport controls to translate, rotate, and scale the currently selected
- * node using Babylon.js's built-in GizmoManager. Changes are purely visual
- * in the running scene and are NOT persisted to the manifest or backend.
+ * node using Babylon.js's built-in GizmoManager. Transform edits are staged
+ * in `state.pendingTransformEdits` and persisted to the manifest on the
+ * next Save Draft / Publish.
  */
 
 import { emit, on, EVENTS } from "../events/registry.js";
@@ -45,8 +46,8 @@ function initTransformGizmo(scene, _camera) {
   gizmoManager.clearGizmoOnEmptyPointerEvent = false;
 
   // Planar drag is more useful than single-axis drag for most assets.
-  if (gizmoManager.positionGizmo) {
-    gizmoManager.positionGizmo.planarGizmoEnabled = true;
+  if (gizmoManager.gizmos?.positionGizmo) {
+    gizmoManager.gizmos.positionGizmo.planarGizmoEnabled = true;
   }
 
   state.gizmoManager = gizmoManager;
@@ -58,6 +59,39 @@ function initTransformGizmo(scene, _camera) {
   updateToolbarUI();
 
   console.log("[GIZMO] transform gizmo initialized");
+}
+
+/**
+ * Return a copy of the Babylon Matrix's `.m` array. Babylon stores matrices
+ * column-major, which matches the glTF / Arbesk manifest `transform_matrix`
+ * format consumed by `applyTransformMatrix()`.
+ */
+function matrixToManifestArray(matrix) {
+  return Array.from(matrix.m);
+}
+
+/**
+ * Read the selected anchor's current local transform and stage it for
+ * persistence in the manifest.
+ */
+function captureSelectedTransform() {
+  const nodeId = state.highlightedNodeId;
+  if (!nodeId) return;
+
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!anchor || anchor.isDisposed()) return;
+
+  const rotation =
+    anchor.rotationQuaternion || BABYLON.Quaternion.Identity();
+  const matrix = BABYLON.Matrix.Compose(
+    anchor.scaling,
+    rotation,
+    anchor.position
+  );
+  const matrixArray = matrixToManifestArray(matrix);
+
+  state.pendingTransformEdits.set(nodeId, matrixArray);
+  console.log(`[GIZMO] transform staged | nodeId=${nodeId}`);
 }
 
 function createToolbar() {
@@ -158,8 +192,24 @@ function setMode(mode) {
   state.gizmoManager.rotationGizmoEnabled = mode === "rotate";
   state.gizmoManager.scaleGizmoEnabled = mode === "scale";
 
+  // Gizmos are created lazily; subscribe to drag-end on whichever exists.
+  const gizmos = state.gizmoManager.gizmos || {};
+  ensureDragEndSubscription(gizmos.positionGizmo);
+  ensureDragEndSubscription(gizmos.rotationGizmo);
+  ensureDragEndSubscription(gizmos.scaleGizmo);
+
   attachToSelected(state.gizmoManager);
   updateToolbarUI();
+}
+
+const _subscribedGizmos = new WeakSet();
+
+function ensureDragEndSubscription(gizmo) {
+  if (!gizmo || _subscribedGizmos.has(gizmo)) return;
+  if (gizmo.onDragEndObservable) {
+    gizmo.onDragEndObservable.add(() => captureSelectedTransform());
+    _subscribedGizmos.add(gizmo);
+  }
 }
 
 function attachToSelected(gizmoManager) {
