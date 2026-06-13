@@ -72,6 +72,17 @@ export {
   clearPendingPostProcessorEdit,
 } from "./cleanup.js";
 
+// Re-sync viewport background when the user toggles light / dark mode.
+// Registered at module load so it catches the initial theme:changed emit.
+on(EVENTS.THEME_CHANGED, () => {
+  if (state.scene) {
+    const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
+    state.scene.clearColor =
+      hexToColor4(viewportBg, 1) ||
+      new BABYLON.Color4(0.118, 0.118, 0.118, 1);
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // View presets — Blender-style 1/3/7 orthographic view snapping
 // ═══════════════════════════════════════════════════════════════════════════
@@ -242,15 +253,6 @@ function initEngine() {
 
   window.addEventListener("resize", () => state.engine.resize());
 
-  // Re-sync viewport background when the user toggles light / dark mode
-  on(EVENTS.THEME_CHANGED, () => {
-    if (state.scene) {
-      const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
-      state.scene.clearColor =
-        hexToColor4(viewportBg, 1) ||
-        new BABYLON.Color4(0.118, 0.118, 0.118, 1);
-    }
-  });
   state.resizeEngineHandler = () => state.engine.resize();
   state.resizeObserverInstance = new ResizeObserver(() =>
     state.engine.resize()
