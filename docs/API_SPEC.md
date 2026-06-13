@@ -19,22 +19,46 @@
 
 ## Authentication
 
-`POST /api/v1/generations` requires a Bearer token built from the transaction hash signature flow when the configured `CONTRACT_ADDRESS` is the paid tier (`ArbeskAsset`):
+`POST /api/v1/generations` requires a valid session token obtained through the SIWE (EIP-4361) sign-in flow:
 
 ```text
-Authorization: Bearer <base64(message)>.<base64(signature)>
+Authorization: Session <opaque-token>
 ```
 
-The frontend service signs a message containing the transaction hash. The backend:
+### Creating a session
 
-1. Recovers the wallet address from the signature.
-2. Extracts the tx hash from the message.
-3. Verifies the transaction receipt on the configured EVM RPC (Hardhat local or Optimism).
-4. The generation route then validates the receipt target contract and expected `AssetGenerationPaid` event when `CONTRACT_ADDRESS` is the paid tier.
+1. Build a SIWE message (EIP-4361) containing the wallet address, domain, chain ID, nonce, and issued-at timestamp.
+2. Sign the message with the wallet (e.g., `personal.sign`).
+3. POST the message and signature to `/api/v1/sessions`:
 
-When the configured `CONTRACT_ADDRESS` is the free tier (`ArbeskAssetFree`), the UI calls `recordGeneration()` for on-chain quota enforcement. The backend validates the `AssetGenerationRecorded` event instead of a payment event.
+```json
+POST /api/v1/sessions
+{
+  "message": "example.com wants you to sign in...",
+  "signature": "0x..."
+}
+```
 
-Parametric edits, manifest saves, manifest chain reads, ABI reads, and token manifest reads do not currently require this Bearer auth.
+The backend verifies the SIWE signature and returns an opaque session token valid for 24 hours:
+
+```json
+{
+  "token": "<uuid>",
+  "expiresAt": 1780001000000
+}
+```
+
+4. Include the token in subsequent protected requests:
+
+```text
+Authorization: Session <uuid>
+```
+
+Session tokens are stored in browser `localStorage` under the key `arbesk_session` and are cleared on wallet disconnect.
+
+The generation route validates the transaction receipt and the expected `AssetGenerationPaid` / `AssetGenerationRecorded` event from the configured `CONTRACT_ADDRESS` contract, regardless of whether it is the paid tier (`ArbeskAsset`) or free tier (`ArbeskAssetFree`).
+
+Parametric edits, manifest saves, manifest chain reads, ABI reads, and token manifest reads do not currently require session auth.
 
 ---
 
@@ -60,11 +84,11 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 
 **Current behavior**
 
-- Paid tier: requires Bearer auth tied to a PayGo transaction.
+- Paid tier: requires Session auth tied to a PayGo transaction.
 - Free tier: validates `recordGeneration()` transaction; accepts `AssetGenerationRecorded` event.
 - Applies rate limit: 10 requests/hour per recovered wallet.
 - Requires `prompt` and `nodeId`.
-- Uses `txHash` from the body or authenticated token.
+- Uses `txHash` from the request body.
 - If `prevManifestCid` is provided, reads and updates the previous manifest.
 - In replace mode, keeps only one root node and preserves that node's history chain.
 - If `MOCK_3D_GENERATION=true`, uses `src/api/adapters/mock-adapter.js`.
@@ -111,7 +135,7 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 | HTTP | Meaning |
 |---:|---|
 | 400 | `prompt` or `nodeId` missing |
-| 401 | Missing or malformed Bearer auth |
+| 401 | Missing, malformed, or invalid Session auth |
 | 403 | Auth failed, tx missing/failed, wrong contract, or missing payment event |
 | 409 | Replay detected (`txHash` already consumed or found in manifest history) |
 | 429 | Generation rate limit exceeded |

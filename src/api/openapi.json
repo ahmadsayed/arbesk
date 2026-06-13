@@ -73,7 +73,7 @@
         "operationId": "generateAsset",
         "security": [
           {
-            "bearerAuth": []
+            "sessionAuth": []
           }
         ],
         "requestBody": {
@@ -453,10 +453,11 @@
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "Wallet-signed authentication token. Format: `base64(\"txHash:<hash>\").base64(signature)`. The backend recovers the signer address via `web3.eth.accounts.recover()` and validates the on-chain transaction receipt."
+      "sessionAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Session authentication. Format: `Session <opaque-token>`. Obtain a token by signing a SIWE (EIP-4361) message via `POST /api/v1/sessions`. Tokens expire after 24 hours."
       }
     },
     "schemas": {

@@ -49,37 +49,6 @@ function parseErrorBody(data) {
   return { message: data?.error || "Unknown error", code: null, details: null };
 }
 
-/**
- * Sign a txHash and produce the Bearer token format the backend expects.
- * @param {string} txHash — e.g. "0xabc..."
- * @returns {Promise<string>} Bearer token: "<base64msg>.<base64sig>"
- */
-export async function signTxHash(txHash) {
-  if (!web3 || !window.walletAddress) {
-    throw new ApiError("Wallet not connected", 401, "WALLET_NOT_CONNECTED");
-  }
-
-  const message = `txHash:${txHash}`;
-  const msgB64 = btoa(message);
-
-  try {
-    const signature = await web3.eth.personal.sign(
-      message,
-      window.walletAddress,
-      "" // password empty for MetaMask/Rabby
-    );
-    const sigB64 = btoa(signature);
-    return `${msgB64}.${sigB64}`;
-  } catch (err) {
-    console.error("Sign failed:", err);
-    throw new ApiError(
-      "Failed to sign authentication message",
-      401,
-      "SIGN_FAILED"
-    );
-  }
-}
-
 // ─── Session Management ─────────────────────────────────────────────────────
 
 const SESSION_STORAGE_KEY = "arbesk_session";
@@ -286,20 +255,10 @@ export async function generateAsset({
   tier,
 }) {
   announceStatus("Authenticating…");
-  // Use session token when available; fall back to per-request txHash signature.
-  // Session reuses the ONE pop-up from createSession() across all generation
-  // calls in a 24-hour window — reducing from 3 pop-ups to 2 after the first.
-  let authHeader;
-  let usedSession = false;
-  try {
-    const sessionToken = await getOrCreateSession();
-    authHeader = `Session ${sessionToken}`;
-    usedSession = true;
-  } catch {
-    announceStatus("Sign authentication message in MetaMask…");
-    const bearerToken = await signTxHash(txHash);
-    authHeader = `Bearer ${bearerToken}`;
-  }
+  // Session auth reuses the ONE pop-up from createSession() across all
+  // generation calls in a 24-hour window.
+  const sessionToken = await getOrCreateSession();
+  let authHeader = `Session ${sessionToken}`;
 
   const chainId =
     typeof window !== "undefined" && window.chainId
@@ -336,24 +295,15 @@ export async function generateAsset({
 
   // Auto-retry once with a fresh session if the backend lost our token
   // (common during development when the Node server restarts).
-  if (response.status === 401 && usedSession) {
+  if (response.status === 401) {
     const { code } = parseErrorBody(data);
     if (code === "INVALID_SESSION" || code === "MISSING_AUTH") {
       console.log("[SESSION] backend rejected token — creating fresh session…");
       clearSession();
-      try {
-        const freshToken = await createSession();
-        authHeader = `Session ${freshToken.token}`;
-        response = await doFetch(authHeader);
-        data = await response.json().catch(() => ({}));
-      } catch {
-        // Session creation failed — fall back to Bearer (txHash signature)
-        announceStatus("Sign authentication message in MetaMask…");
-        const bearerToken = await signTxHash(txHash);
-        authHeader = `Bearer ${bearerToken}`;
-        response = await doFetch(authHeader);
-        data = await response.json().catch(() => ({}));
-      }
+      const freshToken = await createSession();
+      authHeader = `Session ${freshToken.token}`;
+      response = await doFetch(authHeader);
+      data = await response.json().catch(() => ({}));
     }
   }
 
@@ -522,7 +472,6 @@ export async function unpinAssetCids(cid, actorAddress) {
 
 // ─── Global Exports (for non-module <script> loading) ───────────────────────
 
-window.signTxHash = signTxHash;
 window.createSession = createSession;
 window.clearSession = clearSession;
 window.getConfig = getConfig;

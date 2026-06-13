@@ -681,7 +681,8 @@ Each 3D generation involves two on-chain transactions (USDC approval + PayGo pay
 
 | Step | Pop-ups | What happens |
 |------|:---:|---|
-| First generation | 3 | USDC approval + PayGo payment + session creation signature |
+| Wallet connect | 1 | SIWE session creation signature |
+| First generation | 2 | USDC approval + PayGo payment |
 | Subsequent generations | 2 | USDC approval + PayGo payment (session token reused) |
 
 ### Implementation
@@ -689,7 +690,7 @@ Each 3D generation involves two on-chain transactions (USDC approval + PayGo pay
 | File | Purpose |
 |------|---------|
 | `src/api/sessions.js` | Session store (in-memory Map, 24h TTL), create/validate/invalidate, `POST/DELETE /api/v1/sessions` routes |
-| `src/api/authentication.js` | Accepts `Authorization: Session <token>` alongside existing `Bearer` scheme |
+| `src/api/authentication.js` | Validates `Authorization: Session <token>` and sets `res.locals.userAddress` |
 | `src/api/index.js` | Mounts session routes at `/api/v1/sessions` |
 | `frontend/src/js/services/api.js` | `createSession()`, `getOrCreateSession()`, `clearSession()` — localStorage-backed with auto-clear on wallet disconnect |
 
@@ -701,9 +702,9 @@ The session token lives in `localStorage`. The only risk is physical access to t
 - Are bound to a specific wallet address (checked on every request)
 - Are auto-cleared when the wallet disconnects
 
-### Fallback behavior
+### Session required
 
-If session creation fails (e.g., user denies the session signature), `generateAsset()` falls back to the per-request `Bearer` txHash signature — so generation still works, just with 3 pop-ups instead of 2.
+`POST /api/v1/generations` requires a valid `Authorization: Session <token>` header. If the user denies the SIWE signature, no session is created and generation cannot proceed. The frontend shows a "Sign in to generate assets" toast and aborts the action.
 
 ---
 

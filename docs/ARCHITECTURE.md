@@ -52,7 +52,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │                           Express Backend                           │
 │                                                                    │
 │  /api/v1/generations                                           │
-│  ├─ Bearer txHash signature auth                                    │
+│  ├─ Session (SIWE) auth                                             │
 │  ├─ EVM/Hardhat receipt validation                                 │
 │  ├─ AssetGenerationPaid event validation                            │
 │  ├─ Mock generation adapter                                         │
@@ -92,7 +92,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | `src/api/index.js` | Route registry, IPFS helper reads, manifest save/publish, thumbnail normalization |
 | `src/api/assets/generate-node.js` | Authenticated PayGo generation route, tx/event validation, mock adapter, manifest updates |
 | *(client-side only)* | Parametric editing happens in browser; no dedicated backend route |
-| `src/api/authentication.js` | Bearer signature parsing, wallet recovery, tx receipt verification |
+| `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
 | `src/api/rate-limiter.js` | In-memory route rate limiter |
 | `src/api/abi-router.js` | Serves compiled `ArbeskAsset` artifact |
 | `src/api/adapters/mock-adapter.js` | Deterministic local asset generation for development/tests |
@@ -272,10 +272,10 @@ During publish:
 
 ```text
 User prompt
+  → wallet.signInWithEthereum() → POST /api/v1/sessions → Session token
   → wallet.payForGeneration(nodeId, prompt)
-  → signed txHash Bearer token
-  → POST /api/v1/generations
-  → backend verifies tx receipt + AssetGenerationPaid event
+  → POST /api/v1/generations (Authorization: Session <token>)
+  → backend verifies session token + tx receipt + AssetGenerationPaid event
   → mock adapter returns asset bytes
   → asset bytes added to private IPFS
   → manifest read/update/write on private IPFS

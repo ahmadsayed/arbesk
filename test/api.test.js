@@ -10,6 +10,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let mockIPFS;
   let mockWeb3Receipt;
   let logSpy;
+  let createSession;
 
   beforeAll(async () => {
     // Suppress noisy production logs/warnings during API tests.
@@ -152,6 +153,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     process.env.MOCK_3D_GENERATION = "true";
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
 
+    const sessions = await import("../src/api/sessions.js");
+    createSession = sessions.createSession;
+
     const { app: importedApp } = await import("../src/index.js");
     app = importedApp;
   });
@@ -162,10 +166,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     delete process.env.CONTRACT_ADDRESS;
   });
 
-  function makeAuthHeader(txHash = "0x123") {
-    const message = Buffer.from(txHash).toString("base64");
-    const signature = Buffer.from("0xFakeSignature").toString("base64");
-    return `Bearer ${message}.${signature}`;
+  async function makeSessionHeader(address = "0x1234567890123456789012345678901234567890") {
+    const token = createSession(address);
+    return `Session ${token}`;
   }
 
   async function fetchManifestFromIPFS(cid) {
@@ -189,7 +192,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("creates a new manifest with a generation variant entry", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader())
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A modern minimalist workbench",
           nodeId: "node_table_001",
@@ -219,7 +222,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("returns suka.gltf for character prompts", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader())
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A tall character",
           nodeId: "node_char_001",
@@ -233,7 +236,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("returns howdy.glb for cowboy prompts", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader())
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "howdy cowboy",
           nodeId: "node_cowboy_001",
@@ -253,7 +256,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("rejects when prompt or nodeId is missing", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader())
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "",
           nodeId: "node_test",
@@ -265,7 +268,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("rejects replay txHash with 409", async () => {
       const txHash = "0xreplaytest";
-      const auth = makeAuthHeader(txHash);
+      const auth = await makeSessionHeader();
 
       const res1 = await request(app)
         .post("/api/v1/generations")
@@ -281,6 +284,31 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res2.body.error.code).toBe("REPLAY_DETECTED");
     });
 
+    it("rejects missing Authorization header with 401", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .send({ prompt: "Test", nodeId: "node_noauth", txHash: "0xnoauth" });
+      expect(res.status).toBe(401);
+      expect(res.body.error?.code).toBe("MISSING_AUTH");
+    });
+
+    it("rejects invalid session token with 401", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", "Session invalid-token")
+        .send({ prompt: "Test", nodeId: "node_badsession", txHash: "0xbadsession" });
+      expect(res.status).toBe(401);
+      expect(res.body.error?.code).toBe("INVALID_SESSION");
+    });
+
+    it("rejects non-Session auth scheme with 401", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", "Bearer something")
+        .send({ prompt: "Test", nodeId: "node_bearer", txHash: "0xbearer" });
+      expect(res.status).toBe(401);
+    });
+
     it("rejects tx sent to wrong contract address", async () => {
       const originalTo = mockWeb3Receipt.to;
       const originalLogAddresses = mockWeb3Receipt.logs.map((l) => l.address);
@@ -291,7 +319,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader("0xwrongaddr"))
+        .set("Authorization", await makeSessionHeader())
         .send({ prompt: "Test", nodeId: "node_w1", txHash: "0xwrongaddr" });
       expect(res.status).toBe(403);
       expect(res.body.error.message).toContain("not sent to ArbeskAsset");
@@ -313,7 +341,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const uniqTx = "0xtier_match_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader(uniqTx))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A chair",
           nodeId: "node_tier_match",
@@ -331,7 +359,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const uniqTx = "0xtier_basic_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader(uniqTx))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A table",
           nodeId: "node_tier_basic",
@@ -349,7 +377,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const uniqTx = "0xtier_pro_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader(uniqTx))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A spaceship",
           nodeId: "node_tier_pro",
@@ -367,7 +395,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const uniqTx = "0xtier_mismatch_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader(uniqTx))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A lamp",
           nodeId: "node_tier_mismatch",
@@ -392,7 +420,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const uniqTx = "0xtier_native_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader(uniqTx))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A desk",
           nodeId: "node_tier_native",
@@ -411,7 +439,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const uniqTx = "0xnotier_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader(uniqTx))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A bookshelf",
           nodeId: "node_notier",
@@ -485,7 +513,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       for (let i = 0; i < 15; i++) {
         const res = await request(app)
           .post("/api/v1/generations")
-          .set("Authorization", makeAuthHeader(`0xrate${i}`))
+          .set("Authorization", await makeSessionHeader())
           .send({
             prompt: `Rate test ${i}`,
             nodeId: `node_rate_${i}`,
@@ -519,7 +547,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // Create a base manifest to attach child refs to
       const res = await request(app)
         .post("/api/v1/generations")
-        .set("Authorization", makeAuthHeader("0xchildtest"))
+        .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A table",
           nodeId: "node_table_child_001",

@@ -38,7 +38,7 @@ src/
     ├── adapters/
     │   └── mock-adapter.js     # Reads local .gltf files
     ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
-    ├── authentication.js       # Bearer txHash sig OR Session token middleware
+    ├── authentication.js       # Session token validation middleware
     ├── ipfs-utils.js           # catManifest() with timeout/abort
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
     ├── rate-limiter.js         # In-memory per-wallet rate limiter (10/hr)
@@ -58,7 +58,7 @@ src/
 | GET | `/config` | None | Returns contract address, RPC URLs |
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
 | DELETE | `/sessions` | Session | Invalidates session token |
-| POST | `/generations` | Bearer **or** Session | Validates tx, mocks asset, pins to IPFS |
+| POST | `/generations` | Session | Validates tx, mocks asset, pins to IPFS |
 | POST | `/manifests` | None | Saves draft manifest, extracts thumbnail dataUrl → IPFS |
 | POST | `/manifests/:cid/publish` | None | Same as save but returns plain-text CID |
 | GET | `/manifests/:cid/history` | None | Walks `prev_asset_manifest_cid` chain up to 50 entries |
@@ -70,15 +70,10 @@ src/
 
 ### 2.3 Auth Details
 
-**Bearer auth** (`Authorization: Bearer <base64msg>.<base64sig>`):
-- Frontend signs a message containing the tx hash.
-- Backend recovers address, validates tx receipt (status === 1), checks contract/event alignment.
-- Used for `POST /generations` when no session exists.
-
 **Session auth** (`Authorization: Session <token>`):
 - SIWE-based (EIP-4361). Domain-bound, 5-minute message age, nonce replay protection.
 - 24-hour TTL, in-memory Map with hourly cleanup.
-- Reduces generation pop-ups from 3 to 2 after first use.
+- Used for `POST /generations` after wallet connect creates the session.
 
 ### 2.4 What Works
 
@@ -213,7 +208,7 @@ frontend/src/js/
 
 **API Service (`services/api.js`)**
 - Session auth with auto-retry on `INVALID_SESSION`
-- Fallback to per-request Bearer if session creation fails
+- Generation requires a valid session; no fallback auth scheme
 - Endpoints: `POST /generations`, `POST /manifests`, `POST /manifests/:cid/publish`, `GET /manifests/:cid/history`, `GET /tokens/:tokenId/manifest`, `POST /ipfs/unpin`, `GET /config`, `GET /contracts/:name/abi`
 
 **UI Systems**
