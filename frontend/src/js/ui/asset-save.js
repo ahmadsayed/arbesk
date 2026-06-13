@@ -67,12 +67,10 @@ function updateButtonState() {
   if (saveBtnText) saveBtnText.textContent = "Save";
   if (saveBtn) saveBtn.title = "Save Draft (Ctrl+S)";
   if (publishBtnText) {
-    publishBtnText.textContent = window.activeAssetTokenId ? "Republish" : "Publish";
+    publishBtnText.textContent = "Besk it";
   }
   if (publishBtn) {
-    publishBtn.title = window.activeAssetTokenId
-      ? "Republish the asset with the latest manifest CID"
-      : "Publish this asset as a token";
+    publishBtn.title = "Besk it: publish this asset";
   }
 
   // Show burn button only for published (tokenized) assets
@@ -542,12 +540,9 @@ async function onPublishAsset() {
   isPublishing = true;
   if (publishBtn) {
     publishBtn.disabled = true;
-    publishBtn.title = window.activeAssetTokenId ? "Republishing…" : "Publishing…";
+    publishBtn.title = "Besking…";
   }
-  if (publishBtnText)
-    publishBtnText.textContent = window.activeAssetTokenId
-      ? "Republishing…"
-      : "Publishing…";
+  if (publishBtnText) publishBtnText.textContent = "Besking…";
   announceStatus(window.activeAssetTokenId ? "Republishing asset…" : "Publishing asset…");
 
   try {
@@ -594,10 +589,7 @@ async function onPublishAsset() {
       });
       isPublishing = false;
       if (publishBtn) publishBtn.disabled = false;
-      if (publishBtnText)
-        publishBtnText.textContent = window.activeAssetTokenId
-          ? "Republish"
-          : "Publish";
+      if (publishBtnText) publishBtnText.textContent = "Besk it";
       updateButtonState();
       return;
     }
@@ -653,9 +645,7 @@ async function onPublishAsset() {
     isPublishing = false;
     if (publishBtn) {
       publishBtn.disabled = false;
-      publishBtn.title = window.activeAssetTokenId
-        ? "Republish the asset with the latest manifest CID"
-        : "Publish this asset as a token";
+      publishBtn.title = "Besk it: publish this asset";
     }
     updateButtonState();
   }

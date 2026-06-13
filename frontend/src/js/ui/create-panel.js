@@ -57,8 +57,14 @@ function setGenerating(active) {
 }
 
 function updateGenerateHint() {
-  if (!generateHint) return;
-  generateHint.hidden = !!window.walletAddress;
+  const connected = !!window.walletAddress;
+  // Show the guidance caption only while disconnected.
+  if (generateHint) generateHint.hidden = connected;
+  // Gate the prompt: a disabled (muted) submit reads clearer than a live-looking
+  // gold button the user can't use yet. Don't fight the spinner mid-generation.
+  if (generateBtn && !generateBtn.classList.contains("generating")) {
+    generateBtn.disabled = !connected;
+  }
 }
 
 // ─── Asset Definition Helpers ───

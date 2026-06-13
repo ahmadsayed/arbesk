@@ -174,12 +174,12 @@ function createAssetCard(tokenId, role) {
   badge.textContent = role === "owner" ? "Owner" : "Editor";
 
   const openBtn = document.createElement("button");
-  openBtn.className = "btn btn-outline btn-sm";
+  openBtn.className = "btn btn-primary btn-sm";
   openBtn.textContent = "Open";
   openBtn.addEventListener("click", () => openAssetByTokenId(tokenId));
 
   const addBtn = document.createElement("button");
-  addBtn.className = "btn btn-secondary btn-sm";
+  addBtn.className = "btn btn-outline btn-sm";
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {

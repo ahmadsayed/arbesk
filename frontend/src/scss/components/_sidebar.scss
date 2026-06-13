@@ -22,6 +22,40 @@
   }
 }
 
+// Header action inside a sidebar view (e.g. the + New Asset button).
+.sidebar-header-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-2);
+  color: var(--accent-bg);
+  background-color: transparent;
+  border: var(--border-size-1) solid var(--accent-bg);
+  transition: background-color var(--duration-quick) var(--ease-out-3),
+              color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+
+  &:active {
+    filter: brightness(0.95);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 // View Switcher — vertical icon stack
 .sidebar-switcher {
   display: flex;
@@ -176,7 +210,7 @@
   padding: var(--size-2) 0;
 }
 
-// Asset lifecycle buttons (Save / Publish / Burn) in the Asset sidebar view
+// Asset lifecycle buttons (Save / Burn) in the Asset sidebar view
 .asset-lifecycle-row {
   display: flex;
   gap: var(--size-2);
@@ -192,6 +226,17 @@
       width: 14px;
       height: 14px;
     }
+  }
+}
+
+// Primary publish action on its own full-width row.
+.besk-it-row {
+  padding: 0 0 var(--size-2);
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+    font-size: var(--font-size-2);
   }
 }
 

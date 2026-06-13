@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 .headerbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--size-2);
@@ -81,7 +82,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0;
+  gap: var(--size-1);
   line-height: 1.2;
 
   .headerbar-title-text {
@@ -130,11 +131,14 @@
 }
 
 // Actions area
+// Wallet + network follow the dApp convention of sitting at the far right.
 .headerbar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--size-2);
   flex-shrink: 0;
+  margin-left: auto;
 
   // Icon-only buttons in the headerbar sit flush together
   .btn-icon + .btn-icon {

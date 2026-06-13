@@ -6,15 +6,21 @@
 // ═══════════════════════════════════════════════════════════════════
 
 .history {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   gap: var(--size-2);
-  padding: 0 var(--size-3);
-  margin-left: auto;
-  margin-right: auto;
-  min-width: 0;
-  flex: 1 1 auto;
+  width: min(420px, calc(100% - 340px));
   max-width: 420px;
+  min-width: 0;
+  padding: var(--size-1) var(--size-3);
+  background: var(--surface-overlay-hover);
+  border: var(--border-size-1) solid var(--border-hairline);
+  border-radius: var(--radius-round);
+  box-shadow: var(--shadow-1);
 
   &[hidden] {
     display: none;
@@ -47,7 +53,7 @@
   width: 100%;
   appearance: none;
   -webkit-appearance: none;
-  height: 4px;
+  height: 6px;
   margin: 0;
   background: var(--border-color);
   border-radius: var(--radius-round);
@@ -57,25 +63,27 @@
   &::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     background: var(--accent-bg);
     border-radius: 50%;
     cursor: pointer;
-    border: 2px solid var(--headerbar-bg);
+    border: 3px solid var(--headerbar-bg);
     box-shadow: var(--shadow-1);
-    transition: box-shadow var(--duration-quick) var(--ease-out-3);
+    transition: box-shadow var(--duration-quick) var(--ease-out-3),
+                transform var(--duration-quick) var(--ease-out-3);
   }
 
   &::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     background: var(--accent-bg);
     border-radius: 50%;
     cursor: pointer;
-    border: 2px solid var(--headerbar-bg);
+    border: 3px solid var(--headerbar-bg);
     box-shadow: var(--shadow-1);
-    transition: box-shadow var(--duration-quick) var(--ease-out-3);
+    transition: box-shadow var(--duration-quick) var(--ease-out-3),
+                transform var(--duration-quick) var(--ease-out-3);
   }
 
   &:hover,
@@ -83,9 +91,11 @@
   &:active {
     &::-webkit-slider-thumb {
       box-shadow: var(--glow-accent);
+      transform: scale(1.1);
     }
     &::-moz-range-thumb {
       box-shadow: var(--glow-accent);
+      transform: scale(1.1);
     }
   }
 
