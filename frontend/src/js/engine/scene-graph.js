@@ -14,9 +14,10 @@ import {
   resolveChildRef,
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
-import { applyColor, applyScale } from "./time-travel.js";
 import { CHAIN_IDS } from "../constants/chains.js";
+import { emit, on, EVENTS } from "../events/registry.js";
 
+import { applyColor, applyScale } from "./time-travel.js";
 import { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
 import { getCssVar, hexToColor3, hexToColor4 } from "./theme.js";
 
@@ -242,7 +243,7 @@ function initEngine() {
   window.addEventListener("resize", () => state.engine.resize());
 
   // Re-sync viewport background when the user toggles light / dark mode
-  document.addEventListener("theme:changed", () => {
+  on(EVENTS.THEME_CHANGED, () => {
     if (state.scene) {
       const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
       state.scene.clearColor =
@@ -363,9 +364,7 @@ function selectNode(nodeId, mesh) {
   }
   state.highlightedNodeId = nodeId;
   window.selectedNodeId = nodeId;
-  document.dispatchEvent(
-    new CustomEvent("node:selected", { detail: { nodeId, mesh } })
-  );
+  emit(EVENTS.NODE_SELECTED, { nodeId, mesh });
 }
 
 function selectSubMesh(nodeId, meshName) {
@@ -387,9 +386,7 @@ function selectSubMesh(nodeId, meshName) {
     }
   }
   state.highlightedSubMeshName = meshName;
-  document.dispatchEvent(
-    new CustomEvent("submesh:selected", { detail: { nodeId, meshName } })
-  );
+  emit(EVENTS.SUBMESH_SELECTED, { nodeId, meshName });
 }
 
 /**
@@ -429,7 +426,7 @@ function deselectAll() {
   state.highlightedNodeId = null;
   state.highlightedSubMeshName = null;
   window.selectedNodeId = null;
-  document.dispatchEvent(new CustomEvent("node:deselected"));
+  emit(EVENTS.NODE_DESELECTED);
 }
 
 /**
@@ -891,11 +888,7 @@ async function loadAssetManifest(
 
   if (!parentAnchor) {
     window.activeAssetManifestCid = manifestCid;
-    document.dispatchEvent(
-      new CustomEvent("scene:ready", {
-        detail: { manifest, manifestCid },
-      })
-    );
+    emit(EVENTS.SCENE_READY, { manifest, manifestCid });
   }
 
   return manifest;
@@ -996,17 +989,13 @@ async function handleLinkedAssetDropped(event) {
   const parentNode = state.rootSceneAnchor || state.scene;
   await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
 
-  document.dispatchEvent(
-    new CustomEvent("scene:tokenChildAdded", {
-      detail: {
-        nodeId,
-        chainId: resolvedChainId,
-        contractAddress: resolvedContractAddr,
-        tokenId,
-        resolvedCid,
-      },
-    })
-  );
+  emit(EVENTS.SCENE_TOKEN_CHILD_ADDED, {
+    nodeId,
+    chainId: resolvedChainId,
+    contractAddress: resolvedContractAddr,
+    tokenId,
+    resolvedCid,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1219,11 +1208,7 @@ export {
             window.activeAssetTokenId = String(assetTokenId);
             window.activeAssetManifestCid = cid;
             window.latestAssetManifestCid = cid;
-            document.dispatchEvent(
-              new CustomEvent("asset:openByTokenId", {
-                detail: { tokenId: assetTokenId },
-              })
-            );
+            emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, { tokenId: assetTokenId });
           }
         })
         .catch(() => {});
@@ -1266,7 +1251,7 @@ export {
       if (statusEl) statusEl.textContent = window.activeAssetName;
       const metaEl = document.getElementById("assetStatusMeta");
       if (metaEl) metaEl.textContent = "Draft Scene";
-      document.dispatchEvent(new CustomEvent("scene:empty"));
+      emit(EVENTS.SCENE_EMPTY);
       import("/js/ui/sidebar.js").then(function (m) {
         m.switchView("create");
       });
@@ -1301,6 +1286,6 @@ export {
       }
     });
 
-    document.addEventListener("asset:linkedDropped", handleLinkedAssetDropped);
+    on(EVENTS.ASSET_LINKED_DROPPED, handleLinkedAssetDropped);
   });
 })();

@@ -5,6 +5,7 @@
  * are properly released when clearing the scene or removing nodes.
  */
 
+import { emit, EVENTS } from "../events/registry.js";
 import { state } from "./state.js";
 
 export function clearPendingChildRefs() {
@@ -124,7 +125,7 @@ export function clearScene() {
     state.defaultWoodMaterial = null;
   }
 
-  document.dispatchEvent(new CustomEvent("scene:cleared"));
+  emit(EVENTS.SCENE_CLEARED);
 
   window.activeAssetManifestCid = null;
   window.selectedNodeId = null;
