@@ -55,3 +55,6 @@ coverage/
 # Hardhat dev account key (never commit)
 frontend/src/js/blockchain/dev-account.js
 frontend/dist/js/blockchain/dev-account.js
+
+# Isolated worktrees
+.worktrees/
