@@ -365,6 +365,14 @@ document.addEventListener("asset:published", async () => {
   highlightActiveAsset();
 });
 
+document.addEventListener("asset:burned", async () => {
+  const url = new URL(window.location);
+  url.searchParams.delete("asset");
+  url.searchParams.delete("manifest");
+  window.history.replaceState({}, "", url);
+  await refreshAssetLibrary();
+});
+
 document.addEventListener("asset:openByTokenId", (e) => {
   if (e.detail?.tokenId) openAssetByTokenId(e.detail.tokenId);
 });

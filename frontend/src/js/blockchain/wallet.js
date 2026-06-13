@@ -1290,16 +1290,6 @@ async function burn(tokenId) {
     // Continue with burn even if resolution fails — unpin is best-effort
   }
 
-  // Check reachability before unpin — skip IPFS cleanup if the local gateway
-  // cannot serve the manifest, and burn the token on-chain only.
-  const reachable = manifestCid && await isIpfsCidReachable(manifestCid);
-  if (manifestCid && !reachable) {
-    console.warn(
-      `[BURN] manifest CID ${manifestCid} is not reachable on IPFS; ` +
-        `skipping unpin and burning token ${tokenId} on-chain only`
-    );
-  }
-
   try {
     const tx = c.methods.burn(tokenId);
     const gas = await tx.estimateGas({ from: window.walletAddress });
@@ -1314,22 +1304,25 @@ async function burn(tokenId) {
       })
     );
 
-    // Unpin all IPFS content for this manifest chain (best-effort, non-blocking)
-    if (reachable) {
-      console.log(`[BURN] unpinning IPFS content for ${manifestCid}…`);
-      const { unpinAssetCids } = await import("../services/api.js");
-      unpinAssetCids(manifestCid, window.walletAddress)
-        .then((result) => {
-          console.log(
-            `[BURN] unpinned ${result.count} CIDs for token ${tokenId}`
-          );
-          if (result.errors?.length) {
-            console.warn(`[BURN] unpin errors:`, result.errors);
-          }
-        })
-        .catch((err) => {
-          console.warn(`[BURN] unpin failed (non-fatal):`, err.message);
-        });
+    // Unpin IPFS content after burn — fully non-blocking, skipped if unreachable
+    if (manifestCid) {
+      const capturedCid = manifestCid;
+      const capturedWallet = window.walletAddress;
+      (async () => {
+        const reachable = await isIpfsCidReachable(capturedCid).catch(() => false);
+        if (!reachable) {
+          console.warn(`[BURN] ${capturedCid} not reachable on IPFS, skipping unpin`);
+          return;
+        }
+        console.log(`[BURN] unpinning IPFS content for ${capturedCid}…`);
+        const { unpinAssetCids } = await import("../services/api.js");
+        unpinAssetCids(capturedCid, capturedWallet)
+          .then((result) => {
+            console.log(`[BURN] unpinned ${result.count} CIDs for token ${tokenId}`);
+            if (result.errors?.length) console.warn(`[BURN] unpin errors:`, result.errors);
+          })
+          .catch((err) => console.warn(`[BURN] unpin failed (non-fatal):`, err.message));
+      })();
     }
 
     return receipt.transactionHash;
