@@ -200,6 +200,7 @@ function initLedgerPanel() {
   on(EVENTS.SCENE_READY, () => loadActivities());
   on(EVENTS.ASSET_DRAFT_SAVED, () => loadActivities());
   on(EVENTS.ASSET_PUBLISHED, () => loadActivities());
+  on(EVENTS.WALLET_GENERATION_PAID, () => loadActivities());
 
   initialized = true;
   loadActivities();

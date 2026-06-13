@@ -13,7 +13,7 @@ import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
-import { updateUrlAsset } from "../services/url-utils.js";
+import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
 import { CHAIN_IDS } from "../constants/chains.js";
 import { emit, on, EVENTS } from "../events/registry.js";
@@ -363,10 +363,12 @@ on(EVENTS.ASSET_PUBLISHED, async () => {
 });
 
 on(EVENTS.ASSET_BURNED, async () => {
-  const url = new URL(window.location);
-  url.searchParams.delete("asset");
-  url.searchParams.delete("manifest");
-  window.history.replaceState({}, "", url);
+  clearUrlAssetParams();
+  await refreshAssetLibrary();
+});
+
+on(EVENTS.ASSET_CLEARED, async () => {
+  clearUrlAssetParams();
   await refreshAssetLibrary();
 });
 

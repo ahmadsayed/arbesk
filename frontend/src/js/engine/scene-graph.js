@@ -1166,6 +1166,11 @@ function registerMockNode(nodeId, mesh, _history = []) {
   state.nodeAnchors.set(nodeId, anchor);
 }
 
+on(EVENTS.OUTLINER_REMOVE_REQUESTED, ({ detail }) => {
+  // TODO(#18): implement node removal from manifest
+  console.warn("[SCENE] outliner:removeRequested not yet implemented for nodeId:", detail?.nodeId);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Exports
 // ═══════════════════════════════════════════════════════════════════════════

@@ -40,6 +40,8 @@ function initOutliner() {
   on(EVENTS.SCENE_READY, onSceneReady);
   on(EVENTS.SCENE_EMPTY, onSceneEmpty);
   on(EVENTS.ASSET_DRAFT_SAVED, () => refreshOutliner());
+  on(EVENTS.SCENE_CLEARED, onSceneEmpty);
+  on(EVENTS.NODE_DESELECTED, clearSelection);
 
   // Drag-and-drop from library
   outlinerTree.addEventListener("dragover", (e) => {

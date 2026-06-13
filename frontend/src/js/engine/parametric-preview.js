@@ -367,5 +367,6 @@ function onTokenChildAdded(e) {
   }
 }
 on(EVENTS.SCENE_TOKEN_CHILD_ADDED, onTokenChildAdded);
+on(EVENTS.SCENE_CLEARED, closeInspector);
 
 export { openInspector, closeInspector };
