@@ -239,12 +239,6 @@ document.addEventListener("scene:empty", () => {
   syncAssetNameDisplay();
 });
 
-// Reflect renames made via the editable header title.
-document.addEventListener("asset:renamed", (event) => {
-  const name = event.detail?.name;
-  if (name) syncAssetNameDisplay(name);
-});
-
 document.addEventListener("wallet:connected", () => {
   updateGenerateHint();
 });

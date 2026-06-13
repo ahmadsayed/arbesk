@@ -95,20 +95,6 @@
     border-radius: var(--radius-2);
     padding: 1px var(--size-1);
     margin: 0;
-
-    &[contenteditable] {
-      cursor: text;
-
-      &:hover {
-        background-color: var(--surface-overlay-hover);
-      }
-
-      &:focus {
-        outline: none;
-        background-color: var(--view-bg);
-        box-shadow: var(--focus-ring);
-      }
-    }
   }
 
   .headerbar-title-meta {

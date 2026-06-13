@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   gap: var(--size-2);
-  width: min(420px, calc(100% - 340px));
+  width: min(420px, max(0px, calc(100% - 340px)));
   max-width: 420px;
   min-width: 0;
   padding: var(--size-1) var(--size-3);
@@ -116,6 +116,16 @@
   }
   &::-moz-range-thumb {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-4) 40%, transparent);
+  }
+}
+
+// Restore focus ring on the published thumb when keyboard-focused.
+.history.published .history-slider:focus-visible {
+  &::-webkit-slider-thumb {
+    box-shadow: var(--focus-ring);
+  }
+  &::-moz-range-thumb {
+    box-shadow: var(--focus-ring);
   }
 }
 

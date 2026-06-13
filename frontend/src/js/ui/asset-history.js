@@ -13,6 +13,7 @@
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { contract } from "../blockchain/wallet.js";
+import { getManifestHistory } from "../services/api.js";
 
 // ─── DOM References ───
 const historySection = document.getElementById("assetHistory");

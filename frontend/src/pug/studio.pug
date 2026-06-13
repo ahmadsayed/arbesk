@@ -36,7 +36,7 @@ html(lang="en")
         #assetHistory.history(hidden)
           span.history-label Version
           .history-slider-wrap
-            input#historySlider.history-slider(type="range" min="0" max="0" step="1" value="0" aria-label="Asset version" title="Scrub asset versions")
+            input#historySlider.history-slider(type="range" min="0" max="0" step="1" value="0" aria-label="Asset version" aria-describedby="historyDetailPopover" title="Scrub asset versions")
             #historyDetailPopover.history-detail(hidden)
           span#historyVersionBadge.version-badge v1
 
