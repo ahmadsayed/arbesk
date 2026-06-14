@@ -13,7 +13,10 @@
     "dev": "./scripts/start-dev.sh",
     "test:api": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
     "test:frontend": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/frontend",
-    "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts"
+    "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts",
+    "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",
+    "test:e2e:ui": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js --ui",
+    "test:e2e:setup": "node e2e/setup.mjs"
   },
   "repository": {
     "type": "git",
@@ -29,6 +32,7 @@
     "web3": "^4.15.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "gltf-pipeline": "^4.3.1",
     "jest": "^30.4.1",
     "jest-environment-jsdom": "^30.4.1",
