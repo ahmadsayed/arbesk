@@ -96,11 +96,12 @@ function buildOutlineTree(nodes) {
     const isChildWorld = !!node.child_ref;
     if (isChildWorld && currentParent) {
       currentParent.children ||= [];
-      currentParent.children.push(node);
+      currentParent.children.push({ ...node });
     } else {
-      tree.push(node);
+      const cloned = { ...node };
+      tree.push(cloned);
       if (!isChildWorld) {
-        currentParent = node;
+        currentParent = cloned;
       }
     }
   });
@@ -227,7 +228,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
       } else {
         collapsedNodeIds.add(node.node_id);
       }
-      renderTree(getNodes());
+      renderTree(buildOutlineTree(getNodes()));
       getOutlinerTree()
         ?.querySelector(`[data-node-id="${CSS.escape(node.node_id)}"] .outliner-node-toggle`)
         ?.focus();
@@ -411,4 +412,5 @@ export {
   clearSelection,
   createNodeElement,
   buildOutlineTree,
+  getNodes,
 };

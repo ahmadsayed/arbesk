@@ -8,6 +8,7 @@ import {
   selectNode,
   renderTree,
   buildOutlineTree,
+  getNodes,
 } from "../frontend/src/js/ui/outliner.js";
 import { on, off, EVENTS } from "../frontend/src/js/events/registry.js";
 
@@ -152,6 +153,30 @@ describe("outliner node rendering", () => {
     toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(tree.querySelector('[data-node-id="child"]')).toBeTruthy();
+
+    delete window._currentManifest;
+  });
+
+  test("expand/collapse via buildOutlineTree does not duplicate nodes", () => {
+    const tree = document.querySelector(".outliner-tree");
+    const flatNodes = [
+      { node_id: "hello", name: "hello" },
+      { node_id: "cowboy", name: "cowboy", child_ref: { tokenId: "2103578700" } },
+      { node_id: "person", name: "person", child_ref: { tokenId: "35131021" } },
+    ];
+    window._currentManifest = { scene: { nodes: flatNodes } };
+    renderTree(buildOutlineTree(getNodes()));
+
+    expect(tree.querySelectorAll('[data-node-id="cowboy"]')).toHaveLength(1);
+    expect(tree.querySelectorAll('[data-node-id="person"]')).toHaveLength(1);
+
+    let toggle = tree.querySelector('[data-node-id="hello"] .outliner-node-toggle');
+    toggle.click();
+    expect(tree.querySelector('[data-node-id="cowboy"]')).toBeFalsy();
+
+    toggle.click();
+    expect(tree.querySelectorAll('[data-node-id="cowboy"]')).toHaveLength(1);
+    expect(tree.querySelectorAll('[data-node-id="person"]')).toHaveLength(1);
 
     delete window._currentManifest;
   });
