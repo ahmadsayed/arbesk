@@ -205,41 +205,6 @@
   padding: 0 var(--size-3) var(--size-3);
 }
 
-// Primary action row at the top of a sidebar view (e.g. New Asset in Asset view)
-.sidebar-action-row {
-  padding: var(--size-2) 0;
-}
-
-// Asset lifecycle buttons (Save / Burn) in the Asset sidebar view
-.asset-lifecycle-row {
-  display: flex;
-  gap: var(--size-2);
-  padding: 0 0 var(--size-2);
-
-  .btn {
-    flex: 1;
-    justify-content: center;
-    padding: var(--size-2) var(--size-1);
-    font-size: var(--font-size-0);
-
-    svg {
-      width: 14px;
-      height: 14px;
-    }
-  }
-}
-
-// Primary publish action on its own full-width row.
-.besk-it-row {
-  padding: 0 0 var(--size-2);
-
-  .btn {
-    width: 100%;
-    justify-content: center;
-    font-size: var(--font-size-2);
-  }
-}
-
 // Sidebar toggle (collapse/expand)
 .sidebar-toggle {
   display: flex;

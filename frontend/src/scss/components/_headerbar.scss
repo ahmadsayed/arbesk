@@ -233,3 +233,19 @@
     background-color: var(--view-bg);
   }
 }
+
+// Doc-action button group (New / Save / Besk it) — always visible in headerbar
+.headerbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-hairline);
+  flex-shrink: 0;
+  margin: 0 var(--size-1);
+}
+
+.headerbar-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  flex-shrink: 0;
+}

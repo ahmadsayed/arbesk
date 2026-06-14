@@ -1286,7 +1286,7 @@ export {
     }
 
     // Header button (legacy) and sidebar Create view.
-    ["newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (id) {
+    ["newAssetTopBtn", "newAssetBtn"].forEach(function (id) {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener("click", startNewAsset);
     });
