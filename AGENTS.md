@@ -110,6 +110,8 @@ npm run nodemon                               # with auto-rebuild
 npm test                                      # all (Jest + Hardhat)
 NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
 docker-compose run --rm hardhat npx hardhat test
+npx playwright test --config=e2e/playwright.config.js --project=chromium   # E2E critical path
+npx playwright test --config=e2e/playwright.config.js --project=chromium --ui # E2E debug UI
 
 # ─── Contract workflow (MANDATORY after any .sol change) ───
 docker-compose run --rm hardhat npx hardhat compile
@@ -245,9 +247,57 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Backend API | Jest + Supertest | `test/api.test.js` |
 | Deployment integrity | Jest | `test/frontend/deployment-integrity.test.js` |
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
-| Frontend | Manual browser testing | No automated E2E currently |
+| E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-Run `npm run test:frontend` specifically after any contract change.
+### Running tests
+
+```bash
+# Unit / API / contract tests
+npm test
+
+# E2E critical path (wallet → generate → save → publish)
+npx playwright test --config=e2e/playwright.config.js --project=chromium
+
+# E2E with visible browser for debugging
+npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
+```
+
+### When to run E2E tests
+
+**Run the E2E suite before merging any change that touches:**
+
+- Studio UI/UX (headerbar, chat, prompt input, dialogs, wallet controls, settings)
+- Wallet integration (`wallet.js`, `wallet-connect.js`, `wallet-discovery.js`, `siwe.js`, session auth)
+- Generation flow (`create-panel.js`, generation API, transaction validation, mock adapter, provider/tier selection)
+- Save/publish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture)
+- Smart contracts, ABI, or deployment scripts
+- Manifest schema (`scene.nodes`, `source_asset`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`)
+- IPFS storage format or CID handling
+
+`npm test` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
+
+### Keeping E2E tests in sync with UI changes
+
+The E2E specs depend on a stable selector map and a known user flow. See `e2e/README.md` for the full contract.
+
+**If you change the UI, you must:**
+
+1. Update `e2e/helpers/studio-selectors.mjs` when any referenced `id`, class, or button label changes.
+2. Update the spec assertions when chat/status text, dialog titles, or flow order changes.
+3. Update `e2e/helpers/manifest.mjs` when the manifest schema or version semantics change.
+4. Add or remove test steps when the save/publish flow gains or loses dialogs/confirmations.
+
+**Contract workflow (MANDATORY after any `.sol` change):**
+
+```bash
+docker-compose run --rm hardhat npx hardhat compile
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
+npm run test:frontend
+npx playwright test --config=e2e/playwright.config.js --project=chromium
+```
+
+Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause free-tier generation to fail with "Payment validation failed".
 
 ---
 
