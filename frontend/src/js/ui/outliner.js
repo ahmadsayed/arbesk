@@ -10,11 +10,15 @@ import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/registry.js";
 
-const DEPTH_INDENT = 1; // rem per level
-
 let outlinerTree = null;
 let outlinerFooter = null;
 let selectedNodeId = null;
+const collapsedNodeIds = new Set();
+let renderedManifestCid = null;
+
+function getOutlinerTree() {
+  return outlinerTree || document.querySelector(".outliner-tree");
+}
 
 // ─── Initialization ──────────────────────────────────────────────────
 
@@ -76,48 +80,103 @@ function getNodes() {
   return manifest.scene.nodes;
 }
 
+/**
+ * Build a hierarchical outline tree from the flat manifest nodes array.
+ * Child-world nodes (nodes with child_ref) are grouped under the nearest
+ * preceding regular node so the outline reflects the parent/child relationship
+ * shown in the viewport.
+ */
+function buildOutlineTree(nodes) {
+  if (!Array.isArray(nodes)) return [];
+
+  const tree = [];
+  let currentParent = null;
+
+  nodes.forEach((node) => {
+    const isChildWorld = !!node.child_ref;
+    if (isChildWorld && currentParent) {
+      currentParent.children ||= [];
+      currentParent.children.push({ ...node });
+    } else {
+      const cloned = { ...node };
+      tree.push(cloned);
+      if (!isChildWorld) {
+        currentParent = cloned;
+      }
+    }
+  });
+
+  return tree;
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────
 
 async function refreshOutliner() {
   const manifest = await getCurrentManifest();
   if (!manifest) {
+    collapsedNodeIds.clear();
+    renderedManifestCid = null;
     renderEmpty();
     return;
   }
+  const cid = window.activeAssetManifestCid;
+  if (cid !== renderedManifestCid) {
+    collapsedNodeIds.clear();
+    renderedManifestCid = cid;
+  }
   window._currentManifest = manifest;
-  renderTree(getNodes());
+  renderTree(buildOutlineTree(getNodes()));
 }
 
 function renderEmpty() {
-  if (!outlinerTree) return;
-  outlinerTree.innerHTML = "";
+  const tree = getOutlinerTree();
+  if (!tree) return;
+  tree.innerHTML = "";
   if (outlinerFooter) outlinerFooter.textContent = "No items";
 }
 
 function renderTree(nodes, depth = 0) {
-  if (!outlinerTree) return;
-  outlinerTree.innerHTML = "";
+  const tree = getOutlinerTree();
+  if (!tree) return { totalNodes: 0, childCount: 0 };
 
-  if (nodes.length === 0) {
-    outlinerTree.innerHTML =
-      '<div class="ledger-empty">No items in this world</div>';
-    updateFooter(0, 0);
-    return;
+  if (depth === 0) {
+    tree.innerHTML = "";
   }
 
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    if (depth === 0) {
+      tree.innerHTML =
+        '<div class="ledger-empty">No items in this world</div>';
+      updateFooter(0, 0);
+    }
+    return { totalNodes: 0, childCount: 0 };
+  }
+
+  let totalNodes = 0;
   let childCount = 0;
-  const fragment = document.createDocumentFragment();
 
   nodes.forEach((node) => {
     const isChild = !!node.child_ref;
     if (isChild) childCount++;
+    totalNodes++;
 
     const el = createNodeElement(node, isChild, depth);
-    fragment.appendChild(el);
+    tree.appendChild(el);
+
+    const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+    const isCollapsed = hasChildren && collapsedNodeIds.has(node.node_id);
+    if (hasChildren && !isCollapsed) {
+      const childStats = renderTree(node.children, depth + 1);
+      totalNodes += childStats.totalNodes;
+      childCount += childStats.childCount;
+    }
   });
 
-  outlinerTree.appendChild(fragment);
-  updateFooter(nodes.length, childCount);
+  if (depth === 0) {
+    updateFooter(totalNodes, childCount);
+  }
+
+  return { totalNodes, childCount };
 }
 
 function getNodeDisplayName(node) {
@@ -135,12 +194,53 @@ function getNodeDisplayName(node) {
   return node.node_id || "Untitled";
 }
 
-function createNodeElement(node, isChildWorld, depth) {
+function createNodeElement(node, isChildWorld, depth = 0) {
   const el = document.createElement("div");
   el.className = "outliner-node";
   el.dataset.nodeId = node.node_id;
   el.dataset.depth = depth;
   el.draggable = true;
+
+  const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+
+  // Indentation guides for nested rows
+  for (let i = 0; i < depth; i++) {
+    const guide = document.createElement("span");
+    guide.className = "outliner-node-guide";
+    guide.setAttribute("aria-hidden", "true");
+    el.appendChild(guide);
+  }
+
+  // Expand/collapse toggle or leaf spacer
+  let toggle;
+  if (hasChildren) {
+    const isCollapsed = collapsedNodeIds.has(node.node_id);
+    toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "outliner-node-toggle";
+    toggle.setAttribute("aria-expanded", String(!isCollapsed));
+    toggle.setAttribute("aria-label", `${isCollapsed ? "Expand" : "Collapse"} ${getNodeDisplayName(node)}`);
+    toggle.textContent = isCollapsed ? "▶" : "▼";
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (collapsedNodeIds.has(node.node_id)) {
+        collapsedNodeIds.delete(node.node_id);
+      } else {
+        collapsedNodeIds.add(node.node_id);
+      }
+      renderTree(buildOutlineTree(getNodes()));
+      getOutlinerTree()
+        ?.querySelector(`[data-node-id="${CSS.escape(node.node_id)}"] .outliner-node-toggle`)
+        ?.focus();
+    });
+  } else {
+    toggle = document.createElement("span");
+    toggle.className = "outliner-node-toggle";
+    toggle.setAttribute("aria-hidden", "true");
+    toggle.textContent = "";
+  }
+  toggle.dataset.hasChildren = String(hasChildren);
+  el.appendChild(toggle);
 
   // Icon
   const icon = document.createElement("span");
@@ -148,7 +248,7 @@ function createNodeElement(node, isChildWorld, depth) {
   icon.textContent = isChildWorld ? "🧩" : "📦";
   el.appendChild(icon);
 
-  // Label — prefer display name, fall back to token descriptor, then node_id
+  // Label
   const label = document.createElement("span");
   label.className = "outliner-node-label";
   label.textContent = getNodeDisplayName(node);
@@ -185,10 +285,15 @@ function createNodeElement(node, isChildWorld, depth) {
   return el;
 }
 
+function getOutlinerFooter() {
+  return outlinerFooter || document.querySelector(".outliner-footer");
+}
+
 function updateFooter(totalNodes, childCount) {
-  if (!outlinerFooter) return;
+  const footer = getOutlinerFooter();
+  if (!footer) return;
   const depth = window._nestingDepth || 0;
-  outlinerFooter.textContent = `${totalNodes} item${
+  footer.textContent = `${totalNodes} item${
     totalNodes !== 1 ? "s" : ""
   } · ${childCount} child${childCount !== 1 ? "ren" : ""} · Depth ${depth}/5`;
 }
@@ -198,7 +303,7 @@ function updateFooter(totalNodes, childCount) {
 function selectNode(nodeId) {
   // Deselect previous
   if (selectedNodeId) {
-    const prev = outlinerTree?.querySelector(
+    const prev = getOutlinerTree()?.querySelector(
       `[data-node-id="${CSS.escape(selectedNodeId)}"]`
     );
     if (prev) prev.classList.remove("selected");
@@ -206,7 +311,7 @@ function selectNode(nodeId) {
 
   // Select new
   selectedNodeId = nodeId;
-  const el = outlinerTree?.querySelector(
+  const el = getOutlinerTree()?.querySelector(
     `[data-node-id="${CSS.escape(nodeId)}"]`
   );
   if (el) el.classList.add("selected");
@@ -217,7 +322,7 @@ function selectNode(nodeId) {
 
 function clearSelection() {
   if (selectedNodeId) {
-    const el = outlinerTree?.querySelector(
+    const el = getOutlinerTree()?.querySelector(
       `[data-node-id="${CSS.escape(selectedNodeId)}"]`
     );
     if (el) el.classList.remove("selected");
@@ -251,13 +356,13 @@ function showDropTarget(e) {
   const target = e.target.closest(".outliner-node");
   hideDropTarget();
   if (target) {
-    target.classList.add("outliner-drop-target", "active");
+    target.classList.add("drag-over");
   }
 }
 
 function hideDropTarget() {
-  outlinerTree?.querySelectorAll(".outliner-drop-target").forEach((el) => {
-    el.classList.remove("active");
+  outlinerTree?.querySelectorAll(".outliner-node.drag-over").forEach((el) => {
+    el.classList.remove("drag-over");
   });
 }
 
@@ -294,8 +399,18 @@ function onSceneReady() {
 function onSceneEmpty() {
   renderEmpty();
   clearSelection();
+  collapsedNodeIds.clear();
 }
 
 // ─── Exports ─────────────────────────────────────────────────────────
 
-export { initOutliner, refreshOutliner, selectNode, clearSelection };
+export {
+  initOutliner,
+  refreshOutliner,
+  renderTree,
+  selectNode,
+  clearSelection,
+  createNodeElement,
+  buildOutlineTree,
+  getNodes,
+};
