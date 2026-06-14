@@ -26,10 +26,6 @@
 .outliner-tree {
   flex: 1;
   overflow-y: auto;
-  background-color: color-mix(in srgb, var(--window-fg) 2%, var(--sidebar-bg));
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-2);
-  padding: var(--size-1);
 }
 
 // Tree node
