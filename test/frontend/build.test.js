@@ -67,9 +67,11 @@ describe("Frontend Build", () => {
     }
   });
 
-  // ── P1: api.js window exports ────────────────────────────────────────────
+  // ── P1: api.js ES module exports ────────────────────────────────────────────
+  // These functions are consumed via ES module imports — window.* assignments
+  // were removed in the state-layer refactor (all callers import directly).
 
-  describe("api.js window exports", () => {
+  describe("api.js ES module exports", () => {
     const api = readBuilt("services/api.js");
 
     const requiredExports = [
@@ -83,11 +85,11 @@ describe("Frontend Build", () => {
       "getTokenManifest",
     ];
 
-    for (const name of requiredExports) {
-      test(`window.${name} is assigned`, () => {
-        expect(api).toMatch(new RegExp(`window\\.${name}\\s*=\\s*${name}`));
-      });
-    }
+    test("api.js has no window.* function assignments", () => {
+      for (const name of requiredExports) {
+        expect(api).not.toMatch(new RegExp(`window\\.${name}\\s*=\\s*${name}`));
+      }
+    });
 
     test("ApiError class is exported", () => {
       expect(api).toMatch(/export class ApiError/);
@@ -120,8 +122,8 @@ describe("Frontend Build", () => {
       expect(wallet).not.toMatch(/fetch\("\/api\/abi\//);
     });
 
-    test("_finishWalletSetup sets window.contractAddress", () => {
-      expect(wallet).toMatch(/window\.contractAddress\s*=\s*contractAddress/);
+    test("_initContract writes contractAddress to walletState", () => {
+      expect(wallet).toMatch(/walletState\.set\(\{.*contract/s);
     });
   });
 
