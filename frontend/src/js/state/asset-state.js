@@ -1,4 +1,5 @@
-import { emit, EVENTS } from "../events/registry.js";
+import { createStore } from "./create-store.js";
+import { EVENTS } from "../events/registry.js";
 
 const _defaults = {
   activeAssetManifestCid: null,
@@ -8,20 +9,5 @@ const _defaults = {
   currentManifest: null,
 };
 
-const _state = { ..._defaults };
-
-export const assetState = {
-  get: () => ({ ..._state }),
-  set(partial) {
-    Object.assign(_state, partial);
-    emit(EVENTS.ASSET_STATE_CHANGED, { ..._state });
-  },
-  reset() {
-    Object.assign(_state, _defaults);
-    emit(EVENTS.ASSET_STATE_CHANGED, { ..._state });
-  },
-};
-
-export function _resetForTesting() {
-  Object.assign(_state, _defaults);
-}
+const { store: assetState, _resetForTesting } = createStore(_defaults, EVENTS.ASSET_STATE_CHANGED);
+export { assetState, _resetForTesting };
