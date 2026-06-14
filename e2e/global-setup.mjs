@@ -1,35 +1,17 @@
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  ROOT,
+  log,
+  sleep,
+  isContainerRunning,
+  resetHardhatChain,
+  writeState,
+} from "./lib/infra.mjs";
 
-const ROOT = process.cwd();
-
-let weStartedInfra = false;
-let backendProcess = null;
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function log(step) {
-  const ts = new Date().toISOString().split("T")[1].split(".")[0];
-  console.log(`[E2E ${ts}] ${step}`);
-}
-
-function isContainerRunning(name) {
-  try {
-    const out = execSync(
-      `docker ps --filter "name=${name}" --filter "status=running" --format "{{.Names}}"`,
-      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }
-    );
-    return out.trim().includes(name);
-  } catch {
-    return false;
-  }
-}
-
-function readEnvVar(path, key) {
-  const content = fs.readFileSync(path, "utf8");
+function readEnvVar(envPath, key) {
+  const content = fs.readFileSync(envPath, "utf8");
   const match = content.match(new RegExp(`^${key}=(.*)$`, "m"));
   return match ? match[1].trim() : null;
 }
@@ -103,7 +85,14 @@ export default async function globalSetup() {
   const ipfsRunning = isContainerRunning("arbesk-private-ipfs");
   const hardhatRunning = isContainerRunning("arbesk-hardhat");
   log(`Existing containers: ipfs=${ipfsRunning} hardhat=${hardhatRunning}`);
-  weStartedInfra = !ipfsRunning || !hardhatRunning;
+  const weStartedInfra = !ipfsRunning || !hardhatRunning;
+
+  // Clean-chain reset BEFORE start-dev.sh: if Hardhat is already running we wipe
+  // it so the next deploy is fresh (no leftover tokens, reset daily quota).
+  // start-dev.sh then sees the old contract has no bytecode and redeploys.
+  if (hardhatRunning) {
+    await resetHardhatChain();
+  }
 
   log("Running start-dev.sh --setup-only...");
   execSync("./scripts/start-dev.sh --setup-only", {
@@ -131,9 +120,10 @@ export default async function globalSetup() {
     // not running — start it
   }
 
+  let backendPid = null;
   if (!backendAlreadyRunning) {
     log("Starting backend on 9090...");
-    backendProcess = spawn("node", ["src/index.js"], {
+    const backendProcess = spawn("node", ["src/index.js"], {
       cwd: ROOT,
       env: { ...process.env, MOCK_3D_GENERATION: "true" },
       detached: false,
@@ -144,30 +134,28 @@ export default async function globalSetup() {
       console.error("[E2E] backend process error:", err.message);
     });
 
+    backendPid = backendProcess.pid;
     await waitForPort(9090);
     log("Backend ready on 9090");
   }
 
+  // Persist handoff state for teardown (separate module evaluation).
+  writeState({ weStartedInfra, backendPid });
+
   log("Infrastructure ready");
-}
 
-export async function globalTeardown() {
-  log("Tearing down...");
-
-  if (backendProcess) {
-    log("Stopping backend...");
-    backendProcess.kill("SIGTERM");
-    // Give the backend a moment to shut down gracefully.
-    await sleep(1000);
-    if (!backendProcess.killed) {
-      backendProcess.kill("SIGKILL");
+  // Reset the in-memory backend rate limiter so repeated E2E runs do not
+  // exhaust the per-wallet generation quota left over from previous runs.
+  try {
+    const resetRes = await fetch("http://127.0.0.1:9090/api/v1/test/reset-rate-limit", {
+      method: "POST",
+    });
+    if (resetRes.ok) {
+      log("Rate limiter reset");
+    } else {
+      log("WARN: rate-limiter reset endpoint returned " + resetRes.status);
     }
-    backendProcess = null;
-  }
-
-  if (weStartedInfra) {
-    execSync("docker-compose down", { stdio: "inherit", cwd: ROOT, timeout: 60000 });
-  } else {
-    log("Leaving existing IPFS/Hardhat containers running");
+  } catch (err) {
+    log("WARN: could not reset rate limiter: " + err.message);
   }
 }

@@ -56,6 +56,12 @@
     background-color: var(--surface-overlay-hover);
   }
 
+  &:focus-visible {
+    outline: none;
+    border-color: var(--accent-bg);
+    box-shadow: var(--focus-ring);
+  }
+
   &.active {
     border-color: var(--accent-bg);
     box-shadow: var(--glow-accent);
@@ -140,8 +146,11 @@
   gap: var(--size-2);
   margin-top: var(--size-3);
 
-  button {
-    flex: 1;
+  .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

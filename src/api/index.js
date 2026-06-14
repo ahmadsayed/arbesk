@@ -22,7 +22,7 @@ const {
 
 import generateAssetNode from "./assets/generate-node.js";
 import abiRouter from "./abi-router.js";
-import rateLimit from "./rate-limiter.js";
+import rateLimit, { _resetRateLimiter } from "./rate-limiter.js";
 import sessionRouter from "./sessions.js";
 import openapiSpec from "./openapi.json" with { type: "json" };
 import { getSceneNodes } from "./manifest-utils.js";
@@ -511,6 +511,16 @@ export default () => {
   v1.get("/openapi.json", (req, res) => {
     res.json(openapiSpec);
   });
+
+  // ─── Test-only utilities ───────────────────────────────────────────────────
+
+  if (process.env.NODE_ENV !== "production") {
+    v1.post("/test/reset-rate-limit", (req, res) => {
+      _resetRateLimiter();
+      console.log("[RATE-LIMIT] reset via test endpoint");
+      res.json({ ok: true });
+    });
+  }
 
   // ─── Mount under /api/v1 ──────────────────────────────────────────────────
 

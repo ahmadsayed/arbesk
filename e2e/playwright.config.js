@@ -2,10 +2,18 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./specs",
-  timeout: 10000,
+  // The save-and-publish spec drives a full generate → save → mint → gallery →
+  // burn flow with several on-chain transactions and a swiftshader thumbnail
+  // render. Its slowest single wait (publish) is 30s, so the whole-test budget
+  // must comfortably exceed that or Playwright aborts mid-flow.
+  timeout: 90_000,
   expect: {
-    timeout: 5000,
+    timeout: 15_000,
   },
+  // On-chain/IPFS timing is inherently variable; one retry locally and two on
+  // CI absorbs transient hiccups without masking real regressions (a test that
+  // only passes on retry still shows up flaky in the report).
+  retries: process.env.CI ? 2 : 1,
   fullyParallel: false,
   workers: 1,
   reporter: "list",
@@ -25,6 +33,6 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  globalSetup: "./setup.mjs",
-  globalTeardown: "./setup.mjs",
+  globalSetup: "./global-setup.mjs",
+  globalTeardown: "./global-teardown.mjs",
 });

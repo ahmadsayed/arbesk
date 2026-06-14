@@ -8,11 +8,17 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import { contract as walletContract } from "../blockchain/wallet.js";
+import {
+  burn,
+  canBurn,
+  contract as walletContract,
+} from "../blockchain/wallet.js";
 import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
+import { showConfirmDialog } from "./dialog.js";
+import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
 import { CHAIN_IDS } from "../constants/chains.js";
@@ -165,6 +171,9 @@ function createAssetCard(tokenId, role) {
   item.className = "asset-card";
   item.dataset.tokenId = tokenId;
   item.draggable = true;
+  item.tabIndex = 0;
+  item.setAttribute("role", "button");
+  item.setAttribute("aria-label", `Open asset ${tokenId}`);
 
   item.addEventListener("dragstart", (event) => {
     const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
@@ -212,16 +221,23 @@ function createAssetCard(tokenId, role) {
   }`;
   badge.textContent = role === "owner" ? "Owner" : "Editor";
 
-  const openBtn = document.createElement("button");
-  openBtn.className = "btn btn-primary btn-sm";
-  openBtn.textContent = "Open";
-  openBtn.addEventListener("click", () => openAssetByTokenId(tokenId));
+  // Click or keyboard activate anywhere on the card (except action buttons) to open.
+  item.addEventListener("click", (e) => {
+    if (e.target.closest(".asset-card-actions button")) return;
+    openAssetByTokenId(tokenId);
+  });
+  item.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    openAssetByTokenId(tokenId);
+  });
 
   const addBtn = document.createElement("button");
   addBtn.className = "btn btn-outline btn-sm";
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
-  addBtn.addEventListener("click", () => {
+  addBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
     const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
     const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
     const contractAddr = walletContractAddress || null;
@@ -234,14 +250,24 @@ function createAssetCard(tokenId, role) {
     });
   });
 
+  const burnBtn = document.createElement("button");
+  burnBtn.className = "btn btn-outline btn-danger btn-sm asset-card-burn";
+  burnBtn.title = "Permanently burn this asset";
+  burnBtn.setAttribute("aria-label", `Burn asset ${tokenId}`);
+  burnBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.048 8.287 8.287 0 0 0 9 9.6a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48Z"/>
+    <path d="M12 18a3.75 3.75 0 0 0 .495-7.467 5.99 5.99 0 0 0-1.925 3.546 5.974 5.974 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z"/>
+  </svg><span>Burn</span>`;
+  burnBtn.addEventListener("click", (e) => onBurnAsset(e, tokenId));
+
   const meta = document.createElement("div");
   meta.className = "asset-card-meta";
   meta.appendChild(badge);
 
   const actions = document.createElement("div");
   actions.className = "asset-card-actions";
-  actions.appendChild(openBtn);
   actions.appendChild(addBtn);
+  actions.appendChild(burnBtn);
 
   item.appendChild(thumbnailEl);
   item.appendChild(nameEl);
@@ -254,7 +280,50 @@ function createAssetCard(tokenId, role) {
     runLoad();
   });
   runLoad();
+  resolveBurnVisibility(burnBtn, tokenId, role);
   return item;
+}
+
+async function resolveBurnVisibility(burnBtn, tokenId, role) {
+  if (role === "owner") {
+    burnBtn.hidden = false;
+    return;
+  }
+  const contract = getContract();
+  const { walletAddress } = walletState.get();
+  if (!contract || !walletAddress) return;
+  try {
+    const allowed = await canBurn(tokenId, walletAddress);
+    burnBtn.hidden = !allowed;
+  } catch {
+    burnBtn.hidden = true;
+  }
+}
+
+async function onBurnAsset(event, tokenId) {
+  event.stopPropagation();
+  const confirmed = await showConfirmDialog(
+    "Burn Asset",
+    `Are you sure you want to permanently burn Asset #${tokenId}? This action cannot be undone. The token will be destroyed, its on-chain record removed, and all collaborators will lose access.`,
+    [
+      { text: "Cancel", value: "cancel" },
+      { text: "Burn", value: "burn", className: "btn btn-danger" },
+    ]
+  );
+
+  if (confirmed !== "burn") return;
+
+  const txHash = await burn(tokenId);
+  if (txHash) {
+    if (String(assetState.get().activeAssetTokenId) === String(tokenId)) {
+      emit(EVENTS.ASSET_CLEARED);
+    }
+    showToast({
+      type: "info",
+      title: "Asset Burned",
+      message: `Asset #${tokenId} has been permanently destroyed.`,
+    });
+  }
 }
 
 function extractThumbnailCid(thumbnail) {
@@ -373,6 +442,12 @@ on(EVENTS.ASSET_BURNED, async () => {
 });
 
 on(EVENTS.ASSET_CLEARED, async () => {
+  // The active asset is gone (e.g. burned) — tear the viewport down too so the
+  // studio doesn't keep presenting a destroyed asset as "open". Mirrors the
+  // new-asset reset: clear the scene, then emit SCENE_EMPTY so the header
+  // resets to "No asset open" and Save/Publish disable.
+  clearScene();
+  emit(EVENTS.SCENE_EMPTY);
   clearUrlAssetParams();
   await refreshAssetLibrary();
 });

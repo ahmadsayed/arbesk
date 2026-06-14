@@ -14,14 +14,16 @@ From the repo root:
 npx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
 
-The global setup (`e2e/setup.mjs`) will:
+The global setup (`e2e/global-setup.mjs`) will:
 
-1. Start IPFS + Hardhat Docker containers if they are not running.
-2. Deploy/verify the Arbesk smart contracts on Hardhat Local.
-3. Patch `frontend/src/js/blockchain/network-config.js` and `src/config.js` with the deployed addresses.
-4. Build the frontend.
-5. Start the Express backend with `MOCK_3D_GENERATION=true`.
-6. Tear everything down after the tests finish.
+1. Reset the Hardhat chain to genesis (if already running) so every run starts from a clean chain — no leftover tokens, fresh free-tier daily quota.
+2. Start IPFS + Hardhat Docker containers if they are not running.
+3. Deploy/verify the Arbesk smart contracts on Hardhat Local (a reset chain forces a fresh deploy).
+4. Patch `frontend/src/js/blockchain/network-config.js` and `src/config.js` with the deployed addresses.
+5. Build the frontend.
+6. Start the Express backend with `MOCK_3D_GENERATION=true`.
+
+The global teardown (`e2e/global-teardown.mjs`) stops the backend and brings the Docker containers down (only if this run started them).
 
 No manual `node src/index.js` is required.
 
@@ -172,8 +174,10 @@ Use this when a spec fails and you need to inspect the browser state, DOM, netwo
 
 ## See also
 
-- `e2e/playwright.config.js` — Playwright configuration, timeouts, projects, global setup/teardown.
-- `e2e/setup.mjs` — Infrastructure setup, contract address sync, backend lifecycle.
+- `e2e/playwright.config.js` — Playwright configuration, timeouts, retries, projects, global setup/teardown.
+- `e2e/global-setup.mjs` — Infrastructure setup, clean-chain reset, contract address sync, backend launch.
+- `e2e/global-teardown.mjs` — Backend shutdown and container teardown.
+- `e2e/lib/infra.mjs` — Shared infra helpers (container checks, chain reset, setup↔teardown state handoff).
 - `e2e/fixtures/hardhat-provider.mjs` — Injected wallet provider implementation.
 - `e2e/helpers/studio-selectors.mjs` — UI selector map.
 - `e2e/helpers/manifest.mjs` — Manifest fetch + validation helpers.

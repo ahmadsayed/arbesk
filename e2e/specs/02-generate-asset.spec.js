@@ -10,7 +10,7 @@ test.describe("asset generation", () => {
     await injectHardhatProvider(page);
     await page.goto("/studio.html");
 
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden({ timeout: 10000 });
+    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText("Sign In");
 
     await page.fill(SELECTORS.promptInput, PROMPT);
@@ -19,10 +19,11 @@ test.describe("asset generation", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(PROMPT);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText("Model carved via mock");
 
-    const url = page.url();
-    const match = url.match(/[?&]manifest=(Qm[\w]+)/);
-    expect(match).toBeTruthy();
-    const cid = match[1];
+    // Wait for the URL to actually carry the manifest CID rather than reading
+    // page.url() synchronously — the param is pushed via history.pushState on a
+    // separate tick from the chat message and may not be present yet.
+    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    const cid = page.url().match(/[?&]manifest=(Qm[\w]+)/)[1];
 
     const manifest = await fetchManifest(cid);
     assertGenerationManifest(manifest, { prompt: PROMPT, provider: "mock" });
