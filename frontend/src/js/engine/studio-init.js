@@ -112,8 +112,7 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
     const chainId = e.detail?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
-      [CHAIN_IDS.OPTIMISM_SEPOLIA]: "optimismSepolia",
-      [CHAIN_IDS.OPTIMISM_MAINNET]: "optimismMainnet",
+      [CHAIN_IDS.SEI_TESTNET]: "seiTestnet",
     };
     const key = keyMap[chainId];
     if (key) netSel.value = key;

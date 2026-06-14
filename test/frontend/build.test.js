@@ -143,7 +143,7 @@ describe("Frontend Build", () => {
     });
 
     test("pay fallback gas is set", () => {
-      expect(wallet).toMatch(/payGas = isL2 \? 500000 : 300000/);
+      expect(wallet).toMatch(/payGas = needsGenerousGas \? 500000 : 300000/);
     });
   });
 

@@ -39,6 +39,15 @@ export const NETWORK_CONFIGS = {
     rpcUrl: "https://mainnet.optimism.io",
     blockExplorer: "https://optimistic.etherscan.io",
   },
+  [CHAIN_IDS.SEI_TESTNET]: {
+    name: "SEI Testnet",
+    chainId: CHAIN_IDS.SEI_TESTNET,
+    contractAddress: "0x38BC6BabC907783f92CE1766F98494578ED2a5b2",
+    paidContractAddress: "0x0B7E171c2A98Af2CaD02B12c347997F769e336c2",
+    usdcToken: "0x4fCF1784B31630811181f670Aea7A7bEF803eaED", // Circle USDC on SEI testnet
+    rpcUrl: "https://evm-rpc-testnet.sei-apis.com",
+    blockExplorer: "https://testnet.seiscan.io",
+  },
 };
 
 /**

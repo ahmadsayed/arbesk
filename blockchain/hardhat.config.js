@@ -42,6 +42,12 @@ module.exports = {
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
       chainId: 10,
     },
+    // ── SEI ──
+    seiTestnet: {
+      url: "https://evm-rpc-testnet.sei-apis.com",
+      accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
+      chainId: 1328,
+    },
   },
   etherscan: {
     apiKey: {
@@ -49,6 +55,7 @@ module.exports = {
       filecoin: ETHERSCAN_API_KEY || "",
       optimismSepolia: ETHERSCAN_API_KEY || "",
       optimismMainnet: ETHERSCAN_API_KEY || "",
+      seiTestnet: ETHERSCAN_API_KEY || "",
     },
     customChains: [
       {
@@ -81,6 +88,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-optimistic.etherscan.io/api",
           browserURL: "https://optimistic.etherscan.io",
+        },
+      },
+      {
+        network: "seiTestnet",
+        chainId: 1328,
+        urls: {
+          apiURL: "https://testnet.seiscan.io/api",
+          browserURL: "https://testnet.seiscan.io",
         },
       },
     ],

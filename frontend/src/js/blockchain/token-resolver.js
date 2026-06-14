@@ -26,6 +26,7 @@ const KNOWN_RPC_ENDPOINTS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: "http://127.0.0.1:8545", // Hardhat local dev node
   [CHAIN_IDS.OPTIMISM_SEPOLIA]: "https://sepolia.optimism.io", // Optimism Sepolia testnet
   [CHAIN_IDS.OPTIMISM_MAINNET]: "https://mainnet.optimism.io", // Optimism mainnet
+  [CHAIN_IDS.SEI_TESTNET]: "https://evm-rpc-testnet.sei-apis.com", // SEI testnet
 };
 
 /**

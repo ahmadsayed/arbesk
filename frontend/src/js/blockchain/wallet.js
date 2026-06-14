@@ -56,6 +56,13 @@ const NETWORKS = {
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: ["https://optimistic.etherscan.io"],
   },
+  seiTestnet: {
+    chainId: `0x${CHAIN_IDS.SEI_TESTNET.toString(16)}`,
+    chainName: "SEI Testnet",
+    rpcUrls: ["https://evm-rpc-testnet.sei-apis.com"],
+    nativeCurrency: { name: "SEI", symbol: "SEI", decimals: 18 },
+    blockExplorerUrls: ["https://testnet.seiscan.io"],
+  },
 };
 
 const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
@@ -272,6 +279,14 @@ async function _checkBalance() {
         type: "warning",
         title: "Low Balance",
         message: `Your wallet has very low ETH on ${netName}. You need ETH for gas. Get testnet ETH from a faucet.`,
+        duration: 0,
+      });
+    } else if (chainId === CHAIN_IDS.SEI_TESTNET && parseFloat(balanceEth) < 0.5) {
+      console.warn("Low balance detected on SEI Testnet");
+      lowBalanceToastId = showToast({
+        type: "warning",
+        title: "Low Balance",
+        message: `Your wallet has very low SEI on SEI Testnet. You need SEI for gas. Get testnet SEI from a faucet.`,
         duration: 0,
       });
     }
@@ -886,18 +901,22 @@ async function payWithUSDC(nodeId, prompt, tier) {
       tier
     );
 
-    // L2 chains (Optimism) need higher gas defaults because
-    // external calls (safeTransferFrom) consume more gas on OP stack.
-    // Also, estimateGas may fail on public RPCs due to stale sequencer state.
+    // Public networks (Optimism L2, SEI testnet) need higher gas defaults
+    // because external calls (safeTransferFrom) consume more gas, and
+    // estimateGas may fail on public RPCs due to stale sequencer state.
     let payGas;
     try {
       payGas = await payTx.estimateGas({ from: window.walletAddress });
       console.log("[USDC] estimated pay gas:", payGas);
     } catch (estErr) {
-      // On L2 chains, estimateGas often fails when the approval tx hasn't
+      // On public networks, estimateGas often fails when the approval tx hasn't
       // been indexed by the RPC's simulation state. Use a generous default.
-      const isL2 = [CHAIN_IDS.OPTIMISM_SEPOLIA, CHAIN_IDS.OPTIMISM_MAINNET].includes(chainId);
-      payGas = isL2 ? 500000 : 300000;
+      const needsGenerousGas = [
+        CHAIN_IDS.OPTIMISM_SEPOLIA,
+        CHAIN_IDS.OPTIMISM_MAINNET,
+        CHAIN_IDS.SEI_TESTNET,
+      ].includes(chainId);
+      payGas = needsGenerousGas ? 500000 : 300000;
       console.log(
         `[USDC] pay estimateGas failed (${
           estErr.message || "unknown"

@@ -15,12 +15,15 @@ const EXPLORER_URLS = {
   [CHAIN_IDS.OPTIMISM_SEPOLIA]: "https://sepolia-optimism.etherscan.io",
   // Optimism mainnet
   [CHAIN_IDS.OPTIMISM_MAINNET]: "https://optimistic.etherscan.io",
+  // SEI testnet
+  [CHAIN_IDS.SEI_TESTNET]: "https://testnet.seiscan.io",
 };
 
 const NETWORK_NAMES = {
   [CHAIN_IDS.HARDHAT_LOCAL]: "Hardhat Local",
   [CHAIN_IDS.OPTIMISM_SEPOLIA]: "Optimism Sepolia",
   [CHAIN_IDS.OPTIMISM_MAINNET]: "Optimism Mainnet",
+  [CHAIN_IDS.SEI_TESTNET]: "SEI Testnet",
 };
 
 /**

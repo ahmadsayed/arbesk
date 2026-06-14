@@ -19,6 +19,7 @@ const path = require("path");
 const USDC_ADDRESSES = {
   optimismSepolia: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15",
   optimismMainnet: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+  seiTestnet: "0x4fCF1784B31630811181f670Aea7A7bEF803eaED",
 };
 
 async function main() {
@@ -29,24 +30,30 @@ async function main() {
   const treasury = process.env.TREASURY_ADDRESS || deployer.address;
   console.log("Treasury wallet:", treasury);
 
-  // Determine USDC address
-  let usdcAddress = process.env.USDC_TOKEN || USDC_ADDRESSES[network];
+  // Determine USDC address.
+  // For known live networks, always use the canonical USDC address so a
+  // stale USDC_TOKEN env var from a previous local deploy does not leak
+  // onto testnet/mainnet. Local networks fall back to USDC_TOKEN env var
+  // or deploy MockUSDC.
+  let usdcAddress = USDC_ADDRESSES[network];
 
-  // For local networks without a pre-set USDC address, deploy MockUSDC
   if (!usdcAddress && (network === "hardhat" || network === "localhost")) {
-    console.log(
-      "No USDC_TOKEN env var — deploying MockUSDC for local testing..."
-    );
-    const MockUSDC = await hre.ethers.getContractFactory("MockUSDC");
-    const mockUsdc = await MockUSDC.deploy();
-    await mockUsdc.waitForDeployment();
-    usdcAddress = await mockUsdc.getAddress();
-    console.log("MockUSDC deployed to:", usdcAddress);
+    usdcAddress = process.env.USDC_TOKEN;
+    if (!usdcAddress) {
+      console.log(
+        "No USDC_TOKEN env var — deploying MockUSDC for local testing..."
+      );
+      const MockUSDC = await hre.ethers.getContractFactory("MockUSDC");
+      const mockUsdc = await MockUSDC.deploy();
+      await mockUsdc.waitForDeployment();
+      usdcAddress = await mockUsdc.getAddress();
+      console.log("MockUSDC deployed to:", usdcAddress);
 
-    // Mint 1,000,000 USDC to deployer for testing
-    const mintAmount = hre.ethers.parseUnits("1000000", 6);
-    await mockUsdc.mint(deployer.address, mintAmount);
-    console.log("Minted 1,000,000 USDC to deployer for testing");
+      // Mint 1,000,000 USDC to deployer for testing
+      const mintAmount = hre.ethers.parseUnits("1000000", 6);
+      await mockUsdc.mint(deployer.address, mintAmount);
+      console.log("Minted 1,000,000 USDC to deployer for testing");
+    }
   }
 
   if (!usdcAddress) {
