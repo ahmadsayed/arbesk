@@ -1,10 +1,15 @@
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
 
 let weStartedInfra = false;
+let backendProcess = null;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function log(step) {
   const ts = new Date().toISOString().split("T")[1].split(".")[0];
@@ -115,14 +120,32 @@ export default async function globalSetup() {
   log("Frontend rebuilt");
 
   log("Checking backend on 9090...");
+  let backendAlreadyRunning = false;
   try {
     const res = await fetch("http://127.0.0.1:9090/studio.html");
-    if (!res.ok) throw new Error(`Backend returned ${res.status}`);
-    log("Backend already running on 9090; reusing it");
-  } catch (err) {
-    throw new Error(
-      `Backend not reachable on http://127.0.0.1:9090. Please start it manually with: MOCK_3D_GENERATION=true node src/index.js (${err.message})`
-    );
+    if (res.ok) {
+      backendAlreadyRunning = true;
+      log("Backend already running on 9090; reusing it");
+    }
+  } catch {
+    // not running — start it
+  }
+
+  if (!backendAlreadyRunning) {
+    log("Starting backend on 9090...");
+    backendProcess = spawn("node", ["src/index.js"], {
+      cwd: ROOT,
+      env: { ...process.env, MOCK_3D_GENERATION: "true" },
+      detached: false,
+      stdio: "inherit",
+    });
+
+    backendProcess.on("error", (err) => {
+      console.error("[E2E] backend process error:", err.message);
+    });
+
+    await waitForPort(9090);
+    log("Backend ready on 9090");
   }
 
   log("Infrastructure ready");
@@ -130,6 +153,18 @@ export default async function globalSetup() {
 
 export async function globalTeardown() {
   log("Tearing down...");
+
+  if (backendProcess) {
+    log("Stopping backend...");
+    backendProcess.kill("SIGTERM");
+    // Give the backend a moment to shut down gracefully.
+    await sleep(1000);
+    if (!backendProcess.killed) {
+      backendProcess.kill("SIGKILL");
+    }
+    backendProcess = null;
+  }
+
   if (weStartedInfra) {
     execSync("docker-compose down", { stdio: "inherit", cwd: ROOT, timeout: 60000 });
   } else {
