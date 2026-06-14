@@ -1121,8 +1121,8 @@ function getNodeChildRef(nodeId) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function dismissCreatePulse() {
-  const createBtn = document.querySelector('.sidebar-switcher-btn[data-view="create"]');
-  if (createBtn) createBtn.classList.remove("pulse");
+  const chatBtn = document.querySelector('.sidebar-switcher-btn[data-view="chat"]');
+  if (chatBtn) chatBtn.classList.remove("pulse");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1315,7 +1315,7 @@ export {
       if (metaEl) metaEl.textContent = "Draft Scene";
       emit(EVENTS.SCENE_EMPTY);
       import("/js/ui/sidebar.js").then(function (m) {
-        m.switchView("create");
+        m.switchView("chat");
       });
       var promptInput = document.getElementById("promptInput");
       if (promptInput)
@@ -1338,8 +1338,8 @@ export {
     // Esc — dismiss the create pulse, then future: deselect, close inspector.
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
-      const createBtn = document.querySelector('.sidebar-switcher-btn[data-view="create"]');
-      if (createBtn && createBtn.classList.contains("pulse")) {
+      const chatBtn = document.querySelector('.sidebar-switcher-btn[data-view="chat"]');
+      if (chatBtn && chatBtn.classList.contains("pulse")) {
         e.preventDefault();
         dismissCreatePulse();
       }

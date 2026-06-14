@@ -19,8 +19,6 @@ const teamList = document.getElementById("teamList");
 const teamAddInput = document.getElementById("teamAddInput");
 const teamAddBtn = document.getElementById("teamAddBtn");
 const teamOwnerBadge = document.getElementById("teamOwnerBadge");
-const settingsToggle = document.getElementById("toggleAssetDef");
-const settingsBody = document.querySelector(".asset-def-body");
 
 let activeAssetTokenId = null;
 let owner = false;
@@ -92,17 +90,10 @@ async function onAddEditor() {
   }
 }
 
-function openSettingsPanel() {
-  if (!settingsToggle || !settingsBody) return;
-  settingsBody.hidden = false;
-  settingsToggle.classList.add("open");
-}
-
 function showAssetEditors(tokenId) {
   activeAssetTokenId = tokenId;
   if (teamPanel) {
     teamPanel.hidden = false;
-    openSettingsPanel();
     refreshEditors();
   }
 }

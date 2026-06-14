@@ -5,7 +5,7 @@
  * Views: Create, Outline, Library, Ledger.
  */
 
-const VIEWS = ["create", "outline", "library", "ledger"];
+const VIEWS = ["settings", "chat", "outline", "library", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
 
 let sidebar = null;
@@ -27,9 +27,9 @@ function initSidebar() {
     viewPanes[v] = sidebar.querySelector(`.sidebar-view[data-view="${v}"]`);
   });
 
-  // Restore last view or default to "create"
+  // Restore last view or default to "chat"
   const stored = localStorage.getItem(STORAGE_KEY);
-  switchView(stored && VIEWS.includes(stored) ? stored : "create");
+  switchView(stored && VIEWS.includes(stored) ? stored : "chat");
 
   // Wire switcher buttons
   switcherBtns.forEach((btn) => {
@@ -66,10 +66,10 @@ function initSidebar() {
     }
   });
 
-  // Keyboard: Ctrl+1-4 to switch views
+  // Keyboard: Ctrl+1-5 to switch views
   document.addEventListener("keydown", (e) => {
     if (isEditing()) return;
-    if ((e.ctrlKey || e.metaKey) && e.key >= "1" && e.key <= "4") {
+    if ((e.ctrlKey || e.metaKey) && e.key >= "1" && e.key <= "5") {
       e.preventDefault();
       const idx = parseInt(e.key) - 1;
       if (VIEWS[idx]) switchView(VIEWS[idx]);
