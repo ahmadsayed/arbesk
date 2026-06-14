@@ -4,6 +4,7 @@
  */
 
 import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { saveManifest } from "../services/api.js";
 import {
   contract as walletContract,
   publishAsset,
