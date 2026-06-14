@@ -17,6 +17,7 @@ The goal of every change: **make the interface feel like a native GNOME applicat
 | Adding a keyboard shortcut? | Add to `scene-graph.js` keydown switch with form-field guard. See [→ Checklists](./references/checklists.md) |
 | Need a reusable pattern? | Empty state, drop zone, or spinner. See [→ Patterns](./references/patterns.md) |
 | Something feels off? | Check ortho frustum, HighlightLayer stencil, mesh disposal, form guards. See [→ Pitfalls](./references/pitfalls.md) |
+| Changed a button/id/label/flow/status text? | Update the E2E selectors + specs and run the suite. See [→ E2E Sync](./references/e2e-sync.md) |
 
 ## Key Rules
 
@@ -30,6 +31,7 @@ The goal of every change: **make the interface feel like a native GNOME applicat
 8. **Pug has no includes** — everything is in `studio.pug`.
 9. **SCSS components need `@use` in `styles.scss`** — a new file won't be built unless imported.
 10. **Use CSS variables, not raw px** — spacing, colors, radii, durations all from tokens.
+11. **UI changes must keep E2E in sync** — `e2e/helpers/studio-selectors.mjs` is a public contract. Renaming an `id`/class/label, changing a status message, or reordering a flow breaks the specs. Update selectors + specs and run the suite. See [→ E2E Sync](./references/e2e-sync.md).
 
 ## File Map
 
@@ -53,3 +55,4 @@ The goal of every change: **make the interface feel like a native GNOME applicat
 | Keyboard Shortcuts, New Panel Checklist | [→ Checklists](./references/checklists.md) |
 | Empty State, Drop Zone, Spinner Patterns | [→ Patterns](./references/patterns.md) |
 | Common Mistakes & Anti-Patterns | [→ Pitfalls](./references/pitfalls.md) |
+| When/how to update E2E tests after UI changes | [→ E2E Sync](./references/e2e-sync.md) |

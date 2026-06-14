@@ -70,6 +70,44 @@ Validates the full draft-save → publish → on-chain token lifecycle:
 
 **Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, and the token URI resolution API. UI changes to any of those controls or changes to the manifest schema/versioning logic can break it.
 
+### 4. Parametric versioning + time-travel (`e2e/specs/04-parametric-version.spec.js`)
+
+Validates two of the platform's Golden Rules — **Parametric Coexistence** and **Temporal Isolation**:
+
+1. Generates `cowboy` (version 1).
+2. Selects the node in the **Outliner**, which auto-opens the component colour editor.
+3. Changes the colour and **Save**s — asserts a new version `2` whose `prev_asset_manifest_cid` is the generation CID.
+4. Asserts the version slider (`#historySlider`) now spans two versions and the badge shows `v2`.
+5. Scrubs the slider back to index `0` and asserts the badge follows to `v1` (and forward again to `v2`).
+
+**Why it matters:** Colour/scale edits are first-class versions, and the slider is the app's sole version-control surface. Changes to `parametric-preview.js`, `asset-history.js`, the outliner selection path, or version-chain logic can break it.
+
+### 5. Republish existing token (`e2e/specs/05-republish.spec.js`)
+
+Validates the edit → **republish** branch (no new mint):
+
+1. Generates, saves, and publishes a token.
+2. Edits the published asset's colour.
+3. Clicks **Besk it** again — an already-named token skips the dialog and calls `updateAssetURI` instead of minting.
+4. Polls `GET /api/v1/tokens/<tokenId>/manifest` until the on-chain version increases; asserts the same name, a newer version, and an unchanged `?asset=<tokenId>` anchor.
+
+**Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.js`'s publish branch or the token-URI API can break it.
+
+### 6. Nesting / linked child worlds (`e2e/specs/06-nesting.spec.js`)
+
+Validates the "dollhouse architecture" — linking a token as a child world and navigating depth:
+
+1. Publishes a world to use as the child reference.
+2. Starts a fresh parent (**New asset** → name), generates the parent's own content.
+3. Uses the gallery card's **Add to Scene** to link the child token into the parent.
+4. **Save**s and asserts the parent manifest gains a `child_ref` node with a 16-element identity `transform_matrix` and **no** local `history`.
+5. Selects the child node and **dives** (`#inspectorDiveBtn`) — asserts the back button reveals and the `nesting:didDive` event fires at depth 1.
+6. **Ascends** via the back button — asserts it hides and `nesting:didAscend` fires at depth 0.
+
+**Why it matters:** Token child nodes (`child_ref`, `transform_matrix`, depth gating) are the core fractal-nesting data model. Changes to `nesting.js`, `scene-graph.js` linked-asset handling, the token resolver, or the child-node manifest shape can break it.
+
+> **Note:** the outliner only renders a linked child node **after a save** (it refreshes on `ASSET_DRAFT_SAVED`, not on `SCENE_TOKEN_CHILD_ADDED`), so the spec saves before locating the child node.
+
 ---
 
 ## When you MUST run these tests

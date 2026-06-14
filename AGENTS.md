@@ -249,6 +249,8 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
+**E2E coverage (6 specs):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery → burn · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend. Per-spec contract: `e2e/README.md`.
+
 ### Running tests
 
 ```bash
@@ -269,16 +271,18 @@ npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
 - Studio UI/UX (headerbar, chat, prompt input, dialogs, wallet controls, settings)
 - Wallet integration (`wallet.js`, `wallet-connect.js`, `wallet-discovery.js`, `siwe.js`, session auth)
 - Generation flow (`create-panel.js`, generation API, transaction validation, mock adapter, provider/tier selection)
-- Save/publish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture)
+- Save/publish/republish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture, `updateAssetURI`)
+- Parametric editing + version history (`parametric-preview.js`, `asset-history.js`, the outliner selection path, the version slider)
+- Nesting / linked child worlds (`nesting.js`, `scene-graph.js` linked-asset handling, token resolver, `child_ref` / `transform_matrix`)
 - Smart contracts, ABI, or deployment scripts
-- Manifest schema (`scene.nodes`, `source_asset`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`)
+- Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`)
 - IPFS storage format or CID handling
 
 `npm test` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
 
 ### Keeping E2E tests in sync with UI changes
 
-The E2E specs depend on a stable selector map and a known user flow. See `e2e/README.md` for the full contract.
+The E2E specs depend on a stable selector map and a known user flow. See `e2e/README.md` for the full contract, and the `edit-ui` skill's [E2E Sync guide](.agents/skills/edit-ui/references/e2e-sync.md) for the UI-area → spec → selector map.
 
 **If you change the UI, you must:**
 

@@ -147,8 +147,14 @@ export default async function globalSetup() {
   // Reset the in-memory backend rate limiter so repeated E2E runs do not
   // exhaust the per-wallet generation quota left over from previous runs.
   try {
+    // The /api/v1 router enforces Content-Type: application/json (requireJson),
+    // so this POST must send the header + a body or it 415s and the reset
+    // silently no-ops — letting the per-wallet 10-gen/hour limit accumulate
+    // across runs until generation starts failing with "Rate limit reached".
     const resetRes = await fetch("http://127.0.0.1:9090/api/v1/test/reset-rate-limit", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
     });
     if (resetRes.ok) {
       log("Rate limiter reset");

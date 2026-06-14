@@ -23,4 +23,18 @@ export const SELECTORS = {
   assetCard: ".asset-card",
   assetCardName: ".asset-card-name",
   assetCardBurnBtn: ".asset-card-burn",
+  // Outliner (scene graph tree)
+  outlinerSwitcherBtn: '[data-view="outline"]',
+  outlinerNode: ".outliner-node",
+  // Parametric component (color) editor inside the Node Inspector
+  componentEditor: "#componentEditor",
+  componentColorInput: "#selectedComponentColor",
+  // Version history / time-travel
+  assetHistory: "#assetHistory",
+  historySlider: "#historySlider",
+  historyVersionBadge: "#historyVersionBadge",
+  // New asset + nesting (linked child worlds)
+  newAssetBtn: "#newAssetBtn",
+  inspectorDiveBtn: "#inspectorDiveBtn",
+  backBtn: "#backBtn",
 };

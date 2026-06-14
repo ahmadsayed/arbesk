@@ -15,8 +15,8 @@ export const NETWORK_CONFIGS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {
     name: "Hardhat Local",
     chainId: CHAIN_IDS.HARDHAT_LOCAL,
-    contractAddress: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-    paidContractAddress: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+    contractAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    paidContractAddress: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     usdcToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,

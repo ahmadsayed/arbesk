@@ -1,9 +1,23 @@
 const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
+const BACKEND = "http://127.0.0.1:9090";
 
 export async function fetchManifest(cid) {
   const res = await fetch(`${IPFS_GATEWAY}/${cid}`);
   if (!res.ok) throw new Error(`Failed to fetch manifest ${cid}: ${res.status}`);
   return res.json();
+}
+
+/** Read the on-chain manifest the backend resolves for a token id (hex). */
+export async function fetchTokenManifest(tokenIdHex) {
+  const res = await fetch(`${BACKEND}/api/v1/tokens/${tokenIdHex}/manifest`);
+  if (!res.ok) throw new Error(`token manifest ${tokenIdHex}: ${res.status}`);
+  const payload = await res.json();
+  return payload.manifest;
+}
+
+/** Pull the `?manifest=` CID the studio writes to the URL after a generate/save. */
+export function manifestCidFromUrl(url) {
+  return new URL(url).searchParams.get("manifest");
 }
 
 export function assertGenerationManifest(manifest, { prompt, provider = "mock" }) {
