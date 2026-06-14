@@ -125,4 +125,33 @@ describe("outliner node rendering", () => {
     expect(a.classList.contains("selected")).toBe(false);
     expect(b.classList.contains("selected")).toBe(true);
   });
+
+  test("expand/collapse toggle hides and shows child rows", () => {
+    const tree = document.querySelector(".outliner-tree");
+    const nodes = [
+      {
+        node_id: "parent",
+        name: "parent",
+        children: [{ node_id: "child", name: "child" }],
+      },
+    ];
+    window._currentManifest = { scene: { nodes } };
+    renderTree(nodes);
+
+    let toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(tree.querySelector('[data-node-id="child"]')).toBeTruthy();
+
+    toggle.click();
+    toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(tree.querySelector('[data-node-id="child"]')).toBeFalsy();
+
+    toggle.click();
+    toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(tree.querySelector('[data-node-id="child"]')).toBeTruthy();
+
+    delete window._currentManifest;
+  });
 });

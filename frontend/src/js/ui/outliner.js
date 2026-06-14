@@ -13,7 +13,6 @@ import { emit, on, EVENTS } from "../events/registry.js";
 let outlinerTree = null;
 let outlinerFooter = null;
 let selectedNodeId = null;
-let dropIndicator = null;
 const collapsedNodeIds = new Set();
 let renderedManifestCid = null;
 
@@ -86,6 +85,8 @@ function getNodes() {
 async function refreshOutliner() {
   const manifest = await getCurrentManifest();
   if (!manifest) {
+    collapsedNodeIds.clear();
+    renderedManifestCid = null;
     renderEmpty();
     return;
   }
@@ -322,35 +323,18 @@ async function onRemoveSelected() {
 
 // ─── Drag & Drop from Library ────────────────────────────────────────
 
-function getDropIndicator() {
-  if (!dropIndicator) {
-    dropIndicator = document.createElement("div");
-    dropIndicator.className = "outliner-drop-target";
-  }
-  return dropIndicator;
-}
-
 function showDropTarget(e) {
   const target = e.target.closest(".outliner-node");
-  const tree = getOutlinerTree();
-  if (!target || !tree) {
-    hideDropTarget();
-    return;
+  hideDropTarget();
+  if (target) {
+    target.classList.add("drag-over");
   }
-  const indicator = getDropIndicator();
-  if (
-    indicator.parentNode !== tree ||
-    indicator.nextElementSibling !== target
-  ) {
-    tree.insertBefore(indicator, target);
-  }
-  indicator.classList.add("active");
 }
 
 function hideDropTarget() {
-  if (dropIndicator?.parentNode) {
-    dropIndicator.remove();
-  }
+  outlinerTree?.querySelectorAll(".outliner-node.drag-over").forEach((el) => {
+    el.classList.remove("drag-over");
+  });
 }
 
 function onDropFromLibrary(e) {

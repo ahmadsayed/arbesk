@@ -59,6 +59,10 @@
       color-mix(in srgb, var(--accent-bg) 15%, transparent));
   }
 
+  &.drag-over {
+    background-color: color-mix(in srgb, var(--accent-bg) 25%, transparent);
+  }
+
   &:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
@@ -87,7 +91,6 @@
   height: 16px;
   flex-shrink: 0;
   color: var(--dim-fg);
-  transition: transform var(--duration-quick) var(--ease-out-3);
   cursor: pointer;
   font: inherit;
 
@@ -129,20 +132,6 @@
 @for $d from 1 through 5 {
   .outliner-node[data-depth="#{$d}"] {
     padding-left: calc(var(--size-3) * #{$d});
-  }
-}
-
-// Drag target indicator
-.outliner-drop-target {
-  height: 2px;
-  background-color: var(--accent-bg);
-  border-radius: 1px;
-  margin: 0 var(--size-2);
-  opacity: 0;
-  transition: opacity var(--duration-quick) var(--ease-out-3);
-
-  &.active {
-    opacity: 1;
   }
 }
 
