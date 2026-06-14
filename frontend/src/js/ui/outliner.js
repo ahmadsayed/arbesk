@@ -80,6 +80,34 @@ function getNodes() {
   return manifest.scene.nodes;
 }
 
+/**
+ * Build a hierarchical outline tree from the flat manifest nodes array.
+ * Child-world nodes (nodes with child_ref) are grouped under the nearest
+ * preceding regular node so the outline reflects the parent/child relationship
+ * shown in the viewport.
+ */
+function buildOutlineTree(nodes) {
+  if (!Array.isArray(nodes)) return [];
+
+  const tree = [];
+  let currentParent = null;
+
+  nodes.forEach((node) => {
+    const isChildWorld = !!node.child_ref;
+    if (isChildWorld && currentParent) {
+      currentParent.children ||= [];
+      currentParent.children.push(node);
+    } else {
+      tree.push(node);
+      if (!isChildWorld) {
+        currentParent = node;
+      }
+    }
+  });
+
+  return tree;
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────
 
 async function refreshOutliner() {
@@ -96,7 +124,7 @@ async function refreshOutliner() {
     renderedManifestCid = cid;
   }
   window._currentManifest = manifest;
-  renderTree(getNodes());
+  renderTree(buildOutlineTree(getNodes()));
 }
 
 function renderEmpty() {
@@ -382,4 +410,5 @@ export {
   selectNode,
   clearSelection,
   createNodeElement,
+  buildOutlineTree,
 };

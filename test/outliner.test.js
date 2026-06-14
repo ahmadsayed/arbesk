@@ -7,6 +7,7 @@ import {
   createNodeElement,
   selectNode,
   renderTree,
+  buildOutlineTree,
 } from "../frontend/src/js/ui/outliner.js";
 import { on, off, EVENTS } from "../frontend/src/js/events/registry.js";
 
@@ -153,5 +154,21 @@ describe("outliner node rendering", () => {
     expect(tree.querySelector('[data-node-id="child"]')).toBeTruthy();
 
     delete window._currentManifest;
+  });
+
+  test("buildOutlineTree groups child_ref nodes under preceding regular node", () => {
+    const flatNodes = [
+      { node_id: "hello", name: "hello" },
+      { node_id: "cowboy", name: "cowboy", child_ref: { tokenId: "2103578700" } },
+      { node_id: "person", name: "person", child_ref: { tokenId: "35131021" } },
+    ];
+
+    const tree = buildOutlineTree(flatNodes);
+
+    expect(tree).toHaveLength(1);
+    expect(tree[0].node_id).toBe("hello");
+    expect(tree[0].children).toHaveLength(2);
+    expect(tree[0].children[0].node_id).toBe("cowboy");
+    expect(tree[0].children[1].node_id).toBe("person");
   });
 });
