@@ -15,6 +15,7 @@ let outlinerFooter = null;
 let selectedNodeId = null;
 let dropIndicator = null;
 const collapsedNodeIds = new Set();
+let renderedManifestCid = null;
 
 function getOutlinerTree() {
   return outlinerTree || document.querySelector(".outliner-tree");
@@ -88,13 +89,19 @@ async function refreshOutliner() {
     renderEmpty();
     return;
   }
+  const cid = window.activeAssetManifestCid;
+  if (cid !== renderedManifestCid) {
+    collapsedNodeIds.clear();
+    renderedManifestCid = cid;
+  }
   window._currentManifest = manifest;
   renderTree(getNodes());
 }
 
 function renderEmpty() {
-  if (!outlinerTree) return;
-  outlinerTree.innerHTML = "";
+  const tree = getOutlinerTree();
+  if (!tree) return;
+  tree.innerHTML = "";
   if (outlinerFooter) outlinerFooter.textContent = "No items";
 }
 
@@ -165,7 +172,6 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   el.draggable = true;
 
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-  const isCollapsed = hasChildren && collapsedNodeIds.has(node.node_id);
 
   // Indentation guides for nested rows
   for (let i = 0; i < depth; i++) {
@@ -176,14 +182,14 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   }
 
   // Expand/collapse toggle or leaf spacer
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "outliner-node-toggle";
-  toggle.dataset.hasChildren = String(hasChildren);
-  toggle.setAttribute("aria-expanded", String(!isCollapsed));
+  let toggle;
   if (hasChildren) {
-    toggle.classList.toggle("expanded", !isCollapsed);
-    toggle.setAttribute("aria-label", isCollapsed ? `Expand ${node.name}` : `Collapse ${node.name}`);
+    const isCollapsed = collapsedNodeIds.has(node.node_id);
+    toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "outliner-node-toggle";
+    toggle.setAttribute("aria-expanded", String(!isCollapsed));
+    toggle.setAttribute("aria-label", `${isCollapsed ? "Expand" : "Collapse"} ${getNodeDisplayName(node)}`);
     toggle.textContent = isCollapsed ? "▶" : "▼";
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -193,11 +199,17 @@ function createNodeElement(node, isChildWorld, depth = 0) {
         collapsedNodeIds.add(node.node_id);
       }
       renderTree(getNodes());
+      getOutlinerTree()
+        ?.querySelector(`[data-node-id="${CSS.escape(node.node_id)}"] .outliner-node-toggle`)
+        ?.focus();
     });
   } else {
+    toggle = document.createElement("span");
+    toggle.className = "outliner-node-toggle";
     toggle.setAttribute("aria-hidden", "true");
     toggle.textContent = "";
   }
+  toggle.dataset.hasChildren = String(hasChildren);
   el.appendChild(toggle);
 
   // Icon
@@ -344,7 +356,6 @@ function hideDropTarget() {
 function onDropFromLibrary(e) {
   e.preventDefault();
   hideDropTarget();
-  dropIndicator?.remove();
 
   const raw = e.dataTransfer.getData("application/x-arbesk-linked-asset");
   if (!raw) return;

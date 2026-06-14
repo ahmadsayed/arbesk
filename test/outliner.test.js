@@ -4,18 +4,19 @@
 
 // We import the pure helpers we can test without bootstrapping the full app.
 import {
-  initOutliner,
   createNodeElement,
   selectNode,
   renderTree,
 } from "../frontend/src/js/ui/outliner.js";
-import { on, EVENTS, _resetListenerCounts } from "../frontend/src/js/events/registry.js";
+import { on, off, EVENTS } from "../frontend/src/js/events/registry.js";
 
 // jsdom does not implement CSS.escape, but outliner.js uses it for selectors.
 if (typeof CSS === "undefined" || !CSS.escape) {
   global.CSS = global.CSS || {};
   global.CSS.escape = (value) => value.replace(/([.:#*+?^${}()|[\]\\])/g, "\\$1");
 }
+
+const noop = () => {};
 
 describe("outliner node rendering", () => {
   beforeEach(() => {
@@ -25,11 +26,11 @@ describe("outliner node rendering", () => {
         <div class="outliner-footer">No items</div>
       </div>
     `;
-    on(EVENTS.OUTLINER_NODE_SELECTED, () => {});
+    on(EVENTS.OUTLINER_NODE_SELECTED, noop);
   });
 
   afterEach(() => {
-    _resetListenerCounts();
+    off(EVENTS.OUTLINER_NODE_SELECTED, noop);
   });
 
   test("renderTree recursively renders nested children with depth guides", () => {

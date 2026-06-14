@@ -104,6 +104,20 @@ export function on(name, handler) {
 }
 
 /**
+ * Remove a CustomEvent listener from document and decrement the dev-mode count.
+ *
+ * @param {string}        name    - Use an EVENTS.* constant
+ * @param {EventListener} handler
+ */
+export function off(name, handler) {
+  const count = _listenerCounts.get(name) || 0;
+  if (count > 0) {
+    _listenerCounts.set(name, count - 1);
+  }
+  document.removeEventListener(name, handler);
+}
+
+/**
  * Reset listener counts. Only call this in tests.
  * @internal
  */
