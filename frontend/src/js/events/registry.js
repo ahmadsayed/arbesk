@@ -73,6 +73,9 @@ const _isDev =
 const _futureOnlyEvents = new Set([
   EVENTS.NESTING_DID_DIVE,
   EVENTS.NESTING_DID_ASCEND,
+  EVENTS.ASSET_STATE_CHANGED,
+  EVENTS.WALLET_STATE_CHANGED,
+  EVENTS.UI_STATE_CHANGED,
 ]);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
