@@ -1,0 +1,16 @@
+export const SELECTORS = {
+  connectWalletBtn: "#connectWalletBtn",
+  walletOptionsList: "#walletOptionsList",
+  promptInput: "#promptInput",
+  generateBtn: "#generateBtn",
+  generateHint: "#generateHint",
+  chatHistoryList: "#chatHistoryList",
+  saveAssetBtn: "#saveAssetBtn",
+  publishAssetBtn: "#publishAssetBtn",
+  assetStatusName: "#assetStatusName",
+  assetStatusMeta: "#assetStatusMeta",
+  srStatus: "#srStatus",
+  providerSelect: "#providerSelect",
+  tierSelect: "#tierSelect",
+  assetNameDisplay: "#assetNameDisplay",
+};
