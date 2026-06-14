@@ -151,6 +151,7 @@ function wireEvents(gizmoManager) {
 
 function wireKeyboard(gizmoManager) {
   document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const tag = document.activeElement?.tagName?.toLowerCase();
     const editable =
       document.activeElement?.isContentEditable ||

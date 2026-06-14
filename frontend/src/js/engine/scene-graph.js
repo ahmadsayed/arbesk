@@ -345,6 +345,7 @@ function initEngine() {
 
   // Keyboard shortcuts — only fire when focus is on the canvas or body
   document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const tag = document.activeElement?.tagName?.toLowerCase();
     const editable =
       document.activeElement?.isContentEditable ||
