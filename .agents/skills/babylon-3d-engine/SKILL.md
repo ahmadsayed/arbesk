@@ -17,6 +17,9 @@ Use this skill when working with Babylon.js in the Arbesk project: scene lifecyc
 | `clearScene()` removes the grid/gizmo? | Missing `metadata.isViewportChrome = true`. See [→ Scene Lifecycle](./references/scene-lifecycle.md) |
 | Resize breaks canvas aspect ratio? | Engine resize handler missing or leaking. See [→ Scene Lifecycle](./references/scene-lifecycle.md) |
 | GLTF fails to load (no error, just blank)? | Check blob URL lifecycle, CORS, or invalid JSON. See [→ Asset Loading](./references/asset-loading.md) |
+| Child world transform not saved / "No Changes" on save? | Pointer walk stopping at mesh nodeId instead of walking to childRef boundary. See [→ Child-World Transforms](./references/child-world-transforms.md) |
+| Child world jumps to wrong position after save/reload? | `nodeAnchors` pointing to inner childAnchor instead of outer anchor. See [→ Child-World Transforms](./references/child-world-transforms.md) |
+| Clicking child world in outliner doesn't attach gizmo? | `OUTLINER_NODE_SELECTED` not wired to `selectNodeById`. See [→ Child-World Transforms](./references/child-world-transforms.md) |
 
 ## Key Rules
 
@@ -51,3 +54,4 @@ Use this skill when working with Babylon.js in the Arbesk project: scene lifecyc
 | Engine Init, Scene Setup, Cleanup, Resize, Chrome | [→ Scene Lifecycle](./references/scene-lifecycle.md) |
 | GLTF/GLB Loading, Blob URLs, Metadata, Placeholders | [→ Asset Loading](./references/asset-loading.md) |
 | ArcRotateCamera, Ortho Mode, View Presets, Framing | [→ Camera & Views](./references/camera-and-views.md) |
+| Child-World Anchor Hierarchy, Pointer Walk, Transform Persistence | [→ Child-World Transforms](./references/child-world-transforms.md) |

@@ -281,27 +281,47 @@ function initEngine() {
     if (pickResult.hit && pickResult.pickedMesh) {
       const mesh = pickResult.pickedMesh;
       let target = mesh;
+      // Walk the full parent chain. Track the first nodeId seen (for regular
+      // nodes) but do NOT stop — continue until a childRef boundary is found
+      // or the chain ends. A childRef boundary means we are inside a child
+      // world; the parent manifest's node_id is on the outer anchor above it.
+      let firstNodeId = null;
+      let childWorldNodeId = null;
+
       while (target) {
-        if (target.metadata?.nodeId) {
-          const nodeId = target.metadata.nodeId;
-
-          if (nodeId === state.highlightedNodeId) {
-            // Already selected this node — check for sub-mesh toggle
-            if (mesh.name) {
-              if (state.highlightedSubMeshName === mesh.name) {
-                // Deselect sub-mesh, back to node-level
-                selectNode(nodeId, target);
-              } else {
-                selectSubMesh(nodeId, mesh.name);
-              }
-            }
-            return;
-          }
-
-          selectNode(nodeId, target);
-          return;
+        if (target.metadata?.childRef) {
+          // childAnchor: its parent is the outer anchor whose metadata.nodeId
+          // is the parent-manifest node_id (manifest-loaded path).
+          // Fall back to childAnchor's own nodeId for freshly-dropped nodes.
+          childWorldNodeId =
+            target.parent?.metadata?.nodeId ||
+            target.metadata?.nodeId ||
+            null;
+          break;
+        }
+        if (target.metadata?.nodeId && !firstNodeId) {
+          firstNodeId = target.metadata.nodeId;
         }
         target = target.parent;
+      }
+
+      const resolvedNodeId = childWorldNodeId || firstNodeId;
+      const isChildWorldNode = !!childWorldNodeId;
+
+      if (resolvedNodeId) {
+        if (resolvedNodeId === state.highlightedNodeId) {
+          // Sub-mesh toggle only applies to regular (non-child-world) nodes.
+          if (!isChildWorldNode && mesh.name) {
+            if (state.highlightedSubMeshName === mesh.name) {
+              selectNode(resolvedNodeId, target);
+            } else {
+              selectSubMesh(resolvedNodeId, mesh.name);
+            }
+          }
+          return;
+        }
+        selectNode(resolvedNodeId, target);
+        return;
       }
     }
     // Clicked empty space → deselect
@@ -794,9 +814,18 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       childRef,
       resolvedCid: resolution.manifestCid,
       loaded: true,
+      // nodeId fallback for the freshly-dropped path where no outer anchor exists
+      // and the pointer walk needs to resolve past the childRef boundary.
+      nodeId: node.node_id,
     };
 
-    state.nodeAnchors.set(node.node_id, childAnchor);
+    // Only register childAnchor if loadNode hasn't already registered the outer anchor.
+    // For freshly-dropped nodes (no loadNode call), this registers the childAnchor as the
+    // transform target. For manifest-loaded nodes, the outer anchor takes precedence so that
+    // captureSelectedTransform reads world-space position, not a local offset from the outer anchor.
+    if (!state.nodeAnchors.has(node.node_id)) {
+      state.nodeAnchors.set(node.node_id, childAnchor);
+    }
 
     disposePlaceholder(loadingPlaceholder);
 
@@ -835,6 +864,9 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   let meshes = [];
 
   if (node.child_ref) {
+    // Tag the outer anchor so the pointer walk can resolve child-world
+    // mesh clicks to this parent-manifest node_id (see click-to-select above).
+    anchor.metadata = { nodeId: node.node_id };
     meshes = await loadTokenChildNode(
       node,
       anchor,
@@ -1187,6 +1219,13 @@ function registerMockNode(nodeId, mesh, _history = []) {
 on(EVENTS.OUTLINER_REMOVE_REQUESTED, ({ detail }) => {
   // TODO(#18): implement node removal from manifest
   console.warn("[SCENE] outliner:removeRequested not yet implemented for nodeId:", detail?.nodeId);
+});
+
+// Forward outliner clicks to the scene selection system so that
+// state.highlightedNodeId is updated and the transform gizmo attaches.
+on(EVENTS.OUTLINER_NODE_SELECTED, (e) => {
+  const nodeId = e.detail?.nodeId;
+  if (nodeId) selectNodeById(nodeId);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
