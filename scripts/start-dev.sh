@@ -128,21 +128,24 @@ if [ "$NEEDS_DEPLOY" = true ]; then
     echo "📜 Deploying ArbeskAsset + MockUSDC to Hardhat..."
     docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 
-    # Read deployed addresses from the deployment artifact inside the container.
-    # docker-compose exec output includes non-JSON noise; filter to the JSON.
-    ARTIFACT_RAW=$(docker compose exec -T hardhat cat /app/deployments/localhost/ArbeskAsset.json 2>/dev/null)
-    # Find the JSON object between { and }
-    ARTIFACT_JSON=$(echo "$ARTIFACT_RAW" | sed -n '/^{/,/^}/p')
+    # Read deployed addresses from the deployment artifacts inside the container.
+    # docker-compose exec output includes non-JSON noise; filter to the JSON object.
+    FREE_ARTIFACT_RAW=$(docker compose exec -T hardhat cat /app/deployments/localhost/ArbeskAssetFree.json 2>/dev/null)
+    PAID_ARTIFACT_RAW=$(docker compose exec -T hardhat cat /app/deployments/localhost/ArbeskAsset.json 2>/dev/null)
+    FREE_ARTIFACT_JSON=$(echo "$FREE_ARTIFACT_RAW" | sed -n '/^{/,/^}/p')
+    PAID_ARTIFACT_JSON=$(echo "$PAID_ARTIFACT_RAW" | sed -n '/^{/,/^}/p')
 
-    if [ -n "$ARTIFACT_JSON" ]; then
-        CONTRACT_ADDRESS=$(echo "$ARTIFACT_JSON" | grep '"address"' | head -1 | sed 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-        USDC_TOKEN=$(echo "$ARTIFACT_JSON" | grep '"usdcToken"' | head -1 | sed 's/.*"usdcToken"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    if [ -n "$FREE_ARTIFACT_JSON" ] && [ -n "$PAID_ARTIFACT_JSON" ]; then
+        CONTRACT_ADDRESS=$(echo "$FREE_ARTIFACT_JSON" | grep '"address"' | head -1 | sed 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        PAID_CONTRACT_ADDRESS=$(echo "$PAID_ARTIFACT_JSON" | grep '"address"' | head -1 | sed 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        USDC_TOKEN=$(echo "$FREE_ARTIFACT_JSON" | grep '"usdcToken"' | head -1 | sed 's/.*"usdcToken"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
-        if [ -n "$CONTRACT_ADDRESS" ] && [ -n "$USDC_TOKEN" ]; then
+        if [ -n "$CONTRACT_ADDRESS" ] && [ -n "$PAID_CONTRACT_ADDRESS" ] && [ -n "$USDC_TOKEN" ]; then
             # Update blockchain/.env on HOST (write from host side, not container)
             TMPFILE=$(mktemp)
-            grep -v '^CONTRACT_ADDRESS=\|^USDC_TOKEN=' blockchain/.env > "$TMPFILE"
+            grep -v '^CONTRACT_ADDRESS=\|^PAID_CONTRACT_ADDRESS=\|^USDC_TOKEN=' blockchain/.env > "$TMPFILE"
             echo "CONTRACT_ADDRESS=${CONTRACT_ADDRESS}" >> "$TMPFILE"
+            echo "PAID_CONTRACT_ADDRESS=${PAID_CONTRACT_ADDRESS}" >> "$TMPFILE"
             echo "USDC_TOKEN=${USDC_TOKEN}" >> "$TMPFILE"
             mv "$TMPFILE" blockchain/.env
             echo "✅ Contract deployed at ${CONTRACT_ADDRESS}"
