@@ -2,7 +2,7 @@
 // Settings — Asset Definition + Team Panel in Create sidebar view
 // ═══════════════════════════════════════════════════════════════════
 
-.asset-definition-section {
+.asset-settings-section {
   flex-shrink: 0;
   margin-bottom: var(--size-3);
   background-color: var(--card-bg);
@@ -12,48 +12,22 @@
   box-shadow: var(--shadow-1);
 }
 
-.asset-def-header {
-  display: flex;
+.asset-settings-header {
+  padding: var(--size-2) var(--size-3);
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
 }
 
-.asset-def-toggle {
-  width: 100%;
-  padding: var(--size-2) var(--size-3);
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  user-select: none;
+.asset-section-title {
+  margin: 0;
   color: var(--accent-bg);
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-7);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  transition: background-color var(--duration-quick) var(--ease-out-3);
-
-  &:hover {
-    background-color: color-mix(in srgb, var(--accent-bg) 8%, transparent);
-  }
-
-  svg {
-    transition: transform var(--duration-quick) var(--ease-out-3);
-    flex-shrink: 0;
-  }
-
-  &.open svg {
-    transform: rotate(90deg);
-  }
 }
 
-.asset-def-body {
-  padding: 0 var(--size-3) var(--size-3);
-  border-top: var(--border-size-1) solid var(--border-hairline);
-
-  &[hidden] {
-    display: none;
-  }
+.asset-settings-body {
+  padding: var(--size-3);
 
   #burnAssetBtn {
     margin-top: var(--size-3);
@@ -61,7 +35,7 @@
   }
 }
 
-// ─── Team Section (inside asset-def-body) ────────────────────────────
+// ─── Team Section (inside asset-settings-body) ───────────────────────
 
 .team-section {
   border-top: var(--border-size-1) solid var(--border-hairline);

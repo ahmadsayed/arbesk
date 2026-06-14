@@ -96,22 +96,25 @@ html(lang="en")
         //- Unified Sidebar with View Switcher
         aside.sidebar#sidebar
           .sidebar-switcher(role="tablist")
-            button.sidebar-switcher-btn.active.pulse(data-view="create" role="tab" aria-selected="true" tabindex="0" aria-label="Asset" title="Asset (Ctrl+1)")
+            button.sidebar-switcher-btn.active(data-view="settings" role="tab" aria-selected="true" tabindex="0" aria-label="Settings" title="Settings (Ctrl+1)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                path(d="M12 20h9")
-                path(d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z")
-            button.sidebar-switcher-btn(data-view="outline" role="tab" aria-selected="false" tabindex="-1" aria-label="Outline" title="Outline (Ctrl+2)")
+                circle(cx="12" cy="12" r="3")
+                path(d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z")
+            button.sidebar-switcher-btn.pulse(data-view="chat" role="tab" aria-selected="false" tabindex="-1" aria-label="Chat" title="Chat (Ctrl+2)")
+              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                path(d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z")
+            button.sidebar-switcher-btn(data-view="outline" role="tab" aria-selected="false" tabindex="-1" aria-label="Outline" title="Outline (Ctrl+3)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 circle(cx="12" cy="12" r="10")
                 line(x1="12" y1="2" x2="12" y2="7")
                 line(x1="12" y1="17" x2="12" y2="22")
                 line(x1="2" y1="12" x2="7" y2="12")
                 line(x1="17" y1="12" x2="22" y2="12")
-            button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Gallery" title="Gallery (Ctrl+3)")
+            button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Gallery" title="Gallery (Ctrl+4)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20")
                 path(d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z")
-            button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+4)")
+            button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+5)")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z")
                 path(d="M14 2v6h6")
@@ -124,18 +127,15 @@ html(lang="en")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                   polyline(points="15 18 9 12 15 6")
           .sidebar-content
-            //- View: Asset
-            .sidebar-view(data-view="create")
+            //- View: Settings
+            .sidebar-view(data-view="settings")
               .sidebar-view-header
-                h3 Asset
+                h3 Settings
               .sidebar-view-body
-                #assetDefinition.asset-definition-section
-                  .asset-def-header
-                    button#toggleAssetDef.asset-def-toggle(aria-label="Toggle settings")
-                      svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                        polyline(points="9 18 15 12 9 6")
-                      span Settings
-                  .asset-def-body(hidden)
+                #assetSettings.asset-settings-section
+                  .asset-settings-header
+                    h4.asset-section-title Asset Settings
+                  .asset-settings-body
                     .form-group
                       label.form-label Asset Name
                       #assetNameDisplay.form-input Untitled Asset
@@ -169,11 +169,20 @@ html(lang="en")
                         path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
                         path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
                       span Burn
-                #chatHistory.chat-history
-                  .chat-welcome
-                    .welcome-icon ✦
-                    p.welcome-text Create an asset
-                    p.welcome-sub Describe the 3D asset you want to generate.
+
+            //- View: Chat
+            .sidebar-view(data-view="chat" hidden)
+              .sidebar-view-header
+                h3 Chat
+              .sidebar-view-body
+                #chatHistory.chat-history-section
+                  .chat-history-header
+                    h4.asset-section-title Chat History
+                  #chatHistoryList.chat-history-list
+                    .chat-welcome
+                      .welcome-icon ✦
+                      p.welcome-text Create an asset
+                      p.welcome-sub Describe the 3D asset you want to generate.
 
             //- View: Outline
             .sidebar-view(data-view="outline" hidden)

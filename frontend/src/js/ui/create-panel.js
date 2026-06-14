@@ -21,6 +21,7 @@ import { on, EVENTS } from "../events/registry.js";
 
 // ─── DOM References ───
 const chatHistory = document.getElementById("chatHistory");
+const chatHistoryList = document.getElementById("chatHistoryList");
 const promptInput = document.getElementById("promptInput");
 const generateBtn = document.getElementById("generateBtn");
 const generateHint = document.getElementById("generateHint");
@@ -34,14 +35,28 @@ const tierSelect = document.getElementById("tierSelect");
 
 function addChatMessage(role, text) {
   // Hide welcome text on first real message
-  const welcome = chatHistory?.querySelector(".chat-welcome");
+  const welcome = chatHistoryList?.querySelector(".chat-welcome");
   if (welcome) welcome.hidden = true;
 
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble chat-bubble-${role}`;
-  bubble.textContent = text;
-  chatHistory.appendChild(bubble);
-  chatHistory.scrollTop = chatHistory.scrollHeight;
+
+  const content = document.createElement("span");
+  content.className = "chat-bubble-content";
+  content.textContent = text;
+  bubble.appendChild(content);
+
+  const time = document.createElement("time");
+  time.className = "chat-bubble-time";
+  time.dateTime = new Date().toISOString();
+  time.textContent = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  bubble.appendChild(time);
+
+  chatHistoryList.appendChild(bubble);
+  chatHistoryList.scrollTop = chatHistoryList.scrollHeight;
 }
 
 // ─── Generate Button State ───
@@ -200,19 +215,6 @@ async function onGenerate() {
   } finally {
     setGenerating(false);
   }
-}
-
-// ─── Asset Definition Toggle ───
-
-const toggleAssetDef = document.getElementById("toggleAssetDef");
-const assetDefBody = document.querySelector(".asset-def-body");
-
-if (toggleAssetDef && assetDefBody) {
-  toggleAssetDef.addEventListener("click", () => {
-    const hidden = assetDefBody.hidden;
-    assetDefBody.hidden = !hidden;
-    toggleAssetDef.classList.toggle("open", hidden);
-  });
 }
 
 // ─── Event Bindings ───
