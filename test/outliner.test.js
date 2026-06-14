@@ -7,6 +7,7 @@ import {
   initOutliner,
   createNodeElement,
   selectNode,
+  renderTree,
 } from "../frontend/src/js/ui/outliner.js";
 
 // jsdom does not implement CSS.escape, but outliner.js uses it for selectors.
@@ -23,6 +24,47 @@ describe("outliner node rendering", () => {
         <div class="outliner-footer">No items</div>
       </div>
     `;
+  });
+
+  test("renderTree recursively renders nested children with depth guides", () => {
+    const tree = document.querySelector(".outliner-tree");
+    const nodes = [
+      {
+        node_id: "parent",
+        name: "parent",
+        children: [
+          {
+            node_id: "child1",
+            name: "child1",
+            children: [{ node_id: "grandchild", name: "grandchild" }],
+          },
+          { node_id: "child2", name: "child2" },
+        ],
+      },
+    ];
+    renderTree(nodes);
+
+    const parent = tree.querySelector('[data-node-id="parent"]');
+    const child1 = tree.querySelector('[data-node-id="child1"]');
+    const grandchild = tree.querySelector('[data-node-id="grandchild"]');
+
+    expect(parent).toBeTruthy();
+    expect(child1).toBeTruthy();
+    expect(grandchild).toBeTruthy();
+    expect(parent.dataset.depth).toBe("0");
+    expect(child1.dataset.depth).toBe("1");
+    expect(grandchild.dataset.depth).toBe("2");
+    expect(child1.querySelectorAll(".outliner-node-guide").length).toBe(1);
+    expect(grandchild.querySelectorAll(".outliner-node-guide").length).toBe(2);
+  });
+
+  test("renderTree renders empty state when nodes array is empty", () => {
+    const tree = document.querySelector(".outliner-tree");
+    const footer = document.querySelector(".outliner-footer");
+    renderTree([]);
+
+    expect(tree.querySelector(".ledger-empty")).toBeTruthy();
+    expect(footer.textContent).toBe("0 items · 0 children · Depth 0/5");
   });
 
   test("renders a leaf node with icon, label, and no chevron", () => {

@@ -13,6 +13,8 @@ import { emit, on, EVENTS } from "../events/registry.js";
 let outlinerTree = null;
 let outlinerFooter = null;
 let selectedNodeId = null;
+let dropIndicator = null;
+const collapsedNodeIds = new Set();
 
 function getOutlinerTree() {
   return outlinerTree || document.querySelector(".outliner-tree");
@@ -97,15 +99,16 @@ function renderEmpty() {
 }
 
 function renderTree(nodes, depth = 0) {
-  if (!outlinerTree) return { totalNodes: 0, childCount: 0 };
+  const tree = getOutlinerTree();
+  if (!tree) return { totalNodes: 0, childCount: 0 };
 
   if (depth === 0) {
-    outlinerTree.innerHTML = "";
+    tree.innerHTML = "";
   }
 
   if (!Array.isArray(nodes) || nodes.length === 0) {
     if (depth === 0) {
-      outlinerTree.innerHTML =
+      tree.innerHTML =
         '<div class="ledger-empty">No items in this world</div>';
       updateFooter(0, 0);
     }
@@ -121,9 +124,11 @@ function renderTree(nodes, depth = 0) {
     totalNodes++;
 
     const el = createNodeElement(node, isChild, depth);
-    outlinerTree.appendChild(el);
+    tree.appendChild(el);
 
-    if (Array.isArray(node.children) && node.children.length > 0) {
+    const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+    const isCollapsed = hasChildren && collapsedNodeIds.has(node.node_id);
+    if (hasChildren && !isCollapsed) {
       const childStats = renderTree(node.children, depth + 1);
       totalNodes += childStats.totalNodes;
       childCount += childStats.childCount;
@@ -160,6 +165,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   el.draggable = true;
 
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+  const isCollapsed = hasChildren && collapsedNodeIds.has(node.node_id);
 
   // Indentation guides for nested rows
   for (let i = 0; i < depth; i++) {
@@ -174,13 +180,17 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   toggle.className = "outliner-node-toggle";
   toggle.setAttribute("aria-hidden", "true");
   toggle.dataset.hasChildren = String(hasChildren);
-  toggle.textContent = hasChildren ? "▶" : "";
+  toggle.textContent = hasChildren ? (isCollapsed ? "▶" : "▼") : "";
   if (hasChildren) {
-    toggle.classList.add("expanded");
+    toggle.classList.toggle("expanded", !isCollapsed);
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
-      toggle.classList.toggle("expanded");
-      // Future: emit collapse/expand event or toggle child rows
+      if (collapsedNodeIds.has(node.node_id)) {
+        collapsedNodeIds.delete(node.node_id);
+      } else {
+        collapsedNodeIds.add(node.node_id);
+      }
+      renderTree(getNodes());
     });
   }
   el.appendChild(toggle);
@@ -228,10 +238,15 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   return el;
 }
 
+function getOutlinerFooter() {
+  return outlinerFooter || document.querySelector(".outliner-footer");
+}
+
 function updateFooter(totalNodes, childCount) {
-  if (!outlinerFooter) return;
+  const footer = getOutlinerFooter();
+  if (!footer) return;
   const depth = window._nestingDepth || 0;
-  outlinerFooter.textContent = `${totalNodes} item${
+  footer.textContent = `${totalNodes} item${
     totalNodes !== 1 ? "s" : ""
   } · ${childCount} child${childCount !== 1 ? "ren" : ""} · Depth ${depth}/5`;
 }
@@ -290,25 +305,38 @@ async function onRemoveSelected() {
 
 // ─── Drag & Drop from Library ────────────────────────────────────────
 
+function getDropIndicator() {
+  if (!dropIndicator) {
+    dropIndicator = document.createElement("div");
+    dropIndicator.className = "outliner-drop-target";
+  }
+  return dropIndicator;
+}
+
 function showDropTarget(e) {
   const target = e.target.closest(".outliner-node");
-  hideDropTarget();
-  if (target && outlinerTree) {
-    const indicator = document.createElement("div");
-    indicator.className = "outliner-drop-target active";
+  if (!target || !outlinerTree) {
+    hideDropTarget();
+    return;
+  }
+  const indicator = getDropIndicator();
+  if (
+    indicator.parentNode !== outlinerTree ||
+    indicator.nextElementSibling !== target
+  ) {
     outlinerTree.insertBefore(indicator, target);
   }
+  indicator.classList.add("active");
 }
 
 function hideDropTarget() {
-  outlinerTree?.querySelectorAll(".outliner-drop-target").forEach((el) => {
-    el.remove();
-  });
+  dropIndicator?.classList.remove("active");
 }
 
 function onDropFromLibrary(e) {
   e.preventDefault();
   hideDropTarget();
+  dropIndicator?.remove();
 
   const raw = e.dataTransfer.getData("application/x-arbesk-linked-asset");
   if (!raw) return;
@@ -346,6 +374,7 @@ function onSceneEmpty() {
 export {
   initOutliner,
   refreshOutliner,
+  renderTree,
   selectNode,
   clearSelection,
   createNodeElement,
