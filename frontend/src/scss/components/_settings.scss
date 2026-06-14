@@ -2,33 +2,7 @@
 // Settings — Asset Definition + Team Panel in Create sidebar view
 // ═══════════════════════════════════════════════════════════════════
 
-.asset-settings-section {
-  flex-shrink: 0;
-  margin-bottom: var(--size-3);
-  background-color: var(--card-bg);
-  border: var(--border-size-1) solid var(--border-hairline);
-  border-radius: var(--radius-3);
-  overflow: hidden;
-  box-shadow: var(--shadow-1);
-}
-
-.asset-settings-header {
-  padding: var(--size-2) var(--size-3);
-  border-bottom: var(--border-size-1) solid var(--border-hairline);
-}
-
-.asset-section-title {
-  margin: 0;
-  color: var(--accent-bg);
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-7);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.asset-settings-body {
-  padding: var(--size-3);
-
+#assetSettings {
   #burnAssetBtn {
     margin-top: var(--size-3);
     width: 100%;

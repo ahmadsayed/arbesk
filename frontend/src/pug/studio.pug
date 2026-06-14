@@ -132,52 +132,47 @@ html(lang="en")
               .sidebar-view-header
                 h3 Settings
               .sidebar-view-body
-                #assetSettings.asset-settings-section
-                  .asset-settings-header
-                    h4.asset-section-title Asset Settings
-                  .asset-settings-body
-                    .form-group
-                      label.form-label Asset Name
-                      #assetNameDisplay.form-input Untitled Asset
-                    .form-group
-                      label.form-label(for="providerSelect") Generation Provider
-                      select#providerSelect.form-select
-                        option(value="mock") Mock (Local)
-                        option(value="meshy") Meshy
-                        option(value="tripo3d") Tripo3D
-                        option(value="hunyuan3d") Hunyuan3D
-                    .form-group
-                      label.form-label(for="tierSelect") Quality Tier
-                      select#tierSelect.form-select(aria-describedby="tierHelp")
-                        option(value="0" selected) Free — ~$0.0001 gas
-                      .form-help#tierHelp Higher tiers produce better quality meshes.
-                    #teamPanel.team-section(hidden)
-                      .team-header
-                        h4 Collaborators
-                        span#teamOwnerBadge.owner-badge(hidden) Owner
-                      #teamList.team-list
-                      label.form-label(for="teamAddInput") Wallet Address
-                      .team-add
-                        input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
-                        select#teamRoleSelect.form-select(aria-label="Collaborator role")
-                          option(value="2" selected) Editor
-                          option(value="1") Viewer
-                        button#teamAddBtn.btn.btn-secondary Add
-                    button#burnAssetBtn.btn.btn-outline.btn-danger.btn-sm(hidden type="button" aria-label="Burn asset" title="Burn (delete) this token")
-                      svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                        path(d="M3 6h18")
-                        path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
-                        path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
-                      span Burn
+                #assetSettings
+                  .form-group
+                    label.form-label Asset Name
+                    #assetNameDisplay.form-input Untitled Asset
+                  .form-group
+                    label.form-label(for="providerSelect") Generation Provider
+                    select#providerSelect.form-select
+                      option(value="mock") Mock (Local)
+                      option(value="meshy") Meshy
+                      option(value="tripo3d") Tripo3D
+                      option(value="hunyuan3d") Hunyuan3D
+                  .form-group
+                    label.form-label(for="tierSelect") Quality Tier
+                    select#tierSelect.form-select(aria-describedby="tierHelp")
+                      option(value="0" selected) Free — ~$0.0001 gas
+                    .form-help#tierHelp Higher tiers produce better quality meshes.
+                  #teamPanel.team-section(hidden)
+                    .team-header
+                      h4 Collaborators
+                      span#teamOwnerBadge.owner-badge(hidden) Owner
+                    #teamList.team-list
+                    label.form-label(for="teamAddInput") Wallet Address
+                    .team-add
+                      input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
+                      select#teamRoleSelect.form-select(aria-label="Collaborator role")
+                        option(value="2" selected) Editor
+                        option(value="1") Viewer
+                      button#teamAddBtn.btn.btn-secondary Add
+                  button#burnAssetBtn.btn.btn-outline.btn-danger.btn-sm(hidden type="button" aria-label="Burn asset" title="Burn (delete) this token")
+                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                      path(d="M3 6h18")
+                      path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
+                      path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
+                    span Burn
 
             //- View: Chat
             .sidebar-view(data-view="chat" hidden)
               .sidebar-view-header
                 h3 Chat
               .sidebar-view-body
-                #chatHistory.chat-history-section
-                  .chat-history-header
-                    h4.asset-section-title Chat History
+                #chatHistory
                   #chatHistoryList.chat-history-list
                     .chat-welcome
                       .welcome-icon ✦

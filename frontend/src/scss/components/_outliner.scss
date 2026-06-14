@@ -17,11 +17,6 @@
   flex-shrink: 0;
 }
 
-// Border belongs to the view header, not the toolbar
-.sidebar-view[data-view="outline"] .sidebar-view-header {
-  border-bottom: var(--border-size-1) solid var(--border-hairline);
-}
-
 // Card container for the tree
 .outliner-tree {
   flex: 1;
