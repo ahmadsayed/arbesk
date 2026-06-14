@@ -214,4 +214,9 @@ echo ""
 echo "═══════════════════════════════════════════"
 echo ""
 
+if [ "${1:-}" = "--setup-only" ]; then
+    echo "✅ Setup complete. Backend not started (--setup-only)."
+    exit 0
+fi
+
 node src/index.js

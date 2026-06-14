@@ -1,15 +1,84 @@
-import { spawn, execSync } from "node:child_process";
-import { setTimeout as sleep } from "node:timers/promises";
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const BLOCKCHAIN_ENV = path.join(ROOT, "blockchain", ".env");
-const ROOT_ENV = path.join(ROOT, ".env");
 
-let backendProc = null;
+let weStartedInfra = false;
 
-async function waitForPort(port, host = "127.0.0.1", timeoutMs = 60000) {
+function log(step) {
+  const ts = new Date().toISOString().split("T")[1].split(".")[0];
+  console.log(`[E2E ${ts}] ${step}`);
+}
+
+function isContainerRunning(name) {
+  try {
+    const out = execSync(
+      `docker ps --filter "name=${name}" --filter "status=running" --format "{{.Names}}"`,
+      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }
+    );
+    return out.trim().includes(name);
+  } catch {
+    return false;
+  }
+}
+
+function readEnvVar(path, key) {
+  const content = fs.readFileSync(path, "utf8");
+  const match = content.match(new RegExp(`^${key}=(.*)$`, "m"));
+  return match ? match[1].trim() : null;
+}
+
+function patchConfigFile(configPath, freeAddress, paidAddress, usdcAddress) {
+  let config = fs.readFileSync(configPath, "utf8");
+  // Replace only the address values inside the Hardhat Local config block
+  // so that other fields (chainId, blockExplorer, etc.) are preserved.
+  config = config.replace(
+    /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?contractAddress: )"[^"]*"/,
+    `$1"${freeAddress}"`
+  );
+  config = config.replace(
+    /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?paidContractAddress: )"[^"]*"/,
+    `$1"${paidAddress}"`
+  );
+  config = config.replace(
+    /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?usdcToken: )"[^"]*"/,
+    `$1"${usdcAddress || "0x5FbDB2315678afecb367f032d93F642f64180aa3"}"`
+  );
+  fs.writeFileSync(configPath, config);
+}
+
+function syncNetworkConfigWithDeployedAddresses() {
+  const blockchainEnvPath = path.join(ROOT, "blockchain", ".env");
+  const networkConfigPath = path.join(
+    ROOT,
+    "frontend",
+    "src",
+    "js",
+    "blockchain",
+    "network-config.js"
+  );
+  const backendConfigPath = path.join(ROOT, "src", "config.js");
+
+  const freeAddress = readEnvVar(blockchainEnvPath, "CONTRACT_ADDRESS");
+  const paidAddress = readEnvVar(blockchainEnvPath, "PAID_CONTRACT_ADDRESS");
+  const usdcAddress = readEnvVar(blockchainEnvPath, "USDC_TOKEN");
+
+  if (!freeAddress || !paidAddress) {
+    log("WARN: Could not read contract addresses from blockchain/.env; skipping network-config patch");
+    return;
+  }
+
+  patchConfigFile(networkConfigPath, freeAddress, paidAddress, usdcAddress);
+  log(`Patched network-config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`);
+
+  if (fs.existsSync(backendConfigPath)) {
+    patchConfigFile(backendConfigPath, freeAddress, paidAddress, usdcAddress);
+    log(`Patched src/config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`);
+  }
+}
+
+async function waitForPort(port, host = "127.0.0.1", timeoutMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -23,65 +92,47 @@ async function waitForPort(port, host = "127.0.0.1", timeoutMs = 60000) {
   throw new Error(`Port ${port} did not become ready in ${timeoutMs}ms`);
 }
 
-async function deployContracts() {
-  console.log("[E2E] Deploying contracts to Hardhat...");
-  execSync(
-    "docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat",
-    { stdio: "inherit", cwd: ROOT }
-  );
-
-  const blockchainEnv = fs.readFileSync(BLOCKCHAIN_ENV, "utf8");
-  const lines = blockchainEnv.split("\n").filter((line) =>
-    /^(CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|USDC_ADDRESS)=/.test(line)
-  );
-  if (!lines.length) {
-    throw new Error("Deploy did not produce contract addresses in blockchain/.env");
-  }
-  let rootEnv = fs.existsSync(ROOT_ENV) ? fs.readFileSync(ROOT_ENV, "utf8") : "";
-  for (const line of lines) {
-    const [key] = line.split("=");
-    const regex = new RegExp(`^${key}=.*$`, "m");
-    if (regex.test(rootEnv)) {
-      rootEnv = rootEnv.replace(regex, line);
-    } else {
-      rootEnv += `\n${line}`;
-    }
-  }
-  fs.writeFileSync(ROOT_ENV, rootEnv.trim() + "\n");
-  console.log("[E2E] Synced contract addresses to root .env");
-}
-
-function startBackend() {
-  console.log("[E2E] Starting backend...");
-  backendProc = spawn("node", ["src/index.js"], {
-    cwd: ROOT,
-    env: { ...process.env, MOCK_3D_GENERATION: "true" },
-    stdio: "inherit",
-  });
-}
-
 export default async function globalSetup() {
-  console.log("[E2E] Starting infrastructure...");
-  execSync("docker-compose up -d ipfs hardhat", { stdio: "inherit", cwd: ROOT });
+  log("Starting infrastructure...");
 
-  await waitForPort(5001); // IPFS API
-  await waitForPort(8545); // Hardhat RPC
+  const ipfsRunning = isContainerRunning("arbesk-private-ipfs");
+  const hardhatRunning = isContainerRunning("arbesk-hardhat");
+  log(`Existing containers: ipfs=${ipfsRunning} hardhat=${hardhatRunning}`);
+  weStartedInfra = !ipfsRunning || !hardhatRunning;
 
-  await deployContracts();
+  log("Running start-dev.sh --setup-only...");
+  execSync("./scripts/start-dev.sh --setup-only", {
+    stdio: "inherit",
+    cwd: ROOT,
+    timeout: 300000,
+  });
+  log("start-dev.sh finished");
 
-  execSync("npm run build:frontend", { stdio: "inherit", cwd: ROOT });
-  startBackend();
-  await waitForPort(9090); // Express backend
+  log("Syncing network-config.js with deployed contract addresses...");
+  syncNetworkConfigWithDeployedAddresses();
+  log("Rebuilding frontend with synced contract addresses...");
+  execSync("npm run build:frontend", { stdio: "inherit", cwd: ROOT, timeout: 120000 });
+  log("Frontend rebuilt");
 
-  console.log("[E2E] Infrastructure ready");
+  log("Checking backend on 9090...");
+  try {
+    const res = await fetch("http://127.0.0.1:9090/studio.html");
+    if (!res.ok) throw new Error(`Backend returned ${res.status}`);
+    log("Backend already running on 9090; reusing it");
+  } catch (err) {
+    throw new Error(
+      `Backend not reachable on http://127.0.0.1:9090. Please start it manually with: MOCK_3D_GENERATION=true node src/index.js (${err.message})`
+    );
+  }
+
+  log("Infrastructure ready");
 }
 
 export async function globalTeardown() {
-  console.log("[E2E] Tearing down...");
-  if (backendProc) {
-    backendProc.kill("SIGTERM");
-    await sleep(2000);
-    if (!backendProc.killed) backendProc.kill("SIGKILL");
+  log("Tearing down...");
+  if (weStartedInfra) {
+    execSync("docker-compose down", { stdio: "inherit", cwd: ROOT, timeout: 60000 });
+  } else {
+    log("Leaving existing IPFS/Hardhat containers running");
   }
-  execSync("docker-compose down", { stdio: "inherit", cwd: ROOT });
 }

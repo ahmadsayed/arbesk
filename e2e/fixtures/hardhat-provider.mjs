@@ -36,8 +36,10 @@ export async function injectHardhatProvider(page) {
             return provider.chainId;
           case "eth_sendTransaction":
           case "eth_sign":
-          case "personal_sign":
             return rpcCall(method, params);
+          case "personal_sign":
+            // web3.js appends an empty password param, but Hardhat rejects it.
+            return rpcCall(method, params.slice(0, 2));
           case "wallet_switchEthereumChain":
             return null;
           default:
@@ -50,7 +52,26 @@ export async function injectHardhatProvider(page) {
     };
 
     window.ethereum = provider;
-    window.dispatchEvent(new Event("eip6963:announceProvider"));
+
+    const info = {
+      rdns: "com.arbesk.hardhat-test",
+      name: "Hardhat Test",
+      icon: "",
+    };
+
+    function announce() {
+      window.dispatchEvent(
+        new CustomEvent("eip6963:announceProvider", {
+          detail: { info, provider },
+        })
+      );
+    }
+
+    // Announce immediately for any already-listening consumers.
+    announce();
+
+    // Re-announce when the studio requests wallets (EIP-6963 flow).
+    window.addEventListener("eip6963:requestProvider", announce);
   }, {
     address: TEST_WALLET.address,
     rpc: HARDHAT_RPC,

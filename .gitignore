@@ -49,6 +49,8 @@ blockchain/coverage/
 # Testing
 coverage/
 .nyc_output/
+test-results/
+e2e/debug-screenshots/
 
 # Vercel
 .vercel

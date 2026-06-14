@@ -1,5 +1,6 @@
 export const SELECTORS = {
   connectWalletBtn: "#connectWalletBtn",
+  disconnectWalletBtn: "#disconnectWalletBtn",
   walletOptionsList: "#walletOptionsList",
   promptInput: "#promptInput",
   generateBtn: "#generateBtn",
@@ -10,6 +11,8 @@ export const SELECTORS = {
   assetStatusName: "#assetStatusName",
   assetStatusMeta: "#assetStatusMeta",
   srStatus: "#srStatus",
+  dialogInput: ".dialog-input",
+  dialogConfirmBtn: ".dialog-confirm-btn",
   providerSelect: "#providerSelect",
   tierSelect: "#tierSelect",
   assetNameDisplay: "#assetNameDisplay",
