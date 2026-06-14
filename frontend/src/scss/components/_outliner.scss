@@ -124,10 +124,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-// Nesting indent: 1rem per depth level, plus guides
+// Nesting indent: 0.5rem per depth level, plus guides
 @for $d from 1 through 5 {
   .outliner-node[data-depth="#{$d}"] {
-    padding-left: calc(var(--size-3) * #{$d});
+    padding-left: calc(var(--size-2) * #{$d});
   }
 }
 
