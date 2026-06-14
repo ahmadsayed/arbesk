@@ -46,10 +46,11 @@ function addChatMessage(role, text) {
   content.textContent = text;
   bubble.appendChild(content);
 
+  const now = new Date();
   const time = document.createElement("time");
   time.className = "chat-bubble-time";
-  time.dateTime = new Date().toISOString();
-  time.textContent = new Date().toLocaleTimeString([], {
+  time.dateTime = now.toISOString();
+  time.textContent = now.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });

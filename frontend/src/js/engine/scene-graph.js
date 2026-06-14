@@ -1121,9 +1121,10 @@ function getNodeChildRef(nodeId) {
 // Auto-dismissed on first meaningful interaction.
 // ═══════════════════════════════════════════════════════════════════════════
 
+const _chatPulseBtn = document.querySelector('.sidebar-switcher-btn[data-view="chat"]');
+
 function dismissCreatePulse() {
-  const chatBtn = document.querySelector('.sidebar-switcher-btn[data-view="chat"]');
-  if (chatBtn) chatBtn.classList.remove("pulse");
+  _chatPulseBtn?.classList.remove("pulse");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1339,8 +1340,7 @@ export {
     // Esc — dismiss the create pulse, then future: deselect, close inspector.
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
-      const chatBtn = document.querySelector('.sidebar-switcher-btn[data-view="chat"]');
-      if (chatBtn && chatBtn.classList.contains("pulse")) {
+      if (_chatPulseBtn?.classList.contains("pulse")) {
         e.preventDefault();
         dismissCreatePulse();
       }

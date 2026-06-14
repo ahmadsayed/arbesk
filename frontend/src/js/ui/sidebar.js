@@ -31,6 +31,10 @@ function initSidebar() {
   const stored = localStorage.getItem(STORAGE_KEY);
   switchView(stored && VIEWS.includes(stored) ? stored : "chat");
 
+  // Pulse the chat button as an empty-state hint (JS owns this, not the template)
+  const chatBtn = switcherBtns.find((b) => b.dataset.view === "chat");
+  if (chatBtn) chatBtn.classList.add("pulse");
+
   // Wire switcher buttons
   switcherBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
