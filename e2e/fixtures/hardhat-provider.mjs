@@ -1,0 +1,59 @@
+import { TEST_WALLET } from "./test-wallet.mjs";
+
+const HARDHAT_RPC = "http://127.0.0.1:8545";
+const CHAIN_ID_HEX = `0x${TEST_WALLET.chainId.toString(16)}`;
+
+export async function injectHardhatProvider(page) {
+  await page.addInitScript(({ address, rpc, chainIdHex }) => {
+    let rpcId = 1;
+
+    async function rpcCall(method, params = []) {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: rpcId++, method, params }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error.message || JSON.stringify(data.error));
+      }
+      return data.result;
+    }
+
+    const provider = {
+      isArbeskTestProvider: true,
+      selectedAddress: address,
+      chainId: chainIdHex,
+      networkVersion: String(parseInt(chainIdHex, 16)),
+      isConnected: () => true,
+
+      request: async ({ method, params = [] }) => {
+        switch (method) {
+          case "eth_requestAccounts":
+          case "eth_accounts":
+            return [address];
+          case "eth_chainId":
+            return provider.chainId;
+          case "eth_sendTransaction":
+          case "eth_sign":
+          case "personal_sign":
+            return rpcCall(method, params);
+          case "wallet_switchEthereumChain":
+            return null;
+          default:
+            return rpcCall(method, params);
+        }
+      },
+
+      on: () => {},
+      removeListener: () => {},
+    };
+
+    window.ethereum = provider;
+    window.dispatchEvent(new Event("eip6963:announceProvider"));
+  }, {
+    address: TEST_WALLET.address,
+    rpc: HARDHAT_RPC,
+    chainIdHex: CHAIN_ID_HEX,
+  });
+}
