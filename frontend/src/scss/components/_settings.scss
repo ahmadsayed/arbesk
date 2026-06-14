@@ -54,6 +54,11 @@
   &[hidden] {
     display: none;
   }
+
+  #burnAssetBtn {
+    margin-top: var(--size-3);
+    width: 100%;
+  }
 }
 
 // ─── Team Section (inside asset-def-body) ────────────────────────────

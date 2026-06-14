@@ -1285,11 +1285,8 @@ export {
         }, 100);
     }
 
-    // Header button (legacy) and sidebar Create view.
-    ["newAssetTopBtn", "newAssetBtn"].forEach(function (id) {
-      const btn = document.getElementById(id);
-      if (btn) btn.addEventListener("click", startNewAsset);
-    });
+    const newBtn = document.getElementById("newAssetBtn");
+    if (newBtn) newBtn.addEventListener("click", startNewAsset);
 
     // Ctrl+N / Cmd+N — start a new asset.
     document.addEventListener("keydown", function (e) {

@@ -22,40 +22,6 @@
   }
 }
 
-// Header action inside a sidebar view (e.g. the + New Asset button).
-.sidebar-header-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-2);
-  color: var(--accent-bg);
-  background-color: transparent;
-  border: var(--border-size-1) solid var(--accent-bg);
-  transition: background-color var(--duration-quick) var(--ease-out-3),
-              color var(--duration-quick) var(--ease-out-3);
-
-  &:hover {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
-  }
-
-  &:active {
-    filter: brightness(0.95);
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-  }
-
-  svg {
-    width: 18px;
-    height: 18px;
-  }
-}
-
 // View Switcher — vertical icon stack
 .sidebar-switcher {
   display: flex;
