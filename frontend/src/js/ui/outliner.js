@@ -10,8 +10,6 @@ import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/registry.js";
 
-const DEPTH_INDENT = 1; // rem per level
-
 let outlinerTree = null;
 let outlinerFooter = null;
 let selectedNodeId = null;
@@ -99,29 +97,44 @@ function renderEmpty() {
 }
 
 function renderTree(nodes, depth = 0) {
-  if (!outlinerTree) return;
-  outlinerTree.innerHTML = "";
+  if (!outlinerTree) return { totalNodes: 0, childCount: 0 };
 
-  if (nodes.length === 0) {
-    outlinerTree.innerHTML =
-      '<div class="ledger-empty">No items in this world</div>';
-    updateFooter(0, 0);
-    return;
+  if (depth === 0) {
+    outlinerTree.innerHTML = "";
   }
 
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    if (depth === 0) {
+      outlinerTree.innerHTML =
+        '<div class="ledger-empty">No items in this world</div>';
+      updateFooter(0, 0);
+    }
+    return { totalNodes: 0, childCount: 0 };
+  }
+
+  let totalNodes = 0;
   let childCount = 0;
-  const fragment = document.createDocumentFragment();
 
   nodes.forEach((node) => {
     const isChild = !!node.child_ref;
     if (isChild) childCount++;
+    totalNodes++;
 
     const el = createNodeElement(node, isChild, depth);
-    fragment.appendChild(el);
+    outlinerTree.appendChild(el);
+
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      const childStats = renderTree(node.children, depth + 1);
+      totalNodes += childStats.totalNodes;
+      childCount += childStats.childCount;
+    }
   });
 
-  outlinerTree.appendChild(fragment);
-  updateFooter(nodes.length, childCount);
+  if (depth === 0) {
+    updateFooter(totalNodes, childCount);
+  }
+
+  return { totalNodes, childCount };
 }
 
 function getNodeDisplayName(node) {
@@ -139,12 +152,38 @@ function getNodeDisplayName(node) {
   return node.node_id || "Untitled";
 }
 
-function createNodeElement(node, isChildWorld, depth) {
+function createNodeElement(node, isChildWorld, depth = 0) {
   const el = document.createElement("div");
   el.className = "outliner-node";
   el.dataset.nodeId = node.node_id;
   el.dataset.depth = depth;
   el.draggable = true;
+
+  const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+
+  // Indentation guides for nested rows
+  for (let i = 0; i < depth; i++) {
+    const guide = document.createElement("span");
+    guide.className = "outliner-node-guide";
+    guide.setAttribute("aria-hidden", "true");
+    el.appendChild(guide);
+  }
+
+  // Expand/collapse toggle or leaf spacer
+  const toggle = document.createElement("span");
+  toggle.className = "outliner-node-toggle";
+  toggle.setAttribute("aria-hidden", "true");
+  toggle.dataset.hasChildren = String(hasChildren);
+  toggle.textContent = hasChildren ? "▶" : "";
+  if (hasChildren) {
+    toggle.classList.add("expanded");
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggle.classList.toggle("expanded");
+      // Future: emit collapse/expand event or toggle child rows
+    });
+  }
+  el.appendChild(toggle);
 
   // Icon
   const icon = document.createElement("span");
@@ -152,7 +191,7 @@ function createNodeElement(node, isChildWorld, depth) {
   icon.textContent = isChildWorld ? "🧩" : "📦";
   el.appendChild(icon);
 
-  // Label — prefer display name, fall back to token descriptor, then node_id
+  // Label
   const label = document.createElement("span");
   label.className = "outliner-node-label";
   label.textContent = getNodeDisplayName(node);
@@ -254,14 +293,16 @@ async function onRemoveSelected() {
 function showDropTarget(e) {
   const target = e.target.closest(".outliner-node");
   hideDropTarget();
-  if (target) {
-    target.classList.add("outliner-drop-target", "active");
+  if (target && outlinerTree) {
+    const indicator = document.createElement("div");
+    indicator.className = "outliner-drop-target active";
+    outlinerTree.insertBefore(indicator, target);
   }
 }
 
 function hideDropTarget() {
   outlinerTree?.querySelectorAll(".outliner-drop-target").forEach((el) => {
-    el.classList.remove("active");
+    el.remove();
   });
 }
 
