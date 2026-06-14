@@ -18,6 +18,8 @@ import {
 import { showToast } from "./toasts.js";
 import { generateAsset, ApiError, getOrCreateSession } from "../services/api.js";
 import { on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { walletState } from "../state/wallet-state.js";
 
 // ─── DOM References ───
 const chatHistory = document.getElementById("chatHistory");
@@ -74,7 +76,7 @@ function setGenerating(active) {
 }
 
 function updateGenerateHint() {
-  const connected = !!window.walletAddress;
+  const connected = !!walletState.get().walletAddress;
   // Show the guidance caption only while disconnected.
   if (generateHint) generateHint.hidden = connected;
   // Gate the prompt: a disabled (muted) submit reads clearer than a live-looking
@@ -88,7 +90,7 @@ function updateGenerateHint() {
 
 function getAssetName() {
   return (
-    window.activeAssetName ||
+    assetState.get().activeAssetName ||
     assetNameDisplay?.textContent ||
     "Untitled Asset"
   ).trim();
@@ -97,7 +99,7 @@ function getAssetName() {
 function syncAssetNameDisplay(name = null) {
   if (!assetNameDisplay) return;
   assetNameDisplay.textContent =
-    name || window.activeAssetName || "Untitled Asset";
+    name || assetState.get().activeAssetName || "Untitled Asset";
 }
 
 function getProvider() {
@@ -120,7 +122,7 @@ async function onGenerate() {
   const prompt = promptInput.value.trim();
   if (!prompt) return;
 
-  if (!window.walletAddress) {
+  if (!walletState.get().walletAddress) {
     alert("Please connect your wallet first.");
     return;
   }
@@ -143,7 +145,7 @@ async function onGenerate() {
   const nodeId = `${assetName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "_")}_${Date.now()}`;
-  const prevAssetManifestCid = window.activeAssetManifestCid || undefined;
+  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
   const transformMatrix = buildTransformMatrix();
 
   try {
@@ -175,12 +177,15 @@ async function onGenerate() {
       clearScene();
     }
 
-    window.activeAssetManifestCid = result.assetManifestCid;
-    window.latestAssetManifestCid = result.assetManifestCid;
+    assetState.set({
+      activeAssetManifestCid: result.assetManifestCid,
+      latestAssetManifestCid: result.assetManifestCid,
+    });
 
     const url = new URL(window.location);
-    if (window.activeAssetTokenId) {
-      url.searchParams.set("asset", window.activeAssetTokenId);
+    const activeTokenId = assetState.get().activeAssetTokenId;
+    if (activeTokenId) {
+      url.searchParams.set("asset", activeTokenId);
       url.searchParams.delete("manifest");
     } else {
       url.searchParams.set("manifest", result.assetManifestCid);
@@ -235,7 +240,7 @@ promptInput.addEventListener("input", () => {
 });
 
 on(EVENTS.SCENE_READY, (event) => {
-  const name = event.detail?.manifest?.name || window.activeAssetName;
+  const name = event.detail?.manifest?.name || assetState.get().activeAssetName;
   if (name) syncAssetNameDisplay(name);
 });
 

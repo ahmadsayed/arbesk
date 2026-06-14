@@ -11,6 +11,7 @@ import {
   getNodes,
 } from "../frontend/src/js/ui/outliner.js";
 import { on, off, EVENTS } from "../frontend/src/js/events/registry.js";
+import { assetState, _resetForTesting as resetAssetState } from "../frontend/src/js/state/asset-state.js";
 
 // jsdom does not implement CSS.escape, but outliner.js uses it for selectors.
 if (typeof CSS === "undefined" || !CSS.escape) {
@@ -33,6 +34,7 @@ describe("outliner node rendering", () => {
 
   afterEach(() => {
     off(EVENTS.OUTLINER_NODE_SELECTED, noop);
+    resetAssetState();
   });
 
   test("renderTree recursively renders nested children with depth guides", () => {
@@ -137,7 +139,7 @@ describe("outliner node rendering", () => {
         children: [{ node_id: "child", name: "child" }],
       },
     ];
-    window._currentManifest = { scene: { nodes } };
+    assetState.set({ currentManifest: { scene: { nodes } } });
     renderTree(nodes);
 
     let toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
@@ -153,8 +155,6 @@ describe("outliner node rendering", () => {
     toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(tree.querySelector('[data-node-id="child"]')).toBeTruthy();
-
-    delete window._currentManifest;
   });
 
   test("expand/collapse via buildOutlineTree does not duplicate nodes", () => {
@@ -164,7 +164,7 @@ describe("outliner node rendering", () => {
       { node_id: "cowboy", name: "cowboy", child_ref: { tokenId: "2103578700" } },
       { node_id: "person", name: "person", child_ref: { tokenId: "35131021" } },
     ];
-    window._currentManifest = { scene: { nodes: flatNodes } };
+    assetState.set({ currentManifest: { scene: { nodes: flatNodes } } });
     renderTree(buildOutlineTree(getNodes()));
 
     expect(tree.querySelectorAll('[data-node-id="cowboy"]')).toHaveLength(1);
@@ -177,8 +177,6 @@ describe("outliner node rendering", () => {
     toggle.click();
     expect(tree.querySelectorAll('[data-node-id="cowboy"]')).toHaveLength(1);
     expect(tree.querySelectorAll('[data-node-id="person"]')).toHaveLength(1);
-
-    delete window._currentManifest;
   });
 
   test("buildOutlineTree groups child_ref nodes under preceding regular node", () => {

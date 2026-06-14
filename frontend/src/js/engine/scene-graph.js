@@ -16,6 +16,9 @@ import {
 } from "../blockchain/token-resolver.js";
 import { CHAIN_IDS } from "../constants/chains.js";
 import { emit, on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { walletState } from "../state/wallet-state.js";
+import { uiState } from "../state/ui-state.js";
 
 import { applyColor, applyScale } from "./time-travel.js";
 import { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
@@ -402,7 +405,7 @@ function selectNode(nodeId, mesh) {
     }
   }
   state.highlightedNodeId = nodeId;
-  window.selectedNodeId = nodeId;
+  uiState.set({ selectedNodeId: nodeId });
   emit(EVENTS.NODE_SELECTED, { nodeId, mesh });
 }
 
@@ -410,7 +413,7 @@ function selectSubMesh(nodeId, meshName) {
   if (nodeId !== state.highlightedNodeId) {
     clearHighlight();
     state.highlightedNodeId = nodeId;
-    window.selectedNodeId = nodeId;
+    uiState.set({ selectedNodeId: nodeId });
   } else {
     clearHighlight();
   }
@@ -464,7 +467,7 @@ function deselectAll() {
   clearHighlight();
   state.highlightedNodeId = null;
   state.highlightedSubMeshName = null;
-  window.selectedNodeId = null;
+  uiState.set({ selectedNodeId: null });
   emit(EVENTS.NODE_DESELECTED);
 }
 
@@ -938,7 +941,7 @@ async function loadAssetManifest(
   }
 
   if (!parentAnchor) {
-    window.activeAssetManifestCid = manifestCid;
+    assetState.set({ activeAssetManifestCid: manifestCid });
     emit(EVENTS.SCENE_READY, { manifest, manifestCid });
   }
 
@@ -962,16 +965,16 @@ async function handleLinkedAssetDropped(event) {
   } = detail;
   if (!tokenId) return;
 
-  const resolvedChainId = Number(eventChainId || window.chainId || CHAIN_IDS.HARDHAT_LOCAL);
-  const resolvedContractAddr =
-    eventContractAddress || window.contractAddress || window._contractAddress;
+  const { chainId: walletChainId, contractAddress: walletContractAddress, walletAddress } = walletState.get();
+  const resolvedChainId = Number(eventChainId || walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
+  const resolvedContractAddr = eventContractAddress || walletContractAddress;
 
   if (!resolvedContractAddr) {
     console.warn("[SCENE] No contract address available for linked asset drop");
     return;
   }
 
-  if (!window.walletAddress) {
+  if (!walletAddress) {
     console.warn("[SCENE] Wallet not connected — cannot resolve linked asset");
     return;
   }
@@ -1263,28 +1266,30 @@ export {
     const manifestCid = urlParams.get("manifest");
     const assetTokenId = urlParams.get("asset");
 
-    if (assetTokenId && window.contract) {
-      window.contract.methods
+    const { contract } = walletState.get();
+    if (assetTokenId && contract) {
+      contract.methods
         .tokenURI(assetTokenId)
         .call()
         .then((cid) => {
           if (cid) {
-            window.activeAssetTokenId = String(assetTokenId);
-            window.activeAssetManifestCid = cid;
-            window.latestAssetManifestCid = cid;
+            assetState.set({
+              activeAssetTokenId: String(assetTokenId),
+              activeAssetManifestCid: cid,
+              latestAssetManifestCid: cid,
+            });
             emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, { tokenId: assetTokenId });
           }
         })
         .catch(() => {});
     } else if (manifestCid) {
-      window.activeAssetManifestCid = manifestCid;
-      window.latestAssetManifestCid = manifestCid;
+      assetState.set({ activeAssetManifestCid: manifestCid, latestAssetManifestCid: manifestCid });
       loadAssetManifest(manifestCid);
       dismissCreatePulse();
     }
 
     async function startNewAsset() {
-      if (window.activeAssetManifestCid) {
+      if (assetState.get().activeAssetManifestCid) {
         const ok = confirm(
           "Start a new asset? Any unsaved changes will be lost."
         );
@@ -1292,11 +1297,10 @@ export {
       }
 
       clearScene();
-      window.activeAssetManifestCid = null;
-      window.latestAssetManifestCid = null;
-      window.activeAssetTokenId = null;
+      assetState.set({ activeAssetManifestCid: null, latestAssetManifestCid: null, activeAssetTokenId: null });
 
       // Prompt for a name using the GNOME HIG dialog
+      let activeAssetName;
       try {
         const { showDialog } = await import("../ui/dialog.js");
         const name = await showDialog(
@@ -1304,15 +1308,16 @@ export {
           "Give your new asset a descriptive name.",
           ""
         );
-        window.activeAssetName = (name && name.trim()) || "Untitled Asset";
+        activeAssetName = (name && name.trim()) || "Untitled Asset";
       } catch {
-        window.activeAssetName = "Untitled Asset";
+        activeAssetName = "Untitled Asset";
       }
+      assetState.set({ activeAssetName });
 
       const nameEl = document.getElementById("assetNameDisplay");
-      if (nameEl) nameEl.textContent = window.activeAssetName;
+      if (nameEl) nameEl.textContent = activeAssetName;
       const statusEl = document.getElementById("assetStatusName");
-      if (statusEl) statusEl.textContent = window.activeAssetName;
+      if (statusEl) statusEl.textContent = activeAssetName;
       const metaEl = document.getElementById("assetStatusMeta");
       if (metaEl) metaEl.textContent = "Draft Scene";
       emit(EVENTS.SCENE_EMPTY);

@@ -12,6 +12,7 @@ import {
 } from "../services/team.js";
 import { truncateAddress as truncateAddr } from "../utils/format.js";
 import { on, EVENTS } from "../events/registry.js";
+import { walletState } from "../state/wallet-state.js";
 
 // DOM references
 const teamPanel = document.getElementById("teamPanel");
@@ -51,7 +52,7 @@ async function refreshEditors() {
     label.title = addr;
     row.appendChild(label);
 
-    if (owner && addr.toLowerCase() !== window.walletAddress?.toLowerCase()) {
+    if (owner && addr.toLowerCase() !== walletState.get().walletAddress?.toLowerCase()) {
       const removeBtn = document.createElement("button");
       removeBtn.className = "btn-team-remove";
       removeBtn.textContent = "×";

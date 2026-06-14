@@ -8,6 +8,8 @@
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { uiState } from "../state/ui-state.js";
 
 const MAX_DEPTH = 5;
 
@@ -80,20 +82,23 @@ async function onDiveRequested(e) {
     }
 
     // Save current state on the stack
+    const { activeAssetManifestCid, activeAssetName, activeAssetTokenId } = assetState.get();
     navStack.push({
-      cid: window.activeAssetManifestCid,
-      name: window.activeAssetName || "World",
-      assetName: window.activeAssetName,
-      tokenId: window.activeAssetTokenId,
+      cid: activeAssetManifestCid,
+      name: activeAssetName || "World",
+      assetName: activeAssetName,
+      tokenId: activeAssetTokenId,
     });
 
     // Load child world
     clearScene();
-    window.activeAssetManifestCid = manifest.cid;
-    window.latestAssetManifestCid = manifest.cid;
-    window.activeAssetName = manifest.name || "Child World";
-    window.activeAssetTokenId = childRef.tokenId;
-    window._nestingDepth = ++currentDepth;
+    assetState.set({
+      activeAssetManifestCid: manifest.cid,
+      latestAssetManifestCid: manifest.cid,
+      activeAssetName: manifest.name || "Child World",
+      activeAssetTokenId: childRef.tokenId,
+    });
+    uiState.set({ nestingDepth: ++currentDepth });
 
     await loadAssetManifest(manifest.cid);
 
@@ -116,14 +121,16 @@ async function ascendOneLevel() {
 
   const prev = navStack.pop();
   currentDepth = Math.max(0, currentDepth - 1);
-  window._nestingDepth = currentDepth;
+  uiState.set({ nestingDepth: currentDepth });
 
   try {
     clearScene();
-    window.activeAssetManifestCid = prev.cid;
-    window.latestAssetManifestCid = prev.cid;
-    window.activeAssetName = prev.assetName;
-    window.activeAssetTokenId = prev.tokenId;
+    assetState.set({
+      activeAssetManifestCid: prev.cid,
+      latestAssetManifestCid: prev.cid,
+      activeAssetName: prev.assetName,
+      activeAssetTokenId: prev.tokenId,
+    });
 
     await loadAssetManifest(prev.cid);
 
@@ -199,7 +206,7 @@ function updatePublishVisibility() {
   if (publishBtn) {
     // Token-based child worlds are publishable regardless of depth.
     // Only hide publish when truly at root level with no token (empty state).
-    const hidePublish = currentDepth > 0 && !window.activeAssetTokenId;
+    const hidePublish = currentDepth > 0 && !assetState.get().activeAssetTokenId;
     publishBtn.classList.toggle("hidden", hidePublish);
   }
 }
@@ -218,7 +225,7 @@ function updateBottomBarDepth() {
 function resetNesting() {
   navStack = [];
   currentDepth = 0;
-  window._nestingDepth = 0;
+  uiState.set({ nestingDepth: 0 });
   if (pathBar) pathBar.classList.add("hidden");
   if (backBtn) backBtn.classList.add("hidden");
   updatePublishVisibility();

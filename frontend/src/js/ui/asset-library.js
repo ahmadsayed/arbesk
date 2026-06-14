@@ -17,11 +17,13 @@ import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
 import { CHAIN_IDS } from "../constants/chains.js";
 import { emit, on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { walletState } from "../state/wallet-state.js";
 
 let assetLibraryBody = null;
 
 function getContract() {
-  return walletContract || window.contract || null;
+  return walletContract || walletState.get().contract || null;
 }
 
 async function fetchAssetLibrary(address) {
@@ -72,9 +74,11 @@ async function openAssetByTokenId(tokenId) {
     }
 
     clearScene();
-    window.activeAssetTokenId = String(tokenId);
-    window.activeAssetManifestCid = cid;
-    window.latestAssetManifestCid = cid;
+    assetState.set({
+      activeAssetTokenId: String(tokenId),
+      activeAssetManifestCid: cid,
+      latestAssetManifestCid: cid,
+    });
 
     dismissCreatePulse();
     updateUrlAsset(tokenId);
@@ -163,9 +167,9 @@ function createAssetCard(tokenId, role) {
   item.draggable = true;
 
   item.addEventListener("dragstart", (event) => {
-    const chainId = Number(window.chainId || window.walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
-    const contractAddr =
-      window.contractAddress || window._contractAddress || null;
+    const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
+    const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
+    const contractAddr = walletContractAddress || null;
     const payload = {
       type: "linked_asset",
       token_id: String(tokenId),
@@ -218,9 +222,9 @@ function createAssetCard(tokenId, role) {
   addBtn.textContent = "Add to Scene";
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", () => {
-    const chainId = Number(window.chainId || window.walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
-    const contractAddr =
-      window.contractAddress || window._contractAddress || null;
+    const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
+    const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
+    const contractAddr = walletContractAddress || null;
     emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, {
       token_id: String(tokenId),
       standard: "ERC721",
@@ -314,17 +318,18 @@ async function loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item) 
 }
 
 async function refreshAssetLibrary() {
-  if (!window.walletAddress || !assetLibraryBody) return;
-  const { owned, shared } = await fetchAssetLibrary(window.walletAddress);
+  const { walletAddress } = walletState.get();
+  if (!walletAddress || !assetLibraryBody) return;
+  const { owned, shared } = await fetchAssetLibrary(walletAddress);
   renderAssetLibrary(owned, shared);
 }
 
 function highlightActiveAsset() {
-  if (!assetLibraryBody || !window.activeAssetTokenId) return;
+  if (!assetLibraryBody || !assetState.get().activeAssetTokenId) return;
   assetLibraryBody.querySelectorAll(".asset-card").forEach((el) => {
     el.classList.toggle(
       "active",
-      el.dataset.tokenId === String(window.activeAssetTokenId)
+      el.dataset.tokenId === String(assetState.get().activeAssetTokenId)
     );
   });
 }

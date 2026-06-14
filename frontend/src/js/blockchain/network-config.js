@@ -105,9 +105,3 @@ export function getSupportedChainIds() {
   return Object.keys(NETWORK_CONFIGS).map(Number);
 }
 
-// Attach to window for console debugging
-if (typeof window !== "undefined") {
-  window.NETWORK_CONFIGS = NETWORK_CONFIGS;
-  window.getNetworkConfig = getNetworkConfig;
-  window.getContractAddress = getContractAddress;
-}

@@ -15,6 +15,7 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { normalizeTokenURI } from "./uri-utils.js";
 import { web3 as walletWeb3 } from "./wallet.js";
 import { CHAIN_IDS } from "../constants/chains.js";
+import { walletState } from "../state/wallet-state.js";
 
 /** @type {Map<string, {manifestCid: string, timestamp: number}>} */
 const resolutionCache = new Map();
@@ -106,7 +107,7 @@ function getTokenContract(chainId, contractAddress) {
   // If the target chain differs from the connected chain, try an external RPC
   if (provider && chainId) {
     try {
-      const connectedChainId = window.chainId;
+      const connectedChainId = walletState.get().chainId;
       if (connectedChainId && Number(chainId) !== Number(connectedChainId)) {
         const rpcUrl = KNOWN_RPC_ENDPOINTS[chainId];
         if (rpcUrl) {
@@ -176,9 +177,10 @@ export async function resolveChildRef(childRef, options = {}) {
 
   // Fall back to connected wallet's chain/contract when not provided.
   // Normalize chainId to Number — getChainId() returns BigInt in Web3 v4.
-  const chainId = Number(childRef.chainId || window.chainId) || null;
+  const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
+  const chainId = Number(childRef.chainId || walletChainId) || null;
   const contractAddress =
-    childRef.contractAddress || window.contractAddress || null;
+    childRef.contractAddress || walletContractAddress || null;
 
   // Check cache using resolved values
   const resolvedRef = { ...childRef, chainId, contractAddress };

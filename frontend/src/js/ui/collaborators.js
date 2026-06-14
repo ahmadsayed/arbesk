@@ -21,6 +21,8 @@ import {
 import { showConfirmDialog } from "./dialog.js";
 import { truncateAddress } from "../utils/format.js";
 import { emit, on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { walletState } from "../state/wallet-state.js";
 
 // ─── DOM refs ──────────────────────────────────────────────────────────
 
@@ -63,7 +65,7 @@ function initCollaborators() {
 function showTeamPanel() {
   if (teamPanel) teamPanel.hidden = false;
   if (burnAssetBtn) {
-    burnAssetBtn.hidden = !window.activeAssetTokenId;
+    burnAssetBtn.hidden = !assetState.get().activeAssetTokenId;
   }
 }
 
@@ -75,14 +77,14 @@ function hideTeamPanel() {
 // Called from asset-save.js after publish
 function updateBurnButton() {
   if (!burnAssetBtn) return;
-  burnAssetBtn.hidden = !window.activeAssetTokenId;
+  burnAssetBtn.hidden = !assetState.get().activeAssetTokenId;
 }
 
 // ─── Data ──────────────────────────────────────────────────────────────
 
 async function refreshTeamPanel() {
-  const tokenId = window.activeAssetTokenId;
-  if (!tokenId || !window.walletAddress) {
+  const tokenId = assetState.get().activeAssetTokenId;
+  if (!tokenId || !walletState.get().walletAddress) {
     hideTeamPanel();
     return;
   }
@@ -208,7 +210,7 @@ function renderTeamList(editors, viewers, burnPerms) {
   const fragment = document.createDocumentFragment();
 
   editors.forEach((addr) => {
-    if (addr.toLowerCase() === (window.walletAddress || "").toLowerCase())
+    if (addr.toLowerCase() === (walletState.get().walletAddress || "").toLowerCase())
       return;
     fragment.appendChild(
       createItem(
@@ -221,7 +223,7 @@ function renderTeamList(editors, viewers, burnPerms) {
   });
 
   viewers.forEach((addr) => {
-    if (addr.toLowerCase() === (window.walletAddress || "").toLowerCase())
+    if (addr.toLowerCase() === (walletState.get().walletAddress || "").toLowerCase())
       return;
     fragment.appendChild(
       createItem(addr, CollaboratorRole.Viewer, "Viewer", false)
@@ -241,7 +243,7 @@ function renderTeamList(editors, viewers, burnPerms) {
 // ─── Token ID Helper ───────────────────────────────────────────────────
 
 function tokenId() {
-  return window.activeAssetTokenId;
+  return assetState.get().activeAssetTokenId;
 }
 
 // ─── Handlers ──────────────────────────────────────────────────────────
@@ -279,8 +281,7 @@ async function onBurnAsset() {
   const txHash = await burn(id);
   if (txHash) {
     // Clear active asset state
-    window.activeAssetTokenId = null;
-    window.activeAssetManifestCid = null;
+    assetState.set({ activeAssetTokenId: null, activeAssetManifestCid: null });
     hideTeamPanel();
     if (burnAssetBtn) burnAssetBtn.hidden = true;
     emit(EVENTS.ASSET_CLEARED);

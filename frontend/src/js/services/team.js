@@ -5,6 +5,7 @@
  */
 
 import { contract, web3 } from '../blockchain/wallet.js';
+import { walletState } from '../state/wallet-state.js';
 
 /**
  * List editors for a token.
@@ -28,10 +29,10 @@ export async function fetchEditors(tokenId) {
  * @returns {Promise<boolean>}
  */
 export async function isOwner(tokenId) {
-    if (!contract || !window.walletAddress) return false;
+    if (!contract || !walletState.get().walletAddress) return false;
     try {
         const owner = await contract.methods.ownerOf(tokenId).call();
-        return owner.toLowerCase() === window.walletAddress.toLowerCase();
+        return owner.toLowerCase() === walletState.get().walletAddress.toLowerCase();
     } catch {
         return false;
     }
@@ -44,7 +45,7 @@ export async function isOwner(tokenId) {
  * @returns {Promise<string|null>} txHash
  */
 export async function addTeamMember(tokenId, address) {
-    if (!contract || !window.walletAddress) {
+    if (!contract || !walletState.get().walletAddress) {
         throw new Error('Wallet or contract not ready');
     }
 
@@ -54,9 +55,9 @@ export async function addTeamMember(tokenId, address) {
 
     // Use full signature to avoid Web3.js v1 overload resolution issues
     const tx = contract.methods["addEditor(uint256,address)"](tokenId, address);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-        from: window.walletAddress,
+        from: walletState.get().walletAddress,
         gas: Math.floor(Number(gas) * 1.2)
     });
     return receipt.transactionHash;
@@ -69,14 +70,14 @@ export async function addTeamMember(tokenId, address) {
  * @returns {Promise<string|null>} txHash
  */
 export async function removeTeamMember(tokenId, address) {
-    if (!contract || !window.walletAddress) {
+    if (!contract || !walletState.get().walletAddress) {
         throw new Error('Wallet or contract not ready');
     }
 
     const tx = contract.methods.removeEditor(tokenId, address);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-        from: window.walletAddress,
+        from: walletState.get().walletAddress,
         gas: Math.floor(Number(gas) * 1.2)
     });
     return receipt.transactionHash;

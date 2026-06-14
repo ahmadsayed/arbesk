@@ -7,6 +7,7 @@
 
 import { on, EVENTS } from "../events/registry.js";
 import { web3 } from "../blockchain/wallet.js";
+import { walletState } from "../state/wallet-state.js";
 import {
   getContractAddress as getNetworkContractAddress,
   getNetworkConfig,
@@ -116,21 +117,22 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
  * @returns {Promise<{ token: string, expiresAt: number }>}
  */
 export async function createSession() {
-  if (!web3 || !window.walletAddress) {
+  const { walletAddress, chainId: walletChainId } = walletState.get();
+  if (!web3 || !walletAddress) {
     throw new ApiError("Wallet not connected", 401, "WALLET_NOT_CONNECTED");
   }
 
   // Build SIWE (EIP-4361) message
   const { buildSiweMessage, generateNonce } = await import("../blockchain/siwe.js");
   const nonce = generateNonce();
-  const chainId = Number(window.chainId || 1);
+  const chainId = Number(walletChainId || 1);
 
   const domain = window.location.origin;
-  const message = buildSiweMessage(domain, window.walletAddress, nonce, chainId);
+  const message = buildSiweMessage(domain, walletAddress, nonce, chainId);
 
   let signature;
   try {
-    signature = await web3.eth.personal.sign(message, window.walletAddress, "");
+    signature = await web3.eth.personal.sign(message, walletAddress, "");
   } catch (err) {
     console.error("Session sign failed:", err);
     throw new ApiError(
@@ -157,7 +159,7 @@ export async function createSession() {
     );
   }
 
-  cacheSession(data.token, data.expiresAt, window.walletAddress);
+  cacheSession(data.token, data.expiresAt, walletAddress);
   return data;
 }
 
@@ -170,7 +172,7 @@ export async function createSession() {
 export async function getOrCreateSession() {
   // Try cached session first
   const cached = getCachedSession();
-  if (cached && cached.address === window.walletAddress?.toLowerCase()) {
+  if (cached && cached.address === walletState.get().walletAddress?.toLowerCase()) {
     console.log("[SESSION] reused cached token");
     return cached.token;
   }
@@ -261,10 +263,8 @@ export async function generateAsset({
   const sessionToken = await getOrCreateSession();
   let authHeader = `Session ${sessionToken}`;
 
-  const chainId =
-    typeof window !== "undefined" && window.chainId
-      ? Number(window.chainId)
-      : null;
+  const rawChainId = walletState.get().chainId;
+  const chainId = rawChainId ? Number(rawChainId) : null;
 
   const body = {
     prompt,
@@ -471,16 +471,3 @@ export async function unpinAssetCids(cid, actorAddress) {
 
 
 
-// ─── Global Exports (for non-module <script> loading) ───────────────────────
-
-window.createSession = createSession;
-window.clearSession = clearSession;
-window.getConfig = getConfig;
-window.getContractAddress = getContractAddress;
-window.getContractArtifact = getContractArtifact;
-window.generateAsset = generateAsset;
-window.saveManifest = saveManifest;
-window.publishManifest = publishManifest;
-window.getManifestHistory = getManifestHistory;
-window.getTokenManifest = getTokenManifest;
-window.unpinAssetCids = unpinAssetCids;

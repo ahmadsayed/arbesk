@@ -15,6 +15,7 @@ import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { contract } from "../blockchain/wallet.js";
 import { getManifestHistory } from "../services/api.js";
 import { on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
 
 // ─── DOM References ───
 const historySection = document.getElementById("assetHistory");
@@ -44,12 +45,11 @@ async function _fetchChain(cid) {
 }
 
 async function _fetchPublishedCid() {
-  const tokenId = window.activeAssetTokenId;
+  const tokenId = assetState.get().activeAssetTokenId;
   if (!tokenId || !contract) return null;
   try {
-    const c = contract || window.contract;
-    if (!c) return null;
-    const cid = await c.methods.tokenURI(tokenId).call();
+    if (!contract) return null;
+    const cid = await contract.methods.tokenURI(tokenId).call();
     return cid || null;
   } catch {
     return null;
@@ -141,12 +141,12 @@ async function _loadVersion(cid) {
   _render();
 
   try {
-    // clearScene() wipes window.latestAssetManifestCid, but we need to keep
+    // clearScene() resets latestAssetManifestCid, but we need to keep
     // the chain root (latest version) while the user is scrubbing history.
-    const preservedLatest = chainRootCid || window.latestAssetManifestCid;
+    const preservedLatest = chainRootCid || assetState.get().latestAssetManifestCid;
     clearScene();
     if (preservedLatest) {
-      window.latestAssetManifestCid = preservedLatest;
+      assetState.set({ latestAssetManifestCid: preservedLatest });
     }
     await loadAssetManifest(cid);
     activeCid = cid;
@@ -166,7 +166,7 @@ async function _loadVersion(cid) {
 }
 
 async function _refresh() {
-  const manifestCid = window.activeAssetManifestCid;
+  const manifestCid = assetState.get().activeAssetManifestCid;
   if (!manifestCid) {
     chainCache = [];
     chainRootCid = null;
@@ -232,7 +232,7 @@ function _initSlider() {
 // ─── Event Listeners ───
 
 on(EVENTS.SCENE_READY, (e) => {
-  const manifestCid = e.detail?.manifestCid || window.activeAssetManifestCid;
+  const manifestCid = e.detail?.manifestCid || assetState.get().activeAssetManifestCid;
   if (!manifestCid) return;
 
   if (isHistoryNavigation) {
@@ -245,12 +245,12 @@ on(EVENTS.SCENE_READY, (e) => {
   // Normal load — refresh everything
   chainRootCid = manifestCid;
   activeCid = manifestCid;
-  window.latestAssetManifestCid = manifestCid;
+  assetState.set({ latestAssetManifestCid: manifestCid });
   _refresh();
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {
-  if (window.activeAssetManifestCid && !isHistoryNavigation) {
+  if (assetState.get().activeAssetManifestCid && !isHistoryNavigation) {
     _refresh();
   }
 });
@@ -276,7 +276,8 @@ on(EVENTS.SCENE_EMPTY, () => {
 // ─── Initialize ───
 _initSlider();
 
-if (window.activeAssetManifestCid) {
-  chainRootCid = window.activeAssetManifestCid;
+const _initCid = assetState.get().activeAssetManifestCid;
+if (_initCid) {
+  chainRootCid = _initCid;
   _refresh();
 }

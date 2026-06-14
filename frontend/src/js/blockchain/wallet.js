@@ -9,6 +9,7 @@
  */
 
 import { emit, EVENTS } from "../events/registry.js";
+import { walletState } from "../state/wallet-state.js";
 import { showToast, dismissToast } from "../ui/toasts.js";
 import {
   startDiscovery,
@@ -142,11 +143,13 @@ async function _initContract() {
       );
       contractAddress = null;
       contract = null;
+      walletState.set({ contract: null, contractAddress: null });
       return;
     }
 
     contractAddress = addr;
     contract = new web3.eth.Contract(abiData.abi, contractAddress);
+    walletState.set({ contract, contractAddress });
   } catch (e) {
     console.warn("Contract initialization failed:", e.message);
   }
@@ -236,9 +239,10 @@ async function _promptNetworkSwitch(networkKey) {
  * Check wallet balance and warn if too low for generation.
  */
 async function _checkBalance() {
-  if (!web3 || !window.walletAddress) return;
+  const { walletAddress } = walletState.get();
+  if (!web3 || !walletAddress) return;
   try {
-    const balanceWei = await web3.eth.getBalance(window.walletAddress);
+    const balanceWei = await web3.eth.getBalance(walletAddress);
     const balanceEth = web3.utils.fromWei(balanceWei, "ether");
     console.log("Balance:", balanceEth, "ETH");
 
@@ -255,7 +259,7 @@ async function _checkBalance() {
       console.warn("Low balance detected on Hardhat");
       const { DEV_ACCOUNT_ADDRESS } = await import("./dev-account.js");
       if (
-        window.walletAddress.toLowerCase() !==
+        walletAddress.toLowerCase() !==
         DEV_ACCOUNT_ADDRESS.toLowerCase()
       ) {
         lowBalanceToastId = showToast({
@@ -367,11 +371,11 @@ async function autoConnectWallet() {
  * Shared setup after provider is established (accounts, chain, contract, listeners).
  */
 async function _finishWalletSetup(address) {
-  window.walletAddress = address;
+  walletState.set({ walletAddress: address });
 
   let chainId = Number(await web3.eth.getChainId());
-  window.chainId = chainId;
-  console.log("Connected wallet:", window.walletAddress, "chainId:", chainId);
+  walletState.set({ chainId });
+  console.log("Connected wallet:", address, "chainId:", chainId);
 
   // Prompt network switch if not on a supported chain
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
@@ -381,18 +385,17 @@ async function _finishWalletSetup(address) {
     if (switched) {
       // Re-read chainId after switch
       chainId = Number(await web3.eth.getChainId());
-      window.chainId = chainId;
+      walletState.set({ chainId });
     } else {
       console.warn("User did not switch to a supported network");
     }
   }
 
   await _initContract();
-  window.contractAddress = contractAddress;
   await _checkBalance();
 
   emit(EVENTS.WALLET_CONNECTED, {
-    address: window.walletAddress,
+    address,
     chainId,
   });
 
@@ -418,10 +421,10 @@ function _attachProviderListeners() {
       if (!accounts || accounts.length === 0) {
         disconnectWallet();
       } else {
-        window.walletAddress = accounts[0];
+        walletState.set({ walletAddress: accounts[0] });
         _checkBalance();
         emit(EVENTS.WALLET_CONNECTED, {
-          address: window.walletAddress,
+          address: walletState.get().walletAddress,
           chainId: null,
         });
       }
@@ -440,10 +443,10 @@ function _attachProviderListeners() {
       if (accounts.length === 0) {
         disconnectWallet();
       } else {
-        window.walletAddress = accounts[0];
+        walletState.set({ walletAddress: accounts[0] });
         _checkBalance();
         emit(EVENTS.WALLET_CONNECTED, {
-          address: window.walletAddress,
+          address: walletState.get().walletAddress,
           chainId: null,
         });
       }
@@ -467,12 +470,12 @@ async function authenticateUser() {
     const { getOrCreateSession } = await import("../services/api.js");
     const session = await getOrCreateSession();
     emit(EVENTS.USER_AUTHENTICATED, {
-      address: window.walletAddress,
+      address: walletState.get().walletAddress,
       session,
     });
   } catch (err) {
     console.warn("[AUTH] Session creation failed or rejected:", err.message);
-    emit(EVENTS.USER_AUTH_REQUIRED, { address: window.walletAddress });
+    emit(EVENTS.USER_AUTH_REQUIRED, { address: walletState.get().walletAddress });
   }
 }
 
@@ -560,7 +563,7 @@ async function disconnectWallet() {
   web3 = null;
   contract = null;
   contractAddress = null;
-  window.walletAddress = null;
+  walletState.reset();
   if (lowBalanceToastId) {
     dismissToast(lowBalanceToastId);
     lowBalanceToastId = null;
@@ -636,7 +639,7 @@ async function payForGenerationWithUSDC(nodeId, prompt, tier) {
  */
 async function recordGeneration(nodeId, prompt) {
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress) {
+  if (!w3 || !walletState.get().walletAddress) {
     showToast({
       type: "error",
       title: "Wallet Not Connected",
@@ -669,13 +672,13 @@ async function recordGeneration(nodeId, prompt) {
 
     let gas;
     try {
-      gas = await tx.estimateGas({ from: window.walletAddress });
+      gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     } catch {
       gas = 120000;
     }
 
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     console.log("[FREE-GEN] recorded! txHash =", receipt.transactionHash);
@@ -719,7 +722,7 @@ async function recordGeneration(nodeId, prompt) {
 
 async function payWithUSDC(nodeId, prompt, tier) {
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress) {
+  if (!w3 || !walletState.get().walletAddress) {
     showToast({
       type: "error",
       title: "Wallet Not Connected",
@@ -804,7 +807,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
 
     // Check USDC balance before attempting payment
     const balance = await usdcContract.methods
-      .balanceOf(window.walletAddress)
+      .balanceOf(walletState.get().walletAddress)
       .call();
     if (BigInt(balance) < BigInt(tierCostWei)) {
       const balanceUSDC = Number(balance) / 1e6;
@@ -828,7 +831,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
     // Some ERC20 tokens require this to prevent front-running; USDC doesn't
     // but it's a safe practice that costs minimal gas.
     const currentAllowance = await usdcContract.methods
-      .allowance(window.walletAddress, contractAddress)
+      .allowance(walletState.get().walletAddress, contractAddress)
       .call();
     if (BigInt(currentAllowance) > BigInt(0)) {
       console.log(
@@ -839,12 +842,12 @@ async function payWithUSDC(nodeId, prompt, tier) {
       const resetTx = usdcContract.methods.approve(contractAddress, "0");
       let resetGas;
       try {
-        resetGas = await resetTx.estimateGas({ from: window.walletAddress });
+        resetGas = await resetTx.estimateGas({ from: walletState.get().walletAddress });
       } catch {
         resetGas = 80000;
       }
       await resetTx.send({
-        from: window.walletAddress,
+        from: walletState.get().walletAddress,
         gas: Math.floor(Number(resetGas) * 1.2),
       });
       console.log("[USDC] allowance reset to 0");
@@ -857,13 +860,13 @@ async function payWithUSDC(nodeId, prompt, tier) {
 
     let approveGas;
     try {
-      approveGas = await approveTx.estimateGas({ from: window.walletAddress });
+      approveGas = await approveTx.estimateGas({ from: walletState.get().walletAddress });
     } catch {
       approveGas = 100000;
     }
 
     await approveTx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(approveGas) * 1.2),
     });
     console.log("[USDC] approval confirmed");
@@ -872,7 +875,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
     // sequencer state may lag behind). Retry up to 5 times with a 500ms delay.
     for (let attempt = 0; attempt < 5; attempt++) {
       const allowed = await usdcContract.methods
-        .allowance(window.walletAddress, contractAddress)
+        .allowance(walletState.get().walletAddress, contractAddress)
         .call();
       if (BigInt(allowed) >= BigInt(tierCostWei)) {
         console.log("[USDC] allowance verified:", allowed.toString());
@@ -906,7 +909,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
     // estimateGas may fail on public RPCs due to stale sequencer state.
     let payGas;
     try {
-      payGas = await payTx.estimateGas({ from: window.walletAddress });
+      payGas = await payTx.estimateGas({ from: walletState.get().walletAddress });
       console.log("[USDC] estimated pay gas:", payGas);
     } catch (estErr) {
       // On public networks, estimateGas often fails when the approval tx hasn't
@@ -925,7 +928,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
     }
 
     const receipt = await payTx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(payGas) * 1.2),
     });
     console.log("[USDC] payment confirmed! txHash =", receipt.transactionHash);
@@ -996,12 +999,12 @@ function _getWeb3() {
 }
 
 function _getContract() {
-  return contract || window.contract || null;
+  return contract || walletState.get().contract || null;
 }
 async function publishAsset(tokenURI, tokenId) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -1009,9 +1012,9 @@ async function publishAsset(tokenURI, tokenId) {
   try {
     // Use full signature to avoid Web3.js v1 overload resolution issues
     const tx = c.methods["publishAsset(string,uint256)"](tokenURI, tokenId);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
 
@@ -1045,16 +1048,16 @@ async function publishAsset(tokenURI, tokenId) {
 async function updateAssetURI(tokenId, newTokenURI) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
 
   try {
     const tx = c.methods.updateAssetURI(tokenId, newTokenURI);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     return receipt.transactionHash;
@@ -1089,7 +1092,7 @@ async function updateAssetURI(tokenId, newTokenURI) {
 async function addEditor(tokenId, editorAddress) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -1097,9 +1100,9 @@ async function addEditor(tokenId, editorAddress) {
   try {
     // Use full signature to avoid Web3.js v1 overload resolution issues
     const tx = c.methods["addEditor(uint256,address)"](tokenId, editorAddress);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     return receipt.transactionHash;
@@ -1118,16 +1121,16 @@ async function addEditor(tokenId, editorAddress) {
 async function removeEditor(tokenId, editorAddress) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
 
   try {
     const tx = c.methods.removeEditor(tokenId, editorAddress);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     return receipt.transactionHash;
@@ -1158,7 +1161,7 @@ const CollaboratorRole = Object.freeze({
 async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -1170,9 +1173,9 @@ async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
       collaboratorAddress,
       role
     );
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     return receipt.transactionHash;
@@ -1193,7 +1196,7 @@ async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
 async function setCollaboratorRole(tokenId, collaboratorAddress, role) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -1204,9 +1207,9 @@ async function setCollaboratorRole(tokenId, collaboratorAddress, role) {
       collaboratorAddress,
       role
     );
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     return receipt.transactionHash;
@@ -1274,7 +1277,7 @@ async function listCollaboratorsByRole(tokenId, role) {
 async function burn(tokenId) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -1296,9 +1299,9 @@ async function burn(tokenId) {
 
   try {
     const tx = c.methods.burn(tokenId);
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
 
@@ -1310,7 +1313,7 @@ async function burn(tokenId) {
     // Unpin IPFS content after burn — fully non-blocking, skipped if unreachable
     if (manifestCid) {
       const capturedCid = manifestCid;
-      const capturedWallet = window.walletAddress;
+      const capturedWallet = walletState.get().walletAddress;
       (async () => {
         const reachable = await isIpfsCidReachable(capturedCid).catch(() => false);
         if (!reachable) {
@@ -1353,7 +1356,7 @@ async function burn(tokenId) {
 async function setBurnPermission(tokenId, collaboratorAddress, canBurnFlag) {
   const c = _getContract();
   const w3 = _getWeb3();
-  if (!w3 || !window.walletAddress || !c) {
+  if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -1364,9 +1367,9 @@ async function setBurnPermission(tokenId, collaboratorAddress, canBurnFlag) {
       collaboratorAddress,
       canBurnFlag
     );
-    const gas = await tx.estimateGas({ from: window.walletAddress });
+    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
-      from: window.walletAddress,
+      from: walletState.get().walletAddress,
       gas: Math.floor(Number(gas) * 1.2),
     });
     return receipt.transactionHash;
@@ -1396,10 +1399,6 @@ async function canBurn(tokenId, address) {
     return null;
   }
 }
-
-// Expose to window for inline onclick handlers if needed
-window.connectWallet = connectWallet;
-window.disconnectWallet = disconnectWallet;
 
 // ── Exports ──
 export {

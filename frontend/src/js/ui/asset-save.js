@@ -33,6 +33,8 @@ import {
 import { updateBurnButton } from "./collaborators.js";
 import { showToast } from "./toasts.js";
 import { emit, on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { walletState } from "../state/wallet-state.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -45,7 +47,7 @@ let isSaving = false;
 let isPublishing = false;
 
 function requireWallet() {
-  if (window.walletAddress) return true;
+  if (walletState.get().walletAddress) return true;
   showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
   return false;
 }
@@ -66,8 +68,8 @@ function updateAssetStatus(name, meta) {
 
 function updateButtonState() {
   const hasAsset =
-    !!window.activeAssetManifestCid || getPendingChildRefs().length > 0;
-  const hasWallet = !!window.walletAddress;
+    !!assetState.get().activeAssetManifestCid || getPendingChildRefs().length > 0;
+  const hasWallet = !!walletState.get().walletAddress;
   const visible = hasAsset && hasWallet;
 
   if (saveBtn) saveBtn.hidden = !visible;
@@ -89,7 +91,7 @@ function updateButtonState() {
 async function fetchAssetName(tokenId) {
   try {
     const { contract } = await import("../blockchain/wallet.js");
-    const c = contract || window.contract;
+    const c = contract || walletState.get().contract;
     if (!c) return null;
     const cid = await c.methods.tokenURI(tokenId).call();
     if (!cid) return null;
@@ -113,11 +115,11 @@ function isDefaultName(name) {
 
 async function resolveAssetName() {
   // Always prefer the user's in-session rename.
-  if (window.activeAssetName) return window.activeAssetName;
+  if (assetState.get().activeAssetName) return assetState.get().activeAssetName;
 
   // If no rename yet, try fetching from the token's stored manifest.
-  if (window.activeAssetTokenId) {
-    return (await fetchAssetName(window.activeAssetTokenId)) || "My Asset";
+  if (assetState.get().activeAssetTokenId) {
+    return (await fetchAssetName(assetState.get().activeAssetTokenId)) || "My Asset";
   }
   return "My Asset";
 }
@@ -127,7 +129,7 @@ async function resolveAssetName() {
  * Returns the final name or null if cancelled.
  */
 async function ensureExplicitName() {
-  const currentName = window.activeAssetName || "";
+  const currentName = assetState.get().activeAssetName || "";
   if (!isDefaultName(currentName)) {
     return currentName; // already explicitly named — skip dialog
   }
@@ -141,8 +143,8 @@ async function ensureExplicitName() {
   }
   const name = input.trim();
   if (name) {
-    window.activeAssetName = name;
-    if (assetStatusName) assetStatusName.textContent = window.activeAssetName;
+    assetState.set({ activeAssetName: name });
+    if (assetStatusName) assetStatusName.textContent = name;
     return name;
   }
   return "Untitled Asset";
@@ -151,7 +153,7 @@ async function ensureExplicitName() {
 function advanceManifestVersion(manifest, latestCid) {
   manifest.version = (manifest.version || 0) + 1;
   manifest.prev_asset_manifest_cid =
-    latestCid || window.activeAssetManifestCid || null;
+    latestCid || assetState.get().activeAssetManifestCid || null;
 }
 
 /**
@@ -254,14 +256,14 @@ async function decomposeManifestNodes(manifest) {
  * For drafts without a token, fall back to the currently loaded manifest.
  */
 async function resolveLatestManifestCid() {
-  if (window.latestAssetManifestCid) {
-    return window.latestAssetManifestCid;
+  if (assetState.get().latestAssetManifestCid) {
+    return assetState.get().latestAssetManifestCid;
   }
 
-  const tokenId = window.activeAssetTokenId;
+  const tokenId = assetState.get().activeAssetTokenId;
   if (tokenId) {
     try {
-      const c = walletContract || window.contract;
+      const c = walletContract || walletState.get().contract;
       if (c) {
         const onChainCid = await c.methods.tokenURI(String(tokenId)).call();
         if (onChainCid) {
@@ -278,7 +280,7 @@ async function resolveLatestManifestCid() {
       );
     }
   }
-  return window.activeAssetManifestCid || null;
+  return assetState.get().activeAssetManifestCid || null;
 }
 
 async function prepareManifestForWrite(assetName) {
@@ -288,8 +290,8 @@ async function prepareManifestForWrite(assetName) {
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
 
-  if (window.activeAssetManifestCid) {
-    manifest = await getFromRemoteIPFS(window.activeAssetManifestCid);
+  if (assetState.get().activeAssetManifestCid) {
+    manifest = await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
   } else if (
     pendingRefs.length > 0 ||
     pendingPP.size > 0 ||
@@ -438,10 +440,10 @@ async function prepareManifestForWrite(assetName) {
   // should still append to the tip of the chain as the next linear version
   // (v7), not branch off as v3. Use latestAssetManifestCid as the previous
   // link; fall back to the currently loaded manifest if no latest is tracked.
-  const activeCid = window.activeAssetManifestCid;
+  const activeCid = assetState.get().activeAssetManifestCid;
   const latestCid = await resolveLatestManifestCid();
   console.log(
-    `Save: versioning base | active=${activeCid} latest=${window.latestAssetManifestCid} onChain=${window.activeAssetTokenId || "none"} chosenPrev=${latestCid}`
+    `Save: versioning base | active=${activeCid} latest=${assetState.get().latestAssetManifestCid} onChain=${assetState.get().activeAssetTokenId || "none"} chosenPrev=${latestCid}`
   );
 
   let prevManifest = null;
@@ -505,8 +507,7 @@ async function saveAssetDraftCore(assetName, { captureThumbnail = false } = {}) 
   }
 
   const { cid } = await saveManifest(prepared.manifest);
-  window.latestAssetManifestCid = cid;
-  window.activeAssetManifestCid = cid;
+  assetState.set({ latestAssetManifestCid: cid, activeAssetManifestCid: cid });
 
   clearPendingChildRefs();
   clearPendingPostProcessorEdits();
@@ -560,15 +561,15 @@ async function onSaveAssetDraft() {
     // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
     // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
     // stashing a draft manifest in query params.
-    if (!window.activeAssetTokenId) {
+    if (!assetState.get().activeAssetTokenId) {
       updateUrlManifest(cid);
     }
 
     emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
     updateAssetStatus(
       assetName,
-      window.activeAssetTokenId
-        ? `Asset Token #${window.activeAssetTokenId}`
+      assetState.get().activeAssetTokenId
+        ? `Asset Token #${assetState.get().activeAssetTokenId}`
         : "Draft Scene"
     );
     announceStatus("Draft saved.");
@@ -601,7 +602,7 @@ async function onPublishAsset() {
     publishBtn.title = "Besking…";
   }
   if (publishBtnText) publishBtnText.textContent = "Besking…";
-  announceStatus(window.activeAssetTokenId ? "Republishing asset…" : "Publishing asset…");
+  announceStatus(assetState.get().activeAssetTokenId ? "Republishing asset…" : "Publishing asset…");
 
   try {
     const assetName = await ensureExplicitName();
@@ -636,11 +637,11 @@ async function onPublishAsset() {
     const { cid } = result;
 
     announceStatus("Confirm transaction in MetaMask…");
-    if (window.activeAssetTokenId) {
-      const txHash = await updateAssetURI(window.activeAssetTokenId, cid);
+    if (assetState.get().activeAssetTokenId) {
+      const txHash = await updateAssetURI(assetState.get().activeAssetTokenId, cid);
       if (!txHash) throw new Error("Republish transaction failed");
       // Keep the URL clean and anchored to the token, not a specific manifest CID.
-      updateUrlAsset(window.activeAssetTokenId);
+      updateUrlAsset(assetState.get().activeAssetTokenId);
       announceStatus("Asset republished successfully.");
     } else {
       const tokenId =
@@ -651,7 +652,7 @@ async function onPublishAsset() {
           .replace(/^-/, "");
       const txHash = await publishAsset(cid, tokenId);
       if (!txHash) throw new Error("Publish transaction failed");
-      window.activeAssetTokenId = tokenId;
+      assetState.set({ activeAssetTokenId: tokenId });
       updateUrlAsset(tokenId);
 
       const { showAssetEditors } = await import("./asset-editors.js");
@@ -661,8 +662,8 @@ async function onPublishAsset() {
 
     // latestCid / activeCid / pending edits were already updated by saveAssetDraftCore.
 
-    emit(EVENTS.ASSET_PUBLISHED, { tokenId: window.activeAssetTokenId, cid });
-    updateAssetStatus(assetName, `Asset Token #${window.activeAssetTokenId}`);
+    emit(EVENTS.ASSET_PUBLISHED, { tokenId: assetState.get().activeAssetTokenId, cid });
+    updateAssetStatus(assetName, `Asset Token #${assetState.get().activeAssetTokenId}`);
   } catch (err) {
     console.error("Publish asset failed:", err);
     announceStatus("Publish failed: " + err.message);
@@ -702,14 +703,14 @@ document.addEventListener("keydown", (e) => {
 on(EVENTS.SCENE_READY, (e) => {
   const manifest = e.detail?.manifest;
   // Preserve an existing rename — don't overwrite with fallback defaults.
-  const name = manifest?.name || window.activeAssetName || "Untitled Asset";
-  if (manifest?.name || !window.activeAssetName) {
-    window.activeAssetName = name;
+  const name = manifest?.name || assetState.get().activeAssetName || "Untitled Asset";
+  if (manifest?.name || !assetState.get().activeAssetName) {
+    assetState.set({ activeAssetName: name });
   }
   updateAssetStatus(
     name,
-    window.activeAssetTokenId
-      ? `Asset Token #${window.activeAssetTokenId}`
+    assetState.get().activeAssetTokenId
+      ? `Asset Token #${assetState.get().activeAssetTokenId}`
       : "Draft Scene"
   );
   updateButtonState();

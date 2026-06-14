@@ -9,6 +9,8 @@
 import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { uiState } from "../state/ui-state.js";
 
 let outlinerTree = null;
 let outlinerFooter = null;
@@ -58,7 +60,7 @@ function initOutliner() {
   outlinerTree.addEventListener("drop", onDropFromLibrary);
 
   // Initial render if manifest is already loaded
-  if (window.activeAssetManifestCid) {
+  if (assetState.get().activeAssetManifestCid) {
     refreshOutliner();
   }
 }
@@ -66,16 +68,16 @@ function initOutliner() {
 // ─── Data ─────────────────────────────────────────────────────────────
 
 async function getCurrentManifest() {
-  if (!window.activeAssetManifestCid) return null;
+  if (!assetState.get().activeAssetManifestCid) return null;
   try {
-    return await getFromRemoteIPFS(window.activeAssetManifestCid);
+    return await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
   } catch {
     return null;
   }
 }
 
 function getNodes() {
-  const manifest = window._currentManifest;
+  const manifest = assetState.get().currentManifest;
   if (!manifest?.scene?.nodes) return [];
   return manifest.scene.nodes;
 }
@@ -119,12 +121,12 @@ async function refreshOutliner() {
     renderEmpty();
     return;
   }
-  const cid = window.activeAssetManifestCid;
+  const cid = assetState.get().activeAssetManifestCid;
   if (cid !== renderedManifestCid) {
     collapsedNodeIds.clear();
     renderedManifestCid = cid;
   }
-  window._currentManifest = manifest;
+  assetState.set({ currentManifest: manifest });
   renderTree(buildOutlineTree(getNodes()));
 }
 
@@ -292,7 +294,7 @@ function getOutlinerFooter() {
 function updateFooter(totalNodes, childCount) {
   const footer = getOutlinerFooter();
   if (!footer) return;
-  const depth = window._nestingDepth || 0;
+  const depth = uiState.get().nestingDepth;
   footer.textContent = `${totalNodes} item${
     totalNodes !== 1 ? "s" : ""
   } · ${childCount} child${childCount !== 1 ? "ren" : ""} · Depth ${depth}/5`;

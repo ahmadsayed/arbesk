@@ -9,6 +9,8 @@
 
 import { truncateAddress, truncateCid } from "../utils/format.js";
 import { on, EVENTS } from "../events/registry.js";
+import { assetState } from "../state/asset-state.js";
+import { walletState } from "../state/wallet-state.js";
 
 const ACTIVITY_CONFIG = {
   GENERATION: { label: "Generation", icon: "✦" },
@@ -118,7 +120,7 @@ function extractActivities(chain) {
         cid: manifestCid,
         prevCid: manifest.prev_manifest_cid || null,
         actorType: "USER",
-        actorAddress: window.walletAddress || "system",
+        actorAddress: walletState.get().walletAddress || "system",
         payload: {
           version: manifest.version,
           nodeCount: manifest.nodes?.length || 0,
@@ -141,7 +143,7 @@ function extractActivities(chain) {
           cid: h.src?.cid || manifestCid,
           prevCid: null,
           actorType: "USER",
-          actorAddress: h.txHash ? window.walletAddress || "system" : "system",
+          actorAddress: h.txHash ? walletState.get().walletAddress || "system" : "system",
           payload: {
             prompt: h.prompt,
             provider: h.provider,
@@ -159,7 +161,7 @@ function extractActivities(chain) {
 }
 
 async function loadActivities() {
-  const cid = window.activeAssetManifestCid;
+  const cid = assetState.get().activeAssetManifestCid;
   if (!cid) {
     activities = [];
     render();

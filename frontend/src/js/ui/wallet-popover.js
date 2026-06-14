@@ -13,6 +13,7 @@ import {
 import { truncateAddress } from "../utils/format.js";
 import { disconnectWallet } from "../blockchain/wallet.js";
 import { getCachedSession } from "../services/api.js";
+import { walletState } from "../state/wallet-state.js";
 
 let popover = null;
 let isOpen = false;
@@ -101,8 +102,9 @@ function positionPopover() {
 
 function updateContent() {
   const els = getElements();
-  const address = window.walletAddress || "";
-  const chainId = Number(window.chainId || 0);
+  const { walletAddress, chainId: rawChainId } = walletState.get();
+  const address = walletAddress || "";
+  const chainId = Number(rawChainId || 0);
 
   // Address with truncation
   if (els.address) {
@@ -143,9 +145,10 @@ function updateContent() {
 
 async function onCopy() {
   const els = getElements();
-  if (!els.copyBtn || !window.walletAddress) return;
+  const walletAddress = walletState.get().walletAddress;
+  if (!els.copyBtn || !walletAddress) return;
 
-  const ok = await copyToClipboard(window.walletAddress);
+  const ok = await copyToClipboard(walletAddress);
   if (ok) {
     els.copyBtn.textContent = "Copied!";
     els.copyBtn.classList.add("copied");

@@ -39,6 +39,7 @@ import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js
 import { CHAIN_IDS } from "/js/constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
 import { truncateAddress } from "/js/utils/format.js";
+import { walletState } from "/js/state/wallet-state.js";
 
 // ── Headerbar network selector ──
 const networkSelect = document.getElementById("headerbarNetworkSelect");
@@ -47,7 +48,7 @@ if (networkSelect) {
     const key = e.target.value;
     if (!key) return;
     // If wallet is connected, trigger the network switch in the wallet
-    if (window.walletAddress) {
+    if (walletState.get().walletAddress) {
       try {
         await switchNetwork(key);
       } catch (err) {

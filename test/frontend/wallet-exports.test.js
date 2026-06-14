@@ -115,16 +115,11 @@ describe("wallet.js export block", () => {
     expect(exported).toContain("contract");
   });
 
-  // ─── window function exposures must have a matching export ───
+  // ─── No window function exports (removed in state-layer refactor) ───
 
-  test("every function exposed on window is also exported", () => {
+  test("wallet.js has no window.* function exports", () => {
     const windowFuncs = extractWindowFunctionExposures(source);
-    const exported = extractExportNames(source);
-
-    expect(windowFuncs.length).toBeGreaterThan(0);
-    for (const name of windowFuncs) {
-      expect(exported).toContain(name);
-    }
+    expect(windowFuncs).toHaveLength(0);
   });
 
   // ─── Consumer import contracts ───
