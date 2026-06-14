@@ -9,6 +9,7 @@ import {
   selectNode,
   renderTree,
 } from "../frontend/src/js/ui/outliner.js";
+import { on, EVENTS, _resetListenerCounts } from "../frontend/src/js/events/registry.js";
 
 // jsdom does not implement CSS.escape, but outliner.js uses it for selectors.
 if (typeof CSS === "undefined" || !CSS.escape) {
@@ -24,6 +25,11 @@ describe("outliner node rendering", () => {
         <div class="outliner-footer">No items</div>
       </div>
     `;
+    on(EVENTS.OUTLINER_NODE_SELECTED, () => {});
+  });
+
+  afterEach(() => {
+    _resetListenerCounts();
   });
 
   test("renderTree recursively renders nested children with depth guides", () => {

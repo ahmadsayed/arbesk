@@ -176,13 +176,15 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   }
 
   // Expand/collapse toggle or leaf spacer
-  const toggle = document.createElement("span");
+  const toggle = document.createElement("button");
+  toggle.type = "button";
   toggle.className = "outliner-node-toggle";
-  toggle.setAttribute("aria-hidden", "true");
   toggle.dataset.hasChildren = String(hasChildren);
-  toggle.textContent = hasChildren ? (isCollapsed ? "▶" : "▼") : "";
+  toggle.setAttribute("aria-expanded", String(!isCollapsed));
   if (hasChildren) {
     toggle.classList.toggle("expanded", !isCollapsed);
+    toggle.setAttribute("aria-label", isCollapsed ? `Expand ${node.name}` : `Collapse ${node.name}`);
+    toggle.textContent = isCollapsed ? "▶" : "▼";
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
       if (collapsedNodeIds.has(node.node_id)) {
@@ -192,6 +194,9 @@ function createNodeElement(node, isChildWorld, depth = 0) {
       }
       renderTree(getNodes());
     });
+  } else {
+    toggle.setAttribute("aria-hidden", "true");
+    toggle.textContent = "";
   }
   el.appendChild(toggle);
 
@@ -315,22 +320,25 @@ function getDropIndicator() {
 
 function showDropTarget(e) {
   const target = e.target.closest(".outliner-node");
-  if (!target || !outlinerTree) {
+  const tree = getOutlinerTree();
+  if (!target || !tree) {
     hideDropTarget();
     return;
   }
   const indicator = getDropIndicator();
   if (
-    indicator.parentNode !== outlinerTree ||
+    indicator.parentNode !== tree ||
     indicator.nextElementSibling !== target
   ) {
-    outlinerTree.insertBefore(indicator, target);
+    tree.insertBefore(indicator, target);
   }
   indicator.classList.add("active");
 }
 
 function hideDropTarget() {
-  dropIndicator?.classList.remove("active");
+  if (dropIndicator?.parentNode) {
+    dropIndicator.remove();
+  }
 }
 
 function onDropFromLibrary(e) {
@@ -367,6 +375,7 @@ function onSceneReady() {
 function onSceneEmpty() {
   renderEmpty();
   clearSelection();
+  collapsedNodeIds.clear();
 }
 
 // ─── Exports ─────────────────────────────────────────────────────────
