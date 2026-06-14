@@ -5,17 +5,18 @@
 // manifest chain; a glass popover surfaces per-version detail on hover/focus.
 // ═══════════════════════════════════════════════════════════════════
 
+// The scrubber sits in the headerbar between document actions (New/Save/Besk it)
+// on the left and wallet/network actions on the right.
 .history {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: var(--size-2);
-  width: min(420px, max(0px, calc(100% - 340px)));
+  flex: 0 1 420px;
+  order: 1;
   max-width: 420px;
-  min-width: 0;
+  min-width: 140px;
   padding: var(--size-1) var(--size-3);
   background: var(--surface-overlay-hover);
   border: var(--border-size-1) solid var(--border-hairline);
@@ -29,6 +30,11 @@
   &.loading {
     opacity: 0.7;
   }
+}
+
+// Keep wallet/network actions on the far right of the headerbar.
+.headerbar-actions {
+  order: 2;
 }
 
 .history-label {
@@ -148,5 +154,54 @@
 
   &[hidden] {
     display: none;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Responsive behaviour
+//
+// The history scrubber is centred in the headerbar via flex auto margins.
+// On narrower viewports the surrounding chrome (title, document actions,
+// wallet, network) crowds it out, so we progressively collapse it before it
+// can overlap the buttons. At very narrow widths the scrubber drops to a
+// second row below the header controls.
+// ═══════════════════════════════════════════════════════════════════
+
+@media (max-width: 1100px) {
+  .history {
+    padding: var(--size-1) var(--size-2);
+    gap: var(--size-1);
+  }
+
+  .history-label,
+  .version-badge {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .headerbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--headerbar-height);
+  }
+
+  .history {
+    order: 3;
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: auto;
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: var(--border-size-1) solid var(--border-hairline);
+    box-shadow: none;
+  }
+
+  // Grow the headerbar/sidebar/inspector offset only when the scrubber is
+  // actually visible in the wrapped layout.
+  #app:has(.headerbar .history:not([hidden])) {
+    --headerbar-height: 96px;
   }
 }
