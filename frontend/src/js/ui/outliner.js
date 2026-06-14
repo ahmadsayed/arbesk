@@ -16,6 +16,10 @@ let outlinerTree = null;
 let outlinerFooter = null;
 let selectedNodeId = null;
 
+function getOutlinerTree() {
+  return outlinerTree || document.querySelector(".outliner-tree");
+}
+
 // ─── Initialization ──────────────────────────────────────────────────
 
 function initOutliner() {
@@ -198,7 +202,7 @@ function updateFooter(totalNodes, childCount) {
 function selectNode(nodeId) {
   // Deselect previous
   if (selectedNodeId) {
-    const prev = outlinerTree?.querySelector(
+    const prev = getOutlinerTree()?.querySelector(
       `[data-node-id="${CSS.escape(selectedNodeId)}"]`
     );
     if (prev) prev.classList.remove("selected");
@@ -206,7 +210,7 @@ function selectNode(nodeId) {
 
   // Select new
   selectedNodeId = nodeId;
-  const el = outlinerTree?.querySelector(
+  const el = getOutlinerTree()?.querySelector(
     `[data-node-id="${CSS.escape(nodeId)}"]`
   );
   if (el) el.classList.add("selected");
@@ -217,7 +221,7 @@ function selectNode(nodeId) {
 
 function clearSelection() {
   if (selectedNodeId) {
-    const el = outlinerTree?.querySelector(
+    const el = getOutlinerTree()?.querySelector(
       `[data-node-id="${CSS.escape(selectedNodeId)}"]`
     );
     if (el) el.classList.remove("selected");
@@ -298,4 +302,10 @@ function onSceneEmpty() {
 
 // ─── Exports ─────────────────────────────────────────────────────────
 
-export { initOutliner, refreshOutliner, selectNode, clearSelection };
+export {
+  initOutliner,
+  refreshOutliner,
+  selectNode,
+  clearSelection,
+  createNodeElement,
+};
