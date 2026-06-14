@@ -24,10 +24,10 @@ describe("EVENTS constants", () => {
     }
   });
 
-  test("all 25 values are unique", () => {
+  test("all 28 values are unique", () => {
     const values = Object.values(EVENTS);
-    expect(new Set(values).size).toBe(25);
-    expect(values).toHaveLength(25);
+    expect(new Set(values).size).toBe(28);
+    expect(values).toHaveLength(28);
   });
 
   test("spot-check: EVENTS.SCENE_READY === 'scene:ready'", () => {

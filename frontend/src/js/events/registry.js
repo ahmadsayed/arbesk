@@ -15,6 +15,7 @@ export const EVENTS = {
   ASSET_LINKED_DROPPED:       "asset:linkedDropped",
   ASSET_OPEN_BY_TOKEN_ID:     "asset:openByTokenId",
   ASSET_PUBLISHED:            "asset:published",
+  ASSET_STATE_CHANGED:        "asset:stateChanged",
   NESTING_DID_ASCEND:         "nesting:didAscend",
   NESTING_DID_DIVE:           "nesting:didDive",
   NESTING_DIVE_REQUESTED:     "nesting:diveRequested",
@@ -28,11 +29,13 @@ export const EVENTS = {
   SCENE_TOKEN_CHILD_ADDED:    "scene:tokenChildAdded",
   SUBMESH_SELECTED:           "submesh:selected",
   THEME_CHANGED:              "theme:changed",
+  UI_STATE_CHANGED:           "ui:stateChanged",
   USER_AUTHENTICATED:         "user:authenticated",
   USER_AUTH_REQUIRED:         "user:auth-required",
   WALLET_CONNECTED:           "wallet:connected",
   WALLET_DISCONNECTED:        "wallet:disconnected",
   WALLET_GENERATION_PAID:     "wallet:generationPaid",
+  WALLET_STATE_CHANGED:       "wallet:stateChanged",
 };
 
 // ─── Payload Typedefs ─────────────────────────────────────────────────────────
