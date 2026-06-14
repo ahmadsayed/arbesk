@@ -6,6 +6,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  gap: var(--size-2);
 }
 
 .outliner-toolbar {
@@ -14,18 +15,24 @@
   gap: var(--size-1);
   padding: var(--size-2) 0;
   flex-shrink: 0;
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
 }
 
+// Card container for the tree
 .outliner-tree {
   flex: 1;
   overflow-y: auto;
+  background-color: color-mix(in srgb, var(--window-fg) 2%, var(--sidebar-bg));
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-2);
+  padding: var(--size-1);
 }
 
 // Tree node
 .outliner-node {
   display: flex;
   align-items: center;
-  gap: var(--size-1);
+  gap: var(--size-2);
   padding: var(--size-1) var(--size-2);
   font-size: var(--font-size-1);
   border-radius: var(--radius-2);
@@ -39,14 +46,53 @@
   }
 
   &.selected {
-    background-color: color-mix(in srgb, var(--accent-bg) 20%, transparent);
+    background-color: color-mix(in srgb, var(--accent-bg) 15%, transparent);
     color: var(--sidebar-fg);
-    box-shadow: inset 2px 0 0 var(--accent-bg);
+  }
+
+  &.selected:hover {
+    background-color: color-mix(in srgb, var(--window-fg) 6%,
+      color-mix(in srgb, var(--accent-bg) 15%, transparent));
   }
 
   &:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
+  }
+}
+
+// Indentation guides (one per depth level)
+.outliner-node-guide {
+  width: 1px;
+  align-self: stretch;
+  background-color: var(--border-hairline);
+  margin: 0 var(--size-1);
+  flex-shrink: 0;
+}
+
+// Expand/collapse toggle or leaf spacer
+.outliner-node-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--dim-fg);
+  transition: transform var(--duration-quick) var(--ease-out-3);
+  cursor: pointer;
+
+  &[data-has-children="false"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &.expanded {
+    transform: rotate(90deg);
+  }
+
+  &:hover {
+    color: var(--sidebar-fg);
   }
 }
 
@@ -71,28 +117,13 @@
   font-family: var(--font-mono);
   color: var(--dim-fg);
   padding: 0 var(--size-1);
+  font-variant-numeric: tabular-nums;
 }
 
-// Nesting indent
-.outliner-node[data-depth="1"] { padding-left: var(--size-5); }
-.outliner-node[data-depth="2"] { padding-left: var(--size-8); }
-.outliner-node[data-depth="3"] { padding-left: 64px; }
-.outliner-node[data-depth="4"] { padding-left: 80px; }
-.outliner-node[data-depth="5"] { padding-left: 96px; }
-
-// Expand/collapse toggle
-.outliner-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  color: var(--dim-fg);
-  transition: transform var(--duration-quick) var(--ease-out-3);
-
-  &.expanded {
-    transform: rotate(90deg);
+// Nesting indent: 1rem per depth level, plus guides
+@for $d from 1 through 5 {
+  .outliner-node[data-depth="#{$d}"] {
+    padding-left: calc(var(--size-3) * #{$d});
   }
 }
 
@@ -113,8 +144,8 @@
 // Footer
 .outliner-footer {
   flex-shrink: 0;
-  padding: var(--size-2) var(--size-2);
+  padding: var(--size-2);
   font-size: var(--font-size-0);
   color: var(--dim-fg);
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--border-hairline);
 }
