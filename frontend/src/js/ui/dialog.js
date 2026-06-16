@@ -15,42 +15,14 @@ import { escapeHtml } from "../utils/html.js";
 
 // ── Shared infrastructure ────────────────────────────────────────────────────
 
-function _trapFocus(dialog, fallbackEl) {
-  const FOCUSABLE =
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-  const focusable = dialog.querySelectorAll(FOCUSABLE);
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-
-  function handleTab(e) {
-    if (e.key !== "Tab") return;
-    if (e.shiftKey) {
-      if (document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      }
-    } else {
-      if (document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }
-  dialog.addEventListener("keydown", handleTab);
-
-  // Pull focus back if MetaMask or other overlay steals it
-  function handleFocusIn(e) {
-    if (!dialog.contains(e.target)) {
-      e.preventDefault();
-      fallbackEl?.focus();
-    }
-  }
-  document.addEventListener("focusin", handleFocusIn);
-
-  return () => {
-    dialog.removeEventListener("keydown", handleTab);
-    document.removeEventListener("focusin", handleFocusIn);
-  };
+function _trapFocus(dialog, initialFocusEl) {
+  const trap = window.focusTrap.createFocusTrap(dialog, {
+    initialFocus: initialFocusEl,
+    escapeDeactivates: false, // Escape is handled by _buildDialog's global keydown
+    allowOutsideClick: true,  // lets MetaMask overlays receive clicks without breaking the trap
+  });
+  trap.activate();
+  return () => trap.deactivate();
 }
 
 /**
@@ -164,10 +136,6 @@ export function showDialog(title, body, defaultValue = "") {
       });
 
       setRemoveTrap(_trapFocus(dialog, input));
-      requestAnimationFrame(() => {
-        input.focus();
-        input.select();
-      });
     } catch (err) {
       console.error("[DIALOG] error creating dialog:", err);
       resolve(null);
@@ -226,7 +194,6 @@ export function showConfirmDialog(title, body, buttons = []) {
 
       const firstBtn = dialog.querySelector(".dialog-action-btn");
       setRemoveTrap(_trapFocus(dialog, firstBtn));
-      requestAnimationFrame(() => firstBtn?.focus());
     } catch (err) {
       console.error("[DIALOG] error creating confirm dialog:", err);
       resolve(null);
@@ -262,7 +229,6 @@ export function showInfoDialog(title, bodyHtml) {
       closeBtn.addEventListener("click", () => closeDialog(null));
 
       setRemoveTrap(_trapFocus(dialog, closeBtn));
-      requestAnimationFrame(() => closeBtn?.focus());
     } catch (err) {
       console.error("[DIALOG] error creating info dialog:", err);
       resolve();
