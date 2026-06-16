@@ -21,9 +21,9 @@ function getNotyf() {
       dismissible: true,
       position: { x: "right", y: "top" },
       types: [
-        { type: "info",    background: "#3b82f6", icon: false, dismissible: true },
-        { type: "warning", background: "#f59e0b", icon: false, dismissible: true },
-        { type: "pending", background: "#6b7280", icon: false, dismissible: true },
+        { type: "info",    icon: false, dismissible: true },
+        { type: "warning", icon: false, dismissible: true },
+        { type: "pending", icon: false, dismissible: true },
       ],
     });
   }

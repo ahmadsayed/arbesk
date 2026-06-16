@@ -1,104 +1,85 @@
 // ═══════════════════════════════════════════════════════════════════
-// Toast Notification System
+// Toast Notification System — Notyf overrides
 //
-// Fixed-position toast container with slide-in animation.
-// Supports info, success, warning, error variants.
+// Resets Notyf's default bright-colored boxes to match the studio's
+// GNOME HIG glass-morphism aesthetic and positions the container
+// just below the header bar, flush to the right edge.
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Container ────────────────────────────────────────────────────────
+// ── Container positioning ─────────────────────────────────────────
+// Notyf appends its own .notyf-container to <body>. We reposition it
+// to sit below the headerbar (Notyf's default is top: 0).
 
-#toastContainer {
-  position: fixed;
-  top: calc(var(--headerbar-height) + var(--size-2));
-  right: var(--size-3);
-  z-index: 500;
-  display: flex;
-  flex-direction: column;
+.notyf-container {
+  top: calc(var(--headerbar-height) + var(--size-2)) !important;
+  right: var(--size-3) !important;
+  left: auto !important;
+  transform: none !important;
+  width: min(360px, calc(100vw - var(--size-3) * 2)) !important;
+  padding: 0 !important;
+  z-index: 500 !important; // same layer as the old #toastContainer
   gap: var(--size-2);
-  width: min(360px, calc(100vw - var(--size-3) * 2));
-  pointer-events: none;
-
-  > * {
-    pointer-events: auto;
-  }
 }
 
-// ── Toast base ───────────────────────────────────────────────────────
+// ── Toast base ────────────────────────────────────────────────────
 
-.toast {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--size-2);
-  padding: var(--size-3);
-  background: var(--popover-glass-bg);
+.notyf__toast {
+  // Reset Notyf's solid color background
+  background-color: var(--popover-glass-bg) !important;
   backdrop-filter: blur(var(--glass-blur));
-  color: var(--popover-fg);
+  color: var(--popover-fg) !important;
   border: var(--border-size-1) solid var(--border-hairline);
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-3) !important;
   box-shadow: var(--shadow-4);
-  position: relative;
-  overflow: hidden;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: var(--size-3) !important;
 
-  // Entrance animation
-  opacity: 0;
-  transform: translateX(20px);
-  transition: opacity 260ms var(--ease-out-3),
-              transform 260ms var(--ease-out-3);
+  // Default (info / pending) accent
+  border-left: 3px solid var(--accent-bg);
 
-  &.toast-in {
-    opacity: 1;
-    transform: translateX(0);
+  // Type variants via Notyf class names
+  &.notyf__toast--success { border-left-color: var(--green-4); }
+  &.notyf__toast--error   { border-left-color: var(--destructive-bg); }
+  &.notyf__toast--warning { border-left-color: var(--yellow-4); }
+  &.notyf__toast--info,
+  &.notyf__toast--pending { border-left-color: var(--accent-bg); }
+}
+
+// ── Message content ───────────────────────────────────────────────
+
+.notyf__wrapper {
+  padding: 0;
+}
+
+.notyf__message {
+  color: var(--popover-fg) !important;
+
+  strong {
+    display: block;
+    font-size: var(--font-size-1);
+    font-weight: var(--font-weight-6);
+    line-height: 1.3;
+    color: var(--popover-fg);
   }
 
-  &.toast-out {
-    opacity: 0;
-    transform: translateX(20px);
+  span {
+    display: block;
+    font-size: var(--font-size-0);
+    line-height: 1.4;
+    color: var(--dim-fg);
+    margin-top: var(--size-1);
+    word-break: break-word;
   }
 }
 
-// ── Icon ─────────────────────────────────────────────────────────────
-
-.toast-icon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 1px;
-}
-
-// ── Body ─────────────────────────────────────────────────────────────
-
-.toast-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-1);
-}
-
-.toast-title {
-  font-size: var(--font-size-1);
-  font-weight: var(--font-weight-6);
-  line-height: 1.3;
-  color: var(--popover-fg);
-}
-
-.toast-message {
-  font-size: var(--font-size-0);
-  line-height: 1.4;
-  color: var(--dim-fg);
-  word-break: break-word;
-}
-
-// ── Actions ──────────────────────────────────────────────────────────
+// ── Action buttons (injected by toasts.js) ────────────────────────
 
 .toast-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--size-1);
-  margin-top: var(--size-1);
+  margin-top: var(--size-2);
 }
 
 .toast-action {
@@ -124,106 +105,45 @@
   }
 }
 
-// ── Close button ─────────────────────────────────────────────────────
+// ── Dismiss button ────────────────────────────────────────────────
 
-.toast-close {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--dim-fg);
-  background: transparent;
+.notyf__dismiss {
+  background: transparent !important;
   border: none;
-  border-radius: var(--radius-2);
-  cursor: pointer;
-  margin-top: -2px;
-  margin-right: -4px;
+  top: var(--size-2) !important;
+  right: var(--size-2) !important;
+}
 
-  &:hover {
-    color: var(--popover-fg);
-    background-color: var(--surface-overlay-hover);
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
+.notyf__dismiss-btn {
+  &::before,
+  &::after {
+    background: var(--dim-fg) !important;
   }
 }
 
-// ── Progress bar ─────────────────────────────────────────────────────
+// ── Icon container (hidden — we use icon: false in config) ─────────
 
-.toast-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background-color: var(--border-color);
-}
+.notyf__icon { display: none; }
 
-.toast-progress-bar {
-  height: 100%;
-  width: 100%;
-  background-color: currentColor;
-  opacity: 0.35;
-}
+// ── Ripple (disabled in config, hidden for safety) ────────────────
 
-// ── Color variants ───────────────────────────────────────────────────
+.notyf__ripple { display: none !important; }
 
-.toast-success {
-  border-left: 3px solid var(--green-4);
-
-  .toast-icon {
-    color: var(--green-4);
-  }
-}
-
-.toast-error {
-  border-left: 3px solid var(--destructive-bg);
-
-  .toast-icon {
-    color: var(--destructive-bg);
-  }
-}
-
-.toast-warning {
-  border-left: 3px solid var(--yellow-4);
-
-  .toast-icon {
-    color: var(--yellow-4);
-  }
-}
-
-.toast-info {
-  border-left: 3px solid var(--accent-bg);
-
-  .toast-icon {
-    color: var(--accent-bg);
-  }
-}
-
-// ── Reduced motion ───────────────────────────────────────────────────
+// ── Reduced motion ────────────────────────────────────────────────
 
 @media (prefers-reduced-motion: reduce) {
-  .toast {
-    transition: none;
-  }
-
-  .toast-progress-bar {
+  .notyf__toast {
     transition: none !important;
+    animation: none !important;
   }
 }
 
-// ── Narrow screens ───────────────────────────────────────────────────
+// ── Narrow screens ────────────────────────────────────────────────
 
 @media (max-width: 480px) {
-  #toastContainer {
-    left: var(--size-2);
-    right: var(--size-2);
-    width: auto;
+  .notyf-container {
+    left: var(--size-2) !important;
+    right: var(--size-2) !important;
+    width: auto !important;
   }
 }
