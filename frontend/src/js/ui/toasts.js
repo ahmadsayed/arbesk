@@ -20,10 +20,17 @@ function getNotyf() {
       ripple: false,
       dismissible: true,
       position: { x: "right", y: "top" },
+      // Register every type with an explicit className. Notyf only adds its
+      // own --success / --error modifier classes for the two built-in types;
+      // custom types get no modifier, so we attach our own class to each so
+      // the SCSS can apply per-type accent borders. icon: false keeps Notyf's
+      // default check/cross glyphs out — our toasts are text-only.
       types: [
-        { type: "info",    icon: false, dismissible: true },
-        { type: "warning", icon: false, dismissible: true },
-        { type: "pending", icon: false, dismissible: true },
+        { type: "info",    className: "toast--info",    icon: false, dismissible: true },
+        { type: "success", className: "toast--success", icon: false, dismissible: true },
+        { type: "warning", className: "toast--warning", icon: false, dismissible: true },
+        { type: "error",   className: "toast--error",   icon: false, dismissible: true },
+        { type: "pending", className: "toast--pending", icon: false, dismissible: true },
       ],
     });
   }

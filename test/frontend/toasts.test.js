@@ -14,16 +14,24 @@ import { showToast, dismissToast, dismissAllToasts } from "../../frontend/src/js
 // ─── MockNotyf ───────────────────────────────────────────────────────────────
 
 class MockNotyf {
-  constructor() {
+  constructor(config = {}) {
     this._notifications = [];
+    // Real Notyf appends a <div class="notyf"> wrapper to <body>.
     this._el = document.createElement("div");
-    this._el.className = "notyf-container";
+    this._el.className = "notyf";
     document.body.appendChild(this._el);
+    // Map each registered type → its className so open() can mirror the real
+    // library, which stamps the per-type className onto the toast element.
+    this._typeClassNames = new Map(
+      (config.types || []).map((t) => [t.type, t.className])
+    );
   }
 
   open({ type = "info", message = "", duration = 6000 }) {
     const el = document.createElement("div");
     el.className = "notyf__toast";
+    const typeClass = this._typeClassNames.get(type);
+    if (typeClass) el.classList.add(typeClass);
     el.dataset.type = type;
     el.innerHTML = message;
     this._el.appendChild(el);
@@ -96,6 +104,19 @@ test("showToast renders the title", () => {
   showToast({ type: "info", title: "My Title" });
 
   expect(document.querySelector(".notyf__toast").textContent).toContain("My Title");
+});
+
+test("showToast stamps the per-type className so SCSS can style accents", () => {
+  // The CDN stylesheet is gone and custom Notyf types get no --type modifier,
+  // so the wrapper must register an explicit className per type (toast--info,
+  // toast--success, …) for the accent-border SCSS to match. Regression guard
+  // for the toasts that rendered unstyled/off-screen.
+  for (const type of ["info", "success", "warning", "error", "pending"]) {
+    showToast({ type, title: type, duration: 0 });
+    const el = document.querySelector(`.notyf__toast.toast--${type}`);
+    expect(el).not.toBeNull();
+    dismissAllToasts();
+  }
 });
 
 test("showToast renders the optional message body", () => {

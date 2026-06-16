@@ -7,18 +7,30 @@
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Container positioning ─────────────────────────────────────────
-// Notyf appends its own .notyf-container to <body>. We reposition it
-// to sit below the headerbar (Notyf's default is top: 0).
+// Notyf appends a `<div class="notyf">` wrapper to <body>. Its own CDN
+// stylesheet (which we no longer load) positioned it fixed/full-viewport,
+// so we must declare position: fixed here and anchor it below the headerbar.
 
-.notyf-container {
+.notyf {
+  position: fixed !important;
   top: calc(var(--headerbar-height) + var(--size-2)) !important;
   right: var(--size-3) !important;
   left: auto !important;
+  bottom: auto !important;
+  height: auto !important;
   transform: none !important;
   width: min(360px, calc(100vw - var(--size-3) * 2)) !important;
   padding: 0 !important;
-  z-index: 500 !important; // same layer as the old #toastContainer
+  z-index: 500 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--size-2);
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
 }
 
 // ── Toast base ────────────────────────────────────────────────────
@@ -33,17 +45,19 @@
   box-shadow: var(--shadow-4);
   width: 100% !important;
   max-width: 100% !important;
+  margin: 0 !important;
   padding: var(--size-3) !important;
+  position: relative; // anchor for the absolutely-positioned dismiss button
 
-  // Default (info / pending) accent
+  // Default accent (info / pending)
   border-left: 3px solid var(--accent-bg);
 
-  // Type variants via Notyf class names
-  &.notyf__toast--success { border-left-color: var(--green-4); }
-  &.notyf__toast--error   { border-left-color: var(--destructive-bg); }
-  &.notyf__toast--warning { border-left-color: var(--yellow-4); }
-  &.notyf__toast--info,
-  &.notyf__toast--pending { border-left-color: var(--accent-bg); }
+  // Type variants via the classNames registered in toasts.js
+  &.toast--success { border-left-color: var(--green-4); }
+  &.toast--error   { border-left-color: var(--destructive-bg); }
+  &.toast--warning { border-left-color: var(--yellow-4); }
+  &.toast--info,
+  &.toast--pending { border-left-color: var(--accent-bg); }
 }
 
 // ── Message content ───────────────────────────────────────────────
@@ -106,19 +120,50 @@
 }
 
 // ── Dismiss button ────────────────────────────────────────────────
+// The CDN stylesheet (no longer loaded) supplied all dismiss-button
+// geometry, so we recreate it here: a small square in the top-right
+// whose ::before/::after pseudo-elements form an X.
 
 .notyf__dismiss {
+  position: absolute;
+  top: var(--size-2);
+  right: var(--size-2);
+  width: 20px;
+  height: 20px;
   background: transparent !important;
-  border: none;
-  top: var(--size-2) !important;
-  right: var(--size-2) !important;
 }
 
 .notyf__dismiss-btn {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  border: none;
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--duration-quick) var(--ease-out-3);
+
+  &:hover { opacity: 1; }
+
   &::before,
   &::after {
+    content: "";
+    position: absolute;
+    left: calc(50% - 1px);
+    top: calc(50% - 6px);
+    width: 2px;
+    height: 12px;
+    border-radius: 2px;
     background: var(--dim-fg) !important;
   }
+  &::before { transform: rotate(45deg); }
+  &::after  { transform: rotate(-45deg); }
+}
+
+// Make room for the dismiss button so it doesn't overlap the text.
+.notyf__toast--dismissible .notyf__wrapper {
+  padding-right: var(--size-4);
 }
 
 // ── Icon container (hidden — we use icon: false in config) ─────────
@@ -141,7 +186,7 @@
 // ── Narrow screens ────────────────────────────────────────────────
 
 @media (max-width: 480px) {
-  .notyf-container {
+  .notyf {
     left: var(--size-2) !important;
     right: var(--size-2) !important;
     width: auto !important;
