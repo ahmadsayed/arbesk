@@ -6,7 +6,7 @@
  * colors so a single token change themes the entire studio.
  */
 
-import { emit, EVENTS } from "../events/registry.js";
+import { emit, EVENTS } from "../events/bus.js";
 
 /**
  * Read a CSS custom property from :root, trimmed of whitespace.

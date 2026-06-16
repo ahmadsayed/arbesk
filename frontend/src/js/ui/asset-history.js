@@ -14,7 +14,7 @@
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { contract } from "../blockchain/wallet.js";
 import { getManifestHistory } from "../services/api.js";
-import { on, EVENTS } from "../events/registry.js";
+import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 
 // ─── DOM References ───
@@ -232,7 +232,7 @@ function _initSlider() {
 // ─── Event Listeners ───
 
 on(EVENTS.SCENE_READY, (e) => {
-  const manifestCid = e.detail?.manifestCid || assetState.get().activeAssetManifestCid;
+  const manifestCid = e?.manifestCid || assetState.get().activeAssetManifestCid;
   if (!manifestCid) return;
 
   if (isHistoryNavigation) {

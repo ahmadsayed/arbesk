@@ -22,7 +22,7 @@ import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
 import { CHAIN_IDS } from "../constants/chains.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 
@@ -453,7 +453,7 @@ on(EVENTS.ASSET_CLEARED, async () => {
 });
 
 on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
-  if (e.detail?.tokenId) openAssetByTokenId(e.detail.tokenId);
+  if (e?.tokenId) openAssetByTokenId(e.tokenId);
 });
 
 on(EVENTS.WALLET_CONNECTED, async () => {

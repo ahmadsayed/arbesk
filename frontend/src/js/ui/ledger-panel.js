@@ -8,7 +8,7 @@
  */
 
 import { truncateAddress, truncateCid } from "../utils/format.js";
-import { on, EVENTS } from "../events/registry.js";
+import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 

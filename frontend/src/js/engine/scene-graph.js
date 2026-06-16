@@ -15,7 +15,7 @@ import {
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
 import { CHAIN_IDS } from "../constants/chains.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { uiState } from "../state/ui-state.js";
@@ -953,7 +953,7 @@ async function loadAssetManifest(
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function handleLinkedAssetDropped(event) {
-  const detail = event.detail;
+  const detail = event;
   if (!detail) return;
 
   const {
@@ -1221,15 +1221,15 @@ function registerMockNode(nodeId, mesh, _history = []) {
   state.nodeAnchors.set(nodeId, anchor);
 }
 
-on(EVENTS.OUTLINER_REMOVE_REQUESTED, ({ detail }) => {
+on(EVENTS.OUTLINER_REMOVE_REQUESTED, (payload) => {
   // TODO(#18): implement node removal from manifest
-  console.warn("[SCENE] outliner:removeRequested not yet implemented for nodeId:", detail?.nodeId);
+  console.warn("[SCENE] outliner:removeRequested not yet implemented for nodeId:", payload?.nodeId);
 });
 
 // Forward outliner clicks to the scene selection system so that
 // state.highlightedNodeId is updated and the transform gizmo attaches.
 on(EVENTS.OUTLINER_NODE_SELECTED, (e) => {
-  const nodeId = e.detail?.nodeId;
+  const nodeId = e?.nodeId;
   if (nodeId) selectNodeById(nodeId);
 });
 

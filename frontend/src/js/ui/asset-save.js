@@ -33,7 +33,7 @@ import {
 } from "../engine/parametric-preview.js";
 import { updateBurnButton } from "./collaborators.js";
 import { showToast } from "./toasts.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 
@@ -702,7 +702,7 @@ document.addEventListener("keydown", (e) => {
 // Asset name is set at creation time and displayed read-only in the header.
 
 on(EVENTS.SCENE_READY, (e) => {
-  const manifest = e.detail?.manifest;
+  const manifest = e?.manifest;
   // Preserve an existing rename — don't overwrite with fallback defaults.
   const name = manifest?.name || assetState.get().activeAssetName || "Untitled Asset";
   if (manifest?.name || !assetState.get().activeAssetName) {

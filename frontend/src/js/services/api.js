@@ -5,7 +5,7 @@
  * parametric version saving, and standardized error handling.
  */
 
-import { on, EVENTS } from "../events/registry.js";
+import { on, EVENTS } from "../events/bus.js";
 import { web3 } from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import {

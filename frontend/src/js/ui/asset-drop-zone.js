@@ -4,7 +4,7 @@
  * this module provides the clean scene-level UX event surface.
  */
 
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 
 const MIME = "application/x-arbesk-linked-asset";
 const viewport = document.getElementById("viewport");
@@ -67,6 +67,6 @@ if (viewport) {
   });
 }
 
-on(EVENTS.ASSET_ADD_LINKED_REQUESTED, (event) => {
-  emit(EVENTS.ASSET_LINKED_DROPPED, event.detail);
+on(EVENTS.ASSET_ADD_LINKED_REQUESTED, (payload) => {
+  emit(EVENTS.ASSET_LINKED_DROPPED, payload);
 });

@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { uiState, _resetForTesting } from "../../frontend/src/js/state/ui-state.js";
-import { on, off, EVENTS } from "../../frontend/src/js/events/registry.js";
+import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 
@@ -24,10 +24,10 @@ describe("uiState.set()", () => {
 
   test("emits UI_STATE_CHANGED with full state", () => {
     return new Promise((resolve) => {
-      const handler = ({ detail }) => {
+      const handler = (payload) => {
         off(EVENTS.UI_STATE_CHANGED, handler);
-        expect(detail.selectedNodeId).toBe("node-1");
-        expect(detail.nestingDepth).toBe(0);
+        expect(payload.selectedNodeId).toBe("node-1");
+        expect(payload.nestingDepth).toBe(0);
         resolve();
       };
       on(EVENTS.UI_STATE_CHANGED, handler);

@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { walletState, _resetForTesting } from "../../frontend/src/js/state/wallet-state.js";
-import { on, off, EVENTS } from "../../frontend/src/js/events/registry.js";
+import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 
@@ -32,9 +32,9 @@ describe("walletState.set()", () => {
 
   test("emits WALLET_STATE_CHANGED with full state", () => {
     return new Promise((resolve) => {
-      const handler = ({ detail }) => {
+      const handler = (payload) => {
         off(EVENTS.WALLET_STATE_CHANGED, handler);
-        expect(detail.walletAddress).toBe("0xabc");
+        expect(payload.walletAddress).toBe("0xabc");
         resolve();
       };
       on(EVENTS.WALLET_STATE_CHANGED, handler);

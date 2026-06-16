@@ -1,5 +1,5 @@
 import { createStore } from "./create-store.js";
-import { EVENTS } from "../events/registry.js";
+import { EVENTS } from "../events/bus.js";
 
 const _defaults = {
   walletAddress: null,

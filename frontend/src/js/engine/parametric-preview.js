@@ -11,7 +11,7 @@
  */
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import {
   applyColor,
   applyScale,
@@ -283,15 +283,15 @@ export function clearPendingSourceColorEdit(nodeId) {
 
 // Event bindings
 function onNodeSelected(e) {
-  selectNodeById(e.detail.nodeId);
-  openInspector(e.detail.nodeId);
+  selectNodeById(e.nodeId);
+  openInspector(e.nodeId);
 }
 on(EVENTS.NODE_SELECTED, onNodeSelected);
 on(EVENTS.OUTLINER_NODE_SELECTED, onNodeSelected);
 
 // Sub-mesh selected from the viewport: sync the inspector to that component.
 on(EVENTS.SUBMESH_SELECTED, (e) => {
-  const meshName = e.detail?.meshName;
+  const meshName = e?.meshName;
   if (!meshName || !activeNodeId) return;
   selectComponent(meshName);
 });
@@ -362,8 +362,8 @@ document.addEventListener("keydown", (e) => {
 
 // Update token child CID when resolution completes and we're showing the info
 function onTokenChildAdded(e) {
-  if (e.detail?.nodeId === activeNodeId && tokenChildCidEl) {
-    tokenChildCidEl.textContent = e.detail.resolvedCid || "Resolving…";
+  if (e?.nodeId === activeNodeId && tokenChildCidEl) {
+    tokenChildCidEl.textContent = e.resolvedCid || "Resolving…";
   }
 }
 on(EVENTS.SCENE_TOKEN_CHILD_ADDED, onTokenChildAdded);

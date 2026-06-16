@@ -1,4 +1,4 @@
-import { emit } from "../events/registry.js";
+import { emit } from "../events/bus.js";
 
 export function createStore(defaults, eventName) {
   let state = { ...defaults };

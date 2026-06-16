@@ -8,7 +8,7 @@
  * tokenURI updates, editor management, role-based collaboration, and burn.
  */
 
-import { emit, EVENTS } from "../events/registry.js";
+import { emit, EVENTS } from "../events/bus.js";
 import { walletState } from "../state/wallet-state.js";
 import { getContractAddress, getContractArtifact } from "../services/api.js";
 import { showToast, dismissToast } from "../ui/toasts.js";

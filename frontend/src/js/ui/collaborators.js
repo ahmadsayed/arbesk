@@ -20,7 +20,7 @@ import {
 } from "../blockchain/wallet.js";
 import { showConfirmDialog } from "./dialog.js";
 import { truncateAddress } from "../utils/format.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 

@@ -11,7 +11,7 @@ import {
   removeTeamMember,
 } from "../services/team.js";
 import { truncateAddress as truncateAddr } from "../utils/format.js";
-import { on, EVENTS } from "../events/registry.js";
+import { on, EVENTS } from "../events/bus.js";
 import { walletState } from "../state/wallet-state.js";
 
 // DOM references
@@ -117,7 +117,7 @@ if (teamAddInput) {
 
 // Listen for mint success to reveal panel
 on(EVENTS.ASSET_PUBLISHED, (e) => {
-  const tokenId = e.detail?.tokenId;
+  const tokenId = e?.tokenId;
   if (tokenId) showAssetEditors(tokenId);
 });
 

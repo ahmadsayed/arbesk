@@ -8,7 +8,7 @@
 
 import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
 

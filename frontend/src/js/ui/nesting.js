@@ -7,7 +7,7 @@
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
 
@@ -65,7 +65,7 @@ function initNesting() {
 // ─── Dive ────────────────────────────────────────────────────────────
 
 async function onDiveRequested(e) {
-  const { childRef, nodeId } = e.detail;
+  const { childRef, nodeId } = e;
   if (!childRef) return;
 
   if (currentDepth >= MAX_DEPTH) {

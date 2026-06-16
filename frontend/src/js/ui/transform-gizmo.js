@@ -7,7 +7,7 @@
  * next Save Draft / Publish.
  */
 
-import { emit, on, EVENTS } from "../events/registry.js";
+import { emit, on, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 
 const TOOLBAR_ID = "transformToolbar";

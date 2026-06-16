@@ -17,7 +17,7 @@ import {
 } from "../blockchain/wallet.js";
 import { showToast } from "./toasts.js";
 import { generateAsset, ApiError, getOrCreateSession } from "../services/api.js";
-import { on, EVENTS } from "../events/registry.js";
+import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 
@@ -240,7 +240,7 @@ promptInput.addEventListener("input", () => {
 });
 
 on(EVENTS.SCENE_READY, (event) => {
-  const name = event.detail?.manifest?.name || assetState.get().activeAssetName;
+  const name = event?.manifest?.name || assetState.get().activeAssetName;
   if (name) syncAssetNameDisplay(name);
 });
 

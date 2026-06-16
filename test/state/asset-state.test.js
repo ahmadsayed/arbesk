@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
-import { on, off, EVENTS } from "../../frontend/src/js/events/registry.js";
+import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 
@@ -33,10 +33,10 @@ describe("assetState.set()", () => {
 
   test("emits ASSET_STATE_CHANGED with full state", () => {
     return new Promise((resolve) => {
-      const handler = ({ detail }) => {
+      const handler = (payload) => {
         off(EVENTS.ASSET_STATE_CHANGED, handler);
-        expect(detail.activeAssetName).toBe("Cube");
-        expect(detail.activeAssetTokenId).toBeNull();
+        expect(payload.activeAssetName).toBe("Cube");
+        expect(payload.activeAssetTokenId).toBeNull();
         resolve();
       };
       on(EVENTS.ASSET_STATE_CHANGED, handler);
@@ -61,9 +61,9 @@ describe("assetState.reset()", () => {
   test("emits ASSET_STATE_CHANGED after reset", () => {
     return new Promise((resolve) => {
       assetState.set({ activeAssetName: "Cube" });
-      const handler = ({ detail }) => {
+      const handler = (payload) => {
         off(EVENTS.ASSET_STATE_CHANGED, handler);
-        expect(detail.activeAssetName).toBeNull();
+        expect(payload.activeAssetName).toBeNull();
         resolve();
       };
       on(EVENTS.ASSET_STATE_CHANGED, handler);

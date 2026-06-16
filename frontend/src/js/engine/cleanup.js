@@ -5,7 +5,7 @@
  * are properly released when clearing the scene or removing nodes.
  */
 
-import { emit, EVENTS } from "../events/registry.js";
+import { emit, EVENTS } from "../events/bus.js";
 import { state } from "./state.js";
 import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";

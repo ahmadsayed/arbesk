@@ -34,7 +34,7 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 
 import { initWalletPopover } from "/js/ui/wallet-popover.js";
 
-import { on, EVENTS } from "../events/registry.js";
+import { on, EVENTS } from "../events/bus.js";
 import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
 import { CHAIN_IDS } from "/js/constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
@@ -102,7 +102,7 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
     c.classList.remove("disconnected");
   }
 
-  const address = e.detail?.address || "";
+  const address = e?.address || "";
   const cached = getCachedSession();
   const isAuth = cached && cached.address === address.toLowerCase();
   updateWalletButtonState(address, isAuth);
@@ -110,7 +110,7 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
   // Green dot + sync network selector to current chain
   if (netSel) {
     netSel.classList.add("connected");
-    const chainId = e.detail?.chainId;
+    const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
       [CHAIN_IDS.SEI_TESTNET]: "seiTestnet",
@@ -138,9 +138,9 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 });
 
 on(EVENTS.USER_AUTHENTICATED, (e) => {
-  updateWalletButtonState(e.detail?.address, true);
+  updateWalletButtonState(e?.address, true);
 });
 
 on(EVENTS.USER_AUTH_REQUIRED, (e) => {
-  updateWalletButtonState(e.detail?.address, false);
+  updateWalletButtonState(e?.address, false);
 });
