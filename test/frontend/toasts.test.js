@@ -157,6 +157,16 @@ test("positive duration auto-dismisses the toast after the timeout", () => {
   expect(toastCount()).toBe(0);
 });
 
+test("default duration auto-dismisses after 3 seconds", () => {
+  showToast({ type: "info", title: "Default" }); // no explicit duration
+
+  jest.advanceTimersByTime(2999);
+  expect(toastCount()).toBe(1); // still open just before 3s
+
+  jest.advanceTimersByTime(1);
+  expect(toastCount()).toBe(0); // gone at 3s
+});
+
 test("action button fires the callback and dismisses the toast", () => {
   const onClick = jest.fn();
   showToast({

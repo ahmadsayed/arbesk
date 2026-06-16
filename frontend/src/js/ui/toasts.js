@@ -16,7 +16,7 @@ let _notyf = null;
 function getNotyf() {
   if (!_notyf) {
     _notyf = new window.Notyf({
-      duration: 6000,
+      duration: 3000,
       ripple: false,
       dismissible: true,
       position: { x: "right", y: "top" },
@@ -49,11 +49,11 @@ const MAX_TOASTS = 5;
  * @param {'info'|'success'|'warning'|'error'|'pending'} opts.type
  * @param {string} opts.title — Short heading (required)
  * @param {string} [opts.message] — Optional body text
- * @param {number} [opts.duration=6000] — ms until auto-dismiss. 0 = persist until manual close.
+ * @param {number} [opts.duration=3000] — ms until auto-dismiss. 0 = persist until manual close.
  * @param {Array<{label:string, onClick:Function}>} [opts.actions] — Inline action buttons
  * @returns {string} toastId
  */
-export function showToast({ type = "info", title, message = "", duration = 6000, actions = [] }) {
+export function showToast({ type = "info", title, message = "", duration = 3000, actions = [] }) {
   const notyf = getNotyf();
 
   // Enforce max visible toasts — evict oldest
