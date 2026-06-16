@@ -8,7 +8,9 @@ html(lang="en")
     link(rel="icon", type="image/webp", href="/logo.webp")
     link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
+    link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.css" crossorigin="anonymous")
     script(src="/js/engine/theme-init.js")
+    script(src="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.js" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/v9.12.0/babylon.js" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/v9.12.0/loaders/babylonjs.loaders.min.js" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/v9.12.0/materialsLibrary/babylonjs.materials.min.js" crossorigin="anonymous")
@@ -328,9 +330,6 @@ html(lang="en")
         .wallet-popover-actions
           button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button") Sign In
           button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Disconnect Wallet
-
-      //- Toast Container
-      #toastContainer(role="region" aria-label="Notifications")
 
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")

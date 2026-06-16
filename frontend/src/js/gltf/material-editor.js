@@ -54,15 +54,19 @@ export function getMaterial(composite, materialIndex = 0) {
 }
 
 /**
- * Find a material by mesh primitive reference.
- * Walks meshes to find the material assigned to a specific primitive.
+ * Find all materials referenced by primitives of a named mesh.
+ * A mesh may have multiple primitives each pointing to a different material
+ * (e.g. vehicle body + glass window). Returns every match so callers can
+ * apply edits to all of them, not just the first.
  *
  * @param {object} composite - Composite glTF JSON
  * @param {string} meshName - Name of the mesh to find (e.g., "flowercenter")
- * @returns {{ material: object, meshIndex: number, primitiveIndex: number }|null}
+ * @returns {{ material: object, meshIndex: number, primitiveIndex: number }[]}
  */
 export function findMaterialByMeshName(composite, meshName) {
-  if (!composite.meshes || !meshName) return null;
+  if (!composite.meshes || !meshName) return [];
+
+  const results = [];
 
   for (let mi = 0; mi < composite.meshes.length; mi++) {
     const mesh = composite.meshes[mi];
@@ -74,16 +78,16 @@ export function findMaterialByMeshName(composite, meshName) {
 
       const mat = composite.materials?.[prim.material];
       if (mat) {
-        return {
+        results.push({
           material: mat,
           meshIndex: mi,
           primitiveIndex: pi,
-        };
+        });
       }
     }
   }
 
-  return null;
+  return results;
 }
 
 /**
@@ -144,11 +148,13 @@ export function applyMeshOverrideColors(composite, meshOverrides, defaultColor =
   for (const [meshName, override] of Object.entries(meshOverrides)) {
     if (!override?.color) continue;
 
-    const result = findMaterialByMeshName(composite, meshName);
-    if (result) {
-      setBaseColorFactor(result.material, override.color);
+    const results = findMaterialByMeshName(composite, meshName);
+    if (results.length > 0) {
+      for (const { material } of results) {
+        setBaseColorFactor(material, override.color);
+      }
       modified++;
-      console.log(`[MAT-EDIT] mesh "${meshName}" → ${override.color}`);
+      console.log(`[MAT-EDIT] mesh "${meshName}" → ${override.color} (${results.length} primitive(s))`);
     } else {
       skipped++;
       console.warn(`[MAT-EDIT] mesh "${meshName}" not found in composite`);
