@@ -33,6 +33,22 @@
   }
 }
 
+// ── Animations ─────────────────────────────────────────────────────
+// Notyf removes a toast from the DOM on the `animationend` event of its
+// fade-out animation. The CDN stylesheet (no longer loaded) defined these
+// keyframes; without them the toast never animates, `animationend` never
+// fires, and toasts never close — neither on timer nor on click. We must
+// redefine them here so the dismiss lifecycle works.
+
+@keyframes notyf-fadeinup {
+  0%  { opacity: 0; transform: translateY(25%); }
+  to  { opacity: 1; transform: translateY(0); }
+}
+@keyframes notyf-fadeoutdown {
+  0%  { opacity: 1; transform: translateY(0); }
+  to  { opacity: 0; transform: translateY(25%); }
+}
+
 // ── Toast base ────────────────────────────────────────────────────
 
 .notyf__toast {
@@ -48,6 +64,15 @@
   margin: 0 !important;
   padding: var(--size-3) !important;
   position: relative; // anchor for the absolutely-positioned dismiss button
+
+  // Entrance animation
+  animation: notyf-fadeinup 0.3s var(--ease-out-3) forwards;
+
+  // Exit animation — Notyf adds this class, then removes the element when
+  // the animation ends. The animation MUST exist or the toast never closes.
+  &.notyf__toast--disappear {
+    animation: notyf-fadeoutdown 0.3s var(--ease-out-3) forwards;
+  }
 
   // Default accent (info / pending)
   border-left: 3px solid var(--accent-bg);
@@ -175,11 +200,15 @@
 .notyf__ripple { display: none !important; }
 
 // ── Reduced motion ────────────────────────────────────────────────
+// Keep a near-instant animation (not `none`): Notyf relies on the
+// `animationend` event to remove a dismissed toast, so the animation must
+// still run — we just collapse its duration so there is no visible motion.
 
 @media (prefers-reduced-motion: reduce) {
-  .notyf__toast {
+  .notyf__toast,
+  .notyf__toast.notyf__toast--disappear {
     transition: none !important;
-    animation: none !important;
+    animation-duration: 0.01ms !important;
   }
 }
 
