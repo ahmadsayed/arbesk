@@ -51,13 +51,17 @@ test.describe("nesting / linked child worlds", () => {
 
     // 6. Dive into the child world. A child node is labelled "Token #<id>", so
     //    locate it by token id. Capture the nesting lifecycle events first.
-    await page.evaluate(() => {
+    // Nesting events go through the in-memory mitt bus (handlers get the
+    // payload directly), not document CustomEvents — subscribe via the bus
+    // singleton, which the dynamic import resolves to the already-loaded module.
+    await page.evaluate(async () => {
+      const { on, EVENTS } = await import("/js/events/bus.js");
       window.__nesting = [];
-      document.addEventListener("nesting:didDive", (e) =>
-        window.__nesting.push(["dive", e.detail?.depth])
+      on(EVENTS.NESTING_DID_DIVE, ({ depth }) =>
+        window.__nesting.push(["dive", depth])
       );
-      document.addEventListener("nesting:didAscend", (e) =>
-        window.__nesting.push(["ascend", e.detail?.depth])
+      on(EVENTS.NESTING_DID_ASCEND, ({ depth }) =>
+        window.__nesting.push(["ascend", depth])
       );
     });
 
