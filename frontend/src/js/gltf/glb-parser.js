@@ -8,6 +8,7 @@
  * This avoids the base64 bloat of converting GLB → standard glTF first.
  */
 
+import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 
 const GLB_MAGIC = 0x46546c67; // "glTF"
@@ -15,7 +16,8 @@ const GLB_VERSION = 2;
 const CHUNK_TYPE_JSON = 0x4e4f534a; // "JSON"
 const CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0"
 const IPFS_URI_PREFIX = "ipfs://";
-const CID_BUFFER_PREFIX = "data:application/cid;base64,";
+
+const _io = new WebIO();
 
 /**
  * Check if an ArrayBuffer looks like a GLB v2 container.
@@ -31,10 +33,13 @@ export function isGLB(arrayBuffer) {
 /**
  * Parse a GLB v2 file.
  *
+ * Uses @gltf-transform/core for spec-compliant container parsing. The legacy
+ * custom DataView-based parser has been removed.
+ *
  * @param {ArrayBuffer} arrayBuffer
- * @returns {{ json: object, binaryChunk: ArrayBuffer }}
+ * @returns {Promise<{ json: object, binaryChunk: ArrayBuffer }>}
  */
-export function parseGLB(arrayBuffer) {
+export async function parseGLB(arrayBuffer) {
   if (!arrayBuffer) throw new Error("parseGLB: arrayBuffer is required");
   if (arrayBuffer.byteLength < 12) {
     throw new Error("parseGLB: file too small to be a GLB");
@@ -43,7 +48,6 @@ export function parseGLB(arrayBuffer) {
   const view = new DataView(arrayBuffer);
   const magic = view.getUint32(0, true);
   const version = view.getUint32(4, true);
-  const length = view.getUint32(8, true);
 
   if (magic !== GLB_MAGIC) {
     throw new Error(`parseGLB: invalid magic 0x${magic.toString(16)}`);
@@ -51,49 +55,12 @@ export function parseGLB(arrayBuffer) {
   if (version !== GLB_VERSION) {
     throw new Error(`parseGLB: unsupported GLB version ${version}`);
   }
-  if (length !== arrayBuffer.byteLength) {
-    throw new Error(
-      `parseGLB: header length ${length} does not match buffer ${arrayBuffer.byteLength}`
-    );
-  }
 
-  let json = null;
-  let binaryChunk = null;
-  let offset = 12;
-
-  while (offset < length) {
-    if (offset + 8 > length) {
-      throw new Error("parseGLB: truncated chunk header");
-    }
-    const chunkLength = view.getUint32(offset, true);
-    const chunkType = view.getUint32(offset + 4, true);
-    offset += 8;
-
-    if (offset + chunkLength > length) {
-      throw new Error("parseGLB: chunk exceeds file length");
-    }
-
-    const chunkData = arrayBuffer.slice(offset, offset + chunkLength);
-
-    if (chunkType === CHUNK_TYPE_JSON) {
-      const text = new TextDecoder("utf-8").decode(chunkData);
-      json = JSON.parse(text);
-    } else if (chunkType === CHUNK_TYPE_BIN) {
-      binaryChunk = chunkData;
-    } else {
-      console.warn(`[GLB-PARSER] skipping unknown chunk type 0x${chunkType.toString(16)}`);
-    }
-
-    offset += chunkLength;
-  }
-
-  if (!json) {
-    throw new Error("parseGLB: no JSON chunk found");
-  }
-
-  if (!json.asset || json.asset.version !== "2.0") {
-    throw new Error("parseGLB: JSON is not glTF 2.0");
-  }
+  const { json, resources } = await _io.binaryToJSON(new Uint8Array(arrayBuffer));
+  const binBytes = resources[GLB_BUFFER];
+  const binaryChunk = binBytes
+    ? binBytes.buffer.slice(binBytes.byteOffset, binBytes.byteOffset + binBytes.byteLength)
+    : null;
 
   return { json, binaryChunk };
 }
@@ -229,16 +196,15 @@ function resolveBufferBytes(buf, binaryChunk) {
 }
 
 /**
- * Serialize a glTF JSON + optional binary chunk back into a GLB v2 container.
+ * Fast custom GLB serializer.
  *
- * @param {object} json — glTF JSON object
- * @param {ArrayBuffer|null} binaryChunk — Optional BIN chunk
- * @returns {ArrayBuffer} GLB bytes
+ * Packs glTF JSON + optional BIN chunk into a GLB v2 container without
+ * decoding/re-encoding mesh data, so content-addressed CIDs remain stable.
  */
-export function serializeGLB(json, binaryChunk = null) {
+function serializeGLBCustom(json, binaryChunk = null) {
   const jsonText = JSON.stringify(json);
   const jsonBytes = new TextEncoder().encode(jsonText);
-  // GLB requires JSON chunk length to be multiple of 4
+  // GLB requires each chunk's data (including padding) to be a multiple of 4 bytes.
   const jsonPadding = (4 - (jsonBytes.length % 4)) % 4;
   const binPadding = binaryChunk ? (4 - (binaryChunk.byteLength % 4)) % 4 : 0;
 
@@ -262,8 +228,8 @@ export function serializeGLB(json, binaryChunk = null) {
   view.setUint32(offset, totalLength, true);
   offset += 4;
 
-  // JSON chunk
-  view.setUint32(offset, jsonBytes.length, true);
+  // JSON chunk — chunkLength includes padding to match @gltf-transform/core.
+  view.setUint32(offset, jsonChunkLength, true);
   offset += 4;
   view.setUint32(offset, CHUNK_TYPE_JSON, true);
   offset += 4;
@@ -274,9 +240,9 @@ export function serializeGLB(json, binaryChunk = null) {
     view.setUint8(offset++, 0x20);
   }
 
-  // BIN chunk
+  // BIN chunk — chunkLength includes padding to match @gltf-transform/core.
   if (binaryChunk) {
-    view.setUint32(offset, binaryChunk.byteLength, true);
+    view.setUint32(offset, binChunkLength, true);
     offset += 4;
     view.setUint32(offset, CHUNK_TYPE_BIN, true);
     offset += 4;
@@ -292,16 +258,37 @@ export function serializeGLB(json, binaryChunk = null) {
 }
 
 /**
+ * Serialize a glTF JSON + optional binary chunk back into a GLB v2 container.
+ *
+ * Uses the fast custom serializer. It does not decode/re-encode mesh data, so
+ * the binary payload (and therefore its content-addressed CID) stays identical.
+ * This is kept as a utility for GLB export/download; the storage/edit path does
+ * not re-serialize to GLB.
+ *
+ * @param {object} json — glTF JSON object
+ * @param {ArrayBuffer|null} binaryChunk — Optional BIN chunk
+ * @returns {ArrayBuffer} GLB bytes
+ */
+export function serializeGLB(json, binaryChunk = null) {
+  return serializeGLBCustom(json, binaryChunk);
+}
+
+/**
  * Decompose a GLB in-memory into a composite glTF JSON with IPFS CID references.
  *
  * @param {ArrayBuffer} arrayBuffer — Raw GLB bytes
  * @param {Function} [writer] — Optional IPFS writer `(bytes, filename) => Promise<cid>`
- * @returns {Promise<{ composite: object, compositeCid: string }>}
+ * @param {{ storeComposite?: boolean }} [options] — When `storeComposite` is
+ *   false, buffers/images are still uploaded but the composite glTF itself is
+ *   not written to IPFS (`compositeCid` is null). Use this when the caller
+ *   mutates the composite and writes its own final version.
+ * @returns {Promise<{ composite: object, compositeCid: string|null }>}
  */
-export async function decomposeGLB(arrayBuffer, writer) {
+export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
+  const { storeComposite = true } = options;
 
-  const { json, binaryChunk } = parseGLB(arrayBuffer);
+  const { json, binaryChunk } = await parseGLB(arrayBuffer);
   const composite = JSON.parse(JSON.stringify(json));
   const stats = { buffers: 0, images: 0, bytesTotal: 0 };
 
@@ -311,15 +298,6 @@ export async function decomposeGLB(arrayBuffer, writer) {
 
   for (let i = 0; i < buffers.length; i++) {
     const buf = buffers[i];
-
-    // Already a CID reference (legacy)
-    if (buf.uri && buf.uri.startsWith(CID_BUFFER_PREFIX)) {
-      const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
-      buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-      stats.buffers++;
-      console.log(`[GLB-DECOMPOSE] buffer[${i}] legacy CID → ipfs://${cid}`);
-      continue;
-    }
 
     // Already composite
     if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) {
@@ -417,10 +395,15 @@ export async function decomposeGLB(arrayBuffer, writer) {
     `[GLB-DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} totalBytes=${stats.bytesTotal}`
   );
 
-  const compositeCid = await (writer
-    ? writeBytes(writer, JSON.stringify(composite, null, 2), "composite.gltf")
-    : writeJSONToIPFS(composite));
-  console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
+  let compositeCid = null;
+  if (storeComposite) {
+    compositeCid = await (writer
+      ? writeBytes(writer, JSON.stringify(composite, null, 2), "composite.gltf")
+      : writeJSONToIPFS(composite));
+    console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
+  } else {
+    console.log(`[GLB-DECOMPOSE] composite not stored (caller writes its own)`);
+  }
 
   return { composite, compositeCid };
 }

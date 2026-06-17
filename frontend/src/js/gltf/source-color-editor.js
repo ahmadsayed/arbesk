@@ -6,8 +6,8 @@
  */
 
 import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { writeJSONToIPFS, writeToIPFS } from "../ipfs/write-to-ipfs.js";
-import { isGLB, parseGLB, serializeGLB } from "./glb-parser.js";
+import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { isGLB, decomposeGLB } from "./glb-parser.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 
@@ -132,9 +132,15 @@ export function applyNodeColors(gltf, nodeColors) {
 /**
  * Edit colors in a source asset (glTF JSON or GLB) and upload the new asset.
  *
+ * The stored result is always glTF JSON: GLB sources are decomposed into a
+ * composite glTF first (colors live in JSON, so we never re-serialize back to
+ * GLB). The returned `format`/`path` let the caller keep the manifest node in
+ * sync — a node whose source was a GLB must stop claiming `format: "glb"` once
+ * its content is glTF JSON, or the loader picks the binary-GLB path and fails.
+ *
  * @param {string} sourceCid — Current source CID
  * @param {object} nodeColors — { "nodeName": "#RRGGBB", ... }
- * @returns {Promise<{sourceCid: string, modified: number, skipped: number}>}
+ * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
  */
 export async function editSourceColors(sourceCid, nodeColors) {
   if (!sourceCid) throw new Error("editSourceColors: sourceCid is required");
@@ -143,16 +149,19 @@ export async function editSourceColors(sourceCid, nodeColors) {
   }
 
   let gltf = null;
-  let binaryChunk = null;
-  let isGlb = false;
+  let decomposedFromGlb = false;
 
   try {
     const buffer = await getArrayBufferFromRemoteIPFS(sourceCid);
     if (isGLB(buffer)) {
-      const parsed = parseGLB(buffer);
-      gltf = parsed.json;
-      binaryChunk = parsed.binaryChunk;
-      isGlb = true;
+      // Decompose GLB into composite glTF before editing. Colors live in JSON,
+      // so we never need to re-serialize back to GLB for storage. Skip storing
+      // the intermediate composite — we write the edited version below.
+      const { composite } = await decomposeGLB(buffer, undefined, {
+        storeComposite: false,
+      });
+      gltf = composite;
+      decomposedFromGlb = true;
     } else {
       gltf = await getFromRemoteIPFS(sourceCid);
     }
@@ -163,14 +172,14 @@ export async function editSourceColors(sourceCid, nodeColors) {
 
   const stats = applyNodeColors(gltf, nodeColors);
 
-  let newCid;
-  if (isGlb) {
-    const newBuffer = serializeGLB(gltf, binaryChunk);
-    newCid = await writeToIPFS(newBuffer, "asset.glb");
-  } else {
-    newCid = await writeJSONToIPFS(gltf);
-  }
+  const newCid = await writeJSONToIPFS(gltf);
 
   console.log(`[SRC-COLOR] source ${sourceCid} → ${newCid} | modified=${stats.modified} skipped=${stats.skipped}`);
-  return { sourceCid: newCid, ...stats };
+
+  // Stored content is always glTF JSON now. Signal the format so the caller can
+  // correct a node that was previously a GLB; only set the composite path when
+  // we actually decomposed a GLB (don't clobber an existing glTF source's path).
+  const result = { sourceCid: newCid, format: "gltf", ...stats };
+  if (decomposedFromGlb) result.path = "composite.gltf";
+  return result;
 }

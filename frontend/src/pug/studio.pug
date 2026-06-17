@@ -16,6 +16,12 @@ html(lang="en")
     script(src="https://cdn.babylonjs.com/v9.12.0/loaders/babylonjs.loaders.min.js" crossorigin="anonymous")
     script(src="https://cdn.babylonjs.com/v9.12.0/materialsLibrary/babylonjs.materials.min.js" crossorigin="anonymous")
     script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" crossorigin="anonymous")
+    script(type="importmap").
+      {
+        "imports": {
+          "@gltf-transform/core": "https://esm.sh/@gltf-transform/core@4.1.2?bundle"
+        }
+      }
   body
     #app
       //- ═══════════════════════════════════════════════════════════
