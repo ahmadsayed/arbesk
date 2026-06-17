@@ -268,9 +268,9 @@ function serializeGLBCustom(json, binaryChunk = null) {
  *
  * @param {object} json — glTF JSON object
  * @param {ArrayBuffer|null} binaryChunk — Optional BIN chunk
- * @returns {Promise<ArrayBuffer>} GLB bytes
+ * @returns {ArrayBuffer} GLB bytes
  */
-export async function serializeGLB(json, binaryChunk = null) {
+export function serializeGLB(json, binaryChunk = null) {
   return serializeGLBCustom(json, binaryChunk);
 }
 
@@ -279,10 +279,15 @@ export async function serializeGLB(json, binaryChunk = null) {
  *
  * @param {ArrayBuffer} arrayBuffer — Raw GLB bytes
  * @param {Function} [writer] — Optional IPFS writer `(bytes, filename) => Promise<cid>`
- * @returns {Promise<{ composite: object, compositeCid: string }>}
+ * @param {{ storeComposite?: boolean }} [options] — When `storeComposite` is
+ *   false, buffers/images are still uploaded but the composite glTF itself is
+ *   not written to IPFS (`compositeCid` is null). Use this when the caller
+ *   mutates the composite and writes its own final version.
+ * @returns {Promise<{ composite: object, compositeCid: string|null }>}
  */
-export async function decomposeGLB(arrayBuffer, writer) {
+export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
+  const { storeComposite = true } = options;
 
   const { json, binaryChunk } = await parseGLB(arrayBuffer);
   const composite = JSON.parse(JSON.stringify(json));
@@ -400,10 +405,15 @@ export async function decomposeGLB(arrayBuffer, writer) {
     `[GLB-DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} totalBytes=${stats.bytesTotal}`
   );
 
-  const compositeCid = await (writer
-    ? writeBytes(writer, JSON.stringify(composite, null, 2), "composite.gltf")
-    : writeJSONToIPFS(composite));
-  console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
+  let compositeCid = null;
+  if (storeComposite) {
+    compositeCid = await (writer
+      ? writeBytes(writer, JSON.stringify(composite, null, 2), "composite.gltf")
+      : writeJSONToIPFS(composite));
+    console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
+  } else {
+    console.log(`[GLB-DECOMPOSE] composite not stored (caller writes its own)`);
+  }
 
   return { composite, compositeCid };
 }

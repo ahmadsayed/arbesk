@@ -339,8 +339,12 @@ async function prepareManifestForWrite(assetName) {
       try {
         const result = await editSourceColors(node.source.cid, colorMap);
         node.source.cid = result.sourceCid;
+        // The edited source is always glTF JSON now; keep the node's
+        // format/path truthful so the loader doesn't treat it as a binary GLB.
+        if (result.format) node.source.format = result.format;
+        if (result.path) node.source.path = result.path;
         console.log(
-          `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} modified=${result.modified} skipped=${result.skipped}`
+          `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
         );
       } catch (err) {
         console.warn(
