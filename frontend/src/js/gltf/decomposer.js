@@ -19,7 +19,6 @@ import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
-const CID_BUFFER_PREFIX = "data:application/cid;base64,";
 const BASE64_IMAGE_PREFIX = "data:image/";
 
 /**
@@ -102,15 +101,6 @@ export async function decomposeGlTF(gltf) {
     for (let i = 0; i < composite.buffers.length; i++) {
       const buf = composite.buffers[i];
       if (!buf.uri) continue;
-
-      // Already a CID reference (legacy format)
-      if (buf.uri.startsWith(CID_BUFFER_PREFIX)) {
-        const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
-        composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-        console.log(`[DECOMPOSE] buffer[${i}] already CID-ref → ipfs://${cid}`);
-        stats.buffers++;
-        continue;
-      }
 
       // Already an ipfs:// URI
       if (buf.uri.startsWith(IPFS_URI_PREFIX)) {

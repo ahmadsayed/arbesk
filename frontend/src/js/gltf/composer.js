@@ -6,15 +6,12 @@
  * to base64 data URIs, and returns a standard glTF JSON ready for
  * Babylon.js SceneLoader.ImportMeshAsync.
  *
- * Also handles legacy glTF formats (base64 data URIs, CID-prefix URIs)
- * so it works as a drop-in replacement for `uri_to_cid.js → convertToDataURI`.
+ * Already-resolved data URIs are passed through unchanged.
  */
 
-import { getBase64FromRemoteIPFS, getBlobFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
-const CID_BUFFER_PREFIX = "data:application/cid;base64,";
-const BASE64_PREFIX = "data:application/octet-stream;base64,";
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -36,7 +33,6 @@ async function fetchCIDAsBase64(cid) {
  *
  * Handles:
  *   - ipfs://<CID>        → fetches binary, returns data:...;base64,...
- *   - data:application/cid;base64,<CID>  → legacy CID ref, fetches and resolves
  *   - data:...;base64,...  → already resolved, return as-is
  *   - anything else        → return as-is
  *
@@ -54,13 +50,6 @@ async function resolveURI(uri, defaultMime = "application/octet-stream") {
     return `data:${defaultMime};base64,${base64}`;
   }
 
-  // Legacy CID-prefix format
-  if (uri.startsWith(CID_BUFFER_PREFIX)) {
-    const cid = uri.replace(CID_BUFFER_PREFIX, "");
-    const base64 = await getBase64FromRemoteIPFS(cid);
-    return `${BASE64_PREFIX}${base64}`;
-  }
-
   // Already a data URI — pass through
   if (uri.startsWith("data:")) {
     return uri;
@@ -71,12 +60,12 @@ async function resolveURI(uri, defaultMime = "application/octet-stream") {
 }
 
 /**
- * Compose a full standard glTF JSON from either a composite or legacy format.
+ * Compose a full standard glTF JSON from a composite or standard glTF.
  *
  * Resolves all buffer and image URIs to base64 data URIs so that
  * Babylon.js can load the result as a self-contained glTF.
  *
- * @param {object} gltfJson - The glTF JSON (composite or legacy)
+ * @param {object} gltfJson - The glTF JSON (composite ipfs:// refs or standard data URIs)
  * @returns {Promise<object>} Standard glTF JSON with data URI buffers/images
  */
 export async function composeGlTF(gltfJson) {

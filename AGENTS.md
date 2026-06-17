@@ -211,7 +211,7 @@ Every world is a content-addressed JSON manifest stored on IPFS. Each manifest l
 
 ### glTF Buffer URI Format
 ```
-IPFS storage:  "uri": "data:application/cid;base64,Qm..."
+IPFS storage:  "uri": "ipfs://Qm..."
 Render time:   "uri": "data:application/octet-stream;base64,Z2xC..."
 ```
 The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't bypass it.

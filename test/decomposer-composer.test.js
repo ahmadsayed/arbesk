@@ -164,11 +164,6 @@ async function decomposeGLB(arrayBuffer, writer) {
   const buffers = composite.buffers || [];
   for (let i = 0; i < buffers.length; i++) {
     const buf = buffers[i];
-    if (buf.uri && buf.uri.startsWith(CID_BUFFER_PREFIX)) {
-      const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
-      buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-      continue;
-    }
     if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) continue;
     if (buf.uri && !buf.uri.startsWith("data:")) continue;
 
@@ -234,7 +229,6 @@ async function decomposeGLB(arrayBuffer, writer) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const IPFS_URI_PREFIX = "ipfs://";
-const CID_BUFFER_PREFIX = "data:application/cid;base64,";
 
 function isComposite(gltf) {
   if (!gltf) return false;
@@ -451,10 +445,10 @@ describe("Decomposer — isComposite", () => {
     expect(isComposite(gltf)).toBe(true);
   });
 
-  it("returns false for legacy CID-prefix format (not yet composite)", () => {
+  it("returns false for an embedded data-URI buffer (not composite)", () => {
     const gltf = makeTestGlTF({
       buffers: [
-        { uri: "data:application/cid;base64,QmLegacyCid", byteLength: 100 },
+        { uri: "data:application/octet-stream;base64,AAAA", byteLength: 100 },
       ],
     });
     expect(isComposite(gltf)).toBe(false);
@@ -689,12 +683,6 @@ describe("Decomposer — decomposeGlTF (mocked IPFS)", () => {
         const buf = composite.buffers[i];
         if (!buf.uri) continue;
 
-        if (buf.uri.startsWith(CID_BUFFER_PREFIX)) {
-          const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
-          composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-          continue;
-        }
-
         if (buf.uri.startsWith(IPFS_URI_PREFIX)) continue;
 
         const extracted = extractDataURI(buf.uri);
@@ -820,27 +808,6 @@ describe("Decomposer — decomposeGlTF (mocked IPFS)", () => {
     expect(mockWrite).toHaveBeenCalledTimes(2);
   });
 
-  it("converts legacy CID-prefix buffers to ipfs:// format", async () => {
-    const gltf = makeTestGlTF({
-      buffers: [
-        {
-          uri: "data:application/cid;base64,QmLegacyBufferCid12345678901234567890",
-          byteLength: 100,
-        },
-      ],
-      images: [],
-    });
-
-    const mockWrite = jest.fn();
-    const result = await decomposeGlTF(gltf, mockWrite);
-
-    // Legacy CID should be converted to ipfs:// without re-uploading
-    expect(result.buffers[0].uri).toBe(
-      "ipfs://QmLegacyBufferCid12345678901234567890",
-    );
-    expect(mockWrite).not.toHaveBeenCalled();
-  });
-
   it("skips buffers with no uri", async () => {
     const gltf = makeTestGlTF({
       buffers: [{ byteLength: 100 }],
@@ -943,15 +910,6 @@ describe("Composer — resolveURI", () => {
       return `data:${defaultMime};base64,${base64}`;
     }
 
-    if (uri.startsWith(CID_BUFFER_PREFIX)) {
-      const cid = uri.replace(CID_BUFFER_PREFIX, "");
-      const url = `${GATEWAY_URL}${cid}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
-      const text = await response.text();
-      return `data:application/octet-stream;base64,${text}`;
-    }
-
     if (uri.startsWith("data:")) return uri;
 
     return uri;
@@ -1016,32 +974,12 @@ describe("Composer — resolveURI", () => {
     expect(result).toBe("data:image/png;base64,iVBORw==");
   });
 
-  it("resolves legacy CID-prefix buffer URI", async () => {
-    const response = {
-      ok: true,
-      text: () => Promise.resolve("SGVsbG8="),
-    };
-    global.fetch.mockResolvedValue(response);
-
-    const result = await resolveURI("data:application/cid;base64,QmLegacyCid");
-
-    expect(result).toBe("data:application/octet-stream;base64,SGVsbG8=");
-  });
-
   it("throws on gateway error for ipfs:// URI", async () => {
     global.fetch.mockResolvedValue({ ok: false, status: 404 });
 
     await expect(resolveURI("ipfs://QmMissing")).rejects.toThrow(
       "gateway returned 404",
     );
-  });
-
-  it("throws on gateway error for legacy CID URI", async () => {
-    global.fetch.mockResolvedValue({ ok: false, status: 500 });
-
-    await expect(
-      resolveURI("data:application/cid;base64,QmBadCid"),
-    ).rejects.toThrow("fetch failed: 500");
   });
 
   it("handles network failure (fetch throws)", async () => {
@@ -1240,11 +1178,6 @@ describe("Decompose → Compose round-trip", () => {
         const buf = composite.buffers[i];
         if (!buf.uri) continue;
         if (buf.uri.startsWith(IPFS_URI_PREFIX)) continue;
-        if (buf.uri.startsWith(CID_BUFFER_PREFIX)) {
-          const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
-          composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-          continue;
-        }
         const extracted = extractDataURI(buf.uri);
         if (!extracted) continue;
         const cid = await mockWriteToIPFS(extracted.bytes, `buffer_${i}.bin`);
