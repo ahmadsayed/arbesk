@@ -6,8 +6,8 @@
  */
 
 import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { writeJSONToIPFS, writeToIPFS } from "../ipfs/write-to-ipfs.js";
-import { isGLB, parseGLB, serializeGLB } from "./glb-parser.js";
+import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { isGLB, decomposeGLB } from "./glb-parser.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 
@@ -143,16 +143,14 @@ export async function editSourceColors(sourceCid, nodeColors) {
   }
 
   let gltf = null;
-  let binaryChunk = null;
-  let isGlb = false;
 
   try {
     const buffer = await getArrayBufferFromRemoteIPFS(sourceCid);
     if (isGLB(buffer)) {
-      const parsed = parseGLB(buffer);
-      gltf = parsed.json;
-      binaryChunk = parsed.binaryChunk;
-      isGlb = true;
+      // Decompose GLB into composite glTF before editing. Colors live in JSON,
+      // so we never need to re-serialize back to GLB for storage.
+      const { composite } = await decomposeGLB(buffer);
+      gltf = composite;
     } else {
       gltf = await getFromRemoteIPFS(sourceCid);
     }
@@ -163,13 +161,7 @@ export async function editSourceColors(sourceCid, nodeColors) {
 
   const stats = applyNodeColors(gltf, nodeColors);
 
-  let newCid;
-  if (isGlb) {
-    const newBuffer = serializeGLB(gltf, binaryChunk);
-    newCid = await writeToIPFS(newBuffer, "asset.glb");
-  } else {
-    newCid = await writeJSONToIPFS(gltf);
-  }
+  const newCid = await writeJSONToIPFS(gltf);
 
   console.log(`[SRC-COLOR] source ${sourceCid} → ${newCid} | modified=${stats.modified} skipped=${stats.skipped}`);
   return { sourceCid: newCid, ...stats };

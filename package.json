@@ -32,6 +32,7 @@
     "web3": "^4.15.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.1.2",
     "@playwright/test": "^1.60.0",
     "gltf-pipeline": "^4.3.1",
     "jest": "^30.4.1",
