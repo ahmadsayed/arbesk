@@ -1,8 +1,8 @@
 # Web & Web 3.0 Standards Audit Report — Arbesk Studio
 
-**Date**: 2026-06-06
-**Auditor**: Kimi Code CLI (automated source audit)
-**Version**: 3eb5011
+**Date**: 2026-06-16  
+**Auditor**: Kimi Code CLI (automated source audit)  
+**Version**: `2036538`  
 **Scope**: Modern web standards, PWA readiness, dApp UX patterns, wallet integration, blockchain interaction quality
 
 ---
@@ -11,13 +11,11 @@
 
 | Domain | Score | Rating |
 |--------|-------|--------|
-| **Web Standards** | 60/100 | ⚠️ Fair |
-| **Web 3.0 / dApp Standards** | 63/100 | ⚠️ Fair |
-| **Combined Web Score** | 62/100 | ⚠️ Fair |
+| **Web Standards** | 62/100 | ⚠️ Fair |
+| **Web 3.0 / dApp Standards** | 72/100 | 👍 Good |
+| **Combined Web Score** | 67/100 | 👍 Good |
 
-**Context**: Arbesk Studio scores **91/100 on GNOME HIG** (visual design + accessibility) but **62/100 on Web/Web 3.0** (architecture + integration). The app is visually polished and accessible, but architecturally behind on modern web performance, bundling, PWA capabilities, and Web3 integration patterns.
-
-> **Note**: This is a **developer tool / studio** running primarily on localhost against a local Hardhat node. Some gaps (PWA, i18n, CSP) are less critical in this context than they would be for a consumer-facing production dApp. Scores are calibrated accordingly.
+**Context**: Arbesk Studio is a **developer tool / studio** running primarily on localhost against a local Hardhat node. Since the last audit (2026-06-06, score 62), the wallet integration was modernized (EIP-6963 + WalletConnect v2), a report-only CSP was added, and the frontend architecture was cleaned up with a `mitt` event bus and typed state stores. The biggest remaining gaps are production bundling/PWA, enforcing CSP/SRI, and a richer multi-chain UI.
 
 ---
 
@@ -33,7 +31,7 @@
 | `viewport` meta | ✅ | `width=device-width, initial-scale=1` |
 | Semantic landmarks (`header`, `aside`, `main`, `footer`, `nav`) | ✅ | GNOME-style shell uses proper landmarks |
 | `h1` page title (sr-only) | ✅ | `h1.sr-only Arbesk Studio` |
-| Favicon (`logo.webp`) | ✅ | WebP format |
+| Favicon (`logo.webp` + `favicon.ico`) | ✅ | WebP + ICO formats |
 | Apple touch icon | ✅ | `apple-touch-icon.webp` |
 | `meta description` | ❌ | Missing — hurts SEO/shareability |
 | Open Graph tags (`og:title`, `og:image`, etc.) | ❌ | Missing — no rich link previews |
@@ -50,10 +48,10 @@
 | Check | Status | Notes |
 |-------|--------|-------|
 | CSS Custom Properties (design tokens) | ✅ | Three-layer libadwaita-inspired token system |
-| `prefers-color-scheme` media query | ✅ | Light/dark/auto |
-| `prefers-reduced-motion` | ✅ | Durations set to 0ms |
+| `prefers-color-scheme` media query | ✅ | Light/dark/auto + manual `data-theme` override |
+| `prefers-reduced-motion` | ✅ | Durations set to 0ms, animations gated |
 | `prefers-contrast: more` | ✅ | Borders become `currentColor`, shadows removed |
-| `color-mix()` | ✅ | Used for focus rings and hover states |
+| `color-mix()` | ✅ | Used for focus rings, hover states, glass surfaces |
 | Flexbox layout | ✅ | Studio shell, sidebar, inspector all use flex |
 | SCSS with nesting | ✅ | Organized component files |
 | Autoprefixer in build | ✅ | `package.json` devDependency |
@@ -66,24 +64,24 @@
 
 ---
 
-### Category W3: JavaScript Architecture — 85/100
+### Category W3: JavaScript Architecture — 88/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
 | ES modules (`import`/`export`) | ✅ | All frontend JS is modular |
 | Vanilla JS (no framework bloat) | ✅ | Appropriate for a 3D studio |
-| Clean separation of concerns | ✅ | `engine/`, `ui/`, `blockchain/`, `services/` |
-| Custom events for decoupling | ✅ | `wallet:connected`, `scene:empty`, `nesting:didDive`, etc. via `mitt` singleton in `events/bus.js` |
+| Clean separation of concerns | ✅ | `engine/`, `ui/`, `blockchain/`, `services/`, `state/` |
+| Typed event bus for decoupling | ✅ | `mitt` singleton in `events/bus.js` with `EVENTS` constants |
+| Typed state layer | ✅ | `asset-state.js`, `wallet-state.js`, `ui-state.js` replace `window.*` globals |
 | Dynamic `import()` for code splitting | ✅ | `token-resolver.js`, `explorer.js` lazy-loaded |
-| No global namespace pollution | ✅ | Only minimal `window.*` exports for inline handlers |
-| Babylon.js as 3D engine | ✅ | CDN-loaded |
+| No global namespace pollution | ✅ | Minimal `window.*` exports removed |
+| Babylon.js as 3D engine | ✅ | CDN-loaded v9.12.0 |
 | Web3.js for blockchain | ✅ | v1.10.0 |
-| Web3Modal for wallet connection | ✅ | v1.9.12 |
 | TypeScript | ❌ | Pure JS — acceptable for this project |
 | Service Worker | ❌ | None |
 | Web Workers | ❌ | None — heavy 3D/GLTF operations run on main thread |
 
-**Finding**: Excellent modular architecture with clean decoupling via a typed `mitt` event bus (`frontend/src/js/events/bus.js`). Missing service workers and web workers for background processing.
+**Finding**: Excellent modular architecture. The move from `document.dispatchEvent` to `mitt` and the introduction of typed state stores are significant improvements. Missing service workers and web workers for background processing.
 
 ---
 
@@ -94,17 +92,17 @@
 | Single CSS file (`styles.css`) | ✅ | One request for all styles |
 | WebP images | ✅ | Logo, favicon, apple-touch-icon |
 | No render-blocking resources | ⚠️ | CSS is render-blocking; scripts are `type="module"` (deferred) |
-| JavaScript bundler | ❌ | **No bundler** — `render-scripts.js` literally copies `src/js → dist/js` |
+| JavaScript bundler | ❌ | **No bundler** — `build-scripts.js` copies `src/js → dist/js` |
 | Tree-shaking | ❌ | Impossible without a bundler |
 | Code splitting | ❌ | No dynamic chunks beyond 2 lazy imports |
 | Minification | ❌ | JS files are unminified in dist |
 | `preload` / `preconnect` hints | ❌ | No `<link rel="preload">` or `dns-prefetch` |
-| Subresource Integrity (SRI) | ❌ | CDN scripts (`babylon.js`, `web3.min.js`, `web3modal`) have no `integrity` hash |
-| Lazy loading for images | ❌ | Asset library card thumbnails load eagerly |
+| Subresource Integrity (SRI) | ❌ | CDN scripts lack `integrity` attributes |
+| Lazy loading for images | ✅ | Asset library thumbnails use `loading="lazy"` |
 | Critical CSS inlining | ❌ | Not implemented |
 | Resource count | ⚠️ | **35+ individual JS module files** + 5 CDN scripts + 1 CSS file |
 
-**Finding**: The build system (`render-scripts.js`) performs a raw `cp -R` of source JS to dist. This means 35+ unminified module files are served individually. For localhost development this is acceptable, but for production this would be a critical performance issue. CDN scripts lack SRI hashes, creating a supply-chain vulnerability.
+**Finding**: The build system still performs a raw copy of source JS to dist. This is acceptable for localhost development but would be a critical production issue. CDN scripts still lack SRI hashes. Thumbnails now lazy-load.
 
 ---
 
@@ -125,25 +123,27 @@
 
 ---
 
-### Category W6: Security & Privacy — 50/100
+### Category W6: Security & Privacy — 55/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
 | `rel="noopener noreferrer"` on external links | ✅ | Wallet explorer link has it |
 | No analytics / tracking scripts | ✅ | No Google Analytics, Mixpanel, etc. |
 | No third-party cookies | ✅ | No cookie usage |
-| Content Security Policy (CSP) | ❌ | No `Content-Security-Policy` meta tag or header |
+| Content Security Policy (CSP) | ⚠️ | Report-only header added (`src/index.js`), not enforcing |
 | Subresource Integrity (SRI) | ❌ | CDN scripts lack `integrity` attributes |
 | HTTPS enforcement | ❌ | Localhost only — no `upgrade-insecure-requests` |
-| Hardcoded private key in source | ❌ | Hardhat dev account key `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` is embedded in `wallet.js` (lines 134-135, 421-422) |
+| Hardcoded private key in source | ❌ | Hardhat dev account key embedded in `wallet.js` — acceptable for local dev only |
 | Input sanitization | ⚠️ | `escapeHtml()` used in dialogs and toasts; API inputs rely on backend validation |
 | `X-Frame-Options` / frame ancestors | ❌ | No clickjacking protection headers |
+| `X-Content-Type-Options: nosniff` | ❌ | Not set |
+| `Referrer-Policy` | ❌ | Not set |
 
-**Finding**: The hardcoded Hardhat dev private key is acceptable for local development but must be removed before any production deployment. Lack of CSP and SRI on CDN scripts creates XSS and supply-chain risks. No tracking is a privacy win.
+**Finding**: CSP is now in report-only mode, which is progress. Lack of enforcing CSP, SRI, and additional security headers remains a concern before any production deployment. No tracking is a privacy win.
 
 ---
 
-### Category W7: Cross-Browser Compatibility — 65/100
+### Category W7: Cross-Browser Compatibility — 70/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
@@ -151,11 +151,14 @@
 | `-webkit-` / `-moz-` prefixes for range slider | ✅ | Both engines covered |
 | `appearance: none` for form controls | ✅ | |
 | Web3.js v1.10.0 | ⚠️ | Stable but aging; v4 is current |
-| Web3Modal v1.9.12 | ❌ | **Deprecated** — v2 (now Reown AppKit) is the modern standard |
+| Web3Modal v1 | ✅ | **Removed** — replaced with custom EIP-6963 + WalletConnect v2 modal |
+| WalletConnect v2 | ✅ | Supported via `@walletconnect/ethereum-provider` |
+| EIP-6963 (multi-injection) | ✅ | `wallet-discovery.js` discovers and connects multiple injected wallets |
+| Coinbase Wallet / Rainbow | ⚠️ | Supported if they emit `eip6963:announceProvider`; no explicit deep links |
 | `@supports` feature queries | ❌ | No progressive enhancement guards |
 | Safari-specific quirks | ⚠️ | `color-mix()` supported in Safari 16.2+; Babylon.js WebGL compatibility varies |
 
-**Finding**: Web3Modal v1 is the biggest compatibility concern. It lacks modern wallet support (WalletConnect v2, Coinbase Smart Wallet, Rainbow) and may break as wallets drop legacy injection patterns.
+**Finding**: Wallet integration was modernized and now supports EIP-6963 and WalletConnect v2. This removes the biggest compatibility concern from the previous audit. Web3.js v1 remains the next aging dependency.
 
 ---
 
@@ -196,7 +199,7 @@
 |-------|--------|-------|
 | `ApiError` custom error class | ✅ | Status code + error code |
 | `parseErrorBody` for standardized errors | ✅ | Handles nested and legacy formats |
-| Toast notifications for errors | ✅ | With action buttons (Retry, View on Explorer) |
+| Toast notifications for errors | ✅ | Notyf-based, with action buttons (Retry, View on Explorer) |
 | `fetch` with `AbortController` | ❌ | No request cancellation |
 | Exponential backoff retry | ❌ | No retry logic |
 | Offline detection (`navigator.onLine`) | ❌ | Not implemented |
@@ -209,49 +212,49 @@
 
 ## Part B: Web 3.0 / dApp Standards
 
-### Category D1: Wallet Connection UX — 70/100
+### Category D1: Wallet Connection UX — 82/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Web3Modal integration | ✅ | `cacheProvider: true` |
+| EIP-6963 multi-wallet discovery | ✅ | `wallet-discovery.js` listens for announced providers |
+| WalletConnect v2 | ✅ | Mobile wallet support via `@walletconnect/ethereum-provider` |
 | Auto-connect via `eth_accounts` (silent) | ✅ | No popup on page load |
 | `accountsChanged` listener | ✅ | Updates UI, checks balance |
 | `chainChanged` → page reload | ✅ | Standard pattern |
-| Direct `window.ethereum` fallback | ✅ | Works without Web3Modal |
+| Direct `window.ethereum` fallback | ✅ | Works without EIP-6963 |
 | No wallet installed handling | ✅ | Toast: "Please install MetaMask or Rabby" |
 | User rejection handled silently | ✅ | Error code 4001 → no toast spam |
-| Web3Modal v1 | ❌ | **Deprecated** — should migrate to Reown AppKit (v2) |
-| WalletConnect v2 | ❌ | Not supported |
-| Coinbase Wallet / Rainbow | ❌ | Not supported |
-| EIP-6963 (multi-injection) | ❌ | Not supported — may fail with multiple wallets |
+| Custom wallet picker modal | ✅ | GNOME HIG-styled, focus-trapped |
+| Coinbase Wallet / Rainbow deep links | ❌ | No explicit wallet deep links |
+| Reown AppKit / RainbowKit | ❌ | Custom modal is maintained in-house |
 
-**Finding**: Wallet connection works well for MetaMask/Rabby but uses deprecated Web3Modal v1. Modern wallets (Coinbase Smart Wallet, Rainbow, Frame) may not connect reliably. Migrating to Reown AppKit or RainbowKit is recommended.
+**Finding**: Wallet connection was significantly modernized. The custom EIP-6963 + WalletConnect v2 modal removes the Web3Modal v1 deprecation risk and supports modern multi-injection wallets.
 
 ---
 
-### Category D2: Network / Chain Management — 55/100
+### Category D2: Network / Chain Management — 70/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
 | `wallet_switchEthereumChain` | ✅ | Prompts user to switch |
-| `wallet_addEthereumChain` | ✅ | Adds Hardhat if not present |
+| `wallet_addEthereumChain` | ✅ | Adds chains if not present |
 | Wrong network detection | ✅ | Dialog prompts to switch |
-| Chain ID badge in headerbar | ✅ | Shows "Hardhat", "Calibration", "Mainnet" |
-| Network switch in wallet popover | ⚠️ | Only "Hardhat Local" option — no production networks |
-| Multi-network config object | ✅ | `NETWORKS` object exists but only has Hardhat |
-| Production network support (Mainnet, Sepolia, Polygon) | ❌ | Not in UI |
+| Chain ID badge in headerbar | ✅ | Shows network name |
+| Network switch in headerbar | ✅ | `<select>` with Hardhat, SEI Testnet, and (disabled) Optimism options |
+| Multi-network config object | ✅ | `NETWORK_CONFIGS` covers Hardhat, Optimism Sepolia, Optimism Mainnet, SEI Testnet |
+| Production network support (Mainnet, Sepolia) | ⚠️ | Configured but contracts not deployed on Optimism mainnet |
 | Custom RPC endpoint input | ❌ | Not implemented |
 
-**Finding**: Network switching works for the Hardhat local dev environment, but the UI offers no production network options. The backend supports multi-chain, but the frontend doesn't expose it.
+**Finding**: Network configuration expanded significantly (added SEI Testnet and Optimism configs). The UI now exposes a network selector, though some production networks lack deployed contracts.
 
 ---
 
-### Category D3: Transaction UX — 70/100
+### Category D3: Transaction UX — 75/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
 | Gas estimation with buffer | ✅ | 1.2× buffer on all transactions |
-| Transaction lifecycle toasts | ✅ | `showTxToast()` (Notyf wrapper) — pending → submitting → confirmed / failed |
+| Transaction lifecycle toasts | ✅ | Notyf wrapper — pending → submitting → confirmed / failed |
 | Explorer links in toasts | ✅ | "View on Explorer" for confirmed txs |
 | Retry action on failure | ✅ | Retry button in error toasts |
 | User rejection silent handling | ✅ | No toast on code 4001 |
@@ -262,11 +265,11 @@
 | Speed-up / cancel pending tx | ❌ | Not implemented |
 | Transaction queue / batching | ❌ | Not implemented |
 
-**Finding**: Transaction feedback is good — users see clear Notyf-based toasts with explorer links and retry actions. Missing: gas price preview, simulation, and advanced nonce management.
+**Finding**: Transaction feedback is clear and modernized via Notyf. Missing: gas price preview, simulation, and advanced nonce management.
 
 ---
 
-### Category D4: Token Standards — 50/100
+### Category D4: Token Standards — 55/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
@@ -301,11 +304,11 @@
 
 ---
 
-### Category D6: Session & Authentication — 75/100
+### Category D6: Session & Authentication — 78/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Session-based auth | ✅ | Reduces MetaMask popups from 3 → 2 after first use |
+| Session-based auth | ✅ | Reduces wallet popups after first use |
 | `personal.sign` for session creation | ✅ | One signature = 24h token |
 | `localStorage` session cache | ✅ | With expiry check |
 | `Session` auth header scheme | ✅ | `Authorization: Session <token>` |
@@ -320,19 +323,19 @@
 
 ---
 
-### Category D7: Multi-Chain Support — 45/100
+### Category D7: Multi-Chain Support — 60/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| `KNOWN_RPC_ENDPOINTS` for mainnet/Sepolia | ✅ | `eth.llamarpc.com`, `ethereum-sepolia.publicnode.com` |
+| `NETWORK_CONFIGS` for mainnet/Sepolia/SEI | ✅ | `eth.llamarpc.com`, `https://sepolia.optimism.io`, SEI testnet RPC |
 | External RPC fallback | ✅ | Token resolver creates new Web3 instance for different chains |
 | Hardhat local dev | ✅ | Primary network |
-| Calibration / Filecoin Mainnet | ⚠️ | Chain IDs in event handler (314159, 314) but no RPC configured |
+| Calibration / Filecoin Mainnet | ⚠️ | Chain IDs in constants but no RPC configured |
 | Polygon / Arbitrum / Base | ❌ | No RPC or UI support |
-| Chain switch UI | ❌ | Only Hardhat in wallet popover select |
+| Chain switch UI | ✅ | Headerbar `<select>` |
 | Cross-chain asset references | ⚠️ | `child_ref` stores `chainId` but resolution only works for known RPCs |
 
-**Finding**: The architecture supports multi-chain via `child_ref.chainId` and external RPC fallbacks, but the UI is hardcoded to Hardhat local. Adding production networks requires config changes, not code changes.
+**Finding**: The architecture supports multi-chain via `child_ref.chainId` and external RPC fallbacks, and the UI now exposes a network selector. Adding more production networks is primarily a config change, not a code change.
 
 ---
 
@@ -354,7 +357,7 @@
 
 ---
 
-### Category D9: Data Privacy & Permissions — 65/100
+### Category D9: Data Privacy & Permissions — 70/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
@@ -363,7 +366,7 @@
 | No cookies | ✅ | |
 | Wallet address not in URL | ✅ | Not exposed in query params |
 | `navigator.clipboard` with fallback | ✅ | Secure context + textarea fallback |
-| Hardcoded dev private key | ❌ | In `wallet.js` source — acceptable for local dev only |
+| Hardcoded dev private key | ⚠️ | In `wallet.js` source — acceptable for local dev only |
 | Privacy policy | ❌ | None |
 | Terms of service | ❌ | None |
 
@@ -371,7 +374,7 @@
 
 ---
 
-### Category D10: Contract Interaction Patterns — 65/100
+### Category D10: Contract Interaction Patterns — 68/100
 
 | Check | Status | Notes |
 |-------|--------|-------|
@@ -395,20 +398,22 @@
 
 | # | Gap | Risk | Fix |
 |---|-----|------|-----|
-| 1 | **Web3Modal v1 is deprecated** | Wallets may stop supporting legacy injection; users cannot connect with modern wallets | Migrate to Reown AppKit (v2) or RainbowKit |
+| 1 | **No enforcing CSP / no SRI on CDN scripts** | XSS and supply-chain attack if CDN is compromised | Promote CSP to enforcing and add `integrity` + `crossorigin="anonymous"` to CDN `<script>` tags |
 | 2 | **Hardcoded dev private key in source** | Accidental mainnet deployment could leak funds | Move to environment variable or dev-only config file |
-| 3 | **No production network config in UI** | App only works on Hardhat local; mainnet users cannot connect | Add Mainnet, Sepolia, Polygon, etc. to `NETWORKS` and wallet popover |
+| 3 | **No production contract deployment on Optimism mainnet** | App cannot publish on production network | Deploy contracts and populate `NETWORK_CONFIGS` |
 | 4 | **No transaction revert reason decoding** | Users see raw hex/errors instead of human-readable revert reasons | Parse `error.data` and map to contract error definitions |
 | 5 | **No SIWE (EIP-4361)** | Non-standard auth message; not interoperable with SIWE-verifying backends | Replace custom `arbesk-session:` message with SIWE format |
-| 6 | **CDN scripts lack SRI** | Supply-chain attack if CDN is compromised | Add `integrity` and `crossorigin="anonymous"` to all CDN `<script>` tags |
-| 7 | **No CSP** | XSS vulnerability if malicious script is injected | Add `Content-Security-Policy` meta tag |
+| 6 | **No PWA / service worker / manifest** | Cannot install as desktop app or work offline | Add `manifest.json` and a minimal service worker for asset caching |
+| 7 | **No bundler / minification / SRI** | 35+ unminified modules served individually in production | Add a production bundler (e.g., Rollup) with SRI generation |
 
 ---
 
 ## What's Done Well (Web 3.0)
 
-- **Session auth reduces friction**: Clever session token system cuts MetaMask popups from 3 to 2 after the first generation.
-- **Transaction lifecycle UX**: `showTxToast()` gives clear Notyf-based feedback through pending → confirmed/failed states with explorer links.
+- **Modern wallet integration**: Custom EIP-6963 discovery + WalletConnect v2 modal replaces the deprecated Web3Modal v1.
+- **Multi-network config**: Hardhat, Optimism Sepolia, Optimism Mainnet, and SEI Testnet are all configured.
+- **Session auth reduces friction**: Clever session token system cuts wallet popups after the first generation.
+- **Transaction lifecycle UX**: Notyf-based toasts give clear feedback through pending → confirmed/failed states with explorer links.
 - **Token resolver architecture**: Clean separation with caching, external RPC fallback, and URI normalization for cross-contract compatibility.
 - **Role-based collaboration**: Full Viewer/Editor/Owner role system wired through the contract.
 - **Burn → unpin lifecycle**: Thoughtful cleanup that resolves the manifest CID before burning, then unpins IPFS content afterward.
@@ -420,7 +425,7 @@
 
 - **Semantic HTML**: Proper landmarks, heading hierarchy, and ARIA coverage.
 - **Modern CSS**: Custom properties, `color-mix()`, `prefers-*` media queries.
-- **Modular JS architecture**: Clean ES modules with typed `mitt` event-bus decoupling (`events/bus.js`).
+- **Modular JS architecture**: Clean ES modules with typed `mitt` event bus and state stores.
 - **Responsive design**: Fully responsive sidebar, inspector, and touch targets.
 - **Zero tracking**: No analytics, cookies, or third-party data sharing.
 
@@ -430,9 +435,9 @@
 
 | Audit | Score | Gap |
 |-------|-------|-----|
-| GNOME HIG (Visual + A11y) | 91/100 | — |
-| Web Standards | 60/100 | -31 |
-| Web 3.0 / dApp | 63/100 | -28 |
-| **Combined Web** | **62/100** | **-29** |
+| GNOME HIG (Visual + A11y) | 90/100 | — |
+| Web Standards | 62/100 | -28 |
+| Web 3.0 / dApp | 72/100 | -18 |
+| **Combined Web** | **67/100** | **-23** |
 
-**Interpretation**: Arbesk Studio is a **visually excellent but architecturally immature** web application. The GNOME HIG score of 91 reflects world-class UI/UX design and accessibility. The Web score of 62 reflects that the app is built as a local development tool without production-grade bundling, PWA support, modern wallet SDKs, or multi-chain UI configuration. These gaps are **expected and acceptable for a Phase 5.1 dev tool** but must be addressed before any public mainnet deployment.
+**Interpretation**: Arbesk Studio is now a **visually excellent and increasingly mature** web application. The Web 3.0 score improved from 63 to 72 thanks to the wallet modernization and multi-chain work. The remaining gaps are expected for a dev tool but must be addressed before any public mainnet deployment: enforcing CSP/SRI, contract deployment, revert decoding, SIWE, and production bundling.

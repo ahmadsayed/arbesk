@@ -46,6 +46,20 @@ services:
     # docker compose run --rm -e PRIVATE_KEY=0x... hardhat npx hardhat run scripts/deploy.js --network filecoinCalibration
     restart: unless-stopped
 
+  nostr:
+    image: scsibug/nostr-rs-relay:latest
+    container_name: arbesk-nostr-relay
+    # Private/local-only relay: exposed on loopback for studio dev use.
+    # No federation or public peering is configured.
+    ports:
+      - "127.0.0.1:7777:7777" # Nostr relay WebSocket
+    volumes:
+      # nostr-rs-relay reads config.toml from its working directory (/usr/src/app)
+      - ./docker/nostr-relay.toml:/usr/src/app/config.toml:ro
+      - nostr-data:/usr/src/app/db
+    restart: unless-stopped
+
 volumes:
   ipfs-data:
   hardhat-cache:
+  nostr-data:

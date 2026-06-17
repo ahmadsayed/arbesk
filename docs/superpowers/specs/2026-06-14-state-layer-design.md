@@ -32,7 +32,7 @@ Frontend application state lives in ~12 mutable `window.*` globals with no singl
 ## Decisions
 
 - **Approach:** Option A — plain-JS store modules, no new dependencies.
-- **Notifications:** piggyback on the existing `events/registry.js` event bus (`emit` / `on`).
+- **Notifications:** piggyback on the existing `events/bus.js` event bus (`emit` / `on`).
 - **Migration:** clean cut — all read and write sites migrated in one pass, no compatibility shims.
 - **UI isolation:** `selectedNodeId` and `nestingDepth` go into a separate `ui-state.js` so the UI layer has no import-level coupling to asset/wallet stores.
 
@@ -56,12 +56,14 @@ const _state = { /* domain fields, all null/0 by default */ };
 
 export const xState = {
   get()           // returns shallow copy of _state
-  set(partial)    // Object.assign + emit EVENTS.X_STATE_CHANGED
-  reset()         // restore all fields to defaults + emit
+  set(partial)    // Object.assign + emit(EVENTS.X_STATE_CHANGED, { ..._state })
+  reset()         // restore all fields to defaults + emit(EVENTS.X_STATE_CHANGED, { ..._state })
 };
 ```
 
-### New event constants (added to `events/registry.js`)
+Listeners receive the full state object directly (no `CustomEvent.detail` wrapper) because the bus is a `mitt()` singleton.
+
+### New event constants (added to `events/bus.js`)
 
 ```js
 ASSET_STATE_CHANGED:  "asset:stateChanged",
@@ -99,7 +101,7 @@ nestingDepth    — was window._nestingDepth (underscore dropped)
 ## Migration Steps
 
 1. **Create** `frontend/src/js/state/asset-state.js`, `wallet-state.js`, `ui-state.js`.
-2. **Add** `ASSET_STATE_CHANGED`, `WALLET_STATE_CHANGED`, `UI_STATE_CHANGED` to `events/registry.js`.
+2. **Add** `ASSET_STATE_CHANGED`, `WALLET_STATE_CHANGED`, `UI_STATE_CHANGED` to `events/bus.js`.
 3. **Replace writes** — every `window.X = value` becomes `xState.set({ X: value })`.
 4. **Replace reads** — every `window.X` becomes `xState.get().X`.
 5. **Replace resets** — null-setting blocks in `cleanup.js` become `assetState.reset()` / `uiState.reset()`.

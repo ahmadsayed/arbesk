@@ -90,9 +90,9 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with
 
 ```bash
 # ─── Infrastructure ───
-docker-compose up -d                          # start IPFS + Hardhat
+docker-compose up -d                          # start IPFS + Hardhat + Nostr relay
 docker-compose down
-docker-compose logs -f ipfs                   # or: hardhat
+docker-compose logs -f ipfs                   # or: hardhat, nostr
 
 # ─── Dependencies ───
 npm install && cd frontend && npm install && cd ..
@@ -311,10 +311,11 @@ Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause
 |---------|-----|---------------|-------|
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, no bootstrap, loopback swarm |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container, `./blockchain` volume-mounted |
+| Local Nostr relay | — | `ws://127.0.0.1:7777` | `scsibug/nostr-rs-relay`, SQLite-backed, dev-only |
 | Optimism Sepolia | — | `https://sepolia.optimism.io` | Testnet |
 | Optimism mainnet | — | `https://mainnet.optimism.io` | Production |
 
-Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`.
+Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`, `docker/nostr-relay.toml`.
 
 ---
 

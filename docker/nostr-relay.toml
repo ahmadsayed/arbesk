@@ -1,0 +1,39 @@
+# Local development Nostr relay configuration (nostr-rs-relay)
+# Bound to loopback via docker-compose port mapping: 127.0.0.1:7777
+
+[info]
+relay_url = "ws://127.0.0.1:7777"
+name = "Arbesk Local Nostr Relay"
+description = "Private development relay for Arbesk Studio. No federation, no public peering."
+pubkey = "0000000000000000000000000000000000000000000000000000000000000000"
+contact = "dev@localhost"
+
+[diagnostics]
+tracing = false
+
+[database]
+engine = "sqlite"
+path = "/usr/src/app/db/nostr.db"
+
+[network]
+address = "0.0.0.0"
+port = 7777
+remote_ip_header = "x-forwarded-for"
+
+[limits]
+# Dev-friendly limits; tighten for any shared/testnet-facing deployment.
+messages_per_sec = 10
+subscriptions_per_min = 20
+max_subscriptions = 100
+max_filters = 10
+max_limit = 5000
+max_event_tags = 100
+max_content_length = 8192
+min_pow = 0
+auth_required = false
+payment_required = false
+restricted_writes = false
+
+[authorization]
+# Open relay for local development. Restrict pubkeys here if you need ACLs.
+pubkey_whitelist = []

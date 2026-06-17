@@ -143,10 +143,11 @@ Shared responsibilities (in `ArbeskAssetBase.sol`):
 |---|---|---|
 | `ipfs` | Private Kubo node | `127.0.0.1:5001`, `127.0.0.1:8080` |
 | `hardhat` | Local EVM and contract tooling | `127.0.0.1:8545` |
+| `nostr` | Local Nostr relay (dev only) | `127.0.0.1:7777` |
 | `optimismSepolia` | Public testnet target | RPC via configured provider |
 | `optimismMainnet` | Public production (softnet) target | RPC via configured provider |
 
-The IPFS container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm.
+The IPFS container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm. The Nostr relay is likewise local-only: bound to loopback, SQLite-backed, with no federation or public peering.
 
 Public network strategy: **Hardhat local for development, Optimism Sepolia for testnet, Optimism mainnet for production**. Base and Polygon configurations are not current targets.
 

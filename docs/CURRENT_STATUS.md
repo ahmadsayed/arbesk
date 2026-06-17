@@ -1,6 +1,6 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-06-10  
+> **Generated:** 2026-06-10; updated 2026-06-16  
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.  
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).  
 > **Frontend build:** Custom Node.js scripts (no bundler).  
@@ -146,8 +146,12 @@ frontend/src/js/
 ├── gltf/
 │   ├── decomposer.js           # Break buffers/images into separate IPFS CIDs
 │   ├── composer.js             # Resolve ipfs:// URIs back to base64 for Babylon
-│   ├── material-editor.js      # PBR material color edits, bake to composite
+│   ├── material-editor.js      # PBR material color edits, multi-primitive aware, bake to composite
 │   └── uri_to_cid.js           # Legacy helpers (mostly reference now)
+├── state/
+│   ├── asset-state.js        # Replaces window.* asset globals
+│   ├── wallet-state.js       # Replaces window.* wallet globals
+│   └── ui-state.js           # Replaces window.* UI globals
 └── services/
     ├── api.js                  # API client: sessions, generate, save, publish, history, unpin
     ├── team.js                 # Contract wrappers for editor add/remove
@@ -188,8 +192,17 @@ frontend/src/js/
 **glTF Pipeline**
 - `decomposer.js`: base64 buffers/images → `writeToIPFS` → `ipfs://<CID>` URIs
 - `composer.js`: fetches `ipfs://` binaries from gateway → base64 data URIs
-- `material-editor.js`: `fetchComposite` → edit PBR factors → `commitCompositeChanges`
+- `material-editor.js`: `fetchComposite` → edit PBR factors → `commitCompositeChanges`; `findMaterialByMeshName()` returns all materials for meshes with multiple primitives
 - Round-trip tested: decompose → compose yields identical bytes
+
+**Events Layer**
+- `frontend/src/js/events/bus.js` exports a singleton `mitt()` instance plus `EVENTS` constants
+- Handlers receive the payload directly (not wrapped in `CustomEvent`)
+- Replaces the previous `events/registry.js` implementation (removed)
+
+**State Layer**
+- `frontend/src/js/state/{asset-state,wallet-state,ui-state}.js` replace the ~12 mutable `window.*` app-state globals
+- Each store exposes `get() / set() / reset()` and emits `ASSET_STATE_CHANGED` / `WALLET_STATE_CHANGED` / `UI_STATE_CHANGED` via the mitt bus
 
 **IPFS Layer**
 - Reads: `http://127.0.0.1:8080/ipfs/<cid>` with `cache: "no-store"`
@@ -219,6 +232,8 @@ frontend/src/js/
 - Nesting: breadcrumb path bar, Alt+Left ascend, depth status in bottom bar
 - History: draggable horizontal track, active vs published states
 - Ledger: derives activity from manifest chain via `/api/v1/manifests/:cid/history` — **no localStorage ledger**
+- Dialogs: GNOME HIG-styled modals using `focus-trap@7.6.2` (CDN) for robust Tab cycling and MetaMask overlay coexistence
+- Toasts: Notyf@3.10.0 (CDN) wrapper preserving `showToast` / `showTxToast` / `showErrorToast` call sites with GNOME-styled glass accents
 
 ### 3.3 What Does NOT Work / Is Missing
 
@@ -364,6 +379,12 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 | `test/frontend/build.test.js` | ~286 | Syntax-checks built JS, verifies `window.*` exports, CDN version pinning (web3@1.10.0), wallet lifecycle |
 | `test/frontend/deployment-integrity.test.js` | ~486 | ABI exists, required function signatures, `.env` address sync, Docker volume mounts, on-chain bytecode verification |
 | `test/frontend/wallet-exports.test.js` | ~152 | Static parse of `wallet.js` export block, consumer import contracts |
+| `test/frontend/bus.test.js` | ~120 | mitt singleton contract: direct payloads, on/off, no cross-fire |
+| `test/frontend/dialog.test.js` | ~191 | `showDialog` / `showConfirmDialog` / `showInfoDialog` behaviour, focus-trap API contract |
+| `test/frontend/toasts.test.js` | ~209 | Notyf wrapper: types, durations, actions, eviction, dismiss |
+| `test/state/asset-state.test.js` | ~80 | Store get/set/reset + `ASSET_STATE_CHANGED` emissions |
+| `test/state/wallet-state.test.js` | ~60 | Store get/set/reset + `WALLET_STATE_CHANGED` emissions |
+| `test/state/ui-state.test.js` | ~50 | Store get/set/reset + `UI_STATE_CHANGED` emissions |
 
 ### 5.3 Contract Tests (`blockchain/test/`)
 
@@ -384,6 +405,10 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 
 ### 6.1 Build Pipeline
 
+**Frontend dependencies**
+- Runtime: `bootstrap@5.1.3`, `mitt@^3.0.1`
+- CDN-loaded: `babylon.js`, `web3@1.10.0`, `web3modal@1.9.12`, `notyf@3.10.0`, `focus-trap@7.6.2`
+
 **Frontend build** (`frontend/scripts/` — custom Node.js, no Webpack/Vite):
 1. `clean` — `rm -rf frontend/dist`
 2. `build:pug` — Prettier-formatted `.pug` → `dist/*.html`
@@ -392,7 +417,7 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 5. `build:assets` — `cp -R public/* dist/`
 6. `start` — Full build + BrowserSync + chokidar watcher (`sb-watch.js`)
 
-> Browser globals (`BABYLON`, `Web3`, `IpfsHttpClient`) come from CDN `<script>` tags in `studio.pug`.
+> Browser globals (`BABYLON`, `Web3`, `IpfsHttpClient`, `Notyf`, `focusTrap`) come from CDN `<script>` tags in `studio.pug`.
 
 ### 6.2 Docker Services (`docker-compose.yml`)
 
@@ -400,6 +425,7 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 |---------|-------|-------|--------|
 | `ipfs` | `ipfs/kubo:latest` | `127.0.0.1:5001`, `127.0.0.1:8080` | No DHT, no bootstrap, no NAT/relay, loopback-only swarm, 100GB cap, CORS enabled |
 | `hardhat` | `node:20-slim` | `127.0.0.1:8545` | Live-mounted `blockchain/` volume, default `npx hardhat node --hostname 0.0.0.0` |
+| `nostr` | `scsibug/nostr-rs-relay:latest` | `127.0.0.1:7777` | Local-only WebSocket relay, SQLite storage, open auth for dev |
 
 ### 6.3 Dev Orchestration (`scripts/start-dev.sh`)
 
@@ -470,6 +496,7 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 | File `frontend/src/js/ui/gallery.js` | Actual file is `asset-library.js` |
 | File `frontend/src/js/ui/history-browser.js` | Actual file is `asset-history.js` |
 | File `frontend/src/js/ui/team-panel.js` | Actual file is `asset-editors.js` |
+| File `frontend/src/js/events/registry.js` | Replaced by `frontend/src/js/events/bus.js` (mitt singleton) |
 
 ---
 
