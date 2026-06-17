@@ -283,34 +283,54 @@ html(lang="en")
                 line(x1="18" y1="6" x2="6" y2="18")
                 line(x1="6" y1="6" x2="18" y2="18")
           .inspector-body
-            #tokenChildInfo.inspector-token-child(hidden)
-              .inspector-section
-                .inspector-section-title Token Info
-                .inspector-meta
-                  .inspector-meta-row
-                    span.label Linked Token
-                    span#tokenChildId.value —
-                  .inspector-meta-row
-                    span.label Contract
-                    span#tokenChildContract.value —
-                  .inspector-meta-row
-                    span.label Chain ID
-                    span#tokenChildChain.value —
-                  .inspector-meta-row
-                    span.label Resolution
-                    span#tokenChildResolution.value latest
-                  .inspector-meta-row
-                    span.label Manifest CID
-                    span#tokenChildCid.value(style="font-family:var(--font-mono);font-size:var(--font-size-0);word-break:break-all") —
-              .inspector-actions
-                button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open This World &rarr;
-            #parametricEditor
-              #componentEditor.inspector-section(hidden)
-                .inspector-section-title Color
-                .component-editor-header
-                  span#selectedComponentName.component-editor-name —
-                  .component-editor-swatch#selectedComponentSwatch
-                input#selectedComponentColor.form-color.component-color-editor(type="color" aria-label="Component color")
+            section#tokenChildInfo.inspector-section.inspector-token-child(hidden)
+              details
+                summary.inspector-section-title Token Info
+                div
+                  .inspector-meta
+                    .inspector-meta-row
+                      span.label Linked Token
+                      span#tokenChildId.value —
+                    .inspector-meta-row
+                      span.label Contract
+                      span#tokenChildContract.value —
+                    .inspector-meta-row
+                      span.label Chain ID
+                      span#tokenChildChain.value —
+                    .inspector-meta-row
+                      span.label Resolution
+                      span#tokenChildResolution.value latest
+                    .inspector-meta-row
+                      span.label Manifest CID
+                      span#tokenChildCid.value(style="font-family:var(--font-mono);font-size:var(--font-size-0);word-break:break-all") —
+                  .inspector-actions
+                    button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open This World &rarr;
+            section#parametricEditor.inspector-section
+              details
+                summary.inspector-section-title Color
+                div
+                  #componentEditor(hidden)
+                    .component-editor-header
+                      span#selectedComponentName.component-editor-name —
+                      .component-editor-swatch#selectedComponentSwatch
+                    input#selectedComponentColor.form-color.component-color-editor(type="color" aria-label="Component color")
+            section#commentsSection.inspector-section.comments-section(hidden)
+              h3#commentsTitle.inspector-section-title Comments · 
+                span#commentsCount 0
+              .comments-scroll
+                ul#commentList.comment-list(role="list" aria-label="Comments")
+              #commentsEmpty.comments-empty(hidden)
+                .comments-empty-icon ✦
+                p.comments-empty-title No comments yet
+                p.comments-empty-sub Mention an editor to request a change or review.
+              .comment-composer
+                #commentAutocomplete.autocomplete(hidden role="listbox" aria-label="Mention a wallet")
+                label.composer-label(for="commentComposerInput") Add a comment
+                textarea#commentComposerInput.composer-input(rows="3" placeholder="Add a comment… use @ to mention a wallet." aria-label="Add a comment")
+                .composer-actions
+                  span.composer-hint Ctrl+Enter to send
+                  button#postCommentBtn.btn.btn-primary.btn-sm(type="button" aria-label="Post comment" title="Post comment (Ctrl+Enter)") Post
+              span#commentsLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
 
       //- ═══════════════════════════════════════════════════════════
       //- Bottom Bar

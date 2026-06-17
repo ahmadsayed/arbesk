@@ -23,6 +23,9 @@ initNesting();
 import { initCollaborators } from "/js/ui/collaborators.js";
 initCollaborators();
 
+import { initCommentsPanel } from "/js/ui/comments-panel.js";
+initCommentsPanel();
+
 import { rewriteShortcutTitles } from "/js/utils/platform.js";
 rewriteShortcutTitles();
 

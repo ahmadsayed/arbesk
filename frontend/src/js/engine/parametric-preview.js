@@ -29,6 +29,8 @@ import {
 const inspector = document.getElementById("inspector");
 const parametricEditor = document.getElementById("parametricEditor");
 const tokenChildInfo = document.getElementById("tokenChildInfo");
+const tokenChildInfoDetails = tokenChildInfo?.querySelector("details");
+const parametricEditorDetails = parametricEditor?.querySelector("details");
 const nodeColorInput = document.getElementById("nodeColor");
 const nodeScaleX = document.getElementById("nodeScaleX");
 const nodeScaleY = document.getElementById("nodeScaleY");
@@ -129,6 +131,7 @@ function getMeshMaterialColor(mesh) {
 function showTokenChildInfo(nodeId) {
   if (parametricEditor) parametricEditor.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = false;
+  if (tokenChildInfoDetails) tokenChildInfoDetails.open = true;
   if (componentEditor) componentEditor.hidden = true;
 
   const childRef = getNodeChildRef(nodeId);
@@ -163,6 +166,7 @@ async function openInspector(nodeId) {
   }
 
   if (parametricEditor) parametricEditor.hidden = false;
+  if (parametricEditorDetails) parametricEditorDetails.open = false;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
 
   // Capture original material colors so close() can revert the preview.
@@ -231,6 +235,7 @@ function selectComponent(meshName) {
   }
 
   if (componentEditor) componentEditor.hidden = false;
+  if (parametricEditorDetails) parametricEditorDetails.open = true;
 }
 
 function readScaleInputs() {

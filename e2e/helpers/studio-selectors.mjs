@@ -37,4 +37,11 @@ export const SELECTORS = {
   newAssetBtn: "#newAssetBtn",
   inspectorDiveBtn: "#inspectorDiveBtn",
   backBtn: "#backBtn",
+  // Comments section in right inspector
+  commentsSection: "#commentsSection",
+  commentList: "#commentList",
+  commentComposerInput: "#commentComposerInput",
+  postCommentBtn: "#postCommentBtn",
+  commentsCount: "#commentsCount",
+  commentsEmpty: "#commentsEmpty",
 };

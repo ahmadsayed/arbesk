@@ -1,0 +1,307 @@
+// ═══════════════════════════════════════════════════════════════════
+// Comments & Mentions — Right inspector section
+// ═══════════════════════════════════════════════════════════════════
+
+// Make inspector sections collapsible with native <details>.
+// Token Info, Color, and any future section use the same summary style
+// as the existing .inspector-section-title.
+.inspector-section details {
+  border: var(--border-size-1) solid var(--border-hairline);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+}
+
+.inspector-section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: var(--size-2) var(--size-3);
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-7);
+  color: var(--dim-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    content: '▸';
+    font-size: var(--font-size-1);
+    transition: transform var(--duration-quick) var(--ease-out-3);
+  }
+
+  &:hover {
+    background: var(--surface-overlay-hover);
+  }
+}
+
+.inspector-section details[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.inspector-section details > div {
+  padding: var(--size-3);
+}
+
+// The comments section is the only inspector section that stays open and
+// fills the remaining vertical space.
+.comments-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  .inspector-section-title {
+    margin-bottom: 0;
+  }
+}
+
+.comments-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: var(--size-2) 0;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+  }
+}
+
+// ─── Comment list ─────────────────────────────────────────────────
+
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.comment-item {
+  display: flex;
+  gap: var(--size-2);
+}
+
+.comment-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-round);
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-7);
+  flex-shrink: 0;
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin-bottom: var(--size-1);
+  flex-wrap: wrap;
+}
+
+.comment-author {
+  font-weight: var(--font-weight-6);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+  color: var(--sidebar-fg);
+}
+
+.comment-time {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+}
+
+.comment-text {
+  font-size: var(--font-size-1);
+  line-height: var(--font-lineheight-2);
+  color: var(--sidebar-fg);
+  word-break: break-word;
+}
+
+.comment-mention {
+  color: var(--accent-bg);
+  font-weight: var(--font-weight-6);
+  cursor: pointer;
+  border-radius: var(--radius-1);
+  padding: 0 2px;
+  margin: 0 -2px;
+
+  &:hover {
+    text-decoration: underline;
+    background: color-mix(in srgb, var(--accent-bg) 12%, transparent);
+  }
+}
+
+.comment-mentioned-you {
+  border-left: 3px solid var(--accent-bg);
+  padding: var(--size-2) var(--size-2) var(--size-2) var(--size-3);
+  background: color-mix(in srgb, var(--accent-bg) 8%, transparent);
+  border-radius: 0 var(--radius-2) var(--radius-2) 0;
+
+  .comment-item {
+    margin: calc(-1 * var(--size-2)) calc(-1 * var(--size-2)) calc(-1 * var(--size-2)) calc(-1 * var(--size-3));
+  }
+}
+
+.comment-system {
+  opacity: 0.85;
+
+  .comment-avatar {
+    background: var(--dim-fg);
+    color: var(--sidebar-bg);
+  }
+}
+
+// ─── Mention badge ────────────────────────────────────────────────
+
+.mention-badge {
+  margin-left: auto;
+  font-size: var(--font-size-0);
+  color: var(--accent-bg);
+  font-weight: var(--font-weight-6);
+}
+
+// ─── Empty state ──────────────────────────────────────────────────
+
+.comments-empty {
+  text-align: center;
+  padding: var(--size-5) var(--size-2);
+}
+
+.comments-empty-icon {
+  font-size: var(--size-6);
+  color: var(--accent-bg);
+  margin-bottom: var(--size-2);
+}
+
+.comments-empty-title {
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-6);
+  color: var(--sidebar-fg);
+  margin: 0 0 var(--size-1);
+}
+
+.comments-empty-sub {
+  font-size: var(--font-size-1);
+  color: var(--dim-fg);
+  margin: 0;
+  line-height: var(--font-lineheight-3);
+}
+
+// ─── Composer ─────────────────────────────────────────────────────
+
+.comment-composer {
+  margin-top: var(--size-2);
+  padding-top: var(--size-3);
+  border-top: var(--border-size-1) solid var(--border-hairline);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.composer-label {
+  display: block;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+  margin-bottom: var(--size-1);
+}
+
+.composer-input {
+  width: 100%;
+  min-height: 80px;
+  padding: var(--size-2) var(--size-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-1);
+  line-height: var(--font-lineheight-2);
+  color: var(--view-fg);
+  background: var(--view-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-2);
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color var(--duration-quick) var(--ease-out-3),
+              box-shadow var(--duration-quick) var(--ease-out-3);
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--accent-bg);
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--size-2);
+}
+
+.composer-hint {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+}
+
+// ─── Autocomplete dropdown ────────────────────────────────────────
+
+.autocomplete {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--popover-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-3);
+  max-height: 160px;
+  overflow-y: auto;
+  z-index: 10;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.autocomplete-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  font-size: var(--font-size-1);
+  cursor: pointer;
+  color: var(--popover-fg);
+
+  &:hover,
+  &.autocomplete-item-active {
+    background: var(--surface-overlay-hover);
+  }
+
+  span {
+    color: var(--dim-fg);
+    font-size: var(--font-size-0);
+  }
+}
