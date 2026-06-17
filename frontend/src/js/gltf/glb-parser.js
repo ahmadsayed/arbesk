@@ -16,7 +16,6 @@ const GLB_VERSION = 2;
 const CHUNK_TYPE_JSON = 0x4e4f534a; // "JSON"
 const CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0"
 const IPFS_URI_PREFIX = "ipfs://";
-const CID_BUFFER_PREFIX = "data:application/cid;base64,";
 
 const _io = new WebIO();
 
@@ -299,15 +298,6 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
 
   for (let i = 0; i < buffers.length; i++) {
     const buf = buffers[i];
-
-    // Already a CID reference (legacy)
-    if (buf.uri && buf.uri.startsWith(CID_BUFFER_PREFIX)) {
-      const cid = buf.uri.replace(CID_BUFFER_PREFIX, "");
-      buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-      stats.buffers++;
-      console.log(`[GLB-DECOMPOSE] buffer[${i}] legacy CID → ipfs://${cid}`);
-      continue;
-    }
 
     // Already composite
     if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) {
