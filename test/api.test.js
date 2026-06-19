@@ -49,6 +49,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       }),
       pin: {
         add: jest.fn(async () => {}),
+        rm: jest.fn(async () => {}),
       },
     };
 
@@ -151,6 +152,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     };
 
     process.env.MOCK_3D_GENERATION = "true";
+    process.env.GENERATION_RATE_LIMIT_MAX = "10";
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
 
     const sessions = await import("../src/api/sessions.js");
@@ -164,6 +166,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     logSpy?.mockRestore();
     jest.restoreAllMocks();
     delete process.env.CONTRACT_ADDRESS;
+    delete process.env.GENERATION_RATE_LIMIT_MAX;
   });
 
   async function makeSessionHeader(address = "0x1234567890123456789012345678901234567890") {
@@ -523,6 +526,66 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         if (res.status === 429) break;
       }
       expect(lastStatus).toBe(429);
+    });
+  });
+
+  describe("POST /api/v1/ipfs/upload-url", () => {
+    beforeEach(() => _resetRateLimiter());
+
+    it("rejects without a session (401)", async () => {
+      const res = await request(app).post("/api/v1/ipfs/upload-url").send({});
+      expect(res.status).toBe(401);
+    });
+
+    it("returns a credential for an authed session", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-url")
+        .set("Authorization", await makeSessionHeader())
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("backend");
+      // Kubo mode in tests (no IPFS_BACKEND set):
+      expect(res.body.backend).toBe("kubo");
+      expect(res.body).toHaveProperty("apiUrl");
+      // master secret must never appear
+      expect(JSON.stringify(res.body)).not.toMatch(/PINATA_JWT|Bearer/i);
+    });
+
+    it("rate-limits to 5 per minute per wallet (6th = 429), no upload performed", async () => {
+      const auth = await makeSessionHeader(
+        "0xRateWallet000000000000000000000000000001",
+      );
+      let last = 200;
+      for (let i = 0; i < 6; i++) {
+        const res = await request(app)
+          .post("/api/v1/ipfs/upload-url")
+          .set("Authorization", auth)
+          .send({});
+        last = res.status;
+      }
+      expect(last).toBe(429);
+    });
+  });
+
+  describe("POST /api/v1/ipfs/unpin via storage", () => {
+    it("walks the chain and reports unpinned CIDs", async () => {
+      const manifest = {
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+      };
+      const addRes = await request(app)
+        .post("/api/v1/manifests")
+        .send(manifest);
+      const startCid = addRes.body.cid;
+      expect(startCid).toBeTruthy();
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .send({ cid: startCid });
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.unpinned)).toBe(true);
+      expect(res.body.unpinned).toContain(startCid);
     });
   });
 
@@ -1116,6 +1179,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.contractAddress).toBe("0xArbeskContractAddress");
+    });
+  });
+
+  describe("GET /api/v1/config storage fields", () => {
+    it("reports the ipfs backend and gateway", async () => {
+      const res = await request(app).get("/api/v1/config");
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("ipfsBackend");
+      expect(res.body).toHaveProperty("ipfsGatewayUrl");
+      expect(res.body.ipfsGatewayUrl).toMatch(/\/ipfs\/$/);
     });
   });
 });

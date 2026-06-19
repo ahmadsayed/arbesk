@@ -7,7 +7,7 @@ Unpin endpoint specification.
 ### Request
 ```json
 {
-  "cid": "QmManifestCidToStartFrom...",
+  "cid": "bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri",
   "actorAddress": "0x..."  // optional, for ledger audit
 }
 ```
@@ -15,9 +15,9 @@ Unpin endpoint specification.
 ### Response (200)
 ```json
 {
-  "unpinned": ["Qm...", "Qm...", ...],
+  "unpinned": ["bafkreia7kc...", "bafybeicso2bhrwbry...", ...],
   "count": 42,
-  "errors": ["unpin QmBad: some error"]  // optional, only if errors occurred
+  "errors": ["unpin bafkreibad...: some error"]  // optional, only if errors occurred
 }
 ```
 

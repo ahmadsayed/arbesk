@@ -15,7 +15,7 @@ Every Arbesk manifest is a JSON document stored on the private IPFS node. Key fi
   "name": "Untitled Asset",                  // Human-readable name
   "thumbnail": {                             // Optional WebP snapshot
     "type": "snapshot",
-    "cid": "Qm...",
+    "cid": "bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri",
     "path": "thumbnail.webp",
     "format": "webp",
     "mime": "image/webp",
@@ -42,7 +42,7 @@ Each entry in `scene.nodes` is one of two types:
   "type": "source_asset",
   "name": "person",
   "source": {
-    "cid": "QmavQYrXKWERMEuz9q4viP8UU5rxCFJbpKKeAxvtQg8rT5",
+    "cid": "bafybeicso2bhrwbry5brt5rippu2aosfjzw5ysydzbv6thmqmx5aj4pknm",
     "path": "asset.gltf",
     "format": "gltf"
   },

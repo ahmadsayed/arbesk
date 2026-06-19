@@ -9,7 +9,7 @@ jest.setTimeout(10000);
 describe("Comments Archive Service", () => {
   let archiveCommentsForAsset;
   let fetchCommentsArchive;
-  let mockIPFS;
+  let mockStorage;
   let relayMessages;
   let MockWebSocket;
 
@@ -72,14 +72,11 @@ describe("Comments Archive Service", () => {
       NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
     }));
 
-    mockIPFS = {
+    mockStorage = {
       add: jest.fn(async (payload) => {
         const hash = "Qm" + Buffer.from(payload).toString("hex").slice(0, 15);
-        return { cid: { toString: () => hash } };
+        return hash;
       }),
-      pin: {
-        add: jest.fn(async () => {}),
-      },
     };
 
     const mod = await import("../src/api/comments-archive.js");
@@ -115,15 +112,13 @@ describe("Comments Archive Service", () => {
       ["EOSE", "sub-1"],
     ];
 
-    const result = await archiveCommentsForAsset(assetId, mockIPFS);
+    const result = await archiveCommentsForAsset(assetId, mockStorage);
 
     expect(result.cid).toMatch(/^Qm/);
     expect(result.eventCount).toBe(1);
-    expect(mockIPFS.add).toHaveBeenCalledTimes(1);
-    expect(mockIPFS.pin.add).toHaveBeenCalledTimes(1);
-    expect(mockIPFS.pin.add).toHaveBeenCalledWith(result.cid);
+    expect(mockStorage.add).toHaveBeenCalledTimes(1);
 
-    const archivePayload = JSON.parse(mockIPFS.add.mock.calls[0][0]);
+    const archivePayload = JSON.parse(mockStorage.add.mock.calls[0][0]);
     expect(archivePayload.assetId).toBe(assetId);
     expect(archivePayload.events[0].id).toBe("evt-3");
   });
@@ -131,10 +126,10 @@ describe("Comments Archive Service", () => {
   test("returns empty archive when relay sends EOSE with no events", async () => {
     relayMessages = [["EOSE", "sub-1"]];
 
-    const result = await archiveCommentsForAsset("31337:0xabc:3", mockIPFS);
+    const result = await archiveCommentsForAsset("31337:0xabc:3", mockStorage);
 
     expect(result.eventCount).toBe(0);
-    const archivePayload = JSON.parse(mockIPFS.add.mock.calls[0][0]);
+    const archivePayload = JSON.parse(mockStorage.add.mock.calls[0][0]);
     expect(archivePayload.events).toEqual([]);
   });
 });

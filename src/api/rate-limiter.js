@@ -7,9 +7,9 @@ export function _resetRateLimiter() {
 
 export default function rateLimit({ max, windowMs }) {
   return (req, res, next) => {
-    const wallet = req.body.txHash
-      ? res.locals.userAddress // set by authenticate middleware
-      : req.ip; // fallback for unauthenticated routes
+    // Prefer the authenticated wallet (set by the authenticate middleware,
+    // which runs before this limiter). Fall back to IP for unauthenticated routes.
+    const wallet = res.locals.userAddress || req.ip;
 
     if (!wallet) return next();
 

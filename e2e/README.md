@@ -48,7 +48,7 @@ Validates free-tier mock generation end-to-end:
 
 - Types `cowboy` into the prompt input and clicks **Generate asset**.
 - Confirms the chat history shows the prompt and `Model carved via mock`.
-- Extracts the manifest CID from `?manifest=Qm...` in the URL.
+- Extracts the manifest CID from `?manifest=baf...` in the URL. The exact CIDv1 prefix depends on the IPFS backend (e.g. `bafy...` for dag-pb, `bafkrei...` for raw JSON).
 - Fetches the manifest from the local IPFS gateway.
 - Validates the manifest structure (asset_id, version, timestamp, one `source_asset` node, source CID/format, 16-element transform matrix, node name contains the prompt).
 
