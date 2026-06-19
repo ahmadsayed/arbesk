@@ -204,18 +204,26 @@ export async function getOrCreateSession() {
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
+let _configPromise = null;
+
 /**
  * GET /api/v1/config
+ * Config is immutable for the page lifetime, so the (successful) result is
+ * memoized; a failed fetch clears the cache so the next call can retry.
  * @returns {Promise<Object>} { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
  */
 export async function getConfig() {
-  try {
-    const res = await fetch(`${API_BASE}/config`);
-    const data = await res.json();
-    return data;
-  } catch {
-    return null;
-  }
+  if (_configPromise) return _configPromise;
+  _configPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/config`);
+      return await res.json();
+    } catch {
+      _configPromise = null;
+      return null;
+    }
+  })();
+  return _configPromise;
 }
 
 /**

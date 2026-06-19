@@ -11,29 +11,7 @@ import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { truncateAddress } from "../utils/format.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { clearSession, createSession } from "../services/api.js";
-
-const SESSION_STORAGE_KEY = "arbesk_session";
-
-/**
- * Local copy of the cached-session reader so we don't need to import
- * the full API service module (which pulls in wallet/web3 code) at load time.
- */
-function getCachedSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw);
-    if (!session.token || !session.expiresAt || !session.address) return null;
-    if (session.expiresAt <= Date.now() - 60_000) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      return null;
-    }
-    return session;
-  } catch {
-    return null;
-  }
-}
+import { clearSession, createSession, getCachedSession } from "../services/api.js";
 
 let isReauthenticating = false;
 
@@ -48,7 +26,6 @@ let reconnectAttempts = 0;
 let isConnecting = false;
 let currentTokenId = null;
 let currentChainId = null;
-let currentAssetId = null;
 let currentAddress = null;
 let currentArchiveCid = null;
 let knownEventIds = new Set();
@@ -95,17 +72,22 @@ async function onAssetContextChanged(e) {
   const tokenId = assetState.get().activeAssetTokenId;
   const chainId = walletState.get().chainId;
 
-  if (tokenId !== currentTokenId || chainId !== currentChainId) {
+  const contextChanged = tokenId !== currentTokenId || chainId !== currentChainId;
+  if (contextChanged) {
     disconnect();
     clearComments();
     currentTokenId = tokenId;
     currentChainId = chainId;
-    await loadArchiveForCurrentManifest(e?.manifest);
+  }
+
+  // Always reload the archive: the manifest may have been republished even when
+  // the token/chain context is unchanged. loadArchiveForCurrentManifest no-ops
+  // when the archive CID hasn't changed.
+  await loadArchiveForCurrentManifest(e?.manifest);
+
+  if (contextChanged) {
     updateUI();
     tryConnect();
-  } else {
-    // Same asset context, but the manifest may have been republished.
-    await loadArchiveForCurrentManifest(e?.manifest);
   }
 }
 
@@ -210,7 +192,6 @@ function disconnect() {
     }
   }
   isConnecting = false;
-  currentAssetId = null;
 }
 
 function scheduleReconnect() {
@@ -236,7 +217,6 @@ function getWsBase() {
 function handleMessage(msg) {
   switch (msg.type) {
     case "ready":
-      currentAssetId = msg.assetId;
       updateUI();
       break;
     case "event":
@@ -418,28 +398,29 @@ function updateUI() {
   if (elements.postBtn) elements.postBtn.disabled = !canPost;
 
   // Empty / status state
-  if (elements.empty) {
-    const emptyTitle = elements.empty.querySelector(".comments-empty-title");
-    const emptySub = elements.empty.querySelector(".comments-empty-sub");
-
-    if (!isConnected) {
-      if (emptyTitle) emptyTitle.textContent = "Connect wallet";
-      if (emptySub) emptySub.textContent = "Connect your wallet to view comments.";
-      elements.empty.hidden = false;
-    } else if (!hasSession) {
-      if (emptyTitle) emptyTitle.textContent = "Sign in";
-      if (emptySub)
-        emptySub.textContent = "Sign in with your wallet to view comments.";
-      elements.empty.hidden = false;
-    } else if (knownEventIds.size === 0) {
-      if (emptyTitle) emptyTitle.textContent = "No comments yet";
-      if (emptySub)
-        emptySub.textContent = "Mention an editor to request a change or review.";
-      elements.empty.hidden = false;
-    } else {
-      elements.empty.hidden = true;
-    }
+  if (!isConnected) {
+    setEmptyState("Connect wallet", "Connect your wallet to view comments.");
+  } else if (!hasSession) {
+    setEmptyState("Sign in", "Sign in with your wallet to view comments.");
+  } else if (knownEventIds.size === 0) {
+    setEmptyState("No comments yet", "Mention an editor to request a change or review.");
+  } else if (elements.empty) {
+    elements.empty.hidden = true;
   }
+}
+
+/**
+ * Show the empty-state block with the given title/subtitle.
+ * @param {string} title
+ * @param {string} sub
+ */
+function setEmptyState(title, sub) {
+  if (!elements.empty) return;
+  const emptyTitle = elements.empty.querySelector(".comments-empty-title");
+  const emptySub = elements.empty.querySelector(".comments-empty-sub");
+  if (emptyTitle) emptyTitle.textContent = title;
+  if (emptySub) emptySub.textContent = sub;
+  elements.empty.hidden = false;
 }
 
 function showError(message) {

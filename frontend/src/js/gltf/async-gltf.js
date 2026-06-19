@@ -26,42 +26,36 @@ async function checkWorkerAvailable() {
   return workerAvailable;
 }
 
-function placeholderPattern(prefix) {
-  return new RegExp(`^${prefix}\\d+__$`);
+/**
+ * Upload extracted bytes and rewrite their placeholder URIs in `targets`.
+ * @param {Array} items - extracted {bytes, name, skip} entries
+ * @param {string} prefix - placeholder prefix (WORKER_BUFFER_PREFIX / WORKER_IMAGE_PREFIX)
+ * @param {Array} targets - composite.buffers or composite.images
+ * @returns {Promise[]} upload promises
+ */
+function uploadAndRewrite(items, prefix, targets) {
+  const uploads = [];
+  items.forEach((item, idx) => {
+    if (item.skip || !item.bytes) return;
+    uploads.push(
+      writeToIPFS(item.bytes, item.name).then((cid) => {
+        const placeholder = `${prefix}${idx}__`;
+        for (const t of targets || []) {
+          if (t.uri === placeholder) {
+            t.uri = `ipfs://${cid}`;
+          }
+        }
+      }),
+    );
+  });
+  return uploads;
 }
 
 async function uploadExtractedAssets(composite, buffers, images) {
-  const uploads = [];
-
-  buffers.forEach((buf, idx) => {
-    if (buf.skip || !buf.bytes) return;
-    uploads.push(
-      writeToIPFS(buf.bytes, buf.name).then((cid) => {
-        const placeholder = `${WORKER_BUFFER_PREFIX}${idx}__`;
-        for (const b of composite.buffers || []) {
-          if (b.uri === placeholder) {
-            b.uri = `ipfs://${cid}`;
-          }
-        }
-      }),
-    );
-  });
-
-  images.forEach((img, idx) => {
-    if (img.skip || !img.bytes) return;
-    uploads.push(
-      writeToIPFS(img.bytes, img.name).then((cid) => {
-        const placeholder = `${WORKER_IMAGE_PREFIX}${idx}__`;
-        for (const i of composite.images || []) {
-          if (i.uri === placeholder) {
-            i.uri = `ipfs://${cid}`;
-          }
-        }
-      }),
-    );
-  });
-
-  await Promise.all(uploads);
+  await Promise.all([
+    ...uploadAndRewrite(buffers, WORKER_BUFFER_PREFIX, composite.buffers),
+    ...uploadAndRewrite(images, WORKER_IMAGE_PREFIX, composite.images),
+  ]);
   return composite;
 }
 
