@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { ROOT, log, sleep, readState, clearState } from "./lib/infra.mjs";
+import { ROOT, COMPOSE_PROJECT, log, sleep, readState, clearState } from "./lib/infra.mjs";
 
 function isAlive(pid) {
   try {
@@ -13,10 +13,10 @@ function isAlive(pid) {
 export default async function globalTeardown() {
   log("Tearing down...");
 
-  const { weStartedInfra, backendPid } = readState();
+  const { weStartedInfra, backendPid, backendPort } = readState();
 
   if (backendPid && isAlive(backendPid)) {
-    log(`Stopping backend (pid ${backendPid})...`);
+    log(`Stopping backend (pid ${backendPid}, port ${backendPort || "unknown"})...`);
     try {
       process.kill(backendPid, "SIGTERM");
     } catch {
@@ -34,7 +34,11 @@ export default async function globalTeardown() {
   }
 
   if (weStartedInfra) {
-    execSync("docker-compose down", { stdio: "inherit", cwd: ROOT, timeout: 60000 });
+    execSync(`docker compose -p "${COMPOSE_PROJECT}" down`, {
+      stdio: "inherit",
+      cwd: ROOT,
+      timeout: 60000,
+    });
   } else {
     log("Leaving pre-existing IPFS/Hardhat containers running");
   }

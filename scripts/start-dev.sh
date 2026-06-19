@@ -5,8 +5,35 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# ─── Worktree isolation ───
+# If COMPOSE_PROJECT_NAME is already set (e.g. by the E2E global setup), reuse it.
+# Otherwise derive a stable project name from the checkout path so different
+# git worktrees do not share Docker containers or volume mounts.
+if [ -z "$COMPOSE_PROJECT_NAME" ]; then
+    WORKTREE_BASENAME=$(basename "$PROJECT_ROOT")
+    WORKTREE_HASH=$(printf '%s' "$PROJECT_ROOT" | sha256sum | cut -c1-8)
+    WORKTREE_ID="${WORKTREE_BASENAME}-${WORKTREE_HASH}"
+    WORKTREE_ID_SANITIZED=$(echo "$WORKTREE_ID" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')
+    COMPOSE_PROJECT_NAME="arbesk-${WORKTREE_ID_SANITIZED}"
+fi
+export COMPOSE_PROJECT_NAME
+
+# Convenience flag for scripts/docs that need the current worktree's project name.
+if [ "${1:-}" = "--print-project" ]; then
+    echo "$COMPOSE_PROJECT_NAME"
+    exit 0
+fi
+
+# Backend port: E2E global setup sets PORT per-worktree; normal dev keeps 9090.
+BACKEND_PORT="${PORT:-9090}"
+
+# Docker Compose shorthand scoped to this worktree.
+DC="docker compose -p ${COMPOSE_PROJECT_NAME}"
+
 echo "═══════════════════════════════════════════"
 echo "  Arbesk Dev Launcher"
+echo "  worktree: ${COMPOSE_PROJECT_NAME}"
+echo "  backend port: ${BACKEND_PORT}"
 echo "═══════════════════════════════════════════"
 echo ""
 
@@ -35,11 +62,27 @@ fi
 echo ""
 
 # ─── 2. Start Docker infrastructure ───
-if docker compose ps --services --filter "status=running" 2>/dev/null | grep -qE 'ipfs|hardhat'; then
-    echo "✅ Docker infrastructure already running"
-else
-    echo "🐳 Starting Docker infrastructure (IPFS + Hardhat)..."
-    docker compose up -d
+# Before bringing up our stack, make sure no foreign worktree is holding the
+# fixed host ports. Docker Compose's own error is cryptic; this is actionable.
+check_port_conflict() {
+    local port=$1
+    local foreign
+    foreign=$(docker ps --filter "publish=${port}" --format "{{.Names}}" 2>/dev/null | head -1)
+    if [ -n "$foreign" ]; then
+        echo "❌ Port ${port} is already bound by container: ${foreign}"
+        echo "   Stop that worktree's infrastructure first, or run E2E from that worktree."
+        return 1
+    fi
+}
+
+start_docker_infra() {
+    check_port_conflict 8545
+    check_port_conflict 5001
+    check_port_conflict 8080
+    check_port_conflict 7777
+
+    echo "🐳 Starting Docker infrastructure (IPFS + Hardhat) for ${COMPOSE_PROJECT_NAME}..."
+    ${DC} up -d
     echo "⏳ Waiting for Hardhat node to boot..."
     sleep 6
 
@@ -58,6 +101,12 @@ else
         fi
         sleep 1
     done
+}
+
+if ${DC} ps --services --filter "status=running" 2>/dev/null | grep -qE 'ipfs|hardhat'; then
+    echo "✅ Docker infrastructure already running for ${COMPOSE_PROJECT_NAME}"
+else
+    start_docker_infra
 fi
 echo ""
 
@@ -113,25 +162,25 @@ if [ "$NEEDS_DEPLOY" = true ]; then
     # Hardhat auto-compiles inside getContractFactory but an explicit step
     # catches stale artifacts and missing dependencies before the deploy runs.
     echo "🔨 Compiling Solidity contracts..."
-    docker compose exec -T hardhat npx hardhat compile
+    ${DC} exec -T hardhat npx hardhat compile
 
     # Docker bind mounts on some systems don't sync container→host file writes.
     # To avoid stale USDC_TOKEN poisoning the deploy, we MUST remove it inside
     # the container before running the deploy script.
     # See: test/frontend/deployment-integrity.test.js for regression coverage.
     echo "🧹 Ensuring clean USDC_TOKEN state for fresh MockUSDC deploy..."
-    docker compose exec -T hardhat sh -c '
+    ${DC} exec -T hardhat sh -c '
         TMPFILE=$(mktemp)
         grep -v "^USDC_TOKEN=" /app/.env > "$TMPFILE" && cat "$TMPFILE" > /app/.env && rm "$TMPFILE"
     '
 
     echo "📜 Deploying ArbeskAsset + MockUSDC to Hardhat..."
-    docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
+    ${DC} exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 
     # Read deployed addresses from the deployment artifacts inside the container.
     # docker-compose exec output includes non-JSON noise; filter to the JSON object.
-    FREE_ARTIFACT_RAW=$(docker compose exec -T hardhat cat /app/deployments/localhost/ArbeskAssetFree.json 2>/dev/null)
-    PAID_ARTIFACT_RAW=$(docker compose exec -T hardhat cat /app/deployments/localhost/ArbeskAsset.json 2>/dev/null)
+    FREE_ARTIFACT_RAW=$(${DC} exec -T hardhat cat /app/deployments/localhost/ArbeskAssetFree.json 2>/dev/null)
+    PAID_ARTIFACT_RAW=$(${DC} exec -T hardhat cat /app/deployments/localhost/ArbeskAsset.json 2>/dev/null)
     FREE_ARTIFACT_JSON=$(echo "$FREE_ARTIFACT_RAW" | sed -n '/^{/,/^}/p')
     PAID_ARTIFACT_JSON=$(echo "$PAID_ARTIFACT_RAW" | sed -n '/^{/,/^}/p')
 
@@ -197,8 +246,8 @@ echo "════════════════════════�
 echo "  🚀 Arbesk is ready!"
 echo "═══════════════════════════════════════════"
 echo ""
-echo "   Studio:     http://localhost:9090/studio.html"
-echo "   API:        http://localhost:9090/api"
+echo "   Studio:     http://localhost:${BACKEND_PORT}/studio.html"
+echo "   API:        http://localhost:${BACKEND_PORT}/api"
 echo "   Hardhat:    http://127.0.0.1:8545"
 echo "   IPFS API:   http://127.0.0.1:5001"
 echo "   IPFS GW:    http://127.0.0.1:8080"
@@ -222,4 +271,4 @@ if [ "${1:-}" = "--setup-only" ]; then
     exit 0
 fi
 
-node src/index.js
+PORT="${BACKEND_PORT}" node src/index.js

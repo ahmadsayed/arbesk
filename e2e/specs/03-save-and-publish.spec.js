@@ -3,6 +3,7 @@ import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   fetchManifest,
+  fetchTokenManifest,
   assertGenerationManifest,
   assertSavedManifest,
   assertPublishedManifest,
@@ -63,12 +64,7 @@ test.describe("save and publish", () => {
     const tokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
     const tokenIdDec = BigInt(tokenIdHex).toString();
 
-    const tokenManifestRes = await fetch(
-      `http://127.0.0.1:9090/api/v1/tokens/${tokenIdHex}/manifest`
-    );
-    expect(tokenManifestRes.ok).toBe(true);
-    const tokenManifestPayload = await tokenManifestRes.json();
-    const publishedManifest = tokenManifestPayload.manifest;
+    const publishedManifest = await fetchTokenManifest(tokenIdHex);
     expect(publishedManifest).toBeTruthy();
 
     assertPublishedManifest(publishedManifest);

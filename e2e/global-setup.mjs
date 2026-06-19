@@ -3,9 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ROOT,
+  BACKEND_PORT,
+  BACKEND_URL,
+  COMPOSE_PROJECT,
   log,
   sleep,
-  isContainerRunning,
+  isServiceRunning,
   resetHardhatChain,
   writeState,
 } from "./lib/infra.mjs";
@@ -80,11 +83,11 @@ async function waitForPort(port, host = "127.0.0.1", timeoutMs = 30000) {
 }
 
 export default async function globalSetup() {
-  log("Starting infrastructure...");
+  log(`Starting infrastructure for worktree ${COMPOSE_PROJECT} on backend port ${BACKEND_PORT}...`);
 
-  const ipfsRunning = isContainerRunning("arbesk-private-ipfs");
-  const hardhatRunning = isContainerRunning("arbesk-hardhat");
-  log(`Existing containers: ipfs=${ipfsRunning} hardhat=${hardhatRunning}`);
+  const ipfsRunning = isServiceRunning("ipfs");
+  const hardhatRunning = isServiceRunning("hardhat");
+  log(`Existing services: ipfs=${ipfsRunning} hardhat=${hardhatRunning}`);
   const weStartedInfra = !ipfsRunning || !hardhatRunning;
 
   // Clean-chain reset BEFORE start-dev.sh: if Hardhat is already running we wipe
@@ -98,6 +101,7 @@ export default async function globalSetup() {
   execSync("./scripts/start-dev.sh --setup-only", {
     stdio: "inherit",
     cwd: ROOT,
+    env: { ...process.env, COMPOSE_PROJECT_NAME: COMPOSE_PROJECT },
     timeout: 300000,
   });
   log("start-dev.sh finished");
@@ -108,13 +112,13 @@ export default async function globalSetup() {
   execSync("npm run build:frontend", { stdio: "inherit", cwd: ROOT, timeout: 120000 });
   log("Frontend rebuilt");
 
-  log("Checking backend on 9090...");
+  log(`Checking backend on ${BACKEND_PORT}...`);
   let backendAlreadyRunning = false;
   try {
-    const res = await fetch("http://127.0.0.1:9090/studio.html");
+    const res = await fetch(`${BACKEND_URL}/studio.html`);
     if (res.ok) {
       backendAlreadyRunning = true;
-      log("Backend already running on 9090; reusing it");
+      log(`Backend already running on ${BACKEND_PORT}; reusing it`);
     }
   } catch {
     // not running — start it
@@ -122,10 +126,17 @@ export default async function globalSetup() {
 
   let backendPid = null;
   if (!backendAlreadyRunning) {
-    log("Starting backend on 9090...");
+    log(`Starting backend on ${BACKEND_PORT}...`);
     const backendProcess = spawn("node", ["src/index.js"], {
       cwd: ROOT,
-      env: { ...process.env, MOCK_3D_GENERATION: "true" },
+      env: {
+        ...process.env,
+        PORT: String(BACKEND_PORT),
+        MOCK_3D_GENERATION: "true",
+        // E2E repeatedly decomposes glTF nodes and mints upload credentials;
+        // keep the per-minute credential limit from blocking the suite.
+        UPLOAD_URL_RATE_LIMIT_MAX: "9999",
+      },
       detached: false,
       stdio: "inherit",
     });
@@ -135,12 +146,12 @@ export default async function globalSetup() {
     });
 
     backendPid = backendProcess.pid;
-    await waitForPort(9090);
-    log("Backend ready on 9090");
+    await waitForPort(BACKEND_PORT);
+    log(`Backend ready on ${BACKEND_PORT}`);
   }
 
   // Persist handoff state for teardown (separate module evaluation).
-  writeState({ weStartedInfra, backendPid });
+  writeState({ weStartedInfra, backendPid, backendPort: BACKEND_PORT });
 
   log("Infrastructure ready");
 
@@ -151,7 +162,7 @@ export default async function globalSetup() {
     // so this POST must send the header + a body or it 415s and the reset
     // silently no-ops — letting the per-wallet 10-gen/hour limit accumulate
     // across runs until generation starts failing with "Rate limit reached".
-    const resetRes = await fetch("http://127.0.0.1:9090/api/v1/test/reset-rate-limit", {
+    const resetRes = await fetch(`${BACKEND_URL}/api/v1/test/reset-rate-limit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}",

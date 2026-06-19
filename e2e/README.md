@@ -29,6 +29,39 @@ No manual `node src/index.js` is required.
 
 ---
 
+## Git worktrees
+
+E2E is worktree-aware. Each checkout gets its own Docker Compose project, its own backend port, and its own handoff state file, so tests from one worktree do not silently reuse containers, contracts, or a running backend from another worktree.
+
+- The main checkout keeps the familiar `http://127.0.0.1:9090` backend port.
+- Linked worktrees automatically receive a deterministic backend port in the `30000–40000` range.
+- Docker containers are named by the Compose project (`arbesk-<worktree-id>_*`) instead of the old global `arbesk-hardhat`, `arbesk-private-ipfs`, and `arbesk-nostr-relay` names.
+
+To create a worktree already seeded with the current working-tree state, environment files, built frontend, and compiled contracts, use the helper script:
+
+```bash
+npm run worktree:create -- feature-xyz
+```
+
+Then run tests from `.worktrees/feature-xyz` as usual. The script also forces `IPFS_BACKEND=kubo` in the worktree `.env` because local E2E relies on the Kubo gateway and `Qm...` CIDs.
+
+If you switch to a worktree while the main checkout's Docker stack is still running, the worktree's setup will detect the port conflict and print the name of the foreign container that is holding the fixed Hardhat/IPFS/Nostr ports. Stop that stack first:
+
+```bash
+# From the other worktree / main checkout:
+docker compose -p <project-name> down
+```
+
+You can also stop the current worktree's stack after a run:
+
+```bash
+docker compose -p $(./scripts/start-dev.sh --print-project 2>/dev/null || echo arbesk) down
+```
+
+> **Note:** Hardhat (`8545`), IPFS (`5001`/`8080`), and Nostr (`7777`) still use fixed host ports. True concurrent E2E runs across worktrees on the same machine require stopping one stack before starting another; the isolation guarantees that each stack uses the correct worktree's files.
+
+---
+
 ## What the tests cover
 
 ### 1. Wallet connection (`e2e/specs/01-connect-wallet.spec.js`)

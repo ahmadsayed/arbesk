@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { BACKEND_URL } from "./lib/infra.mjs";
 
 export default defineConfig({
   testDir: "./specs",
@@ -18,7 +19,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:9090",
+    baseURL: BACKEND_URL,
     headless: true,
     screenshot: "only-on-failure",
     video: "retain-on-failure",

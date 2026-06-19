@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
-    "test:contracts": "docker-compose run --rm hardhat npx hardhat test",
+    "test:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat test",
     "build:frontend": "cd frontend && npm run build",
     "start": "node src/index.js",
     "nodemon": "npm run build:frontend && nodemon src/index.js",
@@ -16,7 +16,8 @@
     "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts",
     "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",
     "test:e2e:ui": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js --ui",
-    "test:e2e:setup": "node e2e/setup.mjs"
+    "test:e2e:setup": "node e2e/setup.mjs",
+    "worktree:create": "./scripts/create-worktree.sh"
   },
   "repository": {
     "type": "git",

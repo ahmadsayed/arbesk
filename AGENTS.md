@@ -269,9 +269,14 @@ npx playwright test --config=e2e/playwright.config.js --project=chromium
 
 # E2E with visible browser for debugging
 npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
+
+# Create an isolated worktree pre-seeded for the full test stack
+npm run worktree:create -- feature-xyz
 ```
 
 `jest.config.js` excludes `/e2e/` so Playwright specs are not picked up by `npm test`.
+
+E2E is isolated per git worktree: each checkout gets its own Docker Compose project, backend port, and state file. The main checkout continues to use `127.0.0.1:9090`; linked worktrees use a deterministic port in the `30000–40000` range. Use `scripts/create-worktree.sh` (or `npm run worktree:create`) to create a ready-to-test worktree; see the `arbesk-worktree` skill and `e2e/README.md § Git worktrees` for the full workflow and port-conflict resolution.
 
 ### When to run E2E tests
 
@@ -365,7 +370,46 @@ Optimism uses ETH for gas; block time ~2 s; L2 execution fee + L1 data fee (frac
 
 ---
 
-## 15. Contact & Links
+## 15. Worktree Testing & Isolation
+
+For tasks that require a clean, isolated test environment — or when the main checkout's Docker containers/ports are already in use — use a git worktree.
+
+**Preferred workflow:**
+
+```bash
+# Create a worktree already seeded with current changes, env files, built frontend,
+# and compiled contracts. It also forces IPFS_BACKEND=kubo for local E2E.
+npm run worktree:create -- feature-xyz
+
+# Run the full stack inside the worktree
+cd .worktrees/feature-xyz
+npm run test:frontend
+npm run test:api
+COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) npm run test:contracts
+npm run test:e2e -- --project=chromium
+```
+
+**Cleanup:**
+
+```bash
+cd .worktrees/feature-xyz
+PROJECT=$(./scripts/start-dev.sh --print-project)
+docker compose -p "$PROJECT" down
+
+# Docker leaves artifacts as root; fix ownership before git worktree remove
+docker run --rm -v "$(pwd):/ws" alpine sh -c \
+  'chown -R $(stat -c "%u:%g" /ws) /ws/blockchain/artifacts /ws/blockchain/deployments 2>/dev/null || true'
+
+cd /path/to/main/checkout
+git worktree remove .worktrees/feature-xyz --force
+git worktree prune
+```
+
+See the `arbesk-worktree` skill for the complete rationale, file map, and troubleshooting.
+
+---
+
+## 16. Contact & Links
 
 - **Repository**: https://github.com/ahmadsayed/arbesk
 - **Docs**: `docs/` directory in this repo

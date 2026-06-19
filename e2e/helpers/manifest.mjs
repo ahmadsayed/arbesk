@@ -1,5 +1,6 @@
+import { BACKEND_URL } from "../lib/infra.mjs";
+
 const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
-const BACKEND = "http://127.0.0.1:9090";
 
 export async function fetchManifest(cid) {
   const res = await fetch(`${IPFS_GATEWAY}/${cid}`);
@@ -9,7 +10,7 @@ export async function fetchManifest(cid) {
 
 /** Read the on-chain manifest the backend resolves for a token id (hex). */
 export async function fetchTokenManifest(tokenIdHex) {
-  const res = await fetch(`${BACKEND}/api/v1/tokens/${tokenIdHex}/manifest`);
+  const res = await fetch(`${BACKEND_URL}/api/v1/tokens/${tokenIdHex}/manifest`);
   if (!res.ok) throw new Error(`token manifest ${tokenIdHex}: ${res.status}`);
   const payload = await res.json();
   return payload.manifest;

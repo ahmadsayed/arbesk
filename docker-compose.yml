@@ -3,7 +3,6 @@ services:
     build:
       context: ./docker
       dockerfile: Dockerfile
-    container_name: arbesk-private-ipfs
     # Private-only node: no peers, no public DHT. Only API and Gateway are
     # exposed, bound to loopback so they're reachable only from this laptop.
     # Swarm ports are intentionally not published — the daemon binds swarm to
@@ -22,7 +21,6 @@ services:
     build:
       context: .
       dockerfile: docker/hardhat.Dockerfile
-    container_name: arbesk-hardhat
     ports:
       - "127.0.0.1:8545:8545" # Hardhat local EVM network
     volumes:
@@ -48,7 +46,6 @@ services:
 
   nostr:
     image: scsibug/nostr-rs-relay:latest
-    container_name: arbesk-nostr-relay
     # Private/local-only relay: exposed on loopback for studio dev use.
     # No federation or public peering is configured.
     ports:
