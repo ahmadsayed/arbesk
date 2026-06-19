@@ -23,6 +23,8 @@ const {
 import generateAssetNode from "./assets/generate-node.js";
 import abiRouter from "./abi-router.js";
 import rateLimit, { _resetRateLimiter } from "./rate-limiter.js";
+import authenticate from "./authentication.js";
+import { getStorage } from "./storage/index.js";
 import sessionRouter from "./sessions.js";
 import openapiSpec from "./openapi.json" with { type: "json" };
 import { getSceneNodes } from "./manifest-utils.js";
@@ -378,6 +380,32 @@ export default () => {
       sendError(res, 500, "TOKEN_RESOLUTION_FAILED", error.message);
     }
   });
+
+  // ─── IPFS Upload Credential ────────────────────────────────────────────────
+
+  /**
+   * POST /api/v1/ipfs/upload-url
+   * Mint a short-lived client upload credential. Session-gated and rate-limited
+   * per wallet. In Pinata mode returns a presigned URL; in Kubo mode returns the
+   * local API URL. The master Pinata JWT never reaches the client.
+   */
+  v1.post(
+    "/ipfs/upload-url",
+    authenticate,
+    rateLimit({ max: 5, windowMs: 60 * 1000 }),
+    async (req, res) => {
+      try {
+        const credential = await getStorage().mintUploadCredential();
+        console.log(
+          `[IPFS] minted upload credential — backend=${credential.backend} wallet=${res.locals.userAddress}`,
+        );
+        res.json(credential);
+      } catch (error) {
+        console.error("[IPFS] upload-url error:", error.message);
+        sendError(res, 500, "UPLOAD_URL_FAILED", error.message);
+      }
+    },
+  );
 
   // ─── IPFS Unpin ──────────────────────────────────────────────────────────
 

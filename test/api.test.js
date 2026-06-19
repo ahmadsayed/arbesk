@@ -526,6 +526,44 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
+  describe("POST /api/v1/ipfs/upload-url", () => {
+    beforeEach(() => _resetRateLimiter());
+
+    it("rejects without a session (401)", async () => {
+      const res = await request(app).post("/api/v1/ipfs/upload-url").send({});
+      expect(res.status).toBe(401);
+    });
+
+    it("returns a credential for an authed session", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-url")
+        .set("Authorization", await makeSessionHeader())
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("backend");
+      // Kubo mode in tests (no IPFS_BACKEND set):
+      expect(res.body.backend).toBe("kubo");
+      expect(res.body).toHaveProperty("apiUrl");
+      // master secret must never appear
+      expect(JSON.stringify(res.body)).not.toMatch(/PINATA_JWT|Bearer/i);
+    });
+
+    it("rate-limits to 5 per minute per wallet (6th = 429), no upload performed", async () => {
+      const auth = await makeSessionHeader(
+        "0xRateWallet000000000000000000000000000001",
+      );
+      let last = 200;
+      for (let i = 0; i < 6; i++) {
+        const res = await request(app)
+          .post("/api/v1/ipfs/upload-url")
+          .set("Authorization", auth)
+          .send({});
+        last = res.status;
+      }
+      expect(last).toBe(429);
+    });
+  });
+
   describe("ABI Route", () => {
     it("returns ABI JSON when compiled", async () => {
       const res = await request(app).get("/api/v1/contracts/ArbeskAsset/abi");
