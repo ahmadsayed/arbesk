@@ -445,8 +445,8 @@ export async function getTokenManifest(tokenId) {
  * @returns {Promise<{backend:string, url?:string, gateway?:string, apiUrl?:string}>}
  */
 export async function getUploadCredential() {
-  const token = await getOrCreateSession();
-  const res = await fetch(`${API_BASE}/ipfs/upload-url`, {
+  let token = await getOrCreateSession();
+  let res = await fetch(`${API_BASE}/ipfs/upload-url`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -454,6 +454,23 @@ export async function getUploadCredential() {
     },
     body: "{}",
   });
+
+  // If the server lost its session store (e.g. restart), clear the stale
+  // cached token and re-authenticate once.
+  if (res.status === 401) {
+    console.log("[SESSION] upload-url rejected cached token — re-authenticating");
+    clearSession();
+    token = await getOrCreateSession();
+    res = await fetch(`${API_BASE}/ipfs/upload-url`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Session ${token}`,
+      },
+      body: "{}",
+    });
+  }
+
   if (!res.ok) {
     throw new Error(`upload-url failed: HTTP ${res.status}`);
   }
