@@ -209,6 +209,13 @@ Every world is a content-addressed JSON manifest stored on IPFS. Each manifest l
 
 **Thumbnail:** best-effort publish metadata — all code must tolerate missing thumbnails.
 
+**Comments Archive (`comments_archive_cid`):**
+- Republishing an existing token snapshots the asset's Nostr comment thread to a JSON archive on IPFS and stores the archive CID in the manifest.
+- The archive is created by `src/api/comments-archive.js` via the `publishContext` control field on `POST /api/v1/manifests`.
+- First-time publishes have no prior comments and therefore no archive CID.
+- On token burn, the archive CID is unpinned alongside the manifest chain.
+- The frontend loads the archive before subscribing to live relay events and deduplicates by `event.id`.
+
 ### glTF Buffer URI Format
 ```
 IPFS storage:  "uri": "ipfs://Qm..."
@@ -264,6 +271,8 @@ npx playwright test --config=e2e/playwright.config.js --project=chromium
 npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
 ```
 
+`jest.config.js` excludes `/e2e/` so Playwright specs are not picked up by `npm test`.
+
 ### When to run E2E tests
 
 **Run the E2E suite before merging any change that touches:**
@@ -275,7 +284,7 @@ npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
 - Parametric editing + version history (`parametric-preview.js`, `asset-history.js`, the outliner selection path, the version slider)
 - Nesting / linked child worlds (`nesting.js`, `scene-graph.js` linked-asset handling, token resolver, `child_ref` / `transform_matrix`)
 - Smart contracts, ABI, or deployment scripts
-- Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`)
+- Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`)
 - IPFS storage format or CID handling
 
 `npm test` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.

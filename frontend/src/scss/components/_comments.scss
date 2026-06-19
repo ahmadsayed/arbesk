@@ -251,6 +251,12 @@
     border-color: var(--accent-bg);
     box-shadow: var(--focus-ring);
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--surface-overlay);
+  }
 }
 
 .composer-actions {

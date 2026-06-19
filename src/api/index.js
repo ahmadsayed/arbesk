@@ -27,6 +27,7 @@ import sessionRouter from "./sessions.js";
 import openapiSpec from "./openapi.json" with { type: "json" };
 import { getSceneNodes } from "./manifest-utils.js";
 import { catManifest } from "./ipfs-utils.js";
+import { archiveCommentsForAsset } from "./comments-archive.js";
 
 const ipfs = create(new URL(IPFS_API_URL));
 
@@ -191,7 +192,7 @@ export default () => {
   // Create a new manifest (was save-draft)
   v1.post("/manifests", async (req, res) => {
     try {
-      const manifest = req.body;
+      let manifest = req.body;
       if (!manifest || typeof manifest !== "object") {
         console.log(`[SAVE] rejected — manifest object required`);
         return sendError(
@@ -201,6 +202,11 @@ export default () => {
           "Manifest object required",
         );
       }
+
+      // Extract optional publish context used to snapshot comments on republish.
+      // This is removed from the stored manifest; it is only a control signal.
+      const publishContext = manifest.publishContext || null;
+      delete manifest.publishContext;
 
       // Ensure version fields are present
       if (!manifest.asset_id) {
@@ -213,9 +219,35 @@ export default () => {
 
       await persistEmbeddedThumbnail(manifest);
 
+      // On republish, snapshot the asset's Nostr comment thread to IPFS and
+      // embed the archive CID in the manifest. Failures are logged but never
+      // block the publish.
+      if (publishContext?.tokenId) {
+        const chainId = publishContext.chainId
+          ? Number(publishContext.chainId)
+          : null;
+        const contractAddress =
+          publishContext.contractAddress || getContractAddress(chainId);
+        if (contractAddress) {
+          const tokenIdNum = Number(publishContext.tokenId);
+          const assetId = `${chainId || 31337}:${contractAddress}:${tokenIdNum}`;
+          try {
+            const { cid: archiveCid } = await archiveCommentsForAsset(
+              assetId,
+              ipfs,
+            );
+            manifest.comments_archive_cid = archiveCid;
+          } catch (archiveErr) {
+            console.warn(
+              `[ARCHIVE] failed to snapshot comments for ${assetId}: ${archiveErr.message}`,
+            );
+          }
+        }
+      }
+
       const resultCid = await addAndPin(ipfs, JSON.stringify(manifest));
       console.log(
-        `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} → cid=${resultCid}`,
+        `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} → cid=${resultCid}`,
       );
 
 
@@ -433,6 +465,12 @@ export default () => {
         const thumbnailCid = manifest?.thumbnail?.cid;
         if (thumbnailCid && typeof thumbnailCid === "string") {
           toUnpin.add(thumbnailCid);
+        }
+
+        // Collect comments archive CID
+        const commentsArchiveCid = manifest?.comments_archive_cid;
+        if (commentsArchiveCid && typeof commentsArchiveCid === "string") {
+          toUnpin.add(commentsArchiveCid);
         }
 
         // Collect source asset CIDs from nodes (current sources + history)

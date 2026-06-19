@@ -13,6 +13,7 @@ dotenv.config({ path: path.resolve(__dirnameRoot, "../blockchain/.env") });
 
 // Now safe to import — config.js reads from process.env which is populated
 const { default: api } = await import("./api/index.js");
+const { createChatProxy } = await import("./api/chat-proxy.js");
 
 export const app = express();
 const port = process.env.PORT || 9090;
@@ -68,6 +69,9 @@ app.use(express.static(__dirname + "/../frontend/dist"));
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 app.use("/api", api());
+
+// Attach WebSocket chat proxy to the same HTTP server
+createChatProxy(server);
 
 if (process.env.NODE_ENV !== "test") {
   server.listen(port);

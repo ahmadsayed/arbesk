@@ -101,6 +101,9 @@ export const IPFS_API_URL = process.env.IPFS_API_URL || "http://127.0.0.1:5001";
 export const HARDHAT_RPC_URL =
   process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545";
 export const API_URL = process.env.API_URL || HARDHAT_RPC_URL;
+export const NOSTR_RELAY_URL =
+  process.env.NOSTR_RELAY_URL || "ws://127.0.0.1:7777";
+export const NOSTR_SERVICE_PRIVATE_KEY = process.env.NOSTR_SERVICE_PRIVATE_KEY;
 
 // Default shared Web3 instance (Hardhat local or env-configured RPC)
 export const web3 = new Web3(API_URL);

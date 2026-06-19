@@ -10,6 +10,7 @@ import {
   publishAsset,
   updateAssetURI,
 } from "../blockchain/wallet.js";
+import { getContractAddress } from "../blockchain/network-config.js";
 import { showDialog } from "./dialog.js";
 import {
   clearScene,
@@ -480,7 +481,7 @@ async function prepareManifestForWrite(assetName) {
   return { manifest, prevCid: latestCid, prevManifest: prevManifest || baseManifest };
 }
 
-async function saveAssetDraftCore(assetName, { captureThumbnail = false } = {}) {
+async function saveAssetDraftCore(assetName, { captureThumbnail = false, publishContext = null } = {}) {
   const prepared = await prepareManifestForWrite(assetName);
   if (!prepared) {
     return { ok: false, reason: "empty" };
@@ -511,7 +512,7 @@ async function saveAssetDraftCore(assetName, { captureThumbnail = false } = {}) 
     };
   }
 
-  const { cid } = await saveManifest(prepared.manifest);
+  const { cid } = await saveManifest(prepared.manifest, { publishContext });
   assetState.set({ latestAssetManifestCid: cid, activeAssetManifestCid: cid });
 
   clearPendingChildRefs();
@@ -618,8 +619,22 @@ async function onPublishAsset() {
       return;
     }
 
+    // Republishes (existing tokenId) snapshot the live comment thread into the
+    // manifest via publishContext. First-time publishes have no prior comments.
+    const existingTokenId = assetState.get().activeAssetTokenId;
+    const publishContext = existingTokenId
+      ? {
+          tokenId: existingTokenId,
+          chainId: walletState.get().chainId,
+          contractAddress: getContractAddress(walletState.get().chainId),
+        }
+      : null;
+
     // Save first: every Besk it creates a new draft version, then publishes it.
-    const result = await saveAssetDraftCore(assetName, { captureThumbnail: true });
+    const result = await saveAssetDraftCore(assetName, {
+      captureThumbnail: true,
+      publishContext,
+    });
 
     if (!result.ok) {
       if (result.reason === "empty") {

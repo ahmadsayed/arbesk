@@ -64,3 +64,15 @@ export function assertPublishedManifest(manifest) {
     throw new Error("Published manifest has thumbnail object but missing thumbnail.cid");
   }
 }
+
+/**
+ * Validates an optional comments archive CID stored in the manifest.
+ * The archive is created on republish only when the asset has comments,
+ * so its absence is valid; when present it must be a non-empty string.
+ */
+export function assertCommentsArchive(manifest) {
+  if (manifest.comments_archive_cid === undefined || manifest.comments_archive_cid === null) return;
+  if (typeof manifest.comments_archive_cid !== "string" || !manifest.comments_archive_cid) {
+    throw new Error("Invalid comments_archive_cid in manifest");
+  }
+}

@@ -184,20 +184,35 @@ Saves a manifest to private IPFS without blockchain interaction.
 
 **Current behavior**
 
-- Ensures `manifest_id` exists.
+- Ensures `asset_id` exists.
 - Ensures `version` is numeric.
 - If `manifest.thumbnail.dataUrl` is present, uploads the thumbnail bytes as a separate IPFS object and replaces the embedded data with CID metadata.
+- If the request body includes `publishContext` with a `tokenId`, the backend snapshots the asset's Nostr comment thread from the relay, stores it as a JSON archive on IPFS, and writes the archive CID into the manifest as `comments_archive_cid`. The `publishContext` object is removed before the manifest is stored.
 
 **Request Body**
 
-Any manifest JSON object.
+Any manifest JSON object. Optional republish control:
 
-**Response `200`**
+```json
+{
+  "name": "My World",
+  "asset_id": "asset_1700000000000",
+  "version": 4,
+  "scene": { "nodes": [] },
+  "publishContext": {
+    "tokenId": "42",
+    "chainId": 31337,
+    "contractAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+  }
+}
+```
+
+**Response `201`**
 
 ```json
 {
   "cid": "QmSavedManifest...",
-  "manifest_id": "manifest_001",
+  "assetId": "asset_1700000000000",
   "version": 4
 }
 ```
@@ -322,7 +337,7 @@ Fetches a manifest by on-chain token ID. The backend queries `ArbeskAsset.tokenU
   "tokenId": "123",
   "manifestCid": "QmManifestCid...",
   "manifest": {
-    "manifest_id": "manifest_001",
+    "asset_id": "asset_1700000000000",
     "version": 4,
     "name": "My World",
     "thumbnail": {
@@ -330,7 +345,8 @@ Fetches a manifest by on-chain token ID. The backend queries `ArbeskAsset.tokenU
       "cid": "QmThumbnailCid...",
       "format": "webp"
     },
-    "nodes": []
+    "comments_archive_cid": "QmCommentsArchiveCid...",
+    "scene": { "nodes": [] }
   }
 }
 ```

@@ -40,6 +40,7 @@ export const SELECTORS = {
   // Comments section in right inspector
   commentsSection: "#commentsSection",
   commentList: "#commentList",
+  commentItem: ".comment-item",
   commentComposerInput: "#commentComposerInput",
   postCommentBtn: "#postCommentBtn",
   commentsCount: "#commentsCount",

@@ -597,6 +597,12 @@
             "description": "Previous manifest CID for version chaining",
             "nullable": true
           },
+          "comments_archive_cid": {
+            "type": "string",
+            "description": "IPFS CID of the JSON archive of Nostr comments for this asset (set on republish)",
+            "nullable": true,
+            "example": "QmCommentsArchiveCid..."
+          },
           "thumbnail": {
             "$ref": "#/components/schemas/Thumbnail"
           },
@@ -612,6 +618,24 @@
                 "items": {
                   "$ref": "#/components/schemas/SceneNode"
                 }
+              }
+            }
+          },
+          "publishContext": {
+            "type": "object",
+            "description": "Republish control signal (removed by server before storage). When present, the backend snapshots the asset's Nostr comment thread to IPFS and writes the archive CID as comments_archive_cid.",
+            "properties": {
+              "tokenId": {
+                "type": "string",
+                "description": "On-chain token ID of the asset being republished"
+              },
+              "chainId": {
+                "type": "integer",
+                "description": "EVM chain ID"
+              },
+              "contractAddress": {
+                "type": "string",
+                "description": "ArbeskAsset contract address (falls back to server config if omitted)"
               }
             }
           }

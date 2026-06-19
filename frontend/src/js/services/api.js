@@ -328,14 +328,20 @@ export async function generateAsset({
  * POST /api/v1/manifests
  * Create or update a draft manifest.
  * @param {Object} manifest — Full manifest object
+ * @param {Object} [options]
+ * @param {Object} [options.publishContext] — Optional republish context that
+ *   triggers a comments archive snapshot. Deleted by the server before storage.
  * @returns {Promise<{cid: string, assetId: string, version: number}>}
  */
-export async function saveManifest(manifest) {
+export async function saveManifest(manifest, { publishContext = null } = {}) {
   announceStatus("Uploading manifest to IPFS…");
+  const body = publishContext
+    ? { ...manifest, publishContext }
+    : manifest;
   const response = await fetch(`${API_BASE}/manifests`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(manifest),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json().catch(() => ({}));
