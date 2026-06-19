@@ -1,13 +1,13 @@
 ---
 name: arbesk-asset-inspection
-description: Fetch and inspect Arbesk assets by token ID, manifest CID, or IPFS CID. Covers manifest chain walking, child node counting, fractal manifest structure, and token URI resolution. Use whenever someone wants to look up, fetch, inspect, or describe an Arbesk asset — "get asset 42", "what's in token 172409538", "show the manifest for CID Qm...", "how many children does this world have", "walk the version history", "why can't I resolve token X", "what does this asset contain", or any question about a specific asset's content, structure, or history.
+description: Fetch and inspect Arbesk assets by token ID, manifest CID, or IPFS CID. Covers manifest chain walking, child node counting, fractal manifest structure, and token URI resolution. Use whenever someone wants to look up, fetch, inspect, or describe an Arbesk asset — "get asset 42", "what's in token 172409538", "show the manifest for CID baf...", "how many children does this world have", "walk the version history", "why can't I resolve token X", "what does this asset contain", or any question about a specific asset's content, structure, or history.
 ---
 
 # Arbesk Asset Inspection
 
 Use this skill when you need to:
 - Inspect an asset by its **token ID** (numeric, e.g. `172409538`)
-- Fetch a manifest by its **IPFS CID** (e.g. `Qmcuae4gCFFJ9Nkyyz7AyxATW1jSK63EvbtgzzXBWxt4gg`)
+- Fetch a manifest by its **IPFS CID** (e.g. `bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri`)
 - Walk the **manifest version chain** (backward-linked IPFS history)
 - Count or list **child worlds** embedded in a manifest
 - Understand the **fractal manifest structure**

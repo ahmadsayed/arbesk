@@ -76,9 +76,9 @@ Each buffer and image is stored as an individual IPFS blob and referenced by CID
 
 ```
 Composite glTF JSON (stored as CID_A)
-├── buffers[0].uri = "ipfs://QmBuf0Cid..."    ← binary .bin stored separately
-├── images[0].uri  = "ipfs://QmImg0Cid..."    ← PNG/JPG stored separately
-├── images[1].uri  = "ipfs://QmImg1Cid..."
+├── buffers[0].uri = "ipfs://bafkreibuf0cid..."  ← binary .bin stored separately
+├── images[0].uri  = "ipfs://bafybeimg0cid..."   ← PNG/JPG stored separately
+├── images[1].uri  = "ipfs://bafybeimg1cid..."
 ├── materials[0].pbrMetallicRoughness.baseColorFactor = [0.8, 0.2, 0.1, 1.0]
 ├── meshes, nodes, scenes, accessors...       ← kept inline in JSON
 ```

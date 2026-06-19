@@ -14,7 +14,7 @@
 - Frontend has **no bundler** — frontend JS may NOT `import` the `pinata` npm package. The browser write path uses `fetch` against the presigned URL directly. The `pinata` SDK is a **backend-only** dependency.
 - Backend logs use `[TAG]` prefixes — reuse `[IPFS]`, `[UNPIN]`; add `[STORAGE]` for adapter selection.
 - Secrets (`PINATA_JWT`) are server-side only and never returned to the browser. Gitignore all `.env*`.
-- CIDs are **CIDv1 (`bafy…`)** in Pinata mode — no `cidVersion: 0` override. Backward compatibility with existing `Qm…` CIDs is explicitly not a goal.
+- CIDs are **CIDv1 (`baf…`)** in Pinata mode (e.g. `bafy…` for dag-pb, `bafkrei…` for raw JSON) — no `cidVersion: 0` override. Backward compatibility with existing `Qm…` CIDs is explicitly not a goal.
 - Rate limit on uploads: **max 5 per 60_000 ms**, keyed on the SIWE wallet (`res.locals.userAddress`).
 - Test commands:
   - Backend/API: `NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest <path> --runInBand`
@@ -1123,7 +1123,7 @@ git commit -m "feat(frontend): resolve IPFS read gateway from /config (#27)"
 
 **Interfaces:**
 - Consumes: `normalizeTokenURI` from `uri-utils.js`.
-- Produces: confidence that `bafy…` CIDs round-trip through normalization.
+- Produces: confidence that CIDv1 (`baf…`) CIDs round-trip through normalization.
 
 - [ ] **Step 1: Write the failing/again-green test**
 
@@ -1219,7 +1219,7 @@ test.describe("Pinata storage (real network)", () => {
     // 3. Capture the resulting asset manifest CID from the UI/selectors.
 
     const manifestCid = await /* read the saved manifest CID via selectors */ "";
-    expect(manifestCid).toMatch(/^bafy/); // CIDv1
+    expect(manifestCid).toMatch(/^baf[a-z0-9]{50,}$/); // CIDv1
 
     // 4. Resolve it back through the Pinata gateway.
     const gw = `https://${process.env.PINATA_GATEWAY}/ipfs/${manifestCid}`;

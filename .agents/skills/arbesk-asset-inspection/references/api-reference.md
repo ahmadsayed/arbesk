@@ -26,12 +26,12 @@ curl -s http://127.0.0.1:9090/api/v1/tokens/172409538/manifest
 ```json
 {
   "tokenId": "172409538",
-  "manifestCid": "Qmcuae4gCFFJ9Nkyyz7AyxATW1jSK63EvbtgzzXBWxt4gg",
+  "manifestCid": "bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri",
   "manifest": {
     "asset_id": "asset_1780583355628",
     "version": 3,
     "timestamp": 1780583355628,
-    "prev_asset_manifest_cid": "QmPczH3uYPZqvwRjNDRdF2wyRBCYAuJoqHzvVHDPqGkFPq",
+    "prev_asset_manifest_cid": "bafkrei6fbquzn4igq3usxqjtanbio4q6lbhxoiwvdktpi54s3tuole5bq",
     "scene": { "nodes": [...] },
     "name": "Untitled Asset",
     "thumbnail": { ... }
@@ -54,7 +54,7 @@ GET /api/v1/manifests/:cid/history
 Walks `prev_asset_manifest_cid` links backward up to 50 entries deep. Returns all versions, oldest first:
 
 ```bash
-curl -s http://127.0.0.1:9090/api/v1/manifests/Qmcuae4gCFFJ9Nkyyz7AyxATW1jSK63EvbtgzzXBWxt4gg/history
+curl -s http://127.0.0.1:9090/api/v1/manifests/bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri/history
 ```
 
 Returns:
@@ -62,9 +62,9 @@ Returns:
 ```json
 {
   "chain": [
-    { "cid": "QmAbc...", "version": 1, "name": "...", "nodeCount": 1, "timestamp": 1780000000 },
-    { "cid": "QmDef...", "version": 2, "name": "...", "nodeCount": 1, "timestamp": 1780100000 },
-    { "cid": "QmGhi...", "version": 3, "name": "...", "nodeCount": 1, "timestamp": 1780583355628 }
+    { "cid": "bafkreia7kc...", "version": 1, "name": "...", "nodeCount": 1, "timestamp": 1780000000 },
+    { "cid": "bafkreib8ld...", "version": 2, "name": "...", "nodeCount": 1, "timestamp": 1780100000 },
+    { "cid": "bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri", "version": 3, "name": "...", "nodeCount": 1, "timestamp": 1780583355628 }
   ]
 }
 ```
@@ -74,6 +74,6 @@ Returns:
 In a Node.js context (tests or scripts), the API exposes `_getFromIPFS(cid)`:
 
 ```js
-const raw = await api._getFromIPFS("Qmcuae4gCFFJ9Nkyyz7AyxATW1jSK63EvbtgzzXBWxt4gg");
+const raw = await api._getFromIPFS("bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri");
 const manifest = JSON.parse(raw);
 ```

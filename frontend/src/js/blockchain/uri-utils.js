@@ -8,11 +8,11 @@
 /**
  * Normalize a tokenURI response to a plain CID string.
  * Handles:
- *   - Plain CID: "QmABC123..."
- *   - ipfs:// URI: "ipfs://QmABC123..."
- *   - ipfs:// with path: "ipfs://QmABC123/path/to/manifest.json"
- *   - HTTP gateway URL: "http://127.0.0.1:8080/ipfs/QmABC123..."
- *   - Full URL: "https://ipfs.io/ipfs/QmABC123..."
+ *   - Plain CID: "bafkreiABC123..."
+ *   - ipfs:// URI: "ipfs://bafkreiABC123..."
+ *   - ipfs:// with path: "ipfs://bafkreiABC123/path/to/manifest.json"
+ *   - HTTP gateway URL: "http://127.0.0.1:8080/ipfs/bafkreiABC123..."
+ *   - Full URL: "https://ipfs.io/ipfs/bafkreiABC123..."
  *
  * @param {string} uri
  * @returns {string} Plain CID

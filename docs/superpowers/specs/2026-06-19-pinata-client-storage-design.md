@@ -26,7 +26,7 @@ backend. It is the gating infra dependency for any external pilot, and lands
 | # | Decision | Choice |
 |---|----------|--------|
 | 1 | Write scope | **All storage via Pinata** — frontend writes, backend `generate-node` writes, unpin-on-burn. Kubo retained **only** for the E2E automated suite. |
-| 2 | CID version | **CIDv1 (`bafy…`)** — greenfield; backward compatibility with existing `Qm…` CIDs is explicitly **not** a goal. |
+| 2 | CID version | **CIDv1 (`baf…`)** — greenfield; backward compatibility with existing `Qm…` CIDs is explicitly **not** a goal. |
 | 3 | Local dev / E2E | Local dev **web UI** uses Pinata. The **automated E2E suite** keeps using the local Kubo node. Selected by an `IPFS_BACKEND` env switch. |
 | 4 | Client credentials | **Pinata v3 presigned upload URLs** (`pinata.upload.public.createSignedURL`). Free-plan compatible; master JWT never reaches the browser. |
 | 5 | Rate limit | **5 uploads / 60s**, keyed on the **SIWE wallet address** (session `userAddress`), not IP. |
@@ -58,7 +58,7 @@ embed these CIDs and must resolve through a normal IPFS gateway.
 
 ### 3.3 CID version
 
-Pinata v3 public uploads return **CIDv1 (`bafy…`)** by default. No
+Pinata v3 public uploads return **CIDv1 (`baf…`)** by default (e.g. `bafy…` for dag-pb, `bafkrei…` for raw JSON). No
 `cidVersion: 0` override. New assets are CIDv1 end-to-end.
 
 ## 4. Backend changes
@@ -106,7 +106,7 @@ Pinata v3 public uploads return **CIDv1 (`bafy…`)** by default. No
 
 ### 5.3 CID normalization
 - Verify `frontend/src/js/blockchain/uri-utils.js` (`normalizeTokenURI`) and
-  `token-resolver.js` accept `bafy…`. The existing `[A-Za-z0-9]{46,}` regex
+  `token-resolver.js` accept CIDv1 (`baf…`). The existing `[A-Za-z0-9]{46,}` regex
   matches CIDv1 by length; add a regression test for a CIDv1 round-trip through
   `normalizeTokenURI`.
 
@@ -155,7 +155,7 @@ rewrites expected.
 ### 8.4 E2E — new Pinata spec (`e2e/specs/07-pinata-storage.spec.js`)
 Runs with `IPFS_BACKEND=pinata` against **real Pinata**. The only spec that
 touches the network/third party.
-- Generate/save an asset; assert a `bafy…` **CIDv1** is returned.
+- Generate/save an asset; assert a `baf…` **CIDv1** is returned.
 - Fetch the CID back through the Pinata dedicated gateway and validate the
   manifest.
 - Assert the network log carries only a **signed URL**, never the master JWT.

@@ -396,7 +396,7 @@ export default () => {
    * source asset CIDs (from every history entry), and thumbnail CIDs,
    * then unpins them all so they become eligible for garbage collection.
    *
-   * Body: { cid: "Qm..." }
+   * Body: { cid: "baf..." }
    */
   v1.post("/ipfs/unpin", async (req, res) => {
     const startTime = Date.now();

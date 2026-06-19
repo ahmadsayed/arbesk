@@ -186,7 +186,7 @@ for (uint256 i = 0; i < members[tokenId].length; i++) {
 
 ### How It Is Addressed
 
-1. **IPFS CIDs are ~46 characters** (`Qm...` or `bafy...`), far below any reasonable limit.
+1. **IPFS CIDs are CIDv1 (`baf...`) ~62 characters by default** (~46 characters for legacy CIDv0 `Qm...`), far below any reasonable limit.
 2. **The `MAX_TOKENS_PER_EDITOR` cap** limits how many URIs one wallet can store.
 3. **Gas cost** on most EVM chains makes storing very large strings economically unattractive.
 
