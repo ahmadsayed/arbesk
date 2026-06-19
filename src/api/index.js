@@ -147,11 +147,12 @@ export default () => {
   // ─── Config ───────────────────────────────────────────────────────────────
 
   v1.get("/config", (req, res) => {
+    const storage = getStorage();
     res.json({
       contractAddress: CONTRACT_ADDRESS,
       networkConfigs: NETWORK_CONFIGS,
-      ipfsGatewayUrl:
-        process.env.IPFS_GATEWAY_URL || "http://127.0.0.1:8080/ipfs/",
+      ipfsBackend: storage.backend,
+      ipfsGatewayUrl: storage.gatewayBase(),
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
       walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,

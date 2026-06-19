@@ -1179,4 +1179,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.contractAddress).toBe("0xArbeskContractAddress");
     });
   });
+
+  describe("GET /api/v1/config storage fields", () => {
+    it("reports the ipfs backend and gateway", async () => {
+      const res = await request(app).get("/api/v1/config");
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("ipfsBackend");
+      expect(res.body).toHaveProperty("ipfsGatewayUrl");
+      expect(res.body.ipfsGatewayUrl).toMatch(/\/ipfs\/$/);
+    });
+  });
 });
