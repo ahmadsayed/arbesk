@@ -8,12 +8,13 @@
  *   - source color baking (per-node material color mutation)
  *
  * This worker is intentionally self-contained: it does NOT import project
- * modules that rely on the DOM, session state, or import maps. The only
- * external dependency is @gltf-transform/core, loaded directly from the
- * same pinned CDN URL used in studio.pug.
+ * modules that rely on the DOM, session state, or import maps. Web Workers
+ * don't inherit the page's import map, so @gltf-transform/core is loaded
+ * from the same vendored bundle the main thread's import map points at
+ * (see frontend/src/js/vendor/README.md) via a relative path instead.
  */
 
-import { WebIO, GLB_BUFFER } from "https://esm.sh/@gltf-transform/core@4.1.2?bundle";
+import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";

@@ -397,7 +397,63 @@ describe("Deployment Pipeline Integrity", () => {
   });
 
   // ================================================================
-  // 6. On-chain contract verification
+  // 6. glTF-transform vendoring (worker vs. main-thread alignment)
+  //
+  // The glTF Web Worker can't see the page's import map (Web Workers don't
+  // inherit it), so it has always needed its own hardcoded module source.
+  // Both paths must resolve to the same vendored bundle so they can never
+  // drift to different @gltf-transform/core builds.
+  // ================================================================
+
+  describe("gltf-transform vendoring", () => {
+    const VENDOR_PATH = resolve(
+      ROOT_DIR,
+      "frontend/src/js/vendor/gltf-transform-core-4.1.2.js",
+    );
+    const NODE_BUFFER_POLYFILL_PATH = resolve(
+      ROOT_DIR,
+      "frontend/src/js/vendor/node-buffer-polyfill.js",
+    );
+    const WORKER_PATH = resolve(
+      ROOT_DIR,
+      "frontend/src/js/workers/gltf-worker.js",
+    );
+    const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/studio.pug");
+
+    test("vendored gltf-transform-core bundle exists", () => {
+      expect(existsSync(VENDOR_PATH)).toBe(true);
+    });
+
+    test("vendored node buffer polyfill exists", () => {
+      expect(existsSync(NODE_BUFFER_POLYFILL_PATH)).toBe(true);
+    });
+
+    test("worker imports gltf-transform-core from the vendored file, not esm.sh", () => {
+      const content = readFileSync(WORKER_PATH, "utf-8");
+      expect(content).toContain(
+        'from "../vendor/gltf-transform-core-4.1.2.js"',
+      );
+      expect(content).not.toContain("esm.sh/@gltf-transform/core");
+    });
+
+    test("studio.pug import map points @gltf-transform/core at the vendored file", () => {
+      const content = readFileSync(STUDIO_PUG_PATH, "utf-8");
+      expect(content).toContain(
+        '"@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js"',
+      );
+      expect(content).not.toContain("esm.sh/@gltf-transform/core");
+    });
+
+    test("frontend package.json @gltf-transform/core version matches the vendored bundle", () => {
+      const pkg = JSON.parse(
+        readFileSync(resolve(ROOT_DIR, "frontend/package.json"), "utf-8"),
+      );
+      expect(pkg.dependencies["@gltf-transform/core"]).toContain("4.1.2");
+    });
+  });
+
+  // ================================================================
+  // 7. On-chain contract verification
   // ================================================================
 
   describe("on-chain contract integrity", () => {
