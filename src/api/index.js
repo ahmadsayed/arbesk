@@ -371,7 +371,10 @@ export default () => {
   v1.post(
     "/ipfs/upload-url",
     authenticate,
-    rateLimit({ max: 5, windowMs: 60 * 1000 }),
+    rateLimit({
+      max: Number(process.env.UPLOAD_URL_RATE_LIMIT_MAX || 20),
+      windowMs: 60 * 1000,
+    }),
     async (req, res) => {
       try {
         const credential = await getStorage().mintUploadCredential();
