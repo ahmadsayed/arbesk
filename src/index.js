@@ -47,15 +47,22 @@ app.use(logRequest);
  * console before promoting to enforcing mode.
  */
 function cspMiddleware(req, res, next) {
+  const pinataGateway = process.env.PINATA_GATEWAY;
+  const pinataConnect = pinataGateway ? ` https://${pinataGateway}` : "";
   res.setHeader(
     "Content-Security-Policy-Report-Only",
     "default-src 'self'; " +
-      "script-src 'self' https://cdn.babylonjs.com https://cdn.jsdelivr.net https://esm.sh; " +
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.babylonjs.com https://cdn.jsdelivr.net https://esm.sh; " +
       "style-src 'self' 'unsafe-inline'; " +
-      "connect-src 'self' http://127.0.0.1:5001 http://127.0.0.1:8545 http://127.0.0.1:9090 https://*.llamarpc.com https://*.publicnode.com; " +
-      "img-src 'self' blob: data: http://127.0.0.1:8080; " +
+      "connect-src 'self' http://127.0.0.1:5001 http://127.0.0.1:8545 http://127.0.0.1:9090 ws://localhost:9090 wss://localhost:9090 https://*.llamarpc.com https://*.publicnode.com" +
+      pinataConnect +
+      "; " +
+      "img-src 'self' blob: data: http://127.0.0.1:8080" +
+      pinataConnect +
+      "; " +
       "font-src 'self'; " +
       "media-src 'self'; " +
+      "worker-src 'self' blob:; " +
       "frame-src 'none'; " +
       "object-src 'none'; " +
       "base-uri 'self'; " +

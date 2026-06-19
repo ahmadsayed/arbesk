@@ -11,6 +11,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let mockWeb3Receipt;
   let logSpy;
   let createSession;
+  let _resetStorage;
 
   beforeAll(async () => {
     // Suppress noisy production logs/warnings during API tests.
@@ -153,6 +154,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     process.env.MOCK_3D_GENERATION = "true";
     process.env.GENERATION_RATE_LIMIT_MAX = "10";
+    process.env.UPLOAD_URL_RATE_LIMIT_MAX = "5";
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
 
     const sessions = await import("../src/api/sessions.js");
@@ -160,6 +162,18 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     const { app: importedApp } = await import("../src/index.js");
     app = importedApp;
+
+    // Import after mocking ipfs-http-client so the storage adapter factory
+    // resolves the mock instead of the real ESM-only client under Jest.
+    const storageMod = await import("../src/api/storage/index.js");
+    _resetStorage = storageMod._resetStorage;
+  });
+
+  beforeEach(() => {
+    // Storage adapter is a singleton selected by IPFS_BACKEND; reset it
+    // between tests so Pinata/Kubo backend changes take effect cleanly.
+    _resetStorage();
+    _resetRateLimiter();
   });
 
   afterAll(() => {
@@ -167,6 +181,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     jest.restoreAllMocks();
     delete process.env.CONTRACT_ADDRESS;
     delete process.env.GENERATION_RATE_LIMIT_MAX;
+    delete process.env.UPLOAD_URL_RATE_LIMIT_MAX;
   });
 
   async function makeSessionHeader(address = "0x1234567890123456789012345678901234567890") {

@@ -36,4 +36,4 @@ restricted_writes = false
 
 [authorization]
 # Open relay for local development. Restrict pubkeys here if you need ACLs.
-pubkey_whitelist = []
+pubkey_whitelist = ["45ffa785bc3034c40e39d63fa4a37ab3c46de21a6c053963526a3f813d837c43"]

@@ -38,14 +38,14 @@ const KIND_CHAT = 1;
 const TAG_ASSET = "asset";
 const TAG_SENDER = "sender";
 const MAX_CONTENT_LENGTH = 2000;
-const MAX_MSG_PER_MINUTE = 30;
-const WALLET_COOLDOWN_MS = 60_000; // one message per wallet per minute
+const MAX_MSG_PER_MINUTE = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 const RELAY_RECONNECT_DELAY_MS = 2000;
 const CLIENT_PING_INTERVAL_MS = 30000;
 const CLIENT_PONG_TIMEOUT_MS = 10000;
 
-// Global wallet-level cooldown map: address -> last message timestamp
-const walletLastMessage = new Map();
+// Global wallet-level sliding window: address -> [timestamps within window]
+const walletMessageTimestamps = new Map();
 
 const MINIMAL_COLLAB_ABI = [
   {
@@ -402,16 +402,13 @@ function createSessionState(address, assetId, clientWs) {
     allowMessage() {
       const now = Date.now();
 
-      // Global wallet cooldown: one message per wallet per minute.
-      const last = walletLastMessage.get(address);
-      if (last && now - last < WALLET_COOLDOWN_MS) return false;
+      // Sliding window: up to MAX_MSG_PER_MINUTE messages per wallet per minute.
+      let timestamps = walletMessageTimestamps.get(address) || [];
+      timestamps = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+      if (timestamps.length >= MAX_MSG_PER_MINUTE) return false;
 
-      // Per-connection burst defense in depth.
-      state.messages = state.messages.filter((t) => now - t < 60_000);
-      if (state.messages.length >= MAX_MSG_PER_MINUTE) return false;
-
-      walletLastMessage.set(address, now);
-      state.messages.push(now);
+      timestamps.push(now);
+      walletMessageTimestamps.set(address, timestamps);
       return true;
     },
     dispose() {

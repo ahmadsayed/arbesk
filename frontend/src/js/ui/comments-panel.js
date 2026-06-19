@@ -11,6 +11,7 @@ import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { truncateAddress } from "../utils/format.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { clearSession, createSession } from "../services/api.js";
 
 const SESSION_STORAGE_KEY = "arbesk_session";
 
@@ -33,6 +34,8 @@ function getCachedSession() {
     return null;
   }
 }
+
+let isReauthenticating = false;
 
 const RELAY_PATH = "/api/v1/chat/ws";
 const RECONNECT_DELAY_MS = 3000;
@@ -160,10 +163,29 @@ function connect() {
     handleMessage(msg);
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     ws = null;
     isConnecting = false;
     updateUI();
+
+    // 4401 = invalid session (server restarted, in-memory store cleared, etc.)
+    if (event.code === 4401 && !isReauthenticating) {
+      isReauthenticating = true;
+      console.log("[COMMENTS] session rejected by proxy — re-authenticating…");
+      clearSession();
+      createSession()
+        .then(() => {
+          isReauthenticating = false;
+          connect();
+        })
+        .catch((err) => {
+          isReauthenticating = false;
+          console.warn("[COMMENTS] re-auth failed:", err.message);
+          scheduleReconnect();
+        });
+      return;
+    }
+
     scheduleReconnect();
   };
 
@@ -356,6 +378,7 @@ function renderEvent(event, { fromArchive = false } = {}) {
   elements.list?.appendChild(li);
   elements.list?.scrollTo({ top: elements.list.scrollHeight, behavior: "smooth" });
   updateCount();
+  updateUI();
   if (!fromArchive) {
     announce("New comment posted");
   }
