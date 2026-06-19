@@ -24,6 +24,8 @@ export const EVENTS = {
   ASSET_OPEN_BY_TOKEN_ID:     "asset:openByTokenId",
   ASSET_PUBLISHED:            "asset:published",
   ASSET_STATE_CHANGED:        "asset:stateChanged",
+  COMMENT_THREAD_CHANGE:      "commentThread:change",
+  COMMENT_THREAD_STATUS:      "commentThread:status",
   NESTING_DID_ASCEND:         "nesting:didAscend",
   NESTING_DID_DIVE:           "nesting:didDive",
   NESTING_DIVE_REQUESTED:     "nesting:diveRequested",

@@ -1,34 +1,20 @@
 /**
  * Arbesk Comments Panel
  *
- * Powers the right-inspector Comments section using the backend Nostr chat proxy.
- * Each published asset gets its own comment thread; only the owner and
- * collaborators with role >= Viewer may read or post.
+ * Thin view layer for the right-inspector Comments section. All transport,
+ * deduplication, and ordering live in {@link CommentThread};
+ * this module only renders what the thread emits.
  */
 
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import { CommentThread } from "../state/comment-thread.js";
 import { truncateAddress } from "../utils/format.js";
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { clearSession, createSession, getCachedSession } from "../services/api.js";
-
-let isReauthenticating = false;
-
-const RELAY_PATH = "/api/v1/chat/ws";
-const RECONNECT_DELAY_MS = 3000;
-const MAX_RECONNECT_ATTEMPTS = 5;
+import { getCachedSession } from "../services/api.js";
 
 const elements = {};
-let ws = null;
-let reconnectTimer = null;
-let reconnectAttempts = 0;
-let isConnecting = false;
-let currentTokenId = null;
-let currentChainId = null;
-let currentAddress = null;
-let currentArchiveCid = null;
-let knownEventIds = new Set();
+const thread = new CommentThread();
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +22,7 @@ export function initCommentsPanel() {
   cacheElements();
   bindEvents();
   bindDomEvents();
+  bindThreadEvents();
   updateUI();
 }
 
@@ -66,182 +53,46 @@ function bindDomEvents() {
   elements.input?.addEventListener("keydown", onComposerKeydown);
 }
 
+function bindThreadEvents() {
+  on(EVENTS.COMMENT_THREAD_CHANGE, onThreadChange);
+  on(EVENTS.COMMENT_THREAD_STATUS, onThreadStatus);
+}
+
 // ─── State Changes ──────────────────────────────────────────────────────────
 
 async function onAssetContextChanged(e) {
   const tokenId = assetState.get().activeAssetTokenId;
   const chainId = walletState.get().chainId;
-
-  const contextChanged = tokenId !== currentTokenId || chainId !== currentChainId;
-  if (contextChanged) {
-    disconnect();
-    clearComments();
-    currentTokenId = tokenId;
-    currentChainId = chainId;
-  }
-
-  // Always reload the archive: the manifest may have been republished even when
-  // the token/chain context is unchanged. loadArchiveForCurrentManifest no-ops
-  // when the archive CID hasn't changed.
-  await loadArchiveForCurrentManifest(e?.manifest);
-
-  if (contextChanged) {
-    updateUI();
-    tryConnect();
-  }
+  await thread.setContext({ tokenId, chainId, manifest: e?.manifest });
 }
 
 function onAuthChanged() {
-  currentAddress = walletState.get().walletAddress;
   updateUI();
-  tryConnect();
+  thread.connect();
 }
 
-function tryConnect() {
-  if (currentTokenId && currentAddress && getCachedSession()) {
-    connect();
+function onThreadChange({ source }) {
+  renderAll();
+  updateUI();
+  if (source === "live") {
+    announce("New comment posted");
   }
 }
 
-// ─── WebSocket Lifecycle ────────────────────────────────────────────────────
-
-function connect() {
-  if (ws || isConnecting || !currentTokenId || !currentAddress) return;
-
-  const session = getCachedSession();
-  if (!session) return;
-
-  isConnecting = true;
-  reconnectAttempts = 0;
-
-  const token = encodeURIComponent(session.token);
-  const tokenId = encodeURIComponent(currentTokenId);
-  const chainId = currentChainId ? encodeURIComponent(currentChainId) : "";
-  const url = `${getWsBase()}${RELAY_PATH}?token=${token}&tokenId=${tokenId}&chainId=${chainId}`;
-
-  try {
-    ws = new WebSocket(url);
-  } catch (err) {
-    console.error("[COMMENTS] WebSocket creation failed:", err);
-    isConnecting = false;
-    scheduleReconnect();
-    return;
-  }
-
-  ws.onopen = () => {
-    isConnecting = false;
-    reconnectAttempts = 0;
-    console.log("[COMMENTS] connected");
-    updateUI();
-  };
-
-  ws.onmessage = (event) => {
-    let msg;
-    try {
-      msg = JSON.parse(event.data);
-    } catch {
-      return;
-    }
-    handleMessage(msg);
-  };
-
-  ws.onclose = (event) => {
-    ws = null;
-    isConnecting = false;
-    updateUI();
-
-    // 4401 = invalid session (server restarted, in-memory store cleared, etc.)
-    if (event.code === 4401 && !isReauthenticating) {
-      isReauthenticating = true;
-      console.log("[COMMENTS] session rejected by proxy — re-authenticating…");
-      clearSession();
-      createSession()
-        .then(() => {
-          isReauthenticating = false;
-          connect();
-        })
-        .catch((err) => {
-          isReauthenticating = false;
-          console.warn("[COMMENTS] re-auth failed:", err.message);
-          scheduleReconnect();
-        });
-      return;
-    }
-
-    scheduleReconnect();
-  };
-
-  ws.onerror = (err) => {
-    console.warn("[COMMENTS] WebSocket error:", err);
-    isConnecting = false;
-  };
+function onThreadStatus({ error } = {}) {
+  updateUI();
+  if (error) showError(error);
 }
 
-function disconnect() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  if (ws) {
-    const s = ws;
-    ws = null;
-    try {
-      s.close(1000, "Panel closed");
-    } catch {
-      // ignore
-    }
-  }
-  isConnecting = false;
-}
-
-function scheduleReconnect() {
-  if (reconnectTimer || !currentTokenId || !currentAddress) return;
-  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    console.warn("[COMMENTS] max reconnect attempts reached");
-    return;
-  }
-  reconnectAttempts++;
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connect();
-  }, RECONNECT_DELAY_MS);
-}
-
-function getWsBase() {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}`;
-}
-
-// ─── Message Handling ───────────────────────────────────────────────────────
-
-function handleMessage(msg) {
-  switch (msg.type) {
-    case "ready":
-      updateUI();
-      break;
-    case "event":
-      renderEvent(msg.event);
-      break;
-    case "error":
-      showError(msg.message);
-      break;
-    case "eose":
-      // Historical backlog finished loading
-      break;
-    default:
-      break;
-  }
-}
+// ─── Composer ───────────────────────────────────────────────────────────────
 
 function onPostComment() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
   const text = elements.input?.value?.trim();
   if (!text) return;
-
-  ws.send(JSON.stringify({ type: "chat", content: text }));
-  elements.input.value = "";
-  elements.input.focus();
+  if (thread.post(text)) {
+    elements.input.value = "";
+    elements.input.focus();
+  }
 }
 
 function onComposerKeydown(e) {
@@ -253,63 +104,22 @@ function onComposerKeydown(e) {
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
-function clearComments() {
-  if (elements.list) elements.list.innerHTML = "";
-  knownEventIds.clear();
-  currentArchiveCid = null;
+function renderAll() {
+  if (!elements.list) return;
+  elements.list.innerHTML = "";
+  for (const event of thread.events) {
+    elements.list.appendChild(renderEvent(event));
+  }
   updateCount();
+  scrollToBottom();
 }
 
-async function loadArchiveForCurrentManifest(manifest) {
-  let archiveCid = manifest?.comments_archive_cid;
-
-  // If no manifest was passed in the event, try to fetch the currently loaded
-  // manifest from IPFS so we can read its comments_archive_cid.
-  if (!archiveCid && currentTokenId) {
-    const activeCid = assetState.get().activeAssetManifestCid;
-    const cachedManifest = assetState.get().currentManifest;
-    if (cachedManifest?.comments_archive_cid) {
-      archiveCid = cachedManifest.comments_archive_cid;
-    } else if (activeCid) {
-      try {
-        const fetched = await getFromRemoteIPFS(activeCid);
-        archiveCid = fetched?.comments_archive_cid;
-      } catch (err) {
-        console.warn("[COMMENTS] failed to fetch manifest for archive CID:", err.message);
-      }
-    }
-  }
-
-  if (!archiveCid || archiveCid === currentArchiveCid) return;
-
-  const tokenIdWhenStarted = currentTokenId;
-  try {
-    const archive = await getFromRemoteIPFS(archiveCid);
-    // Drop stale results if the user switched assets while the archive was loading.
-    if (currentTokenId !== tokenIdWhenStarted) return;
-    currentArchiveCid = archiveCid;
-    const events = Array.isArray(archive?.events) ? archive.events : [];
-    // Render oldest first so the thread reads top-to-bottom.
-    const sorted = [...events].sort(
-      (a, b) => (a.created_at || 0) - (b.created_at || 0)
-    );
-    for (const event of sorted) {
-      renderEvent(event, { fromArchive: true });
-    }
-    console.log(`[COMMENTS] loaded ${sorted.length} archived event(s) from ${archiveCid}`);
-  } catch (err) {
-    console.warn(`[COMMENTS] failed to load archive ${archiveCid}:`, err.message);
-  }
-}
-
-function renderEvent(event, { fromArchive = false } = {}) {
-  if (!event?.id || knownEventIds.has(event.id)) return;
-  knownEventIds.add(event.id);
-
+function renderEvent(event) {
   const senderTag = (event.tags || []).find(
     (t) => Array.isArray(t) && t[0] === "sender"
   );
   const sender = senderTag?.[1] || "unknown";
+  const currentAddress = walletState.get().walletAddress;
   const isMe =
     currentAddress && sender.toLowerCase() === currentAddress.toLowerCase();
   const contentText = event.content || "";
@@ -355,13 +165,7 @@ function renderEvent(event, { fromArchive = false } = {}) {
   li.appendChild(avatar);
   li.appendChild(body);
 
-  elements.list?.appendChild(li);
-  elements.list?.scrollTo({ top: elements.list.scrollHeight, behavior: "smooth" });
-  updateCount();
-  updateUI();
-  if (!fromArchive) {
-    announce("New comment posted");
-  }
+  return li;
 }
 
 function renderMentions(html) {
@@ -379,15 +183,18 @@ function escapeHtml(text) {
 }
 
 function updateCount() {
-  const count = knownEventIds.size;
-  if (elements.count) elements.count.textContent = String(count);
+  if (elements.count) elements.count.textContent = String(thread.events.length);
+}
+
+function scrollToBottom() {
+  elements.list?.scrollTo({ top: elements.list.scrollHeight, behavior: "smooth" });
 }
 
 function updateUI() {
-  const hasToken = !!currentTokenId;
-  const isConnected = !!currentAddress;
+  const hasToken = !!thread.status.tokenId;
+  const isConnected = !!walletState.get().walletAddress;
   const hasSession = !!getCachedSession();
-  const wsOpen = ws?.readyState === WebSocket.OPEN;
+  const wsOpen = thread.status.connected;
 
   // Show section only when an asset is open
   if (elements.section) elements.section.hidden = !hasToken;
@@ -402,7 +209,7 @@ function updateUI() {
     setEmptyState("Connect wallet", "Connect your wallet to view comments.");
   } else if (!hasSession) {
     setEmptyState("Sign in", "Sign in with your wallet to view comments.");
-  } else if (knownEventIds.size === 0) {
+  } else if (thread.events.length === 0) {
     setEmptyState("No comments yet", "Mention an editor to request a change or review.");
   } else if (elements.empty) {
     elements.empty.hidden = true;
@@ -423,6 +230,15 @@ function setEmptyState(title, sub) {
   elements.empty.hidden = false;
 }
 
+function announce(text) {
+  if (elements.live) {
+    elements.live.textContent = "";
+    requestAnimationFrame(() => {
+      elements.live.textContent = text;
+    });
+  }
+}
+
 function showError(message) {
   console.warn("[COMMENTS] server error:", message);
   // Surface short errors via the empty-state subtitle for v1.
@@ -430,15 +246,6 @@ function showError(message) {
     const emptySub = elements.empty.querySelector(".comments-empty-sub");
     if (emptySub) emptySub.textContent = message;
     elements.empty.hidden = false;
-  }
-}
-
-function announce(text) {
-  if (elements.live) {
-    elements.live.textContent = "";
-    requestAnimationFrame(() => {
-      elements.live.textContent = text;
-    });
   }
 }
 
