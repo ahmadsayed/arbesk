@@ -18,12 +18,11 @@
  * remains a stock nostr-rs-relay instance; scoping is enforced by the proxy.
  */
 
-import { WebSocketServer, WebSocket } from "ws";
-import { schnorr } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha256";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { WebSocketServer } from "ws";
+import { finalizeEvent, getPublicKey, utils } from "nostr-tools";
 import url from "url";
 import { validateSession } from "./sessions.js";
+import { KIND_CHAT, TAG_ASSET, createRelay, safeClose } from "./nostr-relay.js";
 import {
   getWeb3,
   getContractAddress,
@@ -31,16 +30,15 @@ import {
   NOSTR_SERVICE_PRIVATE_KEY,
 } from "../config.js";
 
+const { hexToBytes } = utils;
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const WS_PATH = "/api/v1/chat/ws";
-const KIND_CHAT = 1;
-const TAG_ASSET = "asset";
 const TAG_SENDER = "sender";
 const MAX_CONTENT_LENGTH = 2000;
 const MAX_MSG_PER_MINUTE = 10;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RELAY_RECONNECT_DELAY_MS = 2000;
 const CLIENT_PING_INTERVAL_MS = 30000;
 const CLIENT_PONG_TIMEOUT_MS = 10000;
 
@@ -82,7 +80,7 @@ function initServiceKey() {
     return false;
   }
   servicePrivkey = hexToBytes(NOSTR_SERVICE_PRIVATE_KEY);
-  servicePubkey = bytesToHex(schnorr.getPublicKey(servicePrivkey));
+  servicePubkey = getPublicKey(servicePrivkey);
   console.log(`[CHAT] service pubkey ${servicePubkey.slice(0, 16)}…`);
   return true;
 }
@@ -157,13 +155,13 @@ async function handleConnection(clientWs, req) {
   );
 
   // 3. Attach rate limiter and heartbeat
-  const session = createSessionState(address, access.assetId, clientWs);
+  const session = createSessionState(address, clientWs);
   setupClientHeartbeat(session);
 
   // 4. Bridge to relay
-  let relayWs;
+  let relay;
   try {
-    relayWs = await openRelayBridge(access.assetId, clientWs, session);
+    relay = await openRelayBridge(access.assetId, clientWs, session);
   } catch (err) {
     console.error(`[CHAT] relay bridge failed | client=${remote}:`, err.message);
     safeClose(clientWs, 4403, "Could not connect to relay");
@@ -210,14 +208,17 @@ async function handleConnection(clientWs, req) {
       }
 
       const event = buildSignedEvent(content, access.assetId, address);
-      if (relayWs.readyState === WebSocket.OPEN) {
-        relayWs.send(JSON.stringify(["EVENT", event]));
-        console.log(
-          `[CHAT] published | asset=${access.assetId} sender=${address.slice(0, 10)}… len=${content.length}`
-        );
-      } else {
-        sendClient(clientWs, { type: "error", message: "Relay not connected" });
-      }
+      relay
+        .publish(event)
+        .then(() => {
+          console.log(
+            `[CHAT] published | asset=${access.assetId} sender=${address.slice(0, 10)}… len=${content.length}`
+          );
+        })
+        .catch((err) => {
+          console.warn(`[CHAT] publish rejected | asset=${access.assetId}:`, err.message);
+          sendClient(clientWs, { type: "error", message: "Relay rejected message" });
+        });
     } catch (err) {
       console.warn(`[CHAT] bad client message | client=${remote}:`, err.message);
       sendClient(clientWs, { type: "error", message: "Invalid JSON" });
@@ -229,13 +230,13 @@ async function handleConnection(clientWs, req) {
       `[CHAT] client disconnected | tokenId=${tokenId} code=${code} reason=${reason}`
     );
     session.dispose();
-    safeClose(relayWs, 1000, "Client disconnected");
+    relay.close();
   });
 
   clientWs.on("error", (err) => {
     console.error(`[CHAT] client error | client=${remote}:`, err.message);
     session.dispose();
-    safeClose(relayWs, 1011, "Client error");
+    relay.close();
   });
 }
 
@@ -284,73 +285,61 @@ function defaultChainId() {
 
 function openRelayBridge(assetId, clientWs, session) {
   return new Promise((resolve, reject) => {
-    const relayWs = new WebSocket(NOSTR_RELAY_URL);
-    const subId = `asset-${assetId.slice(-16)}-${Date.now().toString(36)}`;
+    const relay = createRelay(NOSTR_RELAY_URL);
     let resolved = false;
-    let eoseReceived = false;
 
-    relayWs.on("open", () => {
-      relayWs.send(
-        JSON.stringify([
-          "REQ",
-          subId,
-          { kinds: [KIND_CHAT], [`#${TAG_ASSET}`]: [assetId], limit: 100 },
-        ])
-      );
-      if (!resolved) {
-        resolved = true;
-        resolve(relayWs);
-      }
-    });
-
-    relayWs.on("message", (raw) => {
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (!Array.isArray(msg)) return;
-        const [type, ...rest] = msg;
-
-        if (type === "EVENT" && rest[0] === subId && rest[1]) {
-          const event = rest[1];
-          // Defensive: only forward events that carry the expected asset tag.
-          if (
-            Array.isArray(event.tags) &&
-            event.tags.some(
-              (t) => Array.isArray(t) && t[0] === TAG_ASSET && t[1] === assetId
-            )
-          ) {
-            sendClient(clientWs, { type: "event", event });
-          }
-        } else if (type === "EOSE" && rest[0] === subId && !eoseReceived) {
-          eoseReceived = true;
-          sendClient(clientWs, { type: "eose", assetId });
-        } else if (type === "NOTICE") {
-          sendClient(clientWs, { type: "relayNotice", message: rest[0] });
-        }
-      } catch (err) {
-        console.warn("[CHAT] relay message parse error:", err.message);
-      }
-    });
-
-    relayWs.on("error", (err) => {
-      console.error("[CHAT] relay error:", err.message);
-      if (!resolved) {
-        resolved = true;
-        reject(err);
-      }
-      safeClose(clientWs, 1011, "Relay error");
-    });
-
-    relayWs.on("close", (code) => {
-      console.log(`[CHAT] relay closed | code=${code}`);
+    relay.onclose = () => {
+      console.log("[CHAT] relay closed");
       session.dispose();
       safeClose(clientWs, 1011, "Relay connection closed");
-    });
+    };
 
-    // Timeout if not opened quickly
+    relay
+      .connect()
+      .then(() => {
+        relay.subscribe(
+          [{ kinds: [KIND_CHAT], [`#${TAG_ASSET}`]: [assetId], limit: 100 }],
+          {
+            onevent(event) {
+              // Defensive: only forward events that carry the expected asset tag.
+              if (
+                Array.isArray(event.tags) &&
+                event.tags.some(
+                  (t) => Array.isArray(t) && t[0] === TAG_ASSET && t[1] === assetId
+                )
+              ) {
+                sendClient(clientWs, { type: "event", event });
+              }
+            },
+            oneose() {
+              sendClient(clientWs, { type: "eose", assetId });
+            },
+            onnotice(message) {
+              sendClient(clientWs, { type: "relayNotice", message });
+            },
+            eoseTimeout: 10000,
+          }
+        );
+
+        if (!resolved) {
+          resolved = true;
+          resolve(relay);
+        }
+      })
+      .catch((err) => {
+        console.error("[CHAT] relay error:", err.message || err);
+        if (!resolved) {
+          resolved = true;
+          reject(err);
+        }
+        safeClose(clientWs, 1011, "Relay error");
+      });
+
+    // Timeout if connect() does not resolve quickly.
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        relayWs.terminate();
+        relay.close();
         reject(new Error("Relay connection timeout"));
       }
     }, 10000);
@@ -360,45 +349,25 @@ function openRelayBridge(assetId, clientWs, session) {
 // ─── Nostr Event Building ───────────────────────────────────────────────────
 
 function buildSignedEvent(content, assetId, senderAddress) {
-  const createdAt = Math.floor(Date.now() / 1000);
-  const event = {
+  const eventTemplate = {
     kind: KIND_CHAT,
-    created_at: createdAt,
+    created_at: Math.floor(Date.now() / 1000),
     content,
     tags: [
       [TAG_ASSET, assetId],
       [TAG_SENDER, senderAddress.toLowerCase()],
     ],
-    pubkey: servicePubkey,
   };
 
-  const id = bytesToHex(
-    sha256(new TextEncoder().encode(serializeEvent(event)))
-  );
-  const sig = bytesToHex(schnorr.sign(hexToBytes(id), servicePrivkey));
-
-  return { ...event, id, sig };
-}
-
-function serializeEvent(event) {
-  return JSON.stringify([
-    0,
-    event.pubkey,
-    event.created_at,
-    event.kind,
-    event.tags,
-    event.content,
-  ]);
+  return finalizeEvent(eventTemplate, servicePrivkey);
 }
 
 // ─── Session State ──────────────────────────────────────────────────────────
 
-function createSessionState(address, assetId, clientWs) {
+function createSessionState(address, clientWs) {
   const state = {
     address,
-    assetId,
     clientWs,
-    messages: [],
     allowMessage() {
       const now = Date.now();
 
@@ -451,20 +420,3 @@ function sendClient(ws, payload) {
   }
 }
 
-function safeClose(ws, code, reason) {
-  if (!ws) return;
-  if (
-    ws.readyState === WebSocket.OPEN ||
-    ws.readyState === WebSocket.CONNECTING
-  ) {
-    try {
-      ws.close(code, reason);
-    } catch {
-      try {
-        ws.terminate();
-      } catch {
-        // ignore
-      }
-    }
-  }
-}

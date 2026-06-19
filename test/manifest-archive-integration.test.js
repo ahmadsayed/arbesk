@@ -41,30 +41,25 @@ describe("Manifest comments archive integration", () => {
     jest.unstable_mockModule("ws", () => {
       function MockWebSocket() {
         this.readyState = 0;
-        this.handlers = {};
         setTimeout(() => {
           this.readyState = 1;
-          const onopen = this.handlers.open;
-          if (onopen) onopen();
-          for (const msg of relayMessages) {
-            const onmessage = this.handlers.message;
-            const rewritten = [...msg];
-            if (actualSubId && rewritten.length > 1) rewritten[1] = actualSubId;
-            if (onmessage) onmessage({ toString: () => JSON.stringify(rewritten) });
-          }
-          this.readyState = 3;
-          const onclose = this.handlers.close;
-          if (onclose) onclose();
+          if (this.onopen) this.onopen();
         }, 0);
       }
-      MockWebSocket.prototype.on = function (event, handler) {
-        this.handlers[event] = handler;
-      };
       MockWebSocket.prototype.send = function (data) {
         try {
           const req = JSON.parse(data);
           if (Array.isArray(req) && req[0] === "REQ" && req[1]) {
             actualSubId = req[1];
+            setTimeout(() => {
+              for (const msg of relayMessages) {
+                if (this.onmessage) {
+                  const rewritten = [...msg];
+                  if (actualSubId && rewritten.length > 1) rewritten[1] = actualSubId;
+                  this.onmessage({ data: JSON.stringify(rewritten) });
+                }
+              }
+            }, 0);
           }
         } catch {
           // ignore
@@ -72,8 +67,15 @@ describe("Manifest comments archive integration", () => {
       };
       MockWebSocket.prototype.close = function () {
         this.readyState = 3;
+        if (this.onclose) this.onclose({ message: "closed by test" });
       };
       MockWebSocket.prototype.terminate = function () {};
+      MockWebSocket.prototype.ping = function () {};
+      MockWebSocket.prototype.once = function (event, handler) {
+        if (event === "pong") {
+          setTimeout(() => handler(true), 0);
+        }
+      };
       MockWebSocket.OPEN = 1;
       MockWebSocket.CONNECTING = 0;
       const MockedWebSocket = jest.fn(function () {
@@ -186,11 +188,10 @@ describe("Manifest comments archive integration", () => {
     const { WebSocket } = await import("ws");
     WebSocket.mockImplementationOnce(function () {
       this.readyState = 0;
-      this.handlers = {};
       setTimeout(() => {
-        if (this.handlers.error) this.handlers.error(new Error("relay down"));
+        if (this.onerror) this.onerror(new Error("relay down"));
         this.readyState = 3;
-        if (this.handlers.close) this.handlers.close();
+        if (this.onclose) this.onclose({ message: "relay down" });
       }, 0);
     });
 
