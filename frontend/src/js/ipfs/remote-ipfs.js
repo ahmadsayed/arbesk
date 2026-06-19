@@ -1,7 +1,7 @@
 /**
  * Arbesk Remote IPFS Reader (Gateway-Only)
  *
- * All reads go through the private Kubo gateway (127.0.0.1:8080).
+ * All reads go through the IPFS gateway reported by /api/v1/config.
  * All writes go through the backend API (POST /api/v1/generations, etc.).
  *
  * Browser caching (memory + IndexedDB) is DISABLED for development.
@@ -9,15 +9,24 @@
  * Re-enable by setting IPFS_CACHE_ENABLED = true.
  */
 
+import { getConfig } from "../services/api.js";
+
 const IPFS_CACHE_ENABLED = false; // flip to true to re-enable browser caching
 
-const GATEWAY_URL =
-  typeof process !== "undefined" && process.env && process.env.IPFS_GATEWAY_URL
-    ? process.env.IPFS_GATEWAY_URL
-    : "http://127.0.0.1:8080/ipfs/";
+const FALLBACK_GATEWAY = "http://127.0.0.1:8080/ipfs/";
+let _gatewayPromise = null;
+
+async function gatewayBase() {
+  if (!_gatewayPromise) {
+    _gatewayPromise = getConfig()
+      .then((cfg) => cfg?.ipfsGatewayUrl || FALLBACK_GATEWAY)
+      .catch(() => FALLBACK_GATEWAY);
+  }
+  return _gatewayPromise;
+}
 
 async function fetchAndCacheIpfsPayload(cid, kind) {
-  const url = `${GATEWAY_URL}${cid}`;
+  const url = `${await gatewayBase()}${cid}`;
   console.log(`[IPFS] get ${url}`);
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
@@ -49,7 +58,7 @@ async function getBlobFromRemoteIPFS(cid) {
 }
 
 async function getArrayBufferFromRemoteIPFS(cid) {
-  const url = `${GATEWAY_URL}${cid}`;
+  const url = `${await gatewayBase()}${cid}`;
   console.log(`[IPFS] getArrayBuffer ${url}`);
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
@@ -89,7 +98,7 @@ async function getManifestChain(cid, maxDepth = 50) {
 async function isIpfsCidReachable(cid) {
   if (!cid) return false;
   try {
-    const url = `${GATEWAY_URL}${cid}`;
+    const url = `${await gatewayBase()}${cid}`;
     const response = await fetch(url, { method: "HEAD", cache: "no-store" });
     return response.ok;
   } catch {

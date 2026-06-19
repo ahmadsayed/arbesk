@@ -1,85 +1,76 @@
 /**
  * Arbesk Browser-Side IPFS Writer
  *
- * POSTs binary data to the private Kubo node at 127.0.0.1:5001.
- * Only works because both the browser and IPFS run on the same machine
- * in the development Docker setup.
- *
- * API: POST /api/v0/add with multipart/form-data
- * Returns: { Hash, Name, Size }
+ * Fetches a short-lived upload credential from the backend, then uploads
+ * directly to the chosen storage backend:
+ *   - pinata: POST the file to a presigned URL (CIDv1 returned)
+ *   - kubo:   POST multipart to the local Kubo node (E2E/dev fallback)
  */
+import { getUploadCredential } from "../services/api.js";
 
-const IPFS_API_URL =
-  typeof process !== "undefined" && process.env?.IPFS_API_URL
-    ? process.env.IPFS_API_URL
-    : "http://127.0.0.1:5001";
+function toBlob(data) {
+  if (data instanceof Blob) return data;
+  if (data instanceof ArrayBuffer || data instanceof Uint8Array) return new Blob([data]);
+  if (typeof data === "string") return new Blob([data], { type: "application/octet-stream" });
+  throw new Error("writeToIPFS: unsupported data type");
+}
 
-/**
- * Write raw binary data to IPFS and return its CID (v0).
- *
- * @param {Uint8Array|ArrayBuffer|Blob|string} data - The data to store
- * @param {string} [filename="asset.bin"] - Hint for IPFS (doesn't affect CID)
- * @returns {Promise<string>} The IPFS CID (Qm...)
- */
-export async function writeToIPFS(data, filename = "asset.bin") {
-  let blob;
-  if (data instanceof Blob) {
-    blob = data;
-  } else if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
-    blob = new Blob([data]);
-  } else if (typeof data === "string") {
-    blob = new Blob([data], { type: "application/octet-stream" });
-  } else {
-    throw new Error("writeToIPFS: unsupported data type");
+async function uploadToPinata(blob, filename, credential) {
+  const form = new FormData();
+  form.append("file", blob, filename);
+  form.append("network", "public");
+  const res = await fetch(credential.url, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Pinata upload failed: ${res.status} — ${text}`);
   }
+  const json = await res.json();
+  const cid = json?.data?.cid || json?.cid;
+  if (!cid) throw new Error("Pinata upload returned no CID");
+  console.log(`[IPFS-WRITE] pinata stored → ${cid}`);
+  return cid;
+}
 
-  const formData = new FormData();
-  formData.append("file", blob, filename);
-
-  console.log(
-    `[IPFS-WRITE] posting ${blob.size} bytes to ${IPFS_API_URL}/api/v0/add`
-  );
-
-  const response = await fetch(`${IPFS_API_URL}/api/v0/add`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`IPFS add failed: ${response.status} — ${text}`);
+async function uploadToKubo(blob, filename, credential) {
+  const apiUrl = credential.apiUrl || "http://127.0.0.1:5001";
+  const form = new FormData();
+  form.append("file", blob, filename);
+  const res = await fetch(`${apiUrl}/api/v0/add`, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`IPFS add failed: ${res.status} — ${text}`);
   }
-
-  const result = await response.json();
-  console.log(`[IPFS-WRITE] stored → ${result.Hash} (${result.Size} bytes)`);
-
-  // Explicitly pin for clarity (Kubo /add defaults pin=true, but this is defense-in-depth)
+  const result = await res.json();
+  console.log(`[IPFS-WRITE] kubo stored → ${result.Hash} (${result.Size} bytes)`);
   try {
-    const pinResponse = await fetch(
-      `${IPFS_API_URL}/api/v0/pin/add?arg=${encodeURIComponent(result.Hash)}`,
-      { method: "POST" }
-    );
-    if (pinResponse.ok) {
-      console.log(`[IPFS-WRITE] pinned → ${result.Hash}`);
-    } else {
-      console.warn(
-        `[IPFS-WRITE] pin failed (non-fatal): HTTP ${pinResponse.status}`
-      );
-    }
-  } catch (pinErr) {
-    console.warn(`[IPFS-WRITE] pin failed (non-fatal): ${pinErr.message}`);
+    await fetch(`${apiUrl}/api/v0/pin/add?arg=${encodeURIComponent(result.Hash)}`, { method: "POST" });
+    console.log(`[IPFS-WRITE] pinned → ${result.Hash}`);
+  } catch (e) {
+    console.warn(`[IPFS-WRITE] pin failed (non-fatal): ${e.message}`);
   }
-
   return result.Hash;
 }
 
 /**
+ * Write raw binary/string data to IPFS and return its CID.
+ * @param {Uint8Array|ArrayBuffer|Blob|string} data
+ * @param {string} [filename="asset.bin"]
+ * @returns {Promise<string>}
+ */
+export async function writeToIPFS(data, filename = "asset.bin") {
+  const blob = toBlob(data);
+  const credential = await getUploadCredential();
+  console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${credential.backend}`);
+  return credential.backend === "pinata"
+    ? uploadToPinata(blob, filename, credential)
+    : uploadToKubo(blob, filename, credential);
+}
+
+/**
  * Write JSON data to IPFS and return its CID.
- *
- * @param {object} json - The JSON-serializable object
- * @returns {Promise<string>} The IPFS CID
+ * @param {object} json
+ * @returns {Promise<string>}
  */
 export async function writeJSONToIPFS(json) {
-  const text = JSON.stringify(json, null, 2);
-  return writeToIPFS(text, "composite.gltf");
+  return writeToIPFS(JSON.stringify(json, null, 2), "composite.gltf");
 }

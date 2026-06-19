@@ -461,6 +461,19 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 | `blockchain/.env` | ✅ Exists |
 | `frontend/.env` | ❌ Missing (AGENTS.md mentions it, but it does not exist) |
 
+#### Storage backend variables
+
+IPFS storage is selected by `IPFS_BACKEND` and implemented through the `src/api/storage/` abstraction.
+
+| Variable | Scope | Meaning |
+|----------|-------|---------|
+| `IPFS_BACKEND` | backend | `pinata` (dev/prod) or `kubo` (E2E). Default `kubo`. |
+| `PINATA_JWT` | backend secret | Master JWT for the Pinata v3 SDK — server-only, never sent to the browser. |
+| `PINATA_GATEWAY` | backend | Dedicated gateway host, e.g. `your-gw.mypinata.cloud`. |
+| `PINATA_UPLOAD_TTL` | backend | Presigned upload URL lifetime in seconds (default 60). |
+
+Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/upload-url` (session-gated, 5 uploads per 60 seconds per wallet); the master JWT stays server-side. The automated E2E suite runs against Kubo via `IPFS_BACKEND=kubo`.
+
 ---
 
 ## 7. Known Gaps & TODOs
