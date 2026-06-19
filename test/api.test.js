@@ -152,6 +152,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     };
 
     process.env.MOCK_3D_GENERATION = "true";
+    process.env.GENERATION_RATE_LIMIT_MAX = "10";
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
 
     const sessions = await import("../src/api/sessions.js");
@@ -165,6 +166,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     logSpy?.mockRestore();
     jest.restoreAllMocks();
     delete process.env.CONTRACT_ADDRESS;
+    delete process.env.GENERATION_RATE_LIMIT_MAX;
   });
 
   async function makeSessionHeader(address = "0x1234567890123456789012345678901234567890") {

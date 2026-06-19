@@ -26,7 +26,10 @@ export default function generateAssetNode(storage) {
     "/",
     authenticate,
     rateLimit({
-      max: process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10,
+      max: Number(
+        process.env.GENERATION_RATE_LIMIT_MAX ||
+          (process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10),
+      ),
       windowMs: 60 * 60 * 1000,
     }),
     async (req, res) => {

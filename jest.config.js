@@ -1,7 +1,9 @@
 export default {
   testPathIgnorePatterns: [
     "/node_modules/",
-    "/blockchain/"
+    "/blockchain/",
+    "/.claude/",
+    "/e2e/"
   ],
   transform: {},
 };
