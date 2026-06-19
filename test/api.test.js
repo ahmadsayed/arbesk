@@ -49,6 +49,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       }),
       pin: {
         add: jest.fn(async () => {}),
+        rm: jest.fn(async () => {}),
       },
     };
 
@@ -561,6 +562,28 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         last = res.status;
       }
       expect(last).toBe(429);
+    });
+  });
+
+  describe("POST /api/v1/ipfs/unpin via storage", () => {
+    it("walks the chain and reports unpinned CIDs", async () => {
+      const manifest = {
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+      };
+      const addRes = await request(app)
+        .post("/api/v1/manifests")
+        .send(manifest);
+      const startCid = addRes.body.cid;
+      expect(startCid).toBeTruthy();
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .send({ cid: startCid });
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.unpinned)).toBe(true);
+      expect(res.body.unpinned).toContain(startCid);
     });
   });
 

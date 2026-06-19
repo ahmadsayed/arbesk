@@ -446,7 +446,7 @@ export default () => {
 
         let manifest;
         try {
-          const raw = await catManifest(ipfs, currentCid);
+          const raw = await getStorage().cat(currentCid);
           manifest = JSON.parse(raw);
         } catch (e) {
           console.warn(`[UNPIN] cannot read ${currentCid}: ${e.message}`);
@@ -492,18 +492,13 @@ export default () => {
       const unpinned = [];
       for (const cid of toUnpin) {
         try {
-          await ipfs.pin.rm(cid);
+          // The adapter treats "already unpinned" as success.
+          await getStorage().unpin(cid);
           unpinned.push(cid);
           console.log(`[UNPIN] unpinned → ${cid}`);
         } catch (e) {
-          // "not pinned" is fine — the content may already be unpinned
-          if (e.message?.includes("not pinned")) {
-            unpinned.push(cid);
-            console.log(`[UNPIN] already unpinned → ${cid}`);
-          } else {
-            console.warn(`[UNPIN] failed to unpin ${cid}: ${e.message}`);
-            errors.push(`unpin ${cid}: ${e.message}`);
-          }
+          console.warn(`[UNPIN] failed to unpin ${cid}: ${e.message}`);
+          errors.push(`unpin ${cid}: ${e.message}`);
         }
       }
 

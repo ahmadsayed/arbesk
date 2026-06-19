@@ -1,3 +1,5 @@
+import { catManifest } from "../ipfs-utils.js";
+
 /**
  * Kubo storage adapter — wraps the local ipfs-http-client.
  * Used only by the automated E2E suite (IPFS_BACKEND=kubo).
@@ -19,13 +21,9 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
     },
 
     async cat(cid) {
-      let data = "";
-      const decoder = new TextDecoder();
-      for await (const chunk of ipfs.cat(cid)) {
-        data += decoder.decode(chunk, { stream: true });
-      }
-      data += decoder.decode();
-      return data;
+      // Reuse the shared multi-encoding decoder (Uint16Array test mock,
+      // Uint8Array/Buffer real Kubo, string) so reads stay consistent.
+      return catManifest(ipfs, cid);
     },
 
     async unpin(cid) {
