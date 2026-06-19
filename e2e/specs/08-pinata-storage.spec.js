@@ -43,19 +43,20 @@ test.describe("Pinata storage (real network)", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(PROMPT);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText("Model carved via mock");
 
-    // CIDv1 manifests start with bafy... (Pinata public uploads).
-    await page.waitForURL(/[?&]manifest=bafy[\w]+/);
+    // Pinata public uploads return CIDv1 (e.g. bafy... for dag-pb, bafkrei... for raw JSON).
+    const CIDV1_RE = /^baf[a-z0-9]{50,}$/;
+    await page.waitForURL((url) => CIDV1_RE.test(manifestCidFromUrl(url.toString()) || ""));
     const manifestCid = manifestCidFromUrl(page.url());
-    expect(manifestCid).toMatch(/^bafy/);
+    expect(manifestCid).toMatch(CIDV1_RE);
 
     // Save the draft so the thumbnail/manifest round-trip also exercises Pinata.
     await page.click(SELECTORS.saveAssetBtn);
     await page.waitForURL((url) => {
       const cid = manifestCidFromUrl(url.toString());
-      return Boolean(cid) && cid !== manifestCid && /^bafy/.test(cid);
+      return Boolean(cid) && cid !== manifestCid && CIDV1_RE.test(cid);
     });
     const savedCid = manifestCidFromUrl(page.url());
-    expect(savedCid).toMatch(/^bafy/);
+    expect(savedCid).toMatch(CIDV1_RE);
 
     // Resolve the saved manifest back through the Pinata dedicated gateway.
     const gw = `https://${process.env.PINATA_GATEWAY}/ipfs/${savedCid}`;
