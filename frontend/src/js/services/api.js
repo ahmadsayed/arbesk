@@ -437,6 +437,29 @@ export async function getTokenManifest(tokenId) {
   return data;
 }
 
+// ─── IPFS Upload Credential ───────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/ipfs/upload-url
+ * Mint a short-lived client upload credential (Pinata presigned URL or Kubo API URL).
+ * @returns {Promise<{backend:string, url?:string, gateway?:string, apiUrl?:string}>}
+ */
+export async function getUploadCredential() {
+  const token = await getOrCreateSession();
+  const res = await fetch(`${API_BASE}/ipfs/upload-url`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Session ${token}`,
+    },
+    body: "{}",
+  });
+  if (!res.ok) {
+    throw new Error(`upload-url failed: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // ─── IPFS Unpin ────────────────────────────────────────────────────────────────
 
 /**
