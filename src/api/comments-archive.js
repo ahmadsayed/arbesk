@@ -47,22 +47,14 @@ export async function fetchCommentsArchive(assetId) {
  * Build a comments archive for the asset and persist it to IPFS.
  *
  * @param {string} assetId - Canonical asset identifier
- * @param {import('ipfs-http-client').IPFSHTTPClient} ipfs
+ * @param {{ add: (payload: string) => Promise<string> }} storage - Storage adapter (Kubo or Pinata)
  * @returns {Promise<{cid: string, eventCount: number}>}
  */
-export async function archiveCommentsForAsset(assetId, ipfs) {
+export async function archiveCommentsForAsset(assetId, storage) {
   const archive = await fetchCommentsArchive(assetId);
   const payload = JSON.stringify(archive);
 
-  const { cid } = await ipfs.add(payload);
-  const archiveCid = cid.toString();
-
-  try {
-    await ipfs.pin.add(archiveCid);
-    console.log(`[ARCHIVE] pinned comments archive → ${archiveCid}`);
-  } catch (pinErr) {
-    console.warn(`[ARCHIVE] pin failed (non-fatal): ${pinErr.message}`);
-  }
+  const archiveCid = await storage.add(payload);
 
   console.log(
     `[ARCHIVE] archived ${archive.eventCount} comment(s) for ${assetId} → ${archiveCid}`,
