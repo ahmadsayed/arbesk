@@ -28,3 +28,24 @@ line to point at `./node-buffer-polyfill.js`, update the filename references in
 `frontend/src/js/workers/gltf-worker.js` and the import map in
 `frontend/src/pug/studio.pug`, and bump `@gltf-transform/core` in
 `frontend/package.json` to match.
+
+## workerpool-10.0.2.js / workerpool-10.0.2.mjs
+
+Source: `frontend/node_modules/workerpool/dist/workerpool.js` (copied from the
+installed `workerpool` package, version pinned in `frontend/package.json`).
+
+`workerpool-10.0.2.js` is the UMD browser bundle. `workerpool-10.0.2.mjs` is a
+small ESM shim that loads the UMD and re-exports its API, because module Web
+Workers cannot use import maps and need a relative ESM path.
+
+### Refreshing to a new version
+
+```bash
+cd frontend
+npm install workerpool@<version>
+cp node_modules/workerpool/dist/workerpool.js src/js/vendor/workerpool-<version>.js
+```
+
+Then update the import in `frontend/src/js/workers/gltf-worker.js` and
+`frontend/src/js/workers/gltf-worker-pool.js` if the filename changes, and bump
+`workerpool` in `frontend/package.json` to match.

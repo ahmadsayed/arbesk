@@ -15,6 +15,7 @@
  */
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
+import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
 
 const IPFS_URI_PREFIX = "ipfs://";
 const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
@@ -442,36 +443,7 @@ function bakeSourceColors(payload) {
   return { bakedJson: gltf, modified, skipped };
 }
 
-// ─── Message Dispatch ───────────────────────────────────────────────────────
-
-const handlers = {
-  compose,
-  decomposeGltf,
-  decomposeGlb,
-  bakeSourceColors,
-};
-
-self.onmessage = async (event) => {
-  const { id, type, payload } = event.data;
-  if (!id || !type) {
-    console.warn("[WORKER] received malformed message", event.data);
-    return;
-  }
-
-  const handler = handlers[type];
-  if (!handler) {
-    self.postMessage({ id, type: "error", error: { message: `Unknown worker task type: ${type}` } });
-    return;
-  }
-
-  try {
-    const result = await handler(payload);
-    const transfer = collectTransferables(result);
-    self.postMessage({ id, type: "success", result }, transfer);
-  } catch (error) {
-    self.postMessage({ id, type: "error", error: { message: error.message, stack: error.stack } });
-  }
-};
+// ─── Worker Registration ────────────────────────────────────────────────────
 
 function collectTransferables(result) {
   const transfer = [];
@@ -488,3 +460,19 @@ function collectTransferables(result) {
   }
   return transfer;
 }
+
+function wrapWithTransfer(handler) {
+  return async (payload) => {
+    const result = await handler(payload);
+    const transfer = collectTransferables(result);
+    return transfer.length > 0 ? new Transfer(result, transfer) : result;
+  };
+}
+
+workerpool.worker({
+  compose: wrapWithTransfer(compose),
+  decomposeGltf: wrapWithTransfer(decomposeGltf),
+  decomposeGlb: wrapWithTransfer(decomposeGlb),
+  bakeSourceColors: wrapWithTransfer(bakeSourceColors),
+  ping: () => "pong",
+});

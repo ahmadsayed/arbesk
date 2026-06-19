@@ -75,10 +75,10 @@ export async function composeGlTFAsync(compositeJson) {
 
   if (await checkWorkerAvailable()) {
     try {
-      const { composedJson } = await getGlTFWorkerPool().execute("compose", {
+      const { composedJson } = await getGlTFWorkerPool().exec("compose", [{
         compositeJson,
         gatewayBase: await gatewayBase(),
-      });
+      }]);
       return composedJson;
     } catch (error) {
       console.warn("[ASYNC-GLTF] compose worker failed, falling back:", error.message);
@@ -101,7 +101,7 @@ export async function decomposeGlTFAsync(gltfJson) {
 
   if (await checkWorkerAvailable()) {
     try {
-      return await getGlTFWorkerPool().execute("decomposeGltf", { gltfJson });
+      return await getGlTFWorkerPool().exec("decomposeGltf", [{ gltfJson }]);
     } catch (error) {
       console.warn("[ASYNC-GLTF] decomposeGltf worker failed, falling back:", error.message);
     }
@@ -124,9 +124,7 @@ export async function decomposeAndStoreAsync(gltfJson) {
 
   if (await checkWorkerAvailable()) {
     try {
-      const { composite, buffers, images } = await getGlTFWorkerPool().execute("decomposeGltf", {
-        gltfJson,
-      });
+      const { composite, buffers, images } = await getGlTFWorkerPool().exec("decomposeGltf", [{ gltfJson }]);
       await uploadExtractedAssets(composite, buffers, images, reusableCredential);
       const compositeCid = await writeJSONToIPFS(composite, reusableCredential);
       return { composite, compositeCid };
@@ -158,9 +156,9 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
       // the original stays intact for the main-thread fallback if the worker
       // fails, and so its underlying buffer cannot collide with extracted
       // buffer transferables returned by the worker.
-      const { composite, buffers, images } = await getGlTFWorkerPool().execute(
+      const { composite, buffers, images } = await getGlTFWorkerPool().exec(
         "decomposeGlb",
-        { arrayBuffer },
+        [{ arrayBuffer }],
       );
       await uploadExtractedAssets(composite, buffers, images, reusableCredential);
 
@@ -210,10 +208,10 @@ export async function editSourceColorsAsync(sourceCid, nodeColors) {
 
   if (await checkWorkerAvailable()) {
     try {
-      const result = await getGlTFWorkerPool().execute("bakeSourceColors", {
+      const result = await getGlTFWorkerPool().exec("bakeSourceColors", [{
         gltfJson: gltf,
         nodeColors,
-      });
+      }]);
       gltf = result.bakedJson;
       const newCid = await writeJSONToIPFS(gltf);
       const out = { sourceCid: newCid, format: "gltf", modified: result.modified, skipped: result.skipped };
