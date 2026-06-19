@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import url from "url";
 import fs from "fs";
-import { create } from "ipfs-http-client";
 
 const Router = express.Router;
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -12,7 +11,6 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const {
   CONTRACT_ADDRESS,
   ASSETS_IPFS,
-  IPFS_API_URL,
   HARDHAT_RPC_URL,
   NETWORK_CONFIGS,
   getContractAddress,
@@ -23,12 +21,11 @@ const {
 import generateAssetNode from "./assets/generate-node.js";
 import abiRouter from "./abi-router.js";
 import rateLimit, { _resetRateLimiter } from "./rate-limiter.js";
+import authenticate from "./authentication.js";
+import { getStorage } from "./storage/index.js";
 import sessionRouter from "./sessions.js";
 import openapiSpec from "./openapi.json" with { type: "json" };
 import { getSceneNodes } from "./manifest-utils.js";
-import { catManifest } from "./ipfs-utils.js";
-
-const ipfs = create(new URL(IPFS_API_URL));
 
 // ─── Middleware & Helpers ────────────────────────────────────────────────────
 
@@ -62,19 +59,11 @@ function sendError(res, status, code, message, details = null) {
 }
 
 /**
- * Add JSON to IPFS and pin it (non-fatal pin failure).
+ * Add a payload to the configured storage backend (adds + pins).
  * Returns the CID string.
  */
-async function addAndPin(ipfs, payload) {
-  const { cid } = await ipfs.add(payload);
-  const resultCid = cid.toString();
-  try {
-    await ipfs.pin.add(resultCid);
-    console.log(`[IPFS] pinned → ${resultCid}`);
-  } catch (pinErr) {
-    console.warn(`[IPFS] pin failed (non-fatal): ${pinErr.message}`);
-  }
-  return resultCid;
+async function addAndPin(payload) {
+  return getStorage().add(payload);
 }
 
 // ─── Thumbnail Helpers ──────────────────────────────────────────────────────
@@ -113,16 +102,7 @@ async function persistEmbeddedThumbnail(manifest) {
     console.log(
       `[IPFS] add thumbnail | size=${buffer.length} bytes mime=${mime}`,
     );
-    const { cid } = await ipfs.add(buffer);
-    const thumbnailCid = cid.toString();
-    try {
-      await ipfs.pin.add(thumbnailCid);
-      console.log(`[IPFS] pin thumbnail → ${thumbnailCid}`);
-    } catch (pinErr) {
-      console.warn(
-        `[IPFS] pin thumbnail failed (non-fatal): ${pinErr.message}`,
-      );
-    }
+    const thumbnailCid = await getStorage().add(buffer);
     const format = thumbnailExtension(mime);
     manifest.thumbnail = {
       type: "snapshot",
@@ -167,11 +147,12 @@ export default () => {
   // ─── Config ───────────────────────────────────────────────────────────────
 
   v1.get("/config", (req, res) => {
+    const storage = getStorage();
     res.json({
       contractAddress: CONTRACT_ADDRESS,
       networkConfigs: NETWORK_CONFIGS,
-      ipfsGatewayUrl:
-        process.env.IPFS_GATEWAY_URL || "http://127.0.0.1:8080/ipfs/",
+      ipfsBackend: storage.backend,
+      ipfsGatewayUrl: storage.gatewayBase(),
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
       walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,
@@ -184,7 +165,7 @@ export default () => {
 
   // ─── Generations ──────────────────────────────────────────────────────────
 
-  v1.use("/generations", generateAssetNode(ipfs));
+  v1.use("/generations", generateAssetNode(getStorage()));
 
   // ─── Manifests ────────────────────────────────────────────────────────────
 
@@ -213,7 +194,7 @@ export default () => {
 
       await persistEmbeddedThumbnail(manifest);
 
-      const resultCid = await addAndPin(ipfs, JSON.stringify(manifest));
+      const resultCid = await addAndPin(JSON.stringify(manifest));
       console.log(
         `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} → cid=${resultCid}`,
       );
@@ -240,7 +221,7 @@ export default () => {
       console.log(
         `[IPFS] publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
       );
-      const resultCid = await addAndPin(ipfs, payload);
+      const resultCid = await addAndPin(payload);
       console.log(`[IPFS] publish → ${resultCid}`);
 
 
@@ -281,7 +262,7 @@ export default () => {
         visited.add(currentCid);
 
         try {
-          const raw = await catManifest(ipfs, currentCid);
+          const raw = await getStorage().cat(currentCid);
           const manifest = JSON.parse(raw);
           const nodes = getSceneNodes(manifest);
           const timestamp = manifest.timestamp || null;
@@ -369,7 +350,7 @@ export default () => {
       }
 
       console.log(`[TOKEN] token ${tokenId} → CID ${manifestCid}`);
-      const raw = await catManifest(ipfs, manifestCid);
+      const raw = await getStorage().cat(manifestCid);
       const manifest = JSON.parse(raw);
 
       res.json({ tokenId, manifestCid, manifest });
@@ -378,6 +359,32 @@ export default () => {
       sendError(res, 500, "TOKEN_RESOLUTION_FAILED", error.message);
     }
   });
+
+  // ─── IPFS Upload Credential ────────────────────────────────────────────────
+
+  /**
+   * POST /api/v1/ipfs/upload-url
+   * Mint a short-lived client upload credential. Session-gated and rate-limited
+   * per wallet. In Pinata mode returns a presigned URL; in Kubo mode returns the
+   * local API URL. The master Pinata JWT never reaches the client.
+   */
+  v1.post(
+    "/ipfs/upload-url",
+    authenticate,
+    rateLimit({ max: 5, windowMs: 60 * 1000 }),
+    async (req, res) => {
+      try {
+        const credential = await getStorage().mintUploadCredential();
+        console.log(
+          `[IPFS] minted upload credential — backend=${credential.backend} wallet=${res.locals.userAddress}`,
+        );
+        res.json(credential);
+      } catch (error) {
+        console.error("[IPFS] upload-url error:", error.message);
+        sendError(res, 500, "UPLOAD_URL_FAILED", error.message);
+      }
+    },
+  );
 
   // ─── IPFS Unpin ──────────────────────────────────────────────────────────
 
@@ -418,7 +425,7 @@ export default () => {
 
         let manifest;
         try {
-          const raw = await catManifest(ipfs, currentCid);
+          const raw = await getStorage().cat(currentCid);
           manifest = JSON.parse(raw);
         } catch (e) {
           console.warn(`[UNPIN] cannot read ${currentCid}: ${e.message}`);
@@ -464,18 +471,13 @@ export default () => {
       const unpinned = [];
       for (const cid of toUnpin) {
         try {
-          await ipfs.pin.rm(cid);
+          // The adapter treats "already unpinned" as success.
+          await getStorage().unpin(cid);
           unpinned.push(cid);
           console.log(`[UNPIN] unpinned → ${cid}`);
         } catch (e) {
-          // "not pinned" is fine — the content may already be unpinned
-          if (e.message?.includes("not pinned")) {
-            unpinned.push(cid);
-            console.log(`[UNPIN] already unpinned → ${cid}`);
-          } else {
-            console.warn(`[UNPIN] failed to unpin ${cid}: ${e.message}`);
-            errors.push(`unpin ${cid}: ${e.message}`);
-          }
+          console.warn(`[UNPIN] failed to unpin ${cid}: ${e.message}`);
+          errors.push(`unpin ${cid}: ${e.message}`);
         }
       }
 
@@ -556,8 +558,7 @@ export default () => {
   api.use("/v1", v1);
 
   // Expose for test helpers
-  api._getFromIPFS = async (cid) => catManifest(ipfs, cid);
-  api._ipfs = ipfs;
+  api._getFromIPFS = async (cid) => getStorage().cat(cid);
 
   return api;
 };

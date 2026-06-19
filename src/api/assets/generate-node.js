@@ -11,12 +11,11 @@ import authenticate from "../authentication.js";
 import rateLimit from "../rate-limiter.js";
 
 import { getSceneNodes, bumpManifestVersion } from "../manifest-utils.js";
-import { catManifest } from "../ipfs-utils.js";
 
 const Router = express.Router;
 const usedTxHashes = new Set();
 
-export default function generateAssetNode(ipfs) {
+export default function generateAssetNode(storage) {
   const router = Router();
 
   /**
@@ -26,7 +25,10 @@ export default function generateAssetNode(ipfs) {
   router.post(
     "/",
     authenticate,
-    rateLimit({ max: 10, windowMs: 60 * 60 * 1000 }),
+    rateLimit({
+      max: process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10,
+      windowMs: 60 * 60 * 1000,
+    }),
     async (req, res) => {
       try {
         const {
@@ -204,17 +206,8 @@ export default function generateAssetNode(ipfs) {
         console.log(
           `[IPFS] add source asset | size=${assetPayload?.length || "?"} bytes`,
         );
-        const { cid: sourceCid } = await ipfs.add(assetPayload);
-        const sourceAssetCid = sourceCid.toString();
+        const sourceAssetCid = await storage.add(assetPayload);
         console.log(`[IPFS] add source asset → ${sourceAssetCid}`);
-        try {
-          await ipfs.pin.add(sourceAssetCid);
-          console.log(`[IPFS] pin source asset → ${sourceAssetCid}`);
-        } catch (pinErr) {
-          console.warn(
-            `[IPFS] pin source asset failed (non-fatal): ${pinErr.message}`,
-          );
-        }
 
         let manifest = null;
         if (prevAssetManifestCid) {
@@ -222,7 +215,7 @@ export default function generateAssetNode(ipfs) {
             console.log(
               `[GEN] reading previous asset manifest ${prevAssetManifestCid}`,
             );
-            const data = await catManifest(ipfs, prevAssetManifestCid);
+            const data = await storage.cat(prevAssetManifestCid);
             manifest = JSON.parse(data);
             console.log(
               `[GEN] previous manifest loaded — version=${manifest.version} nodes=${getSceneNodes(manifest).length}`,
@@ -291,19 +284,8 @@ export default function generateAssetNode(ipfs) {
         console.log(
           `[IPFS] add asset manifest | version=${manifest.version} nodes=${nodes.length}`,
         );
-        const { cid: newAssetManifestCid } = await ipfs.add(
-          JSON.stringify(manifest),
-        );
-        const assetManifestCid = newAssetManifestCid.toString();
+        const assetManifestCid = await storage.add(JSON.stringify(manifest));
         console.log(`[IPFS] add asset manifest → ${assetManifestCid}`);
-        try {
-          await ipfs.pin.add(assetManifestCid);
-          console.log(`[IPFS] pin asset manifest → ${assetManifestCid}`);
-        } catch (pinErr) {
-          console.warn(
-            `[IPFS] pin asset manifest failed (non-fatal): ${pinErr.message}`,
-          );
-        }
 
         usedTxHashes.add(effectiveTxHash);
         console.log(
