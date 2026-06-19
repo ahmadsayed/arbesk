@@ -31,6 +31,12 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: /08-pinata-storage\.spec\.js/,
+    },
+    {
+      name: "pinata",
+      testMatch: /08-pinata-storage\.spec\.js/,
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
   globalSetup: "./global-setup.mjs",
