@@ -9,7 +9,7 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
-import { composeGlTF } from "../gltf/composer.js";
+import { composeGlTFAsync } from "../gltf/async-gltf.js";
 import {
   resolveChildRef,
   clearResolutionCache,
@@ -692,7 +692,7 @@ async function loadAsset(src, parentNode, nodeId) {
         }`
       );
 
-      const resolvedGltf = await composeGlTF(gltfJson);
+      const resolvedGltf = await composeGlTFAsync(gltfJson);
       const gltfString = JSON.stringify(resolvedGltf);
       console.log(`[SCENE] glTF stringified | chars=${gltfString.length}`);
 
@@ -936,9 +936,11 @@ async function loadAssetManifest(
     state.rootSceneAnchor = rootAnchor;
   }
 
-  for (const node of getManifestNodes(manifest)) {
-    await loadNode(node, rootAnchor, depth, resolvingCids);
-  }
+  await Promise.all(
+    getManifestNodes(manifest).map((node) =>
+      loadNode(node, rootAnchor, depth, resolvingCids)
+    )
+  );
 
   if (!parentAnchor) {
     assetState.set({ activeAssetManifestCid: manifestCid });

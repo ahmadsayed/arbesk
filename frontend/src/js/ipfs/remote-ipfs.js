@@ -107,6 +107,7 @@ async function isIpfsCidReachable(cid) {
 }
 
 export {
+  gatewayBase,
   getFromRemoteIPFS,
   getBase64FromRemoteIPFS,
   getBlobFromRemoteIPFS,

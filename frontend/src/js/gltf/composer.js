@@ -74,34 +74,37 @@ export async function composeGlTF(gltfJson) {
   // Deep clone to avoid mutating the original
   const composed = JSON.parse(JSON.stringify(gltfJson));
 
-  // Resolve buffer URIs
+  // Resolve buffer URIs in parallel
   if (composed.buffers) {
-    for (let i = 0; i < composed.buffers.length; i++) {
-      composed.buffers[i] = {
-        ...composed.buffers[i],
-        uri: await resolveURI(composed.buffers[i].uri, "application/octet-stream"),
-      };
-    }
+    await Promise.all(
+      composed.buffers.map(async (buf, i) => {
+        composed.buffers[i] = {
+          ...buf,
+          uri: await resolveURI(buf.uri, "application/octet-stream"),
+        };
+      }),
+    );
   }
 
-  // Resolve image URIs
+  // Resolve image URIs in parallel
   if (composed.images) {
-    for (let i = 0; i < composed.images.length; i++) {
-      const img = composed.images[i];
-      if (!img.uri) continue;
+    await Promise.all(
+      composed.images.map(async (img, i) => {
+        if (!img.uri) return;
 
-      // Detect MIME type from the URI or existing mimeType
-      let mimeType = img.mimeType || "image/png";
-      if (img.uri.startsWith(IPFS_URI_PREFIX) && !img.mimeType) {
-        // We don't know the MIME type from the CID alone; default to PNG
-        mimeType = "image/png";
-      }
+        // Detect MIME type from the URI or existing mimeType
+        let mimeType = img.mimeType || "image/png";
+        if (img.uri.startsWith(IPFS_URI_PREFIX) && !img.mimeType) {
+          // We don't know the MIME type from the CID alone; default to PNG
+          mimeType = "image/png";
+        }
 
-      composed.images[i] = {
-        ...img,
-        uri: await resolveURI(img.uri, mimeType),
-      };
-    }
+        composed.images[i] = {
+          ...img,
+          uri: await resolveURI(img.uri, mimeType),
+        };
+      }),
+    );
   }
 
   console.log(`[COMPOSE] resolved ${composed.buffers?.length || 0} buffers, ${composed.images?.length || 0} images`);

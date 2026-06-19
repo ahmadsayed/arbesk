@@ -24,10 +24,13 @@ import {
   clearPendingTransformEdits,
 } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
-import { decomposeAndStore, isComposite } from "../gltf/decomposer.js";
-import { decomposeGLB } from "../gltf/glb-parser.js";
+import { isComposite } from "../gltf/decomposer.js";
+import {
+  decomposeAndStoreAsync,
+  decomposeGLBAsync,
+  editSourceColorsAsync,
+} from "../gltf/async-gltf.js";
 import { editCompositeColors } from "../gltf/material-editor.js";
-import { editSourceColors } from "../gltf/source-color-editor.js";
 import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,
@@ -52,6 +55,13 @@ function requireWallet() {
   if (walletState.get().walletAddress) return true;
   showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
   return false;
+}
+
+function isRateLimitError(err) {
+  if (!err || typeof err.message !== "string") return false;
+  return (
+    err.message.includes("HTTP 429") || err.message.includes("Too Many Requests")
+  );
 }
 
 function announceStatus(message) {
@@ -200,7 +210,7 @@ async function decomposeManifestNodes(manifest) {
     try {
       if (format === "glb") {
         const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-        const { compositeCid } = await decomposeGLB(glbBuffer);
+        const { compositeCid } = await decomposeGLBAsync(glbBuffer);
 
         node.source.cid = compositeCid;
         node.source.path = "composite.gltf";
@@ -229,7 +239,7 @@ async function decomposeManifestNodes(manifest) {
       }
 
       // Decompose and store
-      const { compositeCid } = await decomposeAndStore(gltf);
+      const { compositeCid } = await decomposeAndStoreAsync(gltf);
 
       // Update the node's source to point to the composite
       node.source.cid = compositeCid;
@@ -239,6 +249,7 @@ async function decomposeManifestNodes(manifest) {
         `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
       );
     } catch (err) {
+      if (isRateLimitError(err)) throw err;
       console.warn(
         `Decompose save: failed to decompose node ${node.node_id}:`,
         err.message
@@ -338,7 +349,7 @@ async function prepareManifestForWrite(assetName) {
       }
 
       try {
-        const result = await editSourceColors(node.source.cid, colorMap);
+        const result = await editSourceColorsAsync(node.source.cid, colorMap);
         node.source.cid = result.sourceCid;
         // The edited source is always glTF JSON now; keep the node's
         // format/path truthful so the loader doesn't treat it as a binary GLB.
@@ -348,6 +359,7 @@ async function prepareManifestForWrite(assetName) {
           `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
         );
       } catch (err) {
+        if (isRateLimitError(err)) throw err;
         console.warn(
           `Save: failed to bake colors into source for ${nodeId}:`,
           err.message
@@ -581,11 +593,14 @@ async function onSaveAssetDraft() {
     announceStatus("Draft saved.");
   } catch (err) {
     console.error("Save asset draft failed:", err);
-    announceStatus("Save failed: " + err.message);
+    const rateLimited = isRateLimitError(err);
+    announceStatus(rateLimited ? "Upload rate limit hit. Save aborted." : "Save failed: " + err.message);
     showToast({
       type: "error",
-      title: "Save Failed",
-      message: err.message,
+      title: rateLimited ? "Upload Rate Limited" : "Save Failed",
+      message: rateLimited
+        ? "Too many upload requests. Please wait a moment and try again."
+        : err.message,
       actions: [{ label: "Retry", onClick: onSaveAssetDraft }],
     });
   } finally {
@@ -686,11 +701,14 @@ async function onPublishAsset() {
     updateAssetStatus(assetName, `Asset Token #${assetState.get().activeAssetTokenId}`);
   } catch (err) {
     console.error("Publish asset failed:", err);
-    announceStatus("Publish failed: " + err.message);
+    const rateLimited = isRateLimitError(err);
+    announceStatus(rateLimited ? "Upload rate limit hit. Publish aborted." : "Publish failed: " + err.message);
     showToast({
       type: "error",
-      title: "Publish Failed",
-      message: err.message,
+      title: rateLimited ? "Upload Rate Limited" : "Publish Failed",
+      message: rateLimited
+        ? "Too many upload requests. The asset was not anchored on-chain. Please wait a moment and try again."
+        : err.message,
       actions: [{ label: "Retry", onClick: onPublishAsset }],
     });
   } finally {

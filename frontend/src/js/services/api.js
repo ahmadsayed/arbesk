@@ -167,8 +167,13 @@ export async function createSession() {
  * Get a valid session token, creating one if necessary.
  * Reuses cached token from localStorage when valid.
  *
+ * Concurrent callers that all need a new session share a single in-flight
+ * session-creation promise, so only ONE MetaMask pop-up is shown.
+ *
  * @returns {Promise<string>} session token
  */
+let sessionCreationPromise = null;
+
 export async function getOrCreateSession() {
   // Try cached session first
   const cached = getCachedSession();
@@ -177,11 +182,24 @@ export async function getOrCreateSession() {
     return cached.token;
   }
 
+  // If another call is already creating a session, wait on that same promise.
+  if (sessionCreationPromise) {
+    console.log("[SESSION] waiting on in-flight session creation…");
+    return sessionCreationPromise;
+  }
+
   console.log("[SESSION] no cached token — creating new session…");
   // Create new session (triggers ONE MetaMask pop-up)
-  const session = await createSession();
-  console.log("[SESSION] created — token=" + session.token.slice(0, 8) + "…");
-  return session.token;
+  sessionCreationPromise = createSession()
+    .then((session) => {
+      console.log("[SESSION] created — token=" + session.token.slice(0, 8) + "…");
+      return session.token;
+    })
+    .finally(() => {
+      sessionCreationPromise = null;
+    });
+
+  return sessionCreationPromise;
 }
 
 // ─── Config ─────────────────────────────────────────────────────────────────
