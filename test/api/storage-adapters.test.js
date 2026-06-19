@@ -55,6 +55,8 @@ describe("kubo adapter", () => {
     expect(await a.mintUploadCredential()).toEqual({
       backend: "kubo",
       apiUrl: "http://127.0.0.1:5001",
+      gateway: "http://127.0.0.1:8080/ipfs/",
+      reusable: true,
     });
   });
 });
@@ -103,6 +105,7 @@ describe("pinata adapter", () => {
       backend: "pinata",
       url: "https://uploads.pinata.cloud/signed",
       gateway: "https://gw.mypinata.cloud/ipfs/",
+      reusable: false,
     });
     expect(p.upload.public.createSignedURL).toHaveBeenCalledWith({ expires: 90 });
     expect(JSON.stringify(cred)).not.toMatch(/jwt|JWT|Bearer/);

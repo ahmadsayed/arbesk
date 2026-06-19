@@ -8,6 +8,7 @@
 
 import { getGlTFWorkerPool, isWorkerPoolAvailable } from "../workers/gltf-worker-pool.js";
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { getUploadCredential } from "../services/api.js";
 import { getArrayBufferFromRemoteIPFS, gatewayBase } from "../ipfs/remote-ipfs.js";
 import { composeGlTF } from "./composer.js";
 import { decomposeGlTF as decomposeGlTFMain, decomposeAndStore as decomposeAndStoreMain, isComposite } from "./decomposer.js";
@@ -31,14 +32,15 @@ async function checkWorkerAvailable() {
  * @param {Array} items - extracted {bytes, name, skip} entries
  * @param {string} prefix - placeholder prefix (WORKER_BUFFER_PREFIX / WORKER_IMAGE_PREFIX)
  * @param {Array} targets - composite.buffers or composite.images
+ * @param {object} [credential] - Optional reusable upload credential.
  * @returns {Promise[]} upload promises
  */
-function uploadAndRewrite(items, prefix, targets) {
+function uploadAndRewrite(items, prefix, targets, credential) {
   const uploads = [];
   items.forEach((item, idx) => {
     if (item.skip || !item.bytes) return;
     uploads.push(
-      writeToIPFS(item.bytes, item.name).then((cid) => {
+      writeToIPFS(item.bytes, item.name, credential).then((cid) => {
         const placeholder = `${prefix}${idx}__`;
         for (const t of targets || []) {
           if (t.uri === placeholder) {
@@ -51,10 +53,11 @@ function uploadAndRewrite(items, prefix, targets) {
   return uploads;
 }
 
-async function uploadExtractedAssets(composite, buffers, images) {
+async function uploadExtractedAssets(composite, buffers, images, credential = null) {
+  const reusableCredential = credential?.reusable ? credential : null;
   await Promise.all([
-    ...uploadAndRewrite(buffers, WORKER_BUFFER_PREFIX, composite.buffers),
-    ...uploadAndRewrite(images, WORKER_IMAGE_PREFIX, composite.images),
+    ...uploadAndRewrite(buffers, WORKER_BUFFER_PREFIX, composite.buffers, reusableCredential),
+    ...uploadAndRewrite(images, WORKER_IMAGE_PREFIX, composite.images, reusableCredential),
   ]);
   return composite;
 }
@@ -116,20 +119,23 @@ export async function decomposeGlTFAsync(gltfJson) {
  * @returns {Promise<{composite: object, compositeCid: string}>}
  */
 export async function decomposeAndStoreAsync(gltfJson) {
+  const credential = await getUploadCredential();
+  const reusableCredential = credential?.reusable ? credential : null;
+
   if (await checkWorkerAvailable()) {
     try {
       const { composite, buffers, images } = await getGlTFWorkerPool().execute("decomposeGltf", {
         gltfJson,
       });
-      await uploadExtractedAssets(composite, buffers, images);
-      const compositeCid = await writeJSONToIPFS(composite);
+      await uploadExtractedAssets(composite, buffers, images, reusableCredential);
+      const compositeCid = await writeJSONToIPFS(composite, reusableCredential);
       return { composite, compositeCid };
     } catch (error) {
       console.warn("[ASYNC-GLTF] decomposeAndStore worker failed, falling back:", error.message);
     }
   }
 
-  return decomposeAndStoreMain(gltfJson);
+  return decomposeAndStoreMain(gltfJson, reusableCredential);
 }
 
 /**
@@ -143,6 +149,9 @@ export async function decomposeAndStoreAsync(gltfJson) {
 export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
   if (!arrayBuffer) throw new Error("decomposeGLBAsync: arrayBuffer is required");
 
+  const credential = await getUploadCredential();
+  const reusableCredential = credential?.reusable ? credential : null;
+
   if (await checkWorkerAvailable()) {
     try {
       // Do not transfer the input ArrayBuffer: the worker receives a copy so
@@ -153,11 +162,11 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
         "decomposeGlb",
         { arrayBuffer },
       );
-      await uploadExtractedAssets(composite, buffers, images);
+      await uploadExtractedAssets(composite, buffers, images, reusableCredential);
 
       let compositeCid = null;
       if (storeComposite) {
-        compositeCid = await writeJSONToIPFS(composite);
+        compositeCid = await writeJSONToIPFS(composite, reusableCredential);
       }
       return { composite, compositeCid };
     } catch (error) {
@@ -165,7 +174,7 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
     }
   }
 
-  return decomposeGLBMain(arrayBuffer, undefined, { storeComposite });
+  return decomposeGLBMain(arrayBuffer, undefined, { storeComposite, credential: reusableCredential });
 }
 
 /**

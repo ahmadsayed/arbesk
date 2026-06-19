@@ -55,22 +55,26 @@ async function uploadToKubo(blob, filename, credential) {
  * Write raw binary/string data to IPFS and return its CID.
  * @param {Uint8Array|ArrayBuffer|Blob|string} data
  * @param {string} [filename="asset.bin"]
+ * @param {object} [credential=null] - Optional upload credential. When omitted,
+ *   a fresh credential is fetched. Callers reusing a credential must ensure it
+ *   is marked `reusable` by the backend.
  * @returns {Promise<string>}
  */
-export async function writeToIPFS(data, filename = "asset.bin") {
+export async function writeToIPFS(data, filename = "asset.bin", credential = null) {
   const blob = toBlob(data);
-  const credential = await getUploadCredential();
-  console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${credential.backend}`);
-  return credential.backend === "pinata"
-    ? uploadToPinata(blob, filename, credential)
-    : uploadToKubo(blob, filename, credential);
+  const cred = credential || (await getUploadCredential());
+  console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${cred.backend}`);
+  return cred.backend === "pinata"
+    ? uploadToPinata(blob, filename, cred)
+    : uploadToKubo(blob, filename, cred);
 }
 
 /**
  * Write JSON data to IPFS and return its CID.
  * @param {object} json
+ * @param {object} [credential=null] - Optional reusable upload credential.
  * @returns {Promise<string>}
  */
-export async function writeJSONToIPFS(json) {
-  return writeToIPFS(JSON.stringify(json, null, 2), "composite.gltf");
+export async function writeJSONToIPFS(json, credential = null) {
+  return writeToIPFS(JSON.stringify(json, null, 2), "composite.gltf", credential);
 }

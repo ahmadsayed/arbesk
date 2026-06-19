@@ -33,7 +33,7 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
       const url = await pinata.upload.public.createSignedURL({
         expires: uploadTtl,
       });
-      return { backend: "pinata", url, gateway: gatewayBase };
+      return { backend: "pinata", url, gateway: gatewayBase, reusable: false };
     },
 
     gatewayBase() {

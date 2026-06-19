@@ -84,7 +84,7 @@ function extractDataURI(uri) {
  * @param {object} gltf - Standard glTF 2.0 JSON (with data-URI buffers/images)
  * @returns {Promise<object>} Composite glTF JSON with ipfs:// URI references
  */
-export async function decomposeGlTF(gltf) {
+export async function decomposeGlTF(gltf, credential = null) {
   if (!gltf) throw new Error("decomposeGlTF: gltf is null");
 
   // Already decomposed — nothing to do
@@ -116,7 +116,7 @@ export async function decomposeGlTF(gltf) {
       }
 
       const filename = `buffer_${i}.bin`;
-      const cid = await writeToIPFS(extracted.bytes, filename);
+      const cid = await writeToIPFS(extracted.bytes, filename, credential);
       composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
       stats.buffers++;
       stats.bytesTotal += extracted.bytes.length;
@@ -150,7 +150,7 @@ export async function decomposeGlTF(gltf) {
 
       const ext = extracted.mimeType.split("/")[1] || "bin";
       const filename = `texture_${i}.${ext}`;
-      const cid = await writeToIPFS(extracted.bytes, filename);
+      const cid = await writeToIPFS(extracted.bytes, filename, credential);
       composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
       stats.images++;
       stats.bytesTotal += extracted.bytes.length;
@@ -170,12 +170,13 @@ export async function decomposeGlTF(gltf) {
  * Returns { composite, compositeCid }.
  *
  * @param {object} gltf - Standard glTF 2.0 JSON
+ * @param {object} [credential=null] - Optional reusable upload credential.
  * @returns {Promise<{composite: object, compositeCid: string}>}
  */
-export async function decomposeAndStore(gltf) {
-  const composite = await decomposeGlTF(gltf);
+export async function decomposeAndStore(gltf, credential = null) {
+  const composite = await decomposeGlTF(gltf, credential);
   const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.js");
-  const compositeCid = await writeJSONToIPFS(composite);
+  const compositeCid = await writeJSONToIPFS(composite, credential);
   console.log(`[DECOMPOSE] composite stored → ${compositeCid}`);
   return { composite, compositeCid };
 }

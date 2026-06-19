@@ -163,9 +163,9 @@ function extFromMimeType(mimeType) {
 /**
  * Write bytes to IPFS using the provided writer or the default project writer.
  */
-async function writeBytes(writer, bytes, filename) {
-  const fn = writer || writeToIPFS;
-  return fn(bytes, filename);
+async function writeBytes(writer, bytes, filename, credential = null) {
+  if (writer) return writer(bytes, filename);
+  return writeToIPFS(bytes, filename, credential);
 }
 
 /**
@@ -286,7 +286,7 @@ export function serializeGLB(json, binaryChunk = null) {
  */
 export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
-  const { storeComposite = true } = options;
+  const { storeComposite = true, credential = null } = options;
 
   const { json, binaryChunk } = await parseGLB(arrayBuffer);
   const composite = JSON.parse(JSON.stringify(json));
@@ -318,7 +318,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
     }
 
     const filename = `buffer_${i}.bin`;
-    const cid = await writeBytes(writer, bytes, filename);
+    const cid = await writeBytes(writer, bytes, filename, credential);
     buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
     bufferBytesByIndex[i] = bytes;
     stats.buffers++;
@@ -381,7 +381,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
 
     const ext = extFromMimeType(mimeType);
     const filename = `texture_${i}.${ext}`;
-    const cid = await writeBytes(writer, bytes, filename);
+    const cid = await writeBytes(writer, bytes, filename, credential);
     images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
     if (mimeType && !images[i].mimeType) {
       images[i].mimeType = mimeType;
@@ -399,7 +399,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   if (storeComposite) {
     compositeCid = await (writer
       ? writeBytes(writer, JSON.stringify(composite, null, 2), "composite.gltf")
-      : writeJSONToIPFS(composite));
+      : writeJSONToIPFS(composite, credential));
     console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
   } else {
     console.log(`[GLB-DECOMPOSE] composite not stored (caller writes its own)`);

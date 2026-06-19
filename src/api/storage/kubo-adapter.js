@@ -37,7 +37,7 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
     },
 
     async mintUploadCredential() {
-      return { backend: "kubo", apiUrl };
+      return { backend: "kubo", apiUrl, gateway: gatewayBase, reusable: true };
     },
 
     gatewayBase() {
