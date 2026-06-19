@@ -25,7 +25,10 @@ export default function generateAssetNode(storage) {
   router.post(
     "/",
     authenticate,
-    rateLimit({ max: 10, windowMs: 60 * 60 * 1000 }),
+    rateLimit({
+      max: process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10,
+      windowMs: 60 * 60 * 1000,
+    }),
     async (req, res) => {
       try {
         const {
