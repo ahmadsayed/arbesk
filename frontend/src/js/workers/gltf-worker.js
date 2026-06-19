@@ -28,9 +28,10 @@ const io = new WebIO();
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
+  const CHUNK = 0x8000; // 32 KiB — avoid `apply` argument limits
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   }
   return btoa(binary);
 }
