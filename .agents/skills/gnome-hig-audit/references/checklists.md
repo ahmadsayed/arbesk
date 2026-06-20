@@ -41,7 +41,7 @@ For each surface listed in the scope table, read the relevant SCSS and JS files.
 
 ### Step 2: Open the running app
 
-Start the app (`docker-compose up -d` + `npm start`) and inspect at `http://localhost:9090`. Toggle dark/light mode (browser DevTools → Rendering → `prefers-color-scheme`).
+Start the app (`./scripts/start-dev.sh`) and inspect at `http://localhost:9090`. Toggle dark/light mode (browser DevTools → Rendering → `prefers-color-scheme`).
 
 ### Step 3: Run the checklist
 

@@ -53,8 +53,8 @@ npm start
 npm run nodemon
 ```
 
-Also requires:
-- **IPFS container**: `docker-compose up -d ipfs`
-- **Hardhat container**: `docker-compose up -d hardhat` (for on-chain `tokenURI` calls)
+Also requires a running local dev stack:
+- **Full stack**: `./scripts/start-dev.sh --setup-only` (IPFS + Hardhat + Nostr + contracts + frontend)
+- **Or individual**: `docker-compose up -d ipfs`, `docker-compose up -d hardhat` (for on-chain `tokenURI` calls)
 - **Compiled contracts**: `docker-compose run --rm hardhat npx hardhat compile`
 - **CONTRACT_ADDRESS** set in root `.env`

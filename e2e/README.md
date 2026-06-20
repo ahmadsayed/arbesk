@@ -14,14 +14,20 @@ From the repo root:
 npx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
 
-The global setup (`e2e/global-setup.mjs`) will:
+The global setup (`e2e/global-setup.mjs`) delegates infrastructure boot to `scripts/start-dev.sh --setup-only`, which:
 
-1. Reset the Hardhat chain to genesis (if already running) so every run starts from a clean chain — no leftover tokens, fresh free-tier daily quota.
-2. Start IPFS + Hardhat Docker containers if they are not running.
-3. Deploy/verify the Arbesk smart contracts on Hardhat Local (a reset chain forces a fresh deploy).
-4. Patch `frontend/src/js/blockchain/network-config.js` and `src/config.js` with the deployed addresses.
-5. Build the frontend.
-6. Start the Express backend with `MOCK_3D_GENERATION=true`.
+1. Tears down any existing worktree containers for a clean start.
+2. Starts Docker (IPFS + Hardhat + Nostr), resets the Hardhat chain to genesis.
+3. Compiles and deploys fresh `ArbeskAssetFree` + `ArbeskAsset` + `MockUSDC`.
+4. Syncs deployed addresses to `.env` files and JS network configs.
+5. Builds the frontend.
+6. Exits (no backend — global-setup then starts the Express backend with `MOCK_3D_GENERATION=true`).
+
+You can also run the setup standalone to pre-warm the environment:
+
+```bash
+./scripts/start-dev.sh --setup-only
+```
 
 The global teardown (`e2e/global-teardown.mjs`) stops the backend and brings the Docker containers down (only if this run started them).
 
