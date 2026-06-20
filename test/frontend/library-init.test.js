@@ -22,6 +22,7 @@ describe("library-init.js", () => {
     expect(src()).toMatch(/autoConnectWallet\(\)/);
     expect(src()).toMatch(/EVENTS\.WALLET_CONNECTED/);
     expect(src()).toMatch(/EVENTS\.WALLET_DISCONNECTED/);
+    expect(src()).toMatch(/initLibraryGrid\(\)/);
   });
 
   test("wires both the headerbar and gate Connect Wallet buttons", () => {

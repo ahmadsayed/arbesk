@@ -11,6 +11,7 @@ import { initTheme, toggleTheme } from "./engine/theme.js";
 import { walletState } from "./state/wallet-state.js";
 import { truncateAddress } from "./utils/format.js";
 import { getCachedSession } from "./services/api.js";
+import { initLibraryGrid } from "./ui/library-grid.js";
 
 function applyWalletGate(connected) {
   const gate = document.getElementById("libraryGate");
@@ -44,6 +45,7 @@ document.getElementById("connectWalletBtn")?.addEventListener("click", connectWa
 document.getElementById("libraryConnectBtn")?.addEventListener("click", connectWallet);
 initWalletPopover();
 
+initLibraryGrid();
 applyWalletGate(Boolean(walletState.get().walletAddress));
 
 on(EVENTS.WALLET_CONNECTED, (e) => {
