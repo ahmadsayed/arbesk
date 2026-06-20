@@ -26,7 +26,7 @@ beforeEach(() => {
     </div>
   `;
   libraryState.set({
-    folders: [{ id: "f1", name: "Weapons", parentId: null }],
+    folders: [{ id: "f1", name: "Weapons", parentId: null, status: "wip" }],
     files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }],
   });
 });
@@ -52,10 +52,10 @@ describe("openContextMenu / closeContextMenu", () => {
     expect(labels).toEqual(["Besk it", "Open in Studio", "Rename", "Move to folder…", "Delete"]);
   });
 
-  test("a single selected folder shows Open, Rename, Move, Delete — no Besk it", () => {
+  test("a single selected folder shows Besk it, Open, Rename, Move, Delete", () => {
     openContextMenu(0, 0, ["f1"]);
     const labels = [...document.querySelectorAll(".context-menu-item")].map((el) => el.textContent.trim());
-    expect(labels).toEqual(["Open", "Rename", "Move to folder…", "Delete"]);
+    expect(labels).toEqual(["Besk it", "Open", "Rename", "Move to folder…", "Delete"]);
   });
 
   test("a multi-selection omits Rename", () => {
@@ -113,17 +113,16 @@ describe("requestMoveToFolder", () => {
 });
 
 describe("requestBeskIt", () => {
-  test("flips status from wip to besked on confirm", async () => {
-    const promise = requestBeskIt(["a"]);
-    document.querySelector(".dialog-action-btn[data-value='confirm']")?.click();
-    await promise;
+  test("flips status from wip to besked immediately, with no confirmation dialog", async () => {
+    await requestBeskIt(["a"]);
+    expect(document.querySelector(".dialog-overlay")).toBeNull();
     expect(libraryState.get().files.find((f) => f.id === "a").status).toBe("besked");
   });
 
-  test("leaves status unchanged if cancelled", async () => {
-    const promise = requestBeskIt(["a"]);
-    document.querySelector(".dialog-action-btn[data-value='cancel']")?.click();
-    await promise;
+  test("besks a folder independently of its children's status", async () => {
+    await requestBeskIt(["f1"]);
+    expect(libraryState.get().folders.find((f) => f.id === "f1").status).toBe("besked");
+    // Besking the folder does not cascade to its children.
     expect(libraryState.get().files.find((f) => f.id === "a").status).toBe("wip");
   });
 });

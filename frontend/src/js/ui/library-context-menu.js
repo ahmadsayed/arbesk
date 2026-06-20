@@ -1,7 +1,7 @@
 import { libraryState } from "../state/library-state.js";
 import { openInStudio, requestDelete, announce } from "./library-grid.js";
 import { requestNewFolder } from "./library-toolbar.js";
-import { showDialog, showConfirmDialog } from "./dialog.js";
+import { showDialog } from "./dialog.js";
 import { escapeHtml } from "../utils/html.js";
 
 let menuEl = null;
@@ -21,6 +21,7 @@ function singleItemMenuItems(ids) {
   const id = ids[0];
   if (isFolder(id)) {
     return [
+      { label: "Besk it", action: () => requestBeskIt(ids) },
       { label: "Open", action: () => libraryState.set({ currentFolderId: id, selectedIds: [] }) },
       { label: "Rename", action: () => requestRename(id) },
       { label: "Move to folder…", action: () => requestMoveToFolder(ids) },
@@ -160,21 +161,13 @@ export function requestMoveToFolder(ids) {
 }
 
 export function requestBeskIt(ids) {
-  return showConfirmDialog(
-    ids.length === 1 ? "Besk it?" : `Besk ${ids.length} items?`,
-    "This publishes the selected asset(s) on-chain.",
-    [
-      { text: "Cancel", value: "cancel", className: "btn btn-secondary" },
-      { text: "Besk it", value: "confirm", className: "btn btn-primary" },
-    ]
-  ).then((value) => {
-    if (value !== "confirm") return;
-    const state = libraryState.get();
-    libraryState.set({
-      files: state.files.map((f) => (ids.includes(f.id) ? { ...f, status: "besked" } : f)),
-    });
-    announce(`${ids.length} item${ids.length === 1 ? "" : "s"} besked`);
+  const state = libraryState.get();
+  libraryState.set({
+    files: state.files.map((f) => (ids.includes(f.id) ? { ...f, status: "besked" } : f)),
+    folders: state.folders.map((f) => (ids.includes(f.id) ? { ...f, status: "besked" } : f)),
   });
+  announce(`${ids.length} item${ids.length === 1 ? "" : "s"} besked`);
+  return Promise.resolve();
 }
 
 export function initLibraryContextMenu() {

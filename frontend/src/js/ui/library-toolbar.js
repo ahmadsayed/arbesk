@@ -26,6 +26,7 @@ export function requestNewFolder() {
       id: `folder-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name,
       parentId: libraryState.get().currentFolderId,
+      status: "wip",
     };
     libraryState.set({ folders: [...libraryState.get().folders, folder] });
   });

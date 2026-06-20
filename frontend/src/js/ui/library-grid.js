@@ -18,7 +18,6 @@ export function announce(text) {
 }
 
 function renderGridStatus(item) {
-  if (item.type !== "file") return "";
   if (item.status === "uploading") {
     return `<span class="status-badge status-uploading">Uploading…</span>`;
   }
@@ -29,7 +28,6 @@ function renderGridStatus(item) {
 }
 
 function renderListStatus(item) {
-  if (item.type !== "file") return "—";
   if (item.status === "uploading")
     return `<span class="status-badge status-uploading">Uploading…</span>`;
   if (item.status === "besked")
@@ -151,6 +149,8 @@ function render() {
 }
 
 let lastClickedId = null;
+let lastClickTime = 0;
+const DOUBLE_CLICK_MS = 400;
 
 export function openInStudio(fileId) {
   window.location.href = `/studio.html?libraryFile=${fileId}`;
@@ -176,6 +176,17 @@ export function requestDelete(ids) {
   });
 }
 
+function openItem(id) {
+  const state = libraryState.get();
+  const isFolder = state.folders.some((f) => f.id === id);
+  if (isFolder) {
+    libraryState.set({ currentFolderId: id, selectedIds: [] });
+    announce(`Opened folder`);
+  } else {
+    openInStudio(id);
+  }
+}
+
 function handleItemClick(e) {
   const container = document.getElementById("libraryItems");
   const el = e.target.closest("[data-id]");
@@ -186,6 +197,20 @@ function handleItemClick(e) {
   }
 
   const id = el.dataset.id;
+  const now = Date.now();
+  // Native dblclick never fires here: render() replaces every item element
+  // on every click (even a no-op reselect), so the second click of any
+  // double-click always lands on a different DOM node than the first, and
+  // browsers only count a dblclick when both clicks hit the same node.
+  // Detect the double-click manually instead, by id + elapsed time.
+  const isDoubleClick =
+    id === lastClickedId &&
+    now - lastClickTime < DOUBLE_CLICK_MS &&
+    !e.shiftKey &&
+    !e.ctrlKey &&
+    !e.metaKey;
+  lastClickTime = now;
+
   const state = libraryState.get();
   let selectedIds;
 
@@ -204,20 +229,8 @@ function handleItemClick(e) {
   announce(
     `${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`
   );
-}
 
-function handleItemDblClick(e) {
-  // Use lastClickedId instead of e.target because the click handler's
-  // render may have already rebuilt the DOM, detaching the original element.
-  if (!lastClickedId) return;
-  const state = libraryState.get();
-  const isFolder = state.folders.some((f) => f.id === lastClickedId);
-  if (isFolder) {
-    libraryState.set({ currentFolderId: lastClickedId, selectedIds: [] });
-    announce(`Opened folder`);
-  } else {
-    openInStudio(lastClickedId);
-  }
+  if (isDoubleClick) openItem(id);
 }
 
 function isEditingText() {
@@ -259,13 +272,7 @@ function handleKeydown(e) {
   }
 
   if (e.key === "Enter" && state.selectedIds.length === 1) {
-    const id = state.selectedIds[0];
-    const isFolder = state.folders.some((f) => f.id === id);
-    if (isFolder) {
-      libraryState.set({ currentFolderId: id, selectedIds: [] });
-    } else {
-      openInStudio(id);
-    }
+    openItem(state.selectedIds[0]);
     return;
   }
 
@@ -476,7 +483,6 @@ export function initLibraryGrid() {
 
   const container = document.getElementById("libraryItems");
   container?.addEventListener("click", handleItemClick);
-  container?.addEventListener("dblclick", handleItemDblClick);
   document.addEventListener("keydown", handleKeydown);
 
   on(EVENTS.LIBRARY_STATE_CHANGED, render);

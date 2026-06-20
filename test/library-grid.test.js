@@ -42,17 +42,46 @@ beforeEach(() => {
 });
 
 describe("createItemElement", () => {
-  test("renders a folder with no status badge or icon", () => {
+  test("renders a folder's name and id/type correctly", () => {
     const el = createItemElement(
-      { id: "f1", type: "folder", name: "Weapons" },
+      { id: "f1", type: "folder", name: "Weapons", status: "wip" },
       "grid",
     );
     expect(el.dataset.id).toBe("f1");
     expect(el.dataset.type).toBe("folder");
     expect(el.querySelector(".library-item-name").textContent).toBe("Weapons");
-    expect(el.querySelector(".status-badge")).toBeNull();
+  });
+
+  test("grid view: a wip folder shows the flag icon, not the checkmark", () => {
+    const el = createItemElement(
+      { id: "f1", type: "folder", name: "Weapons", status: "wip" },
+      "grid",
+    );
+    expect(el.querySelector(".status-flag")).not.toBeNull();
     expect(el.querySelector(".status-check")).toBeNull();
+  });
+
+  test("grid view: a besked folder shows the checkmark icon, not the flag", () => {
+    const el = createItemElement(
+      { id: "f1", type: "folder", name: "Weapons", status: "besked" },
+      "grid",
+    );
+    expect(el.querySelector(".status-check")).not.toBeNull();
     expect(el.querySelector(".status-flag")).toBeNull();
+  });
+
+  test("list view: a folder shows the same text badges as a file", () => {
+    const wip = createItemElement(
+      { id: "f1", type: "folder", name: "Weapons", status: "wip" },
+      "list",
+    );
+    expect(wip.querySelector(".status-wip").textContent).toBe("Work in Progress");
+
+    const besked = createItemElement(
+      { id: "f2", type: "folder", name: "Armor", status: "besked" },
+      "list",
+    );
+    expect(besked.querySelector(".status-besked").textContent).toBe("Besked");
   });
 
   test("grid view: a wip file shows the flag icon, not the checkmark", () => {
@@ -307,18 +336,74 @@ describe("selection: click", () => {
     });
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
-    // A real browser always fires a click before dblclick; the click handler
-    // sets lastClickedId which the dblclick handler now reads instead of
-    // relying on the (potentially rebuilt) DOM element.
+    // render() replaces every item element on each click, so in a real
+    // browser the second click of a double-click never lands on the same
+    // DOM node as the first and native "dblclick" never fires. The click
+    // handler detects the double-click itself (same id, within the
+    // threshold) instead of relying on the browser's dblclick event — so
+    // the test fires two real "click" events, re-querying the (rebuilt)
+    // element each time, exactly as a real double-click would behave.
     container
       .querySelector('[data-id="f1"]')
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    // Re-query after render() rebuilds the DOM
     container
       .querySelector('[data-id="f1"]')
-      .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     expect(libraryState.get().currentFolderId).toBe("f1");
+  });
+
+  test("double-clicking a file opens it in Studio", () => {
+    seedTwoFiles();
+    initLibraryGrid();
+    const container = document.getElementById("libraryItems");
+    container
+      .querySelector('[data-id="a"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    container
+      .querySelector('[data-id="a"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    // openInStudio navigates via window.location.href, which jsdom cannot
+    // observe (see the openInStudio describe block below) — this test only
+    // verifies the double-click path is reached without error and that the
+    // item remains the active selection, not the actual navigation target.
+    expect(libraryState.get().selectedIds).toEqual(["a"]);
+  });
+
+  test("two separate clicks on the same item more than the double-click threshold apart do not navigate", () => {
+    jest.useFakeTimers();
+    libraryState.set({
+      folders: [{ id: "f1", name: "Weapons", parentId: null }],
+    });
+    initLibraryGrid();
+    const container = document.getElementById("libraryItems");
+
+    container
+      .querySelector('[data-id="f1"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    jest.advanceTimersByTime(500);
+    container
+      .querySelector('[data-id="f1"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(libraryState.get().currentFolderId).toBeNull();
+    jest.useRealTimers();
+  });
+
+  test("two quick clicks on different items in a row do not count as a double-click", () => {
+    seedTwoFiles();
+    initLibraryGrid();
+    const container = document.getElementById("libraryItems");
+
+    container
+      .querySelector('[data-id="a"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    container
+      .querySelector('[data-id="b"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(libraryState.get().selectedIds).toEqual(["b"]);
   });
 });
 
