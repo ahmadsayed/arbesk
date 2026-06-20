@@ -13,6 +13,7 @@ import { truncateAddress } from "./utils/format.js";
 import { getCachedSession } from "./services/api.js";
 import { initLibraryGrid } from "./ui/library-grid.js";
 import { initLibraryToolbar } from "./ui/library-toolbar.js";
+import { initLibraryContextMenu } from "./ui/library-context-menu.js";
 
 function applyWalletGate(connected) {
   const gate = document.getElementById("libraryGate");
@@ -48,6 +49,7 @@ initWalletPopover();
 
 initLibraryGrid();
 initLibraryToolbar();
+initLibraryContextMenu();
 applyWalletGate(Boolean(walletState.get().walletAddress));
 
 on(EVENTS.WALLET_CONNECTED, (e) => {

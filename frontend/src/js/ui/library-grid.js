@@ -234,6 +234,11 @@ function handleKeydown(e) {
 
   if (e.key === "Delete" && state.selectedIds.length > 0) {
     requestDelete(state.selectedIds);
+    return;
+  }
+
+  if (e.key === "F2" && state.selectedIds.length === 1) {
+    import("./library-context-menu.js").then(({ requestRename }) => requestRename(state.selectedIds[0]));
   }
 }
 

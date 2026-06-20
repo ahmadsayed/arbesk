@@ -268,6 +268,20 @@ describe("keyboard shortcuts", () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true }));
     expect(libraryState.get().selectedIds).toEqual([]);
   });
+
+  test("F2 opens the rename dialog for the single selected item", async () => {
+    window.focusTrap = {
+      createFocusTrap: () => ({ activate() { return this; }, deactivate() { return this; } }),
+    };
+    seedTwoFiles();
+    initLibraryGrid();
+    libraryState.set({ selectedIds: ["a"] });
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.querySelector(".dialog-title").textContent).toBe("Rename");
+  });
 });
 
 describe("openInStudio", () => {

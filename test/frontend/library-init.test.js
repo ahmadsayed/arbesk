@@ -38,4 +38,8 @@ describe("library-init.js", () => {
   test("wires the toolbar module", () => {
     expect(src()).toMatch(/initLibraryToolbar\(\)/);
   });
+
+  test("wires the context menu module", () => {
+    expect(src()).toMatch(/initLibraryContextMenu\(\)/);
+  });
 });
