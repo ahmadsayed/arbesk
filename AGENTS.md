@@ -15,7 +15,7 @@ Conventions, key file references, and practical guidance for AI agents and devel
 
 **Key Constraints**
 
-- **Blockchain**: EVM-compatible — Hardhat local dev, Optimism Sepolia testnet, Optimism mainnet production
+- **Blockchain**: EVM-compatible — Hardhat local dev, MegaETH testnet
 - **IPFS**: Private Dockerized Kubo node — no public DHT, no external peers, loopback-only
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`)
@@ -51,7 +51,7 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
 - `create-panel.js` dispatches via `wallet.isFreeTierContract()` — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `11155420`, `10`)
+- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `6342`)
 - Contract `owner()` bypasses all quotas (useful for admin/test wallets)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
 
@@ -122,10 +122,8 @@ docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hard
 grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend                         # always verify last
 
-# ─── Deploy to testnet / mainnet ───
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismSepolia
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismMainnet
-docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network <network>
+# ─── Deploy to testnet ───
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network megaethTestnet
 
 # ─── Hardhat shell ───
 docker-compose run --rm hardhat sh
@@ -329,8 +327,7 @@ Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, no bootstrap, loopback swarm |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container, `./blockchain` volume-mounted |
 | Local Nostr relay | — | `ws://127.0.0.1:7777` | `scsibug/nostr-rs-relay`, SQLite-backed, dev-only |
-| Optimism Sepolia | — | `https://sepolia.optimism.io` | Testnet |
-| Optimism mainnet | — | `https://mainnet.optimism.io` | Production |
+| MegaETH Testnet | — | `https://carrot.megaeth.com/rpc` | Testnet |
 
 Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`, `docker/nostr-relay.toml`.
 
@@ -355,10 +352,9 @@ Full variable reference: `docs/CURRENT_STATUS.md §6.5`.
 | Environment | Network | RPC |
 |-------------|---------|-----|
 | Local dev | Hardhat (Docker) | `http://127.0.0.1:8545` |
-| Testnet | Optimism Sepolia | `https://sepolia.optimism.io` |
-| Production | Optimism mainnet | `https://mainnet.optimism.io` |
+| Testnet | MegaETH Testnet | `https://carrot.megaeth.com/rpc` |
 
-Optimism uses ETH for gas; block time ~2 s; L2 execution fee + L1 data fee (fraction of L1 cost).
+MegaETH uses ETH for gas; block time ~0.5 s.
 
 ---
 

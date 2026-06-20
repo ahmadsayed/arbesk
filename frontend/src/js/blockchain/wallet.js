@@ -44,26 +44,12 @@ const NETWORKS = {
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: [],
   },
-  optimismSepolia: {
-    chainId: `0x${CHAIN_IDS.OPTIMISM_SEPOLIA.toString(16)}`,
-    chainName: "Optimism Sepolia",
-    rpcUrls: ["https://sepolia.optimism.io"],
+  megaethTestnet: {
+    chainId: `0x${CHAIN_IDS.MEGAETH_TESTNET.toString(16)}`,
+    chainName: "MegaETH Testnet",
+    rpcUrls: ["https://carrot.megaeth.com/rpc"],
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://sepolia-optimism.etherscan.io"],
-  },
-  optimismMainnet: {
-    chainId: `0x${CHAIN_IDS.OPTIMISM_MAINNET.toString(16)}`,
-    chainName: "Optimism Mainnet",
-    rpcUrls: ["https://mainnet.optimism.io"],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://optimistic.etherscan.io"],
-  },
-  seiTestnet: {
-    chainId: `0x${CHAIN_IDS.SEI_TESTNET.toString(16)}`,
-    chainName: "SEI Testnet",
-    rpcUrls: ["https://evm-rpc-testnet.sei-apis.com"],
-    nativeCurrency: { name: "SEI", symbol: "SEI", decimals: 18 },
-    blockExplorerUrls: ["https://testnet.seiscan.io"],
+    blockExplorerUrls: ["https://megaexplorer.xyz"],
   },
 };
 
@@ -80,7 +66,9 @@ function _isChainUnknownError(error) {
   if (error.code === 4902) return true;
   if (error.code === -32603) return true;
   const msg = (error.message || "").toLowerCase();
-  return msg.includes("unrecognized chain") || msg.includes("unrecognized chainid");
+  return (
+    msg.includes("unrecognized chain") || msg.includes("unrecognized chainid")
+  );
 }
 
 /** @type {string|null} 'injected' | 'walletconnect' | null */
@@ -259,10 +247,7 @@ async function _checkBalance() {
     if (chainId === HARHAT_CHAIN_ID_DEC && parseFloat(balanceEth) < 0.1) {
       console.warn("Low balance detected on Hardhat");
       const { DEV_ACCOUNT_ADDRESS } = await import("./dev-account.js");
-      if (
-        walletAddress.toLowerCase() !==
-        DEV_ACCOUNT_ADDRESS.toLowerCase()
-      ) {
+      if (walletAddress.toLowerCase() !== DEV_ACCOUNT_ADDRESS.toLowerCase()) {
         lowBalanceToastId = showToast({
           type: "warning",
           title: "Low Balance",
@@ -271,27 +256,14 @@ async function _checkBalance() {
         });
       }
     } else if (
-      (chainId === CHAIN_IDS.OPTIMISM_SEPOLIA ||
-        chainId === CHAIN_IDS.OPTIMISM_MAINNET) &&
+      chainId === CHAIN_IDS.MEGAETH_TESTNET &&
       parseFloat(balanceEth) < 0.001
     ) {
-      console.warn("Low balance detected on Optimism");
-      const netName =
-        chainId === CHAIN_IDS.OPTIMISM_SEPOLIA
-          ? "Optimism Sepolia"
-          : "Optimism Mainnet";
+      console.warn("Low balance detected on MegaETH Testnet");
       lowBalanceToastId = showToast({
         type: "warning",
         title: "Low Balance",
-        message: `Your wallet has very low ETH on ${netName}. You need ETH for gas. Get testnet ETH from a faucet.`,
-        duration: 0,
-      });
-    } else if (chainId === CHAIN_IDS.SEI_TESTNET && parseFloat(balanceEth) < 0.5) {
-      console.warn("Low balance detected on SEI Testnet");
-      lowBalanceToastId = showToast({
-        type: "warning",
-        title: "Low Balance",
-        message: `Your wallet has very low SEI on SEI Testnet. You need SEI for gas. Get testnet SEI from a faucet.`,
+        message: `Your wallet has very low ETH on MegaETH Testnet. You need ETH for gas. Get testnet ETH from a faucet.`,
         duration: 0,
       });
     }
@@ -476,7 +448,9 @@ async function authenticateUser() {
     });
   } catch (err) {
     console.warn("[AUTH] Session creation failed or rejected:", err.message);
-    emit(EVENTS.USER_AUTH_REQUIRED, { address: walletState.get().walletAddress });
+    emit(EVENTS.USER_AUTH_REQUIRED, {
+      address: walletState.get().walletAddress,
+    });
   }
 }
 
@@ -662,7 +636,8 @@ async function recordGeneration(nodeId, prompt) {
     showToast({
       type: "error",
       title: "Wrong Contract",
-      message: "Current contract is not the free tier. Use paid payment instead.",
+      message:
+        "Current contract is not the free tier. Use paid payment instead.",
       duration: 0,
     });
     return null;
@@ -843,7 +818,9 @@ async function payWithUSDC(nodeId, prompt, tier) {
       const resetTx = usdcContract.methods.approve(contractAddress, "0");
       let resetGas;
       try {
-        resetGas = await resetTx.estimateGas({ from: walletState.get().walletAddress });
+        resetGas = await resetTx.estimateGas({
+          from: walletState.get().walletAddress,
+        });
       } catch {
         resetGas = 80000;
       }
@@ -861,7 +838,9 @@ async function payWithUSDC(nodeId, prompt, tier) {
 
     let approveGas;
     try {
-      approveGas = await approveTx.estimateGas({ from: walletState.get().walletAddress });
+      approveGas = await approveTx.estimateGas({
+        from: walletState.get().walletAddress,
+      });
     } catch {
       approveGas = 100000;
     }
@@ -910,7 +889,9 @@ async function payWithUSDC(nodeId, prompt, tier) {
     // estimateGas may fail on public RPCs due to stale sequencer state.
     let payGas;
     try {
-      payGas = await payTx.estimateGas({ from: walletState.get().walletAddress });
+      payGas = await payTx.estimateGas({
+        from: walletState.get().walletAddress,
+      });
       console.log("[USDC] estimated pay gas:", payGas);
     } catch (estErr) {
       // On public networks, estimateGas often fails when the approval tx hasn't
@@ -1029,7 +1010,8 @@ async function publishAsset(tokenURI, tokenId) {
   } catch (error) {
     console.error("publishAsset failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
-    const contractAbi = (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
+    const contractAbi =
+      (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
     showToast({
       type: "error",
@@ -1316,19 +1298,28 @@ async function burn(tokenId) {
       const capturedCid = manifestCid;
       const capturedWallet = walletState.get().walletAddress;
       (async () => {
-        const reachable = await isIpfsCidReachable(capturedCid).catch(() => false);
+        const reachable = await isIpfsCidReachable(capturedCid).catch(
+          () => false
+        );
         if (!reachable) {
-          console.warn(`[BURN] ${capturedCid} not reachable on IPFS, skipping unpin`);
+          console.warn(
+            `[BURN] ${capturedCid} not reachable on IPFS, skipping unpin`
+          );
           return;
         }
         console.log(`[BURN] unpinning IPFS content for ${capturedCid}…`);
         const { unpinAssetCids } = await import("../services/api.js");
         unpinAssetCids(capturedCid, capturedWallet)
           .then((result) => {
-            console.log(`[BURN] unpinned ${result.count} CIDs for token ${tokenId}`);
-            if (result.errors?.length) console.warn(`[BURN] unpin errors:`, result.errors);
+            console.log(
+              `[BURN] unpinned ${result.count} CIDs for token ${tokenId}`
+            );
+            if (result.errors?.length)
+              console.warn(`[BURN] unpin errors:`, result.errors);
           })
-          .catch((err) => console.warn(`[BURN] unpin failed (non-fatal):`, err.message));
+          .catch((err) =>
+            console.warn(`[BURN] unpin failed (non-fatal):`, err.message)
+          );
       })();
     }
 
@@ -1336,7 +1327,8 @@ async function burn(tokenId) {
   } catch (error) {
     console.error("burn failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
-    const contractAbi = (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
+    const contractAbi =
+      (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
     showToast({
       type: "error",

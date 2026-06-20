@@ -25,9 +25,7 @@ const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 // Well-known RPC endpoints for common chains
 const KNOWN_RPC_ENDPOINTS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: "http://127.0.0.1:8545", // Hardhat local dev node
-  [CHAIN_IDS.OPTIMISM_SEPOLIA]: "https://sepolia.optimism.io", // Optimism Sepolia testnet
-  [CHAIN_IDS.OPTIMISM_MAINNET]: "https://mainnet.optimism.io", // Optimism mainnet
-  [CHAIN_IDS.SEI_TESTNET]: "https://evm-rpc-testnet.sei-apis.com", // SEI testnet
+  [CHAIN_IDS.MEGAETH_TESTNET]: "https://carrot.megaeth.com/rpc", // MegaETH testnet
 };
 
 /**
@@ -177,7 +175,8 @@ export async function resolveChildRef(childRef, options = {}) {
 
   // Fall back to connected wallet's chain/contract when not provided.
   // Normalize chainId to Number — getChainId() returns BigInt in Web3 v4.
-  const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
+  const { chainId: walletChainId, contractAddress: walletContractAddress } =
+    walletState.get();
   const chainId = Number(childRef.chainId || walletChainId) || null;
   const contractAddress =
     childRef.contractAddress || walletContractAddress || null;

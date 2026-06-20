@@ -43,9 +43,7 @@
   "paths": {
     "/config": {
       "get": {
-        "tags": [
-          "Config"
-        ],
+        "tags": ["Config"],
         "summary": "Get runtime configuration",
         "description": "Returns the current application configuration including the deployed contract address, IPFS gateway URL, Hardhat RPC URL, and mock generation status.",
         "operationId": "getConfig",
@@ -65,9 +63,7 @@
     },
     "/generations": {
       "post": {
-        "tags": [
-          "Generations"
-        ],
+        "tags": ["Generations"],
         "summary": "Generate a 3D asset from a text prompt",
         "description": "Authenticated endpoint that validates an on-chain payment transaction, generates a 3D mesh via the configured adapter (mock or cloud), uploads the asset to IPFS, and returns the new manifest and source asset CIDs.\n\n**Rate Limit:** 10 requests per hour per wallet address.\n\n**Replay Protection:** Each transaction hash can only be consumed once.",
         "operationId": "generateAsset",
@@ -200,9 +196,7 @@
     },
     "/manifests": {
       "post": {
-        "tags": [
-          "Manifests"
-        ],
+        "tags": ["Manifests"],
         "summary": "Create or update a draft manifest",
         "description": "Saves a fractal manifest to IPFS. Auto-generates `asset_id` if not provided, ensures `scene.nodes` array exists, and auto-increments version if missing. Embeds any thumbnail data URL as a separate IPFS asset.\n\nThis replaces the legacy `/save-draft` endpoint \u2014 it does not interact with the blockchain.",
         "operationId": "saveManifest",
@@ -264,9 +258,7 @@
     },
     "/manifests/{cid}/publish": {
       "post": {
-        "tags": [
-          "Manifests"
-        ],
+        "tags": ["Manifests"],
         "summary": "Publish a manifest to IPFS",
         "description": "Stores a complete manifest to IPFS with optional embedded thumbnail (data URL). The thumbnail is extracted, validated (max 2 MB, supported formats: webp, png, jpeg), uploaded as a separate IPFS asset, and referenced by CID in the manifest.",
         "operationId": "publishManifest",
@@ -308,9 +300,7 @@
     },
     "/manifests/{cid}/history": {
       "get": {
-        "tags": [
-          "Manifests"
-        ],
+        "tags": ["Manifests"],
         "summary": "Walk the manifest version chain",
         "description": "Walks backwards through `prev_asset_manifest_cid` links on IPFS from the given CID. Returns a chronological list (oldest first) of lightweight version summaries. Detects and breaks on circular links. Maximum depth: 50 entries.",
         "operationId": "getManifestHistory",
@@ -342,9 +332,7 @@
     },
     "/tokens/{tokenId}/manifest": {
       "get": {
-        "tags": [
-          "Tokens"
-        ],
+        "tags": ["Tokens"],
         "summary": "Resolve a token ID to its manifest",
         "description": "Queries the on-chain `tokenURI(tokenId)` of the ArbeskAsset contract, then fetches the manifest from IPFS. Returns the token ID, manifest CID, and the full manifest JSON.",
         "operationId": "getTokenManifest",
@@ -402,9 +390,7 @@
     },
     "/contracts/{name}/abi": {
       "get": {
-        "tags": [
-          "Contracts"
-        ],
+        "tags": ["Contracts"],
         "summary": "Get compiled contract ABI",
         "description": "Serves the full Hardhat artifact JSON (including `abi` and `bytecode`) for a compiled Solidity contract. Requires contracts to be compiled first via Hardhat.",
         "operationId": "getContractAbi",
@@ -488,10 +474,7 @@
       },
       "GenerationRequest": {
         "type": "object",
-        "required": [
-          "prompt",
-          "nodeId"
-        ],
+        "required": ["prompt", "nodeId"],
         "properties": {
           "prompt": {
             "type": "string",
@@ -532,24 +515,7 @@
             },
             "minItems": 16,
             "maxItems": 16,
-            "example": [
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0,
-              0,
-              0,
-              1
-            ]
+            "example": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
           }
         }
       },
@@ -568,9 +534,7 @@
       },
       "Manifest": {
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -608,9 +572,7 @@
           },
           "scene": {
             "type": "object",
-            "required": [
-              "nodes"
-            ],
+            "required": ["nodes"],
             "properties": {
               "nodes": {
                 "type": "array",
@@ -643,9 +605,7 @@
       },
       "SceneNode": {
         "type": "object",
-        "required": [
-          "node_id"
-        ],
+        "required": ["node_id"],
         "properties": {
           "node_id": {
             "type": "string",
@@ -659,9 +619,7 @@
           "type": {
             "type": "string",
             "description": "Node type",
-            "enum": [
-              "source_asset"
-            ]
+            "enum": ["source_asset"]
           },
           "source": {
             "type": "object",
@@ -720,13 +678,11 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "token"
-                ]
+                "enum": ["token"]
               },
               "chainId": {
                 "type": "integer",
-                "example": 314159
+                "example": 31415822
               },
               "contractAddress": {
                 "type": "string"
@@ -736,15 +692,11 @@
               },
               "standard": {
                 "type": "string",
-                "enum": [
-                  "ERC721"
-                ]
+                "enum": ["ERC721"]
               },
               "resolution": {
                 "type": "string",
-                "enum": [
-                  "latest"
-                ]
+                "enum": ["latest"]
               }
             }
           }
@@ -806,10 +758,7 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "generation",
-              "parametric"
-            ]
+            "enum": ["generation", "parametric"]
           },
           "params": {
             "type": "object",
@@ -829,9 +778,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": [
-              "snapshot"
-            ]
+            "enum": ["snapshot"]
           },
           "dataUrl": {
             "type": "string",
@@ -852,11 +799,7 @@
           },
           "mime": {
             "type": "string",
-            "enum": [
-              "image/webp",
-              "image/png",
-              "image/jpeg"
-            ]
+            "enum": ["image/webp", "image/png", "image/jpeg"]
           },
           "width": {
             "type": "integer",
@@ -895,9 +838,7 @@
       },
       "PublishManifestRequest": {
         "type": "object",
-        "required": [
-          "scene"
-        ],
+        "required": ["scene"],
         "properties": {
           "asset_id": {
             "type": "string"
@@ -1015,16 +956,11 @@
       },
       "Error": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "object",
-            "required": [
-              "code",
-              "message"
-            ],
+            "required": ["code", "message"],
             "properties": {
               "code": {
                 "type": "string",

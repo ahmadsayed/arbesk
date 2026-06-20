@@ -75,7 +75,7 @@ function initServiceKey() {
   if (!NOSTR_SERVICE_PRIVATE_KEY) {
     console.warn(
       "[CHAT] NOSTR_SERVICE_PRIVATE_KEY not set; chat proxy disabled. " +
-        "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+        "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     );
     return false;
   }
@@ -119,7 +119,9 @@ async function handleConnection(clientWs, req) {
   const { token, tokenId, chainId } = parsedUrl.query;
 
   if (!token || !tokenId) {
-    console.log(`[CHAT] rejected — missing token or tokenId | client=${remote}`);
+    console.log(
+      `[CHAT] rejected — missing token or tokenId | client=${remote}`,
+    );
     safeClose(clientWs, 4400, "Missing token or tokenId");
     return;
   }
@@ -137,21 +139,24 @@ async function handleConnection(clientWs, req) {
   try {
     access = await checkAssetAccess(tokenId, chainId, address);
   } catch (err) {
-    console.error(`[CHAT] access check failed | client=${remote}:`, err.message);
+    console.error(
+      `[CHAT] access check failed | client=${remote}:`,
+      err.message,
+    );
     safeClose(clientWs, 4403, "Access check failed");
     return;
   }
 
   if (!access.allowed) {
     console.log(
-      `[CHAT] rejected — not viewer/owner | tokenId=${tokenId} addr=${address} client=${remote}`
+      `[CHAT] rejected — not viewer/owner | tokenId=${tokenId} addr=${address} client=${remote}`,
     );
     safeClose(clientWs, 4403, "Not authorized for this asset");
     return;
   }
 
   console.log(
-    `[CHAT] connected | tokenId=${tokenId} asset=${access.assetId} addr=${address} client=${remote}`
+    `[CHAT] connected | tokenId=${tokenId} asset=${access.assetId} addr=${address} client=${remote}`,
   );
 
   // 3. Attach rate limiter and heartbeat
@@ -163,7 +168,10 @@ async function handleConnection(clientWs, req) {
   try {
     relay = await openRelayBridge(access.assetId, clientWs, session);
   } catch (err) {
-    console.error(`[CHAT] relay bridge failed | client=${remote}:`, err.message);
+    console.error(
+      `[CHAT] relay bridge failed | client=${remote}:`,
+      err.message,
+    );
     safeClose(clientWs, 4403, "Could not connect to relay");
     return;
   }
@@ -188,7 +196,10 @@ async function handleConnection(clientWs, req) {
         return;
       }
       if (payload.type !== "chat" || typeof payload.content !== "string") {
-        sendClient(clientWs, { type: "error", message: "Invalid message format" });
+        sendClient(clientWs, {
+          type: "error",
+          message: "Invalid message format",
+        });
         return;
       }
 
@@ -212,22 +223,31 @@ async function handleConnection(clientWs, req) {
         .publish(event)
         .then(() => {
           console.log(
-            `[CHAT] published | asset=${access.assetId} sender=${address.slice(0, 10)}… len=${content.length}`
+            `[CHAT] published | asset=${access.assetId} sender=${address.slice(0, 10)}… len=${content.length}`,
           );
         })
         .catch((err) => {
-          console.warn(`[CHAT] publish rejected | asset=${access.assetId}:`, err.message);
-          sendClient(clientWs, { type: "error", message: "Relay rejected message" });
+          console.warn(
+            `[CHAT] publish rejected | asset=${access.assetId}:`,
+            err.message,
+          );
+          sendClient(clientWs, {
+            type: "error",
+            message: "Relay rejected message",
+          });
         });
     } catch (err) {
-      console.warn(`[CHAT] bad client message | client=${remote}:`, err.message);
+      console.warn(
+        `[CHAT] bad client message | client=${remote}:`,
+        err.message,
+      );
       sendClient(clientWs, { type: "error", message: "Invalid JSON" });
     }
   });
 
   clientWs.on("close", (code, reason) => {
     console.log(
-      `[CHAT] client disconnected | tokenId=${tokenId} code=${code} reason=${reason}`
+      `[CHAT] client disconnected | tokenId=${tokenId} code=${code} reason=${reason}`,
     );
     session.dispose();
     relay.close();
@@ -278,7 +298,7 @@ async function checkAssetAccess(tokenId, chainId, address) {
 
 function defaultChainId() {
   // Matches CHAIN_IDS.HARDHAT_LOCAL for local dev when chainId not supplied.
-  return 31337;
+  return 31415822;
 }
 
 // ─── Relay Bridge ───────────────────────────────────────────────────────────
@@ -305,7 +325,8 @@ function openRelayBridge(assetId, clientWs, session) {
               if (
                 Array.isArray(event.tags) &&
                 event.tags.some(
-                  (t) => Array.isArray(t) && t[0] === TAG_ASSET && t[1] === assetId
+                  (t) =>
+                    Array.isArray(t) && t[0] === TAG_ASSET && t[1] === assetId,
                 )
               ) {
                 sendClient(clientWs, { type: "event", event });
@@ -318,7 +339,7 @@ function openRelayBridge(assetId, clientWs, session) {
               sendClient(clientWs, { type: "relayNotice", message });
             },
             eoseTimeout: 10000,
-          }
+          },
         );
 
         if (!resolved) {
@@ -419,4 +440,3 @@ function sendClient(ws, payload) {
     ws.send(JSON.stringify(payload));
   }
 }
-

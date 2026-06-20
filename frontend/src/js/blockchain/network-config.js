@@ -15,38 +15,20 @@ export const NETWORK_CONFIGS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {
     name: "Hardhat Local",
     chainId: CHAIN_IDS.HARDHAT_LOCAL,
-    contractAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     paidContractAddress: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-    usdcToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    usdcToken: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,
   },
-  [CHAIN_IDS.OPTIMISM_SEPOLIA]: {
-    name: "Optimism Sepolia",
-    chainId: CHAIN_IDS.OPTIMISM_SEPOLIA,
-    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
-    paidContractAddress: "0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673",
-    usdcToken: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15", // Circle USDC on OP Sepolia
-    rpcUrl: "https://sepolia.optimism.io",
-    blockExplorer: "https://sepolia-optimism.etherscan.io",
-  },
-  [CHAIN_IDS.OPTIMISM_MAINNET]: {
-    name: "Optimism Mainnet",
-    chainId: CHAIN_IDS.OPTIMISM_MAINNET,
-    contractAddress: null, // Free tier not yet deployed to Optimism mainnet
-    paidContractAddress: null, // Paid tier not yet deployed to Optimism mainnet
-    usdcToken: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", // Circle USDC on OP Mainnet
-    rpcUrl: "https://mainnet.optimism.io",
-    blockExplorer: "https://optimistic.etherscan.io",
-  },
-  [CHAIN_IDS.SEI_TESTNET]: {
-    name: "SEI Testnet",
-    chainId: CHAIN_IDS.SEI_TESTNET,
-    contractAddress: "0x38BC6BabC907783f92CE1766F98494578ED2a5b2",
-    paidContractAddress: "0x0B7E171c2A98Af2CaD02B12c347997F769e336c2",
-    usdcToken: "0x4fCF1784B31630811181f670Aea7A7bEF803eaED", // Circle USDC on SEI testnet
-    rpcUrl: "https://evm-rpc-testnet.sei-apis.com",
-    blockExplorer: "https://testnet.seiscan.io",
+  [CHAIN_IDS.MEGAETH_TESTNET]: {
+    name: "MegaETH Testnet",
+    chainId: CHAIN_IDS.MEGAETH_TESTNET,
+    contractAddress: null, // Deploy ArbeskAssetFree to MegaETH testnet
+    paidContractAddress: null, // Paid tier not deployed on testnet
+    usdcToken: null, // USDC not deployed on testnet
+    rpcUrl: "https://carrot.megaeth.com/rpc",
+    blockExplorer: "https://megaexplorer.xyz",
   },
 };
 
@@ -92,9 +74,7 @@ export function getBlockExplorer(chainId) {
  * @returns {string}
  */
 export function getRpcUrl(chainId) {
-  return (
-    getNetworkConfig(chainId)?.rpcUrl || "http://127.0.0.1:8545"
-  );
+  return getNetworkConfig(chainId)?.rpcUrl || "http://127.0.0.1:8545";
 }
 
 /**
@@ -104,4 +84,3 @@ export function getRpcUrl(chainId) {
 export function getSupportedChainIds() {
   return Object.keys(NETWORK_CONFIGS).map(Number);
 }
-

@@ -11,19 +11,13 @@ import { CHAIN_IDS } from "../constants/chains.js";
 const EXPLORER_URLS = {
   // Hardhat local — no explorer
   [CHAIN_IDS.HARDHAT_LOCAL]: null,
-  // Optimism Sepolia testnet
-  [CHAIN_IDS.OPTIMISM_SEPOLIA]: "https://sepolia-optimism.etherscan.io",
-  // Optimism mainnet
-  [CHAIN_IDS.OPTIMISM_MAINNET]: "https://optimistic.etherscan.io",
-  // SEI testnet
-  [CHAIN_IDS.SEI_TESTNET]: "https://testnet.seiscan.io",
+  // MegaETH Testnet
+  [CHAIN_IDS.MEGAETH_TESTNET]: "https://megaexplorer.xyz",
 };
 
 const NETWORK_NAMES = {
   [CHAIN_IDS.HARDHAT_LOCAL]: "Hardhat Local",
-  [CHAIN_IDS.OPTIMISM_SEPOLIA]: "Optimism Sepolia",
-  [CHAIN_IDS.OPTIMISM_MAINNET]: "Optimism Mainnet",
-  [CHAIN_IDS.SEI_TESTNET]: "SEI Testnet",
+  [CHAIN_IDS.MEGAETH_TESTNET]: "MegaETH Testnet",
 };
 
 /**

@@ -211,7 +211,7 @@ export default () => {
           publishContext.contractAddress || getContractAddress(chainId);
         if (contractAddress) {
           const tokenIdNum = Number(publishContext.tokenId);
-          const assetId = `${chainId || 31337}:${contractAddress}:${tokenIdNum}`;
+          const assetId = `${chainId || 31415822}:${contractAddress}:${tokenIdNum}`;
           try {
             const { cid: archiveCid } = await archiveCommentsForAsset(
               assetId,
@@ -230,7 +230,6 @@ export default () => {
       console.log(
         `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} → cid=${resultCid}`,
       );
-
 
       res.status(201).json({
         cid: resultCid,
@@ -255,7 +254,6 @@ export default () => {
       );
       const resultCid = await addAndPin(payload);
       console.log(`[IPFS] publish → ${resultCid}`);
-
 
       res.status(200).json({ cid: resultCid });
     } catch (error) {
@@ -526,7 +524,6 @@ export default () => {
       console.log(
         `[UNPIN] done — ${unpinned.length} unpinned, ${errors.length} errors (${elapsed}ms)`,
       );
-
 
       res.json({
         unpinned,

@@ -3,41 +3,47 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Deploy both ArbeskAsset (paid) and ArbeskAssetFree (free tier) to the selected network.
+ * Deploy ArbeskAssetFree (free tier) to the selected network.
  *
- * Constructors:
- *   ArbeskAsset(address _treasury, address _usdcToken)
- *   ArbeskAssetFree() — no args
+ * Network gating:
+ *   hardhat / localhost → deploy ArbeskAssetFree + ArbeskAsset (paid) + MockUSDC
+ *   megaethTestnet     → deploy ArbeskAssetFree only (no paid, no USDC)
+ *   any other          → error
  *
- * USDC addresses:
- *   Optimism Sepolia: 0x5fd84259d66Cd461235407180D3B4c8d0F273e15
- *   Optimism mainnet: 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85
- *   Local/Hardhat: will deploy MockUSDC first unless USDC_TOKEN env is set
+ * ArbeskAssetFree() — no constructor args
  */
-
-// Known USDC addresses per network
-const USDC_ADDRESSES = {
-  optimismSepolia: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15",
-  optimismMainnet: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-  seiTestnet: "0x4fCF1784B31630811181f670Aea7A7bEF803eaED",
-};
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying with account:", deployer.address);
 
   const network = hre.network.name;
-  const treasury = process.env.TREASURY_ADDRESS || deployer.address;
-  console.log("Treasury wallet:", treasury);
+  console.log("Network:", network);
 
-  // Determine USDC address.
-  // For known live networks, always use the canonical USDC address so a
-  // stale USDC_TOKEN env var from a previous local deploy does not leak
-  // onto testnet/mainnet. Local networks fall back to USDC_TOKEN env var
-  // or deploy MockUSDC.
-  let usdcAddress = USDC_ADDRESSES[network];
+  const isLocal = network === "hardhat" || network === "localhost";
+  const isTestnet = network === "megaethTestnet";
 
-  if (!usdcAddress && (network === "hardhat" || network === "localhost")) {
+  if (!isLocal && !isTestnet) {
+    console.error(
+      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, megaethTestnet`
+    );
+    process.exit(1);
+  }
+
+  // ── Deploy ArbeskAssetFree (free tier) — always deployed ──
+  const ArbeskAssetFree = await hre.ethers.getContractFactory(
+    "ArbeskAssetFree"
+  );
+  const freeAsset = await ArbeskAssetFree.deploy();
+  await freeAsset.waitForDeployment();
+  const freeAddress = await freeAsset.getAddress();
+  console.log("ArbeskAssetFree deployed to:", freeAddress);
+
+  let paidAddress = null;
+  let usdcAddress = null;
+
+  if (isLocal) {
+    // ── Local: deploy MockUSDC + ArbeskAsset (paid tier) for testing ──
     usdcAddress = process.env.USDC_TOKEN;
     if (!usdcAddress) {
       console.log(
@@ -54,32 +60,22 @@ async function main() {
       await mockUsdc.mint(deployer.address, mintAmount);
       console.log("Minted 1,000,000 USDC to deployer for testing");
     }
-  }
 
-  if (!usdcAddress) {
-    console.warn(
-      "WARNING: No USDC address found for network '" +
-        network +
-        "'. Deploying with address(0) — USDC payments disabled."
+    const treasury = process.env.TREASURY_ADDRESS || deployer.address;
+    console.log("Treasury wallet:", treasury);
+    console.log("USDC token address:", usdcAddress);
+
+    const ArbeskAsset = await hre.ethers.getContractFactory("ArbeskAsset");
+    const paidAsset = await ArbeskAsset.deploy(treasury, usdcAddress);
+    await paidAsset.waitForDeployment();
+    paidAddress = await paidAsset.getAddress();
+    console.log("ArbeskAsset (paid) deployed to:", paidAddress);
+  } else {
+    // ── Testnet: free tier only ──
+    console.log(
+      "Skipping ArbeskAsset (paid) and USDC — not deployed on testnet"
     );
-    usdcAddress = hre.ethers.ZeroAddress;
   }
-
-  console.log("USDC token address:", usdcAddress);
-
-  // ── Deploy ArbeskAssetFree (free tier) — DEFAULT contract ──
-  const ArbeskAssetFree = await hre.ethers.getContractFactory("ArbeskAssetFree");
-  const freeAsset = await ArbeskAssetFree.deploy();
-  await freeAsset.waitForDeployment();
-  const freeAddress = await freeAsset.getAddress();
-  console.log("ArbeskAssetFree deployed to:", freeAddress);
-
-  // ── Deploy ArbeskAsset (paid tier) ──
-  const ArbeskAsset = await hre.ethers.getContractFactory("ArbeskAsset");
-  const paidAsset = await ArbeskAsset.deploy(treasury, usdcAddress);
-  await paidAsset.waitForDeployment();
-  const paidAddress = await paidAsset.getAddress();
-  console.log("ArbeskAsset deployed to:", paidAddress);
 
   // ── Save deployment artifacts ──
   const deployDir = path.join(__dirname, "..", "deployments", network);
@@ -99,38 +95,45 @@ async function main() {
     )
   );
 
-  fs.writeFileSync(
-    path.join(deployDir, "ArbeskAsset.json"),
-    JSON.stringify(
-      {
-        address: paidAddress,
-        treasury,
-        usdcToken: usdcAddress,
-        deployer: deployer.address,
-        blockNumber: await hre.ethers.provider.getBlockNumber(),
-        timestamp: new Date().toISOString(),
-      },
-      null,
-      2
-    )
-  );
+  if (paidAddress) {
+    fs.writeFileSync(
+      path.join(deployDir, "ArbeskAsset.json"),
+      JSON.stringify(
+        {
+          address: paidAddress,
+          treasury: process.env.TREASURY_ADDRESS || deployer.address,
+          usdcToken: usdcAddress,
+          deployer: deployer.address,
+          blockNumber: await hre.ethers.provider.getBlockNumber(),
+          timestamp: new Date().toISOString(),
+        },
+        null,
+        2
+      )
+    );
+  }
+
   console.log("Deployment artifacts saved to deployments/" + network);
 
   // ── Update .env for local networks ──
-  if (network === "hardhat" || network === "localhost") {
+  if (isLocal) {
     const envPath = path.join(__dirname, "..", ".env");
     let env = "";
     if (fs.existsSync(envPath)) {
       env = fs.readFileSync(envPath, "utf8");
-      // Free contract is the default CONTRACT_ADDRESS
       if (env.includes("CONTRACT_ADDRESS=")) {
-        env = env.replace(/CONTRACT_ADDRESS=.*/g, `CONTRACT_ADDRESS=${freeAddress}`);
+        env = env.replace(
+          /CONTRACT_ADDRESS=.*/g,
+          `CONTRACT_ADDRESS=${freeAddress}`
+        );
       } else {
         env += `\nCONTRACT_ADDRESS=${freeAddress}\n`;
       }
-      // Paid contract stored separately
       if (env.includes("PAID_CONTRACT_ADDRESS=")) {
-        env = env.replace(/PAID_CONTRACT_ADDRESS=.*/g, `PAID_CONTRACT_ADDRESS=${paidAddress}`);
+        env = env.replace(
+          /PAID_CONTRACT_ADDRESS=.*/g,
+          `PAID_CONTRACT_ADDRESS=${paidAddress}`
+        );
       } else {
         env += `\nPAID_CONTRACT_ADDRESS=${paidAddress}\n`;
       }
@@ -143,7 +146,18 @@ async function main() {
       env = `CONTRACT_ADDRESS=${freeAddress}\nPAID_CONTRACT_ADDRESS=${paidAddress}\nUSDC_TOKEN=${usdcAddress}\n`;
     }
     fs.writeFileSync(envPath, env);
-    console.log("Updated blockchain/.env with CONTRACT_ADDRESS (free) + PAID_CONTRACT_ADDRESS + USDC_TOKEN");
+    console.log(
+      "Updated blockchain/.env with CONTRACT_ADDRESS (free) + PAID_CONTRACT_ADDRESS + USDC_TOKEN"
+    );
+  }
+
+  if (isTestnet) {
+    console.log("\n=== Next steps for MegaETH Testnet ===");
+    console.log("1. Copy CONTRACT_ADDRESS to blockchain/.env and root .env:");
+    console.log(`   CONTRACT_ADDRESS=${freeAddress}`);
+    console.log(
+      "2. Update frontend/src/js/blockchain/network-config.js with the new address"
+    );
   }
 }
 

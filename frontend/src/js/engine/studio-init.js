@@ -38,7 +38,12 @@ document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 import { initWalletPopover } from "/js/ui/wallet-popover.js";
 
 import { on, EVENTS } from "../events/bus.js";
-import { initWallet, autoConnectWallet, connectWallet, switchNetwork } from "/js/blockchain/wallet.js";
+import {
+  initWallet,
+  autoConnectWallet,
+  connectWallet,
+  switchNetwork,
+} from "/js/blockchain/wallet.js";
 import { CHAIN_IDS } from "/js/constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
 import { truncateAddress } from "/js/utils/format.js";
@@ -71,7 +76,9 @@ initWallet();
 // Try to reconnect a previously authorized wallet (silent, no popup)
 autoConnectWallet();
 
-document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
+document
+  .getElementById("connectWalletBtn")
+  ?.addEventListener("click", connectWallet);
 initWalletPopover();
 
 function updateWalletButtonState(address, isAuthenticated) {
@@ -116,7 +123,7 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
     const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
-      [CHAIN_IDS.SEI_TESTNET]: "seiTestnet",
+      [CHAIN_IDS.MEGAETH_TESTNET]: "megaethTestnet",
     };
     const key = keyMap[chainId];
     if (key) netSel.value = key;

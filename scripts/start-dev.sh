@@ -6,7 +6,7 @@ set -e
 #
 #   ./scripts/start-dev.sh              → local:  IPFS + Hardhat + Nostr + backend       (UI testing)
 #   ./scripts/start-dev.sh --setup-only → local:  IPFS + Hardhat + Nostr, no backend     (E2E testing)
-#   ./scripts/start-dev.sh --testnet    → testnet: Optimism Sepolia + Pinata + Nostr + backend
+#   ./scripts/start-dev.sh --testnet    → testnet: MegaETH Testnet + Pinata + Nostr + backend
 #
 # Flags:
 #   --print-project   Print the Docker Compose project name and exit.
@@ -138,11 +138,9 @@ else
   MISSING=0
   [ -z "$PINATA_JWT" ]            && { echo "❌ PINATA_JWT is not set."; MISSING=1; }
   [ -z "$CONTRACT_ADDRESS" ]      && { echo "❌ CONTRACT_ADDRESS is not set."; MISSING=1; }
-  [ -z "$PAID_CONTRACT_ADDRESS" ] && { echo "❌ PAID_CONTRACT_ADDRESS is not set."; MISSING=1; }
-  [ -z "$USDC_TOKEN" ]            && { echo "❌ USDC_TOKEN is not set."; MISSING=1; }
 
-  if [ -z "$API_URL" ] || [[ ! "$API_URL" =~ optimism|sepolia ]]; then
-    echo "⚠️  API_URL is '${API_URL:-}'. For testnet it should point to Optimism Sepolia."
+  if [ -z "$API_URL" ] || [[ ! "$API_URL" =~ carrot\.megaeth ]]; then
+    echo "⚠️  API_URL is '${API_URL:-}'. For testnet it should point to MegaETH Testnet."
   fi
 
   if [ "$MISSING" -ne 0 ]; then
