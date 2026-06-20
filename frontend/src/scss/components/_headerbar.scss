@@ -49,6 +49,42 @@
   }
 }
 
+// Page switcher (Library / Studio)
+.page-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: var(--size-3);
+  padding: 2px;
+  border-radius: var(--radius-round);
+  background-color: var(--surface-overlay-hover);
+  flex-shrink: 0;
+}
+
+.page-switcher-tab {
+  padding: 4px var(--size-3);
+  border-radius: var(--radius-round);
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--headerbar-fg);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &.active {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+}
+
 // Back button (nested only)
 .headerbar-back {
   display: flex;

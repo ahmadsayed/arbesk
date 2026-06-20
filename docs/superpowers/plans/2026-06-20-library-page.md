@@ -11,13 +11,13 @@
 ## Global Constraints
 
 - Format gate is a single extension check (`.gltf`, `.glb` only) — do not build a generic plugin system for formats.
-- No backend/API routes, no IPFS, no contract calls. "Besk it" only flips local in-memory status from `saved` to `besked`.
+- No backend/API routes, no IPFS, no contract calls. "Besk it" only flips local in-memory status from `wip` to `besked`.
 - No real thumbnails — generic file icon only, but markup must reserve the thumbnail slot.
 - Whole-page wallet gate: nothing in `#libraryMain` renders/functions until a wallet is connected.
 - Drag-and-drop *between* folders in the grid is out of scope — moving files only happens via the context menu's "Move to folder…".
 - Reuse existing primitives verbatim: `showDialog`/`showConfirmDialog` (`frontend/src/js/ui/dialog.js`), `showToast` (`frontend/src/js/ui/toasts.js`), `escapeHtml` (`frontend/src/js/utils/html.js`), the `createStore` pattern (`frontend/src/js/state/create-store.js`), and the `.empty-state` / `asset-card-badge` / `.viewport-drop-indicator` CSS patterns already in `_empty-state.scss` / `_cards.scss` / `_viewport.scss`.
 - Spec: `docs/superpowers/specs/2026-06-20-library-page-design.md`. Approved mockups: `/tmp/library-mockups/library-grid.html`, `library-list.html`, `library-empty-drop.html`.
-- **Grid vs. list status badge asymmetry is deliberate** (confirmed by user): grid view shows *no badge* for `saved` files and a small checkmark icon for `besked` files; list view always shows text badges (`Saved` / `Besked`). Do not unify these.
+- **Grid vs. list status badge treatment is symmetric** (confirmed by user, supersedes an earlier asymmetric draft): grid view shows a small flag icon for `wip` files and a checkmark icon for `besked` files — every card gets an icon, not just `besked` ones. List view always shows text badges (`Work in Progress` / `Besked`). The status value/enum is `wip` (renamed from `saved` — "Saved" implied false permanence for a local-only draft); the UI label is "Work in Progress," chosen as artist-friendly vocabulary (used on Sketchfab/ArtStation/itch.io) over dev jargon like "Staged"/"Drafted". The "Save" action name (auto-save on drop) is unchanged — only the post-save status label/enum changed.
 
 ---
 
@@ -214,7 +214,7 @@
         { id: "nested-folder", name: "Swords", parentId: "root-folder" },
       ],
       files: [
-        { id: "file-1", name: "shield.glb", parentId: null, status: "saved", sizeBytes: 1024, dateModified: 100 },
+        { id: "file-1", name: "shield.glb", parentId: null, status: "wip", sizeBytes: 1024, dateModified: 100 },
         { id: "file-2", name: "sword.glb", parentId: "root-folder", status: "besked", sizeBytes: 2048, dateModified: 200 },
       ],
     };
@@ -246,7 +246,7 @@
   describe("sortItems", () => {
     test("folders always sort before files regardless of sortBy", () => {
       const items = [
-        { id: "f1", type: "file", name: "b.glb", status: "saved", dateModified: 1 },
+        { id: "f1", type: "file", name: "b.glb", status: "wip", dateModified: 1 },
         { id: "d1", type: "folder", name: "z-folder", status: null, dateModified: null },
       ];
       const sorted = sortItems(items, "name");
@@ -255,25 +255,25 @@
 
     test("sortBy 'name' orders files alphabetically within the file group", () => {
       const items = [
-        { id: "b", type: "file", name: "banana.glb", dateModified: 1, status: "saved" },
-        { id: "a", type: "file", name: "apple.glb", dateModified: 2, status: "saved" },
+        { id: "b", type: "file", name: "banana.glb", dateModified: 1, status: "wip" },
+        { id: "a", type: "file", name: "apple.glb", dateModified: 2, status: "wip" },
       ];
       expect(sortItems(items, "name").map((i) => i.id)).toEqual(["a", "b"]);
     });
 
     test("sortBy 'date' orders files newest first", () => {
       const items = [
-        { id: "old", type: "file", name: "old.glb", dateModified: 1, status: "saved" },
-        { id: "new", type: "file", name: "new.glb", dateModified: 2, status: "saved" },
+        { id: "old", type: "file", name: "old.glb", dateModified: 1, status: "wip" },
+        { id: "new", type: "file", name: "new.glb", dateModified: 2, status: "wip" },
       ];
       expect(sortItems(items, "date").map((i) => i.id)).toEqual(["new", "old"]);
     });
 
-    test("sortBy 'status' orders uploading, then saved, then besked", () => {
+    test("sortBy 'status' orders uploading, then wip, then besked", () => {
       const items = [
         { id: "b", type: "file", name: "b.glb", status: "besked", dateModified: 1 },
         { id: "u", type: "file", name: "u.glb", status: "uploading", dateModified: 1 },
-        { id: "s", type: "file", name: "s.glb", status: "saved", dateModified: 1 },
+        { id: "s", type: "file", name: "s.glb", status: "wip", dateModified: 1 },
       ];
       expect(sortItems(items, "status").map((i) => i.id)).toEqual(["u", "s", "b"]);
     });
@@ -360,7 +360,7 @@
     } else if (sortBy === "date") {
       sorted.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
     } else if (sortBy === "status") {
-      const rank = { uploading: 0, saved: 1, besked: 2 };
+      const rank = { uploading: 0, wip: 1, besked: 2 };
       sorted.sort((a, b) => (rank[a.status] ?? -1) - (rank[b.status] ?? -1));
     }
     const folders = sorted.filter((i) => i.type === "folder");
@@ -861,7 +861,7 @@
     color: #2a1a0e;
   }
 
-  .status-saved {
+  .status-wip {
     background-color: color-mix(in srgb, var(--dim-fg) 25%, var(--card-bg));
     color: var(--window-fg);
   }
@@ -871,15 +871,14 @@
     color: var(--accent-fg);
   }
 
-  .status-check {
+  .status-check,
+  .status-flag {
     position: absolute;
     bottom: -3px;
     right: -3px;
     width: 18px;
     height: 18px;
     border-radius: var(--radius-round);
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -889,6 +888,16 @@
       width: 11px;
       height: 11px;
     }
+  }
+
+  .status-check {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+  }
+
+  .status-flag {
+    background-color: color-mix(in srgb, var(--dim-fg) 35%, var(--card-bg));
+    color: var(--window-fg);
   }
 
   .library-statusbar {
@@ -1236,24 +1245,27 @@ file instead of importing it). The plan follows that same text-matching conventi
   });
 
   describe("createItemElement", () => {
-    test("renders a folder with no status badge", () => {
+    test("renders a folder with no status badge or icon", () => {
       const el = createItemElement({ id: "f1", type: "folder", name: "Weapons" }, "grid");
       expect(el.dataset.id).toBe("f1");
       expect(el.dataset.type).toBe("folder");
       expect(el.querySelector(".library-item-name").textContent).toBe("Weapons");
       expect(el.querySelector(".status-badge")).toBeNull();
       expect(el.querySelector(".status-check")).toBeNull();
+      expect(el.querySelector(".status-flag")).toBeNull();
     });
 
-    test("grid view: a saved file has no status badge at all", () => {
-      const el = createItemElement({ id: "a", type: "file", name: "shield.glb", status: "saved" }, "grid");
-      expect(el.querySelector(".status-badge")).toBeNull();
+    test("grid view: a wip file shows the flag icon, not the checkmark", () => {
+      const el = createItemElement({ id: "a", type: "file", name: "shield.glb", status: "wip" }, "grid");
+      expect(el.querySelector(".status-flag")).not.toBeNull();
       expect(el.querySelector(".status-check")).toBeNull();
+      expect(el.querySelector(".status-badge")).toBeNull();
     });
 
-    test("grid view: a besked file shows the checkmark badge, not text", () => {
+    test("grid view: a besked file shows the checkmark icon, not the flag", () => {
       const el = createItemElement({ id: "a", type: "file", name: "shield.glb", status: "besked" }, "grid");
       expect(el.querySelector(".status-check")).not.toBeNull();
+      expect(el.querySelector(".status-flag")).toBeNull();
       expect(el.querySelector(".status-badge")).toBeNull();
     });
 
@@ -1262,9 +1274,9 @@ file instead of importing it). The plan follows that same text-matching conventi
       expect(el.querySelector(".status-uploading").textContent).toBe("Uploading…");
     });
 
-    test("list view: a saved file shows the Saved text badge", () => {
-      const el = createItemElement({ id: "a", type: "file", name: "shield.glb", status: "saved" }, "list");
-      expect(el.querySelector(".status-saved").textContent).toBe("Saved");
+    test("list view: a wip file shows the Work in Progress text badge", () => {
+      const el = createItemElement({ id: "a", type: "file", name: "shield.glb", status: "wip" }, "list");
+      expect(el.querySelector(".status-wip").textContent).toBe("Work in Progress");
     });
 
     test("list view: a besked file shows the Besked text badge", () => {
@@ -1284,14 +1296,14 @@ file instead of importing it). The plan follows that same text-matching conventi
       const container = document.getElementById("libraryItems");
       renderItems(container, [
         { id: "1", type: "folder", name: "A" },
-        { id: "2", type: "file", name: "b.glb", status: "saved" },
+        { id: "2", type: "file", name: "b.glb", status: "wip" },
       ], "grid");
       expect(container.querySelectorAll("[data-id]")).toHaveLength(2);
     });
 
     test("renders a table in list mode", () => {
       const container = document.getElementById("libraryItems");
-      renderItems(container, [{ id: "2", type: "file", name: "b.glb", status: "saved" }], "list");
+      renderItems(container, [{ id: "2", type: "file", name: "b.glb", status: "wip" }], "list");
       expect(container.querySelector("table.library-list-table")).not.toBeNull();
     });
   });
@@ -1307,13 +1319,13 @@ file instead of importing it). The plan follows that same text-matching conventi
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());
 
-    test("adds supported files in 'uploading' status, then flips to 'saved'", () => {
+    test("adds supported files in 'uploading' status, then flips to 'wip'", () => {
       addFiles([{ name: "model.glb", size: 1024 }]);
       expect(libraryState.get().files).toHaveLength(1);
       expect(libraryState.get().files[0].status).toBe("uploading");
 
       jest.runAllTimers();
-      expect(libraryState.get().files[0].status).toBe("saved");
+      expect(libraryState.get().files[0].status).toBe("wip");
     });
 
     test("rejects unsupported files and does not add them", () => {
@@ -1382,14 +1394,14 @@ file instead of importing it). The plan follows that same text-matching conventi
     if (item.status === "besked") {
       return `<span class="status-check" title="Besked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>`;
     }
-    return "";
+    return `<span class="status-flag" title="Work in Progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4M4 4h14l-2.5 4L18 12H4"/></svg></span>`;
   }
 
   function renderListStatus(item) {
     if (item.type !== "file") return "—";
     if (item.status === "uploading") return `<span class="status-badge status-uploading">Uploading…</span>`;
     if (item.status === "besked") return `<span class="status-badge status-besked">Besked</span>`;
-    return `<span class="status-badge status-saved">Saved</span>`;
+    return `<span class="status-badge status-wip">Work in Progress</span>`;
   }
 
   export function createItemElement(item, viewMode) {
@@ -1510,9 +1522,9 @@ file instead of importing it). The plan follows that same text-matching conventi
 
     newFiles.forEach((nf) => {
       setTimeout(() => {
-        const files = libraryState.get().files.map((f) => (f.id === nf.id ? { ...f, status: "saved" } : f));
+        const files = libraryState.get().files.map((f) => (f.id === nf.id ? { ...f, status: "wip" } : f));
         libraryState.set({ files });
-        announce(`${nf.name} saved`);
+        announce(`${nf.name} added`);
       }, 600);
     });
   }
@@ -1622,9 +1634,9 @@ file instead of importing it). The plan follows that same text-matching conventi
     function seedTwoFiles() {
       libraryState.set({
         files: [
-          { id: "a", name: "a.glb", parentId: null, status: "saved", sizeBytes: 1, dateModified: 1 },
-          { id: "b", name: "b.glb", parentId: null, status: "saved", sizeBytes: 1, dateModified: 2 },
-          { id: "c", name: "c.glb", parentId: null, status: "saved", sizeBytes: 1, dateModified: 3 },
+          { id: "a", name: "a.glb", parentId: null, status: "wip", sizeBytes: 1, dateModified: 1 },
+          { id: "b", name: "b.glb", parentId: null, status: "wip", sizeBytes: 1, dateModified: 2 },
+          { id: "c", name: "c.glb", parentId: null, status: "wip", sizeBytes: 1, dateModified: 3 },
         ],
       });
     }
@@ -1689,8 +1701,8 @@ file instead of importing it). The plan follows that same text-matching conventi
     function seedTwoFiles() {
       libraryState.set({
         files: [
-          { id: "a", name: "a.glb", parentId: null, status: "saved", sizeBytes: 1, dateModified: 1 },
-          { id: "b", name: "b.glb", parentId: null, status: "saved", sizeBytes: 1, dateModified: 2 },
+          { id: "a", name: "a.glb", parentId: null, status: "wip", sizeBytes: 1, dateModified: 1 },
+          { id: "b", name: "b.glb", parentId: null, status: "wip", sizeBytes: 1, dateModified: 2 },
         ],
       });
     }
@@ -1744,7 +1756,7 @@ file instead of importing it). The plan follows that same text-matching conventi
     test("removes the given ids from files and folders, and clears selection", async () => {
       window.focusTrap = { createFocusTrap: () => ({ activate() { return this; }, deactivate() { return this; } }) };
       libraryState.set({
-        files: [{ id: "a", name: "a.glb", parentId: null, status: "saved" }],
+        files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }],
         selectedIds: ["a"],
       });
 
@@ -2299,7 +2311,7 @@ file instead of importing it). The plan follows that same text-matching conventi
     `;
     libraryState.set({
       folders: [{ id: "f1", name: "Weapons", parentId: null }],
-      files: [{ id: "a", name: "a.glb", parentId: null, status: "saved" }],
+      files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }],
     });
   });
 
@@ -2385,7 +2397,7 @@ file instead of importing it). The plan follows that same text-matching conventi
   });
 
   describe("requestBeskIt", () => {
-    test("flips status from saved to besked on confirm", async () => {
+    test("flips status from wip to besked on confirm", async () => {
       const promise = requestBeskIt(["a"]);
       document.querySelector(".dialog-action-btn[data-value='confirm']")?.click();
       await promise;
@@ -2396,7 +2408,7 @@ file instead of importing it). The plan follows that same text-matching conventi
       const promise = requestBeskIt(["a"]);
       document.querySelector(".dialog-action-btn[data-value='cancel']")?.click();
       await promise;
-      expect(libraryState.get().files.find((f) => f.id === "a").status).toBe("saved");
+      expect(libraryState.get().files.find((f) => f.id === "a").status).toBe("wip");
     });
   });
 
@@ -2781,8 +2793,8 @@ pass and a manual browser smoke test across both empty states and the full inter
     test("dragging a box over empty space selects every item it intersects", () => {
       libraryState.set({
         files: [
-          { id: "a", name: "a.glb", parentId: null, status: "saved" },
-          { id: "b", name: "b.glb", parentId: null, status: "saved" },
+          { id: "a", name: "a.glb", parentId: null, status: "wip" },
+          { id: "b", name: "b.glb", parentId: null, status: "wip" },
         ],
       });
       initLibraryGrid();
@@ -2803,7 +2815,7 @@ pass and a manual browser smoke test across both empty states and the full inter
     });
 
     test("a rubber-band drag that starts on an item does not start a selection box", () => {
-      libraryState.set({ files: [{ id: "a", name: "a.glb", parentId: null, status: "saved" }] });
+      libraryState.set({ files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }] });
       initLibraryGrid();
       const container = document.getElementById("libraryItems");
       const itemA = container.querySelector('[data-id="a"]');
@@ -2939,15 +2951,15 @@ pass and a manual browser smoke test across both empty states and the full inter
   Start the backend (`npm start`) and open `http://localhost:9090/library.html`. Walk through:
   1. With no wallet connected: confirm only the "Connect Wallet" empty-state renders — no toolbar, no grid, no statusbar visible.
   2. Connect a wallet (Hardhat local + MetaMask, or whatever the dev setup uses): confirm the gate disappears and the toolbar/content/statusbar appear.
-  3. Drag a `.glb` file from the OS file manager onto the content area: confirm the drop-indicator overlay appears on dragover, and the file appears immediately in "Uploading…" then "Saved" status.
+  3. Drag a `.glb` file from the OS file manager onto the content area: confirm the drop-indicator overlay appears on dragover, and the file appears immediately in "Uploading…" then "Work in Progress" status.
   4. Click "Upload," pick a `.glb` via the native file picker: confirm the same Save flow.
   5. Drag a `.txt` file onto the content area: confirm a toast appears ("Unsupported file type…") and no card is added.
   6. Click "New Folder," type a name, confirm: folder appears; double-click it, confirm breadcrumb updates and `Backspace` returns to Home.
   7. Click a file, `Ctrl`-click a second, `Shift`-click a third: confirm multi-selection. Click empty space: confirm selection clears. Drag a rubber-band box over two files: confirm both get selected.
-  8. Right-click a single saved file: confirm "Besk it / Open in Studio / Rename / Move to folder… / Delete" all appear; click "Besk it," confirm, confirm the grid badge becomes a checkmark and the list badge becomes "Besked."
+  8. Right-click a single "Work in Progress" file: confirm "Besk it / Open in Studio / Rename / Move to folder… / Delete" all appear; click "Besk it," confirm, confirm the grid badge changes from a flag icon to a checkmark and the list badge becomes "Besked."
   9. Right-click empty space: confirm only "New Folder / Upload" appear.
   10. Press `F2` on a selected file: confirm the rename dialog opens; press `Delete` on a selection: confirm the delete confirmation dialog opens.
-  11. Toggle Grid/List view in the statusbar: confirm the asymmetric badge treatment — grid view shows no badge for "Saved" files and a checkmark only for "Besked" files; list view shows the literal "Saved"/"Besked" text badges in both states.
+  11. Toggle Grid/List view in the statusbar: confirm the symmetric badge treatment — grid view shows a flag icon for "Work in Progress" files and a checkmark icon for "Besked" files; list view shows the literal "Work in Progress"/"Besked" text badges in both states.
   12. Click the "Studio" tab in the headerbar page-switcher: confirm it navigates to `/studio.html` and the same theme/network/wallet state is reflected there; click back to "Library."
 
   Record the outcome of each step in the PR description or task tracker; do not mark this task complete until all 12 pass.
