@@ -411,5 +411,5 @@ See the `arbesk-worktree` skill for the complete rationale, file map, and troubl
 
 ## 16. Contact & Links
 
-- **Repository**: https://github.com/ahmadsayed/arbesk
+- **Repository**: https://github.com/ahmadsayed/arbesk (private — always use the `gh` CLI for issue/PR access; public `https://` fetches return 404)
 - **Docs**: `docs/` directory in this repo

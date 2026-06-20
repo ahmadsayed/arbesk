@@ -1,0 +1,43 @@
+// ═══════════════════════════════════════════════════════════════════
+// Library Toolbar — breadcrumb, search, sort, new folder, upload
+// ═══════════════════════════════════════════════════════════════════
+
+.library-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.library-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
+  flex-shrink: 0;
+}
+
+.library-search {
+  flex: 0 1 240px;
+}
+
+.library-sort {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 120px;
+}
+
+.library-up-btn {
+  flex: 0 0 auto;
+}
+
+.library-toolbar .btn {
+  min-height: 40px;
+  min-width: 40px;
+  padding: var(--size-2) var(--size-3);
+}
+
+.library-toolbar .btn-icon {
+  padding: var(--size-2);
+}
