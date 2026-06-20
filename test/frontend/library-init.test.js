@@ -34,4 +34,8 @@ describe("library-init.js", () => {
     expect(src()).toMatch(/initTheme\(\)/);
     expect(src()).toMatch(/initWalletPopover\(\)/);
   });
+
+  test("wires the toolbar module", () => {
+    expect(src()).toMatch(/initLibraryToolbar\(\)/);
+  });
 });
