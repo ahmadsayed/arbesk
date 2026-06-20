@@ -68,6 +68,10 @@ html(lang="en")
 
         #libraryMain.hidden
           .library-toolbar
+            button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to parent folder" title="Up to parent folder" hidden)
+              svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                polyline(points="18 15 12 9 6 15")
+              span Up
             nav#libraryBreadcrumb.pathbar(aria-label="Folder path")
             input#librarySearchInput.form-input.library-search(type="search" placeholder="Search this folder…" aria-label="Search files")
             select#librarySortSelect.form-input.library-sort(aria-label="Sort by")
@@ -79,7 +83,7 @@ html(lang="en")
                 line(x1="12" y1="5" x2="12" y2="19")
                 line(x1="5" y1="12" x2="19" y2="12")
               span New Folder
-            button#libraryUploadBtn.btn.btn-primary.btn-sm(type="button")
+            button#libraryUploadBtn.btn.btn-secondary.btn-sm(type="button")
               svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4")
                 polyline(points="17 8 12 3 7 8")

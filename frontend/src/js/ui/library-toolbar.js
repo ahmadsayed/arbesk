@@ -36,6 +36,9 @@ function renderToolbar() {
   const breadcrumb = document.getElementById("libraryBreadcrumb");
   if (breadcrumb) renderBreadcrumb(breadcrumb, state.folders, state.currentFolderId);
 
+  const upBtn = document.getElementById("libraryUpBtn");
+  if (upBtn) upBtn.hidden = state.currentFolderId === null;
+
   const gridBtn = document.getElementById("libraryGridViewBtn");
   const listBtn = document.getElementById("libraryListViewBtn");
   gridBtn?.classList.toggle("active", state.viewMode === "grid");
@@ -43,6 +46,12 @@ function renderToolbar() {
 }
 
 export function initLibraryToolbar() {
+  document.getElementById("libraryUpBtn")?.addEventListener("click", () => {
+    const state = libraryState.get();
+    const parent = state.folders.find((f) => f.id === state.currentFolderId);
+    libraryState.set({ currentFolderId: parent ? parent.parentId : null, selectedIds: [] });
+  });
+
   document.getElementById("libraryBreadcrumb")?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-folder-id]");
     if (!btn) return;

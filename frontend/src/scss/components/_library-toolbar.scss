@@ -24,4 +24,20 @@
 
 .library-sort {
   flex: 0 0 auto;
+  width: auto;
+  min-width: 120px;
+}
+
+.library-up-btn {
+  flex: 0 0 auto;
+}
+
+.library-toolbar .btn {
+  min-height: 40px;
+  min-width: 40px;
+  padding: var(--size-2) var(--size-3);
+}
+
+.library-toolbar .btn-icon {
+  padding: var(--size-2);
 }

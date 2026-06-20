@@ -4,6 +4,8 @@
 
 .library-content {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -14,6 +16,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--size-3);
+  flex: 1 1 auto;
+  align-content: start;
+}
+
+.library-grid > .empty-state {
+  grid-column: 1 / -1;
+  justify-self: center;
+  align-self: center;
 }
 
 .library-item {
@@ -32,6 +42,11 @@
   &.selected {
     background-color: var(--surface-overlay-active);
     box-shadow: var(--focus-ring);
+  }
+
+  &.drop-target {
+    outline: 2px dashed var(--accent-bg);
+    outline-offset: 2px;
   }
 }
 
@@ -78,6 +93,11 @@
 
   &.selected {
     background-color: var(--surface-overlay-active);
+  }
+
+  &.drop-target {
+    outline: 2px dashed var(--accent-bg);
+    outline-offset: -2px;
   }
 
   td {

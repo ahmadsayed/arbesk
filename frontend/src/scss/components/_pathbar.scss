@@ -11,16 +11,20 @@
   overflow: hidden;
 }
 
-.pathbar-segment {
+.pathbar-segment,
+.pathbar-current {
   display: flex;
   align-items: center;
   gap: var(--size-1);
-  padding: 1px var(--size-1);
+  padding: var(--size-1) var(--size-2);
   font-size: var(--font-size-0);
-  font-weight: var(--font-weight-5);
-  color: var(--dim-fg);
   border-radius: var(--radius-2);
   white-space: nowrap;
+}
+
+.pathbar-segment {
+  font-weight: var(--font-weight-5);
+  color: var(--dim-fg);
   cursor: pointer;
   transition: background-color var(--duration-quick) var(--ease-out-3),
               color var(--duration-quick) var(--ease-out-3);
@@ -39,12 +43,14 @@
 .pathbar-separator {
   color: var(--dim-fg);
   font-size: var(--font-size-0);
-  margin: 0;
+  margin: 0 var(--size-1);
   flex-shrink: 0;
   user-select: none;
 }
 
 .pathbar-current {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: var(--font-weight-7);

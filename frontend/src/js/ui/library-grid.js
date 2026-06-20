@@ -1,6 +1,12 @@
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
-import { getChildItems, filterItems, sortItems, isSupportedFile, formatBytes } from "../utils/library-items.js";
+import {
+  getChildItems,
+  filterItems,
+  sortItems,
+  isSupportedFile,
+  formatBytes,
+} from "../utils/library-items.js";
 import { escapeHtml } from "../utils/html.js";
 import { showToast } from "./toasts.js";
 import { computeRangeSelection } from "../utils/library-items.js";
@@ -24,8 +30,10 @@ function renderGridStatus(item) {
 
 function renderListStatus(item) {
   if (item.type !== "file") return "—";
-  if (item.status === "uploading") return `<span class="status-badge status-uploading">Uploading…</span>`;
-  if (item.status === "besked") return `<span class="status-badge status-besked">Besked</span>`;
+  if (item.status === "uploading")
+    return `<span class="status-badge status-uploading">Uploading…</span>`;
+  if (item.status === "besked")
+    return `<span class="status-badge status-besked">Besked</span>`;
   return `<span class="status-badge status-wip">Work in Progress</span>`;
 }
 
@@ -37,13 +45,20 @@ export function createItemElement(item, viewMode) {
     el.className = "library-row";
     el.dataset.id = item.id;
     el.dataset.type = item.type;
+    el.draggable = true;
     el.tabIndex = 0;
     el.setAttribute("role", "row");
     el.setAttribute("aria-selected", "false");
     el.innerHTML = `
-      <td class="library-row-name"><span>${icon}</span><span class="library-item-name">${escapeHtml(item.name)}</span></td>
+      <td class="library-row-name"><span>${icon}</span><span class="library-item-name">${escapeHtml(
+      item.name
+    )}</span></td>
       <td>${renderListStatus(item)}</td>
-      <td>${item.dateModified ? new Date(item.dateModified).toLocaleDateString() : "—"}</td>
+      <td>${
+        item.dateModified
+          ? new Date(item.dateModified).toLocaleDateString()
+          : "—"
+      }</td>
       <td>${item.sizeBytes ? formatBytes(item.sizeBytes) : "—"}</td>
     `;
     return el;
@@ -53,6 +68,7 @@ export function createItemElement(item, viewMode) {
   el.className = "library-item";
   el.dataset.id = item.id;
   el.dataset.type = item.type;
+  el.draggable = true;
   el.tabIndex = 0;
   el.setAttribute("role", "gridcell");
   el.setAttribute("aria-selected", "false");
@@ -93,11 +109,15 @@ export function renderItems(container, items, viewMode) {
     table.className = "library-list-table";
     table.innerHTML = `<thead><tr><th>Name</th><th>Status</th><th>Date modified</th><th>Size</th></tr></thead>`;
     const tbody = document.createElement("tbody");
-    items.forEach((item) => tbody.appendChild(createItemElement(item, viewMode)));
+    items.forEach((item) =>
+      tbody.appendChild(createItemElement(item, viewMode))
+    );
     table.appendChild(tbody);
     container.appendChild(table);
   } else {
-    items.forEach((item) => container.appendChild(createItemElement(item, viewMode)));
+    items.forEach((item) =>
+      container.appendChild(createItemElement(item, viewMode))
+    );
   }
 }
 
@@ -124,7 +144,10 @@ function render() {
   applySelection(container, state.selectedIds);
 
   const countEl = document.getElementById("libraryItemCount");
-  if (countEl) countEl.textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+  if (countEl)
+    countEl.textContent = `${items.length} item${
+      items.length === 1 ? "" : "s"
+    }`;
 }
 
 let lastClickedId = null;
@@ -178,23 +201,31 @@ function handleItemClick(e) {
 
   lastClickedId = id;
   libraryState.set({ selectedIds });
-  announce(`${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`);
+  announce(
+    `${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`
+  );
 }
 
 function handleItemDblClick(e) {
-  const el = e.target.closest("[data-id]");
-  if (!el) return;
-  if (el.dataset.type === "folder") {
-    libraryState.set({ currentFolderId: el.dataset.id, selectedIds: [] });
+  // Use lastClickedId instead of e.target because the click handler's
+  // render may have already rebuilt the DOM, detaching the original element.
+  if (!lastClickedId) return;
+  const state = libraryState.get();
+  const isFolder = state.folders.some((f) => f.id === lastClickedId);
+  if (isFolder) {
+    libraryState.set({ currentFolderId: lastClickedId, selectedIds: [] });
+    announce(`Opened folder`);
   } else {
-    openInStudio(el.dataset.id);
+    openInStudio(lastClickedId);
   }
 }
 
 function isEditingText() {
   const el = document.activeElement;
   if (!el) return false;
-  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+  return (
+    el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable
+  );
 }
 
 function handleKeydown(e) {
@@ -214,10 +245,16 @@ function handleKeydown(e) {
     return;
   }
 
-  if ((e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) && state.currentFolderId !== null) {
+  if (
+    (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) &&
+    state.currentFolderId !== null
+  ) {
     e.preventDefault();
     const parent = state.folders.find((f) => f.id === state.currentFolderId);
-    libraryState.set({ currentFolderId: parent ? parent.parentId : null, selectedIds: [] });
+    libraryState.set({
+      currentFolderId: parent ? parent.parentId : null,
+      selectedIds: [],
+    });
     return;
   }
 
@@ -238,7 +275,9 @@ function handleKeydown(e) {
   }
 
   if (e.key === "F2" && state.selectedIds.length === 1) {
-    import("./library-context-menu.js").then(({ requestRename }) => requestRename(state.selectedIds[0]));
+    import("./library-context-menu.js").then(({ requestRename }) =>
+      requestRename(state.selectedIds[0])
+    );
   }
 }
 
@@ -267,11 +306,15 @@ export function addFiles(fileList) {
   }));
 
   libraryState.set({ files: [...libraryState.get().files, ...newFiles] });
-  announce(`${newFiles.length} file${newFiles.length === 1 ? "" : "s"} uploading`);
+  announce(
+    `${newFiles.length} file${newFiles.length === 1 ? "" : "s"} uploading`
+  );
 
   newFiles.forEach((nf) => {
     setTimeout(() => {
-      const files = libraryState.get().files.map((f) => (f.id === nf.id ? { ...f, status: "wip" } : f));
+      const files = libraryState
+        .get()
+        .files.map((f) => (f.id === nf.id ? { ...f, status: "wip" } : f));
       libraryState.set({ files });
       announce(`${nf.name} added`);
     }, 600);
@@ -279,7 +322,12 @@ export function addFiles(fileList) {
 }
 
 function rectsIntersect(a, b) {
-  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+  return !(
+    a.right < b.left ||
+    a.left > b.right ||
+    a.bottom < b.top ||
+    a.top > b.bottom
+  );
 }
 
 function initRubberBand() {
@@ -327,11 +375,16 @@ function initRubberBand() {
     const container = document.getElementById("libraryItems");
     const selectedIds = [];
     container?.querySelectorAll("[data-id]").forEach((el) => {
-      if (rectsIntersect(boxRect, el.getBoundingClientRect())) selectedIds.push(el.dataset.id);
+      if (rectsIntersect(boxRect, el.getBoundingClientRect()))
+        selectedIds.push(el.dataset.id);
     });
     if (selectedIds.length > 0) {
       libraryState.set({ selectedIds });
-      announce(`${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`);
+      announce(
+        `${selectedIds.length} item${
+          selectedIds.length === 1 ? "" : "s"
+        } selected`
+      );
     }
   });
 }
@@ -349,20 +402,77 @@ function initDropzone() {
   if (!content) return;
 
   content.addEventListener("dragover", (e) => {
+    if (!e.dataTransfer?.types.includes("Files")) return;
     e.preventDefault();
     overlay?.classList.add("active");
   });
-  content.addEventListener("dragleave", () => overlay?.classList.remove("active"));
+  content.addEventListener("dragleave", () =>
+    overlay?.classList.remove("active")
+  );
   content.addEventListener("drop", (e) => {
+    if (!e.dataTransfer?.files?.length) return;
     e.preventDefault();
     overlay?.classList.remove("active");
-    if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+    addFiles(e.dataTransfer.files);
+  });
+}
+
+function initDragMove() {
+  const container = document.getElementById("libraryItems");
+  if (!container) return;
+
+  container.addEventListener("dragstart", (e) => {
+    const el = e.target.closest("[data-id]");
+    if (!el) return;
+    const state = libraryState.get();
+    const ids = state.selectedIds.includes(el.dataset.id)
+      ? state.selectedIds
+      : [el.dataset.id];
+    e.dataTransfer.setData("text/arbesk-ids", ids.join(","));
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  container.addEventListener("dragover", (e) => {
+    const el = e.target.closest('[data-type="folder"]');
+    if (!el || !e.dataTransfer?.types.includes("text/arbesk-ids")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    el.classList.add("drop-target");
+  });
+
+  container.addEventListener("dragleave", (e) => {
+    const el = e.target.closest('[data-type="folder"]');
+    if (!el) return;
+    el.classList.remove("drop-target");
+  });
+
+  container.addEventListener("drop", (e) => {
+    const el = e.target.closest('[data-type="folder"]');
+    const ids = e.dataTransfer?.getData("text/arbesk-ids");
+    if (!el || !ids) return;
+    e.preventDefault();
+    el.classList.remove("drop-target");
+
+    const targetId = el.dataset.id;
+    const idList = ids.split(",");
+    const state = libraryState.get();
+    libraryState.set({
+      files: state.files.map((f) =>
+        idList.includes(f.id) ? { ...f, parentId: targetId } : f
+      ),
+      folders: state.folders.map((f) =>
+        idList.includes(f.id) ? { ...f, parentId: targetId } : f
+      ),
+      selectedIds: [],
+    });
+    announce(`Moved ${idList.length} item${idList.length === 1 ? "" : "s"}`);
   });
 }
 
 export function initLibraryGrid() {
   initDropzone();
   initRubberBand();
+  initDragMove();
 
   const container = document.getElementById("libraryItems");
   container?.addEventListener("click", handleItemClick);
