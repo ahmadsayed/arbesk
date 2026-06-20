@@ -72,7 +72,26 @@ function cspMiddleware(req, res, next) {
 }
 app.use(cspMiddleware);
 
-app.use(express.static(__dirname + "/../frontend/dist"));
+app.use(
+  express.static(__dirname + "/../frontend/dist", {
+    setHeaders: (res, filePath) => {
+      // Workers and their pool must never be cached: a stale worker script
+      // that predates a method registration (e.g. "ping") causes the pool to
+      // fall back to the main thread and makes save/publish very slow.
+      if (
+        filePath.includes("/workers/") ||
+        filePath.endsWith("gltf-worker-pool.js")
+      ) {
+        res.setHeader(
+          "Cache-Control",
+          "no-store, no-cache, must-revalidate, proxy-revalidate",
+        );
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+    },
+  }),
+);
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 app.use("/api", api());
