@@ -68,7 +68,7 @@ export function createItemElement(item, viewMode) {
   el.dataset.type = item.type;
   el.draggable = true;
   el.tabIndex = 0;
-  el.setAttribute("role", "gridcell");
+  el.setAttribute("role", "option");
   el.setAttribute("aria-selected", "false");
   el.innerHTML = `
     <div class="library-item-thumbnail">${icon}${renderGridStatus(item)}</div>
@@ -361,6 +361,8 @@ function initRubberBand() {
     positionBand(band, startX, startY, startX, startY);
   });
 
+  // Listeners live for the page lifetime — initRubberBand is only called once
+  // during initLibraryGrid(). If that ever changes, store refs and remove on cleanup.
   document.addEventListener("mousemove", (e) => {
     if (!band) return;
     endX = e.clientX;

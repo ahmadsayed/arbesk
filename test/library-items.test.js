@@ -24,8 +24,22 @@ describe("getChildItems", () => {
       { id: "nested-folder", name: "Swords", parentId: "root-folder" },
     ],
     files: [
-      { id: "file-1", name: "shield.glb", parentId: null, status: "wip", sizeBytes: 1024, dateModified: 100 },
-      { id: "file-2", name: "sword.glb", parentId: "root-folder", status: "besked", sizeBytes: 2048, dateModified: 200 },
+      {
+        id: "file-1",
+        name: "shield.glb",
+        parentId: null,
+        status: "wip",
+        sizeBytes: 1024,
+        dateModified: 100,
+      },
+      {
+        id: "file-2",
+        name: "sword.glb",
+        parentId: "root-folder",
+        status: "besked",
+        sizeBytes: 2048,
+        dateModified: 200,
+      },
     ],
   };
 
@@ -37,12 +51,33 @@ describe("getChildItems", () => {
 
     const nestedItems = getChildItems(state, "root-folder");
     expect(nestedItems).toHaveLength(2);
-    expect(nestedItems.map((i) => i.id).sort()).toEqual(["file-2", "nested-folder"]);
+    expect(nestedItems.map((i) => i.id).sort()).toEqual([
+      "file-2",
+      "nested-folder",
+    ]);
+  });
+
+  test("propagates folder status from state", () => {
+    const stateWithStatus = {
+      folders: [
+        { id: "f1", name: "Weapons", parentId: null, status: "wip" },
+        { id: "f2", name: "Armor", parentId: null, status: "besked" },
+      ],
+      files: [],
+    };
+    const items = getChildItems(stateWithStatus, null);
+    const wip = items.find((i) => i.id === "f1");
+    const besked = items.find((i) => i.id === "f2");
+    expect(wip.status).toBe("wip");
+    expect(besked.status).toBe("besked");
   });
 });
 
 describe("filterItems", () => {
-  const items = [{ id: "1", name: "Shield.glb" }, { id: "2", name: "Sword.gltf" }];
+  const items = [
+    { id: "1", name: "Shield.glb" },
+    { id: "2", name: "Sword.gltf" },
+  ];
 
   test("returns all items for an empty query", () => {
     expect(filterItems(items, "")).toHaveLength(2);
@@ -57,7 +92,13 @@ describe("sortItems", () => {
   test("folders always sort before files regardless of sortBy", () => {
     const items = [
       { id: "f1", type: "file", name: "b.glb", status: "wip", dateModified: 1 },
-      { id: "d1", type: "folder", name: "z-folder", status: null, dateModified: null },
+      {
+        id: "d1",
+        type: "folder",
+        name: "z-folder",
+        status: null,
+        dateModified: null,
+      },
     ];
     const sorted = sortItems(items, "name");
     expect(sorted.map((i) => i.id)).toEqual(["d1", "f1"]);
@@ -65,27 +106,67 @@ describe("sortItems", () => {
 
   test("sortBy 'name' orders files alphabetically within the file group", () => {
     const items = [
-      { id: "b", type: "file", name: "banana.glb", dateModified: 1, status: "wip" },
-      { id: "a", type: "file", name: "apple.glb", dateModified: 2, status: "wip" },
+      {
+        id: "b",
+        type: "file",
+        name: "banana.glb",
+        dateModified: 1,
+        status: "wip",
+      },
+      {
+        id: "a",
+        type: "file",
+        name: "apple.glb",
+        dateModified: 2,
+        status: "wip",
+      },
     ];
     expect(sortItems(items, "name").map((i) => i.id)).toEqual(["a", "b"]);
   });
 
   test("sortBy 'date' orders files newest first", () => {
     const items = [
-      { id: "old", type: "file", name: "old.glb", dateModified: 1, status: "wip" },
-      { id: "new", type: "file", name: "new.glb", dateModified: 2, status: "wip" },
+      {
+        id: "old",
+        type: "file",
+        name: "old.glb",
+        dateModified: 1,
+        status: "wip",
+      },
+      {
+        id: "new",
+        type: "file",
+        name: "new.glb",
+        dateModified: 2,
+        status: "wip",
+      },
     ];
     expect(sortItems(items, "date").map((i) => i.id)).toEqual(["new", "old"]);
   });
 
   test("sortBy 'status' orders uploading, then wip, then besked", () => {
     const items = [
-      { id: "b", type: "file", name: "b.glb", status: "besked", dateModified: 1 },
-      { id: "u", type: "file", name: "u.glb", status: "uploading", dateModified: 1 },
+      {
+        id: "b",
+        type: "file",
+        name: "b.glb",
+        status: "besked",
+        dateModified: 1,
+      },
+      {
+        id: "u",
+        type: "file",
+        name: "u.glb",
+        status: "uploading",
+        dateModified: 1,
+      },
       { id: "s", type: "file", name: "s.glb", status: "wip", dateModified: 1 },
     ];
-    expect(sortItems(items, "status").map((i) => i.id)).toEqual(["u", "s", "b"]);
+    expect(sortItems(items, "status").map((i) => i.id)).toEqual([
+      "u",
+      "s",
+      "b",
+    ]);
   });
 });
 
@@ -96,7 +177,9 @@ describe("buildBreadcrumb", () => {
   ];
 
   test("returns just Home at the root", () => {
-    expect(buildBreadcrumb(folders, null)).toEqual([{ id: null, name: "Home" }]);
+    expect(buildBreadcrumb(folders, null)).toEqual([
+      { id: null, name: "Home" },
+    ]);
   });
 
   test("returns the full ancestor chain ending at the current folder", () => {

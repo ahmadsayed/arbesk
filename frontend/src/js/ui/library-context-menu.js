@@ -22,7 +22,11 @@ function singleItemMenuItems(ids) {
   if (isFolder(id)) {
     return [
       { label: "Besk it", action: () => requestBeskIt(ids) },
-      { label: "Open", action: () => libraryState.set({ currentFolderId: id, selectedIds: [] }) },
+      {
+        label: "Open",
+        action: () =>
+          libraryState.set({ currentFolderId: id, selectedIds: [] }),
+      },
       { label: "Rename", action: () => requestRename(id) },
       { label: "Move to folder…", action: () => requestMoveToFolder(ids) },
       { label: "Delete", action: () => requestDelete(ids), danger: true },
@@ -40,7 +44,13 @@ function singleItemMenuItems(ids) {
 function multiSelectionMenuItems(ids) {
   return [
     { label: "Besk it", action: () => requestBeskIt(ids) },
-    { label: "Open in Studio", action: () => ids.forEach((id) => openInStudio(id)) },
+    // openInStudio navigates via window.location.href, so only the first call
+    // takes effect; the remaining ids are dead no-ops. This is a known limitation
+    // — you can't open multiple files simultaneously from a single action.
+    {
+      label: "Open in Studio",
+      action: () => ids.forEach((id) => openInStudio(id)),
+    },
     { label: "Move to folder…", action: () => requestMoveToFolder(ids) },
     { label: "Delete", action: () => requestDelete(ids), danger: true },
   ];
@@ -49,7 +59,10 @@ function multiSelectionMenuItems(ids) {
 function emptySpaceMenuItems() {
   return [
     { label: "New Folder", action: () => requestNewFolder() },
-    { label: "Upload", action: () => document.getElementById("libraryFileInput")?.click() },
+    {
+      label: "Upload",
+      action: () => document.getElementById("libraryFileInput")?.click(),
+    },
     { label: "Paste", action: () => {}, disabled: true, dataAction: "paste" },
   ];
 }
@@ -78,7 +91,8 @@ export function openContextMenu(x, y, targetIds) {
   items.forEach((item) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "context-menu-item" + (item.danger ? " context-menu-item-danger" : "");
+    btn.className =
+      "context-menu-item" + (item.danger ? " context-menu-item-danger" : "");
     btn.setAttribute("role", "menuitem");
     btn.textContent = item.label;
     if (item.dataAction) btn.dataset.action = item.dataAction;
@@ -116,9 +130,13 @@ export function requestRename(id) {
   return showDialog("Rename", "New name", current).then((name) => {
     if (!name) return;
     if (file) {
-      libraryState.set({ files: state.files.map((f) => (f.id === id ? { ...f, name } : f)) });
+      libraryState.set({
+        files: state.files.map((f) => (f.id === id ? { ...f, name } : f)),
+      });
     } else {
-      libraryState.set({ folders: state.folders.map((f) => (f.id === id ? { ...f, name } : f)) });
+      libraryState.set({
+        folders: state.folders.map((f) => (f.id === id ? { ...f, name } : f)),
+      });
     }
     announce(`Renamed to ${name}`);
   });
@@ -127,44 +145,130 @@ export function requestRename(id) {
 export function requestMoveToFolder(ids) {
   return new Promise((resolve) => {
     const state = libraryState.get();
+    const dialogId = "move-dialog-title-" + Date.now();
+
+    // Backdrop — click outside dismisses
+    const backdrop = document.createElement("div");
+    backdrop.className = "dialog-backdrop";
+
     const dialog = document.createElement("div");
-    dialog.className = "dialog-overlay";
+    dialog.className = "dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", dialogId);
+
+    const folderButtons = state.folders
+      .filter((f) => !ids.includes(f.id))
+      .map(
+        (f) =>
+          `<button type="button" class="context-menu-item" data-move-target="${
+            f.id
+          }">${escapeHtml(f.name)}</button>`
+      )
+      .join("");
+
     dialog.innerHTML = `
-      <div class="dialog">
-        <h2 class="dialog-title">Move to folder…</h2>
-        <div class="dialog-body">
-          <button type="button" class="context-menu-item" data-move-target="">Home</button>
-          ${state.folders
-            .filter((f) => !ids.includes(f.id))
-            .map((f) => `<button type="button" class="context-menu-item" data-move-target="${f.id}">${escapeHtml(f.name)}</button>`)
-            .join("")}
-        </div>
+      <div class="dialog-header"><h2 class="dialog-title" id="${dialogId}">Move to folder…</h2></div>
+      <div class="dialog-body">
+        <button type="button" class="context-menu-item" data-move-target="">Home</button>
+        ${folderButtons}
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary dialog-cancel-btn" type="button">Cancel</button>
       </div>
     `;
-    document.body.appendChild(dialog);
 
-    dialog.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-move-target]");
-      if (!btn) return;
-      const targetId = btn.dataset.moveTarget || null;
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+
+    let resolved = false;
+    let removeTrap = () => {};
+
+    function dismiss() {
+      if (resolved) return;
+      resolved = true;
+      document.removeEventListener("keydown", onKey);
+      removeTrap();
+      backdrop.remove();
+      resolve();
+    }
+
+    function moveTo(targetId) {
+      if (resolved) return;
+      resolved = true;
+      document.removeEventListener("keydown", onKey);
+      removeTrap();
+      backdrop.remove();
       const next = libraryState.get();
       libraryState.set({
-        files: next.files.map((f) => (ids.includes(f.id) ? { ...f, parentId: targetId } : f)),
-        folders: next.folders.map((f) => (ids.includes(f.id) ? { ...f, parentId: targetId } : f)),
+        files: next.files.map((f) =>
+          ids.includes(f.id) ? { ...f, parentId: targetId } : f
+        ),
+        folders: next.folders.map((f) =>
+          ids.includes(f.id) ? { ...f, parentId: targetId } : f
+        ),
         selectedIds: [],
       });
-      dialog.remove();
       announce(`Moved ${ids.length} item${ids.length === 1 ? "" : "s"}`);
       resolve();
+    }
+
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismiss();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+
+    // Click outside (on backdrop) dismisses
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) dismiss();
     });
+
+    // Cancel button
+    dialog
+      .querySelector(".dialog-cancel-btn")
+      ?.addEventListener("click", dismiss);
+
+    // Folder target buttons
+    dialog.querySelectorAll("[data-move-target]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const targetId = btn.dataset.moveTarget || null;
+        moveTo(targetId);
+      });
+    });
+
+    // Focus trap
+    if (window.focusTrap) {
+      const firstBtn =
+        dialog.querySelector("[data-move-target]") ||
+        dialog.querySelector(".dialog-cancel-btn");
+      try {
+        const trap = window.focusTrap.createFocusTrap(dialog, {
+          initialFocus: firstBtn,
+          escapeDeactivates: false,
+          allowOutsideClick: true,
+        });
+        trap.activate();
+        removeTrap = () => trap.deactivate();
+      } catch (_) {
+        // focus-trap unavailable (e.g. test environment) — dialog still works
+      }
+    }
   });
 }
 
 export function requestBeskIt(ids) {
   const state = libraryState.get();
   libraryState.set({
-    files: state.files.map((f) => (ids.includes(f.id) ? { ...f, status: "besked" } : f)),
-    folders: state.folders.map((f) => (ids.includes(f.id) ? { ...f, status: "besked" } : f)),
+    files: state.files.map((f) =>
+      ids.includes(f.id) ? { ...f, status: "besked" } : f
+    ),
+    folders: state.folders.map((f) =>
+      ids.includes(f.id) ? { ...f, status: "besked" } : f
+    ),
   });
   announce(`${ids.length} item${ids.length === 1 ? "" : "s"} besked`);
   return Promise.resolve();

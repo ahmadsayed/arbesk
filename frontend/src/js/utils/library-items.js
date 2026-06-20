@@ -8,10 +8,24 @@ export function isSupportedFile(filename) {
 export function getChildItems(state, folderId) {
   const folders = state.folders
     .filter((f) => f.parentId === folderId)
-    .map((f) => ({ id: f.id, type: "folder", name: f.name, status: null, dateModified: null, sizeBytes: null }));
+    .map((f) => ({
+      id: f.id,
+      type: "folder",
+      name: f.name,
+      status: f.status,
+      dateModified: null,
+      sizeBytes: null,
+    }));
   const files = state.files
     .filter((f) => f.parentId === folderId)
-    .map((f) => ({ id: f.id, type: "file", name: f.name, status: f.status, dateModified: f.dateModified, sizeBytes: f.sizeBytes }));
+    .map((f) => ({
+      id: f.id,
+      type: "file",
+      name: f.name,
+      status: f.status,
+      dateModified: f.dateModified,
+      sizeBytes: f.sizeBytes,
+    }));
   return [...folders, ...files];
 }
 
@@ -53,7 +67,10 @@ export function computeRangeSelection(items, anchorId, targetId) {
   const anchorIndex = ids.indexOf(anchorId);
   const targetIndex = ids.indexOf(targetId);
   if (anchorIndex === -1 || targetIndex === -1) return [targetId];
-  const [start, end] = anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+  const [start, end] =
+    anchorIndex < targetIndex
+      ? [anchorIndex, targetIndex]
+      : [targetIndex, anchorIndex];
   return ids.slice(start, end + 1);
 }
 
