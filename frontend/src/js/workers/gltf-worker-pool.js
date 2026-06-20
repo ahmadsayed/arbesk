@@ -9,7 +9,7 @@
 
 import workerpool from "../vendor/workerpool-10.0.2.mjs";
 
-const WORKER_SCRIPT = new URL("./gltf-worker.js", import.meta.url);
+const WORKER_SCRIPT = new URL("./gltf-worker.js?v=2", import.meta.url);
 const MAX_WORKERS = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
 
 let pool = null;
