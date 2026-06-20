@@ -24,7 +24,7 @@ describe("getChildItems", () => {
       { id: "nested-folder", name: "Swords", parentId: "root-folder" },
     ],
     files: [
-      { id: "file-1", name: "shield.glb", parentId: null, status: "saved", sizeBytes: 1024, dateModified: 100 },
+      { id: "file-1", name: "shield.glb", parentId: null, status: "wip", sizeBytes: 1024, dateModified: 100 },
       { id: "file-2", name: "sword.glb", parentId: "root-folder", status: "besked", sizeBytes: 2048, dateModified: 200 },
     ],
   };
@@ -56,7 +56,7 @@ describe("filterItems", () => {
 describe("sortItems", () => {
   test("folders always sort before files regardless of sortBy", () => {
     const items = [
-      { id: "f1", type: "file", name: "b.glb", status: "saved", dateModified: 1 },
+      { id: "f1", type: "file", name: "b.glb", status: "wip", dateModified: 1 },
       { id: "d1", type: "folder", name: "z-folder", status: null, dateModified: null },
     ];
     const sorted = sortItems(items, "name");
@@ -65,25 +65,25 @@ describe("sortItems", () => {
 
   test("sortBy 'name' orders files alphabetically within the file group", () => {
     const items = [
-      { id: "b", type: "file", name: "banana.glb", dateModified: 1, status: "saved" },
-      { id: "a", type: "file", name: "apple.glb", dateModified: 2, status: "saved" },
+      { id: "b", type: "file", name: "banana.glb", dateModified: 1, status: "wip" },
+      { id: "a", type: "file", name: "apple.glb", dateModified: 2, status: "wip" },
     ];
     expect(sortItems(items, "name").map((i) => i.id)).toEqual(["a", "b"]);
   });
 
   test("sortBy 'date' orders files newest first", () => {
     const items = [
-      { id: "old", type: "file", name: "old.glb", dateModified: 1, status: "saved" },
-      { id: "new", type: "file", name: "new.glb", dateModified: 2, status: "saved" },
+      { id: "old", type: "file", name: "old.glb", dateModified: 1, status: "wip" },
+      { id: "new", type: "file", name: "new.glb", dateModified: 2, status: "wip" },
     ];
     expect(sortItems(items, "date").map((i) => i.id)).toEqual(["new", "old"]);
   });
 
-  test("sortBy 'status' orders uploading, then saved, then besked", () => {
+  test("sortBy 'status' orders uploading, then wip, then besked", () => {
     const items = [
       { id: "b", type: "file", name: "b.glb", status: "besked", dateModified: 1 },
       { id: "u", type: "file", name: "u.glb", status: "uploading", dateModified: 1 },
-      { id: "s", type: "file", name: "s.glb", status: "saved", dateModified: 1 },
+      { id: "s", type: "file", name: "s.glb", status: "wip", dateModified: 1 },
     ];
     expect(sortItems(items, "status").map((i) => i.id)).toEqual(["u", "s", "b"]);
   });

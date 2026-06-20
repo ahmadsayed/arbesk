@@ -28,7 +28,7 @@ export function sortItems(items, sortBy) {
   } else if (sortBy === "date") {
     sorted.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
   } else if (sortBy === "status") {
-    const rank = { uploading: 0, saved: 1, besked: 2 };
+    const rank = { uploading: 0, wip: 1, besked: 2 };
     sorted.sort((a, b) => (rank[a.status] ?? -1) - (rank[b.status] ?? -1));
   }
   const folders = sorted.filter((i) => i.type === "folder");
