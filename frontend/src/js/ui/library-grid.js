@@ -3,6 +3,8 @@ import { on, EVENTS } from "../events/bus.js";
 import { getChildItems, filterItems, sortItems, isSupportedFile, formatBytes } from "../utils/library-items.js";
 import { escapeHtml } from "../utils/html.js";
 import { showToast } from "./toasts.js";
+import { computeRangeSelection } from "../utils/library-items.js";
+import { showConfirmDialog } from "./dialog.js";
 
 export function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
@@ -105,15 +107,134 @@ function currentItems() {
   return sortItems(filterItems(items, state.searchQuery), state.sortBy);
 }
 
+function applySelection(container, selectedIds) {
+  container.querySelectorAll("[data-id]").forEach((el) => {
+    const selected = selectedIds.includes(el.dataset.id);
+    el.classList.toggle("selected", selected);
+    el.setAttribute("aria-selected", String(selected));
+  });
+}
+
 function render() {
   const container = document.getElementById("libraryItems");
   if (!container) return;
   const state = libraryState.get();
   const items = currentItems();
   renderItems(container, items, state.viewMode);
+  applySelection(container, state.selectedIds);
 
   const countEl = document.getElementById("libraryItemCount");
   if (countEl) countEl.textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+}
+
+let lastClickedId = null;
+
+export function openInStudio(fileId) {
+  window.location.href = `/studio.html?libraryFile=${fileId}`;
+}
+
+export function requestDelete(ids) {
+  return showConfirmDialog(
+    ids.length === 1 ? "Delete item?" : `Delete ${ids.length} items?`,
+    "This cannot be undone.",
+    [
+      { text: "Cancel", value: "cancel", className: "btn btn-secondary" },
+      { text: "Delete", value: "confirm", className: "btn btn-danger" },
+    ]
+  ).then((value) => {
+    if (value !== "confirm") return;
+    const state = libraryState.get();
+    libraryState.set({
+      folders: state.folders.filter((f) => !ids.includes(f.id)),
+      files: state.files.filter((f) => !ids.includes(f.id)),
+      selectedIds: [],
+    });
+    announce(`${ids.length} item${ids.length === 1 ? "" : "s"} deleted`);
+  });
+}
+
+function handleItemClick(e) {
+  const container = document.getElementById("libraryItems");
+  const el = e.target.closest("[data-id]");
+
+  if (!el) {
+    if (e.target === container) libraryState.set({ selectedIds: [] });
+    return;
+  }
+
+  const id = el.dataset.id;
+  const state = libraryState.get();
+  let selectedIds;
+
+  if (e.shiftKey && lastClickedId) {
+    selectedIds = computeRangeSelection(currentItems(), lastClickedId, id);
+  } else if (e.ctrlKey || e.metaKey) {
+    selectedIds = state.selectedIds.includes(id)
+      ? state.selectedIds.filter((sid) => sid !== id)
+      : [...state.selectedIds, id];
+  } else {
+    selectedIds = [id];
+  }
+
+  lastClickedId = id;
+  libraryState.set({ selectedIds });
+  announce(`${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`);
+}
+
+function handleItemDblClick(e) {
+  const el = e.target.closest("[data-id]");
+  if (!el) return;
+  if (el.dataset.type === "folder") {
+    libraryState.set({ currentFolderId: el.dataset.id, selectedIds: [] });
+  } else {
+    openInStudio(el.dataset.id);
+  }
+}
+
+function isEditingText() {
+  const el = document.activeElement;
+  if (!el) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+
+function handleKeydown(e) {
+  if (isEditingText()) return;
+  const state = libraryState.get();
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    const selectedIds = currentItems().map((i) => i.id);
+    libraryState.set({ selectedIds });
+    announce(`${selectedIds.length} items selected`);
+    return;
+  }
+
+  if (e.key === "Escape") {
+    libraryState.set({ selectedIds: [] });
+    return;
+  }
+
+  if ((e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) && state.currentFolderId !== null) {
+    e.preventDefault();
+    const parent = state.folders.find((f) => f.id === state.currentFolderId);
+    libraryState.set({ currentFolderId: parent ? parent.parentId : null, selectedIds: [] });
+    return;
+  }
+
+  if (e.key === "Enter" && state.selectedIds.length === 1) {
+    const id = state.selectedIds[0];
+    const isFolder = state.folders.some((f) => f.id === id);
+    if (isFolder) {
+      libraryState.set({ currentFolderId: id, selectedIds: [] });
+    } else {
+      openInStudio(id);
+    }
+    return;
+  }
+
+  if (e.key === "Delete" && state.selectedIds.length > 0) {
+    requestDelete(state.selectedIds);
+  }
 }
 
 export function addFiles(fileList) {
@@ -171,6 +292,12 @@ function initDropzone() {
 
 export function initLibraryGrid() {
   initDropzone();
+
+  const container = document.getElementById("libraryItems");
+  container?.addEventListener("click", handleItemClick);
+  container?.addEventListener("dblclick", handleItemDblClick);
+  document.addEventListener("keydown", handleKeydown);
+
   on(EVENTS.LIBRARY_STATE_CHANGED, render);
   render();
 }
