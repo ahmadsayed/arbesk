@@ -33,6 +33,7 @@ services:
       - ./blockchain/deployments:/app/deployments
       - ./blockchain/.env:/app/.env
       - ./blockchain/artifacts:/app/artifacts
+      - ./blockchain/coverage:/app/coverage
       # Named volume keeps Hardhat compiler cache across restarts
       - hardhat-cache:/app/cache
     # Default command starts the local node; override for compile/test/deploy:
