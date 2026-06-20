@@ -1,0 +1,50 @@
+// ═══════════════════════════════════════════════════════════════════
+// Library Context Menu — libadwaita-style popover
+// ═══════════════════════════════════════════════════════════════════
+
+.context-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 200px;
+  padding: var(--size-1);
+  border-radius: var(--radius-3);
+  background-color: var(--popover-bg);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-3);
+  border: var(--border-size-1) solid var(--border-color);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  width: 100%;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-1);
+  color: var(--headerbar-fg);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--surface-overlay-hover);
+    outline: none;
+  }
+
+  &.context-menu-item-primary {
+    color: var(--accent-bg);
+  }
+
+  &.context-menu-item-danger {
+    color: var(--error-bg, #c01c28);
+  }
+}
+
+.context-menu-separator {
+  height: var(--border-size-1);
+  margin: var(--size-1) 0;
+  background-color: var(--border-hairline);
+}

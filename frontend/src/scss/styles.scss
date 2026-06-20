@@ -33,6 +33,9 @@
 @use 'components/wallet-popover';
 @use 'components/wallet-modal';
 @use 'components/toasts';
+@use 'components/library-toolbar';
+@use 'components/library-grid';
+@use 'components/library-context-menu';
 
 // ── Utilities ───────────────────────────────────────────────────────
 @use 'utilities/responsive';
