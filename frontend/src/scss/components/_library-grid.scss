@@ -156,6 +156,14 @@
   flex-shrink: 0;
 }
 
+.library-rubber-band {
+  position: fixed;
+  z-index: 30;
+  border: 1px solid var(--accent-bg);
+  background-color: color-mix(in srgb, var(--accent-bg) 15%, transparent);
+  pointer-events: none;
+}
+
 .library-view-toggle {
   display: flex;
   gap: 2px;

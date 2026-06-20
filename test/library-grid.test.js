@@ -316,3 +316,43 @@ describe("requestDelete", () => {
     expect(libraryState.get().selectedIds).toEqual([]);
   });
 });
+
+describe("rubber-band selection", () => {
+  function rect(el, box) {
+    el.getBoundingClientRect = () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top });
+  }
+
+  test("dragging a box over empty space selects every item it intersects", () => {
+    libraryState.set({
+      files: [
+        { id: "a", name: "a.glb", parentId: null, status: "wip" },
+        { id: "b", name: "b.glb", parentId: null, status: "wip" },
+      ],
+    });
+    initLibraryGrid();
+
+    const content = document.getElementById("libraryContent");
+    rect(content, { left: 0, top: 0, right: 1000, bottom: 1000 });
+    const container = document.getElementById("libraryItems");
+    const itemA = container.querySelector('[data-id="a"]');
+    const itemB = container.querySelector('[data-id="b"]');
+    rect(itemA, { left: 10, top: 10, right: 50, bottom: 50 });
+    rect(itemB, { left: 200, top: 200, right: 240, bottom: 240 });
+
+    content.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 0, clientY: 0 }));
+    document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 250, clientY: 250 }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    expect(libraryState.get().selectedIds.sort()).toEqual(["a", "b"]);
+  });
+
+  test("a rubber-band drag that starts on an item does not start a selection box", () => {
+    libraryState.set({ files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }] });
+    initLibraryGrid();
+    const container = document.getElementById("libraryItems");
+    const itemA = container.querySelector('[data-id="a"]');
+
+    itemA.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 0, clientY: 0 }));
+    expect(document.querySelector(".library-rubber-band")).toBeNull();
+  });
+});

@@ -278,6 +278,71 @@ export function addFiles(fileList) {
   });
 }
 
+function rectsIntersect(a, b) {
+  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
+function initRubberBand() {
+  const content = document.getElementById("libraryContent");
+  if (!content) return;
+
+  let band = null;
+  let startX = 0;
+  let startY = 0;
+  let endX = 0;
+  let endY = 0;
+
+  content.addEventListener("mousedown", (e) => {
+    if (e.target.closest("[data-id]")) return;
+    if (e.button !== 0) return;
+
+    startX = e.clientX;
+    startY = e.clientY;
+    endX = e.clientX;
+    endY = e.clientY;
+    band = document.createElement("div");
+    band.className = "library-rubber-band";
+    document.body.appendChild(band);
+    positionBand(band, startX, startY, startX, startY);
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!band) return;
+    endX = e.clientX;
+    endY = e.clientY;
+    positionBand(band, startX, startY, endX, endY);
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!band) return;
+    const boxRect = {
+      left: Math.min(startX, endX),
+      top: Math.min(startY, endY),
+      right: Math.max(startX, endX),
+      bottom: Math.max(startY, endY),
+    };
+    band.remove();
+    band = null;
+
+    const container = document.getElementById("libraryItems");
+    const selectedIds = [];
+    container?.querySelectorAll("[data-id]").forEach((el) => {
+      if (rectsIntersect(boxRect, el.getBoundingClientRect())) selectedIds.push(el.dataset.id);
+    });
+    if (selectedIds.length > 0) {
+      libraryState.set({ selectedIds });
+      announce(`${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`);
+    }
+  });
+}
+
+function positionBand(band, x1, y1, x2, y2) {
+  band.style.left = `${Math.min(x1, x2)}px`;
+  band.style.top = `${Math.min(y1, y2)}px`;
+  band.style.width = `${Math.abs(x2 - x1)}px`;
+  band.style.height = `${Math.abs(y2 - y1)}px`;
+}
+
 function initDropzone() {
   const content = document.getElementById("libraryContent");
   const overlay = document.getElementById("libraryDropOverlay");
@@ -297,6 +362,7 @@ function initDropzone() {
 
 export function initLibraryGrid() {
   initDropzone();
+  initRubberBand();
 
   const container = document.getElementById("libraryItems");
   container?.addEventListener("click", handleItemClick);
