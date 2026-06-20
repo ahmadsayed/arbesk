@@ -25,15 +25,15 @@ function patchConfigFile(configPath, freeAddress, paidAddress, usdcAddress) {
   // so that other fields (chainId, blockExplorer, etc.) are preserved.
   config = config.replace(
     /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?contractAddress: )"[^"]*"/,
-    `$1"${freeAddress}"`
+    `$1"${freeAddress}"`,
   );
   config = config.replace(
     /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?paidContractAddress: )"[^"]*"/,
-    `$1"${paidAddress}"`
+    `$1"${paidAddress}"`,
   );
   config = config.replace(
     /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?usdcToken: )"[^"]*"/,
-    `$1"${usdcAddress || "0x5FbDB2315678afecb367f032d93F642f64180aa3"}"`
+    `$1"${usdcAddress || "0x5FbDB2315678afecb367f032d93F642f64180aa3"}"`,
   );
   fs.writeFileSync(configPath, config);
 }
@@ -46,7 +46,7 @@ function syncNetworkConfigWithDeployedAddresses() {
     "src",
     "js",
     "blockchain",
-    "network-config.js"
+    "network-config.js",
   );
   const backendConfigPath = path.join(ROOT, "src", "config.js");
 
@@ -55,16 +55,22 @@ function syncNetworkConfigWithDeployedAddresses() {
   const usdcAddress = readEnvVar(blockchainEnvPath, "USDC_TOKEN");
 
   if (!freeAddress || !paidAddress) {
-    log("WARN: Could not read contract addresses from blockchain/.env; skipping network-config patch");
+    log(
+      "WARN: Could not read contract addresses from blockchain/.env; skipping network-config patch",
+    );
     return;
   }
 
   patchConfigFile(networkConfigPath, freeAddress, paidAddress, usdcAddress);
-  log(`Patched network-config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`);
+  log(
+    `Patched network-config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
+  );
 
   if (fs.existsSync(backendConfigPath)) {
     patchConfigFile(backendConfigPath, freeAddress, paidAddress, usdcAddress);
-    log(`Patched src/config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`);
+    log(
+      `Patched src/config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
+    );
   }
 }
 
@@ -83,7 +89,9 @@ async function waitForPort(port, host = "127.0.0.1", timeoutMs = 30000) {
 }
 
 export default async function globalSetup() {
-  log(`Starting infrastructure for worktree ${COMPOSE_PROJECT} on backend port ${BACKEND_PORT}...`);
+  log(
+    `Starting infrastructure for worktree ${COMPOSE_PROJECT} on backend port ${BACKEND_PORT}...`,
+  );
 
   const ipfsRunning = isServiceRunning("ipfs");
   const hardhatRunning = isServiceRunning("hardhat");
@@ -97,19 +105,23 @@ export default async function globalSetup() {
     await resetHardhatChain();
   }
 
-  log("Running start-dev-local.sh --setup-only...");
-  execSync("./scripts/start-dev-local.sh --setup-only", {
+  log("Running start-dev.sh --setup-only...");
+  execSync("./scripts/start-dev.sh --setup-only", {
     stdio: "inherit",
     cwd: ROOT,
     env: { ...process.env, COMPOSE_PROJECT_NAME: COMPOSE_PROJECT },
     timeout: 300000,
   });
-  log("start-dev-local.sh finished");
+  log("start-dev.sh finished");
 
   log("Syncing network-config.js with deployed contract addresses...");
   syncNetworkConfigWithDeployedAddresses();
   log("Rebuilding frontend with synced contract addresses...");
-  execSync("npm run build:frontend", { stdio: "inherit", cwd: ROOT, timeout: 120000 });
+  execSync("npm run build:frontend", {
+    stdio: "inherit",
+    cwd: ROOT,
+    timeout: 120000,
+  });
   log("Frontend rebuilt");
 
   log(`Checking backend on ${BACKEND_PORT}...`);
@@ -162,11 +174,14 @@ export default async function globalSetup() {
     // so this POST must send the header + a body or it 415s and the reset
     // silently no-ops — letting the per-wallet 10-gen/hour limit accumulate
     // across runs until generation starts failing with "Rate limit reached".
-    const resetRes = await fetch(`${BACKEND_URL}/api/v1/test/reset-rate-limit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
-    });
+    const resetRes = await fetch(
+      `${BACKEND_URL}/api/v1/test/reset-rate-limit`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+    );
     if (resetRes.ok) {
       log("Rate limiter reset");
     } else {

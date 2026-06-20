@@ -1,179 +1,236 @@
 #!/usr/bin/env bash
 set -e
 
+# ─── Arbesk Dev Launcher ─────────────────────────────────────────────────────
+# One script, two modes.  Both modes require Docker (local Nostr relay).
+#
+#   ./scripts/start-dev.sh              → local:  IPFS + Hardhat + Nostr + backend       (UI testing)
+#   ./scripts/start-dev.sh --setup-only → local:  IPFS + Hardhat + Nostr, no backend     (E2E testing)
+#   ./scripts/start-dev.sh --testnet    → testnet: Optimism Sepolia + Pinata + Nostr + backend
+#
+# Flags:
+#   --print-project   Print the Docker Compose project name and exit.
+#   --setup-only      Skip starting the backend (E2E manages its own backend process).
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-# ─── Worktree isolation ───
-# Nostr is the only local container in this mode; keep a stable project name
-# per checkout so multiple worktrees do not collide on port 7777.
+# ─── Parse flags ─────────────────────────────────────────────────────────────
+MODE="local"
+SETUP_ONLY=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --testnet)       MODE="testnet" ;;
+    --setup-only)    SETUP_ONLY=true ;;
+    --print-project) PRINT_PROJECT=true ;;
+  esac
+done
+
+# ─── Worktree isolation ──────────────────────────────────────────────────────
 if [ -z "$COMPOSE_PROJECT_NAME" ]; then
-    WORKTREE_BASENAME=$(basename "$PROJECT_ROOT")
-    WORKTREE_HASH=$(printf '%s' "$PROJECT_ROOT" | sha256sum | cut -c1-8)
-    WORKTREE_ID="${WORKTREE_BASENAME}-${WORKTREE_HASH}"
-    WORKTREE_ID_SANITIZED=$(echo "$WORKTREE_ID" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')
-    COMPOSE_PROJECT_NAME="arbesk-${WORKTREE_ID_SANITIZED}"
+  WT_NAME=$(basename "$PROJECT_ROOT")
+  WT_HASH=$(printf '%s' "$PROJECT_ROOT" | sha256sum | cut -c1-8)
+  WT_ID=$(echo "${WT_NAME}-${WT_HASH}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')
+  COMPOSE_PROJECT_NAME="arbesk-${WT_ID}"
 fi
 export COMPOSE_PROJECT_NAME
-
-# Convenience flag for scripts/docs that need the current worktree's project name.
-if [ "${1:-}" = "--print-project" ]; then
-    echo "$COMPOSE_PROJECT_NAME"
-    exit 0
-fi
-
+DC="docker compose -p ${COMPOSE_PROJECT_NAME}"
 BACKEND_PORT="${PORT:-9090}"
 
-# Docker Compose shorthand scoped to this worktree.
-DC="docker compose -p ${COMPOSE_PROJECT_NAME}"
+if [ "${PRINT_PROJECT:-}" = "true" ]; then
+  echo "$COMPOSE_PROJECT_NAME"
+  exit 0
+fi
+
+# ─── Load .env (source of truth for both modes) ───────────────────────────────
+if [ -f ".env" ]; then
+  set -a; source .env; set +a
+fi
 
 echo "═══════════════════════════════════════════"
-echo "  Arbesk Dev Launcher (testnet + Pinata)"
-echo "  worktree: ${COMPOSE_PROJECT_NAME}"
-echo "  backend port: ${BACKEND_PORT}"
+echo "  Arbesk Dev Launcher"
+echo "  mode:       ${MODE}"
+echo "  worktree:   ${COMPOSE_PROJECT_NAME}"
+echo "  backend:    ${BACKEND_PORT}"
 echo "═══════════════════════════════════════════"
 echo ""
 
-# ─── 1. Load environment ───
-load_env_var() {
-    local key="$1"
-    local value=""
-    if [ -f ".env" ]; then
-        value=$(grep "^${key}=" .env | cut -d'=' -f2- | tr -d ' \r' || true)
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOCAL MODE
+# ═══════════════════════════════════════════════════════════════════════════════
+if [ "$MODE" = "local" ]; then
+
+  # ── Ensure blockchain/.env exists ─────────────────────────────────────────
+  if [ ! -f "blockchain/.env" ]; then
+    echo "⚙️  Creating blockchain/.env from example..."
+    cp blockchain/.env.example blockchain/.env 2>/dev/null || {
+      echo "⚠️  blockchain/.env.example not found; creating minimal .env"
+      cat > blockchain/.env << 'EOF'
+API_URL=http://127.0.0.1:8545
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+PUBLIC_KEY=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+CONTRACT_ADDRESS=
+TREASURY_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+EOF
+    }
+  fi
+  sed -i 's|^API_URL=.*|API_URL=http://127.0.0.1:8545|' blockchain/.env
+  echo "✅ blockchain/.env configured for local Hardhat"
+  echo ""
+
+  # ── Clean start: stop containers, restart, wait for Hardhat ───────────────
+  echo "🧹 Stopping any existing local infrastructure..."
+  ${DC} down --volumes --remove-orphans 2>/dev/null || true
+
+  echo "🐳 Starting Docker infrastructure (IPFS + Hardhat + Nostr)..."
+  ${DC} up -d
+
+  echo "⏳ Waiting for Hardhat RPC..."
+  sleep 6
+  for i in $(seq 1 30); do
+    if curl -s -X POST http://127.0.0.1:8545 \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+        | grep -q '"result"'; then
+      echo "✅ Hardhat RPC is ready"
+      break
     fi
-    echo "$value"
-}
+    [ "$i" -eq 30 ] && { echo "❌ Hardhat RPC did not become ready in time"; exit 1; }
+    sleep 1
+  done
+  echo ""
 
-IPFS_BACKEND="${IPFS_BACKEND:-$(load_env_var IPFS_BACKEND)}"
-PINATA_JWT="${PINATA_JWT:-$(load_env_var PINATA_JWT)}"
-CONTRACT_ADDRESS="${CONTRACT_ADDRESS:-$(load_env_var CONTRACT_ADDRESS)}"
-PAID_CONTRACT_ADDRESS="${PAID_CONTRACT_ADDRESS:-$(load_env_var PAID_CONTRACT_ADDRESS)}"
-USDC_TOKEN="${USDC_TOKEN:-$(load_env_var USDC_TOKEN)}"
-API_URL="${API_URL:-$(load_env_var API_URL)}"
+  # ── Reset chain + deploy contracts ────────────────────────────────────────
+  echo "🧹 Resetting Hardhat chain to genesis..."
+  curl -s -X POST http://127.0.0.1:8545 \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"hardhat_reset","params":[],"id":1}' >/dev/null
 
-# ─── 2. Validate required configuration ───
-MISSING=0
+  echo "🔨 Compiling Solidity contracts..."
+  ${DC} exec -T hardhat npx hardhat compile
 
-if [ "$IPFS_BACKEND" != "pinata" ]; then
-    echo "⚠️  IPFS_BACKEND is '${IPFS_BACKEND:-}'. For testnet dev it should be 'pinata'."
-    echo "   Set IPFS_BACKEND=pinata in your root .env, or export it before running this script."
-    MISSING=1
-fi
+  # Force a fresh MockUSDC deploy by removing any cached address.
+  # sed -i fails on volume mounts (atomic rename across fs). Use /tmp.
+  ${DC} exec -T hardhat sh -c 'grep -v "^USDC_TOKEN=" /app/.env >/tmp/e && cat /tmp/e >/app/.env'
 
-if [ -z "$PINATA_JWT" ]; then
-    echo "❌ PINATA_JWT is not set. Add it to your root .env or export it."
-    MISSING=1
-fi
+  echo "📜 Deploying ArbeskAsset + MockUSDC..."
+  ${DC} exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 
-if [ -z "$CONTRACT_ADDRESS" ]; then
-    echo "❌ CONTRACT_ADDRESS is not set. Add the Optimism Sepolia free-contract address to your root .env."
-    MISSING=1
-fi
+  # ── Sync deployed addresses to all config files ───────────────────────────
+  echo "📜 Syncing deployed addresses..."
+  node scripts/sync-deployed-addresses.mjs
+  # Re-source .env so banner + backend see the fresh addresses.
+  set -a; source .env; set +a
+  echo ""
 
-if [ -z "$PAID_CONTRACT_ADDRESS" ]; then
-    echo "❌ PAID_CONTRACT_ADDRESS is not set. Add the Optimism Sepolia paid-contract address to your root .env."
-    MISSING=1
-fi
+# ═══════════════════════════════════════════════════════════════════════════════
+# TESTNET MODE
+# ═══════════════════════════════════════════════════════════════════════════════
+else
 
-if [ -z "$USDC_TOKEN" ]; then
-    echo "❌ USDC_TOKEN is not set. Add the Optimism Sepolia USDC address (0x5fd84259d66Cd461235407180D3B4c8d0F273e15) to your root .env."
-    MISSING=1
-fi
+  # Override with Pinata-specific config (IPFS_BACKEND, PINATA_JWT, etc.)
+  [ -f ".env.pinata" ] && { set -a; source .env.pinata; set +a; }
+  # --testnet always uses Pinata, regardless of what .env says.
+  export IPFS_BACKEND=pinata
 
-if [ -z "$API_URL" ] || [[ ! "$API_URL" =~ optimism|sepolia ]]; then
-    echo "⚠️  API_URL is '${API_URL:-}'. For testnet dev it should point to an Optimism Sepolia RPC."
-    echo "   Example: https://sepolia.optimism.io"
-fi
+  MISSING=0
+  [ -z "$PINATA_JWT" ]            && { echo "❌ PINATA_JWT is not set."; MISSING=1; }
+  [ -z "$CONTRACT_ADDRESS" ]      && { echo "❌ CONTRACT_ADDRESS is not set."; MISSING=1; }
+  [ -z "$PAID_CONTRACT_ADDRESS" ] && { echo "❌ PAID_CONTRACT_ADDRESS is not set."; MISSING=1; }
+  [ -z "$USDC_TOKEN" ]            && { echo "❌ USDC_TOKEN is not set."; MISSING=1; }
 
-if [ "$MISSING" -ne 0 ]; then
+  if [ -z "$API_URL" ] || [[ ! "$API_URL" =~ optimism|sepolia ]]; then
+    echo "⚠️  API_URL is '${API_URL:-}'. For testnet it should point to Optimism Sepolia."
+  fi
+
+  if [ "$MISSING" -ne 0 ]; then
     echo ""
-    echo "❌ Missing required configuration. Please update your root .env and try again."
+    echo "❌ Missing required configuration. Update your root .env and try again."
     exit 1
-fi
+  fi
 
-echo "✅ Configuration valid for testnet + Pinata mode"
-echo "   IPFS backend: pinata"
-echo "   Blockchain:   ${API_URL:-(from .env)}"
-echo "   Contract:     ${CONTRACT_ADDRESS}"
-echo "   Paid contract: ${PAID_CONTRACT_ADDRESS}"
-echo "   USDC token:   ${USDC_TOKEN}"
-echo ""
+  echo "✅ Configuration valid for testnet + Pinata"
+  echo "   IPFS:  pinata (remote)"
+  echo "   Nostr: Docker (ws://127.0.0.1:7777)"
+  echo "   RPC:   ${API_URL}"
+  echo ""
 
-# ─── 3. Start only the local Nostr relay ───
-start_nostr() {
-    if ${DC} ps --services --filter "status=running" 2>/dev/null | grep -qE 'nostr'; then
-        echo "✅ Nostr relay already running for ${COMPOSE_PROJECT_NAME}"
-        return
-    fi
-
-    echo "🐳 Starting local Nostr relay for ${COMPOSE_PROJECT_NAME}..."
+  # ── Start local Nostr relay ───────────────────────────────────────────────
+  if ! ${DC} ps --services --filter "status=running" 2>/dev/null | grep -qE 'nostr'; then
+    echo "🐳 Starting local Nostr relay..."
     ${DC} up -d nostr
-    echo "⏳ Waiting for Nostr relay to boot..."
-    for i in {1..30}; do
-        if curl -s http://127.0.0.1:7777 >/dev/null 2>&1 || nc -z 127.0.0.1 7777 2>/dev/null; then
-            echo "✅ Nostr relay is ready on ws://127.0.0.1:7777"
-            break
-        fi
-        if [ "$i" -eq 30 ]; then
-            echo "⚠️  Nostr relay did not become ready in time; continuing anyway"
-        fi
-        sleep 1
+    echo "⏳ Waiting for Nostr..."
+    for i in $(seq 1 30); do
+      curl -s http://127.0.0.1:7777 >/dev/null 2>&1 && { echo "✅ Nostr relay ready on ws://127.0.0.1:7777"; break; }
+      [ "$i" -eq 30 ] && echo "⚠️  Nostr relay did not become ready; continuing anyway"
+      sleep 1
     done
-}
+  else
+    echo "✅ Nostr relay already running"
+  fi
+  echo ""
+fi
 
-start_nostr
+# ═══════════════════════════════════════════════════════════════════════════════
+# SHARED STEPS (both modes)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Install dependencies ──────────────────────────────────────────────────────
+for dir in . frontend blockchain; do
+  label="${dir#.}"; label="${label#/}"; [ -z "$label" ] && label="root"
+  if [ -d "${dir}/node_modules" ]; then
+    echo "✅ ${label} node_modules found"
+  else
+    echo "📦 Installing ${label} dependencies..."
+    (cd "${dir}" && npm install)
+  fi
+done
 echo ""
 
-# ─── 4. Install dependencies ───
-if [ ! -d "node_modules" ]; then
-    echo "📦 Installing root dependencies..."
-    npm install
-else
-    echo "✅ Root node_modules found"
-fi
-
-if [ ! -d "frontend/node_modules" ]; then
-    echo "📦 Installing frontend dependencies..."
-    (cd frontend && npm install)
-else
-    echo "✅ Frontend node_modules found"
-fi
-
-if [ ! -d "blockchain/node_modules" ]; then
-    echo "📦 Installing blockchain dependencies (for IDE intellisense)..."
-    (cd blockchain && npm install)
-else
-    echo "✅ Blockchain node_modules found"
-fi
-echo ""
-
-# ─── 5. Build frontend ───
+# ── Build frontend ────────────────────────────────────────────────────────────
 echo "🔨 Building frontend..."
 (cd frontend && npm run build)
 echo ""
 
-# ─── 6. Print ready banner ───
+# ── Ready banner ──────────────────────────────────────────────────────────────
 echo "═══════════════════════════════════════════"
-echo "  🚀 Arbesk testnet stack is ready!"
-echo "═══════════════════════════════════════════"
-echo ""
-echo "   Studio:     http://localhost:${BACKEND_PORT}/studio.html"
-echo "   API:        http://localhost:${BACKEND_PORT}/api"
-echo "   Nostr:      ws://127.0.0.1:7777"
-echo "   Network:    Optimism Sepolia"
-echo "   RPC:        ${API_URL}"
-echo "   Contract:   ${CONTRACT_ADDRESS}"
-echo "   Paid:       ${PAID_CONTRACT_ADDRESS}"
-echo "   USDC:       ${USDC_TOKEN}"
-echo ""
-echo "═══════════════════════════════════════════"
+if [ "$MODE" = "local" ]; then
+  echo "  🚀 Arbesk local stack is ready!"
+  echo "═══════════════════════════════════════════"
+  echo ""
+  echo "   Studio:     http://localhost:${BACKEND_PORT}/studio.html"
+  echo "   API:        http://localhost:${BACKEND_PORT}/api"
+  echo "   Hardhat:    http://127.0.0.1:8545"
+  echo "   IPFS API:   http://127.0.0.1:5001"
+  echo "   IPFS GW:    http://127.0.0.1:8080"
+  echo "   Nostr:      ws://127.0.0.1:7777"
+  [ -n "${CONTRACT_ADDRESS:-}" ] && echo "   Contract:   ${CONTRACT_ADDRESS}"
+  echo ""
+  echo "   Wallet setup:"
+  echo "     Network: Hardhat Local  |  Chain: 31415822 (0x1df5e0e)"
+  echo "     RPC:     http://127.0.0.1:8545"
+  echo "     Key:     0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+else
+  echo "  🚀 Arbesk testnet stack is ready!"
+  echo "═══════════════════════════════════════════"
+  echo ""
+  echo "   Studio:     http://localhost:${BACKEND_PORT}/studio.html"
+  echo "   API:        http://localhost:${BACKEND_PORT}/api"
+  echo "   IPFS:       Pinata (remote)"
+  echo "   Nostr:      ws://127.0.0.1:7777 (Docker)"
+  echo "   Network:    Optimism Sepolia"
+  echo "   RPC:        ${API_URL}"
+  echo "   Contract:   ${CONTRACT_ADDRESS}"
+fi
 echo ""
 
-if [ "${1:-}" = "--setup-only" ]; then
-    echo "✅ Setup complete. Backend not started (--setup-only)."
-    exit 0
+if [ "$SETUP_ONLY" = "true" ]; then
+  echo "✅ Setup complete. Backend not started (--setup-only, for E2E testing)."
+  exit 0
 fi
 
-# ─── 7. Start backend ───
-PORT="${BACKEND_PORT}" IPFS_BACKEND=pinata node src/index.js
+# ── Start backend ─────────────────────────────────────────────────────────────
+IPFS_BACKEND="$([ "$MODE" = "local" ] && echo kubo || echo pinata)"
+PORT="${BACKEND_PORT}" IPFS_BACKEND="${IPFS_BACKEND}" node src/index.js

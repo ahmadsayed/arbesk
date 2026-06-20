@@ -25,7 +25,11 @@ function sanitizeIdPart(part) {
 
 function deriveWorktreeId(root) {
   const base = sanitizeIdPart(path.basename(root)) || "arbesk";
-  const hash = crypto.createHash("sha256").update(root).digest("hex").slice(0, 8);
+  const hash = crypto
+    .createHash("sha256")
+    .update(root)
+    .digest("hex")
+    .slice(0, 8);
   return `${base}-${hash}`;
 }
 
@@ -54,7 +58,7 @@ export const HARDHAT_RPC = "http://127.0.0.1:8545";
 // concurrent runs from different worktrees do not clobber each other.
 export const STATE_FILE = path.join(
   os.tmpdir(),
-  `arbesk-e2e-state-${WORKTREE_ID}.json`
+  `arbesk-e2e-state-${WORKTREE_ID}.json`,
 );
 
 export function sleep(ms) {
@@ -74,7 +78,7 @@ export function isServiceRunning(service) {
   try {
     const out = execSync(
       `docker compose -p "${COMPOSE_PROJECT}" ps --services --filter "status=running"`,
-      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }
+      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
     );
     return out
       .split("\n")
@@ -94,7 +98,7 @@ export function isContainerRunning(name) {
   try {
     const out = execSync(
       `docker ps --filter "name=${name}" --filter "status=running" --format "{{.Names}}"`,
-      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }
+      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
     );
     return out.trim().includes(name);
   } catch {
@@ -129,7 +133,8 @@ async function rpc(method, params = []) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  if (data.error)
+    throw new Error(data.error.message || JSON.stringify(data.error));
   return data.result;
 }
 
@@ -141,11 +146,11 @@ async function rpc(method, params = []) {
  * after repeated runs on a reused container).
  *
  * After the reset the previously deployed contracts have no bytecode, so
- * start-dev-local.sh re-detects that and redeploys fresh contracts at the same
+ * start-dev.sh re-detects that and redeploys fresh contracts at the same
  * deterministic addresses.
  *
  * No-op when the Hardhat node isn't reachable yet — in that case
- * start-dev-local.sh will start it and deploy fresh anyway.
+ * start-dev.sh will start it and deploy fresh anyway.
  */
 export async function resetHardhatChain() {
   try {

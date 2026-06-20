@@ -431,10 +431,10 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 
 | Script | Stack | Behavior |
 |--------|-------|----------|
-| `scripts/start-dev-local.sh` | Local IPFS + Hardhat + Nostr | Always starts clean, deploys fresh `ArbeskAsset` + `MockUSDC`, syncs addresses to `.env` and JS network configs, builds frontend, starts backend. Used by E2E. |
-| `scripts/start-dev.sh` | Optimism Sepolia + Pinata + local Nostr | Starts only the local Nostr relay, validates testnet/Pinata env vars, builds frontend, starts backend with `IPFS_BACKEND=pinata`. |
+| `scripts/start-dev.sh` (default) | Local IPFS + Hardhat + Nostr | Always starts clean, deploys fresh `ArbeskAsset` + `MockUSDC`, syncs addresses to `.env` and JS network configs, builds frontend, starts backend. Used by E2E with `--setup-only`. |
+| `scripts/start-dev.sh --testnet` | Optimism Sepolia + Pinata + local Nostr | Starts only the local Nostr relay, validates testnet/Pinata env vars, builds frontend, starts backend with `IPFS_BACKEND=pinata`. |
 
-`start-dev-local.sh` flow:
+`start-dev.sh` (local mode) flow:
 1. Ensures `blockchain/.env` exists
 2. Stops/removes any existing worktree containers for a clean start
 3. Resets the Hardhat chain and starts Docker Compose (IPFS + Hardhat + Nostr)
@@ -450,8 +450,8 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 | Script | What it runs |
 |--------|--------------|
 | `npm start` | `node src/index.js` |
-| `npm run dev` | `./scripts/start-dev.sh` (testnet + Pinata) |
-| `npm run dev:local` | `./scripts/start-dev-local.sh` (local stack, E2E-ready) |
+| `npm run dev` | `./scripts/start-dev.sh` (local stack, E2E-ready) |
+| `npm run dev:testnet` | `./scripts/start-dev.sh --testnet` (testnet + Pinata) |
 | `npm run nodemon` | Build frontend + nodemon backend |
 | `npm run build:frontend` | Delegates to `frontend/package.json` build |
 | `npm test` | Jest on `test/` (excludes `blockchain/`) |

@@ -106,7 +106,7 @@ echo ""
 echo "🔨 Building frontend..."
 (cd "${WORKTREE_PATH}" && npm run build:frontend)
 
-COMPOSE_PROJECT="$(cd "${WORKTREE_PATH}" && ./scripts/start-dev-local.sh --print-project)"
+COMPOSE_PROJECT="$(cd "${WORKTREE_PATH}" && ./scripts/start-dev.sh --print-project)"
 
 echo "🔨 Compiling Solidity contracts..."
 docker compose -p "${COMPOSE_PROJECT}" run --rm hardhat npx hardhat compile
