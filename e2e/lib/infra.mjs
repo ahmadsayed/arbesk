@@ -141,11 +141,11 @@ async function rpc(method, params = []) {
  * after repeated runs on a reused container).
  *
  * After the reset the previously deployed contracts have no bytecode, so
- * start-dev.sh re-detects that and redeploys fresh contracts at the same
+ * start-dev-local.sh re-detects that and redeploys fresh contracts at the same
  * deterministic addresses.
  *
- * No-op when the Hardhat node isn't reachable yet — in that case start-dev.sh
- * will start it and deploy fresh anyway.
+ * No-op when the Hardhat node isn't reachable yet — in that case
+ * start-dev-local.sh will start it and deploy fresh anyway.
  */
 export async function resetHardhatChain() {
   try {

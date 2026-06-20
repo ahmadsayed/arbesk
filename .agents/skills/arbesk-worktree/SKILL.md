@@ -55,7 +55,7 @@ cd .worktrees/feature-xyz
 
 npm run test:frontend
 npm run test:api
-COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) npm run test:contracts
+COMPOSE_PROJECT_NAME=$(./scripts/start-dev-local.sh --print-project) npm run test:contracts
 npm run test:e2e -- --project=chromium
 ```
 
@@ -65,7 +65,7 @@ The script output prints the exact `COMPOSE_PROJECT_NAME` and backend port.
 
 ```bash
 cd .worktrees/feature-xyz
-PROJECT=$(./scripts/start-dev.sh --print-project)
+PROJECT=$(./scripts/start-dev-local.sh --print-project)
 docker compose -p "$PROJECT" down
 
 # Fix Docker-created root-owned artifacts before removal
@@ -85,7 +85,8 @@ git worktree prune
 | `e2e/lib/infra.mjs` | Derives per-worktree Compose project and backend port |
 | `e2e/global-setup.mjs` | Starts E2E infrastructure on the worktree port |
 | `e2e/global-teardown.mjs` | Stops the worktree backend |
-| `scripts/start-dev.sh` | Starts dev stack using worktree-scoped Compose project |
+| `scripts/start-dev-local.sh` | Starts local dev stack using worktree-scoped Compose project |
+| `scripts/start-dev.sh` | Starts testnet + Pinata dev stack (local Nostr only) |
 | `package.json` | `worktree:create` npm script and worktree-aware `test:contracts` |
 
 ## Troubleshooting

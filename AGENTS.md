@@ -90,7 +90,10 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with
 
 ```bash
 # ─── Infrastructure ───
-docker-compose up -d                          # start IPFS + Hardhat + Nostr relay
+./scripts/start-dev-local.sh                  # local IPFS + Hardhat + Nostr, fresh deploy, E2E-ready
+./scripts/start-dev.sh                        # public testnet + Pinata + local Nostr
+./scripts/start-dev-local.sh --setup-only     # start infra + deploy, but do not launch backend
+docker-compose up -d                          # lower-level: start IPFS + Hardhat + Nostr relay
 docker-compose down
 docker-compose logs -f ipfs                   # or: hardhat, nostr
 
@@ -385,7 +388,7 @@ npm run worktree:create -- feature-xyz
 cd .worktrees/feature-xyz
 npm run test:frontend
 npm run test:api
-COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) npm run test:contracts
+COMPOSE_PROJECT_NAME=$(./scripts/start-dev-local.sh --print-project) npm run test:contracts
 npm run test:e2e -- --project=chromium
 ```
 
@@ -393,7 +396,7 @@ npm run test:e2e -- --project=chromium
 
 ```bash
 cd .worktrees/feature-xyz
-PROJECT=$(./scripts/start-dev.sh --print-project)
+PROJECT=$(./scripts/start-dev-local.sh --print-project)
 docker compose -p "$PROJECT" down
 
 # Docker leaves artifacts as root; fix ownership before git worktree remove

@@ -11,6 +11,7 @@
     "start": "node src/index.js",
     "nodemon": "npm run build:frontend && nodemon src/index.js",
     "dev": "./scripts/start-dev.sh",
+    "dev:local": "./scripts/start-dev-local.sh",
     "test:api": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
     "test:frontend": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/frontend",
     "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts",

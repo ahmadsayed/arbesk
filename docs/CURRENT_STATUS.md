@@ -427,24 +427,31 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 | `hardhat` | `node:20-slim` | `127.0.0.1:8545` | Live-mounted `blockchain/` volume, default `npx hardhat node --hostname 0.0.0.0` |
 | `nostr` | `scsibug/nostr-rs-relay:latest` | `127.0.0.1:7777` | Local-only WebSocket relay, SQLite storage, open auth for dev |
 
-### 6.3 Dev Orchestration (`scripts/start-dev.sh`)
+### 6.3 Dev Orchestration
 
-217-line bash script that:
+| Script | Stack | Behavior |
+|--------|-------|----------|
+| `scripts/start-dev-local.sh` | Local IPFS + Hardhat + Nostr | Always starts clean, deploys fresh `ArbeskAsset` + `MockUSDC`, syncs addresses to `.env` and JS network configs, builds frontend, starts backend. Used by E2E. |
+| `scripts/start-dev.sh` | Optimism Sepolia + Pinata + local Nostr | Starts only the local Nostr relay, validates testnet/Pinata env vars, builds frontend, starts backend with `IPFS_BACKEND=pinata`. |
+
+`start-dev-local.sh` flow:
 1. Ensures `blockchain/.env` exists
-2. Starts Docker Compose (IPFS + Hardhat) if not running
-3. Installs `node_modules` if missing
-4. **Auto-deploys** `ArbeskAsset` + `MockUSDC` if no bytecode at `CONTRACT_ADDRESS`
-5. Syncs `CONTRACT_ADDRESS` to root `.env`
-6. Builds frontend
-7. Starts backend server
-8. Prints URLs + MetaMask setup info
+2. Stops/removes any existing worktree containers for a clean start
+3. Resets the Hardhat chain and starts Docker Compose (IPFS + Hardhat + Nostr)
+4. Installs `node_modules` if missing
+5. **Auto-deploys** `ArbeskAsset` + `MockUSDC`
+6. Syncs `CONTRACT_ADDRESS` / `PAID_CONTRACT_ADDRESS` / `USDC_TOKEN` to root `.env`, `src/config.js`, and `frontend/src/js/blockchain/network-config.js`
+7. Builds frontend
+8. Starts backend server
+9. Prints URLs + MetaMask setup info
 
 ### 6.4 npm Scripts
 
 | Script | What it runs |
 |--------|--------------|
 | `npm start` | `node src/index.js` |
-| `npm run dev` | `./scripts/start-dev.sh` |
+| `npm run dev` | `./scripts/start-dev.sh` (testnet + Pinata) |
+| `npm run dev:local` | `./scripts/start-dev-local.sh` (local stack, E2E-ready) |
 | `npm run nodemon` | Build frontend + nodemon backend |
 | `npm run build:frontend` | Delegates to `frontend/package.json` build |
 | `npm test` | Jest on `test/` (excludes `blockchain/`) |

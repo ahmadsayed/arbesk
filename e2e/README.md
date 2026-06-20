@@ -55,7 +55,7 @@ docker compose -p <project-name> down
 You can also stop the current worktree's stack after a run:
 
 ```bash
-docker compose -p $(./scripts/start-dev.sh --print-project 2>/dev/null || echo arbesk) down
+docker compose -p $(./scripts/start-dev-local.sh --print-project 2>/dev/null || echo arbesk) down
 ```
 
 > **Note:** Hardhat (`8545`), IPFS (`5001`/`8080`), and Nostr (`7777`) still use fixed host ports. True concurrent E2E runs across worktrees on the same machine require stopping one stack before starting another; the isolation guarantees that each stack uses the correct worktree's files.

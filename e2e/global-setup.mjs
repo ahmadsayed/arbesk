@@ -97,14 +97,14 @@ export default async function globalSetup() {
     await resetHardhatChain();
   }
 
-  log("Running start-dev.sh --setup-only...");
-  execSync("./scripts/start-dev.sh --setup-only", {
+  log("Running start-dev-local.sh --setup-only...");
+  execSync("./scripts/start-dev-local.sh --setup-only", {
     stdio: "inherit",
     cwd: ROOT,
     env: { ...process.env, COMPOSE_PROJECT_NAME: COMPOSE_PROJECT },
     timeout: 300000,
   });
-  log("start-dev.sh finished");
+  log("start-dev-local.sh finished");
 
   log("Syncing network-config.js with deployed contract addresses...");
   syncNetworkConfigWithDeployedAddresses();
