@@ -26,6 +26,7 @@ export const EVENTS = {
   ASSET_STATE_CHANGED:        "asset:stateChanged",
   COMMENT_THREAD_CHANGE:      "commentThread:change",
   COMMENT_THREAD_STATUS:      "commentThread:status",
+  COLLECTION_OPENED:          "collection:opened",
   LIBRARY_STATE_CHANGED:      "library:stateChanged",
   NESTING_DID_ASCEND:         "nesting:didAscend",
   NESTING_DID_DIVE:           "nesting:didDive",

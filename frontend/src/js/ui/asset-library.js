@@ -77,6 +77,20 @@ async function openAssetByTokenId(tokenId) {
       return;
     }
 
+    const manifest = await getFromRemoteIPFS(cid);
+    if (manifest?.type === "collection") {
+      const { loadCollectionManifest } = await import(
+        "../engine/scene-graph.js"
+      );
+      const { assetEntries } = await loadCollectionManifest(cid, {
+        chainId: walletState.get().chainId,
+        contractAddress: walletState.get().contractAddress,
+        tokenId,
+      });
+      emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
+      return;
+    }
+
     clearScene();
     assetState.set({
       activeAssetTokenId: String(tokenId),
@@ -364,6 +378,20 @@ async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
   }
 }
 
+/**
+ * Summarize a collection manifest for gallery card rendering.
+ * Pure function — no I/O.
+ */
+function buildCollectionCardSummary(manifest, tokenId) {
+  const assetCount = manifest?.assets ? Object.keys(manifest.assets).length : 0;
+  return {
+    tokenId: String(tokenId),
+    name: manifest?.name || `Collection #${tokenId}`,
+    assetCount,
+    thumbnailCid: manifest?.thumbnail?.cid || null,
+  };
+}
+
 async function loadAssetMetadata(
   tokenId,
   nameEl,
@@ -387,9 +415,11 @@ async function loadAssetMetadata(
       return;
     }
     const manifest = await getFromRemoteIPFS(cid);
-    const assetName = manifest.name || "Unnamed Asset";
-    nameEl.textContent = `${assetName} #${tokenId}`;
-    await renderAssetThumbnail(manifest.thumbnail, thumbnailEl, assetName);
+    const summary = buildCollectionCardSummary(manifest, tokenId);
+    nameEl.textContent = `${summary.name} (${summary.assetCount} asset${
+      summary.assetCount === 1 ? "" : "s"
+    })`;
+    await renderAssetThumbnail(manifest.thumbnail, thumbnailEl, summary.name);
   } catch (err) {
     console.warn("Failed to load asset metadata for token", tokenId, err);
     nameEl.textContent = `Asset #${tokenId} (unreachable)`;
