@@ -1030,7 +1030,7 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
 
   it("plans a cross-collection-asset lookup when collection is a token ref", () => {
     const collectionRef = {
-      chainId: 6342,
+      chainId: 6343,
       contractAddress: "0xabc",
       tokenId: "42",
     };
@@ -1076,7 +1076,7 @@ describe("Scene Graph — buildForkOrLiveRefNode", () => {
   }
 
   const ref = {
-    collectionRef: { chainId: 6342, contractAddress: "0xabc", tokenId: "42" },
+    collectionRef: { chainId: 6343, contractAddress: "0xabc", tokenId: "42" },
   };
 
   it("fork builds a plain source node with the resolved CID, frozen", () => {

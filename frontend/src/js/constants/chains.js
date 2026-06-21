@@ -7,7 +7,7 @@
 
 export const CHAIN_IDS = {
   HARDHAT_LOCAL: 31415822,
-  MEGAETH_TESTNET: 6342,
+  MEGAETH_TESTNET: 6343,
 };
 
 /**

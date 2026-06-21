@@ -15,20 +15,35 @@ function toBlob(data) {
   throw new Error("writeToIPFS: unsupported data type");
 }
 
-async function uploadToPinata(blob, filename, credential) {
+async function uploadToPinata(blob, filename, credential, attempt = 1) {
   const form = new FormData();
   form.append("file", blob, filename);
   form.append("network", "public");
-  const res = await fetch(credential.url, { method: "POST", body: form });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Pinata upload failed: ${res.status} — ${text}`);
+
+  try {
+    const res = await fetch(credential.url, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Pinata upload failed: ${res.status} — ${text}`);
+    }
+    const json = await res.json();
+    const cid = json?.data?.cid || json?.cid;
+    if (!cid) throw new Error("Pinata upload returned no CID");
+    console.log(`[IPFS-WRITE] pinata stored → ${cid}`);
+    return cid;
+  } catch (err) {
+    // Retry once on transient network / HTTP2 protocol errors.
+    if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(err.message)) {
+      console.warn(`[IPFS-WRITE] Pinata upload error, retrying once: ${err.message}`);
+      return uploadToPinata(blob, filename, credential, attempt + 1);
+    }
+    throw err;
   }
-  const json = await res.json();
-  const cid = json?.data?.cid || json?.cid;
-  if (!cid) throw new Error("Pinata upload returned no CID");
-  console.log(`[IPFS-WRITE] pinata stored → ${cid}`);
-  return cid;
 }
 
 async function uploadToKubo(blob, filename, credential) {

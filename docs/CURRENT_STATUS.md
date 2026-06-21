@@ -1,10 +1,10 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-06-10; updated 2026-06-16  
-> **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.  
-> **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).  
-> **Frontend build:** Custom Node.js scripts (no bundler).  
-> **Network targets:** Hardhat local for development; Optimism Sepolia for testnet; Optimism mainnet for production ("softnet" target).  
+> **Generated:** 2026-06-21
+> **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
+> **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
+> **Frontend build:** Custom Node.js scripts (no bundler).
+> **Network targets:** Hardhat local for development; MegaETH Testnet (chain ID 6343) for public testnet.
 
 ---
 
@@ -12,13 +12,15 @@
 
 | Phase | Status | Evidence in Code |
 |-------|--------|------------------|
-| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.js`, `src/api/adapters/mock-adapter.js`, `docker-compose.yml` |
+| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.js`, `src/api/adapters/mock-adapter.js`, `docker-compose.yml`, `src/api/storage/` |
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.js`, `frontend/src/js/engine/time-travel.js` |
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 23 SCSS partials, sidebar/outliner/nesting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, thumbnail extraction in `src/api/index.js`, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
+| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
+| Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `asset-save.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js` |
 
 ---
@@ -30,15 +32,20 @@
 ```
 src/
 ├── index.js                    # Express bootstrap, CSP, request logging
-├── config.js                   # Multi-network Web3 config (Hardhat local, Optimism Sepolia, Optimism mainnet)
+├── config.js                   # Multi-network Web3 config (Hardhat local, MegaETH Testnet)
 └── api/
     ├── index.js                # Main router — all v1 routes
     ├── assets/
     │   └── generate-node.js    # 3D generation (mock-only)
     ├── adapters/
     │   └── mock-adapter.js     # Reads local .gltf files
+    ├── storage/
+    │   ├── index.js            # Storage backend factory (kubo/pinata)
+    │   ├── kubo.js             # Local Kubo add/cat/pin.rm
+    │   └── pinata.js           # Pinata v3 SDK + presigned upload URLs
     ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
     ├── authentication.js       # Session token validation middleware
+    ├── comments-archive.js     # Nostr comment thread → IPFS archive
     ├── ipfs-utils.js           # catManifest() with timeout/abort
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
     ├── rate-limiter.js         # In-memory per-wallet rate limiter (10/hr)
@@ -49,21 +56,22 @@ src/
 
 > **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits happen client-side; the browser sends the full manifest to `POST /api/v1/manifests`.
 >
-> **Free tier:** `POST /api/v1/generations` validates a transaction receipt. The UI now uses `recordGeneration()` on the free tier and `payForGenerationWithUSDC()` on the paid tier; the backend accepts `AssetGenerationRecorded`, `AssetGenerationPaid`, or `AssetGenerationPaidUSDC` events.
+> **Free tier:** `POST /api/v1/generations` validates a transaction receipt. The UI uses `recordGeneration()` on the free tier and `payForGenerationWithUSDC()` on the paid tier; the backend accepts `AssetGenerationRecorded`, `AssetGenerationPaid`, or `AssetGenerationPaidUSDC` events.
 
 ### 2.2 Implemented Routes (`/api/v1`)
 
 | Method | Path | Auth | What it does |
 |--------|------|------|--------------|
-| GET | `/config` | None | Returns contract address, RPC URLs |
+| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag |
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
 | DELETE | `/sessions` | Session | Invalidates session token |
 | POST | `/generations` | Session | Validates tx, mocks asset, pins to IPFS |
-| POST | `/manifests` | None | Saves draft manifest, extracts thumbnail dataUrl → IPFS |
-| POST | `/manifests/:cid/publish` | None | Same as save but returns plain-text CID |
+| POST | `/manifests` | None | Saves draft manifest (asset or collection), extracts thumbnail dataUrl → IPFS |
+| POST | `/manifests/:cid/publish` | None | Same as save but returns `{ cid }` |
 | GET | `/manifests/:cid/history` | None | Walks `prev_asset_manifest_cid` chain up to 50 entries |
 | GET | `/tokens/:tokenId/manifest` | None | Calls `tokenURI()` on-chain → fetches manifest from IPFS |
-| POST | `/ipfs/unpin` | None | Walks up to 100 manifests, collects all CIDs, calls `ipfs.pin.rm` |
+| POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
+| POST | `/ipfs/unpin` | None | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
 | GET | `/openapi.json` | None | Static OpenAPI spec |
 | GET | `/docs` | None | Swagger UI HTML bundle |
@@ -73,7 +81,7 @@ src/
 **Session auth** (`Authorization: Session <token>`):
 - SIWE-based (EIP-4361). Domain-bound, 5-minute message age, nonce replay protection.
 - 24-hour TTL, in-memory Map with hourly cleanup.
-- Used for `POST /generations` after wallet connect creates the session.
+- Used for `POST /generations` and `POST /ipfs/upload-url` after wallet connect creates the session.
 
 ### 2.4 What Works
 
@@ -81,10 +89,14 @@ src/
 - ✅ Transaction replay prevention (`usedTxHashes` Set + manifest history scan)
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`)
 - ✅ Manifest save with thumbnail dataUrl extraction → separate IPFS asset
+- ✅ Collection manifest save/validation (`type: "collection"` + `assets` object)
 - ✅ Manifest chain walking (backward `prev_asset_manifest_cid`, cycle detection)
 - ✅ Token resolution (`tokenURI` → IPFS manifest)
 - ✅ IPFS unpin on burn (walks chain, collects CIDs, calls `pin.rm`)
-- ✅ Multi-network config (Hardhat local `31415822`, Optimism Sepolia `11155420`, Optimism mainnet `10`)
+- ✅ Multi-network config (Hardhat local `31415822`, MegaETH Testnet `6343`)
+- ✅ Multi-storage backend (`kubo` local, `pinata` testnet)
+- ✅ Presigned upload URLs for browser uploads (Pinata/Kubo)
+- ✅ Nostr comments archive snapshot on republish
 
 ### 2.5 What Does NOT Work / Is Missing
 
@@ -100,12 +112,12 @@ src/
 
 ### 3.1 Actual File Layout
 
-**JavaScript (46 files)**
+**JavaScript (46+ files)**
 
 ```
 frontend/src/js/
 ├── engine/
-│   ├── scene-graph.js          # Babylon engine, GLB/glTF load, selection, framing, thumbnails
+│   ├── scene-graph.js          # Babylon engine, GLB/glTF load, selection, framing, thumbnails, collection load
 │   ├── time-travel.js          # Manifest chain walk, apply version
 │   ├── parametric-preview.js   # Inspector color/scale, live preview, timeline binding
 │   ├── state.js                # Shared mutable state
@@ -117,8 +129,8 @@ frontend/src/js/
 │   └── viewport-gizmo.js       # Corner orientation gizmo
 ├── ui/
 │   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
-│   ├── asset-save.js           # Save Draft / Publish, decomposition, thumbnail capture
-│   ├── asset-library.js        # Token gallery (owned + shared), thumbnails, drag
+│   ├── asset-save.js           # Save Draft / Publish, collection merge, thumbnail capture
+│   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag
 │   ├── asset-drop-zone.js      # Viewport drag/drop overlay
 │   ├── asset-history.js        # Draggable horizontal timeline scrubber
 │   ├── asset-editors.js        # Team panel (add/remove editors, owner badge)
@@ -130,31 +142,34 @@ frontend/src/js/
 │   ├── dialog.js / toasts.js / wallet-modal.js / wallet-popover.js
 │   └── ...
 ├── blockchain/
-│   ├── wallet.js               # Web3Modal, WalletConnect, USDC PayGo, contract calls, burn
+│   ├── wallet.js               # Web3Modal, WalletConnect, USDC PayGo, contract calls, burn, Merkle proof calls
 │   ├── token-resolver.js       # Resolve child_ref tokens to manifest CIDs
 │   ├── uri-utils.js            # Normalize tokenURIs to plain CIDs
 │   ├── siwe.js                 # EIP-4361 message builder
 │   ├── wallet-discovery.js     # EIP-6963 multi-wallet
 │   ├── wallet-connect.js       # WalletConnect v2
-│   ├── network-config.js       # Per-network contract/USDC addresses
+│   ├── network-config.js       # Per-network contract/USDC/RPC addresses
 │   ├── error-decoder.js        # Revert reason decoding
 │   ├── explorer.js             # Block explorer links
 │   └── dev-account.js          # Hardhat dev account helper
 ├── ipfs/
-│   ├── remote-ipfs.js          # Gateway reads (no caching — disabled)
-│   └── write-to-ipfs.js        # Direct Kubo API writes + pin
+│   ├── remote-ipfs.js          # Gateway reads (cache currently disabled)
+│   └── write-to-ipfs.js        # Direct Kubo/Pinata writes + pin
 ├── gltf/
 │   ├── decomposer.js           # Break buffers/images into separate IPFS CIDs
+│   ├── async-gltf.js           # Async decompose helpers
 │   ├── composer.js             # Resolve ipfs:// URIs back to base64 for Babylon
 │   ├── material-editor.js      # PBR material color edits, multi-primitive aware, bake to composite
+│   ├── merkle-editors.js       # Merkle tree/proof library for editor authorization
 │   └── uri_to_cid.js           # Legacy helpers (mostly reference now)
 ├── state/
 │   ├── asset-state.js        # Replaces window.* asset globals
 │   ├── wallet-state.js       # Replaces window.* wallet globals
 │   └── ui-state.js           # Replaces window.* UI globals
 └── services/
-    ├── api.js                  # API client: sessions, generate, save, publish, history, unpin
-    ├── team.js                 # Contract wrappers for editor add/remove
+    ├── api.js                  # API client: sessions, generate, save, publish, history, unpin, upload-url
+    ├── team.js                 # Merkle-based editor add/remove
+    ├── asset-delete.js         # Remove an asset from a collection
     └── url-utils.js            # URL param helpers
 ```
 
@@ -176,6 +191,13 @@ frontend/src/js/
 - Thumbnail capture: offscreen canvas crop → WebP blob → dataUrl
 - Keyboard: Escape (deselect), Home (frame all), F (frame selected), 1/3/7 (views), Ctrl+N (new), Ctrl+B (sidebar), Ctrl+1-4 (switch views)
 
+**Collection Manifests (Phase 5.4)**
+- `asset-save.js` merges each published asset CID into a collection manifest's `assets` map.
+- Default collection token ID derived deterministically from wallet address via `soliditySha3(address)`.
+- Named collections derive token ID from `soliditySha3(address, name)`.
+- `asset-library.js` expands collection tokens into one card per asset.
+- `scene-graph.js` can load a collection manifest without immediately opening an asset.
+
 **Token Child Worlds (Phase 5.1)**
 - `loadTokenChildNode()` fully implemented with placeholder → async resolution
 - `MAX_CHILD_WORLD_DEPTH = 5`, circular reference detection via `Set`
@@ -190,7 +212,7 @@ frontend/src/js/
 - Timeline slider binds to manifest chain; scrubs are view-only
 
 **glTF Pipeline**
-- `decomposer.js`: base64 buffers/images → `writeToIPFS` → `ipfs://<CID>` URIs
+- `decomposer.js` / `async-gltf.js`: base64 buffers/images → `writeToIPFS` → `ipfs://<CID>` URIs
 - `composer.js`: fetches `ipfs://` binaries from gateway → base64 data URIs
 - `material-editor.js`: `fetchComposite` → edit PBR factors → `commitCompositeChanges`; `findMaterialByMeshName()` returns all materials for meshes with multiple primitives
 - Round-trip tested: decompose → compose yields identical bytes
@@ -206,28 +228,28 @@ frontend/src/js/
 
 **IPFS Layer**
 - Reads: `http://127.0.0.1:8080/ipfs/<cid>` with `cache: "no-store"`
-- Writes: Browser POSTs multipart to `http://127.0.0.1:5001/api/v0/add`, then pins
+- Writes: Browser uses presigned upload URLs from `POST /api/v1/ipfs/upload-url`, then pins via backend
 - **Browser caching is hardcoded disabled** (`IPFS_CACHE_ENABLED = false`); no IndexedDB/memory cache active
 
 **Blockchain / Wallet (`wallet.js`)**
 - Multi-wallet: EIP-6963 discovery + WalletConnect v2 + legacy injected
 - Auto-connect from `localStorage` via silent `eth_accounts`
-- Networks: Hardhat local (`31415822`), Optimism Sepolia (`11155420`), Optimism mainnet (`10`)
+- Networks: Hardhat local (`31415822`), MegaETH Testnet (`6343`)
 - Contract init with bytecode verification at address
-- USDC PayGo: approval → allowance reset → verification (5 retries) → `payForGenerationWithUSDC` with L2 gas defaults
-- Publishing: `publishAsset` (mint), `updateAssetURI` (republish), revert decoding
-- Collaboration: `addEditor`, `removeEditor`, `setCollaboratorRole`, `listCollaboratorsByRole`
-- Burn: resolves manifest CID before burn, calls `unpinAssetCids` non-blocking after on-chain success
+- USDC PayGo: approval → allowance reset → verification (5 retries) → `payForGenerationWithUSDC` with gas defaults
+- Publishing: `publishAsset(tokenURI, tokenId, editorRoot, editorListUri)` (mint), `updateAssetURI(tokenId, newTokenURI, proof)` (republish)
+- Collaboration: `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)` — full editor list stored on IPFS
+- Burn: resolves manifest CID before burn, calls `burn(tokenId, proof)`, `unpinAssetCids` non-blocking after on-chain success
 
 **API Service (`services/api.js`)**
 - Session auth with auto-retry on `INVALID_SESSION`
 - Generation requires a valid session; no fallback auth scheme
-- Endpoints: `POST /generations`, `POST /manifests`, `POST /manifests/:cid/publish`, `GET /manifests/:cid/history`, `GET /tokens/:tokenId/manifest`, `POST /ipfs/unpin`, `GET /config`, `GET /contracts/:name/abi`
+- Endpoints: `POST /generations`, `POST /manifests`, `POST /manifests/:cid/publish`, `GET /manifests/:cid/history`, `GET /tokens/:tokenId/manifest`, `POST /ipfs/unpin`, `POST /ipfs/upload-url`, `GET /config`, `GET /contracts/:name/abi`
 
 **UI Systems**
 - Sidebar: 4 views persisted to `localStorage`, collapsible, responsive auto-collapse
 - Create panel: chat bubbles, prompt input, provider/tier dropdowns, generation flow
-- Asset library: owned (`balanceOf`/`tokenOfOwnerByIndex`) + shared (`listTokens`), lazy thumbnails, drag with `application/x-arbesk-linked-asset`
+- Asset library: owned (`balanceOf`/`tokenOfOwnerByIndex`) + shared (Merkle editor list), collection expansion, lazy thumbnails, drag with `application/x-arbesk-linked-asset`
 - Outliner: tree with 📦/🧩 icons, click select, double-click dive, library drag
 - Nesting: breadcrumb path bar, Alt+Left ascend, depth status in bottom bar
 - History: draggable horizontal track, active vs published states
@@ -256,8 +278,8 @@ There are now **two** contracts:
 
 | Contract | Purpose | Symbol | Default? |
 |----------|---------|--------|----------|
-| `ArbeskAssetFree.sol` | Free tier — NFT + collaboration + free `recordGeneration()` with 10/day quota | `ARBF` | ✅ Yes (local testing + frontend default) |
-| `ArbeskAsset.sol` | Paid tier — adds USDC/native PayGo generation payments | `ARBA` | Optional paid tier |
+| `ArbeskAssetFree.sol` | Free tier — NFT + Merkle editor auth + free `recordGeneration()` with 10/day quota | `ARBF` | ✅ Yes (local testing + frontend default) |
+| `ArbeskAsset.sol` | Paid tier — adds USDC PayGo generation payments | `ARBA` | Optional paid tier |
 
 Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 
@@ -267,26 +289,25 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 - **Symbol:** `ARBA`
 - **Inheritance:** `ArbeskAssetBase`, `ReentrancyGuard`
 
-**Key Functions (55 total)**
+**Key Functions**
 
 | Category | Functions |
 |----------|-----------|
-| Payment (native) | `payForGeneration(bytes32 nodeId, string prompt)` — exact `msg.value`, anti-replay, forwards to treasury |
 | Payment (USDC) | `payForGenerationWithUSDC(bytes32 nodeId, string prompt, Tier tier)` — tiered pricing, `safeTransferFrom` |
-| Minting | `publishAsset(string uri, uint256 tokenId)`, `publishAsset(string uri, uint256 tokenId, address[] editors)` |
-| Queries | `tokenURI()`, `totalSupply()`, `getAssetManifest()`, `getTierCost()`, `isPaymentUsed()`, `getCollaboratorRole()`, `listEditors()`, `listCollaboratorsByRole()`, `listTokens()`, `canBurn()` |
-| Collaboration | `addEditor(uint256,address)`, `addEditor(uint256,address,uint8)`, `addEditor(uint256,address[])`, `removeEditor(uint256,address)`, `setCollaboratorRole(uint256,address,uint8)` |
-| Burn | `burn(uint256)` — owner or Editor with burn permission; cleans up collaborators |
+| Minting | `publishAsset(string uri, uint256 tokenId, bytes32 editorRoot, string editorListUri)` |
+| Queries | `tokenURI()`, `totalSupply()`, `getAssetManifest()`, `getTierCost()`, `editorRoot(tokenId)`, `editorSetVersion(tokenId)` |
+| Collaboration | `updateEditors(uint256 tokenId, bytes32 newRoot, string newListUri, uint8 callerRole, bytes32[] callerProof)` |
+| URI update | `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` |
+| Burn | `burn(uint256 tokenId, bytes32[] proof)` — owner or Editor with Merkle proof |
 | Admin | `setCost()`, `setTreasury()`, `setTierCost()`, `setUsdcToken()`, `pause()`, `unpause()`, `withdraw()`, `withdrawUSDC()` |
 
 **State / Limits (paid tier)**
-- `costPerGeneration` = `0.01 ether` (native)
+- `costPerGeneration` = `0.01 ether` (native, currently unused)
 - Tier costs: Basic=$0.75, Standard=$1.25, Premium=$1.75, Pro=$2.50 (6-decimal USDC)
-- `maxEditorsPerToken()` = 50
-- `maxTokensPerEditor()` = 500
+- `maxEditorsPerToken()` = 5000
 
-**Events (12 custom)**
-`AssetGenerationPaid`, `AssetGenerationPaidUSDC`, `AssetPublished`, `EditorAdded`, `EditorRemoved`, `CollaboratorRoleChanged`, `BurnPermissionChanged`, `AssetBurned`, `AssetURIUpdated`, `TreasuryUpdated`, `CostUpdated`, `TierCostUpdated`, `UsdcTokenUpdated`
+**Events**
+`AssetGenerationPaid`, `AssetGenerationPaidUSDC`, `AssetPublished`, `EditorSetChanged`, `AssetBurned`, `AssetURIUpdated`, `TreasuryUpdated`, `CostUpdated`, `TierCostUpdated`, `UsdcTokenUpdated`
 
 **Custom Errors (paid tier adds)** `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`, `TreasuryTransferFailed`, `UsdcPaymentsDisabled`, `TierCostNotSet`, `InvalidCost`, `NoBalanceToWithdraw`, `WithdrawFailed`, `UsdcTokenNotSet`, `DirectTransferNotAllowed`.
 
@@ -300,8 +321,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 
 **State / Limits (free tier)**
 - `DAILY_GENERATION_LIMIT` = 10 per wallet
-- `maxEditorsPerToken()` = 5 (10× lower than paid)
-- `maxTokensPerEditor()` = 50 (10× lower than paid)
+- `maxEditorsPerToken()` = 5000
 - Quota state (`lastGenerationDay` + `generationCountToday`) is packed into a single 256-bit storage slot to minimize gas
 
 **Gas profile (local Hardhat)**
@@ -312,8 +332,13 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 ### 4.2 `ArbeskAssetBase.sol` (Abstract Base)
 
 - **Inheritance:** `ERC721Enumerable`, `Ownable`, `Pausable`
-- **Shared logic:** minting, URI storage, collaboration (Viewer/Editor roles), burn, pause/unpause
-- **Abstract limits:** `maxEditorsPerToken()` and `maxTokensPerEditor()` overridden by concrete contracts
+- **Shared logic:** minting, URI storage, Merkle-root editor authorization, burn, pause/unpause
+- **Key state:**
+  - `mapping(uint256 => bytes32) public editorRoot`
+  - `mapping(uint256 => uint256) public editorSetVersion`
+- **Leaf format:** `keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))`
+- **Role enum:** `None = 0`, `Viewer = 1`, `Editor = 2`
+- Owner bypasses all Merkle proof checks.
 
 ### 4.3 MockUSDC
 
@@ -324,36 +349,35 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 
 | Network | Contract | Address | Notes |
 |---------|----------|---------|-------|
-| `hardhat` | ArbeskAssetFree | `0x0165...Eb8F` | Local container, MockUSDC |
-| `hardhat` | ArbeskAsset (paid) | `0xa513...C853` | Local container, MockUSDC |
-| `localhost` | ArbeskAssetFree | `0x0165...Eb8F` | Local container, MockUSDC |
-| `localhost` | ArbeskAsset (paid) | `0xa513...C853` | Local container, MockUSDC |
-| `optimismSepolia` | ArbeskAssetFree | — | **Target testnet** — not yet deployed |
-| `optimismSepolia` | ArbeskAsset (paid) | — | **Target testnet** — not yet deployed |
-| `optimismMainnet` | ArbeskAssetFree | — | **Target production (softnet)** — not yet deployed |
-| `optimismMainnet` | ArbeskAsset (paid) | — | **Target production (softnet)** — not yet deployed |
+| `hardhat` (chain 31415822) | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
+| `hardhat` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
+| `localhost` | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
+| `localhost` | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
+| `megaethTestnet` (chain 6343) | ArbeskAssetFree | `0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B` | **Current testnet target** |
+| `megaethTestnet` (chain 6343) | ArbeskAsset (paid) | — | **Not deployed on testnet** |
 
 > `CONTRACT_ADDRESS` in `.env` now points to the **free** contract. The paid contract is stored in `PAID_CONTRACT_ADDRESS`.
+> Contract addresses are also hardcoded in `src/config.js` and `frontend/src/js/blockchain/network-config.js`.
 
 ### 4.4 Hardhat Config
 
 - Solidity `0.8.24`, EVM `cancun`, optimizer `runs: 1000`
-- Networks: `hardhat` (31415822), `localhost` (8545), `optimismSepolia` (11155420), `optimismMainnet` (10)
-- Etherscan verification configured for Optimism Etherscan (Sepolia + Mainnet)
+- Networks: `hardhat` (31415822), `localhost` (8545), `megaethTestnet` (6343)
+- Etherscan verification configured for MegaETH explorer
 
-### 4.5 Estimated On-Chain Costs on Optimism
+### 4.5 Estimated On-Chain Costs on MegaETH Testnet
 
-Costs are approximate and depend on OP L1 data fees + L2 execution gas.
+MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage bucket fills. See `docs/MEGAETH_ANALYSIS.md` for the full model. Approximate costs at 0.01 gwei:
 
-| Operation | Gas (L2) | OP Mainnet cost @ 0.001 Gwei, ETH $1,650 | Notes |
+| Operation | Gas | Cost @ ETH $1,727 | Notes |
 |---|---:|---:|---|
-| `recordGeneration()` first call/day | ~50,650 | ~$0.000084 | Quota day rollover writes one packed slot |
-| `recordGeneration()` warm call | ~33,430 | ~$0.000055 | Same-day generation |
-| `publishAsset()` mint | ~85,000–120,000 | ~$0.00014–$0.00020 | Varies by URI length/editor count |
-| `addEditor()` | ~45,000 | ~$0.000074 | Free tier: max 5 editors/token |
-| `updateAssetURI()` | ~35,000 | ~$0.000058 | Republish existing token |
+| `recordGeneration()` first call/day | ~50,650 | ~$0.0009 | Quota day rollover writes one packed slot |
+| `recordGeneration()` warm call | ~33,430 | ~$0.0006 | Same-day generation |
+| `publishAsset()` mint (m=1) | ~150,000 | ~$0.003 | Varies by URI length |
+| `updateAssetURI()` | ~35,000 | ~$0.0006 | Republish existing token |
+| `updateEditors()` | ~35,000 | ~$0.0006 | Replace editor Merkle root |
 
-> OP Sepolia uses the same gas token (ETH) and ~2-second block time as OP Mainnet. Testnet ETH has no dollar value.
+> MegaETH Testnet uses ETH for gas. Testnet ETH has no dollar value.
 
 ### 4.6 Known Contract Issues
 
@@ -367,7 +391,7 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 
 | File | Lines | Coverage |
 |------|-------|----------|
-| `test/api.test.js` | ~1,048 | All v1 routes: generation, save, publish, history chain, token resolution, auth, rate limit, thumbnails, child_ref manifests |
+| `test/api.test.js` | ~1,048 | All v1 routes: generation, save, publish, history chain, token resolution, auth, rate limit, thumbnails, child_ref manifests, collection manifests |
 | `test/decomposer-composer.test.js` | ~1,167 | glTF pure logic: composite detection, base64 round-trip, decompose, compose, URI resolution |
 | `test/scene-graph.test.js` | ~924 | Scene graph helpers: CID extraction, format detection, bounds, transform matrices, disposal, child_ref anchor walking |
 | `test/token-resolver.test.js` | ~150 | `normalizeTokenURI`, child_ref validation, `MAX_CHILD_WORLD_DEPTH` |
@@ -390,8 +414,8 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 
 | File | Lines | Coverage |
 |------|-------|----------|
-| `blockchain/test/ArbeskAsset.test.js` | ~1,291 | 97 assertions: payment (native + USDC tiered), replay prevention, minting, collaborator roles (Viewer/Editor), burn permissions, transfer hooks, admin, pause |
-| `blockchain/test/ArbeskAssetFree.test.js` | ~250 | 45 assertions: deployment, `recordGeneration` quota (10/day), collaboration limits (5/50), minting, roles, burn, pause, no payment functions |
+| `blockchain/test/ArbeskAsset.test.js` | ~1,291 | Payment (USDC tiered), replay prevention, minting, Merkle editor authorization, burn |
+| `blockchain/test/ArbeskAssetFree.test.js` | ~250 | Deployment, `recordGeneration` quota (10/day), minting, Merkle editor auth, burn, pause |
 
 ### 5.4 Test Gaps
 
@@ -432,7 +456,7 @@ Costs are approximate and depend on OP L1 data fees + L2 execution gas.
 | Script | Stack | Behavior |
 |--------|-------|----------|
 | `scripts/start-dev.sh` (default) | Local IPFS + Hardhat + Nostr | Always starts clean, deploys fresh `ArbeskAsset` + `MockUSDC`, syncs addresses to `.env` and JS network configs, builds frontend, starts backend. Used by E2E with `--setup-only`. |
-| `scripts/start-dev.sh --testnet` | Optimism Sepolia + Pinata + local Nostr | Starts only the local Nostr relay, validates testnet/Pinata env vars, builds frontend, starts backend with `IPFS_BACKEND=pinata`. |
+| `scripts/start-dev.sh --testnet` | MegaETH Testnet + Pinata + local Nostr | Starts only the local Nostr relay, validates testnet/Pinata env vars, builds frontend, starts backend with `IPFS_BACKEND=pinata`. |
 
 `start-dev.sh` (local mode) flow:
 1. Ensures `blockchain/.env` exists
@@ -479,7 +503,7 @@ IPFS storage is selected by `IPFS_BACKEND` and implemented through the `src/api/
 | `PINATA_GATEWAY` | backend | Dedicated gateway host, e.g. `your-gw.mypinata.cloud`. |
 | `PINATA_UPLOAD_TTL` | backend | Presigned upload URL lifetime in seconds (default 60). |
 
-Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/upload-url` (session-gated, 5 uploads per 60 seconds per wallet); the master JWT stays server-side. The automated E2E suite runs against Kubo via `IPFS_BACKEND=kubo`.
+Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/upload-url` (session-gated, rate-limited per wallet); the master JWT stays server-side. The automated E2E suite runs against Kubo via `IPFS_BACKEND=kubo`.
 
 ---
 
@@ -494,7 +518,7 @@ Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/uplo
 | OpenSCAD WASM | Not present | Explicitly deferred post-MVP. |
 | Health check endpoint | Not present | `GET /api/health` planned, not implemented. |
 | Direct manifest fetch by ID | Not present | `GET /api/manifest/:id` planned, not implemented. |
-| Backend token resolver fallback | Not present | `GET /api/resolve-token` planned for Phase 5.1, not implemented. |
+| Backend token resolver fallback | Not present | `GET /api/resolve-token` planned for Phase 5.1, not implemented (browser resolver is the current path). |
 
 ### 7.2 Bugs / Issues
 
@@ -517,6 +541,8 @@ Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/uplo
 | File `frontend/src/js/ui/history-browser.js` | Actual file is `asset-history.js` |
 | File `frontend/src/js/ui/team-panel.js` | Actual file is `asset-editors.js` |
 | File `frontend/src/js/events/registry.js` | Replaced by `frontend/src/js/events/bus.js` (mitt singleton) |
+| Network target Optimism Sepolia/Mainnet | Replaced by MegaETH Testnet |
+| On-chain editor roles (`addEditor`/`removeEditor`) | Replaced by off-chain Merkle editor list + `updateEditors` |
 
 ---
 
@@ -550,7 +576,7 @@ npm run test:frontend
 
 ## 9. Summary
 
-Arbesk is a **functionally complete thick-client 3D world studio** through Phase 5.1. The browser owns rendering, parametric editing, glTF decomposition, IPFS reads/writes, wallet interactions, and token resolution. The Express backend is a thin gatekeeper handling auth, generation validation, manifest persistence, and IPFS unpin lifecycle.
+Arbesk is a **functionally complete thick-client 3D world studio** through Phase 5.4. The browser owns rendering, parametric editing, glTF decomposition, IPFS reads/writes, wallet interactions, token resolution, collection management, and Merkle editor proof generation. The Express backend is a thin gatekeeper handling auth, generation validation, manifest persistence, storage abstraction, and IPFS unpin lifecycle.
 
 **What is production-ready:**
 - Mock-backed generative pipeline with tx validation and replay guards
@@ -559,9 +585,11 @@ Arbesk is a **functionally complete thick-client 3D world studio** through Phase
 - Free-tier `recordGeneration()` with packed daily quota and owner bypass
 - USDC PayGo with tiered pricing (paid tier)
 - SIWE session auth reducing per-generation pop-ups
-- ERC-721 minting, URI updates, role-based collaboration, burn with cleanup
+- ERC-721 minting, URI updates, Merkle-proof editor authorization, burn
+- Collection manifests — every token is a collection of asset CIDs
 - glTF decompose/composer/material-edit pipeline
 - Private Dockerized IPFS + Hardhat local dev stack
+- MegaETH Testnet target with per-chain network configs
 
 **What is explicitly not implemented:**
 - Production cloud 3D adapters (returns 501)

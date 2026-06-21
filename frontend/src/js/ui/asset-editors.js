@@ -42,7 +42,10 @@ async function refreshEditors() {
     return;
   }
 
-  for (const addr of editors) {
+  for (const editor of editors) {
+    const addr = typeof editor === "string" ? editor : editor?.address;
+    if (!addr) continue;
+
     const row = document.createElement("div");
     row.className = "team-row";
 

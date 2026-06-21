@@ -354,8 +354,17 @@ async function _finishWalletSetup(address) {
 
   // Prompt network switch if not on a supported chain
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
-    const preferred =
-      localStorage.getItem("arbesk-preferred-network") || "hardhat";
+    let preferred =
+      localStorage.getItem("arbesk-preferred-network") || "megaethTestnet";
+    // Guard against stale/unknown network keys (e.g. old "seiTestnet" entry)
+    if (!NETWORKS[preferred]) {
+      console.warn(
+        `[WALLET] Ignoring unknown preferred network "${preferred}". ` +
+          `Falling back to megaethTestnet.`
+      );
+      localStorage.removeItem("arbesk-preferred-network");
+      preferred = "megaethTestnet";
+    }
     const switched = await _promptNetworkSwitch(preferred);
     if (switched) {
       // Re-read chainId after switch

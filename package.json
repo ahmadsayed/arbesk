@@ -14,7 +14,7 @@
     "dev:testnet": "./scripts/start-dev.sh --testnet",
     "test:api": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
     "test:frontend": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/frontend",
-    "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts && npm run test:e2e -- --project=chromium",
+    "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts",
     "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",
     "test:e2e:ui": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js --ui",
     "test:e2e:setup": "node e2e/setup.mjs",

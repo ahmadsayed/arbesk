@@ -1,7 +1,7 @@
 # Arbesk API Specification
 
-> Version: 0.6.0 — aligned with the current Express implementation  
-> Base URL: `/api`  
+> Version: 0.7.0 — aligned with the current Express implementation
+> Base URL: `/api`
 > Content-Type: `application/json` unless noted
 
 ---
@@ -9,17 +9,18 @@
 ## Implementation Notes
 
 - The backend is mounted from `src/index.js` at `/api`.
-- Private IPFS writes use the Kubo API from `IPFS_API_URL` (default `http://127.0.0.1:5001`).
-- The browser reads IPFS content through the gateway (`http://127.0.0.1:8080/ipfs/` by default).
+- Private IPFS writes use the Kubo API from `IPFS_API_URL` (default `http://127.0.0.1:5001`) when `IPFS_BACKEND=kubo`.
+- When `IPFS_BACKEND=pinata`, the backend uses the Pinata v3 SDK and serves short-lived presigned upload URLs via `POST /api/v1/ipfs/upload-url`.
+- The browser reads IPFS content through the gateway (`http://127.0.0.1:8080/ipfs/` by default for Kubo, or the configured `PINATA_GATEWAY`).
 - Generation currently supports the mock adapter path. Cloud adapters are planned but return `501` until implemented.
 - The default contract is `ArbeskAssetFree` (free tier). `ArbeskAsset` (paid tier) is available via `PAID_CONTRACT_ADDRESS`. The generation route validates the contract configured in `CONTRACT_ADDRESS`.
-- Error responses are currently simple JSON objects such as `{ "error": "message" }`; they do not yet use a global typed error envelope.
+- Error responses are simple JSON objects such as `{ "error": { "code": "...", "message": "..." } }`.
 
 ---
 
 ## Authentication
 
-`POST /api/v1/generations` requires a valid session token obtained through the SIWE (EIP-4361) sign-in flow:
+`POST /api/v1/generations` and `POST /api/v1/ipfs/upload-url` require a valid session token obtained through the SIWE (EIP-4361) sign-in flow:
 
 ```text
 Authorization: Session <opaque-token>
@@ -56,7 +57,7 @@ Authorization: Session <uuid>
 
 Session tokens are stored in browser `localStorage` under the key `arbesk_session` and are cleared on wallet disconnect.
 
-The generation route validates the transaction receipt and the expected `AssetGenerationPaid` / `AssetGenerationRecorded` event from the configured `CONTRACT_ADDRESS` contract, regardless of whether it is the paid tier (`ArbeskAsset`) or free tier (`ArbeskAssetFree`).
+The generation route validates the transaction receipt and the expected `AssetGenerationPaid`, `AssetGenerationPaidUSDC`, or `AssetGenerationRecorded` event from the configured `CONTRACT_ADDRESS` contract, regardless of whether it is the paid tier (`ArbeskAsset`) or free tier (`ArbeskAssetFree`).
 
 Parametric edits, manifest saves, manifest chain reads, ABI reads, and token manifest reads do not currently require session auth.
 
@@ -64,15 +65,36 @@ Parametric edits, manifest saves, manifest chain reads, ABI reads, and token man
 
 ## Implemented Endpoints
 
-### `GET /api/contract_address`
+### `GET /api/v1/config`
 
-Returns the configured `CONTRACT_ADDRESS`.
+Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, and WalletConnect project ID.
 
 **Response**
 
 ```json
 {
-  "contract_address": "0x..."
+  "contractAddress": "0x...",
+  "networkConfigs": {
+    "31415822": {
+      "name": "Hardhat Local",
+      "contractAddress": "0x...",
+      "paidContractAddress": "0x...",
+      "usdcToken": "0x...",
+      "rpcUrl": "http://127.0.0.1:8545"
+    },
+    "6343": {
+      "name": "MegaETH Testnet",
+      "contractAddress": "0x...",
+      "paidContractAddress": null,
+      "usdcToken": null,
+      "rpcUrl": "https://carrot.megaeth.com/rpc"
+    }
+  },
+  "ipfsBackend": "kubo",
+  "ipfsGatewayUrl": "http://127.0.0.1:8080/ipfs/",
+  "hardhatRpcUrl": "http://127.0.0.1:8545",
+  "mockGeneration": true,
+  "walletConnectProjectId": null
 }
 ```
 
@@ -80,7 +102,7 @@ Returns the configured `CONTRACT_ADDRESS`.
 
 ### `POST /api/v1/generations`
 
-Validates a paid generation transaction, generates or mocks an asset, uploads it to private IPFS, and writes a new manifest snapshot.
+Validates a paid generation transaction, generates or mocks an asset, uploads it to IPFS, and writes a new manifest snapshot.
 
 **Current behavior**
 
@@ -180,29 +202,45 @@ The parametric history entry structure stored in the manifest:
 
 ### `POST /api/v1/manifests`
 
-Saves a manifest to private IPFS without blockchain interaction.
+Saves a manifest to IPFS without blockchain interaction. Accepts both asset manifests and collection manifests.
 
 **Current behavior**
 
 - Ensures `asset_id` exists.
 - Ensures `version` is numeric.
+- For `type: "collection"`, validates that `assets` is a non-array object.
+- For asset manifests, ensures `.scene.nodes` exists via `getSceneNodes()`.
 - If `manifest.thumbnail.dataUrl` is present, uploads the thumbnail bytes as a separate IPFS object and replaces the embedded data with CID metadata.
 - If the request body includes `publishContext` with a `tokenId`, the backend snapshots the asset's Nostr comment thread from the relay, stores it as a JSON archive on IPFS, and writes the archive CID into the manifest as `comments_archive_cid`. The `publishContext` object is removed before the manifest is stored.
 
-**Request Body**
-
-Any manifest JSON object. Optional republish control:
+**Request Body — Asset Manifest**
 
 ```json
 {
+  "type": "asset",
   "name": "My World",
   "asset_id": "asset_1700000000000",
   "version": 4,
   "scene": { "nodes": [] },
   "publishContext": {
     "tokenId": "42",
-    "chainId": 31337,
-    "contractAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+    "chainId": 6343,
+    "contractAddress": "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B"
+  }
+}
+```
+
+**Request Body — Collection Manifest**
+
+```json
+{
+  "type": "collection",
+  "asset_id": "collection_1700000000000",
+  "name": "My Collection",
+  "version": 3,
+  "assets": {
+    "asset_1700000000000": "QmAssetManifestA...",
+    "asset_1700000001234": "QmAssetManifestB..."
   }
 }
 ```
@@ -221,20 +259,20 @@ Any manifest JSON object. Optional republish control:
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | Body is missing or not an object |
+| 400 | Body is missing or not an object; collection missing `assets` object |
 | 500 | IPFS write error |
 
 ---
 
 ### `POST /api/v1/manifests/:cid/publish`
 
-Uploads a JSON payload to private IPFS. The publish flow uses this endpoint to push the final named manifest before minting or updating a token URI.
+Uploads a JSON payload to IPFS. The publish flow uses this endpoint to push the final named manifest before minting or updating a token URI.
 
 **Current behavior**
 
 - Accepts a manifest-like JSON object.
 - If `thumbnail.dataUrl` exists, uploads it separately to IPFS and replaces it with thumbnail CID metadata.
-- Returns the new CID as plain text, not JSON.
+- Returns the new CID as JSON.
 
 **Request Body**
 
@@ -253,7 +291,7 @@ Uploads a JSON payload to private IPFS. The publish flow uses this endpoint to p
     "height": 288,
     "timestamp": 1780000000
   },
-  "nodes": []
+  "scene": { "nodes": [] }
 }
 ```
 
@@ -275,19 +313,21 @@ Uploads a JSON payload to private IPFS. The publish flow uses this endpoint to p
 }
 ```
 
-**Response `200 text/plain`**
+**Response `200`**
 
-```text
-QmManifestCid...
+```json
+{
+  "cid": "QmManifestCid..."
+}
 ```
 
 ---
 
 ### `GET /api/v1/manifests/:cid/history`
 
-Walks the **IPFS content-addressed version chain** (also called the **manifest chain**) — the backward-linked sequence of `prev_manifest_cid` pointers that connects each manifest version to its predecessor. Because every manifest CID is a cryptographic hash of its contents, the chain is tamper-evident: altering any version invalidates all subsequent CIDs.
+Walks the **IPFS content-addressed version chain** (also called the **manifest chain**) — the backward-linked sequence of `prev_asset_manifest_cid` pointers that connects each manifest version to its predecessor. Because every manifest CID is a cryptographic hash of its contents, the chain is tamper-evident: altering any version invalidates all subsequent CIDs.
 
-This endpoint walks backwards through `prev_manifest_cid` links and returns lightweight summaries.
+This endpoint walks backwards through `prev_asset_manifest_cid` links and returns lightweight summaries.
 
 **Query Parameters**
 
@@ -322,13 +362,13 @@ Notes:
 
 - The route stops at 50 entries.
 - Circular links are detected and stop traversal.
-- `timestamp` currently comes from the first history entry of the first node when available.
+- `timestamp` currently comes from the manifest's top-level `timestamp` field.
 
 ---
 
-### `GET /api/manifest-by-token/:tokenId`
+### `GET /api/v1/tokens/:tokenId/manifest`
 
-Fetches a manifest by on-chain token ID. The backend queries `ArbeskAsset.tokenURI(tokenId)` and then fetches that manifest from private IPFS.
+Fetches a manifest by on-chain token ID. The backend queries `tokenURI(tokenId)` and then fetches that manifest from IPFS.
 
 **Response `200`**
 
@@ -362,12 +402,69 @@ Fetches a manifest by on-chain token ID. The backend queries `ArbeskAsset.tokenU
 
 ---
 
-### `GET /api/v1/contracts/ArbeskAsset/abi`
+### `POST /api/v1/ipfs/upload-url`
+
+Mints a short-lived client upload credential. Session-gated and rate-limited per wallet.
+
+- In **Pinata** mode, returns a presigned upload URL; the master JWT stays server-side.
+- In **Kubo** mode, returns the local Kubo API URL.
+
+**Response `200`**
+
+```json
+{
+  "backend": "pinata",
+  "url": "https://uploads.pinata.cloud/...",
+  "expiresAt": 1780001000
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 401 | Missing/invalid session |
+| 429 | Upload-url rate limit exceeded |
+| 500 | Credential minting failed |
+
+---
+
+### `POST /api/v1/ipfs/unpin`
+
+Unpins all IPFS CIDs owned by a manifest chain. Called after token burn.
+
+**Request Body**
+
+```json
+{
+  "cid": "bafy..."
+}
+```
+
+**Response `200`**
+
+```json
+{
+  "unpinned": ["bafy...", "Qm..."],
+  "count": 2
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 400 | Missing `cid` |
+| 500 | Unpin failed |
+
+---
+
+### `GET /api/v1/contracts/:name/abi`
 
 Serves the compiled contract artifact from:
 
 ```text
-blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json
+blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 ```
 
 **Response `200`**
@@ -383,7 +480,10 @@ blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json
 
 ```json
 {
-  "error": "ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile"
+  "error": {
+    "code": "ABI_NOT_FOUND",
+    "message": "ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile"
+  }
 }
 ```
 
@@ -392,37 +492,38 @@ blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json
 ## Frontend/Contract Flow Summary
 
 1. User connects wallet.
-2. **Paid tier generation:** frontend calls `payForGeneration(nodeId, prompt)` on `ArbeskAsset`.
+2. **Paid tier generation:** frontend calls `payForGenerationWithUSDC(nodeId, prompt, tier)` on `ArbeskAsset`.
    **Free tier generation:** frontend calls `recordGeneration(nodeId, prompt)` on `ArbeskAssetFree`.
 3. Frontend signs tx hash and calls `POST /api/v1/generations`.
 4. Backend validates payment/event, uploads asset, writes manifest, returns new manifest CID.
-5. Frontend loads the manifest into Babylon.js and updates `window.activeManifestId` / `window.latestManifestId`.
+5. Frontend loads the manifest into Babylon.js and updates asset state.
 6. Parametric edits are applied client-side; the browser sends the updated manifest to `POST /api/v1/manifests`.
 7. Save calls `POST /api/v1/manifests`.
-8. Publish captures an optional WebP thumbnail and calls `POST /api/v1/manifests/:cid/publish`.
-9. Frontend calls `publishAsset(tokenURI, tokenId)` for new worlds or `updateAssetURI(tokenId, newTokenURI)` for existing worlds.
-10. Gallery fetches token URIs from the contract, loads manifests, and displays names/thumbnails.
-11. Owner adds collaborators via `addEditor(tokenId, address, role)` and manages burn permissions via `setBurnPermission()`.
-12. Owner or permitted editors burn tokens via `burn(tokenId)`, which frees `maxTokensPerEditor()` slots.
+8. Publish captures an optional WebP thumbnail and calls `POST /api/v1/manifests` (asset manifest).
+9. The asset CID is merged into the collection manifest, which is also saved to IPFS.
+10. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
+11. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
+12. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
+13. Owner or editors burn tokens via `burn(tokenId, proof)`, which then triggers non-blocking IPFS unpin.
 
 ---
 
-## Collaboration Contract Endpoints (v0.6.0)
+## Collaboration Contract Endpoints (v0.7.0)
 
 These are on-chain functions exposed by both `ArbeskAsset` and `ArbeskAssetFree` through the shared `ArbeskAssetBase` contract. The frontend calls them directly via Web3.js — the backend does NOT proxy these. Documented here for completeness.
 
-### Role-Based Collaboration
+### Merkle-Based Editor Authorization
+
+The contract does **not** store per-address roles. It stores a Merkle root of the editor set and a monotonic version. The full editor list lives on IPFS.
 
 | Contract Function | Access | Description |
 |---|---|---|
-| `addEditor(uint256,address)` | Owner | Add collaborator with default Editor role |
-| `addEditor(uint256,address,uint8)` | Owner | Add collaborator with explicit role (1=Viewer, 2=Editor) |
-| `addEditor(uint256,address[])` | Owner | Batch add collaborators with Editor role |
-| `setCollaboratorRole(uint256,address,uint8)` | Owner | Change role of existing collaborator (1=Viewer, 2=Editor); 0=None removes |
-| `getCollaboratorRole(uint256,address)` | Public | Returns 0 (None), 1 (Viewer), or 2 (Editor) |
-| `listEditors(uint256)` | Public | Returns all collaborator addresses (Viewers + Editors) |
-| `listCollaboratorsByRole(uint256,uint8)` | Public | Returns addresses filtered by role |
-| `removeEditor(uint256,address)` | Owner | Remove a collaborator entirely |
+| `publishAsset(string uri, uint256 tokenId, bytes32 editorRoot, string editorListUri)` | Any | Mint a new token with the initial editor Merkle root and the IPFS URI of the editor list |
+| `updateEditors(uint256 tokenId, bytes32 newRoot, string newListUri, uint8 callerRole, bytes32[] callerProof)` | Current Editor | Replace the editor set with a new Merkle root and list URI |
+| `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` | Owner or Editor with proof | Update the token's URI (collection manifest CID) |
+| `burn(uint256 tokenId, bytes32[] proof)` | Owner or Editor with proof | Destroy the token |
+| `editorRoot(uint256 tokenId)` | Public | Current editor Merkle root |
+| `editorSetVersion(uint256 tokenId)` | Public | Current editor set version |
 
 **CollaboratorRole enum:**
 
@@ -430,32 +531,31 @@ These are on-chain functions exposed by both `ArbeskAsset` and `ArbeskAssetFree`
 |:---:|---|---|
 | 0 | None | Not a collaborator |
 | 1 | Viewer | Recognized collaborator, read-only |
-| 2 | Editor | Can update asset URI via `updateAssetURI()` |
+| 2 | Editor | Can call `updateAssetURI`, `updateEditors`, and `burn` with a valid Merkle proof |
 
 The token **owner** always has implicit full permissions regardless of role.
 
-### Burn
+**Merkle leaf format (matches `merkle-editors.js`):**
 
-| Contract Function | Access | Description |
-|---|---|---|
-| `burn(uint256)` | Owner or Editor+Burn | Destroy a token; cleans up all collaborators and frees `maxTokensPerEditor()` slots |
-| `setBurnPermission(uint256,address,bool)` | Owner | Grant/revoke burn permission on an Editor-role collaborator |
-| `canBurn(uint256,address)` | Public | Returns `true` if address can burn the token |
+```solidity
+keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))
+```
 
-**Burn permission rules:**
-- Token owner can always burn
-- Editor-role collaborators need explicit `canBurn` flag
-- Viewers can never burn
-- Setting `canBurn=true` on a Viewer or non-collaborator reverts
-- Burning frees `maxTokensPerEditor()` slots for all collaborators on the token
+**Editor set update flow:**
 
-**New Events:**
+1. Load current editor list from IPFS / localStorage.
+2. Build caller's Merkle proof against the current root/version.
+3. Compute the new root for the updated editor list at `editorSetVersion + 1`.
+4. Upload the new editor list to IPFS.
+5. Call `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
+
+### Events
 
 | Event | Signature |
 |---|---|
-| `CollaboratorRoleChanged` | `(uint256 indexed tokenId, address indexed collaborator, uint8 role)` |
-| `BurnPermissionChanged` | `(uint256 indexed tokenId, address indexed collaborator, bool canBurn)` |
+| `EditorSetChanged` | `(uint256 indexed tokenId, bytes32 newRoot, uint256 newVersion)` |
 | `AssetBurned` | `(uint256 indexed tokenId, address indexed burner)` |
+| `AssetURIUpdated` | `(uint256 indexed tokenId, string newURI)` |
 
 ---
 
@@ -492,6 +592,7 @@ The following are planned for Phase 5.1 (Token ID-Based Child Worlds) and Phase 
 | Route | Limit | Window | Key |
 |---|---:|---:|---|
 | `POST /api/v1/generations` | 10 | 1 hour | recovered wallet address |
+| `POST /api/v1/ipfs/upload-url` | 20 | 1 minute | recovered wallet address |
 
 The generation route currently emits:
 
@@ -502,8 +603,10 @@ The generation route currently emits:
 
 ```json
 {
-  "error": "RATE_LIMITED",
-  "message": "Limit: 10 requests per 3600s",
-  "retryAfter": 1234
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Limit: 10 requests per 3600s",
+    "retryAfter": 1234
+  }
 }
 ```

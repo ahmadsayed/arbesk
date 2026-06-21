@@ -42,7 +42,7 @@ import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,
 } from "../engine/parametric-preview.js";
-import { updateBurnButton } from "./collaborators.js";
+
 import { showToast } from "./toasts.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
@@ -111,8 +111,7 @@ function updateButtonState() {
     publishBtn.title = "Besk it: publish this asset";
   }
 
-  // Show burn button only for published (tokenized) assets
-  updateBurnButton();
+
 }
 
 async function fetchAssetName(tokenId) {
@@ -671,9 +670,7 @@ async function onSaveAssetDraft() {
     emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
     updateAssetStatus(
       assetName,
-      assetState.get().activeAssetTokenId
-        ? `Asset Token #${assetState.get().activeAssetTokenId}`
-        : "Draft Scene"
+      assetState.get().activeAssetTokenId ? "Published" : "Draft Scene"
     );
     announceStatus("Draft saved.");
   } catch (err) {
@@ -869,10 +866,7 @@ async function onPublishAsset() {
       tokenId: assetState.get().activeAssetTokenId,
       cid: assetCid,
     });
-    updateAssetStatus(
-      assetName,
-      `Asset Token #${assetState.get().activeAssetTokenId}`
-    );
+    updateAssetStatus(assetName, "Published");
   } catch (err) {
     console.error("Publish asset failed:", err);
     const rateLimited = isRateLimitError(err);
@@ -932,9 +926,7 @@ on(EVENTS.SCENE_READY, (e) => {
   }
   updateAssetStatus(
     name,
-    assetState.get().activeAssetTokenId
-      ? `Asset Token #${assetState.get().activeAssetTokenId}`
-      : "Draft Scene"
+    assetState.get().activeAssetTokenId ? "Published" : "Draft Scene"
   );
   updateButtonState();
 });

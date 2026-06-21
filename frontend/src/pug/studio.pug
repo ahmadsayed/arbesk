@@ -87,8 +87,8 @@ html(lang="en")
             svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
           select#headerbarNetworkSelect.headerbar-network-select(aria-label="Select network" title="Select network")
-            option(value="hardhat" selected) Hardhat Local
-            option(value="megaethTestnet") MegaETH Testnet
+            option(value="megaethTestnet" selected) MegaETH Testnet
+            option(value="hardhat") Hardhat Local
           button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
@@ -177,12 +177,6 @@ html(lang="en")
                         option(value="2" selected) Editor
                         option(value="1") Viewer
                       button#teamAddBtn.btn.btn-secondary Add
-                  button#burnAssetBtn.btn.btn-outline.btn-danger.btn-sm(hidden type="button" aria-label="Burn asset" title="Burn (delete) this token")
-                    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                      path(d="M3 6h18")
-                      path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6")
-                      path(d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
-                    span Burn
 
             //- View: Chat
             .sidebar-view(data-view="chat" hidden)

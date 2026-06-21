@@ -45,7 +45,7 @@ This redesign introduces **Collections**: the only thing minted as an NFT. A col
   "assets": {
     "chair-01": "bafy...chairCidV2",
     "room-01": "bafy...roomCidV1",
-    "garden-01": { "chainId": 6342, "contractAddress": "0x...", "tokenId": "42" }
+    "garden-01": { "chainId": 6343, "contractAddress": "0x...", "tokenId": "42" }
   },
   "thumbnail": { "...": "..." },
   "comments_archive_cid": "..."

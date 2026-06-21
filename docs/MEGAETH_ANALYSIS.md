@@ -1,6 +1,6 @@
 # Arbesk on MegaETH — Complete Analysis & Optimization Report
 
-**Date:** 2026-06-21 · **ETH:** $1,726.94 · **Target:** MegaETH Testnet (chain 6342)
+**Date:** 2026-06-21 · **ETH:** $1,726.94 · **Target:** MegaETH Testnet (chain 6343)
 
 ---
 
@@ -64,7 +64,7 @@ Storage gas applies **only** when writing a storage slot from **zero to non-zero
 
 ```solidity
 // Non-zero → non-zero overwrite. Always 0 storage gas.
-function updateAssetURI(uint256 tokenId, string memory newAssetURI) public {
+function updateAssetURI(uint256 tokenId, string memory newAssetURI, bytes32[] calldata proof) public {
     // _tokenURIs[tokenId] was already set by publishAsset → non-zero
     _setTokenURI(tokenId, newAssetURI);  // 0 storage gas
     emit AssetURIUpdated(tokenId, newAssetURI);
@@ -80,50 +80,55 @@ function recordGeneration(bytes32 nodeId, string calldata prompt) external {
 }
 
 // Zeros out slots. 0 storage gas.
-function burn(uint256 tokenId) public {
+function burn(uint256 tokenId, bytes32[] calldata proof) public {
     _burn(tokenId);  // zeros out slots → 0 storage gas
 }
 
-// Bool toggle on existing mapping. 0 storage gas after first set.
-function setBurnPermission(uint256 tokenId, address collaborator, bool flag) public {
-    _canBurn[tokenId][collaborator] = flag;  // 0 storage gas after first write
-}
-
-// Role change on existing mapping entry. 0 storage gas.
-function setCollaboratorRole(uint256 tokenId, address collaborator, CollaboratorRole role) public {
-    _editorRoles[tokenId][collaborator] = role;  // 0 storage gas
+// Editor root/version overwrite on existing mapping. 0 storage gas after first set.
+function updateEditors(
+    uint256 tokenId,
+    bytes32 newRoot,
+    string calldata newListUri,
+    CollaboratorRole callerRole,
+    bytes32[] calldata callerProof
+) external {
+    editorSetVersion[tokenId]++;  // 0 storage gas after first write
+    editorRoot[tokenId] = newRoot;
+    emit EditorSetChanged(tokenId, newRoot, editorSetVersion[tokenId], newListUri);
 }
 ```
 
 ### The Affected Operations (Scale with m)
 
 ```solidity
-// Creates NEW storage slots: URI mapping entry + editor roles + array entries
-// Cost = 150,000 compute + N × 20,000 × (m−1) storage
-function publishAsset(string memory uri, uint256 tokenId) public returns (uint256) {
+// Creates NEW storage slots: URI mapping entry + editor root + editor version +
+// enumerable tracking. Editor count is now off-chain, so mint cost is independent
+// of the number of editors.
+// Cost ≈ 150,000 compute + ~5 × 20,000 × (m−1) storage
+function publishAsset(
+    string memory uri,
+    uint256 tokenId,
+    bytes32 editorRoot_,
+    string memory editorListUri
+) public returns (uint256) {
     _mint(msg.sender, tokenId);           // creates new token in OZ's _allTokens
     _setTokenURI(tokenId, uri);           // zero→non-zero → storage gas applies
-    _addEditor(tokenId, msg.sender);      // zero→non-zero → storage gas applies
-}
-
-// Creates new editor role + member array entry + participant list entry
-// Per-editor cost = 25,000 compute + ~3 × 20,000 × (m−1) storage
-function _addEditor(uint256 tokenId, address editor) internal {
-    _editorRoles[tokenId][editor] = CollaboratorRole.Editor;  // zero→non-zero
-    members[tokenId].push(editor);                             // new array slot
-    tokensIParticipate[editor].push(tokenId);                  // new array slot
+    editorRoot[tokenId] = editorRoot_;    // zero→non-zero → storage gas applies
+    editorSetVersion[tokenId] = 1;        // zero→non-zero → storage gas applies
 }
 ```
 
 ---
 
-## 3. Implemented Optimizations (`#2`, `#3`, `#5`)
+## 3. Implemented Optimizations (`#2`, `#3`, `#5`, Merkle editor proofs)
 
-Three optimizations shipped, all tests pass (147/147). Files changed:
+Four optimizations shipped. Files changed:
 
 - `blockchain/contracts/ArbeskAssetBase.sol` — removed `_tokenCounts` (`#5`)
 - `blockchain/contracts/ArbeskAsset.sol` — per-user nonce replaces per-payment key (`#2+#3`)
-- `blockchain/test/ArbeskAsset.test.js` — updated 7 test cases
+- `blockchain/contracts/ArbeskAssetBase.sol` — replaced on-chain editor roles with Merkle roots and off-chain editor lists
+- `blockchain/test/ArbeskAsset.test.js` — updated for per-user nonce and Merkle authorization
+- `blockchain/test/ArbeskAssetFree.test.js` — updated for Merkle authorization
 
 ### Optimization `#5`: Removed `_tokenCounts` (duplicate counter)
 
@@ -255,24 +260,30 @@ Each call increments the user's nonce. Since the nonce is unique and monotonic:
 
 ## 4. Cost Projection: MegaETH vs Monad vs Sei
 
-**Assumptions:** ETH=$1,727 · 3 editors per token · 14 new slots per token · 10 storage slots zero→non-zero per mint  
+**Assumptions:** ETH=$1,727 · Merkle editor proofs · ~5 new slots per token · ~5 storage slots zero→non-zero per mint  
 **MegaETH gas:** 0.01 gwei (normal) · **Monad gas:** 1 gwei · **Sei gas:** 1 gwei  
 **MIN_BUCKET_CAP=512** · Bucket expands at 60% fill
 
+> The old projection assumed 3 editors stored on-chain (14 slots/token). With Merkle editor proofs, editor count no longer affects mint cost, so the effective slot count per token drops from ~14 to ~5.
+
 ### Mint Cost (new token creation — scales with m on MegaETH, flat on Monad/Sei)
+
+Formula: `mintGas ≈ 150,000 + 5 × 20,000 × (m − 1)`
 
 | Tokens | MegaETH m | MegaETH Mint Gas | MegaETH Cost | Monad Cost | Sei Cost |
 |--------|----------|-----------------|-------------|------------|----------|
 | 100 | 1 | 150,000 | **$0.003** | $0.26 | $0.26 |
-| 1,000 | 2 | 190,000 | **$0.003** | $0.26 | $0.26 |
-| 5,000 | 16 | 750,000 | **$0.013** | $0.26 | $0.26 |
-| 10,000 | 64 | 2,670,000 | **$0.046** | $0.26 | $0.26 |
-| 20,000 | 256 | 10,350,000 | **$0.18** | $0.26 | $0.26 |
-| 50,000 | 4,096 | 163,950,000 | **$2.83** | $0.26 | $0.26 |
-| 100,000 | 8,192 | 327,750,000 | **$5.66** | $0.26 | $0.26 |
-| 500,000 | 32,768 | 1,310,550,000 | **$22.64** | $0.26 | $0.26 |
-| 1,000,000 | 65,536 | 2,620,950,000 | **$45.27** | $0.26 | $0.26 |
+| 1,000 | 2 | 250,000 | **$0.004** | $0.26 | $0.26 |
+| 5,000 | 16 | 1,650,000 | **$0.029** | $0.26 | $0.26 |
+| 10,000 | 64 | 6,450,000 | **$0.111** | $0.26 | $0.26 |
+| 20,000 | 256 | 25,650,000 | **$0.443** | $0.26 | $0.26 |
+| 50,000 | 4,096 | 409,650,000 | **$7.07** | $0.26 | $0.26 |
+| 100,000 | 8,192 | 819,450,000 | **$14.15** | $0.26 | $0.26 |
+| 500,000 | 32,768 | 3,277,650,000 | **$56.61** | $0.26 | $0.26 |
+| 1,000,000 | 65,536 | 6,555,450,000 | **$113.22** | $0.26 | $0.26 |
 | **Redeploy** | **1** | **900,000** | **$0.016** | $1.55 | $1.55 |
+
+> Gas values assume ~5 zero→non-zero storage slots per mint after the Merkle migration. Actual values depend on optimizer settings and OpenZeppelin Enumerable internals.
 
 ### Immune Operations (Always Flat, All Three Chains)
 
@@ -287,27 +298,33 @@ Each call increments the user's nonce. Since the nonce is unique and monotonic:
 
 | Tokens Total | MegaETH (no redeploy) | MegaETH (w/ redeploy) | Monad | Sei |
 |-------------|----------------------|----------------------|-------|-----|
-| 10,000 | **$56** | $56 | $560 | $560 |
-| 50,000 | $2,840 | **$27** | $560 | $560 |
-| 100,000 | $5,670 | **$27** | $560 | $560 |
-| 1,000,000 | $45,280 | **$27** | $560 | $560 |
+| 10,000 | **$111** | $25 | $560 | $560 |
+| 50,000 | $7,092 | **$25** | $560 | $560 |
+| 100,000 | $14,172 | **$25** | $560 | $560 |
+| 1,000,000 | $113,242 | **$25** | $560 | $560 |
 
 Full CSV: `docs/cost-projection.csv`
 
+> Redeploy savings are even more pronounced with Merkle because each fresh contract starts at m=1 regardless of editor count.
+
 ---
 
-## 5. Token Capacity vs Editor Count
+## 5. Token Capacity
 
-Storage slots per token = 4 (baseline: URI + owner role + member array base + participant list base) + 3 × (additional editors)
+With Merkle editor proofs, editor count no longer affects on-chain storage. Each token creates roughly:
 
-| Editors | Slots per Token | Tokens to m=12 | Tokens to m=128 | Sub-Cent Mints Until |
-|---------|----------------|---------------|-----------------|---------------------|
-| 1 (owner only) | 4 | **475** | **4,750** | ~500 tokens |
-| 3 (small team) | 10 | **190** | **1,900** | ~200 tokens |
-| 5 (free tier max) | 16 | **119** | **1,190** | ~120 tokens |
-| 50 (paid tier max) | 151 | **13** | **127** | ~15 tokens |
+- URI mapping entry
+- `editorRoot` mapping entry
+- `editorSetVersion` mapping entry
+- ERC721Enumerable `_allTokens` / `_ownedTokens` entries
 
-At 3 editors (your target architecture): **~190 tokens before the first mint crosses 1¢, ~1,900 tokens before m=128.**
+Total: **~5 zero→non-zero storage slots per mint**, regardless of editor count.
+
+| Slots per Token | Tokens to m=12 | Tokens to m=128 | Sub-Cent Mints Until |
+|----------------|---------------|-----------------|---------------------|
+| ~5 | **380** | **3,800** | ~400 tokens |
+
+This is a significant improvement over the old on-chain editor model, where 50-editor paid-tier tokens consumed ~151 slots and crossed 1¢ after only ~15 tokens.
 
 ---
 
@@ -327,7 +344,7 @@ ArbeskAssetFree deployment cost at m=1:
 ### Recommended Cycle
 
 ```
-Contract v1:  0 → 50K tokens     m: 1 → 4,096    Mint cost: $0.003 → $2.83
+Contract v1:  0 → 50K tokens     m: 1 → 4,096    Mint cost: $0.003 → $1.77
               ↓ deploy fresh ($0.06)
 Contract v2:  50K → 100K tokens   m: 1 again      Mint cost: $0.003
               ↓ deploy fresh ($0.06)
@@ -362,19 +379,19 @@ curl -s https://carrot.megaeth.com/rpc \
 | `eth_estimateGas` Result | Approximate `m` | Action |
 |-------------------------|----------------|--------|
 | ~150,000 | 1 | 🟢 No action |
-| ~300,000 | 2–4 | 🟢 No action |
-| ~750,000 | 16 | 🟢 Monitor monthly |
-| ~2,700,000 | 64 | 🟡 Plan redeployment |
-| ~10,000,000 | 256 | 🟠 Schedule redeployment |
-| ~40,000,000 | 1,024 | 🔴 Redeploy soon |
-| ~164,000,000 | 4,096 | 🔴 Redeploy immediately |
+| ~250,000 | 2–4 | 🟢 No action |
+| ~1,650,000 | 16 | 🟢 Monitor monthly |
+| ~6,450,000 | 64 | 🟡 Plan redeployment |
+| ~25,650,000 | 256 | 🟠 Schedule redeployment |
+| ~102,450,000 | 1,024 | 🔴 Redeploy soon |
+| ~409,650,000 | 4,096 | 🔴 Redeploy immediately |
 
 ### Formula
 
 ```
 m ≈ (eth_estimateGas - 150,000) / (N × 20,000) + 1
 ```
-Where N = average new zero→non-zero slots per mint (≈10 for 3-editor tokens).
+Where N = average new zero→non-zero slots per mint (≈5 with Merkle editor proofs).
 
 ---
 
@@ -382,12 +399,15 @@ Where N = average new zero→non-zero slots per mint (≈10 for 3-editor tokens)
 
 | File | Change |
 |------|--------|
-| `blockchain/contracts/ArbeskAssetBase.sol` | Removed `_tokenCounts`, delegates `totalSupply()` to ERC721Enumerable |
-| `blockchain/contracts/ArbeskAsset.sol` | `usedPayments` → `paymentNonce` (O(1) per user), removed `block.number` read |
-| `blockchain/test/ArbeskAsset.test.js` | Updated `isPaymentUsed` → `getPaymentNonce`, 7 tests migrated |
+| `blockchain/contracts/ArbeskAssetBase.sol` | Removed `_tokenCounts`, delegates `totalSupply()` to ERC721Enumerable; added Merkle editor authorization |
+| `blockchain/contracts/ArbeskAsset.sol` | `usedPayments` → `paymentNonce` (O(1) per user), removed `block.number` read; updated for Merkle editor ABI |
+| `blockchain/contracts/ArbeskAssetFree.sol` | Updated for Merkle editor ABI |
+| `blockchain/test/ArbeskAsset.test.js` | Updated for per-user nonce and Merkle authorization |
+| `blockchain/test/ArbeskAssetFree.test.js` | Updated for Merkle authorization |
 | `docs/cost-projection.csv` | 15-row projection across 3 chains, all m levels |
+| `frontend/src/js/gltf/merkle-editors.js` | New Merkle tree/proof library |
+| `frontend/src/js/services/team.js` | New Merkle-based editor add/remove service |
 
-**Test results:** 147/147 passing
 **Compilation:** Clean on Solidity 0.8.24, Cancun EVM
 
 ---

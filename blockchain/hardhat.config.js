@@ -26,7 +26,7 @@ module.exports = {
     megaethTestnet: {
       url: "https://carrot.megaeth.com/rpc",
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
-      chainId: 6342,
+      chainId: 6343,
     },
   },
   etherscan: {
@@ -36,7 +36,7 @@ module.exports = {
     customChains: [
       {
         network: "megaethTestnet",
-        chainId: 6342,
+        chainId: 6343,
         urls: {
           apiURL: "https://megaexplorer.xyz/api",
           browserURL: "https://megaexplorer.xyz",

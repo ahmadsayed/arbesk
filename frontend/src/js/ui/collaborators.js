@@ -6,7 +6,7 @@
  * Wires to wallet.js (contract calls) and merkle-editors.js (proofs).
  */
 
-import { updateEditors, burn, CollaboratorRole } from "../blockchain/wallet.js";
+import { updateEditors, CollaboratorRole } from "../blockchain/wallet.js";
 import { computeRoot, getProof } from "../gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
@@ -25,7 +25,6 @@ let teamAddInput = null;
 let teamRoleSelect = null;
 let teamAddBtn = null;
 let teamOwnerBadge = null;
-let burnAssetBtn = null;
 
 // ─── Editor list cache (tokenId → { list, cid }) ──────────────────────
 
@@ -40,14 +39,9 @@ function initCollaborators() {
   teamRoleSelect = document.getElementById("teamRoleSelect");
   teamAddBtn = document.getElementById("teamAddBtn");
   teamOwnerBadge = document.getElementById("teamOwnerBadge");
-  burnAssetBtn = document.getElementById("burnAssetBtn");
 
   if (teamAddBtn) {
     teamAddBtn.addEventListener("click", onAddCollaborator);
-  }
-
-  if (burnAssetBtn) {
-    burnAssetBtn.addEventListener("click", onBurnAsset);
   }
 
   on(EVENTS.ASSET_PUBLISHED, () => refreshTeamPanel());
@@ -60,19 +54,10 @@ function initCollaborators() {
 
 function showTeamPanel() {
   if (teamPanel) teamPanel.hidden = false;
-  if (burnAssetBtn) {
-    burnAssetBtn.hidden = !assetState.get().activeAssetTokenId;
-  }
 }
 
 function hideTeamPanel() {
   if (teamPanel) teamPanel.hidden = true;
-  if (burnAssetBtn) burnAssetBtn.hidden = true;
-}
-
-function updateBurnButton() {
-  if (!burnAssetBtn) return;
-  burnAssetBtn.hidden = !assetState.get().activeAssetTokenId;
 }
 
 // ─── Editor list storage ───────────────────────────────────────────────
@@ -385,46 +370,6 @@ async function applyEditorSetChange(tokenId, currentList, newList) {
   }
 }
 
-// ─── Burn ──────────────────────────────────────────────────────────────
-
-async function onBurnAsset() {
-  const id = tokenId();
-  if (!id) return;
-
-  const confirmed = await showConfirmDialog(
-    "Burn Asset",
-    `Are you sure you want to permanently burn token #${id}? This cannot be undone.`,
-    [
-      { text: "Cancel", value: "cancel" },
-      { text: "Burn Token", value: "burn", className: "btn btn-danger" },
-    ]
-  );
-
-  if (confirmed !== "burn") return;
-
-  const walletAddr = walletState.get().walletAddress;
-  const currentList = await loadEditorList(id);
-  const version = await getSetVersion(id);
-
-  let proof = [];
-  if (currentList) {
-    const proofResult = getProof(currentList, walletAddr, id, version);
-    if (proofResult) proof = proofResult.proof;
-  }
-
-  const txHash = await burn(id, proof);
-  if (txHash) {
-    editorCache.delete(id);
-    try {
-      localStorage.removeItem(editorListKey(id));
-    } catch {}
-    assetState.set({ activeAssetTokenId: null, activeAssetManifestCid: null });
-    hideTeamPanel();
-    if (burnAssetBtn) burnAssetBtn.hidden = true;
-    emit(EVENTS.ASSET_CLEARED);
-  }
-}
-
 // ─── Exports ───────────────────────────────────────────────────────────
 
-export { initCollaborators, refreshTeamPanel, updateBurnButton };
+export { initCollaborators, refreshTeamPanel };

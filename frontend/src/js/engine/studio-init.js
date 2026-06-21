@@ -55,6 +55,12 @@ if (networkSelect) {
   networkSelect.addEventListener("change", async (e) => {
     const key = e.target.value;
     if (!key) return;
+    // Only store/select keys the wallet layer actually knows about
+    const validKeys = ["hardhat", "megaethTestnet"];
+    if (!validKeys.includes(key)) {
+      console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
+      return;
+    }
     // If wallet is connected, trigger the network switch in the wallet
     if (walletState.get().walletAddress) {
       try {

@@ -1,6 +1,9 @@
 /**
  * Arbesk Asset Library — token-centric browser for owned and shared assets.
  * Phase C: Library is now a sidebar view navigated by the View Switcher.
+ *
+ * Gallery semantics: each card represents one asset. Collection tokens are
+ * expanded so every asset inside the collection gets its own card.
  */
 
 import {
@@ -8,11 +11,12 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import { burn, contract as walletContract } from "../blockchain/wallet.js";
+import { contract as walletContract } from "../blockchain/wallet.js";
 import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
+import { deleteAssetFromCollection } from "../services/asset-delete.js";
 import { showConfirmDialog } from "./dialog.js";
 import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
@@ -51,16 +55,139 @@ async function fetchAssetLibrary(address) {
     );
     ids.forEach((id) => owned.push(String(id)));
 
-    const memberTokens = await contract.methods.listTokens(address).call();
-    for (const tokenId of memberTokens) {
-      const id = String(tokenId);
-      if (!owned.includes(id)) shared.push(id);
+    // listTokens is not part of the current ArbeskAssetFree/ArbeskAsset ABI;
+    // editor membership is tracked off-chain in the Merkle editor tree.
+    if (typeof contract.methods.listTokens === "function") {
+      const memberTokens = await contract.methods.listTokens(address).call();
+      for (const tokenId of memberTokens) {
+        const id = String(tokenId);
+        if (!owned.includes(id)) shared.push(id);
+      }
     }
   } catch (err) {
     console.error("Asset library fetch failed:", err);
   }
 
   return { owned, shared };
+}
+
+/**
+ * Resolve a token into one or more gallery entries.
+ * - Standalone asset token → one entry.
+ * - Collection token → one entry per asset in the collection.
+ */
+async function expandTokenToAssets(tokenId) {
+  const contract = getContract();
+  if (!contract) return [];
+
+  try {
+    const cid = await contract.methods.tokenURI(tokenId).call();
+    if (!cid) return [];
+
+    const manifest = await getFromRemoteIPFS(cid);
+    const base = { tokenId: String(tokenId), collectionCid: null };
+
+    if (manifest?.type === "collection" && manifest.assets) {
+      const entries = await Promise.all(
+        Object.entries(manifest.assets).map(async ([assetId, assetCid]) => {
+          let name = assetId;
+          let thumbnail = manifest?.thumbnail || null;
+          try {
+            const assetManifest = await getFromRemoteIPFS(assetCid);
+            name = assetManifest?.name || assetId;
+            thumbnail = assetManifest?.thumbnail || thumbnail;
+          } catch (err) {
+            console.warn(
+              `[ASSET-LIBRARY] Failed to load asset ${assetId} for token ${tokenId}`,
+              err
+            );
+          }
+          return {
+            ...base,
+            assetId,
+            manifestCid: assetCid,
+            collectionCid: cid,
+            name,
+            thumbnail,
+            isCollection: true,
+          };
+        })
+      );
+      return entries;
+    }
+
+    return [
+      {
+        ...base,
+        assetId: null,
+        manifestCid: cid,
+        name: manifest?.name || `Asset #${tokenId}`,
+        thumbnail: manifest?.thumbnail || null,
+        isCollection: false,
+      },
+    ];
+  } catch (err) {
+    console.warn("[ASSET-LIBRARY] Failed to expand token", tokenId, err);
+    return [];
+  }
+}
+
+async function openAssetEntry(entry) {
+  const contract = getContract();
+  if (!contract) {
+    console.warn("[LIBRARY] No contract available to open asset");
+    return;
+  }
+
+  try {
+    clearScene();
+
+    if (entry.isCollection && entry.collectionCid) {
+      const { loadCollectionManifest } = await import(
+        "../engine/scene-graph.js"
+      );
+      const { assetEntries } = await loadCollectionManifest(
+        entry.collectionCid,
+        {
+          chainId: walletState.get().chainId,
+          contractAddress: walletState.get().contractAddress,
+          tokenId: entry.tokenId,
+        }
+      );
+      emit(EVENTS.COLLECTION_OPENED, {
+        tokenId: entry.tokenId,
+        assetEntries,
+      });
+
+      assetState.set({
+        activeAssetTokenId: String(entry.tokenId),
+        activeCollectionTokenId: String(entry.tokenId),
+        activeAssetId: entry.assetId,
+        activeAssetManifestCid: entry.manifestCid,
+        latestAssetManifestCid: entry.manifestCid,
+      });
+    } else {
+      assetState.set({
+        activeAssetTokenId: String(entry.tokenId),
+        activeAssetManifestCid: entry.manifestCid,
+        latestAssetManifestCid: entry.manifestCid,
+      });
+    }
+
+    dismissCreatePulse();
+    updateUrlAsset(entry.tokenId);
+    await loadAssetManifest(entry.manifestCid);
+
+    const { showAssetEditors } = await import("./asset-editors.js");
+    showAssetEditors(entry.tokenId);
+
+    if (window.innerWidth <= 900) {
+      switchView("library");
+    }
+  } catch (err) {
+    console.error("Failed to open asset entry", entry, err);
+    alert(`Failed to open asset #${entry.tokenId}`);
+  }
 }
 
 async function openAssetByTokenId(tokenId) {
@@ -78,6 +205,8 @@ async function openAssetByTokenId(tokenId) {
     }
 
     const manifest = await getFromRemoteIPFS(cid);
+
+    // Collections: load the collection manifest but do not auto-open any asset.
     if (manifest?.type === "collection") {
       const { loadCollectionManifest } = await import(
         "../engine/scene-graph.js"
@@ -89,38 +218,30 @@ async function openAssetByTokenId(tokenId) {
       });
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
 
-      // Auto-load the first asset from the collection into the viewport.
-      const firstAsset = assetEntries.find((e) => e.kind === "asset");
-      if (firstAsset) {
-        clearScene();
-        assetState.set({
-          activeAssetTokenId: String(tokenId),
-          activeCollectionTokenId: String(tokenId),
-          activeAssetId: firstAsset.assetID,
-          activeAssetManifestCid: firstAsset.value,
-          latestAssetManifestCid: firstAsset.value,
-        });
-        dismissCreatePulse();
-        updateUrlAsset(tokenId);
-        await loadAssetManifest(firstAsset.value);
+      clearScene();
+      assetState.set({
+        activeAssetTokenId: String(tokenId),
+        activeCollectionTokenId: String(tokenId),
+        activeAssetId: null,
+        activeAssetManifestCid: null,
+        latestAssetManifestCid: null,
+      });
+      dismissCreatePulse();
+      updateUrlAsset(tokenId);
 
-        const { showAssetEditors } = await import("./asset-editors.js");
-        showAssetEditors(tokenId);
-
-        if (window.innerWidth <= 900) {
-          switchView("library");
-        }
+      if (window.innerWidth <= 900) {
+        switchView("library");
       }
       return;
     }
 
+    // Standalone asset: load it directly.
     clearScene();
     assetState.set({
       activeAssetTokenId: String(tokenId),
       activeAssetManifestCid: cid,
       latestAssetManifestCid: cid,
     });
-
     dismissCreatePulse();
     updateUrlAsset(tokenId);
     await loadAssetManifest(cid);
@@ -138,37 +259,53 @@ async function openAssetByTokenId(tokenId) {
 }
 
 /**
- * Build a payload for drag-drop / "Add to Scene" using the card's cached
- * collection metadata. Falls back to a token-only payload when no assetID
- * has been cached yet.
+ * Build a payload for drag-drop / "Add to Scene" using the card's asset entry.
  */
-function buildLinkedAssetPayload(tokenId, item) {
+function buildLinkedAssetPayload(entry) {
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
-  const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
-  const contractAddr = walletContractAddress || null;
   const payload = {
     type: "linked_asset",
-    token_id: String(tokenId),
+    token_id: String(entry.tokenId),
     standard: "ERC721",
     resolution: "latest",
-    chainId,
-    contractAddress: contractAddr,
+    chainId: Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL),
+    contractAddress: walletContractAddress || null,
   };
-  // Include the first assetID when the collection manifest has been loaded.
-  const firstAssetId = item?.dataset?.firstAssetId;
-  if (firstAssetId) payload.assetID = firstAssetId;
+  if (entry.assetId) payload.assetID = entry.assetId;
   return payload;
 }
 
-function renderAssetLibrary(owned, shared) {
+async function renderAssetLibrary(owned, shared) {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
 
-  assetLibraryBody.appendChild(createSection("My Assets", owned, "owner"));
-  if (shared.length > 0) {
+  const ownedNested = await Promise.all(
+    owned.map(async (tokenId) => {
+      const entries = await expandTokenToAssets(tokenId);
+      entries.forEach((e) => {
+        e.role = "owner";
+      });
+      return entries;
+    })
+  );
+  const ownedEntries = ownedNested.flat();
+
+  const sharedNested = await Promise.all(
+    shared.map(async (tokenId) => {
+      const entries = await expandTokenToAssets(tokenId);
+      entries.forEach((e) => {
+        e.role = "editor";
+      });
+      return entries;
+    })
+  );
+  const sharedEntries = sharedNested.flat();
+
+  assetLibraryBody.appendChild(createSection("My Assets", ownedEntries));
+  if (sharedEntries.length > 0) {
     assetLibraryBody.appendChild(
-      createSection("Shared Assets", shared, "editor")
+      createSection("Shared Assets", sharedEntries)
     );
   }
 }
@@ -199,7 +336,7 @@ function createEmptyState(title, sub) {
   return wrap;
 }
 
-function createSection(title, tokenIds, role) {
+function createSection(title, entries) {
   const section = document.createElement("div");
   section.className = "asset-library-section";
 
@@ -208,7 +345,7 @@ function createSection(title, tokenIds, role) {
   heading.textContent = title;
   section.appendChild(heading);
 
-  if (tokenIds.length === 0) {
+  if (entries.length === 0) {
     const empty =
       title === "My Assets"
         ? createEmptyState(
@@ -225,29 +362,30 @@ function createSection(title, tokenIds, role) {
 
   const list = document.createElement("div");
   list.className = "asset-library-list";
-  for (const tokenId of tokenIds)
-    list.appendChild(createAssetCard(tokenId, role));
+  for (const entry of entries) list.appendChild(createAssetCard(entry));
   section.appendChild(list);
   return section;
 }
 
-function createAssetCard(tokenId, role) {
+function createAssetCard(entry) {
   const item = document.createElement("div");
   item.className = "asset-card";
-  item.dataset.tokenId = tokenId;
+  item.dataset.tokenId = entry.tokenId;
+  if (entry.assetId) item.dataset.assetId = entry.assetId;
+  item.dataset.manifestCid = entry.manifestCid;
   item.draggable = true;
   item.tabIndex = 0;
   item.setAttribute("role", "button");
-  item.setAttribute("aria-label", `Open asset ${tokenId}`);
+  item.setAttribute("aria-label", `Open asset ${entry.name}`);
 
   item.addEventListener("dragstart", (event) => {
-    const payload = buildLinkedAssetPayload(tokenId, item);
+    const payload = buildLinkedAssetPayload(entry);
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData(
       "application/x-arbesk-linked-asset",
       JSON.stringify(payload)
     );
-    event.dataTransfer.setData("text/plain", `Asset Token #${tokenId}`);
+    event.dataTransfer.setData("text/plain", `${entry.name} Token #${entry.tokenId}`);
   });
 
   const thumbnailEl = document.createElement("div");
@@ -268,23 +406,23 @@ function createAssetCard(tokenId, role) {
 
   const nameEl = document.createElement("div");
   nameEl.className = "asset-card-name";
-  nameEl.textContent = `Loading… #${tokenId}`;
+  nameEl.textContent = entry.name || `Loading… #${entry.tokenId}`;
 
   const badge = document.createElement("span");
   badge.className = `asset-card-badge ${
-    role === "owner" ? "badge-owner" : "badge-editor"
+    entry.role === "owner" ? "badge-owner" : "badge-editor"
   }`;
-  badge.textContent = role === "owner" ? "Owner" : "Editor";
+  badge.textContent = entry.role === "owner" ? "Owner" : "Editor";
 
   // Click or keyboard activate anywhere on the card (except action buttons) to open.
   item.addEventListener("click", (e) => {
     if (e.target.closest(".asset-card-actions button")) return;
-    openAssetByTokenId(tokenId);
+    openAssetEntry(entry);
   });
   item.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
-    openAssetByTokenId(tokenId);
+    openAssetEntry(entry);
   });
 
   const addBtn = document.createElement("button");
@@ -293,21 +431,19 @@ function createAssetCard(tokenId, role) {
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    emit(
-      EVENTS.ASSET_ADD_LINKED_REQUESTED,
-      buildLinkedAssetPayload(tokenId, item)
-    );
+    emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry));
   });
 
-  const burnBtn = document.createElement("button");
-  burnBtn.className = "btn btn-outline btn-danger btn-sm asset-card-burn";
-  burnBtn.title = "Permanently burn this asset";
-  burnBtn.setAttribute("aria-label", `Burn asset ${tokenId}`);
-  burnBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.048 8.287 8.287 0 0 0 9 9.6a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48Z"/>
-    <path d="M12 18a3.75 3.75 0 0 0 .495-7.467 5.99 5.99 0 0 0-1.925 3.546 5.974 5.974 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z"/>
-  </svg><span>Burn</span>`;
-  burnBtn.addEventListener("click", (e) => onBurnAsset(e, tokenId));
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "btn btn-outline btn-danger btn-sm asset-card-delete";
+  deleteBtn.title = "Remove this asset from its collection";
+  deleteBtn.setAttribute("aria-label", `Delete asset ${entry.name}`);
+  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 6h18"/>
+    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+  </svg><span>Delete</span>`;
+  deleteBtn.addEventListener("click", (e) => onDeleteAsset(e, entry));
 
   const meta = document.createElement("div");
   meta.className = "asset-card-meta";
@@ -316,61 +452,52 @@ function createAssetCard(tokenId, role) {
   const actions = document.createElement("div");
   actions.className = "asset-card-actions";
   actions.appendChild(addBtn);
-  actions.appendChild(burnBtn);
+  actions.appendChild(deleteBtn);
 
   item.appendChild(thumbnailEl);
   item.appendChild(nameEl);
   item.appendChild(meta);
   item.appendChild(actions);
 
-  const runLoad = () =>
-    loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item);
+  const runLoad = () => renderAssetThumbnail(entry.thumbnail, thumbnailEl, entry.name);
   reloadBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     runLoad();
   });
   runLoad();
-  resolveBurnVisibility(burnBtn, tokenId, role);
+  resolveDeleteVisibility(deleteBtn, entry.role);
   return item;
 }
 
-async function resolveBurnVisibility(burnBtn, tokenId, role) {
-  if (role === "owner") {
-    burnBtn.hidden = false;
-    return;
-  }
-  const contract = getContract();
-  const { walletAddress } = walletState.get();
-  if (!contract || !walletAddress) return;
-  try {
-    burnBtn.hidden = false;
-  } catch {
-    burnBtn.hidden = true;
-  }
+function resolveDeleteVisibility(deleteBtn, role) {
+  deleteBtn.hidden = role !== "owner";
 }
 
-async function onBurnAsset(event, tokenId) {
+async function onDeleteAsset(event, entry) {
   event.stopPropagation();
-  const confirmed = await showConfirmDialog(
-    "Burn Asset",
-    `Are you sure you want to permanently burn Asset #${tokenId}? This action cannot be undone. The token will be destroyed, its on-chain record removed, and all collaborators will lose access.`,
-    [
-      { text: "Cancel", value: "cancel" },
-      { text: "Burn", value: "burn", className: "btn btn-danger" },
-    ]
-  );
 
-  if (confirmed !== "burn") return;
-
-  const txHash = await burn(tokenId, []);
-  if (txHash) {
-    if (String(assetState.get().activeAssetTokenId) === String(tokenId)) {
-      emit(EVENTS.ASSET_CLEARED);
-    }
+  if (!entry.isCollection || !entry.assetId) {
     showToast({
-      type: "info",
-      title: "Asset Burned",
-      message: `Asset #${tokenId} has been permanently destroyed.`,
+      type: "warning",
+      title: "Cannot Delete",
+      message: "This asset is not part of a collection.",
+    });
+    return;
+  }
+
+  try {
+    await deleteAssetFromCollection({
+      tokenId: entry.tokenId,
+      assetId: entry.assetId,
+      assetName: entry.name,
+      onAfterDelete: refreshAssetLibrary,
+    });
+  } catch (err) {
+    console.error("[ASSET-LIBRARY] Delete asset failed:", err);
+    showToast({
+      type: "error",
+      title: "Delete Failed",
+      message: err.message || "Could not remove asset from collection.",
     });
   }
 }
@@ -406,79 +533,25 @@ async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
   }
 }
 
-/**
- * Summarize a collection manifest for gallery card rendering.
- * Pure function — no I/O.
- */
-function buildCollectionCardSummary(manifest, tokenId) {
-  const assetCount = manifest?.assets ? Object.keys(manifest.assets).length : 0;
-  return {
-    tokenId: String(tokenId),
-    name: manifest?.name || `Collection #${tokenId}`,
-    assetCount,
-    thumbnailCid: manifest?.thumbnail?.cid || null,
-  };
-}
-
-async function loadAssetMetadata(
-  tokenId,
-  nameEl,
-  thumbnailEl,
-  reloadBtn,
-  item
-) {
-  const contract = getContract();
-  if (!contract) return;
-
-  nameEl.textContent = `Loading… #${tokenId}`;
-  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
-  thumbnailEl.classList.remove("asset-card-thumbnail-error");
-  item?.classList.remove("asset-card-error");
-  if (reloadBtn) reloadBtn.hidden = true;
-
-  try {
-    const cid = await contract.methods.tokenURI(tokenId).call();
-    if (!cid) {
-      nameEl.textContent = "Unnamed Asset";
-      return;
-    }
-    const manifest = await getFromRemoteIPFS(cid);
-    const summary = buildCollectionCardSummary(manifest, tokenId);
-    nameEl.textContent = `${summary.name} (${summary.assetCount} asset${
-      summary.assetCount === 1 ? "" : "s"
-    })`;
-
-    // Cache the first assetID so drag/drop and "Add to Scene" can route
-    // through the collection resolution path (handleLinkedAssetDropped).
-    if (manifest?.type === "collection" && manifest.assets) {
-      const firstKey = Object.keys(manifest.assets)[0];
-      if (firstKey) item.dataset.firstAssetId = firstKey;
-    }
-
-    await renderAssetThumbnail(manifest.thumbnail, thumbnailEl, summary.name);
-  } catch (err) {
-    console.warn("Failed to load asset metadata for token", tokenId, err);
-    nameEl.textContent = `Asset #${tokenId} (unreachable)`;
-    item?.classList.add("asset-card-error");
-    thumbnailEl.classList.add("asset-card-thumbnail-error");
-    if (reloadBtn) reloadBtn.hidden = false;
-  }
-}
-
 async function refreshAssetLibrary() {
   const { walletAddress } = walletState.get();
   if (!walletAddress || !assetLibraryBody) return;
   const { owned, shared } = await fetchAssetLibrary(walletAddress);
-  renderAssetLibrary(owned, shared);
+  await renderAssetLibrary(owned, shared);
 }
 
 function highlightActiveAsset() {
-  if (!assetLibraryBody || !assetState.get().activeAssetTokenId) return;
+  if (!assetLibraryBody) return;
+  const { activeAssetTokenId, activeAssetId } = assetState.get();
+  const tokenIdMatch = activeAssetTokenId ? String(activeAssetTokenId) : null;
+  const assetIdMatch = activeAssetId ? String(activeAssetId) : null;
+
   assetLibraryBody.querySelectorAll(".asset-card").forEach((el) => {
-    el.classList.toggle(
-      "active",
-      el.dataset.tokenId === String(assetState.get().activeAssetTokenId)
-    );
+    const matchesToken = tokenIdMatch && el.dataset.tokenId === tokenIdMatch;
+    const matchesAsset = assetIdMatch
+      ? el.dataset.assetId === assetIdMatch
+      : true;
+    el.classList.toggle("active", Boolean(matchesToken && matchesAsset));
   });
 }
 

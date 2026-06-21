@@ -202,7 +202,7 @@ describe("Token Resolver — resolveAssetIdFromCollection", () => {
   });
 
   it("resolves an object entry as a nested collection reference", () => {
-    const tokenRef = { chainId: 6342, contractAddress: "0xabc", tokenId: "42" };
+    const tokenRef = { chainId: 6343, contractAddress: "0xabc", tokenId: "42" };
     const result = resolveAssetIdFromCollection(
       { "garden-01": tokenRef },
       "garden-01"
@@ -433,7 +433,7 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
   });
 
   it("plans a cross-collection-asset lookup when collection is a token ref", () => {
-    const collectionRef = { chainId: 6342, contractAddress: "0xabc", tokenId: "42" };
+    const collectionRef = { chainId: 6343, contractAddress: "0xabc", tokenId: "42" };
     const plan = buildChildRefResolutionPlan(
       { collection: collectionRef, assetID: "chair-01" },
       null
@@ -1193,7 +1193,7 @@ describe("Scene Graph — buildForkOrLiveRefNode", () => {
   }
 
   const ref = {
-    collectionRef: { chainId: 6342, contractAddress: "0xabc", tokenId: "42" },
+    collectionRef: { chainId: 6343, contractAddress: "0xabc", tokenId: "42" },
   };
 
   it("fork builds a plain source node with the resolved CID, frozen", () => {

@@ -24,7 +24,7 @@ export const NETWORK_CONFIGS = {
   [CHAIN_IDS.MEGAETH_TESTNET]: {
     name: "MegaETH Testnet",
     chainId: CHAIN_IDS.MEGAETH_TESTNET,
-    contractAddress: null, // Deploy ArbeskAssetFree to MegaETH testnet
+    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
     paidContractAddress: null, // Paid tier not deployed on testnet
     usdcToken: null, // USDC not deployed on testnet
     rpcUrl: "https://carrot.megaeth.com/rpc",

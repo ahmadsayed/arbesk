@@ -16,13 +16,15 @@ Conventions, key file references, and practical guidance for AI agents and devel
 **Key Constraints**
 
 - **Blockchain**: EVM-compatible — Hardhat local dev, MegaETH testnet
-- **IPFS**: Private Dockerized Kubo node — no public DHT, no external peers, loopback-only
+- **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`)
 - **Parametric Versions**: Color + scale edits append new history entries client-side — no cloud generation
 - **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
+- **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
+- **Editor Authorization**: Off-chain Merkle editor lists; the contract stores only a Merkle root and version
 
-**Phase Status**: All phases 1–5.2 are complete. See `docs/CURRENT_STATUS.md` for the definitive snapshot.
+**Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). See `docs/CURRENT_STATUS.md` for the definitive snapshot.
 
 ---
 
@@ -41,18 +43,25 @@ If none apply, implement it in the browser. See `docs/ARCHITECTURE.md §1.5` for
 
 ### Smart Contract Architecture
 
-Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with collaboration + burn):
+Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with Merkle editor authorization + burn):
 
 | Contract | File | Role | Limits |
 |----------|------|------|--------|
-| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, 5 editors/token |
-| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, 50 editors/token |
+| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, ~5000 editors/token (safety net) |
+| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, ~5000 editors/token (safety net) |
+
+The contract stores per token:
+- `tokenURI` → collection manifest CID
+- `editorRoot` → Merkle root of the editor set
+- `editorSetVersion` → monotonic version used in Merkle leaves
+
+The full editor list lives on IPFS and is updated through `updateEditors(...)` with a Merkle proof.
 
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
-- `create-panel.js` dispatches via `wallet.isFreeTierContract()` — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `6342`)
-- Contract `owner()` bypasses all quotas (useful for admin/test wallets)
+- `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet.js`) — never hard-code the paid path in new generation UI code
+- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `6343`)
+- Contract `owner()` bypasses all quotas and Merkle proof checks (useful for admin/test wallets)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
 
 ---
@@ -64,10 +73,12 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with
 | Backend entry | `src/index.js` |
 | API routes | `src/api/index.js` |
 | Cloud generation route | `src/api/assets/generate-node.js` |
+| Storage backends | `src/api/storage/index.js` |
 | Auth middleware | `src/api/authentication.js` |
 | Session store | `src/api/sessions.js` |
 | Rate limiter | `src/api/rate-limiter.js` |
 | ABI serving | `src/api/abi-router.js` |
+| Comments archive | `src/api/comments-archive.js` |
 | 3D engine | `frontend/src/js/engine/` |
 | Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
 | Wallet / chain | `frontend/src/js/blockchain/` |
@@ -78,7 +89,10 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
 | Activity panel | `frontend/src/js/ui/ledger-panel.js` |
+| Team / editor service | `frontend/src/js/services/team.js` |
+| Asset delete service | `frontend/src/js/services/asset-delete.js` |
 | API service layer | `frontend/src/js/services/api.js` |
+| Merkle editor library | `frontend/src/js/gltf/merkle-editors.js` |
 | Smart contracts | `blockchain/contracts/` |
 | Frontend templates | `frontend/src/pug/` |
 | Frontend styles | `frontend/src/scss/` |
@@ -207,6 +221,13 @@ Every world is a content-addressed JSON manifest stored on IPFS. Each manifest l
 - Every token child node **must** have a `transform_matrix` (identity matrix as default)
 - Token child nodes have **no** local `history` array — history lives in the referenced token's manifest
 - `MAX_CHILD_WORLD_DEPTH = 5`; cycle protection enforced in `scene-graph.js`
+
+**Collection Manifests:**
+- Every published token's `tokenURI()` resolves to a collection manifest (`type: "collection"`)
+- The collection manifest contains an `assets` map: `{ assetID: assetManifestCid }`
+- Default collection token ID is deterministically derived from the wallet address; named collections derive from `keccak256(address, name)`
+- Gallery expands collection tokens into one card per `assets` entry
+- Publishing an asset update writes a new collection manifest and calls `updateAssetURI()`; no remint occurs
 
 **Thumbnail:** best-effort publish metadata — all code must tolerate missing thumbnails.
 

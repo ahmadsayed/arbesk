@@ -184,7 +184,7 @@ describe("Token Resolver — resolveAssetIdFromCollection", () => {
   });
 
   it("resolves an object entry as a nested collection reference", () => {
-    const tokenRef = { chainId: 6342, contractAddress: "0xabc", tokenId: "42" };
+    const tokenRef = { chainId: 6343, contractAddress: "0xabc", tokenId: "42" };
     const result = resolveAssetIdFromCollection(
       { "garden-01": tokenRef },
       "garden-01",
