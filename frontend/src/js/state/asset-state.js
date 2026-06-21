@@ -7,7 +7,12 @@ const _defaults = {
   activeAssetName: null,
   latestAssetManifestCid: null,
   currentManifest: null,
+  activeCollectionTokenId: null,
+  activeAssetId: null,
 };
 
-const { store: assetState, _resetForTesting } = createStore(_defaults, EVENTS.ASSET_STATE_CHANGED);
+const { store: assetState, _resetForTesting } = createStore(
+  _defaults,
+  EVENTS.ASSET_STATE_CHANGED
+);
 export { assetState, _resetForTesting };

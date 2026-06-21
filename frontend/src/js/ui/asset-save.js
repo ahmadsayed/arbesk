@@ -186,6 +186,38 @@ function advanceManifestVersion(manifest, latestCid) {
 }
 
 /**
+ * Merge an asset's CID into a collection manifest's `assets` map.
+ * Pure function — does not touch IPFS or chain state.
+ */
+function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
+  const base = collectionManifest
+    ? { ...collectionManifest }
+    : {
+        type: "collection",
+        asset_id: `collection_${Date.now()}`,
+        version: 0,
+        assets: {},
+      };
+  const assets = { ...(base.assets || {}) };
+  assets[assetID] = assetCid;
+  return {
+    ...base,
+    type: "collection",
+    assets,
+  };
+}
+
+/**
+ * Derive the assetID an asset occupies within its collection. Reuses the
+ * existing assetID if the asset has one; otherwise derives a fresh one from
+ * the given seed (e.g. Date.now()) the first time the asset is besked.
+ */
+function deriveDefaultAssetId(existingAssetId, fallbackSeed) {
+  if (existingAssetId) return existingAssetId;
+  return `asset_${fallbackSeed}`;
+}
+
+/**
  * Compare two manifests for semantic equality, ignoring auto-generated fields.
  */
 function manifestsSemanticallyEqual(a, b) {
@@ -322,6 +354,7 @@ async function prepareManifestForWrite(assetName) {
 
   if (assetState.get().activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
+    manifest.type = "asset";
   } else if (
     pendingRefs.length > 0 ||
     pendingPP.size > 0 ||
@@ -329,6 +362,7 @@ async function prepareManifestForWrite(assetName) {
     pendingColors.size > 0
   ) {
     manifest = {
+      type: "asset",
       name: assetName,
       asset_id: `asset_${Date.now()}`,
       version: 1,
@@ -681,7 +715,7 @@ async function onPublishAsset() {
         }
       : null;
 
-    // Save first: every Besk it creates a new draft version, then publishes it.
+    // Save first: every Besk creates a new draft version, then publishes it.
     const result = await saveAssetDraftCore(assetName, {
       captureThumbnail: true,
       publishContext,
@@ -705,12 +739,47 @@ async function onPublishAsset() {
       return;
     }
 
-    const { cid } = result;
+    const { cid: assetCid } = result;
+
+    const assetID = deriveDefaultAssetId(
+      assetState.get().activeAssetId,
+      Date.now()
+    );
+    assetState.set({ activeAssetId: assetID });
 
     announceStatus("Confirm transaction in MetaMask…");
     const walletAddr = walletState.get().walletAddress;
-    if (assetState.get().activeAssetTokenId) {
-      const tokenId = assetState.get().activeAssetTokenId;
+
+    // Fetch the current collection manifest (if one exists yet) and merge
+    // this asset's new CID into its assets map. If no collection token
+    // exists yet, this besk lazily mints the default collection.
+    const existingCollectionTokenId = assetState.get().activeCollectionTokenId;
+    let collectionManifest = null;
+    if (existingCollectionTokenId) {
+      const c = walletContract || walletState.get().contract;
+      const collectionCid = await c.methods
+        .tokenURI(String(existingCollectionTokenId))
+        .call();
+      collectionManifest = await getFromRemoteIPFS(collectionCid);
+    }
+    const mergedCollection = mergeAssetIntoCollection(
+      collectionManifest,
+      assetID,
+      assetCid
+    );
+    mergedCollection.version = (mergedCollection.version || 0) + 1;
+    mergedCollection.prev_asset_manifest_cid = existingCollectionTokenId
+      ? await (walletContract || walletState.get().contract).methods
+          .tokenURI(String(existingCollectionTokenId))
+          .call()
+      : null;
+
+    const { cid: collectionCid } = await saveManifest(mergedCollection, {
+      publishContext: null,
+    });
+
+    if (existingCollectionTokenId) {
+      const tokenId = existingCollectionTokenId;
       const editorList = await _loadEditorList(tokenId);
       if (!editorList) throw new Error("Cannot find editor list");
       const currentVersion = await _getEditorSetVersion(tokenId);
@@ -721,14 +790,18 @@ async function onPublishAsset() {
         currentVersion
       );
       if (!proofResult) throw new Error("Not an authorized editor");
-      const txHash = await updateAssetURI(tokenId, cid, proofResult.proof);
+      const txHash = await updateAssetURI(
+        tokenId,
+        collectionCid,
+        proofResult.proof
+      );
       if (!txHash) throw new Error("Republish transaction failed");
-      updateUrlAsset(assetState.get().activeAssetTokenId);
-      announceStatus("Asset republished successfully.");
+      updateUrlAsset(tokenId);
+      announceStatus("Collection republished successfully.");
     } else {
       const tokenId =
         "0x" +
-        Array.from(cid)
+        Array.from(collectionCid)
           .reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
           .toString(16)
           .replace(/^-/, "");
@@ -737,21 +810,29 @@ async function onPublishAsset() {
       ];
       const editorRoot = computeRoot(editorList, tokenId, 1);
       const editorListUri = _saveEditorListLocally(tokenId, editorList, null);
-      const txHash = await publishAsset(cid, tokenId, editorRoot, editorListUri || "");
+      const txHash = await publishAsset(
+        collectionCid,
+        tokenId,
+        editorRoot,
+        editorListUri || ""
+      );
       if (!txHash) throw new Error("Publish transaction failed");
-      assetState.set({ activeAssetTokenId: tokenId });
+      assetState.set({
+        activeCollectionTokenId: tokenId,
+        activeAssetTokenId: tokenId,
+      });
       updateUrlAsset(tokenId);
 
       const { showAssetEditors } = await import("./asset-editors.js");
       showAssetEditors(tokenId);
-      announceStatus("Asset published and minted.");
+      announceStatus("Default collection published and minted.");
     }
 
     // latestCid / activeCid / pending edits were already updated by saveAssetDraftCore.
 
     emit(EVENTS.ASSET_PUBLISHED, {
       tokenId: assetState.get().activeAssetTokenId,
-      cid,
+      cid: assetCid,
     });
     updateAssetStatus(
       assetName,
