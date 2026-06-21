@@ -184,7 +184,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     delete process.env.UPLOAD_URL_RATE_LIMIT_MAX;
   });
 
-  async function makeSessionHeader(address = "0x1234567890123456789012345678901234567890") {
+  async function makeSessionHeader(
+    address = "0x1234567890123456789012345678901234567890",
+  ) {
     const token = createSession(address);
     return `Session ${token}`;
   }
@@ -264,7 +266,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(200);
       expect(res.body.sourceAssetCid).toBeDefined();
 
-      const manifestData = await fetchManifestFromIPFS(res.body.assetManifestCid);
+      const manifestData = await fetchManifestFromIPFS(
+        res.body.assetManifestCid,
+      );
       const node = (manifestData.scene?.nodes || [])[0];
       expect(node).toBeDefined();
       expect(node.source.format).toBe("glb");
@@ -314,7 +318,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", "Session invalid-token")
-        .send({ prompt: "Test", nodeId: "node_badsession", txHash: "0xbadsession" });
+        .send({
+          prompt: "Test",
+          nodeId: "node_badsession",
+          txHash: "0xbadsession",
+        });
       expect(res.status).toBe(401);
       expect(res.body.error?.code).toBe("INVALID_SESSION");
     });
@@ -803,6 +811,48 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         cid: expect.any(String),
       });
       expect(storedManifest.scene.nodes[0].child_ref.tokenId).toBe("99");
+    });
+  });
+
+  // ─── Collection-Type Manifest Persistence ─────────────────────────────────
+
+  describe("POST /api/v1/manifests — collection-type", () => {
+    it("persists a collection-type manifest without forcing scene.nodes", async () => {
+      const collectionManifest = {
+        type: "collection",
+        asset_id: "collection_test_1",
+        version: 1,
+        timestamp: Date.now(),
+        assets: {
+          "chair-01": "bafyChairCid",
+          "room-01": "bafyRoomCid",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/v1/manifests")
+        .send(collectionManifest);
+
+      expect(res.status).toBe(201);
+      expect(res.body.cid).toBeDefined();
+
+      const stored = await fetchManifestFromIPFS(res.body.cid);
+      expect(stored.type).toBe("collection");
+      expect(stored.assets).toEqual({
+        "chair-01": "bafyChairCid",
+        "room-01": "bafyRoomCid",
+      });
+      // Collection manifests must NOT get a forced scene.nodes default.
+      expect(stored.scene).toBeUndefined();
+    });
+
+    it("rejects a collection-type manifest with a non-object assets field", async () => {
+      const res = await request(app)
+        .post("/api/v1/manifests")
+        .send({ type: "collection", assets: "not-an-object" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("INVALID_COLLECTION_ASSETS");
     });
   });
 

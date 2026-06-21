@@ -189,11 +189,34 @@ export default () => {
       const publishContext = manifest.publishContext || null;
       delete manifest.publishContext;
 
+      // Collection-type manifests use a flat `assets` map instead of
+      // `scene.nodes` — skip the scene/nodes default and validate `assets`.
+      const isCollection = manifest.type === "collection";
+      if (isCollection) {
+        if (
+          !manifest.assets ||
+          typeof manifest.assets !== "object" ||
+          Array.isArray(manifest.assets)
+        ) {
+          console.log(
+            `[SAVE] rejected — collection manifest requires an assets object`,
+          );
+          return sendError(
+            res,
+            400,
+            "INVALID_COLLECTION_ASSETS",
+            "Collection manifest requires an `assets` object",
+          );
+        }
+      }
+
       // Ensure version fields are present
       if (!manifest.asset_id) {
         manifest.asset_id = `asset_${Date.now()}`;
       }
-      getSceneNodes(manifest); // ensure .scene and .nodes exist
+      if (!isCollection) {
+        getSceneNodes(manifest); // ensure .scene and .nodes exist (assets only)
+      }
       if (typeof manifest.version !== "number") {
         manifest.version = 1;
       }
@@ -228,7 +251,7 @@ export default () => {
 
       const resultCid = await addAndPin(JSON.stringify(manifest));
       console.log(
-        `[SAVE] asset_id=${manifest.asset_id} version=${manifest.version} nodes=${manifest.scene.nodes.length} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} → cid=${resultCid}`,
+        `[SAVE] asset_id=${manifest.asset_id} type=${manifest.type || "asset"} version=${manifest.version} ${isCollection ? `assets=${Object.keys(manifest.assets).length}` : `nodes=${manifest.scene.nodes.length}`} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} → cid=${resultCid}`,
       );
 
       res.status(201).json({
