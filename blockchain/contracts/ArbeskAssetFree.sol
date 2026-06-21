@@ -5,11 +5,11 @@ import "./ArbeskAssetBase.sol";
 
 /**
  * @title ArbeskAssetFree
- * @dev Free-tier contract: NFT + Collaboration with no payment.
- *      Inherits all base logic from ArbeskAssetBase.
+ * @dev Free-tier contract: NFT + Merkle-root editor architecture.
+ *      Inherits base NFT/Merkle logic from ArbeskAssetBase.
  *      Adds free `recordGeneration()` with a 10/day per-wallet quota.
- *      Collaboration limits are 10x lower than the paid tier.
- *      Quota state is packed into a single 256-bit storage slot to minimize gas.
+ *
+ *      MAX_EDITORS_PER_TOKEN = 5000 (safety net — full list on IPFS).
  */
 contract ArbeskAssetFree is ArbeskAssetBase {
     // ── Custom Errors ──
@@ -17,9 +17,10 @@ contract ArbeskAssetFree is ArbeskAssetBase {
     error InvalidNodeId();
     error DailyGenerationLimitReached(uint256 limit);
 
+    // ── Constants ──
+    uint256 public constant MAX_EDITORS_PER_TOKEN = 5000;
+
     // ── Packed Quota State ──
-    // Packs day + count into one slot: one cold SLOAD/SSTORE on first use,
-    // one warm SLOAD/SSTORE on subsequent uses same day.
     struct GenerationQuota {
         uint128 day;
         uint128 count;
@@ -28,7 +29,8 @@ contract ArbeskAssetFree is ArbeskAssetBase {
     mapping(address => GenerationQuota) internal _generationQuota;
     uint256 public constant DAILY_GENERATION_LIMIT = 10;
 
-    // ── Backward-Compatible View Functions ──
+    // ── View Functions ──
+
     function lastGenerationDay(address user) public view returns (uint256) {
         return _generationQuota[user].day;
     }
@@ -46,26 +48,11 @@ contract ArbeskAssetFree is ArbeskAssetBase {
         uint256 countToday
     );
 
-    // ── Quota Overrides ──
-    function maxEditorsPerToken() public pure override returns (uint256) {
-        return 5;
-    }
-
-    function maxTokensPerEditor() public pure override returns (uint256) {
-        return 50;
-    }
-
     // ── Constructor ──
     constructor() ArbeskAssetBase("ArbeskAssetFree", "ARBF") {}
 
     // ── Free Generation Recording ──
 
-    /**
-     * @notice Record a free generation attempt. Enforces a 10/day per-wallet quota.
-     * @param nodeId Unique identifier for the target scene node.
-     * @param prompt Text prompt sent to the generation engine.
-     * @dev No payment required. Emits AssetGenerationRecorded for off-chain tracking.
-     */
     function recordGeneration(
         bytes32 nodeId,
         string calldata prompt
@@ -82,8 +69,6 @@ contract ArbeskAssetFree is ArbeskAssetBase {
             quota.count = 0;
         }
 
-        // Owner bypasses the daily quota for administration/load testing,
-        // but we still count usage for observability.
         if (msg.sender != owner() && quota.count >= DAILY_GENERATION_LIMIT)
             revert DailyGenerationLimitReached(DAILY_GENERATION_LIMIT);
 

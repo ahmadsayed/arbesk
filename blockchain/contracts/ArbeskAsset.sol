@@ -8,18 +8,20 @@ import "./ArbeskAssetBase.sol";
 
 /**
  * @title ArbeskAsset
- * @dev Paid-tier contract: PayGo + NFT + Collaboration.
- *      Inherits all base NFT/collaboration logic from ArbeskAssetBase.
+ * @dev Paid-tier contract: PayGo + NFT + Merkle-root editor architecture.
+ *      Inherits base NFT/Merkle logic from ArbeskAssetBase.
  *      Adds native-token and USDC payment paths for 3D asset generation.
+ *
+ *      MAX_EDITORS_PER_TOKEN = 5000 (safety net — full list on IPFS).
  */
 contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     enum Tier {
-        Basic, // 0
+        Basic,    // 0
         Standard, // 1
-        Premium, // 2
-        Pro // 3
+        Premium,  // 2
+        Pro       // 3
     }
 
     // ── Custom Errors ──
@@ -36,12 +38,19 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
     error UsdcTokenNotSet();
     error DirectTransferNotAllowed();
 
+    // ── Constants ──
+    uint256 public constant MAX_EDITORS_PER_TOKEN = 5000;
+
     // ── State ──
     uint256 public costPerGeneration = 0.01 ether;
     mapping(Tier => uint256) public tierCosts;
     IERC20 public usdcToken;
     address public developerTreasuryWallet;
-    mapping(bytes32 => bool) internal usedPayments;
+
+    /// @dev Per-user nonce for payment replay protection.
+    ///      First payment per user creates a new storage slot (zero→non-zero);
+    ///      all subsequent payments overwrite that slot (zero storage gas).
+    mapping(address => uint256) public paymentNonce;
 
     // ── Events ──
     event AssetGenerationPaid(
@@ -74,15 +83,6 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         address indexed newToken
     );
 
-    // ── Quota Overrides ──
-    function maxEditorsPerToken() public pure override returns (uint256) {
-        return 50;
-    }
-
-    function maxTokensPerEditor() public pure override returns (uint256) {
-        return 500;
-    }
-
     // ── Constructor ──
     constructor(
         address _treasury,
@@ -109,11 +109,10 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         if (promptLen == 0 || promptLen > 500) revert InvalidPromptLength();
         if (nodeId == bytes32(0)) revert InvalidNodeId();
 
-        bytes32 paymentKey = keccak256(
-            abi.encodePacked(nodeId, msg.sender, block.number)
-        );
-        if (usedPayments[paymentKey]) revert PaymentAlreadyUsed();
-        usedPayments[paymentKey] = true;
+        uint256 nonce = paymentNonce[msg.sender];
+        unchecked {
+            paymentNonce[msg.sender] = nonce + 1;
+        }
 
         (bool sent, ) = developerTreasuryWallet.call{value: msg.value}("");
         if (!sent) revert TreasuryTransferFailed();
@@ -142,11 +141,10 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         uint256 cost = tierCosts[tier];
         if (cost == 0) revert TierCostNotSet();
 
-        bytes32 paymentKey = keccak256(
-            abi.encodePacked(nodeId, msg.sender, block.number)
-        );
-        if (usedPayments[paymentKey]) revert PaymentAlreadyUsed();
-        usedPayments[paymentKey] = true;
+        uint256 nonce = paymentNonce[msg.sender];
+        unchecked {
+            paymentNonce[msg.sender] = nonce + 1;
+        }
 
         usdcToken.safeTransferFrom(msg.sender, developerTreasuryWallet, cost);
 
@@ -164,13 +162,8 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         return tierCosts[tier];
     }
 
-    function isPaymentUsed(
-        bytes32 nodeId,
-        address sender,
-        uint256 blockNum
-    ) external view returns (bool) {
-        bytes32 key = keccak256(abi.encodePacked(nodeId, sender, blockNum));
-        return usedPayments[key];
+    function getPaymentNonce(address user) external view returns (uint256) {
+        return paymentNonce[user];
     }
 
     // ── Admin ──

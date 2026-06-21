@@ -1,25 +1,18 @@
 /**
- * Arbesk Collaborator Manager
+ * Arbesk Collaborator Manager — Merkle Architecture
  *
- * Manages the team panel: add/remove collaborators with roles,
- * toggle burn permissions, and the burn button in the headerbar.
- * Wires to the ArbeskAsset contract via wallet.js.
+ * Manages the team panel: add/remove collaborators with roles and burn.
+ * Editor list is stored on IPFS; on-chain only has the Merkle root.
+ * Wires to wallet.js (contract calls) and merkle-editors.js (proofs).
  */
 
-import {
-  addEditor,
-  addCollaboratorWithRole,
-  removeEditor,
-  setCollaboratorRole,
-  getCollaboratorRole,
-  listCollaboratorsByRole,
-  burn,
-  setBurnPermission,
-  canBurn,
-  CollaboratorRole,
-} from "../blockchain/wallet.js";
+import { updateEditors, burn, CollaboratorRole } from "../blockchain/wallet.js";
+import { computeRoot, getProof } from "../gltf/merkle-editors.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
 import { showConfirmDialog } from "./dialog.js";
 import { truncateAddress } from "../utils/format.js";
+import { showToast } from "./toasts.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
@@ -33,6 +26,10 @@ let teamRoleSelect = null;
 let teamAddBtn = null;
 let teamOwnerBadge = null;
 let burnAssetBtn = null;
+
+// ─── Editor list cache (tokenId → { list, cid }) ──────────────────────
+
+const editorCache = new Map();
 
 // ─── Init ──────────────────────────────────────────────────────────────
 
@@ -53,7 +50,6 @@ function initCollaborators() {
     burnAssetBtn.addEventListener("click", onBurnAsset);
   }
 
-  // Refresh team panel when asset loads or publishes
   on(EVENTS.ASSET_PUBLISHED, () => refreshTeamPanel());
   on(EVENTS.WALLET_CONNECTED, () => refreshTeamPanel());
   on(EVENTS.ASSET_DRAFT_SAVED, () => refreshTeamPanel());
@@ -74,10 +70,73 @@ function hideTeamPanel() {
   if (burnAssetBtn) burnAssetBtn.hidden = true;
 }
 
-// Called from asset-save.js after publish
 function updateBurnButton() {
   if (!burnAssetBtn) return;
   burnAssetBtn.hidden = !assetState.get().activeAssetTokenId;
+}
+
+// ─── Editor list storage ───────────────────────────────────────────────
+
+function editorListKey(tokenId) {
+  return `arbesk_editor_list_${tokenId}`;
+}
+
+async function loadEditorList(tokenId) {
+  // Check cache first
+  if (editorCache.has(tokenId)) return editorCache.get(tokenId);
+
+  // Try localStorage
+  try {
+    const stored = localStorage.getItem(editorListKey(tokenId));
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.cid) {
+        try {
+          const fresh = await getFromRemoteIPFS(parsed.cid);
+          if (Array.isArray(fresh)) {
+            saveEditorList(tokenId, fresh, parsed.cid);
+            return fresh;
+          }
+        } catch {
+          /* use cached */
+        }
+      }
+      if (Array.isArray(parsed.list)) {
+        editorCache.set(tokenId, parsed.list);
+        return parsed.list;
+      }
+    }
+  } catch {
+    /* unavailable */
+  }
+  return null;
+}
+
+function saveEditorList(tokenId, list, ipfsCid) {
+  editorCache.set(tokenId, list);
+  try {
+    localStorage.setItem(
+      editorListKey(tokenId),
+      JSON.stringify({
+        list,
+        cid: ipfsCid || null,
+        saved: Date.now(),
+      })
+    );
+  } catch {
+    /* quota exceeded, non-critical */
+  }
+}
+
+async function getSetVersion(tokenId) {
+  try {
+    const { contract } = await import("../blockchain/wallet.js");
+    const c = contract || walletState.get().contract;
+    if (!c) return 1;
+    return Number(await c.methods.editorSetVersion(tokenId).call());
+  } catch {
+    return 1;
+  }
 }
 
 // ─── Data ──────────────────────────────────────────────────────────────
@@ -90,48 +149,42 @@ async function refreshTeamPanel() {
   }
   showTeamPanel();
 
-  // Mark owner
   if (teamOwnerBadge) {
     teamOwnerBadge.hidden = false;
-    teamOwnerBadge.textContent = "Owner";
+    teamOwnerBadge.textContent = "Editors";
   }
 
   try {
-    const [editors, viewers] = await Promise.all([
-      listCollaboratorsByRole(tokenId, CollaboratorRole.Editor),
-      listCollaboratorsByRole(tokenId, CollaboratorRole.Viewer),
-    ]);
-
-    // Get burn permissions for all collaborators
-    const burnPerms = {};
-    const allCollaborators = [...(editors || []), ...(viewers || [])];
-    await Promise.all(
-      allCollaborators.map(async (addr) => {
-        const perm = await canBurn(tokenId, addr);
-        burnPerms[addr.toLowerCase()] = perm;
-      })
-    );
-
-    renderTeamList(editors || [], viewers || [], burnPerms);
+    const editorList = await loadEditorList(tokenId);
+    if (editorList) {
+      renderTeamList(editorList);
+    } else if (teamList) {
+      teamList.innerHTML = "";
+    }
   } catch {
-    // Silently fail — contract may not be on current network
     if (teamList) teamList.innerHTML = "";
   }
 }
 
 // ─── Rendering ─────────────────────────────────────────────────────────
 
-function renderTeamList(editors, viewers, burnPerms) {
+function renderTeamList(editorList) {
   if (!teamList) return;
 
   teamList.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+  const selfAddr = (walletState.get().walletAddress || "").toLowerCase();
 
-  const createItem = (addr, role, roleLabel, canBurnFlag) => {
+  for (const entry of editorList) {
+    // Skip self
+    if (entry.address.toLowerCase() === selfAddr) continue;
+
     const el = document.createElement("div");
     el.className = "team-item";
-    el.dataset.address = addr;
+    el.dataset.address = entry.address;
 
-    const addrDisplay = truncateAddress(addr);
+    const roleLabel =
+      entry.role === CollaboratorRole.Editor ? "Editor" : "Viewer";
 
     const roleBadge = document.createElement("span");
     roleBadge.className = `team-role-badge team-role-${roleLabel.toLowerCase()}`;
@@ -139,44 +192,26 @@ function renderTeamList(editors, viewers, burnPerms) {
 
     const addrSpan = document.createElement("span");
     addrSpan.className = "team-addr";
-    addrSpan.textContent = addrDisplay;
+    addrSpan.textContent = truncateAddress(entry.address);
 
     const actions = document.createElement("div");
     actions.className = "team-actions";
 
-    // Burn permission toggle (editors only)
-    if (role === CollaboratorRole.Editor) {
-      const burnBtn = document.createElement("button");
-      burnBtn.className = "btn btn-icon btn-xs";
-      burnBtn.title = canBurnFlag
-        ? "Revoke burn permission"
-        : "Grant burn permission";
-      burnBtn.textContent = canBurnFlag ? "🔥" : "🔥";
-      burnBtn.style.opacity = canBurnFlag ? "1" : "0.3";
-      burnBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await setBurnPermission(tokenId(), addr, !canBurnFlag);
-        refreshTeamPanel();
-      });
-      actions.appendChild(burnBtn);
-    }
-
-    // Role change button
+    // Role toggle
     const roleBtn = document.createElement("button");
     roleBtn.className = "btn btn-icon btn-xs";
     roleBtn.title =
-      role === CollaboratorRole.Editor
+      entry.role === CollaboratorRole.Editor
         ? "Downgrade to Viewer"
         : "Upgrade to Editor";
-    roleBtn.textContent = role === CollaboratorRole.Editor ? "▼" : "▲";
+    roleBtn.textContent = entry.role === CollaboratorRole.Editor ? "▼" : "▲";
     roleBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const newRole =
-        role === CollaboratorRole.Editor
+        entry.role === CollaboratorRole.Editor
           ? CollaboratorRole.Viewer
           : CollaboratorRole.Editor;
-      await setCollaboratorRole(tokenId(), addr, newRole);
-      refreshTeamPanel();
+      await changeCollaboratorRole(tokenId(), entry.address, newRole);
     });
     actions.appendChild(roleBtn);
 
@@ -187,8 +222,7 @@ function renderTeamList(editors, viewers, burnPerms) {
     removeBtn.textContent = "✕";
     removeBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      await removeEditor(tokenId(), addr);
-      refreshTeamPanel();
+      await removeCollaborator(tokenId(), entry.address);
     });
     actions.appendChild(removeBtn);
 
@@ -196,7 +230,6 @@ function renderTeamList(editors, viewers, burnPerms) {
     el.appendChild(addrSpan);
     el.appendChild(actions);
 
-    // Click to select
     el.addEventListener("click", () => {
       teamList
         .querySelectorAll(".team-item")
@@ -204,31 +237,8 @@ function renderTeamList(editors, viewers, burnPerms) {
       el.classList.add("team-item-selected");
     });
 
-    return el;
-  };
-
-  const fragment = document.createDocumentFragment();
-
-  editors.forEach((addr) => {
-    if (addr.toLowerCase() === (walletState.get().walletAddress || "").toLowerCase())
-      return;
-    fragment.appendChild(
-      createItem(
-        addr,
-        CollaboratorRole.Editor,
-        "Editor",
-        burnPerms[addr.toLowerCase()]
-      )
-    );
-  });
-
-  viewers.forEach((addr) => {
-    if (addr.toLowerCase() === (walletState.get().walletAddress || "").toLowerCase())
-      return;
-    fragment.appendChild(
-      createItem(addr, CollaboratorRole.Viewer, "Viewer", false)
-    );
-  });
+    fragment.appendChild(el);
+  }
 
   if (!fragment.childNodes.length) {
     const empty = document.createElement("p");
@@ -246,8 +256,12 @@ function tokenId() {
   return assetState.get().activeAssetTokenId;
 }
 
-// ─── Handlers ──────────────────────────────────────────────────────────
+// ─── Merkle-based Edit Operations ──────────────────────────────────────
 
+/**
+ * Add a collaborator. Fetches current editor list, appends entry,
+ * computes new Merkle root, gets caller proof, submits updateEditors.
+ */
 async function onAddCollaborator() {
   const addr = teamAddInput?.value?.trim();
   if (!addr) return;
@@ -256,12 +270,122 @@ async function onAddCollaborator() {
   if (role !== CollaboratorRole.Viewer && role !== CollaboratorRole.Editor)
     return;
 
-  const txHash = await addCollaboratorWithRole(tokenId(), addr, role);
+  const id = tokenId();
+  if (!id) return;
+
+  const currentList = await loadEditorList(id);
+  if (!currentList) {
+    showToast({
+      type: "error",
+      title: "Error",
+      message: "Cannot load editor list.",
+    });
+    return;
+  }
+
+  // Check not already in list
+  if (currentList.some((e) => e.address.toLowerCase() === addr.toLowerCase())) {
+    showToast({
+      type: "info",
+      title: "Already Added",
+      message: "This address is already a collaborator.",
+    });
+    return;
+  }
+
+  const newList = [...currentList, { address: addr, role }];
+  await applyEditorSetChange(id, currentList, newList);
+  teamAddInput.value = "";
+}
+
+async function removeCollaborator(id, addr) {
+  const currentList = await loadEditorList(id);
+  if (!currentList) return;
+
+  const newList = currentList.filter(
+    (e) => e.address.toLowerCase() !== addr.toLowerCase()
+  );
+  if (newList.length === currentList.length) return; // not found
+  if (newList.length === 0) {
+    showToast({
+      type: "error",
+      title: "Error",
+      message: "Cannot remove the last editor.",
+    });
+    return;
+  }
+
+  await applyEditorSetChange(id, currentList, newList);
+}
+
+async function changeCollaboratorRole(id, addr, newRole) {
+  const currentList = await loadEditorList(id);
+  if (!currentList) return;
+
+  const newList = currentList.map((e) =>
+    e.address.toLowerCase() === addr.toLowerCase() ? { ...e, role: newRole } : e
+  );
+
+  await applyEditorSetChange(id, currentList, newList);
+}
+
+/**
+ * Apply a Merkle editor set change: compute new root, get caller proof,
+ * submit to contract, and store updated list on IPFS + localStorage.
+ */
+async function applyEditorSetChange(tokenId, currentList, newList) {
+  const walletAddr = walletState.get().walletAddress;
+  if (!walletAddr) return;
+
+  // Get current on-chain version
+  const currentVersion = await getSetVersion(tokenId);
+  const nextVersion = currentVersion + 1;
+
+  // Get proof that caller is in the CURRENT tree (before the change)
+  const callerProof = getProof(
+    currentList,
+    walletAddr,
+    tokenId,
+    currentVersion
+  );
+  if (!callerProof) {
+    showToast({
+      type: "error",
+      title: "Permission Denied",
+      message: "You are not an editor of this token.",
+    });
+    return;
+  }
+
+  // Compute new root for the updated list
+  const newRoot = computeRoot(newList, tokenId, nextVersion);
+
+  // Store new list on IPFS
+  let newCid = "";
+  try {
+    const json = JSON.stringify(newList);
+    const blob = new Blob([json], { type: "application/json" });
+    newCid = await writeToIPFS(blob, "editor-list.json");
+  } catch (e) {
+    console.warn("Failed to store editor list on IPFS:", e.message);
+  }
+
+  // Submit to contract
+  const txHash = await updateEditors(
+    tokenId,
+    newRoot,
+    newCid || "",
+    CollaboratorRole.Editor,
+    callerProof.proof
+  );
+
   if (txHash) {
-    teamAddInput.value = "";
+    saveEditorList(tokenId, newList, newCid);
     refreshTeamPanel();
   }
 }
+
+// ─── Burn ──────────────────────────────────────────────────────────────
 
 async function onBurnAsset() {
   const id = tokenId();
@@ -269,7 +393,7 @@ async function onBurnAsset() {
 
   const confirmed = await showConfirmDialog(
     "Burn Asset",
-    `Are you sure you want to permanently burn token #${id}? This cannot be undone. All collaborators will be removed and the token will cease to exist.`,
+    `Are you sure you want to permanently burn token #${id}? This cannot be undone.`,
     [
       { text: "Cancel", value: "cancel" },
       { text: "Burn Token", value: "burn", className: "btn btn-danger" },
@@ -278,9 +402,22 @@ async function onBurnAsset() {
 
   if (confirmed !== "burn") return;
 
-  const txHash = await burn(id);
+  const walletAddr = walletState.get().walletAddress;
+  const currentList = await loadEditorList(id);
+  const version = await getSetVersion(id);
+
+  let proof = [];
+  if (currentList) {
+    const proofResult = getProof(currentList, walletAddr, id, version);
+    if (proofResult) proof = proofResult.proof;
+  }
+
+  const txHash = await burn(id, proof);
   if (txHash) {
-    // Clear active asset state
+    editorCache.delete(id);
+    try {
+      localStorage.removeItem(editorListKey(id));
+    } catch {}
     assetState.set({ activeAssetTokenId: null, activeAssetManifestCid: null });
     hideTeamPanel();
     if (burnAssetBtn) burnAssetBtn.hidden = true;
@@ -291,4 +428,3 @@ async function onBurnAsset() {
 // ─── Exports ───────────────────────────────────────────────────────────
 
 export { initCollaborators, refreshTeamPanel, updateBurnButton };
-

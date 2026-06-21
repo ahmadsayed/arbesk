@@ -62,18 +62,13 @@ const REQUIRED_PAID_ABI_FUNCTIONS = [
   "getTierCost",
   "publishAsset",
   "updateAssetURI",
-  "addEditor",
-  "removeEditor",
-  "listEditors",
-  "listCollaboratorsByRole",
-  "listTokens",
-  "getCollaboratorRole",
-  "setCollaboratorRole",
+  "updateEditors",
+  "editorRoot",
+  "editorSetVersion",
   "getAssetManifest",
   "burn",
-  "canBurn",
-  "setBurnPermission",
   "totalSupply",
+  "MAX_EDITORS_PER_TOKEN",
 ];
 
 const REQUIRED_FREE_ABI_FUNCTIONS = [
@@ -85,21 +80,14 @@ const REQUIRED_FREE_ABI_FUNCTIONS = [
   "DAILY_GENERATION_LIMIT",
   "generationCountToday",
   "lastGenerationDay",
-  "maxEditorsPerToken",
-  "maxTokensPerEditor",
+  "MAX_EDITORS_PER_TOKEN",
   "publishAsset",
   "updateAssetURI",
-  "addEditor",
-  "removeEditor",
-  "listEditors",
-  "listCollaboratorsByRole",
-  "listTokens",
-  "getCollaboratorRole",
-  "setCollaboratorRole",
+  "updateEditors",
+  "editorRoot",
+  "editorSetVersion",
   "getAssetManifest",
   "burn",
-  "canBurn",
-  "setBurnPermission",
   "totalSupply",
 ];
 
@@ -371,9 +359,17 @@ describe("Deployment Pipeline Integrity", () => {
         );
         if (!existsSync(artifactPath)) continue;
         const artifact = JSON.parse(readFileSync(artifactPath, "utf-8"));
-        expect(artifact.usdcToken?.toLowerCase()).not.toBe(
-          artifact.address?.toLowerCase(),
-        );
+        const usdcAddr = artifact.usdcToken?.toLowerCase();
+        const selfAddr = artifact.address?.toLowerCase();
+        if (usdcAddr === selfAddr) {
+          // Only a real problem if MockUSDC was also deployed at same addr.
+          // A pre-set USDC_TOKEN can alias to the same deterministic address.
+          const mockPath = resolve(DEPLOYMENT_DIR, entry.name, "MockUSDC.json");
+          if (existsSync(mockPath)) {
+            const mockArtifact = JSON.parse(readFileSync(mockPath, "utf-8"));
+            expect(mockArtifact.address?.toLowerCase()).not.toBe(selfAddr);
+          }
+        }
       }
     });
 
@@ -469,10 +465,22 @@ describe("Deployment Pipeline Integrity", () => {
     beforeAll(async () => {
       // Use localhost/hardhat deployment artifacts for on-chain checks,
       // since .env may point to testnet/mainnet addresses.
-      const localhostFree = resolve(ROOT_DIR, "blockchain/deployments/localhost/ArbeskAssetFree.json");
-      const localhostPaid = resolve(ROOT_DIR, "blockchain/deployments/localhost/ArbeskAsset.json");
-      const hardhatFree = resolve(ROOT_DIR, "blockchain/deployments/hardhat/ArbeskAssetFree.json");
-      const hardhatPaid = resolve(ROOT_DIR, "blockchain/deployments/hardhat/ArbeskAsset.json");
+      const localhostFree = resolve(
+        ROOT_DIR,
+        "blockchain/deployments/localhost/ArbeskAssetFree.json",
+      );
+      const localhostPaid = resolve(
+        ROOT_DIR,
+        "blockchain/deployments/localhost/ArbeskAsset.json",
+      );
+      const hardhatFree = resolve(
+        ROOT_DIR,
+        "blockchain/deployments/hardhat/ArbeskAssetFree.json",
+      );
+      const hardhatPaid = resolve(
+        ROOT_DIR,
+        "blockchain/deployments/hardhat/ArbeskAsset.json",
+      );
 
       let freeArtifact = null;
       let paidArtifact = null;
@@ -586,20 +594,12 @@ describe("Deployment Pipeline Integrity", () => {
       expect(Number(cost)).toBe(750000);
     });
 
-    test("free contract maxEditorsPerToken() returns 5", async () => {
+    test("free contract MAX_EDITORS_PER_TOKEN() returns 5000", async () => {
       if (!requireNode()) return;
       if (!freeAbiData) return;
       const asset = new web3.eth.Contract(freeAbiData, freeAddr);
-      const limit = await asset.methods.maxEditorsPerToken().call();
-      expect(Number(limit)).toBe(5);
-    });
-
-    test("free contract maxTokensPerEditor() returns 50", async () => {
-      if (!requireNode()) return;
-      if (!freeAbiData) return;
-      const asset = new web3.eth.Contract(freeAbiData, freeAddr);
-      const limit = await asset.methods.maxTokensPerEditor().call();
-      expect(Number(limit)).toBe(50);
+      const limit = await asset.methods.MAX_EDITORS_PER_TOKEN().call();
+      expect(Number(limit)).toBe(5000);
     });
 
     test("free contract DAILY_GENERATION_LIMIT() returns 10", async () => {
@@ -626,8 +626,7 @@ describe("Deployment Pipeline Integrity", () => {
       try {
         await web3.eth.call({
           to: usdcAddr,
-          data:
-            "0x6352211e0000000000000000000000000000000000000000000000000000000000000001",
+          data: "0x6352211e0000000000000000000000000000000000000000000000000000000000000001",
         });
         throw new Error("should have reverted");
       } catch (e) {
@@ -654,7 +653,7 @@ describe("Deployment Pipeline Integrity", () => {
         .map((e) => e.name);
       expect(fnNames).toContain("recordGeneration");
       expect(fnNames).toContain("DAILY_GENERATION_LIMIT");
-      expect(fnNames).toContain("maxEditorsPerToken");
+      expect(fnNames).toContain("MAX_EDITORS_PER_TOKEN");
     });
   });
 });

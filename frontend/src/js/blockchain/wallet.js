@@ -286,6 +286,7 @@ async function autoConnectWallet() {
       if (wcProvider && wcProvider.connected) {
         web3Provider = wcProvider;
         web3 = new Web3(wcProvider);
+        window.web3 = web3;
         const accounts = wcProvider.accounts || [];
         if (accounts.length > 0) {
           activeConnectionSource = "walletconnect";
@@ -308,6 +309,7 @@ async function autoConnectWallet() {
           if (accounts && accounts.length > 0) {
             web3Provider = wallet.provider;
             web3 = new Web3(wallet.provider);
+            window.web3 = web3;
             activeConnectionSource = "injected";
             activeWalletRdns = wallet.rdns;
             await _finishWalletSetup(accounts[0]);
@@ -983,7 +985,7 @@ function _getWeb3() {
 function _getContract() {
   return contract || walletState.get().contract || null;
 }
-async function publishAsset(tokenURI, tokenId) {
+async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
   const c = _getContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
@@ -992,8 +994,12 @@ async function publishAsset(tokenURI, tokenId) {
   }
 
   try {
-    // Use full signature to avoid Web3.js v1 overload resolution issues
-    const tx = c.methods["publishAsset(string,uint256)"](tokenURI, tokenId);
+    const tx = c.methods["publishAsset(string,uint256,bytes32,string)"](
+      tokenURI,
+      tokenId,
+      editorRoot,
+      editorListUri
+    );
     const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
@@ -1028,7 +1034,7 @@ async function publishAsset(tokenURI, tokenId) {
  * @param {string} newTokenURI
  * @returns {string|null} txHash on success
  */
-async function updateAssetURI(tokenId, newTokenURI) {
+async function updateAssetURI(tokenId, newTokenURI, proof) {
   const c = _getContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
@@ -1037,7 +1043,11 @@ async function updateAssetURI(tokenId, newTokenURI) {
   }
 
   try {
-    const tx = c.methods.updateAssetURI(tokenId, newTokenURI);
+    const tx = c.methods["updateAssetURI(uint256,string,bytes32[])"](
+      tokenId,
+      newTokenURI,
+      proof
+    );
     const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
@@ -1060,70 +1070,11 @@ async function updateAssetURI(tokenId, newTokenURI) {
       return null;
     }
 
-    // Propagate the decoded reason so the caller shows a specific message
-    // (e.g. "Not Owner Or Editor: #123, 0xabcd…").
     throw new Error(decodedMsg);
   }
 }
 
-/**
- * Add an editor to a token. Owner only.
- * @param {number|string} tokenId
- * @param {string} editorAddress
- * @returns {string|null} txHash on success
- */
-async function addEditor(tokenId, editorAddress) {
-  const c = _getContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-
-  try {
-    // Use full signature to avoid Web3.js v1 overload resolution issues
-    const tx = c.methods["addEditor(uint256,address)"](tokenId, editorAddress);
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
-    });
-    return receipt.transactionHash;
-  } catch (error) {
-    console.error("addEditor failed:", error);
-    return null;
-  }
-}
-
-/**
- * Remove an editor from a token. Owner only.
- * @param {number|string} tokenId
- * @param {string} editorAddress
- * @returns {string|null} txHash on success
- */
-async function removeEditor(tokenId, editorAddress) {
-  const c = _getContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-
-  try {
-    const tx = c.methods.removeEditor(tokenId, editorAddress);
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
-    });
-    return receipt.transactionHash;
-  } catch (error) {
-    console.error("removeEditor failed:", error);
-    return null;
-  }
-}
-
-// ── Role-Based Collaboration (Phase 5.1) ──
+// ── Merkle Editor Management ──
 
 /**
  * CollaboratorRole enum values matching the Solidity contract.
@@ -1135,13 +1086,15 @@ const CollaboratorRole = Object.freeze({
 });
 
 /**
- * Add a collaborator with a specific role. Owner only.
+ * Replace the entire editor set with a new Merkle root.
+ * Caller must be a current Editor (proved via callerProof).
  * @param {number|string} tokenId
- * @param {string} collaboratorAddress
- * @param {number} role — CollaboratorRole.Viewer (1) or CollaboratorRole.Editor (2)
+ * @param {string} newRoot - bytes32 hex string, the new Merkle root
+ * @param {number} callerRole - CollaboratorRole.Editor (2)
+ * @param {string[]} callerProof - Merkle proof for the caller
  * @returns {string|null} txHash on success
  */
-async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
+async function updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof) {
   const c = _getContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
@@ -1150,11 +1103,12 @@ async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
   }
 
   try {
-    // Use full signature to avoid Web3.js v1 overload resolution issues
-    const tx = c.methods["addEditor(uint256,address,uint8)"](
+    const tx = c.methods["updateEditors(uint256,bytes32,string,uint8,bytes32[])"](
       tokenId,
-      collaboratorAddress,
-      role
+      newRoot,
+      newListUri,
+      callerRole,
+      callerProof
     );
     const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
@@ -1163,87 +1117,7 @@ async function addCollaboratorWithRole(tokenId, collaboratorAddress, role) {
     });
     return receipt.transactionHash;
   } catch (error) {
-    console.error("addCollaboratorWithRole failed:", error);
-    return null;
-  }
-}
-
-/**
- * Change a collaborator's role. Owner only.
- * @param {number|string} tokenId
- * @param {string} collaboratorAddress
- * @param {number} role — CollaboratorRole.Viewer (1) or CollaboratorRole.Editor (2);
- *                         CollaboratorRole.None (0) removes the collaborator.
- * @returns {string|null} txHash on success
- */
-async function setCollaboratorRole(tokenId, collaboratorAddress, role) {
-  const c = _getContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-
-  try {
-    const tx = c.methods.setCollaboratorRole(
-      tokenId,
-      collaboratorAddress,
-      role
-    );
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
-    });
-    return receipt.transactionHash;
-  } catch (error) {
-    console.error("setCollaboratorRole failed:", error);
-    return null;
-  }
-}
-
-/**
- * Get a collaborator's role for a token. Read-only call.
- * @param {number|string} tokenId
- * @param {string} collaboratorAddress
- * @returns {number|null} CollaboratorRole enum value, or null on error
- */
-async function getCollaboratorRole(tokenId, collaboratorAddress) {
-  const c = _getContract();
-  if (!c) {
-    console.error("Contract not ready");
-    return null;
-  }
-
-  try {
-    const role = await c.methods
-      .getCollaboratorRole(tokenId, collaboratorAddress)
-      .call();
-    return Number(role);
-  } catch (error) {
-    console.error("getCollaboratorRole failed:", error);
-    return null;
-  }
-}
-
-/**
- * List collaborators filtered by role. Read-only call.
- * @param {number|string} tokenId
- * @param {number} role — CollaboratorRole.Viewer (1) or CollaboratorRole.Editor (2)
- * @returns {string[]|null} Array of collaborator addresses, or null on error
- */
-async function listCollaboratorsByRole(tokenId, role) {
-  const c = _getContract();
-  if (!c) {
-    console.error("Contract not ready");
-    return null;
-  }
-
-  try {
-    const addrs = await c.methods.listCollaboratorsByRole(tokenId, role).call();
-    return addrs;
-  } catch (error) {
-    console.error("listCollaboratorsByRole failed:", error);
+    console.error("updateEditors failed:", error);
     return null;
   }
 }
@@ -1257,7 +1131,7 @@ async function listCollaboratorsByRole(tokenId, role) {
  * @param {number|string} tokenId
  * @returns {string|null} txHash on success
  */
-async function burn(tokenId) {
+async function burn(tokenId, proof) {
   const c = _getContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
@@ -1281,7 +1155,7 @@ async function burn(tokenId) {
   }
 
   try {
-    const tx = c.methods.burn(tokenId);
+    const tx = c.methods["burn(uint256,bytes32[])"](tokenId, proof);
     const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
@@ -1339,60 +1213,6 @@ async function burn(tokenId) {
   }
 }
 
-/**
- * Grant or revoke burn permission for a collaborator. Owner only.
- * @param {number|string} tokenId
- * @param {string} collaboratorAddress
- * @param {boolean} canBurnFlag
- * @returns {string|null} txHash on success
- */
-async function setBurnPermission(tokenId, collaboratorAddress, canBurnFlag) {
-  const c = _getContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-
-  try {
-    const tx = c.methods.setBurnPermission(
-      tokenId,
-      collaboratorAddress,
-      canBurnFlag
-    );
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
-    });
-    return receipt.transactionHash;
-  } catch (error) {
-    console.error("setBurnPermission failed:", error);
-    return null;
-  }
-}
-
-/**
- * Check if an address can burn a token. Read-only call.
- * @param {number|string} tokenId
- * @param {string} address
- * @returns {boolean|null} True if can burn, false otherwise, null on error
- */
-async function canBurn(tokenId, address) {
-  const c = _getContract();
-  if (!c) {
-    console.error("Contract not ready");
-    return null;
-  }
-
-  try {
-    return await c.methods.canBurn(tokenId, address).call();
-  } catch (error) {
-    console.error("canBurn failed:", error);
-    return null;
-  }
-}
-
 // ── Exports ──
 export {
   initWallet,
@@ -1405,16 +1225,9 @@ export {
   isFreeTierContract,
   publishAsset,
   updateAssetURI,
-  addEditor,
-  removeEditor,
+  updateEditors,
   CollaboratorRole,
-  addCollaboratorWithRole,
-  setCollaboratorRole,
-  getCollaboratorRole,
-  listCollaboratorsByRole,
   burn,
-  setBurnPermission,
-  canBurn,
   web3,
   web3 as walletWeb3,
   contract,

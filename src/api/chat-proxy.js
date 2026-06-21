@@ -10,7 +10,6 @@
  *
  * Authorization model:
  *   - ownerOf(tokenId) === address  => allowed
- *   - getCollaboratorRole(tokenId, address) >= Viewer (1) => allowed
  *   - otherwise => connection closed with 4401
  *
  * The proxy signs all published Nostr events with a service private key and
@@ -50,16 +49,6 @@ const MINIMAL_COLLAB_ABI = [
     inputs: [{ name: "tokenId", type: "uint256" }],
     name: "ownerOf",
     outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "tokenId", type: "uint256" },
-      { name: "collaborator", type: "address" },
-    ],
-    name: "getCollaboratorRole",
-    outputs: [{ name: "", type: "uint8" }],
     stateMutability: "view",
     type: "function",
   },
@@ -277,22 +266,17 @@ async function checkAssetAccess(tokenId, chainId, address) {
   const w3 = getWeb3(cid);
   const contract = new w3.eth.Contract(MINIMAL_COLLAB_ABI, contractAddr);
 
-  const [owner, role] = await Promise.all([
-    contract.methods.ownerOf(id).call(),
-    contract.methods.getCollaboratorRole(id, address).call(),
-  ]);
+  const owner = await contract.methods.ownerOf(id).call();
 
   const normalizedAddress = address.toLowerCase();
   const isOwner = owner.toLowerCase() === normalizedAddress;
-  const roleNum = Number(role);
-  const isViewerOrHigher = roleNum >= 1;
 
   return {
-    allowed: isOwner || isViewerOrHigher,
+    allowed: isOwner,
     assetId: `${cid || defaultChainId()}:${contractAddr}:${id}`,
     chainId: cid,
     isOwner,
-    role: roleNum,
+    role: isOwner ? 2 : 0,
   };
 }
 

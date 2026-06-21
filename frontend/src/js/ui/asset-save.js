@@ -3,13 +3,20 @@
  * Phase B: Updated for GNOME headerbar — buttons managed individually, no wrapper div.
  */
 
-import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import {
+  getFromRemoteIPFS,
+  getArrayBufferFromRemoteIPFS,
+} from "../ipfs/remote-ipfs.js";
+import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
 import { saveManifest } from "../services/api.js";
 import {
   contract as walletContract,
   publishAsset,
   updateAssetURI,
+  updateEditors,
+  CollaboratorRole,
 } from "../blockchain/wallet.js";
+import { computeRoot, getProof } from "../gltf/merkle-editors.js";
 import { getContractAddress } from "../blockchain/network-config.js";
 import { showDialog } from "./dialog.js";
 import {
@@ -53,14 +60,19 @@ let isPublishing = false;
 
 function requireWallet() {
   if (walletState.get().walletAddress) return true;
-  showToast({ type: "error", title: "Wallet Not Connected", message: "Please connect your wallet first." });
+  showToast({
+    type: "error",
+    title: "Wallet Not Connected",
+    message: "Please connect your wallet first.",
+  });
   return false;
 }
 
 function isRateLimitError(err) {
   if (!err || typeof err.message !== "string") return false;
   return (
-    err.message.includes("HTTP 429") || err.message.includes("Too Many Requests")
+    err.message.includes("HTTP 429") ||
+    err.message.includes("Too Many Requests")
   );
 }
 
@@ -69,7 +81,9 @@ function announceStatus(message) {
   if (el) {
     el.textContent = "";
     // Force screen reader announcement by clearing then setting
-    requestAnimationFrame(() => { el.textContent = message; });
+    requestAnimationFrame(() => {
+      el.textContent = message;
+    });
   }
 }
 
@@ -80,7 +94,8 @@ function updateAssetStatus(name, meta) {
 
 function updateButtonState() {
   const hasAsset =
-    !!assetState.get().activeAssetManifestCid || getPendingChildRefs().length > 0;
+    !!assetState.get().activeAssetManifestCid ||
+    getPendingChildRefs().length > 0;
   const hasWallet = !!walletState.get().walletAddress;
   const visible = hasAsset && hasWallet;
 
@@ -131,7 +146,9 @@ async function resolveAssetName() {
 
   // If no rename yet, try fetching from the token's stored manifest.
   if (assetState.get().activeAssetTokenId) {
-    return (await fetchAssetName(assetState.get().activeAssetTokenId)) || "My Asset";
+    return (
+      (await fetchAssetName(assetState.get().activeAssetTokenId)) || "My Asset"
+    );
   }
   return "My Asset";
 }
@@ -461,7 +478,11 @@ async function prepareManifestForWrite(assetName) {
   const activeCid = assetState.get().activeAssetManifestCid;
   const latestCid = await resolveLatestManifestCid();
   console.log(
-    `Save: versioning base | active=${activeCid} latest=${assetState.get().latestAssetManifestCid} onChain=${assetState.get().activeAssetTokenId || "none"} chosenPrev=${latestCid}`
+    `Save: versioning base | active=${activeCid} latest=${
+      assetState.get().latestAssetManifestCid
+    } onChain=${
+      assetState.get().activeAssetTokenId || "none"
+    } chosenPrev=${latestCid}`
   );
 
   let prevManifest = null;
@@ -490,10 +511,17 @@ async function prepareManifestForWrite(assetName) {
     }
   }
 
-  return { manifest, prevCid: latestCid, prevManifest: prevManifest || baseManifest };
+  return {
+    manifest,
+    prevCid: latestCid,
+    prevManifest: prevManifest || baseManifest,
+  };
 }
 
-async function saveAssetDraftCore(assetName, { captureThumbnail = false, publishContext = null } = {}) {
+async function saveAssetDraftCore(
+  assetName,
+  { captureThumbnail = false, publishContext = null } = {}
+) {
   const prepared = await prepareManifestForWrite(assetName);
   if (!prepared) {
     return { ok: false, reason: "empty" };
@@ -594,7 +622,11 @@ async function onSaveAssetDraft() {
   } catch (err) {
     console.error("Save asset draft failed:", err);
     const rateLimited = isRateLimitError(err);
-    announceStatus(rateLimited ? "Upload rate limit hit. Save aborted." : "Save failed: " + err.message);
+    announceStatus(
+      rateLimited
+        ? "Upload rate limit hit. Save aborted."
+        : "Save failed: " + err.message
+    );
     showToast({
       type: "error",
       title: rateLimited ? "Upload Rate Limited" : "Save Failed",
@@ -623,7 +655,11 @@ async function onPublishAsset() {
     publishBtn.title = "Besking…";
   }
   if (publishBtnText) publishBtnText.textContent = "Besking…";
-  announceStatus(assetState.get().activeAssetTokenId ? "Republishing asset…" : "Publishing asset…");
+  announceStatus(
+    assetState.get().activeAssetTokenId
+      ? "Republishing asset…"
+      : "Publishing asset…"
+  );
 
   try {
     const assetName = await ensureExplicitName();
@@ -672,10 +708,21 @@ async function onPublishAsset() {
     const { cid } = result;
 
     announceStatus("Confirm transaction in MetaMask…");
+    const walletAddr = walletState.get().walletAddress;
     if (assetState.get().activeAssetTokenId) {
-      const txHash = await updateAssetURI(assetState.get().activeAssetTokenId, cid);
+      const tokenId = assetState.get().activeAssetTokenId;
+      const editorList = await _loadEditorList(tokenId);
+      if (!editorList) throw new Error("Cannot find editor list");
+      const currentVersion = await _getEditorSetVersion(tokenId);
+      const proofResult = getProof(
+        editorList,
+        walletAddr,
+        tokenId,
+        currentVersion
+      );
+      if (!proofResult) throw new Error("Not an authorized editor");
+      const txHash = await updateAssetURI(tokenId, cid, proofResult.proof);
       if (!txHash) throw new Error("Republish transaction failed");
-      // Keep the URL clean and anchored to the token, not a specific manifest CID.
       updateUrlAsset(assetState.get().activeAssetTokenId);
       announceStatus("Asset republished successfully.");
     } else {
@@ -685,7 +732,12 @@ async function onPublishAsset() {
           .reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
           .toString(16)
           .replace(/^-/, "");
-      const txHash = await publishAsset(cid, tokenId);
+      const editorList = [
+        { address: walletAddr, role: CollaboratorRole.Editor },
+      ];
+      const editorRoot = computeRoot(editorList, tokenId, 1);
+      const editorListUri = _saveEditorListLocally(tokenId, editorList, null);
+      const txHash = await publishAsset(cid, tokenId, editorRoot, editorListUri || "");
       if (!txHash) throw new Error("Publish transaction failed");
       assetState.set({ activeAssetTokenId: tokenId });
       updateUrlAsset(tokenId);
@@ -697,12 +749,22 @@ async function onPublishAsset() {
 
     // latestCid / activeCid / pending edits were already updated by saveAssetDraftCore.
 
-    emit(EVENTS.ASSET_PUBLISHED, { tokenId: assetState.get().activeAssetTokenId, cid });
-    updateAssetStatus(assetName, `Asset Token #${assetState.get().activeAssetTokenId}`);
+    emit(EVENTS.ASSET_PUBLISHED, {
+      tokenId: assetState.get().activeAssetTokenId,
+      cid,
+    });
+    updateAssetStatus(
+      assetName,
+      `Asset Token #${assetState.get().activeAssetTokenId}`
+    );
   } catch (err) {
     console.error("Publish asset failed:", err);
     const rateLimited = isRateLimitError(err);
-    announceStatus(rateLimited ? "Upload rate limit hit. Publish aborted." : "Publish failed: " + err.message);
+    announceStatus(
+      rateLimited
+        ? "Upload rate limit hit. Publish aborted."
+        : "Publish failed: " + err.message
+    );
     showToast({
       type: "error",
       title: rateLimited ? "Upload Rate Limited" : "Publish Failed",
@@ -729,7 +791,13 @@ publishBtn?.addEventListener("click", onPublishAsset);
 document.addEventListener("keydown", (e) => {
   if (!((e.ctrlKey || e.metaKey) && e.key === "s")) return;
   const tag = document.activeElement?.tagName?.toLowerCase();
-  if (document.activeElement?.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return;
+  if (
+    document.activeElement?.isContentEditable ||
+    tag === "input" ||
+    tag === "textarea" ||
+    tag === "select"
+  )
+    return;
   if (saveBtn && !saveBtn.hidden) {
     e.preventDefault();
     onSaveAssetDraft();
@@ -741,7 +809,8 @@ document.addEventListener("keydown", (e) => {
 on(EVENTS.SCENE_READY, (e) => {
   const manifest = e?.manifest;
   // Preserve an existing rename — don't overwrite with fallback defaults.
-  const name = manifest?.name || assetState.get().activeAssetName || "Untitled Asset";
+  const name =
+    manifest?.name || assetState.get().activeAssetName || "Untitled Asset";
   if (manifest?.name || !assetState.get().activeAssetName) {
     assetState.set({ activeAssetName: name });
   }
@@ -764,3 +833,63 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
   if (saveBtn) saveBtn.hidden = true;
   if (publishBtn) publishBtn.hidden = true;
 });
+
+// ── Merkle Editor Helpers ──
+
+const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
+
+function _editorListKey(tokenId) {
+  return EDITOR_LIST_PREFIX + tokenId;
+}
+
+function _saveEditorListLocally(tokenId, editorList, ipfsCid) {
+  try {
+    localStorage.setItem(
+      _editorListKey(tokenId),
+      JSON.stringify({
+        list: editorList,
+        cid: ipfsCid || null,
+        saved: Date.now(),
+      })
+    );
+  } catch (e) {
+    console.warn("Failed to save editor list locally:", e.message);
+  }
+  return ipfsCid || "";
+}
+
+async function _loadEditorList(tokenId) {
+  try {
+    const stored = localStorage.getItem(_editorListKey(tokenId));
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.cid) {
+        try {
+          const fresh = await getFromRemoteIPFS(parsed.cid);
+          if (Array.isArray(fresh)) {
+            _saveEditorListLocally(tokenId, fresh, parsed.cid);
+            return fresh;
+          }
+        } catch {
+          // IPFS fetch failed, use cached
+        }
+      }
+      if (Array.isArray(parsed.list)) return parsed.list;
+    }
+  } catch {
+    // localStorage unavailable or corrupted
+  }
+  return null;
+}
+
+async function _getEditorSetVersion(tokenId) {
+  try {
+    const { contract } = await import("../blockchain/wallet.js");
+    const c = contract || walletState.get().contract;
+    if (!c) return 1;
+    const version = await c.methods.editorSetVersion(tokenId).call();
+    return Number(version);
+  } catch {
+    return 1;
+  }
+}

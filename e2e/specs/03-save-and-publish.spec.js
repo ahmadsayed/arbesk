@@ -18,16 +18,20 @@ function manifestCidFromUrl(url) {
 
 test.describe("save and publish", () => {
   test("saves a draft and publishes an ERC-721 token", async ({ page }) => {
-    await injectHardhatProvider(page);
+await injectHardhatProvider(page);
     await page.goto("/studio.html");
 
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText("Sign In");
+    await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
+      "Sign In",
+    );
 
     // 1. Generate
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
-    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText("Model carved via mock");
+    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
+      "Model carved via mock",
+    );
 
     await page.waitForURL(/[?&]manifest=Qm[\w]+/);
     const genCid = manifestCidFromUrl(page.url());
@@ -75,10 +79,12 @@ test.describe("save and publish", () => {
     // same-named tokens from earlier attempts can never make it ambiguous.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const assetCard = page.locator(
-      `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]`
+      `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]`,
     );
     await expect(assetCard).toHaveCount(1);
-    await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(ASSET_NAME);
+    await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
+      ASSET_NAME,
+    );
 
     // Clicking the card body (not the buttons) should open the asset. The
     // gallery opens by decimal id, so assert the ?asset value numerically.
@@ -87,7 +93,9 @@ test.describe("save and publish", () => {
       const a = new URL(url.toString()).searchParams.get("asset");
       return a != null && BigInt(a) === BigInt(tokenIdHex);
     });
-    await expect(page.locator(SELECTORS.assetStatusName)).toContainText(ASSET_NAME);
+    await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
+      ASSET_NAME,
+    );
 
     // 5. Burn the asset from the gallery card.
     await page.click(SELECTORS.gallerySwitcherBtn);
@@ -101,6 +109,8 @@ test.describe("save and publish", () => {
     // After burning, this specific card should disappear from the gallery.
     await expect(assetCard).toHaveCount(0, { timeout: 15000 });
     // The active asset should be cleared.
-    await expect(page.locator(SELECTORS.assetStatusName)).toContainText("No asset open");
+    await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
+      "No asset open",
+    );
   });
 });

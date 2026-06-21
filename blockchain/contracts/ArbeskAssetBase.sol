@@ -4,44 +4,40 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /**
  * @title ArbeskAssetBase
- * @dev Abstract base contract shared between ArbeskAsset (paid) and ArbeskAssetFree (free tier).
- *      Contains all ERC-721, collaboration, and burn logic. Concrete contracts override
- *      the quota limits and add their own payment / generation behavior.
+ * @dev Abstract base contract with Merkle-root editor architecture.
+ *      The full editor list lives on IPFS; only `editorRoot`,
+ *      `editorSetVersion`, and `editorListURI` stay on-chain
+ *      (3 storage slots per token regardless of editor count —
+ *      down from ~14 in the old design).
+ *
+ *      Concrete contracts: ArbeskAsset (paid), ArbeskAssetFree (free).
  */
 abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
     // ── Custom Errors ──
     error TokenAlreadyMinted(uint256 tokenId);
     error NonexistentToken(uint256 tokenId);
-    error NotOwnerOrEditor(uint256 tokenId, address caller);
-    error NotTokenOwner(uint256 tokenId, address caller);
-    error MaxEditorsReached(uint256 tokenId);
-    error MaxTokensPerEditorReached(address editor);
+    error NotAuthorizedEditor(uint256 tokenId, address caller);
     error InvalidCollaboratorRole();
-    error NotCollaborator(uint256 tokenId, address caller);
-    error CannotBurn(uint256 tokenId, address caller);
     error ZeroAddress();
 
     // ── Enums ──
     enum CollaboratorRole {
-        None, // 0
+        None,   // 0
         Viewer, // 1
-        Editor // 2
+        Editor  // 2
     }
 
     // ── State ──
-    uint256 private _tokenCounts;
     mapping(uint256 => string) private _tokenURIs;
-    mapping(uint256 => address[]) internal members;
-    mapping(uint256 => mapping(address => CollaboratorRole)) internal _editorRoles;
-    mapping(uint256 => mapping(address => bool)) internal _canBurn;
-    mapping(address => uint256[]) public tokensIParticipate;
-
-    // ── Abstract Quota Limits ──
-    function maxEditorsPerToken() public pure virtual returns (uint256);
-    function maxTokensPerEditor() public pure virtual returns (uint256);
+    mapping(uint256 => bytes32) public editorRoot;
+    mapping(uint256 => uint256) public editorSetVersion;
+    /// @dev IPFS CID of the full editor list JSON. Stored on-chain so any
+    ///      browser can discover the editor list without localStorage.
+    mapping(uint256 => string) public editorListURI;
 
     // ── Events ──
     event AssetPublished(
@@ -49,17 +45,10 @@ abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
         uint256 indexed tokenId,
         string tokenURI
     );
-    event EditorAdded(uint256 indexed tokenId, address indexed editor);
-    event EditorRemoved(uint256 indexed tokenId, address indexed editor);
-    event CollaboratorRoleChanged(
+    event EditorSetChanged(
         uint256 indexed tokenId,
-        address indexed collaborator,
-        CollaboratorRole role
-    );
-    event BurnPermissionChanged(
-        uint256 indexed tokenId,
-        address indexed collaborator,
-        bool canBurn
+        bytes32 newRoot,
+        uint256 newVersion
     );
     event AssetBurned(uint256 indexed tokenId, address indexed burner);
     event AssetURIUpdated(uint256 indexed tokenId, string newAssetURI);
@@ -72,34 +61,25 @@ abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
 
     // ── NFT Minting ──
 
-    function publishAsset(
-        string memory uri,
-        uint256 tokenId
-    ) public returns (uint256) {
-        if (_exists(tokenId)) revert TokenAlreadyMinted(tokenId);
-
-        unchecked {
-            _tokenCounts++;
-        }
-        _mint(msg.sender, tokenId);
-        _setTokenURI(tokenId, uri);
-        _addEditor(tokenId, msg.sender);
-
-        emit AssetPublished(msg.sender, tokenId, uri);
-        return tokenId;
-    }
-
+    /// @notice Publish a new asset NFT. Mint + set tokenURI + commit the
+    ///         Merkle root for the initial editor list.
+    /// @param uri IPFS CID pointing to the asset manifest (tokenURI).
+    /// @param tokenId Unique identifier chosen by the dapp.
+    /// @param editorRoot_ Merkle root of the initial editor list (computed
+    ///        off-chain from the full list stored on IPFS).
     function publishAsset(
         string memory uri,
         uint256 tokenId,
-        address[] memory editors
+        bytes32 editorRoot_,
+        string memory editorListUri
     ) public returns (uint256) {
-        publishAsset(uri, tokenId);
-        unchecked {
-            for (uint256 i = 0; i < editors.length; i++) {
-                _addEditor(tokenId, editors[i]);
-            }
-        }
+        if (_exists(tokenId)) revert TokenAlreadyMinted(tokenId);
+
+        _mint(msg.sender, tokenId);
+        _setTokenURI(tokenId, uri);
+        initEditors(tokenId, editorRoot_, editorListUri);
+
+        emit AssetPublished(msg.sender, tokenId, uri);
         return tokenId;
     }
 
@@ -110,10 +90,14 @@ abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
         return _tokenURIs[tokenId];
     }
 
+    /// @dev Delegates to ERC721Enumerable which tracks tokens internally.
     function totalSupply() public view override returns (uint256) {
-        return _tokenCounts;
+        return super.totalSupply();
     }
 
+    /// @notice Returns the asset manifest URI and current owner.
+    /// @dev The editor list is off-chain (IPFS); retrieve it via the
+    ///      Merkle root. The old `editorList` return is removed.
     function getAssetManifest(
         uint256 tokenId
     )
@@ -121,174 +105,67 @@ abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
         view
         returns (
             string memory manifestURI,
-            address owner,
-            address[] memory editorList
+            address owner_
         )
     {
         if (!_exists(tokenId)) revert NonexistentToken(tokenId);
         manifestURI = _tokenURIs[tokenId];
-        owner = _ownerOf(tokenId);
-        editorList = members[tokenId];
+        owner_ = _ownerOf(tokenId);
     }
 
-    // ── Collaboration ──
+    // ── URI Updates (requires Merkle proof) ──
 
-    function updateAssetURI(uint256 tokenId, string memory newAssetURI) public {
+    /// @notice Update the asset URI. Caller must submit a Merkle proof
+    ///         that they hold the Editor role in the current tree.
+    ///         Non-zero→non-zero SSTORE — immune to bucket multiplier.
+    function updateAssetURI(
+        uint256 tokenId,
+        string memory newAssetURI,
+        bytes32[] calldata proof
+    ) public {
         if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (!_isEditor(tokenId, msg.sender))
-            revert NotOwnerOrEditor(tokenId, msg.sender);
+        _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, proof);
         _setTokenURI(tokenId, newAssetURI);
         emit AssetURIUpdated(tokenId, newAssetURI);
     }
 
-    function addEditor(uint256 tokenId, address editor) public {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (_ownerOf(tokenId) != msg.sender)
-            revert NotTokenOwner(tokenId, msg.sender);
-        _addEditor(tokenId, editor);
-    }
+    // ── Editor Set Management ──
 
-    function addEditor(
+    /// @notice Replace the entire editor set with a new Merkle root.
+    ///         Caller must prove they are an Editor in the CURRENT tree.
+    ///         Bumping editorSetVersion invalidates all old proofs.
+    function updateEditors(
         uint256 tokenId,
-        address editor,
-        CollaboratorRole role
-    ) public {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (_ownerOf(tokenId) != msg.sender)
-            revert NotTokenOwner(tokenId, msg.sender);
-        _addCollaborator(tokenId, editor, role);
-    }
+        bytes32 newRoot,
+        string memory newListUri,
+        CollaboratorRole callerRole,
+        bytes32[] calldata callerProof
+    ) external {
+        _requireEditor(tokenId, msg.sender, callerRole, callerProof);
+        if (callerRole != CollaboratorRole.Editor)
+            revert InvalidCollaboratorRole();
 
-    function addEditor(uint256 tokenId, address[] memory editors) public {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (_ownerOf(tokenId) != msg.sender)
-            revert NotTokenOwner(tokenId, msg.sender);
-        uint256 remaining = msg.sender == owner()
-            ? type(uint256).max
-            : maxEditorsPerToken() - members[tokenId].length;
         unchecked {
-            for (uint256 i = 0; i < editors.length && i < remaining; i++) {
-                _addEditor(tokenId, editors[i]);
-            }
+            editorSetVersion[tokenId]++;
         }
-    }
-
-    function removeEditor(uint256 tokenId, address editor) public {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (_ownerOf(tokenId) != msg.sender)
-            revert NotTokenOwner(tokenId, msg.sender);
-        _removeEditor(tokenId, editor);
-    }
-
-    function setCollaboratorRole(
-        uint256 tokenId,
-        address collaborator,
-        CollaboratorRole role
-    ) public {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (_ownerOf(tokenId) != msg.sender)
-            revert NotTokenOwner(tokenId, msg.sender);
-
-        if (role == CollaboratorRole.None) {
-            _removeEditor(tokenId, collaborator);
-            return;
-        }
-
-        if (_editorRoles[tokenId][collaborator] == CollaboratorRole.None)
-            revert NotCollaborator(tokenId, collaborator);
-
-        _editorRoles[tokenId][collaborator] = role;
-        emit CollaboratorRoleChanged(tokenId, collaborator, role);
-    }
-
-    function getCollaboratorRole(
-        uint256 tokenId,
-        address collaborator
-    ) public view returns (CollaboratorRole) {
-        return _editorRoles[tokenId][collaborator];
-    }
-
-    function listEditors(
-        uint256 tokenId
-    ) public view returns (address[] memory) {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        return members[tokenId];
-    }
-
-    function listCollaboratorsByRole(
-        uint256 tokenId,
-        CollaboratorRole role
-    ) public view returns (address[] memory) {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (role == CollaboratorRole.None) revert InvalidCollaboratorRole();
-
-        address[] storage allMembers = members[tokenId];
-        uint256 count;
-        unchecked {
-            for (uint256 i = 0; i < allMembers.length; i++) {
-                if (_editorRoles[tokenId][allMembers[i]] == role) {
-                    count++;
-                }
-            }
-        }
-
-        address[] memory filtered = new address[](count);
-        uint256 idx;
-        unchecked {
-            for (uint256 i = 0; i < allMembers.length; i++) {
-                if (_editorRoles[tokenId][allMembers[i]] == role) {
-                    filtered[idx] = allMembers[i];
-                    idx++;
-                }
-            }
-        }
-        return filtered;
-    }
-
-    function listTokens(address editor) public view returns (uint256[] memory) {
-        return tokensIParticipate[editor];
+        editorRoot[tokenId] = newRoot;
+        editorListURI[tokenId] = newListUri;
+        emit EditorSetChanged(tokenId, newRoot, editorSetVersion[tokenId]);
     }
 
     // ── Burn ──
 
-    function burn(uint256 tokenId) public {
+    /// @notice Burn a token. Caller must prove Editor role in the Merkle tree.
+    ///         Cleans up root + version state after burn (storage refund).
+    function burn(uint256 tokenId, bytes32[] calldata proof) public {
         if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (!_canBurnCheck(tokenId, msg.sender))
-            revert CannotBurn(tokenId, msg.sender);
-
-        address[] storage memberList = members[tokenId];
-        uint256 len = memberList.length;
-        unchecked {
-            for (uint256 i = len; i > 0; i--) {
-                _removeEditor(tokenId, memberList[i - 1]);
-            }
-        }
+        _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, proof);
 
         _burn(tokenId);
-        unchecked {
-            _tokenCounts--;
-        }
+        delete editorRoot[tokenId];
+        delete editorSetVersion[tokenId];
+        delete editorListURI[tokenId];
         emit AssetBurned(tokenId, msg.sender);
-    }
-
-    function setBurnPermission(
-        uint256 tokenId,
-        address collaborator,
-        bool _canBurnFlag
-    ) public {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        if (_ownerOf(tokenId) != msg.sender)
-            revert NotTokenOwner(tokenId, msg.sender);
-
-        if (_editorRoles[tokenId][collaborator] != CollaboratorRole.Editor)
-            revert NotCollaborator(tokenId, collaborator);
-
-        _canBurn[tokenId][collaborator] = _canBurnFlag;
-        emit BurnPermissionChanged(tokenId, collaborator, _canBurnFlag);
-    }
-
-    function canBurn(uint256 tokenId, address who) public view returns (bool) {
-        return _canBurnCheck(tokenId, who);
     }
 
     // ── Admin ──
@@ -307,116 +184,31 @@ abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
         return _ownerOf(tokenId) != address(0);
     }
 
-    function _update(
-        address to,
+    /// @dev Verify a caller is in the current Merkle tree with the required
+    ///      role. The leaf hash includes tokenId + editorSetVersion so proofs
+    ///      cannot be replayed after a set change or across different tokens.
+    function _requireEditor(
         uint256 tokenId,
-        address auth
-    ) internal override returns (address) {
-        address from = _ownerOf(tokenId);
-        if (from != address(0) && from != to) {
-            _removeEditor(tokenId, from);
-            if (to != address(0)) {
-                _addEditor(tokenId, to);
-            }
-        }
-        return super._update(to, tokenId, auth);
+        address caller,
+        CollaboratorRole requiredRole,
+        bytes32[] calldata proof
+    ) internal view {
+        bytes32 leaf = keccak256(
+            abi.encodePacked(caller, requiredRole, tokenId, editorSetVersion[tokenId])
+        );
+        if (!MerkleProof.verify(proof, editorRoot[tokenId], leaf))
+            revert NotAuthorizedEditor(tokenId, caller);
     }
 
-    function _isEditor(
-        uint256 tokenId,
-        address sender
-    ) internal view returns (bool) {
-        return _editorRoles[tokenId][sender] == CollaboratorRole.Editor;
-    }
-
-    function _isCollaborator(
-        uint256 tokenId,
-        address sender
-    ) internal view returns (bool) {
-        return _editorRoles[tokenId][sender] != CollaboratorRole.None;
-    }
-
-    function _canBurnCheck(
-        uint256 tokenId,
-        address sender
-    ) internal view returns (bool) {
-        if (_ownerOf(tokenId) == sender) return true;
-        return
-            _editorRoles[tokenId][sender] == CollaboratorRole.Editor &&
-            _canBurn[tokenId][sender];
-    }
-
-    function _addEditor(uint256 tokenId, address editor) internal {
-        _addCollaborator(tokenId, editor, CollaboratorRole.Editor);
-    }
-
-    function _addCollaborator(
-        uint256 tokenId,
-        address editor,
-        CollaboratorRole role
-    ) internal {
-        if (role == CollaboratorRole.None) revert InvalidCollaboratorRole();
-        if (_editorRoles[tokenId][editor] != CollaboratorRole.None) return;
-
-        // Contract owner bypasses collaboration quotas for testing/admin.
-        if (msg.sender != owner()) {
-            if (members[tokenId].length >= maxEditorsPerToken())
-                revert MaxEditorsReached(tokenId);
-            if (tokensIParticipate[editor].length >= maxTokensPerEditor())
-                revert MaxTokensPerEditorReached(editor);
-        }
-
-        _editorRoles[tokenId][editor] = role;
-        members[tokenId].push(editor);
-        tokensIParticipate[editor].push(tokenId);
-        emit EditorAdded(tokenId, editor);
-        emit CollaboratorRoleChanged(tokenId, editor, role);
-    }
-
-    function _removeEditor(uint256 tokenId, address editor) internal {
-        if (_editorRoles[tokenId][editor] == CollaboratorRole.None) return;
-
-        uint256 membersLen = members[tokenId].length;
-        address[] storage memberList = members[tokenId];
-
-        uint256 memberIdx = membersLen;
-        unchecked {
-            for (uint256 i = 0; i < membersLen; i++) {
-                if (memberList[i] == editor) {
-                    memberIdx = i;
-                    break;
-                }
-            }
-        }
-        if (memberIdx != membersLen) {
-            if (memberIdx != membersLen - 1) {
-                memberList[memberIdx] = memberList[membersLen - 1];
-            }
-            memberList.pop();
-            delete _editorRoles[tokenId][editor];
-            delete _canBurn[tokenId][editor];
-        }
-
-        uint256 partLen = tokensIParticipate[editor].length;
-        uint256[] storage partList = tokensIParticipate[editor];
-
-        uint256 participantIdx = partLen;
-        unchecked {
-            for (uint256 i = 0; i < partLen; i++) {
-                if (partList[i] == tokenId) {
-                    participantIdx = i;
-                    break;
-                }
-            }
-        }
-        if (participantIdx != partLen) {
-            if (participantIdx != partLen - 1) {
-                partList[participantIdx] = partList[partLen - 1];
-            }
-            partList.pop();
-        }
-
-        emit EditorRemoved(tokenId, editor);
+    /// @dev One-time initialization of the editor root for a newly minted
+    ///      token. Called internally by publishAsset only.
+    function initEditors(uint256 tokenId, bytes32 root, string memory listUri) internal {
+        if (editorRoot[tokenId] != bytes32(0))
+            revert TokenAlreadyMinted(tokenId);
+        editorRoot[tokenId] = root;
+        editorSetVersion[tokenId] = 1;
+        editorListURI[tokenId] = listUri;
+        emit EditorSetChanged(tokenId, root, 1);
     }
 
     function _setTokenURI(uint256 tokenId, string memory uri) internal {

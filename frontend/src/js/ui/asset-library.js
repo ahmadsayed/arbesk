@@ -8,11 +8,7 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import {
-  burn,
-  canBurn,
-  contract as walletContract,
-} from "../blockchain/wallet.js";
+import { burn, contract as walletContract } from "../blockchain/wallet.js";
 import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
@@ -49,7 +45,9 @@ async function fetchAssetLibrary(address) {
     const balance = await contract.methods.balanceOf(address).call();
     const indices = Array.from({ length: Number(balance) }, (_, i) => i);
     const ids = await Promise.all(
-      indices.map((i) => contract.methods.tokenOfOwnerByIndex(address, i).call())
+      indices.map((i) =>
+        contract.methods.tokenOfOwnerByIndex(address, i).call()
+      )
     );
     ids.forEach((id) => owned.push(String(id)));
 
@@ -152,8 +150,14 @@ function createSection(title, tokenIds, role) {
   if (tokenIds.length === 0) {
     const empty =
       title === "My Assets"
-        ? createEmptyState("No assets yet", "Create your first asset to see it here.")
-        : createEmptyState("No shared assets", "Assets shared with you will appear here.");
+        ? createEmptyState(
+            "No assets yet",
+            "Create your first asset to see it here."
+          )
+        : createEmptyState(
+            "No shared assets",
+            "Assets shared with you will appear here."
+          );
     section.appendChild(empty);
     return section;
   }
@@ -176,7 +180,8 @@ function createAssetCard(tokenId, role) {
   item.setAttribute("aria-label", `Open asset ${tokenId}`);
 
   item.addEventListener("dragstart", (event) => {
-    const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
+    const { chainId: walletChainId, contractAddress: walletContractAddress } =
+      walletState.get();
     const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
     const contractAddr = walletContractAddress || null;
     const payload = {
@@ -238,7 +243,8 @@ function createAssetCard(tokenId, role) {
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    const { chainId: walletChainId, contractAddress: walletContractAddress } = walletState.get();
+    const { chainId: walletChainId, contractAddress: walletContractAddress } =
+      walletState.get();
     const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
     const contractAddr = walletContractAddress || null;
     emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, {
@@ -274,7 +280,8 @@ function createAssetCard(tokenId, role) {
   item.appendChild(meta);
   item.appendChild(actions);
 
-  const runLoad = () => loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item);
+  const runLoad = () =>
+    loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item);
   reloadBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     runLoad();
@@ -293,8 +300,8 @@ async function resolveBurnVisibility(burnBtn, tokenId, role) {
   const { walletAddress } = walletState.get();
   if (!contract || !walletAddress) return;
   try {
-    const allowed = await canBurn(tokenId, walletAddress);
-    burnBtn.hidden = !allowed;
+    // Show burn for any token (editor verified at burn time via Merkle proof).
+    burnBtn.hidden = false;
   } catch {
     burnBtn.hidden = true;
   }
@@ -313,7 +320,7 @@ async function onBurnAsset(event, tokenId) {
 
   if (confirmed !== "burn") return;
 
-  const txHash = await burn(tokenId);
+  const txHash = await burn(tokenId, []);
   if (txHash) {
     if (String(assetState.get().activeAssetTokenId) === String(tokenId)) {
       emit(EVENTS.ASSET_CLEARED);
@@ -357,7 +364,13 @@ async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
   }
 }
 
-async function loadAssetMetadata(tokenId, nameEl, thumbnailEl, reloadBtn, item) {
+async function loadAssetMetadata(
+  tokenId,
+  nameEl,
+  thumbnailEl,
+  reloadBtn,
+  item
+) {
   const contract = getContract();
   if (!contract) return;
 
