@@ -55,7 +55,6 @@ const REQUIRED_PAID_ABI_FUNCTIONS = [
   "balanceOf",
   "ownerOf",
   "tokenURI",
-  "tokenOfOwnerByIndex",
   "payForGeneration",
   "payForGenerationWithUSDC",
   "tierCosts",
@@ -67,7 +66,6 @@ const REQUIRED_PAID_ABI_FUNCTIONS = [
   "editorSetVersion",
   "getAssetManifest",
   "burn",
-  "totalSupply",
   "MAX_EDITORS_PER_TOKEN",
 ];
 
@@ -75,7 +73,6 @@ const REQUIRED_FREE_ABI_FUNCTIONS = [
   "balanceOf",
   "ownerOf",
   "tokenURI",
-  "tokenOfOwnerByIndex",
   "recordGeneration",
   "DAILY_GENERATION_LIMIT",
   "generationCountToday",
@@ -88,7 +85,6 @@ const REQUIRED_FREE_ABI_FUNCTIONS = [
   "editorSetVersion",
   "getAssetManifest",
   "burn",
-  "totalSupply",
 ];
 
 describe("Deployment Pipeline Integrity", () => {

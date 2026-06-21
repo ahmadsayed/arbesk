@@ -415,7 +415,7 @@ The collection token's `tokenURI` always points to the latest collection manifes
 
 ```text
 Wallet connected
-  → contract.balanceOf + tokenOfOwnerByIndex
+  → contract.getPastEvents('Transfer', { filter: { to: owner } })
   → tokenURI(tokenId)
   → if tokenURI points to a collection manifest, expand each assets[assetID] entry
   → get asset manifests from IPFS gateway/cache

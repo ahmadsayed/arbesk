@@ -84,16 +84,16 @@ test.describe("save and publish", () => {
     assertPublishedManifest(assetManifest);
     expect(assetManifest.name).toBe(ASSET_NAME);
 
-    // 4. Open the Gallery and verify the published asset card appears. The
-    // gallery shows collection card format: "Collection #TOKENID (1 asset)".
-    // Scope to THIS token's card by its on-chain (decimal) id.
+    // 4. Open the Gallery and verify the published asset card appears.
+    // The card is scoped to THIS token's on-chain (decimal) id and shows
+    // the published asset name.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const assetCard = page.locator(
       `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]`,
     );
     await expect(assetCard).toHaveCount(1);
     await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
-      "asset",
+      ASSET_NAME,
     );
 
     // Clicking the card body (not the buttons) should open the asset. The

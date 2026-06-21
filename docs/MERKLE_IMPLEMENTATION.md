@@ -17,7 +17,9 @@ tokensIParticipate[addr] → uint256[]         Full editor list lives on IPFS
 _canBurn[tokenId][addr] → bool               tokenURI → collection manifest CID
                                              editorListUri stored on-chain
                                              
-14+ slots per token (3 editors)              ~5 slots per token (any editor count)
+14+ slots per token (3 editors)              ~4 slots per token (any editor count)*
+
+\* The Merkle migration first brought this to ~5 slots. The subsequent removal of `ERC721Enumerable` dropped the `_allTokens` / `_ownedTokens` arrays, leaving only `_owners`, `_tokenURIs`, `editorRoot`, `editorSetVersion`, and `editorListURI`.
 ```
 
 ### 1.2 Gas Impact at 100K Tokens (0.01 gwei MegaETH)
@@ -56,15 +58,17 @@ The existing contracts were updated in place. There are **no** separate "Merkle"
 - `setBurnPermission` / `canBurn`
 - `_addCollaborator` / `_removeEditor` / `_canBurnCheck`
 - `EditorAdded` / `EditorRemoved` / `CollaboratorRoleChanged` / `BurnPermissionChanged` events
-- `_tokenCounts` (redundant with ERC721Enumerable)
+- `_tokenCounts` (redundant with ERC721Enumerable; the Enumerable extension itself was later removed)
 
 ### 2.2 Added
 
 ```solidity
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
+mapping(uint256 => string) private _tokenURIs;
 mapping(uint256 => bytes32) public editorRoot;
 mapping(uint256 => uint256) public editorSetVersion;
+mapping(uint256 => string) public editorListURI;
 
 function publishAsset(
     string memory uri,
@@ -72,12 +76,11 @@ function publishAsset(
     bytes32 editorRoot_,
     string memory editorListUri
 ) public returns (uint256) {
-    require(!_exists(tokenId), "Already minted");
+    if (_exists(tokenId)) revert TokenAlreadyMinted(tokenId);
     _mint(msg.sender, tokenId);
     _setTokenURI(tokenId, uri);
-    editorRoot[tokenId] = editorRoot_;
-    editorSetVersion[tokenId] = 1;
-    emit AssetPublished(msg.sender, tokenId, uri, editorRoot_, editorListUri);
+    initEditors(tokenId, editorRoot_, editorListUri);
+    emit AssetPublished(msg.sender, tokenId, uri);
     return tokenId;
 }
 

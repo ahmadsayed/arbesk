@@ -8,17 +8,19 @@ Full Arbesk contract reference: inheritance, storage layout, function inventory,
 
 **File:** `blockchain/contracts/ArbeskAsset.sol`
 **Solidity:** `^0.8.20` (compiled 0.8.24, Cancun EVM)
-**Dependencies:** OpenZeppelin v5 — ERC721Enumerable, Ownable, ReentrancyGuard, Pausable
-**Test file:** `blockchain/test/ArbeskAsset.test.js` (~856 lines, 30+ test cases)
-**Security audit:** `blockchain/SECURITY.md` (6 documented findings)
+**Dependencies:** OpenZeppelin v5 — ERC721, Ownable, ReentrancyGuard, Pausable
+**Test file:** `blockchain/test/ArbeskAsset.test.js`
+**Security audit:** `blockchain/SECURITY.md`
 
 ### Inheritance Chain
 
 ```
-ERC721Enumerable → ERC721 → ERC721Utils
+ERC721 → ERC721Utils
 Ownable
-ReentrancyGuard
 Pausable
+ReentrancyGuard
+       ↓
+ArbeskAssetBase
        ↓
 ArbeskAsset
 ```
@@ -31,19 +33,17 @@ ArbeskAsset
 | `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC amounts |
 | `usdcToken` | `IERC20` | address(0) = disabled |
 | `developerTreasuryWallet` | `address` | All payments go here |
-| `usedPayments` | `mapping(bytes32 => bool)` | Per-block replay guard |
-| `_tokenCounts` | `uint256` | Manual counter (OZ v5 removed Counters) |
-| `_tokenURIs` | `mapping(uint256 => string)` | IPFS CIDs |
-| `members` | `mapping(uint256 => address[])` | Editor list per token |
-| `_isEditorMap` | `mapping(uint256 => mapping => bool))` | O(1) membership |
-| `tokensIParticipate` | `mapping(address => uint256[])` | Reverse lookup |
+| `paymentNonce` | `mapping(address => uint256)` | Per-user replay guard |
+| `_tokenURIs` | `mapping(uint256 => string)` | IPFS CIDs (inherited base) |
+| `editorRoot` | `mapping(uint256 => bytes32)` | Merkle root per token (inherited base) |
+| `editorSetVersion` | `mapping(uint256 => uint256)` | Monotonic editor-set version (inherited base) |
+| `editorListURI` | `mapping(uint256 => string)` | IPFS CID of the full editor list (inherited base) |
 
 ### Constants
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `MAX_EDITORS_PER_TOKEN` | 50 | Editor cap per NFT |
-| `MAX_TOKENS_PER_EDITOR` | 500 | Tokens-per-address cap |
+| `MAX_EDITORS_PER_TOKEN` | 5000 | Soft cap per NFT (enforced off-chain; full list on IPFS) |
 
 ### Complete Function Inventory
 
@@ -57,55 +57,47 @@ ArbeskAsset
 |----------|-----------|-----------|------------|--------|
 | `payForGenerationWithUSDC(bytes32,string,uint8)` | `external` | `nonReentrant whenNotPaused` | nodeId, prompt, tier | `AssetGenerationPaidUSDC` |
 | `getTierCost(Tier)` | `external view` | — | tier | — |
+| `getPaymentNonce(address)` | `external view` | — | user | `uint256` |
 
-#### Payment Queries
-| Function | Visibility | Parameters | Returns |
-|----------|-----------|------------|---------|
-| `isPaymentUsed(bytes32,address,uint256)` | `external view` | nodeId, sender, blockNum | `bool` |
-
-#### NFT Minting
-| Function | Visibility | Modifiers | Parameters | Events |
-|----------|-----------|-----------|------------|--------|
-| `publishAsset(string,uint256)` | `public` | — | uri, tokenId | `AssetPublished` |
-| `publishAsset(string,uint256,address[])` | `public` | — | uri, tokenId, editors | `AssetPublished` |
+#### NFT Minting (inherited from `ArbeskAssetBase`)
+| Function | Visibility | Modifiers | Parameters | Returns/Events |
+|----------|-----------|-----------|------------|----------------|
+| `publishAsset(string,uint256,bytes32,string)` | `public` | — | uri, tokenId, editorRoot_, editorListUri | `AssetPublished` |
 | `tokenURI(uint256)` | `public view override` | — | tokenId | `string` |
-| `totalSupply()` | `public view override` | — | — | `uint256` |
-| `getAssetManifest(uint256)` | `public view` | — | tokenId | `(uri, owner, editors[])` |
+| `getAssetManifest(uint256)` | `public view` | — | tokenId | `(uri, owner)` |
 
-#### Collaboration
+#### Collaboration (inherited from `ArbeskAssetBase`)
 | Function | Visibility | Modifiers | Parameters | Events |
 |----------|-----------|-----------|------------|--------|
-| `updateAssetURI(uint256,string)` | `public` | — | tokenId, newURI | `AssetURIUpdated` |
-| `addEditor(uint256,address)` | `public` | owner-only | tokenId, editor | `EditorAdded` |
-| `addEditor(uint256,address[])` | `public` | owner-only | tokenId, editors[] | `EditorAdded` (per editor) |
-| `removeEditor(uint256,address)` | `public` | owner-only | tokenId, editor | `EditorRemoved` |
-| `listEditors(uint256)` | `public view` | — | tokenId | `address[]` |
-| `listTokens(address)` | `public view` | — | editor | `uint256[]` |
+| `updateAssetURI(uint256,string,bytes32[])` | `public` | — | tokenId, newURI, proof | `AssetURIUpdated` |
+| `updateEditors(uint256,bytes32,string,uint8,bytes32[])` | `external` | — | tokenId, newRoot, newListUri, callerRole, callerProof | `EditorSetChanged` |
+| `burn(uint256,bytes32[])` | `public` | — | tokenId, proof | `AssetBurned` |
 
 #### Admin — Native Token
 | Function | Visibility | Modifiers | Parameters | Events |
 |----------|-----------|-----------|------------|--------|
 | `setCost(uint256)` | `external` | `onlyOwner` | newCost | `CostUpdated` |
 | `setTreasury(address)` | `external` | `onlyOwner` | newWallet | `TreasuryUpdated` |
+| `withdraw()` | `external` | `onlyOwner nonReentrant` | — | — |
 
 #### Admin — USDC
 | Function | Visibility | Modifiers | Parameters | Events |
 |----------|-----------|-----------|------------|--------|
 | `setUsdcToken(address)` | `external` | `onlyOwner` | _usdcToken | `UsdcTokenUpdated` |
 | `setTierCost(Tier,uint256)` | `external` | `onlyOwner` | tier, newCost | `TierCostUpdated` |
+| `withdrawUSDC()` | `external` | `onlyOwner nonReentrant` | — | — |
 
-#### Admin — Emergency
+#### Admin — Emergency (inherited from `ArbeskAssetBase`)
 | Function | Visibility | Modifiers | Parameters | Events |
 |----------|-----------|-----------|------------|--------|
 | `pause()` | `external` | `onlyOwner` | — | OZ `Paused` |
 | `unpause()` | `external` | `onlyOwner` | — | OZ `Unpaused` |
-| `withdraw()` | `external` | `onlyOwner nonReentrant` | — | — |
-| `withdrawUSDC()` | `external` | `onlyOwner nonReentrant` | — | — |
 
 #### Fallback
 | Function | Visibility | Behavior |
 |----------|-----------|----------|
-| `receive()` | `external payable` | `revert("Use payForGeneration()")` |
+| `receive()` | `external payable` | `revert DirectTransferNotAllowed()` |
+| `fallback()` | `external payable` | `revert DirectTransferNotAllowed()` |
 
 ### Event Signatures
 
@@ -121,10 +113,10 @@ AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)
 AssetPublished(address,uint256,string)
   → keccak256 = topic[0]
 
-EditorAdded(uint256,address)
+EditorSetChanged(uint256,bytes32,uint256)
   → keccak256 = topic[0]
 
-EditorRemoved(uint256,address)
+AssetBurned(uint256,address)
   → keccak256 = topic[0]
 
 AssetURIUpdated(uint256,string)

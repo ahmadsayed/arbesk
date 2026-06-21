@@ -249,7 +249,7 @@ frontend/src/js/
 **UI Systems**
 - Sidebar: 4 views persisted to `localStorage`, collapsible, responsive auto-collapse
 - Create panel: chat bubbles, prompt input, provider/tier dropdowns, generation flow
-- Asset library: owned (`balanceOf`/`tokenOfOwnerByIndex`) + shared (Merkle editor list), collection expansion, lazy thumbnails, drag with `application/x-arbesk-linked-asset`
+- Asset library: owned (`Transfer` event scan) + shared (Merkle editor list), collection expansion, lazy thumbnails, drag with `application/x-arbesk-linked-asset`
 - Outliner: tree with 📦/🧩 icons, click select, double-click dive, library drag
 - Nesting: breadcrumb path bar, Alt+Left ascend, depth status in bottom bar
 - History: draggable horizontal track, active vs published states
@@ -285,7 +285,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 
 #### `ArbeskAsset.sol` (Paid Tier)
 
-- **Standard:** ERC-721 with Enumerable extension (`ERC721Enumerable`)
+- **Standard:** ERC-721 (plain, non-enumerable)
 - **Symbol:** `ARBA`
 - **Inheritance:** `ArbeskAssetBase`, `ReentrancyGuard`
 
@@ -295,7 +295,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 |----------|-----------|
 | Payment (USDC) | `payForGenerationWithUSDC(bytes32 nodeId, string prompt, Tier tier)` — tiered pricing, `safeTransferFrom` |
 | Minting | `publishAsset(string uri, uint256 tokenId, bytes32 editorRoot, string editorListUri)` |
-| Queries | `tokenURI()`, `totalSupply()`, `getAssetManifest()`, `getTierCost()`, `editorRoot(tokenId)`, `editorSetVersion(tokenId)` |
+| Queries | `tokenURI()`, `getAssetManifest()`, `getTierCost()`, `editorRoot(tokenId)`, `editorSetVersion(tokenId)` |
 | Collaboration | `updateEditors(uint256 tokenId, bytes32 newRoot, string newListUri, uint8 callerRole, bytes32[] callerProof)` |
 | URI update | `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` |
 | Burn | `burn(uint256 tokenId, bytes32[] proof)` — owner or Editor with Merkle proof |
@@ -331,11 +331,13 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 
 ### 4.2 `ArbeskAssetBase.sol` (Abstract Base)
 
-- **Inheritance:** `ERC721Enumerable`, `Ownable`, `Pausable`
+- **Inheritance:** `ERC721`, `Ownable`, `Pausable`
 - **Shared logic:** minting, URI storage, Merkle-root editor authorization, burn, pause/unpause
 - **Key state:**
+  - `mapping(uint256 => string) private _tokenURIs`
   - `mapping(uint256 => bytes32) public editorRoot`
   - `mapping(uint256 => uint256) public editorSetVersion`
+  - `mapping(uint256 => string) public editorListURI`
 - **Leaf format:** `keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))`
 - **Role enum:** `None = 0`, `Viewer = 1`, `Editor = 2`
 - Owner bypasses all Merkle proof checks.
@@ -353,7 +355,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 | `hardhat` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
 | `localhost` | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
 | `localhost` | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
-| `megaethTestnet` (chain 6343) | ArbeskAssetFree | `0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B` | **Current testnet target** |
+| `megaethTestnet` (chain 6343) | ArbeskAssetFree | `0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673` | **Current testnet target** |
 | `megaethTestnet` (chain 6343) | ArbeskAsset (paid) | — | **Not deployed on testnet** |
 
 > `CONTRACT_ADDRESS` in `.env` now points to the **free** contract. The paid contract is stored in `PAID_CONTRACT_ADDRESS`.
@@ -373,7 +375,7 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 |---|---:|---:|---|
 | `recordGeneration()` first call/day | ~50,650 | ~$0.0009 | Quota day rollover writes one packed slot |
 | `recordGeneration()` warm call | ~33,430 | ~$0.0006 | Same-day generation |
-| `publishAsset()` mint (m=1) | ~150,000 | ~$0.003 | Varies by URI length |
+| `publishAsset()` mint (m=1) | ~165,000 | ~$0.0029 | Plain ERC721 + 4 storage slots; varies by URI length |
 | `updateAssetURI()` | ~35,000 | ~$0.0006 | Republish existing token |
 | `updateEditors()` | ~35,000 | ~$0.0006 | Replace editor Merkle root |
 

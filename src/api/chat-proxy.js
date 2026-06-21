@@ -252,8 +252,15 @@ async function handleConnection(clientWs, req) {
 // ─── Asset Access Check ─────────────────────────────────────────────────────
 
 async function checkAssetAccess(tokenId, chainId, address) {
-  const id = Number(tokenId);
-  if (!Number.isFinite(id) || id < 0) {
+  // Token IDs are uint256 and can exceed Number.MAX_SAFE_INTEGER, so keep them
+  // as strings/BigInt throughout this check.
+  let id;
+  try {
+    id = BigInt(tokenId);
+  } catch {
+    throw new Error("Invalid tokenId");
+  }
+  if (id < 0n) {
     throw new Error("Invalid tokenId");
   }
 
@@ -266,14 +273,14 @@ async function checkAssetAccess(tokenId, chainId, address) {
   const w3 = getWeb3(cid);
   const contract = new w3.eth.Contract(MINIMAL_COLLAB_ABI, contractAddr);
 
-  const owner = await contract.methods.ownerOf(id).call();
+  const owner = await contract.methods.ownerOf(id.toString()).call();
 
   const normalizedAddress = address.toLowerCase();
   const isOwner = owner.toLowerCase() === normalizedAddress;
 
   return {
     allowed: isOwner,
-    assetId: `${cid || defaultChainId()}:${contractAddr}:${id}`,
+    assetId: `${cid || defaultChainId()}:${contractAddr}:${id.toString()}`,
     chainId: cid,
     isOwner,
     role: isOwner ? 2 : 0,

@@ -10,7 +10,7 @@ ASCII cheat sheet with all constants, commands, and endpoints.
 ├─────────────────────────────────────────────────────────┤
 │  Token Name:          ArbeskAsset (ARBA)                │
 │  Solidity:            0.8.24 (Cancun EVM)               │
-│  Dependencies:        OZ v5 (ERC721Enumerable, Ownable, │
+│  Dependencies:        OZ v5 (ERC721, Ownable,            │
 │                        ReentrancyGuard, Pausable)        │
 │  Native Cost:         0.01 ETH/FIL (flat rate)          │
 │  USDC Tiers:          Basic $0.75 · Standard $1.25      │
@@ -18,8 +18,8 @@ ASCII cheat sheet with all constants, commands, and endpoints.
 │  USDC Decimals:       6                                 │
 │  Editors/Token Cap:   50                                 │
 │  Tokens/Editor Cap:   500                                │
-│  Payment Key:         keccak256(nodeId+sender+blockNum) │
-│  Replay Protection:   Per-block (on-chain)              │
+│  Payment Nonce:       paymentNonce[sender] monotonic    │
+│  Replay Protection:   Per-user nonce (on-chain)         │
 │                        Cross-block (backend usedTxHashes)│
 │  Minting:             Public, gas-only, manual tokenId  │
 │  TokenURI:            IPFS CIDs (content-addressed)     │

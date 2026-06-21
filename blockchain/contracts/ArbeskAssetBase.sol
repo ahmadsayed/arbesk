@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: ISC
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
@@ -9,14 +9,17 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 /**
  * @title ArbeskAssetBase
  * @dev Abstract base contract with Merkle-root editor architecture.
- *      The full editor list lives on IPFS; only `editorRoot`,
- *      `editorSetVersion`, and `editorListURI` stay on-chain
- *      (3 storage slots per token regardless of editor count —
+ *      The full editor list lives on IPFS; only `_tokenURIs`,
+ *      `editorRoot`, `editorSetVersion`, and `editorListURI` stay on-chain
+ *      (4 storage slots per token regardless of editor count —
  *      down from ~14 in the old design).
+ *
+ *      Uses plain ERC721 (not ERC721Enumerable) to avoid the all/owned
+ *      token arrays, which add ~3 extra storage slots per mint.
  *
  *      Concrete contracts: ArbeskAsset (paid), ArbeskAssetFree (free).
  */
-abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
+abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     // ── Custom Errors ──
     error TokenAlreadyMinted(uint256 tokenId);
     error NonexistentToken(uint256 tokenId);
@@ -88,11 +91,6 @@ abstract contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
     ) public view override returns (string memory) {
         _requireOwned(tokenId);
         return _tokenURIs[tokenId];
-    }
-
-    /// @dev Delegates to ERC721Enumerable which tracks tokens internally.
-    function totalSupply() public view override returns (uint256) {
-        return super.totalSupply();
     }
 
     /// @notice Returns the asset manifest URI and current owner.

@@ -101,20 +101,20 @@ function updateEditors(
 ### The Affected Operations (Scale with m)
 
 ```solidity
-// Creates NEW storage slots: URI mapping entry + editor root + editor version +
-// enumerable tracking. Editor count is now off-chain, so mint cost is independent
-// of the number of editors.
-// Cost ≈ 150,000 compute + ~5 × 20,000 × (m−1) storage
+// Creates NEW storage slots: owner mapping entry + URI mapping entry +
+// editor root + editor version + editor list URI. Editor count is off-chain,
+// so mint cost is independent of the number of editors. ERC721Enumerable has
+// been removed, so there is no all/owned-token-array overhead.
+// Cost ≈ 165,000 compute + ~4 × 20,000 × (m−1) storage
 function publishAsset(
     string memory uri,
     uint256 tokenId,
     bytes32 editorRoot_,
     string memory editorListUri
 ) public returns (uint256) {
-    _mint(msg.sender, tokenId);           // creates new token in OZ's _allTokens
+    _mint(msg.sender, tokenId);           // creates owner mapping entry
     _setTokenURI(tokenId, uri);           // zero→non-zero → storage gas applies
-    editorRoot[tokenId] = editorRoot_;    // zero→non-zero → storage gas applies
-    editorSetVersion[tokenId] = 1;        // zero→non-zero → storage gas applies
+    initEditors(tokenId, editorRoot_, editorListUri); // 3 zero→non-zero SSTOREs
 }
 ```
 
@@ -130,48 +130,47 @@ Four optimizations shipped. Files changed:
 - `blockchain/test/ArbeskAsset.test.js` — updated for per-user nonce and Merkle authorization
 - `blockchain/test/ArbeskAssetFree.test.js` — updated for Merkle authorization
 
-### Optimization `#5`: Removed `_tokenCounts` (duplicate counter)
+### Optimization `#5`: Removed `ERC721Enumerable` entirely
 
-ERC721Enumerable already tracks tokens in its internal `_allTokens` array. `_tokenCounts` was redundant state.
+The base contract previously inherited OpenZeppelin `ERC721Enumerable`, which keeps an `_allTokens` array and per-owner `_ownedTokens` arrays. That added ~3 extra storage writes per mint and caused mint gas to grow with total supply. `ArbeskAssetBase` now inherits plain `ERC721`.
 
 ```solidity
-// BEFORE: duplicate counter, extra SSTORE per mint and burn
-uint256 private _tokenCounts;
+// BEFORE: enumerable tracking + duplicate counter
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
-function publishAsset(...) public {
-    unchecked { _tokenCounts++; }          // removed
-    _mint(msg.sender, tokenId);
-}
+contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
+    uint256 private _tokenCounts;
 
-function burn(uint256 tokenId) public {
-    _burn(tokenId);
-    unchecked { _tokenCounts--; }          // removed
-}
+    function publishAsset(...) public {
+        unchecked { _tokenCounts++; }
+        _mint(msg.sender, tokenId);       // also writes _allTokens / _ownedTokens
+    }
 
-function totalSupply() public view override returns (uint256) {
-    return _tokenCounts;                   // removed
+    function totalSupply() public view override returns (uint256) {
+        return _tokenCounts;
+    }
 }
 ```
 
 ```solidity
-// AFTER: delegates to OpenZeppelin's ERC721Enumerable
-// No _tokenCounts variable needed.
+// AFTER: plain ERC721 + Merkle editor roots
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-function publishAsset(...) public {
-    _mint(msg.sender, tokenId);           // OZ handles token tracking internally
-}
+abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
+    mapping(uint256 => string) private _tokenURIs;
+    mapping(uint256 => bytes32) public editorRoot;
+    mapping(uint256 => uint256) public editorSetVersion;
+    mapping(uint256 => string) public editorListURI;
 
-function burn(uint256 tokenId) public {
-    _burn(tokenId);                        // OZ handles removal internally
-}
-
-/// @dev Delegates to ERC721Enumerable which tracks tokens in _allTokens.
-function totalSupply() public view override returns (uint256) {
-    return super.totalSupply();
+    function publishAsset(...) public returns (uint256) {
+        _mint(msg.sender, tokenId);
+        _setTokenURI(tokenId, uri);
+        initEditors(tokenId, editorRoot_, editorListUri);
+    }
 }
 ```
 
-**Impact:** Removes 1 unnecessary `SSTORE` per mint and burn. Eliminates serialization bottleneck on the single counter slot. All mints previously contended on `_tokenCounts` — now each token ID has independent storage.
+**Impact:** Removes the enumerable arrays and the redundant `_tokenCounts` counter (~4 storage writes saved per mint). Mint gas is now flat with respect to total supply and uses only 4 new zero→non-zero storage slots per token. The gallery builds the owned-token list off-chain by scanning `Transfer` events.
 
 ### Optimizations `#2+#3`: Per-User Payment Nonce
 
@@ -260,30 +259,30 @@ Each call increments the user's nonce. Since the nonce is unique and monotonic:
 
 ## 4. Cost Projection: MegaETH vs Monad vs Sei
 
-**Assumptions:** ETH=$1,727 · Merkle editor proofs · ~5 new slots per token · ~5 storage slots zero→non-zero per mint  
+**Assumptions:** ETH=$1,727 · Merkle editor proofs · ~4 new slots per token · ~4 storage slots zero→non-zero per mint  
 **MegaETH gas:** 0.01 gwei (normal) · **Monad gas:** 1 gwei · **Sei gas:** 1 gwei  
 **MIN_BUCKET_CAP=512** · Bucket expands at 60% fill
 
-> The old projection assumed 3 editors stored on-chain (14 slots/token). With Merkle editor proofs, editor count no longer affects mint cost, so the effective slot count per token drops from ~14 to ~5.
+> The current design stores only the owner, token URI, Merkle editor root, editor-set version, and editor-list URI on-chain. The editor list itself lives off-chain, so editor count does not affect mint cost. Removing `ERC721Enumerable` drops the all/owned token arrays, reducing new storage slots per mint from ~5 to ~4.
 
 ### Mint Cost (new token creation — scales with m on MegaETH, flat on Monad/Sei)
 
-Formula: `mintGas ≈ 150,000 + 5 × 20,000 × (m − 1)`
+Formula: `mintGas ≈ 165,000 + 4 × 20,000 × (m − 1)`
 
 | Tokens | MegaETH m | MegaETH Mint Gas | MegaETH Cost | Monad Cost | Sei Cost |
 |--------|----------|-----------------|-------------|------------|----------|
-| 100 | 1 | 150,000 | **$0.003** | $0.26 | $0.26 |
-| 1,000 | 2 | 250,000 | **$0.004** | $0.26 | $0.26 |
-| 5,000 | 16 | 1,650,000 | **$0.029** | $0.26 | $0.26 |
-| 10,000 | 64 | 6,450,000 | **$0.111** | $0.26 | $0.26 |
-| 20,000 | 256 | 25,650,000 | **$0.443** | $0.26 | $0.26 |
-| 50,000 | 4,096 | 409,650,000 | **$7.07** | $0.26 | $0.26 |
-| 100,000 | 8,192 | 819,450,000 | **$14.15** | $0.26 | $0.26 |
-| 500,000 | 32,768 | 3,277,650,000 | **$56.61** | $0.26 | $0.26 |
-| 1,000,000 | 65,536 | 6,555,450,000 | **$113.22** | $0.26 | $0.26 |
+| 100 | 2 | 245,000 | **$0.004** | $0.28 | $0.28 |
+| 1,000 | 16 | 1,365,000 | **$0.024** | $0.28 | $0.28 |
+| 5,000 | 128 | 10,325,000 | **$0.178** | $0.28 | $0.28 |
+| 10,000 | 256 | 20,565,000 | **$0.355** | $0.28 | $0.28 |
+| 20,000 | 512 | 41,045,000 | **$0.709** | $0.28 | $0.28 |
+| 50,000 | 1,024 | 82,005,000 | **$1.42** | $0.28 | $0.28 |
+| 100,000 | 2,048 | 163,925,000 | **$2.83** | $0.28 | $0.28 |
+| 500,000 | 8,192 | 655,445,000 | **$11.32** | $0.28 | $0.28 |
+| 1,000,000 | 16,384 | 1,310,805,000 | **$22.64** | $0.28 | $0.28 |
 | **Redeploy** | **1** | **900,000** | **$0.016** | $1.55 | $1.55 |
 
-> Gas values assume ~5 zero→non-zero storage slots per mint after the Merkle migration. Actual values depend on optimizer settings and OpenZeppelin Enumerable internals.
+> Gas values assume ~4 zero→non-zero storage slots per mint: `_owners`, `_tokenURIs`, `editorRoot`, `editorSetVersion`, plus `editorListURI`. Actual values depend on optimizer settings and calldata length.
 
 ### Immune Operations (Always Flat, All Three Chains)
 
@@ -298,10 +297,10 @@ Formula: `mintGas ≈ 150,000 + 5 × 20,000 × (m − 1)`
 
 | Tokens Total | MegaETH (no redeploy) | MegaETH (w/ redeploy) | Monad | Sei |
 |-------------|----------------------|----------------------|-------|-----|
-| 10,000 | **$111** | $25 | $560 | $560 |
-| 50,000 | $7,092 | **$25** | $560 | $560 |
-| 100,000 | $14,172 | **$25** | $560 | $560 |
-| 1,000,000 | $113,242 | **$25** | $560 | $560 |
+| 10,000 | **$377** | $26 | $2,480 | $2,480 |
+| 50,000 | $1,438 | **$26** | $2,480 | $2,480 |
+| 100,000 | $2,853 | **$26** | $2,480 | $2,480 |
+| 1,000,000 | $22,660 | **$26** | $2,480 | $2,480 |
 
 Full CSV: `docs/cost-projection.csv`
 
@@ -311,18 +310,19 @@ Full CSV: `docs/cost-projection.csv`
 
 ## 5. Token Capacity
 
-With Merkle editor proofs, editor count no longer affects on-chain storage. Each token creates roughly:
+With Merkle editor proofs, editor count no longer affects on-chain storage. The contract also no longer inherits `ERC721Enumerable`, so there are no `_allTokens` / `_ownedTokens` arrays. Each token creates roughly:
 
-- URI mapping entry
+- `_owners` mapping entry (ERC721)
+- `_tokenURIs` mapping entry
 - `editorRoot` mapping entry
 - `editorSetVersion` mapping entry
-- ERC721Enumerable `_allTokens` / `_ownedTokens` entries
+- `editorListURI` mapping entry
 
-Total: **~5 zero→non-zero storage slots per mint**, regardless of editor count.
+Total: **~4 zero→non-zero storage slots per mint**, regardless of editor count.
 
-| Slots per Token | Tokens to m=12 | Tokens to m=128 | Sub-Cent Mints Until |
+| Slots per Token | Tokens to m=8 | Tokens to m=128 | Sub-Cent Mints Until |
 |----------------|---------------|-----------------|---------------------|
-| ~5 | **380** | **3,800** | ~400 tokens |
+| ~4 | **310** | **4,900** | ~150 tokens |
 
 This is a significant improvement over the old on-chain editor model, where 50-editor paid-tier tokens consumed ~151 slots and crossed 1¢ after only ~15 tokens.
 
@@ -378,20 +378,21 @@ curl -s https://carrot.megaeth.com/rpc \
 
 | `eth_estimateGas` Result | Approximate `m` | Action |
 |-------------------------|----------------|--------|
-| ~150,000 | 1 | 🟢 No action |
-| ~250,000 | 2–4 | 🟢 No action |
-| ~1,650,000 | 16 | 🟢 Monitor monthly |
-| ~6,450,000 | 64 | 🟡 Plan redeployment |
-| ~25,650,000 | 256 | 🟠 Schedule redeployment |
-| ~102,450,000 | 1,024 | 🔴 Redeploy soon |
-| ~409,650,000 | 4,096 | 🔴 Redeploy immediately |
+| ~165,000 | 1 | 🟢 No action |
+| ~245,000 | 2 | 🟢 No action |
+| ~405,000 | 4 | 🟢 No action |
+| ~725,000 | 8 | 🟢 Monitor monthly |
+| ~1,365,000 | 16 | 🟡 Plan redeployment |
+| ~2,645,000 | 32 | 🟠 Schedule redeployment |
+| ~10,325,000 | 128 | 🔴 Redeploy soon |
+| ~20,565,000 | 256 | 🔴 Redeploy immediately |
 
 ### Formula
 
 ```
-m ≈ (eth_estimateGas - 150,000) / (N × 20,000) + 1
+m ≈ (eth_estimateGas - 165,000) / (N × 20,000) + 1
 ```
-Where N = average new zero→non-zero slots per mint (≈5 with Merkle editor proofs).
+Where N = average new zero→non-zero slots per mint (≈4 with the plain-ERC721 Merkle design).
 
 ---
 
@@ -399,12 +400,13 @@ Where N = average new zero→non-zero slots per mint (≈5 with Merkle editor pr
 
 | File | Change |
 |------|--------|
-| `blockchain/contracts/ArbeskAssetBase.sol` | Removed `_tokenCounts`, delegates `totalSupply()` to ERC721Enumerable; added Merkle editor authorization |
+| `blockchain/contracts/ArbeskAssetBase.sol` | Removed `ERC721Enumerable`; stores only `_tokenURIs`, `editorRoot`, `editorSetVersion`, `editorListURI` (~4 slots/token) |
 | `blockchain/contracts/ArbeskAsset.sol` | `usedPayments` → `paymentNonce` (O(1) per user), removed `block.number` read; updated for Merkle editor ABI |
 | `blockchain/contracts/ArbeskAssetFree.sol` | Updated for Merkle editor ABI |
-| `blockchain/test/ArbeskAsset.test.js` | Updated for per-user nonce and Merkle authorization |
-| `blockchain/test/ArbeskAssetFree.test.js` | Updated for Merkle authorization |
-| `docs/cost-projection.csv` | 15-row projection across 3 chains, all m levels |
+| `blockchain/test/ArbeskAsset.test.js` | Updated for per-user nonce, Merkle authorization, and non-Enumerable ABI |
+| `blockchain/test/ArbeskAssetFree.test.js` | Updated for Merkle authorization and non-Enumerable ABI |
+| `frontend/src/js/ui/asset-library.js` | Replaced `tokenOfOwnerByIndex` with off-chain `Transfer` event scanning |
+| `docs/cost-projection.csv` | Recalculated for ~4 storage slots per mint across 3 chains and all m levels |
 | `frontend/src/js/gltf/merkle-editors.js` | New Merkle tree/proof library |
 | `frontend/src/js/services/team.js` | New Merkle-based editor add/remove service |
 

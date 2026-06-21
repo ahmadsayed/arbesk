@@ -21,7 +21,7 @@ export const NETWORK_CONFIGS = {
   },
   [CHAIN_IDS.MEGAETH_TESTNET]: {
     name: "MegaETH Testnet",
-    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
+    contractAddress: "0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673",
     paidContractAddress: null, // Paid tier not deployed on testnet
     usdcToken: null, // USDC not deployed on testnet
     rpcUrl: "https://carrot.megaeth.com/rpc",

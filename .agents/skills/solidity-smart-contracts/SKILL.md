@@ -30,7 +30,7 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
 **`CONTRACT_ADDRESS`** → `ArbeskAssetFree` (default); **`PAID_CONTRACT_ADDRESS`** → `ArbeskAsset`
 
 **Solidity:** `^0.8.20` (compiled 0.8.24, Cancun EVM)
-**Dependencies:** OpenZeppelin v5 — ERC721Enumerable, Ownable, ReentrancyGuard, Pausable
+**Dependencies:** OpenZeppelin v5 — ERC721, Ownable, ReentrancyGuard, Pausable
 **Test file:** `blockchain/test/ArbeskAsset.test.js` (~856 lines, 30+ test cases)
 **Security audit:** `blockchain/SECURITY.md` (6 documented findings)
 
@@ -42,14 +42,14 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
 | `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC |
 | `usdcToken` | `IERC20` | address(0) = disabled |
 | `developerTreasuryWallet` | `address` | All payments go here |
-| `usedPayments` | `mapping(bytes32 => bool)` | Per-block replay guard |
+| `paymentNonce` | `mapping(address => uint256)` | Per-user replay guard |
 
 ### Function Categories
 
 - **Payment — Native:** `payForGeneration(bytes32,string)` — payable, nonReentrant
 - **Payment — USDC:** `payForGenerationWithUSDC(bytes32,string,uint8)` — tiered ERC-20
-- **NFT Minting:** `publishAsset(string,uint256)`, `tokenURI(uint256)`, `totalSupply()`
-- **Collaboration:** `updateAssetURI`, `addEditor`, `removeEditor`, `listEditors`, `listTokens`
+- **NFT Minting:** `publishAsset(string,uint256,bytes32,string)`, `tokenURI(uint256)`
+- **Collaboration:** `updateAssetURI`, `updateEditors`, `burn`
 - **Admin:** `setCost`, `setTreasury`, `setUsdcToken`, `setTierCost`, `pause`, `unpause`, `withdraw`
 
 ### Tier Pricing (6-decimal USDC)
@@ -67,8 +67,8 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
 AssetGenerationPaid(address,bytes32,string,uint256,uint256)
 AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)
 AssetPublished(address,uint256,string)
-EditorAdded(uint256,address)
-EditorRemoved(uint256,address)
+EditorSetChanged(uint256,bytes32,uint256)
+AssetBurned(uint256,address)
 AssetURIUpdated(uint256,string)
 ```
 

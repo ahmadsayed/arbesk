@@ -11,7 +11,12 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import { contract as walletContract } from "../blockchain/wallet.js";
+import {
+  contract as walletContract,
+  burn as burnToken,
+  CollaboratorRole,
+} from "../blockchain/wallet.js";
+import { getProof } from "../gltf/merkle-editors.js";
 import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
@@ -27,9 +32,121 @@ import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 
 let assetLibraryBody = null;
+let libraryRenderInFlight = false;
+let libraryRenderPending = false;
+
+const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 
 function getContract() {
   return walletContract || walletState.get().contract || null;
+}
+
+/**
+ * Load the editor list for a token so we can build a Merkle proof for
+ * on-chain actions (burn, URI update, etc.). Falls back to a owner-only
+ * list because the token owner is always an Editor at mint time.
+ */
+async function loadEditorListForProof(tokenId) {
+  const walletAddress = walletState.get().walletAddress;
+  const contract = getContract();
+  if (!walletAddress || !contract) return null;
+
+  // 1) Try the locally cached editor list first.
+  try {
+    const stored = localStorage.getItem(EDITOR_LIST_PREFIX + tokenId);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed.list)) return parsed.list;
+    }
+  } catch {
+    // localStorage unavailable or corrupted
+  }
+
+  // 2) Fall back to the IPFS editor list URI stored on-chain.
+  try {
+    const listCid = await contract.methods.editorListURI(tokenId).call();
+    if (listCid) {
+      const list = await getFromRemoteIPFS(listCid);
+      if (Array.isArray(list)) return list;
+    }
+  } catch (err) {
+    console.warn(
+      `[ASSET-LIBRARY] Failed to load editor list for ${tokenId}:`,
+      err.message
+    );
+  }
+
+  // 3) Last resort: owner-only list (matches the default mint editor set).
+  return [{ address: walletAddress, role: CollaboratorRole.Editor }];
+}
+
+async function buildBurnProof(tokenId) {
+  const walletAddress = walletState.get().walletAddress;
+  const contract = getContract();
+  if (!walletAddress || !contract) return null;
+
+  try {
+    const version = await contract.methods.editorSetVersion(tokenId).call();
+    const editorList = await loadEditorListForProof(tokenId);
+    if (!editorList || editorList.length === 0) return null;
+
+    const result = getProof(
+      editorList,
+      walletAddress,
+      tokenId,
+      Number(version)
+    );
+    return result?.proof || [];
+  } catch (err) {
+    console.warn(`[ASSET-LIBRARY] Failed to build burn proof:`, err);
+    return null;
+  }
+}
+
+/**
+ * Reconstruct the list of tokens currently owned by an address by scanning
+ * ERC-721 Transfer events. This replaces the ERC721Enumerable
+ * `tokenOfOwnerByIndex` function that was removed to save storage slots.
+ */
+async function fetchOwnedTokenIds(contract, address) {
+  const lowerAddress = address.toLowerCase();
+  const ownership = new Map();
+
+  try {
+    const [transfersTo, transfersFrom] = await Promise.all([
+      contract.getPastEvents("Transfer", {
+        filter: { to: address },
+        fromBlock: 0,
+        toBlock: "latest",
+      }),
+      contract.getPastEvents("Transfer", {
+        filter: { from: address },
+        fromBlock: 0,
+        toBlock: "latest",
+      }),
+    ]);
+
+    // Apply events in block order so the latest transfer for each tokenId wins.
+    const allTransfers = [...transfersTo, ...transfersFrom].sort(
+      (a, b) =>
+        Number(a.blockNumber) - Number(b.blockNumber) ||
+        Number(a.logIndex) - Number(b.logIndex)
+    );
+
+    for (const event of allTransfers) {
+      const tokenId = String(event.returnValues.tokenId);
+      ownership.set(tokenId, event.returnValues.to.toLowerCase());
+    }
+  } catch (err) {
+    console.warn(
+      "[ASSET-LIBRARY] Failed to fetch Transfer events:",
+      err.message
+    );
+  }
+
+  return Array.from(ownership.entries())
+    .filter(([, currentOwner]) => currentOwner === lowerAddress)
+    .map(([tokenId]) => tokenId);
 }
 
 async function fetchAssetLibrary(address) {
@@ -42,21 +159,16 @@ async function fetchAssetLibrary(address) {
     return { owned: [], shared: [] };
   }
 
-  const owned = [];
+  let owned = [];
   const shared = [];
 
   try {
-    const balance = await contract.methods.balanceOf(address).call();
-    const indices = Array.from({ length: Number(balance) }, (_, i) => i);
-    const ids = await Promise.all(
-      indices.map((i) =>
-        contract.methods.tokenOfOwnerByIndex(address, i).call()
-      )
-    );
-    ids.forEach((id) => owned.push(String(id)));
+    owned = await fetchOwnedTokenIds(contract, address);
 
-    // listTokens is not part of the current ArbeskAssetFree/ArbeskAsset ABI;
-    // editor membership is tracked off-chain in the Merkle editor tree.
+    // Shared tokens (editor but not owner) are not discoverable on-chain
+    // without an indexer because editor state is a Merkle root. A future
+    // off-chain indexer can populate this list from EditorSetChanged events
+    // and editor list IPFS CIDs.
     if (typeof contract.methods.listTokens === "function") {
       const memberTokens = await contract.methods.listTokens(address).call();
       for (const tokenId of memberTokens) {
@@ -72,9 +184,11 @@ async function fetchAssetLibrary(address) {
 }
 
 /**
- * Resolve a token into one or more gallery entries.
+ * Resolve a token into a single gallery entry.
  * - Standalone asset token → one entry.
- * - Collection token → one entry per asset in the collection.
+ * - Collection token → one representative entry using the first asset.
+ *   The gallery cards are token-centric; the card's "Add to Scene" and
+ *   "Delete" actions operate on the representative asset.
  */
 async function expandTokenToAssets(tokenId) {
   const contract = getContract();
@@ -88,32 +202,34 @@ async function expandTokenToAssets(tokenId) {
     const base = { tokenId: String(tokenId), collectionCid: null };
 
     if (manifest?.type === "collection" && manifest.assets) {
-      const entries = await Promise.all(
-        Object.entries(manifest.assets).map(async ([assetId, assetCid]) => {
-          let name = assetId;
-          let thumbnail = manifest?.thumbnail || null;
-          try {
-            const assetManifest = await getFromRemoteIPFS(assetCid);
-            name = assetManifest?.name || assetId;
-            thumbnail = assetManifest?.thumbnail || thumbnail;
-          } catch (err) {
-            console.warn(
-              `[ASSET-LIBRARY] Failed to load asset ${assetId} for token ${tokenId}`,
-              err
-            );
-          }
-          return {
-            ...base,
-            assetId,
-            manifestCid: assetCid,
-            collectionCid: cid,
-            name,
-            thumbnail,
-            isCollection: true,
-          };
-        })
-      );
-      return entries;
+      const assetEntries = Object.entries(manifest.assets);
+      if (assetEntries.length === 0) return [];
+
+      // Use the first asset as the token's representative card.
+      const [assetId, assetCid] = assetEntries[0];
+      let name = assetId;
+      let thumbnail = manifest?.thumbnail || null;
+      try {
+        const assetManifest = await getFromRemoteIPFS(assetCid);
+        name = assetManifest?.name || assetId;
+        thumbnail = assetManifest?.thumbnail || thumbnail;
+      } catch (err) {
+        console.warn(
+          `[ASSET-LIBRARY] Failed to load asset ${assetId} for token ${tokenId}`,
+          err
+        );
+      }
+      return [
+        {
+          ...base,
+          assetId,
+          manifestCid: assetCid,
+          collectionCid: cid,
+          name,
+          thumbnail,
+          isCollection: true,
+        },
+      ];
     }
 
     return [
@@ -206,7 +322,8 @@ async function openAssetByTokenId(tokenId) {
 
     const manifest = await getFromRemoteIPFS(cid);
 
-    // Collections: load the collection manifest but do not auto-open any asset.
+    // Collections: load the collection manifest and auto-open the first asset
+    // so that a page reload with ?asset=TOKENID restores the viewport.
     if (manifest?.type === "collection") {
       const { loadCollectionManifest } = await import(
         "../engine/scene-graph.js"
@@ -218,16 +335,26 @@ async function openAssetByTokenId(tokenId) {
       });
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
 
+      const assetIds = Object.keys(manifest.assets || {});
+      const firstAssetId = assetIds[0] || null;
+      const firstAssetCid = firstAssetId
+        ? manifest.assets[firstAssetId]
+        : null;
+
       clearScene();
       assetState.set({
         activeAssetTokenId: String(tokenId),
         activeCollectionTokenId: String(tokenId),
-        activeAssetId: null,
-        activeAssetManifestCid: null,
-        latestAssetManifestCid: null,
+        activeAssetId: firstAssetId,
+        activeAssetManifestCid: firstAssetCid,
+        latestAssetManifestCid: firstAssetCid,
       });
       dismissCreatePulse();
       updateUrlAsset(tokenId);
+
+      if (firstAssetCid) {
+        await loadAssetManifest(firstAssetCid);
+      }
 
       if (window.innerWidth <= 900) {
         switchView("library");
@@ -445,6 +572,13 @@ function createAssetCard(entry) {
   </svg><span>Delete</span>`;
   deleteBtn.addEventListener("click", (e) => onDeleteAsset(e, entry));
 
+  const burnBtn = document.createElement("button");
+  burnBtn.className = "btn btn-outline btn-danger btn-sm asset-card-burn";
+  burnBtn.title = "Burn this token and remove it permanently";
+  burnBtn.setAttribute("aria-label", `Burn token ${entry.tokenId}`);
+  burnBtn.textContent = "Burn";
+  burnBtn.addEventListener("click", (e) => onBurnAsset(e, entry));
+
   const meta = document.createElement("div");
   meta.className = "asset-card-meta";
   meta.appendChild(badge);
@@ -453,6 +587,7 @@ function createAssetCard(entry) {
   actions.className = "asset-card-actions";
   actions.appendChild(addBtn);
   actions.appendChild(deleteBtn);
+  actions.appendChild(burnBtn);
 
   item.appendChild(thumbnailEl);
   item.appendChild(nameEl);
@@ -466,11 +601,16 @@ function createAssetCard(entry) {
   });
   runLoad();
   resolveDeleteVisibility(deleteBtn, entry.role);
+  resolveBurnVisibility(burnBtn, entry.role);
   return item;
 }
 
 function resolveDeleteVisibility(deleteBtn, role) {
   deleteBtn.hidden = role !== "owner";
+}
+
+function resolveBurnVisibility(burnBtn, role) {
+  burnBtn.hidden = role !== "owner";
 }
 
 async function onDeleteAsset(event, entry) {
@@ -498,6 +638,60 @@ async function onDeleteAsset(event, entry) {
       type: "error",
       title: "Delete Failed",
       message: err.message || "Could not remove asset from collection.",
+    });
+  }
+}
+
+async function onBurnAsset(event, entry) {
+  event.stopPropagation();
+
+  const result = await showConfirmDialog(
+    "Burn token?",
+    `This will permanently destroy token #${entry.tokenId}. This action cannot be undone.`,
+    [
+      { text: "Cancel", value: "cancel" },
+      {
+        text: "Burn",
+        value: "burn",
+        className: "btn btn-danger dialog-action-btn",
+      },
+    ]
+  );
+
+  if (result !== "burn") return;
+
+  try {
+    const proof = await buildBurnProof(entry.tokenId);
+    if (!proof) {
+      showToast({
+        type: "error",
+        title: "Burn Failed",
+        message: "Could not build an editor proof for this token.",
+      });
+      return;
+    }
+
+    const txHash = await burnToken(entry.tokenId, proof);
+    if (!txHash) {
+      showToast({
+        type: "error",
+        title: "Burn Failed",
+        message: "The burn transaction was not confirmed.",
+      });
+      return;
+    }
+
+    showToast({
+      type: "success",
+      title: "Token Burned",
+      message: `Token #${entry.tokenId} was destroyed.`,
+    });
+  } catch (err) {
+    console.error("[ASSET-LIBRARY] Burn failed:", err);
+    showToast({
+      type: "error",
+      title: "Burn Failed",
+      message: err.message || "Could not burn the token.",
     });
   }
 }
@@ -536,8 +730,19 @@ async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
 async function refreshAssetLibrary() {
   const { walletAddress } = walletState.get();
   if (!walletAddress || !assetLibraryBody) return;
-  const { owned, shared } = await fetchAssetLibrary(walletAddress);
-  await renderAssetLibrary(owned, shared);
+
+  if (libraryRenderInFlight) {
+    libraryRenderPending = true;
+    return;
+  }
+
+  do {
+    libraryRenderInFlight = true;
+    libraryRenderPending = false;
+    const { owned, shared } = await fetchAssetLibrary(walletAddress);
+    await renderAssetLibrary(owned, shared);
+    libraryRenderInFlight = false;
+  } while (libraryRenderPending);
 }
 
 function highlightActiveAsset() {
@@ -590,6 +795,16 @@ on(EVENTS.ASSET_PUBLISHED, async () => {
 
 on(EVENTS.ASSET_BURNED, async () => {
   clearUrlAssetParams();
+  clearScene();
+  assetState.set({
+    activeAssetTokenId: null,
+    activeCollectionTokenId: null,
+    activeAssetId: null,
+    activeAssetManifestCid: null,
+    latestAssetManifestCid: null,
+    activeAssetName: null,
+  });
+  emit(EVENTS.SCENE_EMPTY);
   await refreshAssetLibrary();
 });
 

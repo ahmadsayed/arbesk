@@ -80,7 +80,7 @@ function updateEditors(
 - `setBurnPermission` → REMOVE (burn permission now just means being in the editor list with Editor role).
 - `canBurn` → REMOVE.
 - `getAssetManifest` → remove `editorList` from return; return just `(manifestURI, owner)`.
-- `totalSupply()` — keep `super.totalSupply()` (already done in #5).
+- `totalSupply()` — REMOVE. The base now inherits plain `ERC721` (non-Enumerable), so no `totalSupply` is exposed.
 - Keep: `tokenURI`, `pause`, `unpause`, `_setTokenURI`, `_exists`, `_ownerOf`, `_mint`, `_burn`, all events except the removed ones, constructor, custom errors.
 - `CollaboratorRole` enum — KEEP (None=0, Viewer=1, Editor=2). Used in `_requireEditor`.
 - `MAX_EDITORS_PER_TOKEN` — make it a constant 5000 in each concrete contract, not an abstract function.
@@ -134,7 +134,7 @@ cd blockchain && docker compose run --rm hardhat npx hardhat compile
 - [ ] No `_editorRoles`, `members`, `tokensIParticipate`, `_canBurn` in any new file
 - [ ] `publishAsset` accepts `editorRoot_` parameter
 - [ ] `updateAssetURI` and `burn` accept `bytes32[] calldata proof`
-- [ ] `totalSupply()` returns `super.totalSupply()` (not a counter variable)
+- [ ] No `totalSupply()` function — base inherits plain `ERC721`
 - [ ] All payment functions preserved exactly as-is from ArbeskAsset.sol
 - [ ] All free-tier functions preserved exactly as-is from ArbeskAssetFree.sol
 - [ ] `MAX_EDITORS_PER_TOKEN = 5000`

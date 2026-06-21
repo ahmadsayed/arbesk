@@ -425,15 +425,15 @@ describe("ArbeskAsset (Merkle)", function () {
       expect(await asset.ownerOf(tokenId)).to.equal(user.address);
     });
 
-    it("totalSupply increments", async () => {
-      expect(await asset.totalSupply()).to.equal(0n);
+    it("balanceOf increments", async () => {
+      expect(await asset.balanceOf(user.address)).to.equal(0n);
       const root = computeRoot(
         [{ address: user.address, role: CollaboratorRole.Editor }],
         10,
         1
       );
       await asset.connect(user).publishAsset("ipfs://x", 10, root, "");
-      expect(await asset.totalSupply()).to.equal(1n);
+      expect(await asset.balanceOf(user.address)).to.equal(1n);
     });
   });
 
@@ -729,10 +729,10 @@ describe("ArbeskAsset (Merkle)", function () {
       ).to.be.revertedWithCustomError(asset, "NonexistentToken");
     });
 
-    it("burning decrements total supply", async () => {
+    it("burning decrements owner balance", async () => {
       const tokenId = 603;
       await publishAsEditor(user, tokenId);
-      expect(await asset.totalSupply()).to.equal(1n);
+      expect(await asset.balanceOf(user.address)).to.equal(1n);
 
       const { proof } = getProof(
         [{ address: user.address, role: CollaboratorRole.Editor }],
@@ -741,7 +741,7 @@ describe("ArbeskAsset (Merkle)", function () {
         1
       );
       await asset.connect(user).burn(tokenId, proof);
-      expect(await asset.totalSupply()).to.equal(0n);
+      expect(await asset.balanceOf(user.address)).to.equal(0n);
     });
 
     it("cannot burn twice", async () => {
