@@ -35,6 +35,7 @@ export const SELECTORS = {
   historyVersionBadge: "#historyVersionBadge",
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
+  assetTokenIdLabel: "#assetStatusMeta",
   inspectorDiveBtn: "#inspectorDiveBtn",
   backBtn: "#backBtn",
   // Comments section in right inspector
