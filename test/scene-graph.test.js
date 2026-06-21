@@ -996,9 +996,6 @@ describe("getNodeAnchor and getNodeMeshes", () => {
 describe("Scene Graph — buildChildRefResolutionPlan", () => {
   function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
     if (!childRef) return { kind: "invalid" };
-    if (childRef.type === "token" && childRef.tokenId) {
-      return { kind: "cross-collection-token", ref: childRef };
-    }
     if (childRef.assetID) {
       if (childRef.collection === "self") {
         return {
@@ -1022,7 +1019,7 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
     const assetsMap = { "chair-01": "bafyChair" };
     const plan = buildChildRefResolutionPlan(
       { collection: "self", assetID: "chair-01" },
-      assetsMap
+      assetsMap,
     );
     expect(plan).toEqual({
       kind: "same-collection",
@@ -1032,10 +1029,14 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
   });
 
   it("plans a cross-collection-asset lookup when collection is a token ref", () => {
-    const collectionRef = { chainId: 6342, contractAddress: "0xabc", tokenId: "42" };
+    const collectionRef = {
+      chainId: 6342,
+      contractAddress: "0xabc",
+      tokenId: "42",
+    };
     const plan = buildChildRefResolutionPlan(
       { collection: collectionRef, assetID: "chair-01" },
-      null
+      null,
     );
     expect(plan).toEqual({
       kind: "cross-collection-asset",
@@ -1044,22 +1045,11 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
     });
   });
 
-  it("plans a legacy cross-collection-token lookup", () => {
-    const legacyRef = {
-      type: "token",
-      chainId: 314159,
-      contractAddress: "0xabc",
-      tokenId: "42",
-      standard: "ERC721",
-      resolution: "latest",
-    };
-    const plan = buildChildRefResolutionPlan(legacyRef, null);
-    expect(plan).toEqual({ kind: "cross-collection-token", ref: legacyRef });
-  });
-
   it("returns invalid for a malformed child_ref", () => {
     expect(buildChildRefResolutionPlan({}, null)).toEqual({ kind: "invalid" });
-    expect(buildChildRefResolutionPlan(null, null)).toEqual({ kind: "invalid" });
+    expect(buildChildRefResolutionPlan(null, null)).toEqual({
+      kind: "invalid",
+    });
   });
 });
 
@@ -1090,13 +1080,23 @@ describe("Scene Graph — buildForkOrLiveRefNode", () => {
   };
 
   it("fork builds a plain source node with the resolved CID, frozen", () => {
-    const node = buildForkOrLiveRefNode("fork", ref, "chair-01", "bafyChairCid");
+    const node = buildForkOrLiveRefNode(
+      "fork",
+      ref,
+      "chair-01",
+      "bafyChairCid",
+    );
     expect(node.source).toEqual({ cid: "bafyChairCid" });
     expect(node.child_ref).toBeUndefined();
   });
 
   it("live-ref builds a child_ref node pointing at the original collection", () => {
-    const node = buildForkOrLiveRefNode("live-ref", ref, "chair-01", "bafyChairCid");
+    const node = buildForkOrLiveRefNode(
+      "live-ref",
+      ref,
+      "chair-01",
+      "bafyChairCid",
+    );
     expect(node.child_ref).toEqual({
       collection: ref.collectionRef,
       assetID: "chair-01",
@@ -1105,6 +1105,8 @@ describe("Scene Graph — buildForkOrLiveRefNode", () => {
   });
 
   it("throws on an unknown choice", () => {
-    expect(() => buildForkOrLiveRefNode("bogus", ref, "chair-01", "cid")).toThrow();
+    expect(() =>
+      buildForkOrLiveRefNode("bogus", ref, "chair-01", "cid"),
+    ).toThrow();
   });
 });

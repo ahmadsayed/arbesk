@@ -137,6 +137,30 @@ async function openAssetByTokenId(tokenId) {
   }
 }
 
+/**
+ * Build a payload for drag-drop / "Add to Scene" using the card's cached
+ * collection metadata. Falls back to a token-only payload when no assetID
+ * has been cached yet.
+ */
+function buildLinkedAssetPayload(tokenId, item) {
+  const { chainId: walletChainId, contractAddress: walletContractAddress } =
+    walletState.get();
+  const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
+  const contractAddr = walletContractAddress || null;
+  const payload = {
+    type: "linked_asset",
+    token_id: String(tokenId),
+    standard: "ERC721",
+    resolution: "latest",
+    chainId,
+    contractAddress: contractAddr,
+  };
+  // Include the first assetID when the collection manifest has been loaded.
+  const firstAssetId = item?.dataset?.firstAssetId;
+  if (firstAssetId) payload.assetID = firstAssetId;
+  return payload;
+}
+
 function renderAssetLibrary(owned, shared) {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
@@ -217,18 +241,7 @@ function createAssetCard(tokenId, role) {
   item.setAttribute("aria-label", `Open asset ${tokenId}`);
 
   item.addEventListener("dragstart", (event) => {
-    const { chainId: walletChainId, contractAddress: walletContractAddress } =
-      walletState.get();
-    const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
-    const contractAddr = walletContractAddress || null;
-    const payload = {
-      type: "linked_asset",
-      token_id: String(tokenId),
-      standard: "ERC721",
-      resolution: "latest",
-      chainId,
-      contractAddress: contractAddr,
-    };
+    const payload = buildLinkedAssetPayload(tokenId, item);
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData(
       "application/x-arbesk-linked-asset",
@@ -280,17 +293,10 @@ function createAssetCard(tokenId, role) {
   addBtn.title = "Add this asset as a linked asset in the current scene";
   addBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    const { chainId: walletChainId, contractAddress: walletContractAddress } =
-      walletState.get();
-    const chainId = Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
-    const contractAddr = walletContractAddress || null;
-    emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, {
-      token_id: String(tokenId),
-      standard: "ERC721",
-      resolution: "latest",
-      chainId,
-      contractAddress: contractAddr,
-    });
+    emit(
+      EVENTS.ASSET_ADD_LINKED_REQUESTED,
+      buildLinkedAssetPayload(tokenId, item)
+    );
   });
 
   const burnBtn = document.createElement("button");
@@ -337,7 +343,6 @@ async function resolveBurnVisibility(burnBtn, tokenId, role) {
   const { walletAddress } = walletState.get();
   if (!contract || !walletAddress) return;
   try {
-    // Show burn for any token (editor verified at burn time via Merkle proof).
     burnBtn.hidden = false;
   } catch {
     burnBtn.hidden = true;
@@ -442,6 +447,14 @@ async function loadAssetMetadata(
     nameEl.textContent = `${summary.name} (${summary.assetCount} asset${
       summary.assetCount === 1 ? "" : "s"
     })`;
+
+    // Cache the first assetID so drag/drop and "Add to Scene" can route
+    // through the collection resolution path (handleLinkedAssetDropped).
+    if (manifest?.type === "collection" && manifest.assets) {
+      const firstKey = Object.keys(manifest.assets)[0];
+      if (firstKey) item.dataset.firstAssetId = firstKey;
+    }
+
     await renderAssetThumbnail(manifest.thumbnail, thumbnailEl, summary.name);
   } catch (err) {
     console.warn("Failed to load asset metadata for token", tokenId, err);

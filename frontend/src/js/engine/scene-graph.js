@@ -771,16 +771,12 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
 }
 
 /**
- * Decide how a node's child_ref should be resolved: same-collection lookup,
- * cross-collection asset lookup, or the legacy top-level token reference.
+ * Decide how a node's child_ref should be resolved: same-collection lookup
+ * or cross-collection asset lookup.
  * Pure decision logic — no I/O.
  */
 function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
   if (!childRef) return { kind: "invalid" };
-
-  if (childRef.type === "token" && childRef.tokenId) {
-    return { kind: "cross-collection-token", ref: childRef };
-  }
 
   if (childRef.assetID) {
     if (childRef.collection === "self") {
@@ -837,9 +833,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   }
 
   const refKey =
-    plan.kind === "cross-collection-token"
-      ? `${childRef.chainId}:${childRef.contractAddress}:${childRef.tokenId}`
-      : plan.kind === "cross-collection-asset"
+    plan.kind === "cross-collection-asset"
       ? `${plan.collectionRef.chainId}:${plan.collectionRef.contractAddress}:${plan.collectionRef.tokenId}:${plan.assetID}`
       : `self:${plan.assetID}`;
 
@@ -860,9 +854,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
     );
 
     let resolution;
-    if (plan.kind === "cross-collection-token") {
-      resolution = await resolveChildRef(childRef);
-    } else if (plan.kind === "invalid") {
+    if (plan.kind === "invalid") {
       resolution = { resolved: false, error: "Invalid child_ref shape" };
     } else {
       resolution = await resolveCollectionChildRef(
@@ -1164,97 +1156,12 @@ async function handleLinkedAssetDropped(event) {
     return;
   }
 
-  const {
-    chainId: walletChainId,
-    contractAddress: walletContractAddress,
-    walletAddress,
-  } = walletState.get();
-  const resolvedChainId = Number(
-    eventChainId || walletChainId || CHAIN_IDS.HARDHAT_LOCAL
+  // Legacy drops without assetID are no longer supported — the caller must
+  // include an assetID so the drop handler can route through the collection
+  // resolution path above.
+  console.warn(
+    `[SCENE] linked asset drop ignored: no assetID for token #${tokenId}`
   );
-  const resolvedContractAddr = eventContractAddress || walletContractAddress;
-
-  if (!resolvedContractAddr) {
-    console.warn("[SCENE] No contract address available for linked asset drop");
-    return;
-  }
-
-  if (!walletAddress) {
-    console.warn("[SCENE] Wallet not connected — cannot resolve linked asset");
-    return;
-  }
-
-  const refKey = `${resolvedChainId}:${resolvedContractAddr}:${tokenId}`;
-
-  // Prevent duplicate drops for the same reference
-  for (const [, anchor] of state.nodeAnchors) {
-    if (
-      anchor.metadata?.childRef &&
-      `${anchor.metadata.childRef.chainId}:${anchor.metadata.childRef.contractAddress}:${anchor.metadata.childRef.tokenId}` ===
-        refKey
-    ) {
-      console.warn(
-        `[SCENE] duplicate child_ref drop ignored: token #${tokenId}`
-      );
-      return;
-    }
-  }
-
-  const shortAddr =
-    resolvedContractAddr.slice(0, 8) + resolvedContractAddr.slice(-6);
-  const nodeId = `child_token_${resolvedChainId}_${shortAddr}_${tokenId}`;
-
-  const childRef = {
-    type: "token",
-    chainId: resolvedChainId,
-    contractAddress: resolvedContractAddr,
-    tokenId,
-    standard,
-    resolution: resolutionMode,
-  };
-
-  // Resolve the token manifest first so we can derive the display name.
-  const resolvedRef = {
-    ...childRef,
-    chainId: resolvedChainId,
-    contractAddress: resolvedContractAddr,
-  };
-  const childResolution = await resolveChildRef(resolvedRef, {
-    validate: true,
-  });
-  const resolvedCid = childResolution?.manifestCid || null;
-
-  if (!resolvedCid) {
-    console.warn(
-      `[SCENE] could not resolve linked asset preview for token #${tokenId}: ${
-        childResolution?.error || "unknown error"
-      }`
-    );
-    return;
-  }
-
-  const nodeEntry = {
-    node_id: nodeId,
-    name: childResolution?.manifest?.name || `World #${tokenId}`,
-    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-    child_ref: childRef,
-  };
-
-  state.pendingChildRefs.push(nodeEntry);
-
-  disposeNode(nodeId);
-
-  // Render the child world immediately into the scene
-  const parentNode = state.rootSceneAnchor || state.scene;
-  await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
-
-  emit(EVENTS.SCENE_TOKEN_CHILD_ADDED, {
-    nodeId,
-    chainId: resolvedChainId,
-    contractAddress: resolvedContractAddr,
-    tokenId,
-    resolvedCid,
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
