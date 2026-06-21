@@ -813,8 +813,12 @@ async function onPublishAsset() {
 
     if (existingCollectionTokenId) {
       const tokenId = existingCollectionTokenId;
-      const editorList = await _loadEditorList(tokenId);
-      if (!editorList) throw new Error("Cannot find editor list");
+      let editorList = await _loadEditorList(tokenId);
+      // When localStorage is empty (fresh browser context or E2E isolation),
+      // fall back to a default editor list with the current wallet as Editor.
+      if (!editorList) {
+        editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
+      }
       const currentVersion = await _getEditorSetVersion(tokenId);
       const proofResult = getProof(
         editorList,

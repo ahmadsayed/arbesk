@@ -29,7 +29,7 @@ test.describe("republish existing token", () => {
     // tokenURI returns a collection manifest — walk through collection → asset.
     const firstCollection = await fetchTokenManifest(tokenIdHex);
     assertCollectionManifest(firstCollection, { expectedAssetIds: undefined });
-    expect(Object.keys(firstCollection.assets)).toBeGreaterThanOrEqual(1);
+    expect(Object.keys(firstCollection.assets).length).toBeGreaterThanOrEqual(1);
     const firstVersion = firstCollection.version;
     expect(firstVersion).toBeGreaterThanOrEqual(1);
 
@@ -60,7 +60,7 @@ test.describe("republish existing token", () => {
     assertCollectionManifest(republishedCollection, {
       expectedAssetIds: undefined,
     });
-    expect(Object.keys(republishedCollection.assets)).toBeGreaterThanOrEqual(1);
+    expect(Object.keys(republishedCollection.assets).length).toBeGreaterThanOrEqual(1);
     expect(republishedCollection.version).toBeGreaterThan(firstVersion);
 
     const [republishedAssetCid] = Object.values(republishedCollection.assets);
