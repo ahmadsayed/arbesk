@@ -186,6 +186,29 @@ function advanceManifestVersion(manifest, latestCid) {
 }
 
 /**
+ * Derive a deterministic collection token ID from the user's wallet address.
+ * Uses keccak256(soliditySha3(address)) so the contract can recompute
+ * and verify ownership. One wallet = one default collection.
+ */
+function deriveDefaultCollectionId(walletAddr) {
+  return window.Web3.utils.soliditySha3({
+    type: "address",
+    value: walletAddr,
+  });
+}
+
+/**
+ * Derive a deterministic named collection token ID from wallet + name.
+ * Same keccak256 ABI-encoding approach; unique per wallet+name pair.
+ */
+function deriveNamedCollectionId(walletAddr, name) {
+  return window.Web3.utils.soliditySha3(
+    { type: "address", value: walletAddr },
+    { type: "string", value: name }
+  );
+}
+
+/**
  * Merge an asset's CID into a collection manifest's `assets` map.
  * Pure function — does not touch IPFS or chain state.
  */
@@ -799,12 +822,7 @@ async function onPublishAsset() {
       updateUrlAsset(tokenId);
       announceStatus("Collection republished successfully.");
     } else {
-      const tokenId =
-        "0x" +
-        Array.from(collectionCid)
-          .reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
-          .toString(16)
-          .replace(/^-/, "");
+      const tokenId = deriveDefaultCollectionId(walletAddr);
       const editorList = [
         { address: walletAddr, role: CollaboratorRole.Editor },
       ];
