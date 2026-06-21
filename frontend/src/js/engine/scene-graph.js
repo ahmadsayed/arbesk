@@ -12,6 +12,7 @@ import {
 import { composeGlTFAsync } from "../gltf/async-gltf.js";
 import {
   resolveChildRef,
+  resolveCollectionChildRef,
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
 import { CHAIN_IDS } from "../constants/chains.js";
@@ -87,8 +88,7 @@ on(EVENTS.THEME_CHANGED, () => {
   if (state.scene) {
     const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
     state.scene.clearColor =
-      hexToColor4(viewportBg, 1) ||
-      new BABYLON.Color4(0.118, 0.118, 0.118, 1);
+      hexToColor4(viewportBg, 1) || new BABYLON.Color4(0.118, 0.118, 0.118, 1);
   }
 });
 
@@ -226,7 +226,12 @@ function initEngine() {
     // X axis (red) — full width cross through origin
     const xAxis = BABYLON.MeshBuilder.CreateLines(
       "axisX",
-      { points: [new BABYLON.Vector3(-AXIS_LEN, AXIS_Y, 0), new BABYLON.Vector3(AXIS_LEN, AXIS_Y, 0)] },
+      {
+        points: [
+          new BABYLON.Vector3(-AXIS_LEN, AXIS_Y, 0),
+          new BABYLON.Vector3(AXIS_LEN, AXIS_Y, 0),
+        ],
+      },
       state.scene
     );
     xAxis.color = axisColors.x;
@@ -236,7 +241,12 @@ function initEngine() {
     // Z axis (blue) — full depth cross through origin
     const zAxis = BABYLON.MeshBuilder.CreateLines(
       "axisZ",
-      { points: [new BABYLON.Vector3(0, AXIS_Y, -AXIS_LEN), new BABYLON.Vector3(0, AXIS_Y, AXIS_LEN)] },
+      {
+        points: [
+          new BABYLON.Vector3(0, AXIS_Y, -AXIS_LEN),
+          new BABYLON.Vector3(0, AXIS_Y, AXIS_LEN),
+        ],
+      },
       state.scene
     );
     zAxis.color = axisColors.z;
@@ -297,9 +307,7 @@ function initEngine() {
           // is the parent-manifest node_id (manifest-loaded path).
           // Fall back to childAnchor's own nodeId for freshly-dropped nodes.
           childWorldNodeId =
-            target.parent?.metadata?.nodeId ||
-            target.metadata?.nodeId ||
-            null;
+            target.parent?.metadata?.nodeId || target.metadata?.nodeId || null;
           break;
         }
         if (target.metadata?.nodeId && !firstNodeId) {
@@ -762,6 +770,38 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
   state.nodeMeshes.set(nodeId, meshArray);
 }
 
+/**
+ * Decide how a node's child_ref should be resolved: same-collection lookup,
+ * cross-collection asset lookup, or the legacy top-level token reference.
+ * Pure decision logic — no I/O.
+ */
+function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
+  if (!childRef) return { kind: "invalid" };
+
+  if (childRef.type === "token" && childRef.tokenId) {
+    return { kind: "cross-collection-token", ref: childRef };
+  }
+
+  if (childRef.assetID) {
+    if (childRef.collection === "self") {
+      return {
+        kind: "same-collection",
+        assetID: childRef.assetID,
+        assetsMap: activeCollectionAssets,
+      };
+    }
+    if (childRef.collection && childRef.collection.tokenId) {
+      return {
+        kind: "cross-collection-asset",
+        collectionRef: childRef.collection,
+        assetID: childRef.assetID,
+      };
+    }
+  }
+
+  return { kind: "invalid" };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Token child world loading
 // ═══════════════════════════════════════════════════════════════════════════
@@ -778,7 +818,31 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
     return [placeholder];
   }
 
-  const refKey = `${childRef.chainId}:${childRef.contractAddress}:${childRef.tokenId}`;
+  const plan = buildChildRefResolutionPlan(
+    childRef,
+    state.activeCollectionAssets
+  );
+
+  // Same-collection self-reference cycle: a node referencing its own
+  // assetID via collection:"self" is always a cycle, independent of depth.
+  if (
+    plan.kind === "same-collection" &&
+    plan.assetID === state.activeCollectionCurrentAssetID
+  ) {
+    console.warn(
+      `[SCENE] self-referencing same-collection child_ref rejected at node ${node.node_id}`
+    );
+    const placeholder = createPlaceholder(node.node_id, anchor, "error");
+    return [placeholder];
+  }
+
+  const refKey =
+    plan.kind === "cross-collection-token"
+      ? `${childRef.chainId}:${childRef.contractAddress}:${childRef.tokenId}`
+      : plan.kind === "cross-collection-asset"
+      ? `${plan.collectionRef.chainId}:${plan.collectionRef.contractAddress}:${plan.collectionRef.tokenId}:${plan.assetID}`
+      : `self:${plan.assetID}`;
+
   if (resolvingCids.has(refKey)) {
     console.warn(
       `[SCENE] circular child_ref detected at node ${node.node_id}, ref=${refKey}`
@@ -792,13 +856,39 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   resolvingCids.add(refKey);
   try {
     console.log(
-      `[SCENE] resolving token child node ${node.node_id} depth=${depth}`
+      `[SCENE] resolving child node ${node.node_id} depth=${depth} kind=${plan.kind}`
     );
 
-    const resolution = await resolveChildRef(childRef);
+    let resolution;
+    if (plan.kind === "cross-collection-token") {
+      resolution = await resolveChildRef(childRef);
+    } else if (plan.kind === "invalid") {
+      resolution = { resolved: false, error: "Invalid child_ref shape" };
+    } else {
+      resolution = await resolveCollectionChildRef(
+        plan.kind === "same-collection"
+          ? { collection: "self", assetID: plan.assetID }
+          : { collection: plan.collectionRef, assetID: plan.assetID },
+        plan.kind === "same-collection" ? plan.assetsMap : null
+      );
+    }
+
+    if (resolution.nestedCollectionRef) {
+      // assetID resolved to a nested collection, not a direct asset CID:
+      // recurse via the cross-collection token path.
+      resolution = await resolveChildRef({
+        type: "token",
+        chainId: resolution.nestedCollectionRef.chainId,
+        contractAddress: resolution.nestedCollectionRef.contractAddress,
+        tokenId: resolution.nestedCollectionRef.tokenId,
+        standard: "ERC721",
+        resolution: "latest",
+      });
+    }
+
     if (!resolution.resolved || !resolution.manifestCid) {
       console.warn(
-        `[SCENE] token child resolution failed for node ${node.node_id}: ${resolution.error}`
+        `[SCENE] child resolution failed for node ${node.node_id}: ${resolution.error}`
       );
       disposePlaceholder(loadingPlaceholder);
       const errorPlaceholder = createPlaceholder(node.node_id, anchor, "error");
@@ -806,7 +896,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
     }
 
     console.log(
-      `[SCENE] token child node ${node.node_id} resolved → ${resolution.manifestCid}`
+      `[SCENE] child node ${node.node_id} resolved → ${resolution.manifestCid}`
     );
 
     const childAnchor = createAnchorNode(
@@ -818,15 +908,9 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
       childRef,
       resolvedCid: resolution.manifestCid,
       loaded: true,
-      // nodeId fallback for the freshly-dropped path where no outer anchor exists
-      // and the pointer walk needs to resolve past the childRef boundary.
       nodeId: node.node_id,
     };
 
-    // Only register childAnchor if loadNode hasn't already registered the outer anchor.
-    // For freshly-dropped nodes (no loadNode call), this registers the childAnchor as the
-    // transform target. For manifest-loaded nodes, the outer anchor takes precedence so that
-    // captureSelectedTransform reads world-space position, not a local offset from the outer anchor.
     if (!state.nodeAnchors.has(node.node_id)) {
       state.nodeAnchors.set(node.node_id, childAnchor);
     }
@@ -842,10 +926,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
 
     return [];
   } catch (err) {
-    console.error(
-      `[SCENE] failed to load token child node ${node.node_id}:`,
-      err
-    );
+    console.error(`[SCENE] failed to load child node ${node.node_id}:`, err);
     disposePlaceholder(loadingPlaceholder);
     const errorPlaceholder = createPlaceholder(node.node_id, anchor, "error");
     return [errorPlaceholder];
@@ -950,6 +1031,35 @@ async function loadAssetManifest(
   return manifest;
 }
 
+/**
+ * Load a collection manifest and populate the active-collection state.
+ * Does NOT render any 3D content — returns the manifest plus a flat list
+ * of its entries so gallery UI can let the user pick which asset to open.
+ *
+ * @param {string} collectionCid
+ * @param {{chainId: number, contractAddress: string, tokenId: string}} collectionRef
+ * @returns {Promise<{manifest: Object, assetEntries: Array<{assetID: string, kind: string, value: any}>}>}
+ */
+async function loadCollectionManifest(collectionCid, collectionRef) {
+  const manifest = await getFromRemoteIPFS(collectionCid);
+  if (!manifest || manifest.type !== "collection") {
+    throw new Error(`CID ${collectionCid} is not a collection manifest`);
+  }
+
+  state.activeCollectionAssets = manifest.assets || {};
+  state.activeCollectionRef = collectionRef || null;
+
+  const assetEntries = Object.entries(manifest.assets || {}).map(
+    ([assetID, value]) => ({
+      assetID,
+      kind: typeof value === "string" ? "asset" : "collection",
+      value,
+    })
+  );
+
+  return { manifest, assetEntries };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Drag/drop — linked asset composition
 // ═══════════════════════════════════════════════════════════════════════════
@@ -967,8 +1077,14 @@ async function handleLinkedAssetDropped(event) {
   } = detail;
   if (!tokenId) return;
 
-  const { chainId: walletChainId, contractAddress: walletContractAddress, walletAddress } = walletState.get();
-  const resolvedChainId = Number(eventChainId || walletChainId || CHAIN_IDS.HARDHAT_LOCAL);
+  const {
+    chainId: walletChainId,
+    contractAddress: walletContractAddress,
+    walletAddress,
+  } = walletState.get();
+  const resolvedChainId = Number(
+    eventChainId || walletChainId || CHAIN_IDS.HARDHAT_LOCAL
+  );
   const resolvedContractAddr = eventContractAddress || walletContractAddress;
 
   if (!resolvedContractAddr) {
@@ -1126,7 +1242,9 @@ function getNodeChildRef(nodeId) {
 // Auto-dismissed on first meaningful interaction.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const _chatPulseBtn = document.querySelector('.sidebar-switcher-btn[data-view="chat"]');
+const _chatPulseBtn = document.querySelector(
+  '.sidebar-switcher-btn[data-view="chat"]'
+);
 
 function dismissCreatePulse() {
   _chatPulseBtn?.classList.remove("pulse");
@@ -1225,7 +1343,10 @@ function registerMockNode(nodeId, mesh, _history = []) {
 
 on(EVENTS.OUTLINER_REMOVE_REQUESTED, (payload) => {
   // TODO(#18): implement node removal from manifest
-  console.warn("[SCENE] outliner:removeRequested not yet implemented for nodeId:", payload?.nodeId);
+  console.warn(
+    "[SCENE] outliner:removeRequested not yet implemented for nodeId:",
+    payload?.nodeId
+  );
 });
 
 // Forward outliner clicks to the scene selection system so that
@@ -1241,6 +1362,7 @@ on(EVENTS.OUTLINER_NODE_SELECTED, (e) => {
 
 export {
   loadAssetManifest,
+  loadCollectionManifest,
   loadNode,
   loadAsset,
   getNodeAnchor,
@@ -1285,7 +1407,10 @@ export {
         })
         .catch(() => {});
     } else if (manifestCid) {
-      assetState.set({ activeAssetManifestCid: manifestCid, latestAssetManifestCid: manifestCid });
+      assetState.set({
+        activeAssetManifestCid: manifestCid,
+        latestAssetManifestCid: manifestCid,
+      });
       loadAssetManifest(manifestCid);
       dismissCreatePulse();
     }
@@ -1299,7 +1424,11 @@ export {
       }
 
       clearScene();
-      assetState.set({ activeAssetManifestCid: null, latestAssetManifestCid: null, activeAssetTokenId: null });
+      assetState.set({
+        activeAssetManifestCid: null,
+        latestAssetManifestCid: null,
+        activeAssetTokenId: null,
+      });
 
       // Prompt for a name using the GNOME HIG dialog
       let activeAssetName;

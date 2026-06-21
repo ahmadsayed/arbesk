@@ -1,7 +1,10 @@
 /**
  * @jest-environment jsdom
  */
-import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
+import {
+  assetState,
+  _resetForTesting,
+} from "../../frontend/src/js/state/asset-state.js";
 import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
 
 beforeEach(() => _resetForTesting());
@@ -14,6 +17,8 @@ describe("assetState.get()", () => {
       activeAssetName: null,
       latestAssetManifestCid: null,
       currentManifest: null,
+      activeCollectionTokenId: null,
+      activeAssetId: null,
     });
   });
 
@@ -55,6 +60,8 @@ describe("assetState.reset()", () => {
       activeAssetName: null,
       latestAssetManifestCid: null,
       currentManifest: null,
+      activeCollectionTokenId: null,
+      activeAssetId: null,
     });
   });
 

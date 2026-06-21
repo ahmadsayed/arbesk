@@ -536,12 +536,18 @@ function resetMockState() {
     materials: [],
     stoppedAnimations: [],
     startedAnimations: [],
-    stopAllAnimations() { this.stoppedAnimations.push("__all__"); },
-    stopAnimation(target) { this.stoppedAnimations.push(target); },
+    stopAllAnimations() {
+      this.stoppedAnimations.push("__all__");
+    },
+    stopAnimation(target) {
+      this.stoppedAnimations.push(target);
+    },
     beginAnimation(target, from, to, loop) {
       this.startedAnimations.push({ target, from, to, loop });
     },
-    getTransformNodeByName() { return null; },
+    getTransformNodeByName() {
+      return null;
+    },
   };
   mockNodeMeshes = new Map();
   mockNodeAnchors = new Map();
@@ -550,7 +556,9 @@ function resetMockState() {
   mockPendingChildRefs = [];
 
   globalThis.BABYLON = {
-    Vector3: function (x, y, z) { return V3(x, y, z); },
+    Vector3: function (x, y, z) {
+      return V3(x, y, z);
+    },
     Color3: { FromHexString: (hex) => ({ r: 0, g: 0, b: 0, _hex: hex }) },
     Matrix: { FromValues: (...v) => makeMatrix(v) },
     Quaternion: { Identity: () => ({ x: 0, y: 0, z: 0, w: 1 }) },
@@ -563,13 +571,34 @@ function resetMockState() {
       },
     },
     StandardMaterial: function () {
-      return { diffuseColor: null, albedoColor: null, alpha: 1, getSubMeshMaterials() { return []; }, dispose() {} };
+      return {
+        diffuseColor: null,
+        albedoColor: null,
+        alpha: 1,
+        getSubMeshMaterials() {
+          return [];
+        },
+        dispose() {},
+      };
     },
     Animation: function (name, targetProp, fps, type, loopMode) {
-      const anim = { name, targetProp, fps, type, loopMode, _keys: [], setKeys(keys) { this._keys = keys; } };
+      const anim = {
+        name,
+        targetProp,
+        fps,
+        type,
+        loopMode,
+        _keys: [],
+        setKeys(keys) {
+          this._keys = keys;
+        },
+      };
       return anim;
     },
-    TransformNode: function () { const n = makeNode(); return n; },
+    TransformNode: function () {
+      const n = makeNode();
+      return n;
+    },
   };
   BABYLON.Animation.ANIMATIONTYPE_VECTOR3 = 1;
   BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE = 2;
@@ -581,7 +610,9 @@ const ERROR_PLACEHOLDER_COLOR = "#CC6666";
 
 function createPlaceholder(nodeId, parentNode, state) {
   const color = state === "error" ? ERROR_PLACEHOLDER_COLOR : PLACEHOLDER_COLOR;
-  const box = BABYLON.MeshBuilder.CreateBox("placeholder_" + nodeId, { size: 0.5 });
+  const box = BABYLON.MeshBuilder.CreateBox("placeholder_" + nodeId, {
+    size: 0.5,
+  });
   box.parent = parentNode;
   box.metadata = { nodeId, isPlaceholder: true, placeholderState: state };
   const mat = new BABYLON.StandardMaterial("placeholderMat_" + nodeId);
@@ -589,8 +620,13 @@ function createPlaceholder(nodeId, parentNode, state) {
   mat.alpha = state === "loading" ? 0.6 : 0.8;
   box.material = mat;
   if (state === "loading") {
-    const pulseAnim = new BABYLON.Animation("pulse_" + nodeId, "scaling", 30,
-      BABYLON.Animation.ANIMATIONTYPE_VECTOR3, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
+    const pulseAnim = new BABYLON.Animation(
+      "pulse_" + nodeId,
+      "scaling",
+      30,
+      BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+      BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE,
+    );
     pulseAnim.setKeys([
       { frame: 0, value: new BABYLON.Vector3(1, 1, 1) },
       { frame: 15, value: new BABYLON.Vector3(1.2, 1.2, 1.2) },
@@ -605,7 +641,8 @@ function createPlaceholder(nodeId, parentNode, state) {
 
 function disposePlaceholder(placeholder) {
   if (!placeholder || placeholder.isDisposed()) return;
-  if (placeholder.metadata?._placeholderAnim) mockScene.stopAnimation(placeholder);
+  if (placeholder.metadata?._placeholderAnim)
+    mockScene.stopAnimation(placeholder);
   placeholder.dispose();
 }
 
@@ -613,11 +650,19 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
   const meshArray = [];
   for (const tNode of transformNodes) {
     if (tNode.parent === null) tNode.parent = parentNode;
-    tNode.metadata = { ...(tNode.metadata || {}), nodeId, isNodeRoot: tNode.parent === parentNode };
+    tNode.metadata = {
+      ...(tNode.metadata || {}),
+      nodeId,
+      isNodeRoot: tNode.parent === parentNode,
+    };
   }
   for (const mesh of meshes) {
     if (mesh.parent === null) mesh.parent = parentNode;
-    mesh.metadata = { ...(mesh.metadata || {}), nodeId, isNodeRoot: mesh.parent === parentNode };
+    mesh.metadata = {
+      ...(mesh.metadata || {}),
+      nodeId,
+      isNodeRoot: mesh.parent === parentNode,
+    };
     meshArray.push(mesh);
   }
   mockNodeMeshes.set(nodeId, meshArray);
@@ -627,7 +672,9 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
 function disposeNode(nodeId) {
   const meshes = mockNodeMeshes.get(nodeId);
   if (meshes) {
-    for (const mesh of meshes) { if (mesh && !mesh.isDisposed()) mesh.dispose(); }
+    for (const mesh of meshes) {
+      if (mesh && !mesh.isDisposed()) mesh.dispose();
+    }
     mockNodeMeshes.delete(nodeId);
   }
   const anchor = mockNodeAnchors.get(nodeId);
@@ -637,25 +684,39 @@ function disposeNode(nodeId) {
   }
 }
 
-function getNodeAnchor(nodeId) { return mockNodeAnchors.get(nodeId) || null; }
-function getNodeMeshes(nodeId) { return mockNodeMeshes.get(nodeId) || []; }
+function getNodeAnchor(nodeId) {
+  return mockNodeAnchors.get(nodeId) || null;
+}
+function getNodeMeshes(nodeId) {
+  return mockNodeMeshes.get(nodeId) || [];
+}
 
 function clearScene() {
   if (!mockScene) return;
   mockScene.stopAllAnimations();
   for (const [, meshes] of mockNodeMeshes) {
-    for (const mesh of meshes) { if (mesh && !mesh.isDisposed()) mesh.dispose(); }
+    for (const mesh of meshes) {
+      if (mesh && !mesh.isDisposed()) mesh.dispose();
+    }
   }
   mockNodeMeshes.clear();
   for (const [, anchor] of mockNodeAnchors) {
     if (anchor && !anchor.isDisposed()) anchor.dispose();
   }
   mockNodeAnchors.clear();
-  if (mockRootSceneAnchor && !mockRootSceneAnchor.isDisposed()) mockRootSceneAnchor.dispose();
+  if (mockRootSceneAnchor && !mockRootSceneAnchor.isDisposed())
+    mockRootSceneAnchor.dispose();
   mockRootSceneAnchor = null;
-  for (const tn of [...mockScene.transformNodes]) { if (tn && !tn.isDisposed()) tn.dispose(); }
-  for (const m of [...mockScene.meshes]) { if (m && !m.isDisposed()) m.dispose(); }
-  if (mockDefaultWoodMaterial) { mockDefaultWoodMaterial.dispose(); mockDefaultWoodMaterial = null; }
+  for (const tn of [...mockScene.transformNodes]) {
+    if (tn && !tn.isDisposed()) tn.dispose();
+  }
+  for (const m of [...mockScene.meshes]) {
+    if (m && !m.isDisposed()) m.dispose();
+  }
+  if (mockDefaultWoodMaterial) {
+    mockDefaultWoodMaterial.dispose();
+    mockDefaultWoodMaterial = null;
+  }
   mockPendingChildRefs.length = 0;
 }
 
@@ -663,7 +724,10 @@ function getNodeChildRef(nodeId) {
   if (nodeId && nodeId.startsWith("child_token_")) {
     const anchor = mockNodeAnchors.get(nodeId);
     if (anchor?.metadata?.childRef) {
-      return { ...anchor.metadata.childRef, resolvedCid: anchor.metadata.resolvedCid || null };
+      return {
+        ...anchor.metadata.childRef,
+        resolvedCid: anchor.metadata.resolvedCid || null,
+      };
     }
   }
   const anchor = mockNodeAnchors.get(nodeId);
@@ -671,7 +735,10 @@ function getNodeChildRef(nodeId) {
     let current = anchor.parent;
     while (current) {
       if (current.metadata?.childRef) {
-        return { ...current.metadata.childRef, resolvedCid: current.metadata.resolvedCid || null };
+        return {
+          ...current.metadata.childRef,
+          resolvedCid: current.metadata.resolvedCid || null,
+        };
       }
       current = current.parent;
     }
@@ -877,7 +944,10 @@ describe("getNodeChildRef", () => {
 
   it("returns child_ref for token child node by anchor metadata", () => {
     const anchor = makeNode();
-    anchor.metadata = { childRef: { type: "token", tokenId: "42" }, resolvedCid: "QmCid" };
+    anchor.metadata = {
+      childRef: { type: "token", tokenId: "42" },
+      resolvedCid: "QmCid",
+    };
     mockNodeAnchors.set("child_token_314159_abc_42", anchor);
     const r = getNodeChildRef("child_token_314159_abc_42");
     expect(r.tokenId).toBe("42");
@@ -920,5 +990,75 @@ describe("getNodeAnchor and getNodeMeshes", () => {
   it("returns null/empty for unknown keys", () => {
     expect(getNodeAnchor("x")).toBe(null);
     expect(getNodeMeshes("x")).toEqual([]);
+  });
+});
+
+describe("Scene Graph — buildChildRefResolutionPlan", () => {
+  function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
+    if (!childRef) return { kind: "invalid" };
+    if (childRef.type === "token" && childRef.tokenId) {
+      return { kind: "cross-collection-token", ref: childRef };
+    }
+    if (childRef.assetID) {
+      if (childRef.collection === "self") {
+        return {
+          kind: "same-collection",
+          assetID: childRef.assetID,
+          assetsMap: activeCollectionAssets,
+        };
+      }
+      if (childRef.collection && childRef.collection.tokenId) {
+        return {
+          kind: "cross-collection-asset",
+          collectionRef: childRef.collection,
+          assetID: childRef.assetID,
+        };
+      }
+    }
+    return { kind: "invalid" };
+  }
+
+  it("plans a same-collection lookup for collection: 'self'", () => {
+    const assetsMap = { "chair-01": "bafyChair" };
+    const plan = buildChildRefResolutionPlan(
+      { collection: "self", assetID: "chair-01" },
+      assetsMap
+    );
+    expect(plan).toEqual({
+      kind: "same-collection",
+      assetID: "chair-01",
+      assetsMap,
+    });
+  });
+
+  it("plans a cross-collection-asset lookup when collection is a token ref", () => {
+    const collectionRef = { chainId: 6342, contractAddress: "0xabc", tokenId: "42" };
+    const plan = buildChildRefResolutionPlan(
+      { collection: collectionRef, assetID: "chair-01" },
+      null
+    );
+    expect(plan).toEqual({
+      kind: "cross-collection-asset",
+      collectionRef,
+      assetID: "chair-01",
+    });
+  });
+
+  it("plans a legacy cross-collection-token lookup", () => {
+    const legacyRef = {
+      type: "token",
+      chainId: 314159,
+      contractAddress: "0xabc",
+      tokenId: "42",
+      standard: "ERC721",
+      resolution: "latest",
+    };
+    const plan = buildChildRefResolutionPlan(legacyRef, null);
+    expect(plan).toEqual({ kind: "cross-collection-token", ref: legacyRef });
+  });
+
+  it("returns invalid for a malformed child_ref", () => {
+    expect(buildChildRefResolutionPlan({}, null)).toEqual({ kind: "invalid" });
+    expect(buildChildRefResolutionPlan(null, null)).toEqual({ kind: "invalid" });
   });
 });

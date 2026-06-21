@@ -60,4 +60,23 @@ export const state = {
    * @type {Map<string, number[]>}
    */
   pendingTransformEdits: new Map(),
+  /**
+   * The `assets` map of the collection currently open in the Studio.
+   * Populated by loadCollectionManifest(); used to resolve `child_ref`
+   * nodes whose `collection` field is `"self"`.
+   * @type {Object|null}
+   */
+  activeCollectionAssets: null,
+  /**
+   * Identity of the collection currently open in the Studio.
+   * @type {{chainId: number, contractAddress: string, tokenId: string}|null}
+   */
+  activeCollectionRef: null,
+  /**
+   * The assetID of the asset manifest currently being loaded/rendered
+   * within the active collection. Used to reject direct self-references
+   * (collection:"self" pointing at the same assetID being resolved).
+   * @type {string|null}
+   */
+  activeCollectionCurrentAssetID: null,
 };
