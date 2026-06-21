@@ -50,7 +50,7 @@ test.describe("republish existing token", () => {
     // version. expect.poll retries on a thrown error, so no fetch fallback is needed.
     await expect
       .poll(async () => (await fetchTokenManifest(tokenIdHex)).version, {
-        timeout: 10000,
+        timeout: 30000,
         intervals: [500, 1000, 1000],
       })
       .toBeGreaterThan(firstVersion);

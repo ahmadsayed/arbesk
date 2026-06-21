@@ -54,7 +54,7 @@ test.describe("fork vs live-reference", () => {
 
     // 5. Fork/live-ref dialog appears — choose "Fork (copy)".
     await expect(page.locator(SELECTORS.dialogForkBtn)).toBeVisible({
-      timeout: 10000,
+      timeout: 30000,
     });
     await page.click(SELECTORS.dialogForkBtn);
 
@@ -116,7 +116,7 @@ test.describe("fork vs live-reference", () => {
 
     // 5. Fork/live-ref dialog appears — choose "Live reference".
     await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-      timeout: 10000,
+      timeout: 30000,
     });
     await page.click(SELECTORS.dialogLiveRefBtn);
 

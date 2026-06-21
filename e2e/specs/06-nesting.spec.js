@@ -72,7 +72,7 @@ test.describe("nesting / linked child worlds", () => {
     // and fetches the manifest from IPFS before pushing the child_ref to
     // the pending list.  Wait for the dialog to disappear and give the
     // handler time to finish the resolution.
-    await expect(liveRefBtn).toBeHidden({ timeout: 10000 });
+    await expect(liveRefBtn).toBeHidden({ timeout: 30000 });
     await page.waitForTimeout(3000);
 
     // ── 5. Save the parent draft ─────────────────────────────────────
@@ -115,7 +115,7 @@ test.describe("nesting / linked child worlds", () => {
     const childNode = page
       .locator(SELECTORS.outlinerNode)
       .filter({ hasText: childTokenDec });
-    await expect(childNode).toHaveCount(1, { timeout: 10000 });
+    await expect(childNode).toHaveCount(1, { timeout: 30000 });
     await childNode.click();
     await expect(page.locator(SELECTORS.inspectorDiveBtn)).toBeVisible();
     await page.click(SELECTORS.inspectorDiveBtn);

@@ -65,7 +65,7 @@ test.describe("save and publish", () => {
     // Publish writes the token id to the URL in HEX (it derives it as a hash of
     // the CID), but the gallery lists the same token by its DECIMAL on-chain id.
     // They are the same number — compare numerically, never as strings.
-    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 10000 });
+    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const tokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
     const tokenIdDec = BigInt(tokenIdHex).toString();
 

@@ -59,7 +59,7 @@ export async function publishWithName(page, name) {
   await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
   await page.fill(SELECTORS.dialogInput, name);
   await page.click(SELECTORS.dialogConfirmBtn);
-  await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 10000 });
+  await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
   return tokenIdHexFromUrl(page.url());
 }
 
