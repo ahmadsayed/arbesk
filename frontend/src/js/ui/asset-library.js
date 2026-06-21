@@ -88,6 +88,29 @@ async function openAssetByTokenId(tokenId) {
         tokenId,
       });
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
+
+      // Auto-load the first asset from the collection into the viewport.
+      const firstAsset = assetEntries.find((e) => e.kind === "asset");
+      if (firstAsset) {
+        clearScene();
+        assetState.set({
+          activeAssetTokenId: String(tokenId),
+          activeCollectionTokenId: String(tokenId),
+          activeAssetId: firstAsset.assetID,
+          activeAssetManifestCid: firstAsset.value,
+          latestAssetManifestCid: firstAsset.value,
+        });
+        dismissCreatePulse();
+        updateUrlAsset(tokenId);
+        await loadAssetManifest(firstAsset.value);
+
+        const { showAssetEditors } = await import("./asset-editors.js");
+        showAssetEditors(tokenId);
+
+        if (window.innerWidth <= 900) {
+          switchView("library");
+        }
+      }
       return;
     }
 
@@ -485,10 +508,6 @@ on(EVENTS.ASSET_BURNED, async () => {
 });
 
 on(EVENTS.ASSET_CLEARED, async () => {
-  // The active asset is gone (e.g. burned) — tear the viewport down too so the
-  // studio doesn't keep presenting a destroyed asset as "open". Mirrors the
-  // new-asset reset: clear the scene, then emit SCENE_EMPTY so the header
-  // resets to "No asset open" and Save/Publish disable.
   clearScene();
   emit(EVENTS.SCENE_EMPTY);
   clearUrlAssetParams();

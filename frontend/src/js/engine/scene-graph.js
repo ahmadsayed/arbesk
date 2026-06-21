@@ -1001,6 +1001,23 @@ async function loadAssetManifest(
   }
 
   const manifest = await getFromRemoteIPFS(manifestCid);
+
+  // Collection manifests don't have scene.nodes — delegate to
+  // loadCollectionManifest and auto-load the first asset.
+  if (manifest?.type === "collection") {
+    const { assetEntries } = await loadCollectionManifest(manifestCid, null);
+    const firstAsset = assetEntries.find((e) => e.kind === "asset");
+    if (firstAsset) {
+      return loadAssetManifest(
+        firstAsset.value,
+        parentAnchor,
+        depth,
+        resolvingCids
+      );
+    }
+    return manifest;
+  }
+
   console.log(
     `[SCENE] manifest loaded | nodes=${
       getManifestNodes(manifest).length
