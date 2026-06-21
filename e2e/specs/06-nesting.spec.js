@@ -58,28 +58,18 @@ test.describe("nesting / linked child worlds", () => {
     const childCard = page.locator(
       `${SELECTORS.assetCard}[data-token-id="${childTokenDec}"]`,
     );
-    await expect(childCard).toHaveCount(1);
+    await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await childCard.getByRole("button", { name: "Add to Scene" }).click();
 
     // Choose "Live reference" for the new {collection, assetID} format.
-    const liveRefBtn = page.locator(
-      '.dialog-action-btn[data-value="live-ref"]',
-    );
-    await expect(liveRefBtn).toBeVisible();
-    await liveRefBtn.click();
-
-    // handleLinkedAssetDropped resolves the collection token on-chain
-    // and fetches the manifest from IPFS before pushing the child_ref to
-    // the pending list.  Wait for the dialog to disappear and give the
-    // handler time to finish the resolution.
-    await expect(liveRefBtn).toBeHidden({ timeout: 30000 });
-    await page.waitForTimeout(3000);
+    await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
+      timeout: 30000,
+    });
+    await page.click(SELECTORS.dialogLiveRefBtn);
 
     // ── 5. Save the parent draft ─────────────────────────────────────
     // The save bakes pending child_ref(s) into the scene manifest.
-    await page.click(SELECTORS.saveAssetBtn);
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
-    const parentCid = new URL(page.url()).searchParams.get("manifest");
+    const parentCid = await saveDraft(page, parentGenCid);
 
     // ── 6. Verify the new child_ref format ────────────────────────────
     const parentManifest = await fetchManifest(parentCid);

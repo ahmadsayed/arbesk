@@ -18,6 +18,11 @@ function tokenIdHexFromUrl(url) {
 
 // Run tests sequentially — they share the same wallet + Hardhat chain.
 test.describe.serial("Collection/asset model", () => {
+  test.beforeEach(({ page }) => {
+    // startNewAsset() uses a native confirm(); auto-accept so the new-asset
+    // flow actually clears in-memory state instead of no-oping.
+    page.on("dialog", (d) => d.accept());
+  });
   test("first besk lazily mints a default collection containing at least one asset", async ({
     page,
   }) => {
@@ -80,40 +85,47 @@ test.describe.serial("Collection/asset model", () => {
     const firstCollection = await fetchTokenManifest(firstTokenIdHex);
     const firstAssetIds = Object.keys(firstCollection.assets);
 
-    // Start fresh asset
+    // Start fresh asset. startNewAsset() shows a GNOME HIG name dialog after
+    // the native confirm() (which is auto-accepted by beforeEach).
     await page.click(SELECTORS.newAssetBtn);
-    const dialogConfirm = page.locator(".dialog-confirm-btn");
-    if (await dialogConfirm.isVisible()) {
-      await dialogConfirm.click();
-    }
+    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
+    await page.fill(SELECTORS.dialogInput, "Table");
+    await page.click(SELECTORS.dialogConfirmBtn);
 
     await page.fill(SELECTORS.promptInput, PROMPT_2);
     await page.click(SELECTORS.generateBtn);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
-    // URL won't change to ?manifest= (activeAssetTokenId persists after New Asset no-op).
 
     await page.click(SELECTORS.publishAssetBtn);
-    const secondDialog = page.locator(SELECTORS.dialogInput);
-    if (await secondDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.fill(SELECTORS.dialogInput, "Table");
-      await page.click(SELECTORS.dialogConfirmBtn);
-    }
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const secondTokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
 
     expect(secondTokenIdHex).toBe(firstTokenIdHex);
 
+    // The URL already contained ?asset= from the first publish, so waitForURL
+    // may return before the republish transaction lands. Poll the on-chain
+    // collection until the new asset is reflected.
+    await expect
+      .poll(
+        async () =>
+          Object.keys(
+            (await fetchTokenManifest(secondTokenIdHex)).assets || {},
+          ).length,
+        {
+          timeout: 30000,
+          message: "collection manifest to include the new asset",
+        },
+      )
+      .toBeGreaterThanOrEqual(firstAssetIds.length + 1);
+
     const updatedCollection = await fetchTokenManifest(secondTokenIdHex);
+
     // All assets from the first snapshot must still be present.
     for (const id of firstAssetIds) {
       expect(updatedCollection.assets[id]).toBe(firstCollection.assets[id]);
     }
-    // At least one more asset than before.
-    expect(Object.keys(updatedCollection.assets).length).toBeGreaterThanOrEqual(
-      firstAssetIds.length + 1,
-    );
   });
 
   test("opening a published token renders the first asset in the viewport", async ({
@@ -194,6 +206,9 @@ test.describe.serial("Collection/asset model", () => {
     expect(firstTokenIdHex).toBeTruthy();
 
     await page.click(SELECTORS.newAssetBtn);
+    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
+    await page.fill(SELECTORS.dialogInput, "Untitled Asset");
+    await page.click(SELECTORS.dialogConfirmBtn);
 
     await expect(page.locator(SELECTORS.collectionSelect)).toHaveValue(
       savedCollectionId,
@@ -245,6 +260,13 @@ test.describe.serial("Collection/asset model", () => {
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const tokenIdHex = tokenIdHexFromUrl(page.url());
 
+    // The collection auto-loads its first asset on open. In the shared default
+    // collection that may be an asset from an earlier spec, so resolve the
+    // actual first asset name instead of hard-coding ASSET_NAME_1.
+    const collection = await fetchTokenManifest(tokenIdHex);
+    const firstAssetCid = Object.values(collection.assets)[0];
+    const firstAsset = await fetchManifest(firstAssetCid);
+
     await page.goto(`/studio.html?asset=${tokenIdHex}`);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden({
       timeout: 5000,
@@ -255,7 +277,7 @@ test.describe.serial("Collection/asset model", () => {
       { timeout: 30000 },
     );
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      ASSET_NAME_1,
+      firstAsset.name,
       { timeout: 30000 },
     );
 
@@ -266,17 +288,23 @@ test.describe.serial("Collection/asset model", () => {
   test("collection selector populates on wallet connect", async ({ page }) => {
     await page.goto("/studio.html");
 
+    // The sidebar defaults to Chat; open Settings to reveal the collection select.
+    await page.click(SELECTORS.settingsSwitcherBtn);
+
     const collectionSelect = page.locator(SELECTORS.collectionSelect);
     await expect(collectionSelect).toBeVisible();
 
     const optionsBefore = collectionSelect.locator("option");
     await expect(optionsBefore).toHaveCount(1);
     await expect(optionsBefore.first()).toHaveText("Default");
-    await expect(optionsBefore.first()).toHaveValue("");
+    await expect(optionsBefore.first()).toHaveAttribute("value", "");
 
     await injectHardhatProvider(page);
     await page.goto("/studio.html");
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+
+    // New page defaults to Chat again.
+    await page.click(SELECTORS.settingsSwitcherBtn);
 
     const optionsAfter = collectionSelect.locator("option");
     await expect(optionsAfter).toHaveCount(1);

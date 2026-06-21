@@ -121,3 +121,23 @@ export function assertCollectionManifest(manifest, { expectedAssetIds } = {}) {
     }
   }
 }
+
+/**
+ * Resolve the asset CID for a given name within a collection manifest.
+ * The default collection is shared across tests, so callers must identify
+ * their asset by an explicit property rather than assuming insertion order.
+ * @param {object} collectionManifest
+ * @param {string} name
+ * @returns {Promise<string|null>} asset CID, or null if not found
+ */
+export async function findAssetCidByName(collectionManifest, name) {
+  for (const cid of Object.values(collectionManifest.assets || {})) {
+    try {
+      const asset = await fetchManifest(cid);
+      if (asset.name === name) return cid;
+    } catch {
+      // ignore unreadable entries
+    }
+  }
+  return null;
+}

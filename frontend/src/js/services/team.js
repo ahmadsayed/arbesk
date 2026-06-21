@@ -6,9 +6,14 @@
  * All writes go through updateEditors (Merkle root update).
  */
 
-import { contract } from "../blockchain/wallet.js";
+import { contract, updateEditors } from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { computeRoot, getProof } from "../gltf/merkle-editors.js";
+
+const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
+const CollaboratorRole = Object.freeze({ None: 0, Viewer: 1, Editor: 2 });
 
 /**
  * List editors for a token from IPFS (with localStorage cache fallback).
@@ -56,4 +61,115 @@ export async function isOwner(tokenId) {
   } catch {
     return false;
   }
+}
+
+function _editorListKey(tokenId) {
+  return EDITOR_LIST_PREFIX + tokenId;
+}
+
+function _saveEditorListLocally(tokenId, list, cid) {
+  try {
+    localStorage.setItem(
+      _editorListKey(tokenId),
+      JSON.stringify({ list, cid: cid || null, saved: Date.now() })
+    );
+  } catch (e) {
+    console.warn("[TEAM] failed to cache editor list locally:", e.message);
+  }
+  return cid || "";
+}
+
+async function _getEditorSetVersion(tokenId) {
+  if (!contract) return 1;
+  try {
+    const version = await contract.methods.editorSetVersion(tokenId).call();
+    return Number(version);
+  } catch {
+    return 1;
+  }
+}
+
+function _normalizeAddress(address) {
+  if (!address || typeof address !== "string" || !address.startsWith("0x")) {
+    throw new Error("Invalid Ethereum address");
+  }
+  return address.toLowerCase();
+}
+
+async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
+  const walletAddress = walletState.get().walletAddress;
+  if (!contract || !walletAddress) {
+    throw new Error("Wallet not connected");
+  }
+
+  const currentVersion = await _getEditorSetVersion(tokenId);
+  const nextVersion = currentVersion + 1;
+  const newRoot = computeRoot(newEditors, tokenId, nextVersion);
+
+  // Proof must be built against the CURRENT editor tree/version.
+  const proofResult = getProof(
+    oldEditors,
+    walletAddress,
+    tokenId,
+    currentVersion
+  );
+  if (!proofResult) {
+    throw new Error("Current wallet is not an editor of this token");
+  }
+
+  const listCid = await writeJSONToIPFS(newEditors);
+  _saveEditorListLocally(tokenId, newEditors, listCid);
+
+  const txHash = await updateEditors(
+    tokenId,
+    newRoot,
+    listCid,
+    proofResult.role,
+    proofResult.proof
+  );
+  if (!txHash) {
+    throw new Error("updateEditors transaction failed");
+  }
+  return txHash;
+}
+
+/**
+ * Add a new editor to a token. Caller must already be an editor.
+ * @param {string|number} tokenId
+ * @param {string} address
+ * @returns {Promise<string>} transaction hash
+ */
+export async function addTeamMember(tokenId, address) {
+  const normalized = _normalizeAddress(address);
+  const editors = await fetchEditors(tokenId);
+
+  if (editors.some((e) => e.address.toLowerCase() === normalized)) {
+    throw new Error("Address is already an editor");
+  }
+
+  const nextEditors = [
+    ...editors,
+    { address: normalized, role: CollaboratorRole.Editor },
+  ];
+  return _updateEditorRoot(tokenId, editors, nextEditors);
+}
+
+/**
+ * Remove an editor from a token. Caller must already be an editor.
+ * @param {string|number} tokenId
+ * @param {string} address
+ * @returns {Promise<string>} transaction hash
+ */
+export async function removeTeamMember(tokenId, address) {
+  const normalized = _normalizeAddress(address);
+  const editors = await fetchEditors(tokenId);
+
+  const nextEditors = editors.filter(
+    (e) => e.address.toLowerCase() !== normalized
+  );
+  if (nextEditors.length === editors.length) {
+    throw new Error("Address is not an editor");
+  }
+
+  return _updateEditorRoot(tokenId, editors, nextEditors);
 }

@@ -6,6 +6,7 @@ import {
   assertGenerationManifest,
   assertPublishedManifest,
   assertCollectionManifest,
+  findAssetCidByName,
 } from "../helpers/manifest.mjs";
 import {
   connectStudio,
@@ -98,13 +99,14 @@ test.describe("parametric versioning + time-travel", () => {
     });
     expect(Object.keys(collectionManifest.assets).length).toBeGreaterThanOrEqual(1);
 
-    const [firstAssetCid] = Object.values(collectionManifest.assets);
-    const assetManifest = await fetchManifest(firstAssetCid);
+    const assetCid = await findAssetCidByName(collectionManifest, ASSET_NAME);
+    expect(assetCid).toBeTruthy();
+    const assetManifest = await fetchManifest(assetCid);
     expect(assetManifest.type).toBe("asset");
     assertPublishedManifest(assetManifest);
-    // The parametric edit produced v2; the published asset carries that version.
+    // Publish saves one more version (v3) with the captured thumbnail.
     expect(assetManifest.name).toBe(ASSET_NAME);
-    expect(assetManifest.version).toBe(2);
-    expect(assetManifest.prev_asset_manifest_cid).toBe(genCid);
+    expect(assetManifest.version).toBe(3);
+    expect(assetManifest.prev_asset_manifest_cid).toBe(saveCid);
   });
 });

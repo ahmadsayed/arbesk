@@ -941,9 +941,9 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   let meshes = [];
 
   if (node.child_ref) {
-    // Tag the outer anchor so the pointer walk can resolve child-world
-    // mesh clicks to this parent-manifest node_id (see click-to-select above).
-    anchor.metadata = { nodeId: node.node_id };
+    // Tag the outer anchor with the child_ref so the inspector / dive button
+    // can resolve it directly from the manifest node_id.
+    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref };
     meshes = await loadTokenChildNode(
       node,
       anchor,
@@ -1195,27 +1195,16 @@ function getNodeSubMeshes(nodeId) {
 }
 
 function getNodeChildRef(nodeId) {
-  if (nodeId && nodeId.startsWith("child_token_")) {
-    const anchor = state.nodeAnchors.get(nodeId);
-    if (anchor && anchor.metadata?.childRef) {
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (anchor) {
+    // The manifest node itself may be a child_ref (outer anchor carries it).
+    if (anchor.metadata?.childRef) {
       return {
         ...anchor.metadata.childRef,
         resolvedCid: anchor.metadata.resolvedCid || null,
       };
     }
-    const childAnchor = state.scene?.getTransformNodeByName(
-      `child_anchor_${nodeId}`
-    );
-    if (childAnchor?.metadata?.childRef) {
-      return {
-        ...childAnchor.metadata.childRef,
-        resolvedCid: childAnchor.metadata.resolvedCid || null,
-      };
-    }
-  }
-
-  const anchor = state.nodeAnchors.get(nodeId);
-  if (anchor) {
+    // Otherwise walk up to find a parent child_ref world.
     let current = anchor.parent;
     while (current) {
       if (current.metadata?.childRef) {
@@ -1225,6 +1214,19 @@ function getNodeChildRef(nodeId) {
         };
       }
       current = current.parent;
+    }
+  }
+
+  // Fallback for legacy child_token_* anchors.
+  if (nodeId && nodeId.startsWith("child_token_")) {
+    const childAnchor = state.scene?.getTransformNodeByName(
+      `child_anchor_${nodeId}`
+    );
+    if (childAnchor?.metadata?.childRef) {
+      return {
+        ...childAnchor.metadata.childRef,
+        resolvedCid: childAnchor.metadata.resolvedCid || null,
+      };
     }
   }
 
@@ -1422,6 +1424,8 @@ export {
         activeAssetManifestCid: null,
         latestAssetManifestCid: null,
         activeAssetTokenId: null,
+        activeAssetId: null,
+        activeCollectionTokenId: null,
       });
 
       // Prompt for a name using the GNOME HIG dialog

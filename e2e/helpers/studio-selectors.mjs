@@ -37,6 +37,7 @@ export const SELECTORS = {
   historyVersionBadge: "#historyVersionBadge",
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
+  settingsSwitcherBtn: '[data-view="settings"]',
   collectionSelect: "#collectionSelect",
   assetTokenIdLabel: "#assetStatusMeta",
   inspectorDiveBtn: "#inspectorDiveBtn",

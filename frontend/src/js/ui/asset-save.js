@@ -762,11 +762,14 @@ async function onPublishAsset() {
       return;
     }
 
-    const { cid: assetCid } = result;
+    const { cid: assetCid, manifest: publishedManifest } = result;
 
+    // Use the manifest's own asset_id as the collection key for new assets;
+    // it is generated from Date.now() at creation time and is unique per draft.
+    // For updates to an existing asset, activeAssetId is already set and reused.
     const assetID = deriveDefaultAssetId(
       assetState.get().activeAssetId,
-      Date.now()
+      publishedManifest?.asset_id || `asset_${Date.now()}`
     );
     assetState.set({ activeAssetId: assetID });
 

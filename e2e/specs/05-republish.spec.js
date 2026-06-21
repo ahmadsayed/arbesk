@@ -5,6 +5,7 @@ import {
   fetchTokenManifest,
   assertPublishedManifest,
   assertCollectionManifest,
+  findAssetCidByName,
 } from "../helpers/manifest.mjs";
 import {
   connectStudio,
@@ -33,7 +34,8 @@ test.describe("republish existing token", () => {
     const firstVersion = firstCollection.version;
     expect(firstVersion).toBeGreaterThanOrEqual(1);
 
-    const [firstAssetCid] = Object.values(firstCollection.assets);
+    const firstAssetCid = await findAssetCidByName(firstCollection, ASSET_NAME);
+    expect(firstAssetCid).toBeTruthy();
     const firstAsset = await fetchManifest(firstAssetCid);
     expect(firstAsset.type).toBe("asset");
     expect(firstAsset.name).toBe(ASSET_NAME);
@@ -63,7 +65,11 @@ test.describe("republish existing token", () => {
     expect(Object.keys(republishedCollection.assets).length).toBeGreaterThanOrEqual(1);
     expect(republishedCollection.version).toBeGreaterThan(firstVersion);
 
-    const [republishedAssetCid] = Object.values(republishedCollection.assets);
+    const republishedAssetCid = await findAssetCidByName(
+      republishedCollection,
+      ASSET_NAME,
+    );
+    expect(republishedAssetCid).toBeTruthy();
     const republishedAsset = await fetchManifest(republishedAssetCid);
     expect(republishedAsset.type).toBe("asset");
     expect(republishedAsset.name).toBe(ASSET_NAME);
