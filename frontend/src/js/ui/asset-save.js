@@ -776,7 +776,9 @@ async function onPublishAsset() {
     // Fetch the current collection manifest (if one exists yet) and merge
     // this asset's new CID into its assets map. If no collection token
     // exists yet, this besk lazily mints the default collection.
-    const existingCollectionTokenId = assetState.get().activeCollectionTokenId;
+    const existingCollectionTokenId =
+      assetState.get().selectedCollectionId ||
+      assetState.get().activeCollectionTokenId;
     let collectionManifest = null;
     if (existingCollectionTokenId) {
       const c = walletContract || walletState.get().contract;

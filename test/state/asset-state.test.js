@@ -19,6 +19,7 @@ describe("assetState.get()", () => {
       currentManifest: null,
       activeCollectionTokenId: null,
       activeAssetId: null,
+      selectedCollectionId: null,
     });
   });
 
@@ -62,6 +63,7 @@ describe("assetState.reset()", () => {
       currentManifest: null,
       activeCollectionTokenId: null,
       activeAssetId: null,
+      selectedCollectionId: null,
     });
   });
 

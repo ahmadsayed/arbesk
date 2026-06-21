@@ -9,6 +9,7 @@ const _defaults = {
   currentManifest: null,
   activeCollectionTokenId: null,
   activeAssetId: null,
+  selectedCollectionId: null,
 };
 
 const { store: assetState, _resetForTesting } = createStore(

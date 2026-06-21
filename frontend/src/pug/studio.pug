@@ -150,6 +150,10 @@ html(lang="en")
                     label.form-label Asset Name
                     #assetNameDisplay.form-input Untitled Asset
                   .form-group
+                    label.form-label(for="collectionSelect") Collection
+                    select#collectionSelect.form-select
+                      option(value="") Default
+                  .form-group
                     label.form-label(for="providerSelect") Generation Provider
                     select#providerSelect.form-select
                       option(value="mock") Mock (Local)

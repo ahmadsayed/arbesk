@@ -16,7 +16,11 @@ import {
   isFreeTierContract,
 } from "../blockchain/wallet.js";
 import { showToast } from "./toasts.js";
-import { generateAsset, ApiError, getOrCreateSession } from "../services/api.js";
+import {
+  generateAsset,
+  ApiError,
+  getOrCreateSession,
+} from "../services/api.js";
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
@@ -32,6 +36,62 @@ const generateHint = document.getElementById("generateHint");
 const assetNameDisplay = document.getElementById("assetNameDisplay");
 const providerSelect = document.getElementById("providerSelect");
 const tierSelect = document.getElementById("tierSelect");
+const collectionSelect = document.getElementById("collectionSelect");
+
+// ─── Collection Selector ───
+
+/**
+ * Derive the default collection ID from the connected wallet address.
+ * Uses keccak256(soliditySha3(address)) — same as asset-save.js.
+ */
+function deriveDefaultCollectionId(walletAddr) {
+  if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
+  return window.Web3.utils.soliditySha3({
+    type: "address",
+    value: walletAddr,
+  });
+}
+
+/**
+ * Populate the collection dropdown with available collections.
+ * Currently shows only the wallet-derived "Default" collection.
+ * Named collections will be added here in the future.
+ */
+function syncCollectionSelect() {
+  if (!collectionSelect) return;
+  const walletAddr = walletState.get().walletAddress;
+  const defaultId = walletAddr ? deriveDefaultCollectionId(walletAddr) : null;
+
+  // Preserve the currently selected value if still valid
+  const currentValue = collectionSelect.value;
+
+  collectionSelect.innerHTML = "";
+  const defaultOption = document.createElement("option");
+  defaultOption.value = defaultId || "";
+  defaultOption.textContent = "Default";
+  collectionSelect.appendChild(defaultOption);
+
+  // Restore previous selection or default
+  if (
+    currentValue &&
+    collectionSelect.querySelector(`option[value="${currentValue}"]`)
+  ) {
+    collectionSelect.value = currentValue;
+  } else if (defaultId) {
+    collectionSelect.value = defaultId;
+    assetState.set({ selectedCollectionId: defaultId });
+  }
+
+  collectionSelect.addEventListener("change", () => {
+    assetState.set({
+      selectedCollectionId: collectionSelect.value || defaultId,
+    });
+  });
+}
+
+function getSelectedCollectionId() {
+  return assetState.get().selectedCollectionId || null;
+}
 
 // ─── Chat Messages ───
 
@@ -77,10 +137,7 @@ function setGenerating(active) {
 
 function updateGenerateHint() {
   const connected = !!walletState.get().walletAddress;
-  // Show the guidance caption only while disconnected.
   if (generateHint) generateHint.hidden = connected;
-  // Gate the prompt: a disabled (muted) submit reads clearer than a live-looking
-  // gold button the user can't use yet. Don't fight the spinner mid-generation.
   if (generateBtn && !generateBtn.classList.contains("generating")) {
     generateBtn.disabled = !connected;
   }
@@ -131,7 +188,11 @@ async function onGenerate() {
   try {
     await getOrCreateSession();
   } catch (err) {
-    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to generate assets." });
+    showToast({
+      type: "warning",
+      title: "Sign In Required",
+      message: "Sign in to generate assets.",
+    });
     return;
   }
 
@@ -145,7 +206,8 @@ async function onGenerate() {
   const nodeId = `${assetName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "_")}_${Date.now()}`;
-  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const prevAssetManifestCid =
+    assetState.get().activeAssetManifestCid || undefined;
   const transformMatrix = buildTransformMatrix();
 
   try {
@@ -250,6 +312,7 @@ on(EVENTS.SCENE_EMPTY, () => {
 
 on(EVENTS.WALLET_CONNECTED, () => {
   updateGenerateHint();
+  syncCollectionSelect();
 });
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
@@ -258,6 +321,11 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 
 syncAssetNameDisplay();
 updateGenerateHint();
+
+// Initialize collection select on load if wallet is already connected
+if (walletState.get().walletAddress) {
+  syncCollectionSelect();
+}
 
 // ─── Exports ───
 export { addChatMessage };
