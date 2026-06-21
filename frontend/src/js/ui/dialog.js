@@ -19,7 +19,7 @@ function _trapFocus(dialog, initialFocusEl) {
   const trap = window.focusTrap.createFocusTrap(dialog, {
     initialFocus: initialFocusEl,
     escapeDeactivates: false, // Escape is handled by _buildDialog's global keydown
-    allowOutsideClick: true,  // lets MetaMask overlays receive clicks without breaking the trap
+    allowOutsideClick: true, // lets MetaMask overlays receive clicks without breaking the trap
   });
   trap.activate();
   return () => trap.deactivate();
@@ -42,7 +42,9 @@ function _buildDialog(title, resolve) {
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
   dialog.setAttribute("aria-labelledby", dialogId);
-  dialog.innerHTML = `<div class="dialog-header"><h2 class="dialog-title" id="${dialogId}">${escapeHtml(title)}</h2></div>`;
+  dialog.innerHTML = `<div class="dialog-header"><h2 class="dialog-title" id="${dialogId}">${escapeHtml(
+    title
+  )}</h2></div>`;
 
   backdrop.appendChild(dialog);
   document.body.appendChild(backdrop);
@@ -103,7 +105,9 @@ export function showDialog(title, body, defaultValue = "") {
       bodyDiv.innerHTML = `
         <p style="margin:0 0 var(--size-2)">${escapeHtml(body)}</p>
         <div class="form-group">
-          <input type="text" class="form-input dialog-input" value="${escapeHtml(defaultValue)}" autocomplete="off">
+          <input type="text" class="form-input dialog-input" value="${escapeHtml(
+            defaultValue
+          )}" autocomplete="off">
         </div>`;
 
       const actionsDiv = document.createElement("div");
@@ -179,7 +183,11 @@ export function showConfirmDialog(title, body, buttons = []) {
           const cls =
             btn.className ||
             (idx === 0 ? "btn btn-secondary" : "btn btn-primary");
-          return `<button class="${escapeHtml(cls)} dialog-action-btn" type="button" data-value="${escapeHtml(btn.value)}">${escapeHtml(btn.text)}</button>`;
+          return `<button class="${escapeHtml(
+            cls
+          )} dialog-action-btn" type="button" data-value="${escapeHtml(
+            btn.value
+          )}">${escapeHtml(btn.text)}</button>`;
         })
         .join("");
 
@@ -202,6 +210,29 @@ export function showConfirmDialog(title, body, buttons = []) {
 }
 
 /**
+ * Ask the user whether to fork (copy) or create a live reference to
+ * another collection's asset. Fork freezes the CID at copy time;
+ * live-ref points back to the original collection and auto-updates.
+ *
+ * @param {string} assetID
+ * @returns {Promise<"fork"|"live-ref"|null>}
+ */
+export function showForkOrLiveRefDialog(assetID) {
+  return showConfirmDialog(
+    "Link Asset",
+    `How would you like to include "${assetID}" in your scene?`,
+    [
+      { text: "Fork (copy)", value: "fork", className: "btn btn-secondary" },
+      {
+        text: "Live reference",
+        value: "live-ref",
+        className: "btn btn-primary",
+      },
+    ]
+  );
+}
+
+/**
  * Show a read-only informational dialog with trusted internal HTML content.
  * Do NOT pass user-supplied strings as bodyHtml — use showConfirmDialog for that.
  *
@@ -212,7 +243,10 @@ export function showConfirmDialog(title, body, buttons = []) {
 export function showInfoDialog(title, bodyHtml) {
   return new Promise((resolve) => {
     try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(title, resolve);
+      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
+        title,
+        resolve
+      );
 
       const bodyDiv = document.createElement("div");
       bodyDiv.className = "dialog-body";
@@ -235,4 +269,3 @@ export function showInfoDialog(title, bodyHtml) {
     }
   });
 }
-

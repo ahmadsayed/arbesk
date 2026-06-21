@@ -1064,6 +1064,33 @@ async function loadCollectionManifest(collectionCid, collectionRef) {
 // Drag/drop — linked asset composition
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Build the scene node to add when a user pulls in another collection's
+ * asset. "fork" freezes the asset's current CID into a plain source node;
+ * "live-ref" embeds a child_ref pointing back at the original collection,
+ * so future edits there propagate automatically.
+ */
+function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
+  const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
+  const baseNode = {
+    node_id: nodeId,
+    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  };
+  if (choice === "fork") {
+    return {
+      ...baseNode,
+      source: { cid: resolvedAssetCid },
+    };
+  }
+  if (choice === "live-ref") {
+    return {
+      ...baseNode,
+      child_ref: { collection: ref.collectionRef, assetID },
+    };
+  }
+  throw new Error(`Unknown fork/live-ref choice: ${choice}`);
+}
+
 async function handleLinkedAssetDropped(event) {
   const detail = event;
   if (!detail) return;
@@ -1076,6 +1103,49 @@ async function handleLinkedAssetDropped(event) {
     contractAddress: eventContractAddress,
   } = detail;
   if (!tokenId) return;
+
+  if (detail.assetID) {
+    const { showForkOrLiveRefDialog } = await import("../ui/dialog.js");
+    const choice = await showForkOrLiveRefDialog(detail.assetID);
+    if (!choice) return; // user cancelled
+
+    const { resolveCollectionChildRef } = await import(
+      "../blockchain/token-resolver.js"
+    );
+    const collectionRef = {
+      chainId: Number(eventChainId || walletState.get().chainId),
+      contractAddress:
+        eventContractAddress || walletState.get().contractAddress,
+      tokenId,
+    };
+    const resolution = await resolveCollectionChildRef(
+      { collection: collectionRef, assetID: detail.assetID },
+      null
+    );
+    if (!resolution.resolved || !resolution.manifestCid) {
+      console.warn(
+        `[SCENE] could not resolve dropped asset ${detail.assetID}: ${resolution.error}`
+      );
+      return;
+    }
+
+    const nodeEntry = buildForkOrLiveRefNode(
+      choice,
+      { collectionRef },
+      detail.assetID,
+      resolution.manifestCid
+    );
+    state.pendingChildRefs.push(nodeEntry);
+    disposeNode(nodeEntry.node_id);
+
+    const parentNode = state.rootSceneAnchor || state.scene;
+    if (choice === "live-ref") {
+      await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
+    } else {
+      await loadAsset(nodeEntry.source, parentNode, nodeEntry.node_id);
+    }
+    return;
+  }
 
   const {
     chainId: walletChainId,

@@ -1062,3 +1062,49 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
     expect(buildChildRefResolutionPlan(null, null)).toEqual({ kind: "invalid" });
   });
 });
+
+describe("Scene Graph — buildForkOrLiveRefNode", () => {
+  function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
+    const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
+    const baseNode = {
+      node_id: nodeId,
+      transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    };
+    if (choice === "fork") {
+      return {
+        ...baseNode,
+        source: { cid: resolvedAssetCid },
+      };
+    }
+    if (choice === "live-ref") {
+      return {
+        ...baseNode,
+        child_ref: { collection: ref.collectionRef, assetID },
+      };
+    }
+    throw new Error(`Unknown fork/live-ref choice: ${choice}`);
+  }
+
+  const ref = {
+    collectionRef: { chainId: 6342, contractAddress: "0xabc", tokenId: "42" },
+  };
+
+  it("fork builds a plain source node with the resolved CID, frozen", () => {
+    const node = buildForkOrLiveRefNode("fork", ref, "chair-01", "bafyChairCid");
+    expect(node.source).toEqual({ cid: "bafyChairCid" });
+    expect(node.child_ref).toBeUndefined();
+  });
+
+  it("live-ref builds a child_ref node pointing at the original collection", () => {
+    const node = buildForkOrLiveRefNode("live-ref", ref, "chair-01", "bafyChairCid");
+    expect(node.child_ref).toEqual({
+      collection: ref.collectionRef,
+      assetID: "chair-01",
+    });
+    expect(node.source).toBeUndefined();
+  });
+
+  it("throws on an unknown choice", () => {
+    expect(() => buildForkOrLiveRefNode("bogus", ref, "chair-01", "cid")).toThrow();
+  });
+});
