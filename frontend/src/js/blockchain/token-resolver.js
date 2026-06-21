@@ -280,6 +280,119 @@ export async function resolveChildRef(childRef, options = {}) {
 }
 
 /**
+ * Look up an assetID inside a collection's `assets` map.
+ *
+ * @param {Object|null} assetsMap - The collection manifest's `assets` field
+ * @param {string} assetID
+ * @returns {{kind: "cid"|"collection"|"missing", value: string|Object|null}}
+ */
+export function resolveAssetIdFromCollection(assetsMap, assetID) {
+  if (!assetsMap || typeof assetsMap !== "object") {
+    return { kind: "missing", value: null };
+  }
+  const entry = assetsMap[assetID];
+  if (entry === undefined || entry === null) {
+    return { kind: "missing", value: null };
+  }
+  if (typeof entry === "string") {
+    return { kind: "cid", value: entry };
+  }
+  if (
+    typeof entry === "object" &&
+    entry.tokenId !== undefined &&
+    entry.contractAddress
+  ) {
+    return { kind: "collection", value: entry };
+  }
+  return { kind: "missing", value: null };
+}
+
+/**
+ * Resolve a generalized collection child reference: `{ collection, assetID }`.
+ * `collection` is either `"self"` (resolve against the currently-loaded
+ * collection's assets map) or `{chainId, contractAddress, tokenId}`
+ * (resolve that token's collection manifest first, then look up assetID
+ * inside it).
+ *
+ * @param {{collection: "self"|Object, assetID: string}} childRef
+ * @param {Object|null} activeCollectionAssets - assets map of the collection
+ *   currently being loaded; required when childRef.collection === "self"
+ * @returns {Promise<ResolutionResult>}
+ */
+export async function resolveCollectionChildRef(
+  childRef,
+  activeCollectionAssets
+) {
+  if (!childRef || !childRef.assetID) {
+    return {
+      manifestCid: null,
+      manifest: null,
+      resolved: false,
+      error: "Invalid collection child_ref: missing assetID",
+      fromCache: false,
+    };
+  }
+
+  let assetsMap = activeCollectionAssets;
+
+  if (childRef.collection && childRef.collection !== "self") {
+    const collectionResolution = await resolveChildRef(
+      {
+        type: "token",
+        chainId: childRef.collection.chainId,
+        contractAddress: childRef.collection.contractAddress,
+        tokenId: childRef.collection.tokenId,
+        standard: "ERC721",
+        resolution: "latest",
+      },
+      { validate: true }
+    );
+    if (!collectionResolution.resolved || !collectionResolution.manifest) {
+      return {
+        manifestCid: null,
+        manifest: null,
+        resolved: false,
+        error: `Could not resolve cross-collection reference: ${collectionResolution.error}`,
+        fromCache: false,
+      };
+    }
+    assetsMap = collectionResolution.manifest.assets;
+  }
+
+  const lookup = resolveAssetIdFromCollection(assetsMap, childRef.assetID);
+  if (lookup.kind === "missing") {
+    return {
+      manifestCid: null,
+      manifest: null,
+      resolved: false,
+      error: `assetID "${childRef.assetID}" not found in collection`,
+      fromCache: false,
+    };
+  }
+  if (lookup.kind === "collection") {
+    // Nested collection: caller is responsible for recursing — surface the
+    // token ref so scene-graph.js can treat it as a nested collection load.
+    return {
+      manifestCid: null,
+      manifest: null,
+      resolved: true,
+      nestedCollectionRef: lookup.value,
+      error: null,
+      fromCache: false,
+    };
+  }
+
+  const manifest = await fetchManifestSafe(lookup.value);
+  return {
+    manifestCid: lookup.value,
+    manifest,
+    resolved: true,
+    error: null,
+    fromCache: false,
+  };
+}
+
+/**
  * Safely fetch a manifest from IPFS, returning null on failure.
  */
 async function fetchManifestSafe(cid) {

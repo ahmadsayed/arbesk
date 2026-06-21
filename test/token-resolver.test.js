@@ -148,3 +148,62 @@ describe("Token Resolver — child_ref validation", () => {
     expect(MAX_CHILD_WORLD_DEPTH).toBe(5);
   });
 });
+
+describe("Token Resolver — resolveAssetIdFromCollection", () => {
+  /**
+   * Inline copy of resolveAssetIdFromCollection from
+   * frontend/src/js/blockchain/token-resolver.js
+   */
+  function resolveAssetIdFromCollection(assetsMap, assetID) {
+    if (!assetsMap || typeof assetsMap !== "object") {
+      return { kind: "missing", value: null };
+    }
+    const entry = assetsMap[assetID];
+    if (entry === undefined || entry === null) {
+      return { kind: "missing", value: null };
+    }
+    if (typeof entry === "string") {
+      return { kind: "cid", value: entry };
+    }
+    if (
+      typeof entry === "object" &&
+      entry.tokenId !== undefined &&
+      entry.contractAddress
+    ) {
+      return { kind: "collection", value: entry };
+    }
+    return { kind: "missing", value: null };
+  }
+
+  it("resolves a string entry as a direct CID", () => {
+    const result = resolveAssetIdFromCollection(
+      { "chair-01": "bafyChairCid" },
+      "chair-01",
+    );
+    expect(result).toEqual({ kind: "cid", value: "bafyChairCid" });
+  });
+
+  it("resolves an object entry as a nested collection reference", () => {
+    const tokenRef = { chainId: 6342, contractAddress: "0xabc", tokenId: "42" };
+    const result = resolveAssetIdFromCollection(
+      { "garden-01": tokenRef },
+      "garden-01",
+    );
+    expect(result).toEqual({ kind: "collection", value: tokenRef });
+  });
+
+  it("returns missing for an unknown assetID", () => {
+    const result = resolveAssetIdFromCollection(
+      { "chair-01": "bafyChairCid" },
+      "table-99",
+    );
+    expect(result).toEqual({ kind: "missing", value: null });
+  });
+
+  it("returns missing when assetsMap is null", () => {
+    expect(resolveAssetIdFromCollection(null, "chair-01")).toEqual({
+      kind: "missing",
+      value: null,
+    });
+  });
+});
