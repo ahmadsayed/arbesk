@@ -4,13 +4,16 @@ const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
 
 export async function fetchManifest(cid) {
   const res = await fetch(`${IPFS_GATEWAY}/${cid}`);
-  if (!res.ok) throw new Error(`Failed to fetch manifest ${cid}: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to fetch manifest ${cid}: ${res.status}`);
   return res.json();
 }
 
 /** Read the on-chain manifest the backend resolves for a token id (hex). */
 export async function fetchTokenManifest(tokenIdHex) {
-  const res = await fetch(`${BACKEND_URL}/api/v1/tokens/${tokenIdHex}/manifest`);
+  const res = await fetch(
+    `${BACKEND_URL}/api/v1/tokens/${tokenIdHex}/manifest`,
+  );
   if (!res.ok) throw new Error(`token manifest ${tokenIdHex}: ${res.status}`);
   const payload = await res.json();
   return payload.manifest;
@@ -21,11 +24,16 @@ export function manifestCidFromUrl(url) {
   return new URL(url).searchParams.get("manifest");
 }
 
-export function assertGenerationManifest(manifest, { prompt, provider = "mock" }) {
+export function assertGenerationManifest(
+  manifest,
+  { prompt, provider = "mock" },
+) {
   if (!manifest.asset_id) throw new Error("Missing asset_id");
-  if (!manifest.version || manifest.version < 1) throw new Error("Invalid version");
+  if (!manifest.version || manifest.version < 1)
+    throw new Error("Invalid version");
   if (!manifest.timestamp) throw new Error("Missing timestamp");
-  if (!Array.isArray(manifest.scene?.nodes)) throw new Error("Missing scene.nodes");
+  if (!Array.isArray(manifest.scene?.nodes))
+    throw new Error("Missing scene.nodes");
   if (manifest.scene.nodes.length !== 1) {
     throw new Error(`Expected 1 node, got ${manifest.scene.nodes.length}`);
   }
@@ -53,7 +61,7 @@ export function assertSavedManifest(manifest, previousCid) {
   }
   if (manifest.prev_asset_manifest_cid !== previousCid) {
     throw new Error(
-      `prev_asset_manifest_cid mismatch: ${manifest.prev_asset_manifest_cid} !== ${previousCid}`
+      `prev_asset_manifest_cid mismatch: ${manifest.prev_asset_manifest_cid} !== ${previousCid}`,
     );
   }
 }
@@ -62,7 +70,9 @@ export function assertPublishedManifest(manifest) {
   // Thumbnails are best-effort, especially in headless SwiftShader environments.
   // Validate structure but do not fail when the snapshot is missing.
   if (manifest.thumbnail && !manifest.thumbnail.cid) {
-    throw new Error("Published manifest has thumbnail object but missing thumbnail.cid");
+    throw new Error(
+      "Published manifest has thumbnail object but missing thumbnail.cid",
+    );
   }
 }
 
@@ -72,8 +82,43 @@ export function assertPublishedManifest(manifest) {
  * so its absence is valid; when present it must be a non-empty string.
  */
 export function assertCommentsArchive(manifest) {
-  if (manifest.comments_archive_cid === undefined || manifest.comments_archive_cid === null) return;
-  if (typeof manifest.comments_archive_cid !== "string" || !manifest.comments_archive_cid) {
+  if (
+    manifest.comments_archive_cid === undefined ||
+    manifest.comments_archive_cid === null
+  )
+    return;
+  if (
+    typeof manifest.comments_archive_cid !== "string" ||
+    !manifest.comments_archive_cid
+  ) {
     throw new Error("Invalid comments_archive_cid in manifest");
+  }
+}
+}
+
+/**
+ * Validate a collection manifest's shape: type, assets map, version chain.
+ * Does not assert on individual asset manifest contents — use
+ * assertGenerationManifest/assertSavedManifest on the resolved asset CID
+ * for that.
+ */
+export function assertCollectionManifest(manifest, { expectedAssetIds } = {}) {
+  if (manifest.type !== "collection") {
+    throw new Error(`Expected type "collection", got "${manifest.type}"`);
+  }
+  if (!manifest.assets || typeof manifest.assets !== "object") {
+    throw new Error("Collection manifest missing assets object");
+  }
+  if (typeof manifest.version !== "number" || manifest.version < 1) {
+    throw new Error(`Expected version >= 1, got ${manifest.version}`);
+  }
+  if (expectedAssetIds) {
+    const actualIds = Object.keys(manifest.assets).sort();
+    const expected = [...expectedAssetIds].sort();
+    if (JSON.stringify(actualIds) !== JSON.stringify(expected)) {
+      throw new Error(
+        `Expected assetIds ${JSON.stringify(expected)}, got ${JSON.stringify(actualIds)}`
+      );
+    }
   }
 }
