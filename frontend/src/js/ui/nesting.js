@@ -35,8 +35,11 @@ function initNesting() {
   document.addEventListener("keydown", (e) => {
     if (e.altKey && e.key === "ArrowLeft") {
       const tag = document.activeElement?.tagName?.toLowerCase();
-      const editing = document.activeElement?.isContentEditable ||
-        tag === "input" || tag === "textarea" || tag === "select";
+      const editing =
+        document.activeElement?.isContentEditable ||
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select";
       if (editing) return;
       e.preventDefault();
       ascendOneLevel();
@@ -82,7 +85,8 @@ async function onDiveRequested(e) {
     }
 
     // Save current state on the stack
-    const { activeAssetManifestCid, activeAssetName, activeAssetTokenId } = assetState.get();
+    const { activeAssetManifestCid, activeAssetName, activeAssetTokenId } =
+      assetState.get();
     navStack.push({
       cid: activeAssetManifestCid,
       name: activeAssetName || "World",
@@ -92,11 +96,14 @@ async function onDiveRequested(e) {
 
     // Load child world
     clearScene();
+    // Extract tokenId from either old ({tokenId}) or new ({collection: {tokenId}}) format
+    const refTokenId = childRef.tokenId || childRef.collection?.tokenId || null;
+
     assetState.set({
       activeAssetManifestCid: manifest.cid,
       latestAssetManifestCid: manifest.cid,
       activeAssetName: manifest.name || "Child World",
-      activeAssetTokenId: childRef.tokenId,
+      activeAssetTokenId: refTokenId,
     });
     uiState.set({ nestingDepth: ++currentDepth });
 
@@ -190,9 +197,24 @@ function renderBreadcrumb() {
 
 async function resolveChildManifest(childRef) {
   try {
-    const { resolveChildRef } = await import("../blockchain/token-resolver.js");
-    const result = await resolveChildRef(childRef);
-    const cid = result?.manifestCid || null;
+    let cid = null;
+
+    // New collection-based format: { collection: {...}, assetID }
+    if (childRef?.assetID && childRef?.collection) {
+      const { resolveCollectionChildRef } = await import(
+        "../blockchain/token-resolver.js"
+      );
+      const result = await resolveCollectionChildRef(childRef, null);
+      cid = result?.manifestCid || null;
+    } else {
+      // Legacy format: { type: "token", chainId, contractAddress, tokenId, ... }
+      const { resolveChildRef } = await import(
+        "../blockchain/token-resolver.js"
+      );
+      const result = await resolveChildRef(childRef);
+      cid = result?.manifestCid || null;
+    }
+
     if (!cid) return null;
     const manifest = await getFromRemoteIPFS(cid);
     return { cid, ...manifest };
@@ -206,7 +228,8 @@ function updatePublishVisibility() {
   if (publishBtn) {
     // Token-based child worlds are publishable regardless of depth.
     // Only hide publish when truly at root level with no token (empty state).
-    const hidePublish = currentDepth > 0 && !assetState.get().activeAssetTokenId;
+    const hidePublish =
+      currentDepth > 0 && !assetState.get().activeAssetTokenId;
     publishBtn.classList.toggle("hidden", hidePublish);
   }
 }

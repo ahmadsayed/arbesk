@@ -94,7 +94,6 @@ export function assertCommentsArchive(manifest) {
     throw new Error("Invalid comments_archive_cid in manifest");
   }
 }
-}
 
 /**
  * Validate a collection manifest's shape: type, assets map, version chain.
@@ -117,7 +116,7 @@ export function assertCollectionManifest(manifest, { expectedAssetIds } = {}) {
     const expected = [...expectedAssetIds].sort();
     if (JSON.stringify(actualIds) !== JSON.stringify(expected)) {
       throw new Error(
-        `Expected assetIds ${JSON.stringify(expected)}, got ${JSON.stringify(actualIds)}`
+        `Expected assetIds ${JSON.stringify(expected)}, got ${JSON.stringify(actualIds)}`,
       );
     }
   }

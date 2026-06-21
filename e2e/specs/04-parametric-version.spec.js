@@ -1,15 +1,23 @@
 import { test, expect } from "@playwright/test";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
-import { fetchManifest, assertGenerationManifest } from "../helpers/manifest.mjs";
+import {
+  fetchManifest,
+  fetchTokenManifest,
+  assertGenerationManifest,
+  assertPublishedManifest,
+  assertCollectionManifest,
+} from "../helpers/manifest.mjs";
 import {
   connectStudio,
   generate,
   saveDraft,
   editFirstNodeColor,
   scrubHistorySlider,
+  publishWithName,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
+const ASSET_NAME = "Cowboy Parametric";
 const EDIT_COLOR = "#ff0000";
 
 test.describe("parametric versioning + time-travel", () => {
@@ -36,7 +44,10 @@ test.describe("parametric versioning + time-travel", () => {
     // 5. The version slider now spans two versions and sits on the newest.
     await expect(page.locator(SELECTORS.assetHistory)).toBeVisible();
     await expect(page.locator(SELECTORS.historyVersionBadge)).toHaveText("v2");
-    await expect(page.locator(SELECTORS.historySlider)).toHaveAttribute("max", "1");
+    await expect(page.locator(SELECTORS.historySlider)).toHaveAttribute(
+      "max",
+      "1",
+    );
 
     // Record scene:ready per loaded version. The badge updates from the slider
     // position *before* the manifest loads and the .loading class clears in a
@@ -49,7 +60,7 @@ test.describe("parametric versioning + time-travel", () => {
       const { on, EVENTS } = await import("/js/events/bus.js");
       window.__sceneReadyCids = [];
       on(EVENTS.SCENE_READY, ({ manifestCid }) =>
-        window.__sceneReadyCids.push(manifestCid)
+        window.__sceneReadyCids.push(manifestCid),
       );
     });
 
@@ -58,7 +69,9 @@ test.describe("parametric versioning + time-travel", () => {
     await expect(page.locator(SELECTORS.historyVersionBadge)).toHaveText("v1");
     // Loading finished (the section drops its .loading state once the older
     // manifest is back in the scene).
-    await expect(page.locator(SELECTORS.assetHistory)).not.toHaveClass(/loading/);
+    await expect(page.locator(SELECTORS.assetHistory)).not.toHaveClass(
+      /loading/,
+    );
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(genCid);
@@ -73,5 +86,25 @@ test.describe("parametric versioning + time-travel", () => {
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);
+
+    // 8. Publish the parametric asset. tokenURI now returns a collection
+    // manifest, not an asset manifest — walk through collection → asset
+    // to validate the published content.
+    const tokenIdHex = await publishWithName(page, ASSET_NAME);
+
+    const collectionManifest = await fetchTokenManifest(tokenIdHex);
+    assertCollectionManifest(collectionManifest, {
+      expectedAssetIds: undefined,
+    });
+    expect(Object.keys(collectionManifest.assets)).toHaveLength(1);
+
+    const [firstAssetCid] = Object.values(collectionManifest.assets);
+    const assetManifest = await fetchManifest(firstAssetCid);
+    expect(assetManifest.type).toBe("asset");
+    assertPublishedManifest(assetManifest);
+    // The parametric edit produced v2; the published asset carries that version.
+    expect(assetManifest.name).toBe(ASSET_NAME);
+    expect(assetManifest.version).toBe(2);
+    expect(assetManifest.prev_asset_manifest_cid).toBe(genCid);
   });
 });

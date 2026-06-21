@@ -7,6 +7,7 @@ import {
   assertGenerationManifest,
   assertSavedManifest,
   assertPublishedManifest,
+  assertCollectionManifest,
 } from "../helpers/manifest.mjs";
 
 const PROMPT = "cowboy";
@@ -18,7 +19,7 @@ function manifestCidFromUrl(url) {
 
 test.describe("save and publish", () => {
   test("saves a draft and publishes an ERC-721 token", async ({ page }) => {
-await injectHardhatProvider(page);
+    await injectHardhatProvider(page);
     await page.goto("/studio.html");
 
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
@@ -64,26 +65,35 @@ await injectHardhatProvider(page);
     // Publish writes the token id to the URL in HEX (it derives it as a hash of
     // the CID), but the gallery lists the same token by its DECIMAL on-chain id.
     // They are the same number — compare numerically, never as strings.
-    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
+    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 10000 });
     const tokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
     const tokenIdDec = BigInt(tokenIdHex).toString();
 
-    const publishedManifest = await fetchTokenManifest(tokenIdHex);
-    expect(publishedManifest).toBeTruthy();
+    // tokenURI now returns a collection manifest, not an asset manifest.
+    // Walk through collection → first asset to validate the published content.
+    const collectionManifest = await fetchTokenManifest(tokenIdHex);
+    expect(collectionManifest).toBeTruthy();
+    assertCollectionManifest(collectionManifest, {
+      expectedAssetIds: undefined,
+    });
+    expect(Object.keys(collectionManifest.assets)).toHaveLength(1);
 
-    assertPublishedManifest(publishedManifest);
-    expect(publishedManifest.name).toBe(ASSET_NAME);
+    const [firstAssetCid] = Object.values(collectionManifest.assets);
+    const assetManifest = await fetchManifest(firstAssetCid);
+    expect(assetManifest.type).toBe("asset");
+    assertPublishedManifest(assetManifest);
+    expect(assetManifest.name).toBe(ASSET_NAME);
 
-    // 4. Open the Gallery and verify the published asset card appears. Scope to
-    // THIS token's card by its on-chain (decimal) id, not by name — leftover
-    // same-named tokens from earlier attempts can never make it ambiguous.
+    // 4. Open the Gallery and verify the published asset card appears. The
+    // gallery shows collection card format: "Collection #TOKENID (1 asset)".
+    // Scope to THIS token's card by its on-chain (decimal) id.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const assetCard = page.locator(
       `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]`,
     );
     await expect(assetCard).toHaveCount(1);
     await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
-      ASSET_NAME,
+      "1 asset",
     );
 
     // Clicking the card body (not the buttons) should open the asset. The
@@ -107,7 +117,7 @@ await injectHardhatProvider(page);
     await page.click(SELECTORS.dialogBurnBtn);
 
     // After burning, this specific card should disappear from the gallery.
-    await expect(assetCard).toHaveCount(0, { timeout: 15000 });
+    await expect(assetCard).toHaveCount(0, { timeout: 5000 });
     // The active asset should be cleared.
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       "No asset open",

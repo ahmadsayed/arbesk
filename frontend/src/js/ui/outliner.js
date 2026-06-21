@@ -147,8 +147,7 @@ function renderTree(nodes, depth = 0) {
 
   if (!Array.isArray(nodes) || nodes.length === 0) {
     if (depth === 0) {
-      tree.innerHTML =
-        '<div class="ledger-empty">No items in this world</div>';
+      tree.innerHTML = '<div class="ledger-empty">No items in this world</div>';
       updateFooter(0, 0);
     }
     return { totalNodes: 0, childCount: 0 };
@@ -165,7 +164,8 @@ function renderTree(nodes, depth = 0) {
     const el = createNodeElement(node, isChild, depth);
     tree.appendChild(el);
 
-    const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+    const hasChildren =
+      Array.isArray(node.children) && node.children.length > 0;
     const isCollapsed = hasChildren && collapsedNodeIds.has(node.node_id);
     if (hasChildren && !isCollapsed) {
       const childStats = renderTree(node.children, depth + 1);
@@ -187,9 +187,12 @@ function getNodeDisplayName(node) {
     return node.name;
   }
 
-  // Token children: use a human-readable label
-  if (node.child_ref?.tokenId) {
-    return `Token #${node.child_ref.tokenId}`;
+  // Token children: use a human-readable label.
+  // Supports both legacy {tokenId} and collection {collection: {tokenId}, assetID} formats.
+  const refTokenId =
+    node.child_ref?.tokenId || node.child_ref?.collection?.tokenId;
+  if (refTokenId) {
+    return `Token #${refTokenId}`;
   }
 
   // Fall back to node_id or "Untitled"
@@ -221,7 +224,10 @@ function createNodeElement(node, isChildWorld, depth = 0) {
     toggle.type = "button";
     toggle.className = "outliner-node-toggle";
     toggle.setAttribute("aria-expanded", String(!isCollapsed));
-    toggle.setAttribute("aria-label", `${isCollapsed ? "Expand" : "Collapse"} ${getNodeDisplayName(node)}`);
+    toggle.setAttribute(
+      "aria-label",
+      `${isCollapsed ? "Expand" : "Collapse"} ${getNodeDisplayName(node)}`
+    );
     toggle.textContent = isCollapsed ? "▶" : "▼";
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -232,7 +238,9 @@ function createNodeElement(node, isChildWorld, depth = 0) {
       }
       renderTree(buildOutlineTree(getNodes()));
       getOutlinerTree()
-        ?.querySelector(`[data-node-id="${CSS.escape(node.node_id)}"] .outliner-node-toggle`)
+        ?.querySelector(
+          `[data-node-id="${CSS.escape(node.node_id)}"] .outliner-node-toggle`
+        )
         ?.focus();
     });
   } else {
@@ -256,11 +264,14 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   label.textContent = getNodeDisplayName(node);
   el.appendChild(label);
 
-  // Badge (token ID for child worlds)
-  if (isChildWorld && node.child_ref?.tokenId) {
+  // Badge (token ID for child worlds).
+  // Supports both legacy {tokenId} and collection {collection: {tokenId}, assetID} formats.
+  const badgeTokenId =
+    node.child_ref?.tokenId || node.child_ref?.collection?.tokenId;
+  if (isChildWorld && badgeTokenId) {
     const badge = document.createElement("span");
     badge.className = "outliner-node-badge";
-    badge.textContent = `#${node.child_ref.tokenId}`;
+    badge.textContent = `#${badgeTokenId}`;
     el.appendChild(badge);
   }
 

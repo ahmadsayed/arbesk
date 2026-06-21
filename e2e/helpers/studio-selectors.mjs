@@ -15,6 +15,8 @@ export const SELECTORS = {
   dialogConfirmBtn: ".dialog-confirm-btn",
   dialogCancelBtn: '.dialog-action-btn[data-value="cancel"]',
   dialogBurnBtn: '.dialog-action-btn[data-value="burn"]',
+  dialogForkBtn: '.dialog-action-btn[data-value="fork"]',
+  dialogLiveRefBtn: '.dialog-action-btn[data-value="live-ref"]',
   providerSelect: "#providerSelect",
   tierSelect: "#tierSelect",
   assetNameDisplay: "#assetNameDisplay",
@@ -35,6 +37,7 @@ export const SELECTORS = {
   historyVersionBadge: "#historyVersionBadge",
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
+  collectionSelect: "#collectionSelect",
   assetTokenIdLabel: "#assetStatusMeta",
   inspectorDiveBtn: "#inspectorDiveBtn",
   backBtn: "#backBtn",

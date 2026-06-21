@@ -14,7 +14,9 @@ export async function connectStudio(page) {
   await injectHardhatProvider(page);
   await page.goto("/studio.html");
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-  await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText("Sign In");
+  await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
+    "Sign In",
+  );
 }
 
 /**
@@ -25,7 +27,9 @@ export async function connectStudio(page) {
 export async function generate(page, prompt = DEFAULT_PROMPT) {
   await page.fill(SELECTORS.promptInput, prompt);
   await page.click(SELECTORS.generateBtn);
-  await expect(page.locator(SELECTORS.chatHistoryList)).toContainText("Model carved via mock");
+  await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
+    "Model carved via mock",
+  );
   await page.waitForURL(/[?&]manifest=Qm[\w]+/);
   return manifestCidFromUrl(page.url());
 }
@@ -55,12 +59,16 @@ export async function publishWithName(page, name) {
   await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
   await page.fill(SELECTORS.dialogInput, name);
   await page.click(SELECTORS.dialogConfirmBtn);
-  await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
+  await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 10000 });
   return tokenIdHexFromUrl(page.url());
 }
 
 /** Run the proven generate → save → publish path and return the token id (hex). */
-export async function generateSaveAndPublish(page, name, prompt = DEFAULT_PROMPT) {
+export async function generateSaveAndPublish(
+  page,
+  name,
+  prompt = DEFAULT_PROMPT,
+) {
   const genCid = await generate(page, prompt);
   await saveDraft(page, genCid);
   return publishWithName(page, name);

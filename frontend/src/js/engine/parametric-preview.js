@@ -12,10 +12,7 @@
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import {
-  applyColor,
-  applyScale,
-} from "./time-travel.js";
+import { applyColor, applyScale } from "./time-travel.js";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -37,8 +34,12 @@ const nodeScaleY = document.getElementById("nodeScaleY");
 const nodeScaleZ = document.getElementById("nodeScaleZ");
 const componentEditor = document.getElementById("componentEditor");
 const selectedComponentName = document.getElementById("selectedComponentName");
-const selectedComponentSwatch = document.getElementById("selectedComponentSwatch");
-const selectedComponentColor = document.getElementById("selectedComponentColor");
+const selectedComponentSwatch = document.getElementById(
+  "selectedComponentSwatch"
+);
+const selectedComponentColor = document.getElementById(
+  "selectedComponentColor"
+);
 
 // Token child info elements
 const tokenChildIdEl = document.getElementById("tokenChildId");
@@ -82,7 +83,8 @@ function _applyUndoEntry(entry, color) {
   // Sync the inspector UI if it's showing this node/mesh
   if (activeNodeId === nodeId && activeMeshName === meshName) {
     if (selectedComponentColor) selectedComponentColor.value = color;
-    if (selectedComponentSwatch) selectedComponentSwatch.style.backgroundColor = color;
+    if (selectedComponentSwatch)
+      selectedComponentSwatch.style.backgroundColor = color;
   }
 
   // Keep pending edits in sync so Save writes the undone/redone color
@@ -135,17 +137,26 @@ function showTokenChildInfo(nodeId) {
   if (componentEditor) componentEditor.hidden = true;
 
   const childRef = getNodeChildRef(nodeId);
+  // Support both legacy {tokenId, chainId, contractAddress, resolution} and
+  // collection {collection: {chainId, contractAddress, tokenId}, assetID} formats.
+  const refTokenId = childRef?.tokenId || childRef?.collection?.tokenId || null;
+  const refChainId = childRef?.chainId || childRef?.collection?.chainId || null;
+  const refContractAddress =
+    childRef?.contractAddress || childRef?.collection?.contractAddress || null;
+
   if (childRef && tokenChildIdEl) {
-    tokenChildIdEl.textContent = `Token #${childRef.tokenId || "—"}`;
+    tokenChildIdEl.textContent = refTokenId ? `Token #${refTokenId}` : "—";
   }
   if (tokenChildContractEl) {
-    tokenChildContractEl.textContent = childRef?.contractAddress
-      ? `${childRef.contractAddress.slice(0, 10)}…${childRef.contractAddress.slice(-6)}`
+    tokenChildContractEl.textContent = refContractAddress
+      ? `${refContractAddress.slice(0, 10)}…${refContractAddress.slice(-6)}`
       : "—";
   }
-  if (tokenChildChainEl) tokenChildChainEl.textContent = childRef?.chainId || "—";
-  if (tokenChildResolutionEl) tokenChildResolutionEl.textContent = childRef?.resolution || "latest";
-  if (tokenChildCidEl) tokenChildCidEl.textContent = childRef?.resolvedCid || "—";
+  if (tokenChildChainEl) tokenChildChainEl.textContent = refChainId || "—";
+  if (tokenChildResolutionEl)
+    tokenChildResolutionEl.textContent = childRef?.resolution || "latest";
+  if (tokenChildCidEl)
+    tokenChildCidEl.textContent = childRef?.resolvedCid || "—";
 
   inspector.classList.remove("collapsed");
 }
@@ -225,10 +236,13 @@ function selectComponent(meshName) {
   // Find the mesh and its color for the editor.
   const subMeshes = getNodeSubMeshes(activeNodeId);
   const match = subMeshes.find((s) => s.name === meshName);
-  const color = match ? getMeshMaterialColor(match.mesh) || "#ffffff" : "#ffffff";
+  const color = match
+    ? getMeshMaterialColor(match.mesh) || "#ffffff"
+    : "#ffffff";
 
   if (selectedComponentName) selectedComponentName.textContent = meshName;
-  if (selectedComponentSwatch) selectedComponentSwatch.style.backgroundColor = color;
+  if (selectedComponentSwatch)
+    selectedComponentSwatch.style.backgroundColor = color;
   if (selectedComponentColor) {
     selectedComponentColor.value = color;
     selectedComponentColor.dataset.meshName = meshName;
@@ -262,7 +276,8 @@ function onComponentColorChange(e) {
   applyColor(meshes, null, { [meshName]: { color } });
 
   // Sync the editor swatch to match.
-  if (selectedComponentSwatch) selectedComponentSwatch.style.backgroundColor = color;
+  if (selectedComponentSwatch)
+    selectedComponentSwatch.style.backgroundColor = color;
 
   // Record for Save/Publish to bake into the source asset.
   let nodeEdits = pendingSourceColorEdits.get(activeNodeId);
@@ -303,7 +318,8 @@ on(EVENTS.SUBMESH_SELECTED, (e) => {
 
 // Inspector close button
 const inspectorCloseBtn = document.getElementById("inspectorCloseBtn");
-if (inspectorCloseBtn) inspectorCloseBtn.addEventListener("click", closeInspector);
+if (inspectorCloseBtn)
+  inspectorCloseBtn.addEventListener("click", closeInspector);
 
 // Dive button for child worlds
 const diveBtn = document.getElementById("inspectorDiveBtn");
@@ -342,7 +358,12 @@ if (selectedComponentColor) {
     if (!activeNodeId || !activeMeshName) return;
     const newColor = e.target.value;
     if (_colorBeforeEdit && _colorBeforeEdit !== newColor) {
-      _pushUndo({ nodeId: activeNodeId, meshName: activeMeshName, oldColor: _colorBeforeEdit, newColor });
+      _pushUndo({
+        nodeId: activeNodeId,
+        meshName: activeMeshName,
+        oldColor: _colorBeforeEdit,
+        newColor,
+      });
     }
     _colorBeforeEdit = null;
   });
@@ -356,8 +377,11 @@ document.addEventListener("keydown", (e) => {
   // Allow undo when a color input is focused; block for text fields
   const isColorInput = tag === "input" && el.type === "color";
   if (!isColorInput) {
-    const editing = el?.isContentEditable || tag === "textarea" || tag === "select" ||
-      (tag === "input");
+    const editing =
+      el?.isContentEditable ||
+      tag === "textarea" ||
+      tag === "select" ||
+      tag === "input";
     if (editing) return;
   }
   e.preventDefault();

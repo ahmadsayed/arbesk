@@ -776,16 +776,24 @@ async function onPublishAsset() {
     // Fetch the current collection manifest (if one exists yet) and merge
     // this asset's new CID into its assets map. If no collection token
     // exists yet, this besk lazily mints the default collection.
-    const existingCollectionTokenId =
+    const preferredCollectionId =
       assetState.get().selectedCollectionId ||
       assetState.get().activeCollectionTokenId;
+    let existingCollectionTokenId = null;
     let collectionManifest = null;
-    if (existingCollectionTokenId) {
+    if (preferredCollectionId) {
       const c = walletContract || walletState.get().contract;
-      const collectionCid = await c.methods
-        .tokenURI(String(existingCollectionTokenId))
-        .call();
-      collectionManifest = await getFromRemoteIPFS(collectionCid);
+      try {
+        const collectionCid = await c.methods
+          .tokenURI(String(preferredCollectionId))
+          .call();
+        if (collectionCid && collectionCid !== "") {
+          collectionManifest = await getFromRemoteIPFS(collectionCid);
+          existingCollectionTokenId = preferredCollectionId;
+        }
+      } catch {
+        // tokenURI reverted or IPFS fetch failed; treat as new collection
+      }
     }
     const mergedCollection = mergeAssetIntoCollection(
       collectionManifest,
