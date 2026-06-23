@@ -242,7 +242,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   }
 
   describe("POST /api/v1/generations", () => {
-    it("creates a new manifest with a generation variant entry", async () => {
+    it("returns asset bytes for a prompt", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
@@ -252,23 +252,14 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
-      expect(res.body.sourceAssetCid).toBeDefined();
+      expect(res.body.assetData).toBeDefined();
+      expect(typeof res.body.assetData).toBe("string");
+      expect(res.body.format).toBeDefined();
+      expect(res.body.path).toBeDefined();
+      expect(res.body.provider).toBe("mock");
 
-      // Verify the manifest stores state directly on the node
-      const manifestData = await fetchManifestFromIPFS(
-        res.body.assetManifestCid,
-      );
-      const node = (manifestData.scene?.nodes || [])[0];
-      expect(node).toBeDefined();
-      expect(node).toHaveProperty("post_processor");
-      expect(node.post_processor).toHaveProperty("color");
-      expect(node.post_processor).toHaveProperty("scale");
-      expect(node.source).toMatchObject({
-        cid: expect.any(String),
-        path: expect.any(String),
-        format: expect.any(String),
-      });
+      // assetData should be valid base64
+      expect(() => atob(res.body.assetData)).not.toThrow();
     });
 
     it("returns suka.gltf for character prompts", async () => {
@@ -281,7 +272,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.sourceAssetCid).toBeDefined();
+      expect(res.body.format).toBe("gltf");
+      expect(res.body.path).toMatch(/\.gltf$/);
     });
 
     it("returns howdy.glb for cowboy prompts", async () => {
@@ -294,15 +286,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.sourceAssetCid).toBeDefined();
-
-      const manifestData = await fetchManifestFromIPFS(
-        res.body.assetManifestCid,
-      );
-      const node = (manifestData.scene?.nodes || [])[0];
-      expect(node).toBeDefined();
-      expect(node.source.format).toBe("glb");
-      expect(node.source.path).toMatch(/\.glb$/);
+      expect(res.body.format).toBe("glb");
+      expect(res.body.path).toMatch(/\.glb$/);
     });
 
     it("rejects when prompt or nodeId is missing", async () => {
@@ -359,45 +344,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.error.code).toBe("MISSING_PROVIDER_KEY");
     });
 
-    // ─── Tier pass-through tests ───
-
-    // Reset rate limiter: earlier tests may have exhausted the 10/hour quota
-    beforeEach(() => {
-      _resetRateLimiter();
-    });
-
-    it("passes tier through in the response", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A chair",
-          nodeId: "node_tier_match",
-          tier: 2,
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
-      expect(res.body.tier).toBe(2);
-    });
-
-    it("generation without tier still works (backward compat)", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A bookshelf",
-          nodeId: "node_notier",
-          // no tier field — backward compat
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
-      // Tier should NOT be in response since it wasn't sent
-      expect(res.body.tier).toBeUndefined();
-    });
-
-    it("BYOK: real provider with providerKey succeeds without a txHash", async () => {
+    it("BYOK: real provider with providerKey succeeds", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
@@ -409,24 +356,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
-      expect(res.body.sourceAssetCid).toBeDefined();
-    });
-
-    it("BYOK: ignores any txHash because the on-chain gate is never used", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A BYOK chair",
-          nodeId: "node_byok_002",
-          txHash: "0xwouldnormallyfail",
-          provider: "tripo3d",
-          providerKey: "sk-byok-test-key-5678",
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
+      expect(res.body.assetData).toBeDefined();
+      expect(res.body.format).toBeDefined();
     });
 
     it("BYOK: empty/whitespace providerKey is rejected for real providers", async () => {

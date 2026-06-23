@@ -276,10 +276,15 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
 
 /**
  * POST /api/v1/generations
+ *
+ * The backend validates the session, checks the rate limit, calls the
+ * adapter, and returns raw asset bytes. The browser uploads the asset
+ * to IPFS, constructs the manifest, and writes it to IPFS directly —
+ * no server-side IPFS writes.
+ *
  * @param {Object} params
  * @param {string} params.prompt
  * @param {string} params.nodeId
- * @param {string} params.txHash
  * @param {string} [params.provider]
  * @param {string} [params.assetId]
  * @param {string} [params.prevAssetManifestCid]
@@ -299,8 +304,6 @@ export async function generateAsset({
   providerKey,
 }) {
   announceStatus("Authenticating…");
-  // Session auth reuses the ONE pop-up from createSession() across all
-  // generation calls in a 24-hour window.
   const sessionToken = await getOrCreateSession();
   let authHeader = `Session ${sessionToken}`;
 
@@ -310,13 +313,8 @@ export async function generateAsset({
   const body = {
     prompt,
     nodeId,
-    txHash,
     provider,
     ...(chainId && { chainId }),
-    ...(assetId && { assetId }),
-    ...(prevAssetManifestCid && { prevAssetManifestCid }),
-    ...(transformMatrix && { transform_matrix: transformMatrix }),
-    ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
     ...(providerKey && { providerKey }),
   };
 
@@ -336,8 +334,6 @@ export async function generateAsset({
   let response = await doFetch(authHeader);
   let data = await response.json().catch(() => ({}));
 
-  // Auto-retry once with a fresh session if the backend lost our token
-  // (common during development when the Node server restarts).
   if (response.status === 401) {
     const { code } = parseErrorBody(data);
     if (code === "INVALID_SESSION" || code === "MISSING_AUTH") {
@@ -362,8 +358,90 @@ export async function generateAsset({
     );
   }
 
+  // Browser uploads the asset bytes to IPFS, constructs the manifest,
+  // and uploads the manifest — no server-side IPFS writes.
+  announceStatus("Uploading asset to IPFS…");
+  const { writeToIPFS, writeJSONToIPFS } = await import(
+    "../ipfs/write-to-ipfs.js"
+  );
+  const { getFromRemoteIPFS } = await import("../ipfs/remote-ipfs.js");
+
+  // Decode base64 asset data from the backend response
+  const assetBytes = Uint8Array.from(atob(data.assetData), (c) =>
+    c.charCodeAt(0)
+  );
+  const sourceAssetCid = await writeToIPFS(
+    assetBytes,
+    data.path || `asset.${data.format}`
+  );
+  console.log(`[GEN] browser uploaded source asset → ${sourceAssetCid}`);
+
+  // Build the manifest (same logic previously done server-side)
+  const displayName = prompt
+    ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
+    : nodeId;
+
+  let manifest = null;
+  if (prevAssetManifestCid) {
+    try {
+      manifest = await getFromRemoteIPFS(prevAssetManifestCid);
+      console.log(`[GEN] previous manifest loaded — v${manifest.version}`);
+    } catch (e) {
+      console.warn(
+        `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${e.message}`
+      );
+    }
+  }
+
+  if (!manifest) {
+    manifest = {
+      asset_id: assetId || `asset_${Date.now()}`,
+      version: 0,
+      timestamp: Date.now(),
+      prev_asset_manifest_cid: null,
+      scene: { nodes: [] },
+    };
+  }
+
+  manifest.version = (manifest.version || 0) + 1;
+  manifest.timestamp = Date.now();
+  if (prevAssetManifestCid !== undefined) {
+    manifest.prev_asset_manifest_cid = prevAssetManifestCid || null;
+  }
+  manifest.scene ||= { nodes: [] };
+  manifest.scene.nodes ||= [];
+
+  // Replace or create the single node for this generation
+  manifest.scene.nodes = [
+    {
+      node_id: nodeId,
+      type: "source_asset",
+      name: displayName,
+      source: {
+        cid: sourceAssetCid,
+        path: data.path || `asset.${data.format}`,
+        format: data.format,
+      },
+      transform_matrix:
+        Array.isArray(transformMatrix) && transformMatrix.length === 16
+          ? transformMatrix
+          : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
+    },
+  ];
+
+  announceStatus("Uploading manifest to IPFS…");
+  const assetManifestCid = await writeJSONToIPFS(manifest, null, {
+    assetId: manifest.asset_id,
+  });
+  console.log(`[GEN] browser uploaded manifest → ${assetManifestCid}`);
+
   announceStatus("Asset generated successfully.");
-  return data;
+  return {
+    assetManifestCid,
+    sourceAssetCid,
+    ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
+  };
 }
 
 // ─── Comments Archive ────────────────────────────────────────────────────────

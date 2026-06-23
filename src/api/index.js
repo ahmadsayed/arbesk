@@ -115,7 +115,7 @@ export default () => {
 
   // ─── Generations ──────────────────────────────────────────────────────────
 
-  v1.use("/generations", generateAssetNode(getStorage()));
+  v1.use("/generations", generateAssetNode());
 
   // ─── Comments Archive ─────────────────────────────────────────────────────
 
