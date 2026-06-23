@@ -282,6 +282,7 @@ export async function generateAsset({
   prevAssetManifestCid,
   transformMatrix,
   tier,
+  providerKey,
 }) {
   announceStatus("Authenticating…");
   // Session auth reuses the ONE pop-up from createSession() across all
@@ -302,6 +303,7 @@ export async function generateAsset({
     ...(prevAssetManifestCid && { prevAssetManifestCid }),
     ...(transformMatrix && { transform_matrix: transformMatrix }),
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
+    ...(providerKey && { providerKey }),
   };
 
   async function doFetch(authorization) {
@@ -537,6 +539,85 @@ export async function unpinAssetCids(cid, actorAddress) {
   }
 
   return data;
+}
+
+// ─── IPFS Bundle (directory upload) ──────────────────────────────────────────
+
+/**
+ * POST /api/v1/ipfs/bundle
+ * Upload multiple files as a single IPFS UnixFS directory and return the
+ * directory root CID. Used to group a glTF + its buffers/textures into one
+ * browsable folder (organizational only — loading still uses bare CIDs).
+ *
+ * Files are base64-encoded so binary buffers survive JSON transport.
+ *
+ * @param {{name: string, data: Uint8Array|ArrayBuffer|string}[]} files
+ * @returns {Promise<{bundleCid: string}>}
+ */
+export async function createBundle(files) {
+  const payload = {
+    files: files.map((f) => ({
+      name: f.name,
+      data: bytesToBase64(f.data),
+    })),
+  };
+
+  let token = await getOrCreateSession();
+  let res = await fetch(`${API_BASE}/ipfs/bundle`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Session ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  // Re-authenticate once on a stale session (server restart).
+  if (res.status === 401) {
+    console.log("[SESSION] bundle rejected cached token — re-authenticating");
+    clearSession();
+    token = await getOrCreateSession();
+    res = await fetch(`${API_BASE}/ipfs/bundle`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Session ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Bundle failed (HTTP ${res.status})`,
+      res.status,
+      code
+    );
+  }
+  return data;
+}
+
+/**
+ * Encode bytes/arraybuffer/string as base64 (for JSON-safe transport).
+ * @param {Uint8Array|ArrayBuffer|string} data
+ * @returns {string}
+ */
+function bytesToBase64(data) {
+  let bytes;
+  if (typeof data === "string") {
+    bytes = new TextEncoder().encode(data);
+  } else if (data instanceof ArrayBuffer) {
+    bytes = new Uint8Array(data);
+  } else {
+    bytes = data;
+  }
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 // ─── Ledger ──────────────────────────────────────────────────────────────────

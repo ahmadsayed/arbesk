@@ -8,7 +8,7 @@
 
 import { getGlTFWorkerPool, isWorkerPoolAvailable } from "../workers/gltf-worker-pool.js";
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
-import { getUploadCredential } from "../services/api.js";
+import { getUploadCredential, createBundle } from "../services/api.js";
 import { getArrayBufferFromRemoteIPFS, gatewayBase } from "../ipfs/remote-ipfs.js";
 import { composeGlTF } from "./composer.js";
 import { decomposeGlTF as decomposeGlTFMain, decomposeAndStore as decomposeAndStoreMain, isComposite } from "./decomposer.js";
@@ -60,6 +60,44 @@ async function uploadExtractedAssets(composite, buffers, images, credential = nu
     ...uploadAndRewrite(images, WORKER_IMAGE_PREFIX, composite.images, reusableCredential),
   ]);
   return composite;
+}
+
+/**
+ * Assemble the composite glTF + its buffers/images into one IPFS directory
+ * for organizational browsing (Pinata/Kubo show a browsable folder). Purely
+ * additive — loading still uses the loose `ipfs://<cid>` refs in the composite.
+ *
+ * Best-effort: returns null on any failure so the asset still loads without a
+ * bundle. Uses the extracted bytes already in memory (no re-fetch).
+ *
+ * @param {object} composite - composite glTF JSON (URIs already rewritten to ipfs://)
+ * @param {Array} buffers - extracted {bytes, name} buffer entries
+ * @param {Array} images - extracted {bytes, name} image entries
+ * @returns {Promise<string|null>} directory root CID, or null on failure
+ */
+async function assembleBundle(composite, buffers, images) {
+  try {
+    const files = [];
+    // The composite glTF JSON, by its friendly name.
+    files.push({
+      name: "composite.gltf",
+      data: JSON.stringify(composite, null, 2),
+    });
+    // Each buffer/image under the same name the decomposer assigned.
+    for (const b of buffers || []) {
+      if (b && b.bytes && !b.skip) files.push({ name: b.name, data: b.bytes });
+    }
+    for (const img of images || []) {
+      if (img && img.bytes && !img.skip) files.push({ name: img.name, data: img.bytes });
+    }
+    if (files.length <= 1) return null; // nothing to bundle beyond the JSON
+    const { bundleCid } = await createBundle(files);
+    console.log(`[BUNDLE] directory root → ${bundleCid} (${files.length} files)`);
+    return bundleCid;
+  } catch (err) {
+    console.warn(`[BUNDLE] directory upload failed (non-fatal): ${err.message}`);
+    return null;
+  }
 }
 
 /**
@@ -127,13 +165,16 @@ export async function decomposeAndStoreAsync(gltfJson) {
       const { composite, buffers, images } = await getGlTFWorkerPool().exec("decomposeGltf", [{ gltfJson }]);
       await uploadExtractedAssets(composite, buffers, images, reusableCredential);
       const compositeCid = await writeJSONToIPFS(composite, reusableCredential);
-      return { composite, compositeCid };
+      const bundleCid = await assembleBundle(composite, buffers, images);
+      return { composite, compositeCid, bundleCid };
     } catch (error) {
       console.warn("[ASYNC-GLTF] decomposeAndStore worker failed, falling back:", error.message);
     }
   }
 
-  return decomposeAndStoreMain(gltfJson, reusableCredential);
+  const result = await decomposeAndStoreMain(gltfJson, reusableCredential);
+  // Main-thread fallback has no extracted bytes array; skip bundling there.
+  return { ...result, bundleCid: null };
 }
 
 /**
@@ -163,16 +204,19 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
       await uploadExtractedAssets(composite, buffers, images, reusableCredential);
 
       let compositeCid = null;
+      let bundleCid = null;
       if (storeComposite) {
         compositeCid = await writeJSONToIPFS(composite, reusableCredential);
+        bundleCid = await assembleBundle(composite, buffers, images);
       }
-      return { composite, compositeCid };
+      return { composite, compositeCid, bundleCid };
     } catch (error) {
       console.warn("[ASYNC-GLTF] decomposeGlb worker failed, falling back:", error.message);
     }
   }
 
-  return decomposeGLBMain(arrayBuffer, undefined, { storeComposite, credential: reusableCredential });
+  const result = await decomposeGLBMain(arrayBuffer, undefined, { storeComposite, credential: reusableCredential });
+  return { ...result, bundleCid: null };
 }
 
 /**

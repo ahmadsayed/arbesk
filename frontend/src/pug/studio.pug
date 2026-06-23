@@ -161,6 +161,12 @@ html(lang="en")
                       option(value="tripo3d") Tripo3D
                       option(value="hunyuan3d") Hunyuan3D
                   .form-group
+                    label.form-label(for="providerKeyInput") Generation API Key
+                    .byok-field
+                      input#providerKeyInput.form-control(type="password", placeholder="sk-… (optional)", autocomplete="off", aria-describedby="byokHelp")
+                      button#providerKeyToggle.byok-toggle(type="button", aria-label="Show API key") Show
+                    .form-help#byokHelp Bring your own key for the selected provider to generate without the free-tier on-chain quota.
+                  .form-group
                     label.form-label(for="tierSelect") Quality Tier
                     select#tierSelect.form-select(aria-describedby="tierHelp")
                       option(value="0" selected) Free — ~$0.0001 gas

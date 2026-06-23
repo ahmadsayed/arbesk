@@ -218,7 +218,7 @@ else
   echo "   API:        http://localhost:${BACKEND_PORT}/api"
   echo "   IPFS:       Pinata (remote)"
   echo "   Nostr:      ws://127.0.0.1:7777 (Docker)"
-  echo "   Network:    Optimism Sepolia"
+  echo "   Network:    MegaETH Testnet  |  Chain: 6343 (0x18c7)"
   echo "   RPC:        ${API_URL}"
   echo "   Contract:   ${CONTRACT_ADDRESS}"
 fi

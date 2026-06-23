@@ -14,7 +14,6 @@ export const SELECTORS = {
   dialogInput: ".dialog-input",
   dialogConfirmBtn: ".dialog-confirm-btn",
   dialogCancelBtn: '.dialog-action-btn[data-value="cancel"]',
-  dialogBurnBtn: '.dialog-action-btn[data-value="burn"]',
   dialogForkBtn: '.dialog-action-btn[data-value="fork"]',
   dialogLiveRefBtn: '.dialog-action-btn[data-value="live-ref"]',
   providerSelect: "#providerSelect",
@@ -24,7 +23,6 @@ export const SELECTORS = {
   assetLibraryBody: "#assetLibraryBody",
   assetCard: ".asset-card",
   assetCardName: ".asset-card-name",
-  assetCardBurnBtn: ".asset-card-burn",
   // Outliner (scene graph tree)
   outlinerSwitcherBtn: '[data-view="outline"]',
   outlinerNode: ".outliner-node",

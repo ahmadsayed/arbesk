@@ -222,7 +222,8 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
         "source": {
           "cid": "QmAssetCid...",
           "path": "asset.glb",
-          "format": "glb"
+          "format": "glb",
+          "bundleCid": "QmBundleRoot..."
         },
         "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
         "history": [
@@ -269,6 +270,12 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
   }
 }
 ```
+
+**Source fields:**
+- `cid` — the authoritative root CID used to load the asset (a composite glTF JSON whose `buffers[].uri` / `images[].uri` reference their parts by bare `ipfs://<cid>` URIs). The loader and composer resolve these bare CIDs directly; they never read `path` or `bundleCid`.
+- `path` — the source file name (`asset.glb` or `composite.gltf`); metadata only.
+- `format` — `"glb"` or `"gltf"`.
+- `bundleCid` *(optional)* — an IPFS UnixFS directory root CID grouping the composite glTF + its `.bin` buffers + textures under their friendly names (`composite.gltf`, `buffer_0.bin`, `texture_0.png`). **Organizational only** — exists so Pinata/Kubo show a browsable folder for the asset. Loading ignores it. Dropped on color-bake edits (JSON-only changes), since re-bundling isn't worth the upload. Burn unpins it alongside `cid`.
 
 ### 4.2 Collection Manifest
 

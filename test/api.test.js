@@ -48,6 +48,24 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           yield new Uint16Array(chars);
         }
       }),
+      addAll: jest.fn(async function* (source, options) {
+        // Mirror Kubo's wrapWithDirectory: store each file under a content
+        // hash, then yield a root directory node whose path is "".
+        const entries = [];
+        for await (const entry of source) {
+          const hash = "Qm" + Math.random().toString(36).substring(2, 15);
+          const data =
+            entry.content instanceof Uint8Array
+              ? Buffer.from(entry.content).toString("base64")
+              : String(entry.content);
+          ipfsStorage.set(hash, data);
+          entries.push({ path: entry.path, hash });
+          yield { path: entry.path, cid: { toString: () => hash } };
+        }
+        const rootHash = "QmDir" + Math.random().toString(36).substring(2, 12);
+        ipfsStorage.set(rootHash, JSON.stringify(entries));
+        yield { path: "", cid: { toString: () => rootHash } };
+      }),
       pin: {
         add: jest.fn(async () => {}),
         rm: jest.fn(async () => {}),
@@ -216,7 +234,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "A modern minimalist workbench",
           nodeId: "node_table_001",
-          txHash: "0xabc",
         });
 
       expect(res.status).toBe(200);
@@ -246,7 +263,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "A tall character",
           nodeId: "node_char_001",
-          txHash: "0xdef",
         });
 
       expect(res.status).toBe(200);
@@ -260,7 +276,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "howdy cowboy",
           nodeId: "node_cowboy_001",
-          txHash: "0xcowboy",
         });
 
       expect(res.status).toBe(200);
@@ -282,34 +297,15 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "",
           nodeId: "node_test",
-          txHash: "0x123",
         });
 
       expect(res.status).toBe(400);
     });
 
-    it("rejects replay txHash with 409", async () => {
-      const txHash = "0xreplaytest";
-      const auth = await makeSessionHeader();
-
-      const res1 = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", auth)
-        .send({ prompt: "First", nodeId: "node_r1", txHash });
-      expect(res1.status).toBe(200);
-
-      const res2 = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", auth)
-        .send({ prompt: "Second", nodeId: "node_r2", txHash });
-      expect(res2.status).toBe(409);
-      expect(res2.body.error.code).toBe("REPLAY_DETECTED");
-    });
-
     it("rejects missing Authorization header with 401", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
-        .send({ prompt: "Test", nodeId: "node_noauth", txHash: "0xnoauth" });
+        .send({ prompt: "Test", nodeId: "node_noauth" });
       expect(res.status).toBe(401);
       expect(res.body.error?.code).toBe("MISSING_AUTH");
     });
@@ -321,7 +317,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "Test",
           nodeId: "node_badsession",
-          txHash: "0xbadsession",
         });
       expect(res.status).toBe(401);
       expect(res.body.error?.code).toBe("INVALID_SESSION");
@@ -331,47 +326,38 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", "Bearer something")
-        .send({ prompt: "Test", nodeId: "node_bearer", txHash: "0xbearer" });
+        .send({ prompt: "Test", nodeId: "node_bearer" });
       expect(res.status).toBe(401);
     });
 
-    it("rejects tx sent to wrong contract address", async () => {
-      const originalTo = mockWeb3Receipt.to;
-      const originalLogAddresses = mockWeb3Receipt.logs.map((l) => l.address);
-      mockWeb3Receipt.to = "0xWrongAddress";
-      // Payment events must also come from the wrong address for the test
-      mockWeb3Receipt.logs.forEach((log) => {
-        log.address = "0xWrongAddress";
-      });
+    it("rejects real provider without providerKey", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
-        .send({ prompt: "Test", nodeId: "node_w1", txHash: "0xwrongaddr" });
-      expect(res.status).toBe(403);
-      expect(res.body.error.message).toContain("not sent to ArbeskAsset");
-      mockWeb3Receipt.to = originalTo;
-      mockWeb3Receipt.logs.forEach((log, i) => {
-        log.address = originalLogAddresses[i];
-      });
+        .send({
+          prompt: "A chair",
+          nodeId: "node_no_key",
+          provider: "meshy",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("MISSING_PROVIDER_KEY");
     });
 
-    // ─── Tier-specific tests ───
+    // ─── Tier pass-through tests ───
 
     // Reset rate limiter: earlier tests may have exhausted the 10/hour quota
     beforeEach(() => {
       _resetRateLimiter();
     });
 
-    it("accepts generation with matching tier (Premium=2)", async () => {
-      // Default mock receipt has USDC event with tier 2, and _usdcTier = 2
-      const uniqTx = "0xtier_match_" + Date.now();
+    it("passes tier through in the response", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A chair",
           nodeId: "node_tier_match",
-          txHash: uniqTx,
           tier: 2,
         });
 
@@ -380,96 +366,13 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.tier).toBe(2);
     });
 
-    it("accepts Basic tier (0)", async () => {
-      mockWeb3Receipt._usdcTier = 0;
-      const uniqTx = "0xtier_basic_" + Date.now();
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A table",
-          nodeId: "node_tier_basic",
-          txHash: uniqTx,
-          tier: 0,
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.tier).toBe(0);
-      mockWeb3Receipt._usdcTier = 2; // reset
-    });
-
-    it("accepts Pro tier (3)", async () => {
-      mockWeb3Receipt._usdcTier = 3;
-      const uniqTx = "0xtier_pro_" + Date.now();
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A spaceship",
-          nodeId: "node_tier_pro",
-          txHash: uniqTx,
-          tier: 3,
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.tier).toBe(3);
-      mockWeb3Receipt._usdcTier = 2; // reset
-    });
-
-    it("rejects when requested tier does not match on-chain tier", async () => {
-      // On-chain event says tier 2 (default), but request claims tier 3
-      const uniqTx = "0xtier_mismatch_" + Date.now();
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A lamp",
-          nodeId: "node_tier_mismatch",
-          txHash: uniqTx,
-          tier: 3, // claims Pro, but receipt says Premium (2)
-        });
-
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("TIER_MISMATCH");
-      expect(res.body.error.message).toContain("does not match");
-    });
-
-    it("accepts native ETH payment even when tier is specified (Hardhat dev)", async () => {
-      // Remove the USDC log from the receipt, leaving only native payment log
-      const originalLogs = mockWeb3Receipt.logs;
-      mockWeb3Receipt.logs = mockWeb3Receipt.logs.filter(
-        (log) =>
-          log.topics[0] !==
-          "0x0000000000000000000000000000000000000000000000000000000000usdc00",
-      );
-
-      const uniqTx = "0xtier_native_" + Date.now();
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A desk",
-          nodeId: "node_tier_native",
-          txHash: uniqTx,
-          tier: 2,
-        });
-
-      // Native ETH payment (e.g. Hardhat) has no on-chain tier data,
-      // so the backend should accept it regardless of the tier value sent.
-      expect(res.status).toBe(200);
-      expect(res.body.assetManifestCid).toBeDefined();
-      mockWeb3Receipt.logs = originalLogs; // restore
-    });
-
     it("generation without tier still works (backward compat)", async () => {
-      const uniqTx = "0xnotier_" + Date.now();
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A bookshelf",
           nodeId: "node_notier",
-          txHash: uniqTx,
           // no tier field — backward compat
         });
 
@@ -477,6 +380,53 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.assetManifestCid).toBeDefined();
       // Tier should NOT be in response since it wasn't sent
       expect(res.body.tier).toBeUndefined();
+    });
+
+    it("BYOK: real provider with providerKey succeeds without a txHash", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          prompt: "A BYOK lamp",
+          nodeId: "node_byok_001",
+          provider: "meshy",
+          providerKey: "sk-byok-test-key-1234",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.assetManifestCid).toBeDefined();
+      expect(res.body.sourceAssetCid).toBeDefined();
+    });
+
+    it("BYOK: ignores any txHash because the on-chain gate is never used", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          prompt: "A BYOK chair",
+          nodeId: "node_byok_002",
+          txHash: "0xwouldnormallyfail",
+          provider: "tripo3d",
+          providerKey: "sk-byok-test-key-5678",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.assetManifestCid).toBeDefined();
+    });
+
+    it("BYOK: empty/whitespace providerKey is rejected for real providers", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          prompt: "An empty-key asset",
+          nodeId: "node_byok_empty",
+          provider: "meshy",
+          providerKey: "   ",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("MISSING_PROVIDER_KEY");
     });
   });
 
@@ -543,7 +493,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           .send({
             prompt: `Rate test ${i}`,
             nodeId: `node_rate_${i}`,
-            txHash: `0xrate${i}`,
           });
         lastStatus = res.status;
         if (res.status === 429) break;
@@ -590,6 +539,41 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
+  describe("POST /api/v1/ipfs/bundle", () => {
+    beforeEach(() => _resetRateLimiter());
+
+    it("rejects without a session (401)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/bundle")
+        .send({ files: [] });
+      expect(res.status).toBe(401);
+    });
+
+    it("rejects an empty files array (400)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/bundle")
+        .set("Authorization", await makeSessionHeader())
+        .send({ files: [] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("MISSING_FILES");
+    });
+
+    it("assembles a directory from base64 files and returns a bundleCid", async () => {
+      // base64 of "glTF JSON content" and a 3-byte binary buffer
+      const res = await request(app)
+        .post("/api/v1/ipfs/bundle")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          files: [
+            { name: "composite.gltf", data: btoa("glTF JSON content") },
+            { name: "buffer_0.bin", data: "AQID" }, // bytes 1,2,3
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.bundleCid).toMatch(/^QmDir/);
+    });
+  });
+
   describe("POST /api/v1/ipfs/unpin via storage", () => {
     it("walks the chain and reports unpinned CIDs", async () => {
       const manifest = {
@@ -609,6 +593,33 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.unpinned)).toBe(true);
       expect(res.body.unpinned).toContain(startCid);
+    });
+
+    it("collects source.bundleCid alongside source.cid", async () => {
+      const manifest = {
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: {
+          nodes: [
+            {
+              node_id: "n",
+              source: { cid: "QmSource", bundleCid: "QmBundleRoot" },
+            },
+          ],
+        },
+      };
+      const addRes = await request(app)
+        .post("/api/v1/manifests")
+        .send(manifest);
+      const startCid = addRes.body.cid;
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .send({ cid: startCid });
+      expect(res.status).toBe(200);
+      // Both the loose source CID and the directory root must be unpinned.
+      expect(res.body.unpinned).toContain("QmSource");
+      expect(res.body.unpinned).toContain("QmBundleRoot");
     });
   });
 
@@ -637,7 +648,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "A table",
           nodeId: "node_table_child_001",
-          txHash: "0xchildtest",
         });
       baseCid = res.body.assetManifestCid;
     });

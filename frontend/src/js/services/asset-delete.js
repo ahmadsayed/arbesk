@@ -10,7 +10,7 @@ import { contract as walletContract } from "../blockchain/wallet.js";
 import { updateAssetURI, CollaboratorRole } from "../blockchain/wallet.js";
 import { getProof } from "../gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { saveManifest } from "./api.js";
+import { saveManifest, unpinAssetCids } from "./api.js";
 import { showConfirmDialog } from "../ui/dialog.js";
 import { showToast } from "../ui/toasts.js";
 import { emit, EVENTS } from "../events/bus.js";
@@ -97,6 +97,11 @@ export async function deleteAssetFromCollection({
     return null;
   }
 
+  // Capture the deleted asset's manifest CID before removing it from the
+  // collection so we can unpin its IPFS footprint after the on-chain pointer
+  // has moved to the new collection manifest.
+  const deletedAssetManifestCid = collection.assets[assetId];
+
   const newCollection = {
     ...collection,
     assets: { ...collection.assets },
@@ -120,6 +125,25 @@ export async function deleteAssetFromCollection({
 
   const txHash = await updateAssetURI(tokenId, newCollectionCid, proofResult.proof);
   if (!txHash) throw new Error("Update tokenURI transaction failed");
+
+  // The on-chain tokenURI now points at the new collection, so the deleted
+  // asset's manifest chain is orphaned. Unpin it best-effort, non-blocking —
+  // the backend walks the chain and unpins the manifest, source glTF, and
+  // thumbnail CIDs. Failures are non-fatal (the asset is already detached).
+  if (deletedAssetManifestCid) {
+    const capturedCid = deletedAssetManifestCid;
+    unpinAssetCids(capturedCid, walletAddr)
+      .then((result) => {
+        console.log(
+          `[DELETE] unpinned ${result.count} CIDs for asset ${assetId}`
+        );
+        if (result.errors?.length)
+          console.warn(`[DELETE] unpin errors:`, result.errors);
+      })
+      .catch((err) =>
+        console.warn(`[DELETE] unpin failed (non-fatal):`, err.message)
+      );
+  }
 
   if (
     String(assetState.get().activeAssetTokenId) === String(tokenId) &&

@@ -20,6 +20,38 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
       return cidStr;
     },
 
+    /**
+     * Upload multiple files as a single IPFS UnixFS directory and return the
+     * directory root CID. Used to group a glTF + its buffers/textures into one
+     * browsable folder (organizational only — loading still uses bare CIDs).
+     * @param {{name: string, data: Uint8Array|string}[]} files
+     * @returns {Promise<string>} directory root CID
+     */
+    async addDirectory(files) {
+      const source = files.map((f) => ({ path: f.name, content: f.data }));
+      let rootCid = null;
+      // addAll yields one result per file plus the wrapping directory node
+      // (which has an empty path) when wrapWithDirectory is true. The last
+      // result is the directory root.
+      for await (const result of ipfs.addAll(source, {
+        wrapWithDirectory: true,
+      })) {
+        if (result.path === "" || result.cid) {
+          rootCid = result.cid.toString();
+        }
+      }
+      if (!rootCid) throw new Error("Kubo addDirectory returned no root CID");
+      try {
+        await ipfs.pin.add(rootCid);
+        console.log(`[IPFS] pinned directory → ${rootCid}`);
+      } catch (e) {
+        console.warn(
+          `[IPFS] directory pin failed (non-fatal): ${e.message}`,
+        );
+      }
+      return rootCid;
+    },
+
     async cat(cid) {
       // Reuse the shared multi-encoding decoder (Uint16Array test mock,
       // Uint8Array/Buffer real Kubo, string) so reads stay consistent.

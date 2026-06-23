@@ -6,6 +6,13 @@ describe("kubo adapter", () => {
   function fakeIpfs() {
     return {
       add: jest.fn(async () => ({ cid: { toString: () => "QmFakeCid" } })),
+      addAll: jest.fn(async function* () {
+        // Simulate wrapWithDirectory: yields per-file results, then a root
+        // node whose path is "" (the directory itself).
+        yield { path: "composite.gltf", cid: { toString: () => "QmFile1" } };
+        yield { path: "buffer_0.bin", cid: { toString: () => "QmFile2" } };
+        yield { path: "", cid: { toString: () => "QmDirRoot" } };
+      }),
       pin: {
         add: jest.fn(async () => {}),
         rm: jest.fn(async () => {}),
@@ -25,6 +32,29 @@ describe("kubo adapter", () => {
     const cid = await a.add("payload");
     expect(cid).toBe("QmFakeCid");
     expect(ipfs.pin.add).toHaveBeenCalledWith("QmFakeCid");
+  });
+
+  it("addDirectory() uploads files with wrapWithDirectory, pins and returns the root", async () => {
+    const ipfs = fakeIpfs();
+    const a = createKuboAdapter(ipfs, {
+      apiUrl: "http://127.0.0.1:5001",
+      gatewayBase: "http://127.0.0.1:8080/ipfs/",
+    });
+    const files = [
+      { name: "composite.gltf", data: "{}" },
+      { name: "buffer_0.bin", data: new Uint8Array([1, 2, 3]) },
+    ];
+    const root = await a.addDirectory(files);
+    expect(root).toBe("QmDirRoot");
+    // addAll must be called with path+content entries and wrapWithDirectory.
+    expect(ipfs.addAll).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "composite.gltf" }),
+        expect.objectContaining({ path: "buffer_0.bin" }),
+      ]),
+      expect.objectContaining({ wrapWithDirectory: true }),
+    );
+    expect(ipfs.pin.add).toHaveBeenCalledWith("QmDirRoot");
   });
 
   it("cat() concatenates the async-iterable chunks into a string", async () => {
@@ -67,6 +97,7 @@ describe("pinata adapter", () => {
       upload: {
         public: {
           file: jest.fn(async () => ({ id: "id-1", cid: "bafyFakeCid" })),
+          fileArray: jest.fn(async () => ({ id: "id-dir", cid: "bafyDirRoot" })),
           createSignedURL: jest.fn(
             async () => "https://uploads.pinata.cloud/signed",
           ),
@@ -92,6 +123,28 @@ describe("pinata adapter", () => {
     });
     expect(await a.add("payload")).toBe("bafyFakeCid");
     expect(p.upload.public.file).toHaveBeenCalled();
+  });
+
+  it("addDirectory() uploads a file array and returns the directory root cid", async () => {
+    const p = fakePinata();
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 60,
+    });
+    const files = [
+      { name: "composite.gltf", data: "{}" },
+      { name: "texture_0.png", data: new Uint8Array([1, 2]) },
+    ];
+    const root = await a.addDirectory(files);
+    expect(root).toBe("bafyDirRoot");
+    expect(p.upload.public.fileArray).toHaveBeenCalledTimes(1);
+    // Each entry must be wrapped in a File with the right name.
+    const arg = p.upload.public.fileArray.mock.calls[0][0];
+    expect(arg).toHaveLength(2);
+    expect(arg.map((f) => f.name).sort()).toEqual([
+      "composite.gltf",
+      "texture_0.png",
+    ]);
   });
 
   it("mintUploadCredential() returns a presigned url and gateway, never the JWT", async () => {

@@ -107,20 +107,14 @@ test.describe("save and publish", () => {
       ASSET_NAME,
     );
 
-    // 5. Burn the asset from the gallery card.
+    // 5. Re-enter the Gallery and confirm the published card persists.
+    // (Burn was removed from the UI — see the asset-library card. This step
+    // now verifies the published token survives a view switch and remains
+    // listed by its decimal on-chain id, instead of tearing it down.)
     await page.click(SELECTORS.gallerySwitcherBtn);
-    await expect(assetCard.locator(SELECTORS.assetCardBurnBtn)).toBeVisible();
-    await assetCard.locator(SELECTORS.assetCardBurnBtn).click();
-
-    // Confirm the destructive action in the GNOME-style dialog.
-    await expect(page.locator(SELECTORS.dialogBurnBtn)).toBeVisible();
-    await page.click(SELECTORS.dialogBurnBtn);
-
-    // After burning, this specific card should disappear from the gallery.
-    await expect(assetCard).toHaveCount(0, { timeout: 5000 });
-    // The active asset should be cleared.
-    await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      "No asset open",
+    await expect(assetCard).toHaveCount(1);
+    await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
+      ASSET_NAME,
     );
   });
 });

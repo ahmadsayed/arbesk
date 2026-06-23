@@ -10,11 +10,6 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import {
-  payForGenerationWithUSDC,
-  recordGeneration,
-  isFreeTierContract,
-} from "../blockchain/wallet.js";
 import { showToast } from "./toasts.js";
 import {
   generateAsset,
@@ -37,6 +32,54 @@ const assetNameDisplay = document.getElementById("assetNameDisplay");
 const providerSelect = document.getElementById("providerSelect");
 const tierSelect = document.getElementById("tierSelect");
 const collectionSelect = document.getElementById("collectionSelect");
+const providerKeyInput = document.getElementById("providerKeyInput");
+const providerKeyToggle = document.getElementById("providerKeyToggle");
+
+// BYOK (Bring Your Own Key): a user-supplied generation provider key. Real
+// providers require a key — the user pays the provider directly, bypassing the
+// on-chain quota/payment gate. The mock provider needs no key. The key lives in
+// localStorage and is sent per-request to the backend; it is never persisted
+// server-side.
+const BYOK_KEY_STORAGE = "arbesk-byok-key";
+
+/**
+ * Read the BYOK provider key (trimmed). Empty string when not set.
+ * @returns {string}
+ */
+function getByokKey() {
+  return (providerKeyInput?.value || "").trim();
+}
+
+/**
+ * True when the selected provider is a real (non-mock) provider.
+ * Real providers require a BYOK key; the mock provider does not.
+ * @returns {boolean}
+ */
+function isRealProvider() {
+  return getProvider() !== "mock";
+}
+
+// Persist + hydrate the BYOK key. Saved on input so it survives reloads; loaded
+// on init so a returning user doesn't have to re-enter it.
+if (providerKeyInput) {
+  providerKeyInput.value = localStorage.getItem(BYOK_KEY_STORAGE) || "";
+  providerKeyInput.addEventListener("input", () => {
+    localStorage.setItem(BYOK_KEY_STORAGE, providerKeyInput.value);
+  });
+}
+
+// Show/hide toggle for the key field (type password ⇄ text).
+if (providerKeyToggle && providerKeyInput) {
+  providerKeyToggle.addEventListener("click", () => {
+    const hidden = providerKeyInput.type === "password";
+    providerKeyInput.type = hidden ? "text" : "password";
+    providerKeyToggle.setAttribute(
+      "aria-label",
+      hidden ? "Hide API key" : "Show API key",
+    );
+    providerKeyToggle.textContent = hidden ? "Hide" : "Show";
+  });
+}
 
 // ─── Collection Selector ───
 
@@ -212,27 +255,30 @@ async function onGenerate() {
 
   try {
     const tier = getTier();
+    const provider = getProvider();
+    const providerKey = getByokKey();
 
-    // Free tier uses on-chain quota; paid tier uses USDC payment.
-    let txHash;
-    if (isFreeTierContract()) {
-      txHash = await recordGeneration(nodeId, prompt);
-    } else {
-      txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
-    }
-
-    if (!txHash) {
-      throw new Error("Payment was cancelled or failed.");
+    // Real providers require a BYOK key; mock does not. The on-chain
+    // quota/payment gate is never used by the generation route.
+    if (isRealProvider() && providerKey.length === 0) {
+      showToast({
+        type: "warning",
+        title: "Provider Key Required",
+        message: `Add your ${provider} API key in Settings to generate.`,
+      });
+      setGenerating(false);
+      return;
     }
 
     const result = await generateAsset({
       prompt,
       nodeId,
-      txHash,
-      provider: getProvider(),
+      txHash: null,
+      provider,
       prevAssetManifestCid,
       transformMatrix,
       tier,
+      ...(isRealProvider() && { providerKey }),
     });
 
     if (prevAssetManifestCid) {
@@ -263,13 +309,10 @@ async function onGenerate() {
     let userMsg = "Generation failed. Please try again.";
 
     if (err instanceof ApiError) {
-      if (err.status === 409) {
-        userMsg = "This payment was already used. A new payment is required.";
+      if (err.status === 400) {
+        userMsg = err.message || "Missing required generation parameter.";
       } else if (err.status === 429) {
         userMsg = "Rate limit reached. Please wait before generating again.";
-      } else if (err.status === 403) {
-        userMsg =
-          "Payment validation failed. Ensure the transaction succeeded.";
       } else if (err.status === 501) {
         userMsg = "Cloud generation is not yet enabled. Switch to mock mode.";
       } else if (err.message) {

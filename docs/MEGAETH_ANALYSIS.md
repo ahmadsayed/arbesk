@@ -1,414 +1,219 @@
-# Arbesk on MegaETH — Complete Analysis & Optimization Report
+# Arbesk on MegaETH — Storage Gas Analysis & Optimization Report
 
-**Date:** 2026-06-21 · **ETH:** $1,726.94 · **Target:** MegaETH Testnet (chain 6343)
+**Date:** 2026-06-22 · **Target:** MegaETH (testnet chain 6343 · mainnet chain 4326)
+
+> **Major revision (2026-06-22).** Earlier versions of this report (and an interim "single-bucket" recomputation) were built on a wrong mental model of MegaETH's bucket multiplier. Verified against the [SALT source](https://github.com/megaeth-labs/salt), the MegaETH Gas Model / MegaEVM docs, and live network params:
+>
+> - **The multiplier is _global_, not per-contract.** Keys are assigned to buckets by `f(key) % 256^3` → **16,777,216 buckets**. A contract's storage slots scatter uniformly across all of them; you cannot fill "your own" bucket. The multiplier a write pays reflects *global* chain state density, which the docs say is **"typically 1"** — *"developers typically do not need to consider the bucket multiplier when designing contracts."*
+> - **Buckets grow in 256-slot _segments_** (m = 1, 2, 3, 4 …), not by doubling (1, 2, 4, 8 …). A 768-slot bucket = three segments = m=3.
+> - **`MIN_BUCKET_SIZE = 256`** (not 512). **No production fill-threshold (60 % / 80 %) exists** in the spec — the only load-factor knob is a *test* env var (`BUCKET_RESIZE_LOAD_FACTOR_PCT`, default 1 %).
+> - **Base fee is `0.001` gwei** (not `0.01`), with EIP-1559 adjustment effectively disabled.
+>
+> **Consequences:** the previous token-count → `m` table, the redeployment "treadmill," and the §5–7 capacity math were all invalid and have been removed. The durable, well-sourced result is simpler and *better* than the old report claimed: **for any realistic app workload, your contract sits at m=1, so new-slot storage is free and overwrites/zeroing are always free.**
 
 ---
 
 ## Table of Contents
 
-1. [MegaETH's Bucket Multiplier — What It Is](#1-megaeths-bucket-multiplier--what-it-is)
-2. [Storage Gas: Which Operations Are Affected](#2-storage-gas-which-operations-are-affected)
-3. [Implemented Optimizations (`#2`, `#3`, `#5`)](#3-implemented-optimizations-2-3-5)
-4. [Cost Projection: MegaETH vs Monad vs Sei](#4-cost-projection-megaeth-vs-monad-vs-sei)
-5. [Token Capacity vs Editor Count](#5-token-capacity-vs-editor-count)
-6. [Redeployment Strategy](#6-redeployment-strategy)
-7. [Monitoring Plan](#7-monitoring-plan)
+1. [How MegaETH Storage Gas Actually Works](#1-how-megaeth-storage-gas-actually-works)
+2. [Which Operations Cost Storage Gas](#2-which-operations-cost-storage-gas)
+3. [Implemented Optimizations](#3-implemented-optimizations)
+4. [Cross-Chain Cost Comparison (Per Unit of Gas)](#4-cross-chain-cost-comparison-per-unit-of-gas)
+5. [What This Means for Arbesk](#5-what-this-means-for-arbesk)
+6. [Monitoring](#6-monitoring)
 
 ---
 
-## 1. MegaETH's Bucket Multiplier — What It Is
+## 1. How MegaETH Storage Gas Actually Works
 
-MegaETH uses a **SALT state trie** (not Ethereum's Merkle Patricia Trie). State is divided into segments called **buckets**. The bucket multiplier `m` makes new storage writes progressively more expensive as buckets fill.
+MegaETH uses a **SALT state trie** (not Ethereum's Merkle Patricia Trie). MegaEVM splits gas into **compute gas** (identical to Ethereum) and **storage gas** (new). Storage gas models the cost of growing on-chain state and is the only part that behaves differently from Ethereum.
 
-> From MegaETH official docs — **Gas Model** page:
->
-> ```
-> m = bucket_capacity / MIN_BUCKET_CAP
-> ```
->
-> | Operation | m=1 | m=2 | m=4 |
-> |-----------|-----|-----|-----|
-> | Zero-to-nonzero SSTORE | **0** | 20,000 | 60,000 |
-> | Account creation | **0** | 25,000 | 75,000 |
-> | Contract creation | **0** | 32,000 | 96,000 |
->
-> *"Buckets expand as they fill up; the multiplier increases and storage gas costs rise."*
+### The bucket multiplier
 
-**Key insight:** At m=1 (fresh bucket), all new state creation costs **zero storage gas**. As the bucket fills past thresholds (roughly 60%), capacity doubles. Each doubling adds `base_cost × (m−1)` to storage gas for any zero→non-zero SSTORE.
+State lives in **buckets**. Per the [SALT spec](https://github.com/megaeth-labs/salt):
 
-| `m` | Bucket Capacity | SSTORE 0→non-zero Storage Gas |
-|-----|----------------|------------------------------|
-| 1   | 512            | **0** (free)                 |
-| 2   | 1,024          | 20,000                       |
-| 4   | 2,048          | 60,000                       |
-| 8   | 4,096          | 140,000                      |
-| 16  | 8,192          | 300,000                      |
-| 32  | 16,384         | 620,000                      |
-| 64  | 32,768         | 1,260,000                    |
-| 128 | 65,536         | 2,540,000                    |
-| 256 | 131,072        | 5,100,000                    |
-| 512 | 262,144        | 10,220,000                   |
-| 1,024 | 524,288      | 20,460,000                   |
-| 4,096 | 2,097,152    | 81,900,000                   |
-| 8,192 | 4,194,304    | 163,820,000                  |
+- *"A bucket is initialized with 256 slots."* (`MIN_BUCKET_SIZE = 256`)
+- *"When it fills up, it can be resized to a multiple of 256. If a bucket grows beyond 256 slots, it is partitioned into 256-slot segments."* → capacities are 256, 512, 768, 1024 … and the multiplier increments by 1 per segment.
+- *"a hash of the key (`f(key) % 256^3`) is used to identify the correct bucket"* → **16,777,216 buckets**, and a key's bucket is chosen by hash, so any contract's slots are spread uniformly across the whole space.
 
-**This is NOT a tokenomics/KPI emission schedule.** This is gas mechanics implemented in `mega-evm`, directly affecting `eth_estimateGas` results.
+```
+m = bucket_capacity / MIN_BUCKET_SIZE        // MIN_BUCKET_SIZE = 256, m ∈ {1, 2, 3, 4, …}
+storage_gas(zero→non-zero) = base_cost × (m − 1)
+```
+
+| Operation | base | m=1 | m=2 | m=3 |
+|-----------|------|-----|-----|-----|
+| Zero→non-zero SSTORE | 20,000 | **0** | 20,000 | 40,000 |
+| Account creation | 25,000 | **0** | 25,000 | 50,000 |
+| Contract creation | 32,000 | **0** | 32,000 | 64,000 |
+
+### Why `m` is effectively always 1 for your contract
+
+Because buckets are chosen by hashing the key, the multiplier a write pays is a function of how full *that one bucket* is — and that fullness is the sum of keys from the **entire chain**, not from your app. For the average bucket to even reach m=2, total chain state must approach `16.7M × 256 ≈ 4.3 billion` populated slots. A contract minting, say, 100,000 tokens (~400,000 slots) sprays those slots across millions of otherwise-near-empty buckets — its own contribution to any single bucket's fill is negligible.
+
+MegaETH's docs say this directly:
+
+> *"Unless a bucket has expanded to handle heavy storage needs, the bucket multiplier is typically 1. Developers typically do not need to consider the bucket multiplier when designing contracts."*
+
+**Takeaway:** treat new-slot storage as **free** in normal operation. The multiplier only bites under chain-wide state pressure that no single application controls — and which (see §5) you cannot escape by redeploying.
 
 ---
 
-## 2. Storage Gas: Which Operations Are Affected
+## 2. Which Operations Cost Storage Gas
 
-Storage gas applies **only** when writing a storage slot from **zero to non-zero**. Once a slot is non-zero, all future writes to it cost **0 storage gas** regardless of `m`.
+Storage gas applies **only** when a slot goes **zero → non-zero**, and only then scaled by `m`. Once a slot is non-zero, every future write to it costs **0 storage gas** regardless of `m`. Zeroing a slot is also free. At m=1 (the normal case) even the zero→non-zero writes are free.
 
-### The Immune Operations (Always 0 Storage Gas)
+### Immune operations (0 storage gas at any `m`)
 
 ```solidity
 // Non-zero → non-zero overwrite. Always 0 storage gas.
 function updateAssetURI(uint256 tokenId, string memory newAssetURI, bytes32[] calldata proof) public {
-    // _tokenURIs[tokenId] was already set by publishAsset → non-zero
-    _setTokenURI(tokenId, newAssetURI);  // 0 storage gas
+    _setTokenURI(tokenId, newAssetURI);  // _tokenURIs[tokenId] already non-zero from publishAsset
     emit AssetURIUpdated(tokenId, newAssetURI);
 }
 
-// Packed quota slot: first write is zero→non-zero, all subsequent writes are
-// non-zero→non-zero → 0 storage gas after day 1.
+// Packed quota slot: first write zero→non-zero, all later writes non-zero→non-zero.
 function recordGeneration(bytes32 nodeId, string calldata prompt) external {
     uint256 today = block.timestamp / 86400;
     GenerationQuota storage quota = _generationQuota[msg.sender];
     if (today > quota.day) { quota.day = uint128(today); quota.count = 0; }
-    quota.count++;  // 0 storage gas after first day
+    quota.count++;  // 0 storage gas after the first write of the day
 }
 
-// Zeros out slots. 0 storage gas.
-function burn(uint256 tokenId, bytes32[] calldata proof) public {
-    _burn(tokenId);  // zeros out slots → 0 storage gas
-}
+// Zeros out slots → 0 storage gas.
+function burn(uint256 tokenId, bytes32[] calldata proof) public { _burn(tokenId); }
 
-// Editor root/version overwrite on existing mapping. 0 storage gas after first set.
-function updateEditors(
-    uint256 tokenId,
-    bytes32 newRoot,
-    string calldata newListUri,
-    CollaboratorRole callerRole,
-    bytes32[] calldata callerProof
-) external {
-    editorSetVersion[tokenId]++;  // 0 storage gas after first write
+// Root/version overwrite on an existing mapping → 0 storage gas after first set.
+function updateEditors(uint256 tokenId, bytes32 newRoot, string calldata newListUri,
+                       CollaboratorRole callerRole, bytes32[] calldata callerProof) external {
+    editorSetVersion[tokenId]++;
     editorRoot[tokenId] = newRoot;
     emit EditorSetChanged(tokenId, newRoot, editorSetVersion[tokenId], newListUri);
 }
 ```
 
-### The Affected Operations (Scale with m)
+### New-slot operations (would scale with `m`, but `m=1` in practice)
 
 ```solidity
-// Creates NEW storage slots: owner mapping entry + URI mapping entry +
-// editor root + editor version + editor list URI. Editor count is off-chain,
-// so mint cost is independent of the number of editors. ERC721Enumerable has
-// been removed, so there is no all/owned-token-array overhead.
-// Cost ≈ 165,000 compute + ~4 × 20,000 × (m−1) storage
-function publishAsset(
-    string memory uri,
-    uint256 tokenId,
-    bytes32 editorRoot_,
-    string memory editorListUri
-) public returns (uint256) {
-    _mint(msg.sender, tokenId);           // creates owner mapping entry
-    _setTokenURI(tokenId, uri);           // zero→non-zero → storage gas applies
-    initEditors(tokenId, editorRoot_, editorListUri); // 3 zero→non-zero SSTOREs
-}
-```
-
----
-
-## 3. Implemented Optimizations (`#2`, `#3`, `#5`, Merkle editor proofs)
-
-Four optimizations shipped. Files changed:
-
-- `blockchain/contracts/ArbeskAssetBase.sol` — removed `_tokenCounts` (`#5`)
-- `blockchain/contracts/ArbeskAsset.sol` — per-user nonce replaces per-payment key (`#2+#3`)
-- `blockchain/contracts/ArbeskAssetBase.sol` — replaced on-chain editor roles with Merkle roots and off-chain editor lists
-- `blockchain/test/ArbeskAsset.test.js` — updated for per-user nonce and Merkle authorization
-- `blockchain/test/ArbeskAssetFree.test.js` — updated for Merkle authorization
-
-### Optimization `#5`: Removed `ERC721Enumerable` entirely
-
-The base contract previously inherited OpenZeppelin `ERC721Enumerable`, which keeps an `_allTokens` array and per-owner `_ownedTokens` arrays. That added ~3 extra storage writes per mint and caused mint gas to grow with total supply. `ArbeskAssetBase` now inherits plain `ERC721`.
-
-```solidity
-// BEFORE: enumerable tracking + duplicate counter
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-
-contract ArbeskAssetBase is ERC721Enumerable, Ownable, Pausable {
-    uint256 private _tokenCounts;
-
-    function publishAsset(...) public {
-        unchecked { _tokenCounts++; }
-        _mint(msg.sender, tokenId);       // also writes _allTokens / _ownedTokens
-    }
-
-    function totalSupply() public view override returns (uint256) {
-        return _tokenCounts;
-    }
-}
-```
-
-```solidity
-// AFTER: plain ERC721 + Merkle editor roots
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-
-abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
-    mapping(uint256 => string) private _tokenURIs;
-    mapping(uint256 => bytes32) public editorRoot;
-    mapping(uint256 => uint256) public editorSetVersion;
-    mapping(uint256 => string) public editorListURI;
-
-    function publishAsset(...) public returns (uint256) {
-        _mint(msg.sender, tokenId);
-        _setTokenURI(tokenId, uri);
-        initEditors(tokenId, editorRoot_, editorListUri);
-    }
-}
-```
-
-**Impact:** Removes the enumerable arrays and the redundant `_tokenCounts` counter (~4 storage writes saved per mint). Mint gas is now flat with respect to total supply and uses only 4 new zero→non-zero storage slots per token. The gallery builds the owned-token list off-chain by scanning `Transfer` events.
-
-### Optimizations `#2+#3`: Per-User Payment Nonce
-
-Replaced `usedPayments` (O(payments) slots, 1 new slot per payment) with `paymentNonce` (O(users) slots, 1 new slot per user lifetime, **0 storage gas thereafter**).
-
-Also removed `block.number` from the payment key, eliminating gas detention on MegaETH.
-
-```solidity
-// BEFORE: O(payments) storage growth, block.number triggers gas detention
-mapping(bytes32 => bool) internal usedPayments;
-
-function payForGeneration(bytes32 nodeId, string calldata prompt) external payable {
-    // ...
-    bytes32 paymentKey = keccak256(
-        abi.encodePacked(nodeId, msg.sender, block.number)  // volatile read → detention
-    );
-    if (usedPayments[paymentKey]) revert PaymentAlreadyUsed();  // new slot every time
-    usedPayments[paymentKey] = true;
-    // ...
-}
-```
-
-```solidity
-// AFTER: O(users) storage growth, no volatile reads
-/// @dev Per-user nonce for payment replay protection.
-///      First payment per user creates a new storage slot (zero→non-zero);
-///      all subsequent payments overwrite that slot (zero storage gas).
-mapping(address => uint256) public paymentNonce;
-
-/// @notice Pay for a generation run with native ETH.
-/// @dev Uses a per-user nonce for replay protection.
-///      Does NOT read block.number — avoids gas detention on MegaETH.
-function payForGeneration(bytes32 nodeId, string calldata prompt)
-    external payable nonReentrant whenNotPaused
+// Creates ~4 new zero→non-zero slots: owner entry, URI entry, editorRoot, editorSetVersion,
+// editorListURI. Editor count is off-chain, so mint cost is independent of editor count.
+// Compute ≈ 165,000 gas. Storage gas = 4 × 20,000 × (m−1) — which is 0 while m=1.
+function publishAsset(string memory uri, uint256 tokenId, bytes32 editorRoot_, string memory editorListUri)
+    public returns (uint256)
 {
-    if (msg.value != costPerGeneration) revert IncorrectPaymentAmount();
-    uint256 promptLen = bytes(prompt).length;
-    if (promptLen == 0 || promptLen > 500) revert InvalidPromptLength();
-    if (nodeId == bytes32(0)) revert InvalidNodeId();
-
-    uint256 nonce = paymentNonce[msg.sender];
-    unchecked {
-        paymentNonce[msg.sender] = nonce + 1;  // non-zero→non-zero after first use
-    }
-
-    (bool sent, ) = developerTreasuryWallet.call{value: msg.value}("");
-    if (!sent) revert TreasuryTransferFailed();
-
-    emit AssetGenerationPaid(msg.sender, nodeId, prompt, msg.value, block.timestamp);
+    _mint(msg.sender, tokenId);
+    _setTokenURI(tokenId, uri);
+    initEditors(tokenId, editorRoot_, editorListUri);
 }
 ```
+
+> Two refinements reported in the `mega-evm` repo that this report does not independently verify but flags for completeness: a per-transaction **intrinsic storage-gas baseline (~39,000)** and a **10× storage-gas multiplier on LOG data** for emitted events. Both are small next to compute gas and do not change the m=1 conclusion.
+
+---
+
+## 3. Implemented Optimizations
+
+These are real, code-accurate wins. They reduce **absolute slot count and compute gas** — they are *not* needed to control the multiplier (which stays at 1 anyway), but lower state growth and gas are good hygiene regardless.
+
+| Optimization | File | Effect |
+|---|---|---|
+| Removed `ERC721Enumerable` | `ArbeskAssetBase.sol` | Drops `_allTokens` / `_ownedTokens` arrays + redundant `_tokenCounts`; mint gas no longer grows with supply |
+| Merkle editor roots | `ArbeskAssetBase.sol` | Editor list moves off-chain; only a root + version + URI on-chain, independent of editor count |
+| `usedPayments` → `paymentNonce` | `ArbeskAsset.sol` | Replaces O(payments) slot growth with O(users); removes the volatile `block.number` read |
+
+### Removed `ERC721Enumerable` (valid)
+
+The base previously inherited `ERC721Enumerable`, whose `_allTokens` / per-owner `_ownedTokens` arrays added ~3 writes per mint and made mint gas grow with total supply. It now inherits plain `ERC721`; the gallery rebuilds the owned-token list off-chain by scanning `Transfer` events. Mint now touches ~4 new slots per token, flat with respect to supply. ✅
+
+### Merkle editor roots (valid)
+
+The editor set lives off-chain as a list on IPFS; the contract stores only `editorRoot`, `editorSetVersion`, and `editorListURI`. Authorization is by Merkle proof. Mint and editor-update cost are independent of editor count. ✅
+
+### `paymentNonce` — storage win is real, the "replay protection" claim is **false**
+
+The change from `usedPayments` (a new slot per payment, keyed partly on `block.number`) to a per-user `paymentNonce` does two genuinely useful things:
+
+1. **Eliminates O(payments) state growth** — `usedPayments` minted a fresh slot on every payment forever; `paymentNonce` is one slot per user, overwritten thereafter.
+2. **Removes the `block.number` read**, which is volatile data subject to MegaETH's gas-detention rules.
+
+But the documented rationale — *"per-user nonce for payment replay protection"* — does not hold. In the shipped code (`ArbeskAsset.sol:103-127`, USDC path `131-159`):
 
 ```solidity
-// BEFORE: old API — required block.number, checked per-payment key
-function isPaymentUsed(bytes32 nodeId, address sender, uint256 blockNum)
-    external view returns (bool)
-{
-    bytes32 key = keccak256(abi.encodePacked(nodeId, sender, blockNum));
-    return usedPayments[key];
-}
+uint256 nonce = paymentNonce[msg.sender];
+unchecked { paymentNonce[msg.sender] = nonce + 1; }   // incremented…
+// …but `nonce` is never read in a require/revert, and never included in the emitted event.
 ```
 
-```solidity
-// AFTER: new API — returns next available nonce for a user
-function getPaymentNonce(address user) external view returns (uint256) {
-    return paymentNonce[user];
-}
-```
+The nonce is **inert**: it is never checked and never emitted, so it enforces nothing. And there is nothing to replay in the first place — the caller *is* the payer (`msg.sender`), no signature is submitted, and each call transfers real ETH/USDC. The "same-transaction / cross-transaction / cross-block: impossible" proof in earlier versions reasoned about a non-problem.
 
-**Why per-user nonce alone prevents replay:**
-
-Each call increments the user's nonce. Since the nonce is unique and monotonic:
-- **Same-transaction:** Impossible — `nonReentrant` blocks reentry, and each internal call would see a different nonce.
-- **Cross-transaction:** Impossible — nonces never repeat.
-- **Cross-block:** Impossible — nonces increase monotonically.
-
-**Gas impact per repeated payment at m=128:**
-
-| | Before | After |
-|---|--------|-------|
-| Slots created | 1 per payment | 1 per user (then 0) |
-| Storage gas per payment #100 | 2,540,000 | **0** |
-| Dollar cost at 0.01 gwei | $0.044 | **$0** |
+This is **not a security hole** (you cannot forge `msg.sender`, and value moves on every call), but the NatSpec is misleading and the nonce is a **wasted SSTORE on every payment**. A future contract revision could drop it entirely; until then, document it as currently inert. *(Per this turn's decision, no contract change is made here — doc correction only.)*
 
 ---
 
-## 4. Cost Projection: MegaETH vs Monad vs Sei
+## 4. Cross-Chain Cost Comparison (Per Unit of Gas)
 
-**Assumptions:** ETH=$1,727 · Merkle editor proofs · ~4 new slots per token · ~4 storage slots zero→non-zero per mint  
-**MegaETH gas:** 0.01 gwei (normal) · **Monad gas:** 1 gwei · **Sei gas:** 1 gwei  
-**MIN_BUCKET_CAP=512** · Bucket expands at 60% fill
+The original report priced **Monad and Sei gas using ETH's price (~$1,700)**, when those chains pay in **MON** and **SEI**. Corrected, the four chains land within a small multiple of each other — Monad/Sei are *not* ~100× more expensive than MegaETH; they're roughly on par.
 
-> The current design stores only the owner, token URI, Merkle editor root, editor-set version, and editor-list URI on-chain. The editor list itself lives off-chain, so editor count does not affect mint cost. Removing `ERC721Enumerable` drops the all/owned token arrays, reducing new storage slots per mint from ~5 to ~4.
+The robust, operation-independent comparison is just `gas_price × token_price`:
 
-### Mint Cost (new token creation — scales with m on MegaETH, flat on Monad/Sei)
+| Chain | Gas token | Gas price | Cost per 1M gas |
+|---|---|---|---|
+| Sei | SEI | 10 gwei | **~$0.00053** |
+| MegaETH | ETH | 0.001 gwei | **~$0.00173** |
+| Optimism (L2 only) | ETH | ~0.001 gwei | **~$0.00173** + L1 data fee |
+| Monad | MON | 100 gwei | **~$0.00207** |
 
-Formula: `mintGas ≈ 165,000 + 4 × 20,000 × (m − 1)`
+All four sit within ~4× per unit of gas. MegaETH's near-zero gwei × expensive ETH and Monad's high gwei × cheap MON nearly cancel out.
 
-| Tokens | MegaETH m | MegaETH Mint Gas | MegaETH Cost | Monad Cost | Sei Cost |
-|--------|----------|-----------------|-------------|------------|----------|
-| 100 | 2 | 245,000 | **$0.004** | $0.28 | $0.28 |
-| 1,000 | 16 | 1,365,000 | **$0.024** | $0.28 | $0.28 |
-| 5,000 | 128 | 10,325,000 | **$0.178** | $0.28 | $0.28 |
-| 10,000 | 256 | 20,565,000 | **$0.355** | $0.28 | $0.28 |
-| 20,000 | 512 | 41,045,000 | **$0.709** | $0.28 | $0.28 |
-| 50,000 | 1,024 | 82,005,000 | **$1.42** | $0.28 | $0.28 |
-| 100,000 | 2,048 | 163,925,000 | **$2.83** | $0.28 | $0.28 |
-| 500,000 | 8,192 | 655,445,000 | **$11.32** | $0.28 | $0.28 |
-| 1,000,000 | 16,384 | 1,310,805,000 | **$22.64** | $0.28 | $0.28 |
-| **Redeploy** | **1** | **900,000** | **$0.016** | $1.55 | $1.55 |
+> ⚠️ **Caveats — read before quoting any dollar figure:**
+> - **Token prices are point-in-time (June 2026) and volatile.** Only ETH (~$1,725) was independently re-verified here; MON (~$0.0207) and SEI (~$0.053) are taken from the supplied research and should be re-checked before use. The per-1M-gas column moves with these prices.
+> - **Per-*operation* dollar totals require `eth_estimateGas`** against the actual compiled contract on each chain — the gas-*used* figures depend on contract bytecode, calldata, and optimizer settings.
+> - **Chain-specific quirks not captured above:** Optimism adds an **L1 data fee** (the largest swing — cheap today at low Ethereum base fee + blobs, but real); **Monad bills the gas _limit_, not gas _used_** (pad ~1.3×); **Sei reportedly charges 72,000 gas per SSTORE** (would inflate storage-heavy mints — unverified here).
+> - **MegaETH testnet (6343) costs are testnet ETH with no real value;** mainnet is chain 4326 at the same 0.001 gwei base fee.
 
-> Gas values assume ~4 zero→non-zero storage slots per mint: `_owners`, `_tokenURIs`, `editorRoot`, `editorSetVersion`, plus `editorListURI`. Actual values depend on optimizer settings and calldata length.
-
-### Immune Operations (Always Flat, All Three Chains)
-
-| Operation | MegaETH (0.01gwei) | Monad (1gwei) | Sei (1gwei) |
-|-----------|-------------------|---------------|-------------|
-| `updateAssetURI` | **$0.0004** | $0.04 | $0.04 |
-| `recordGeneration` (day 2+) | **$0.001** | $0.10 | $0.10 |
-| `burn` | **$0.0013** | $0.13 | $0.13 |
-| `payForGeneration` (repeat user) | **$0.0014** | $0.14 | $0.14 |
-
-### Monthly Operating Cost: 1,000 mints + 5,000 URI edits + 20,000 generations
-
-| Tokens Total | MegaETH (no redeploy) | MegaETH (w/ redeploy) | Monad | Sei |
-|-------------|----------------------|----------------------|-------|-----|
-| 10,000 | **$377** | $26 | $2,480 | $2,480 |
-| 50,000 | $1,438 | **$26** | $2,480 | $2,480 |
-| 100,000 | $2,853 | **$26** | $2,480 | $2,480 |
-| 1,000,000 | $22,660 | **$26** | $2,480 | $2,480 |
-
-Full CSV: `docs/cost-projection.csv`
-
-> Redeploy savings are even more pronounced with Merkle because each fresh contract starts at m=1 regardless of editor count.
+For a realistic mint at **m=1** (~165–200k compute gas, 0 storage gas) the MegaETH cost is on the order of **$0.0003**. See `docs/cost-projection.csv` for the per-1M-gas and m=1 per-operation figures with the price assumptions spelled out.
 
 ---
 
-## 5. Token Capacity
+## 5. What This Means for Arbesk
 
-With Merkle editor proofs, editor count no longer affects on-chain storage. The contract also no longer inherits `ERC721Enumerable`, so there are no `_allTokens` / `_ownedTokens` arrays. Each token creates roughly:
-
-- `_owners` mapping entry (ERC721)
-- `_tokenURIs` mapping entry
-- `editorRoot` mapping entry
-- `editorSetVersion` mapping entry
-- `editorListURI` mapping entry
-
-Total: **~4 zero→non-zero storage slots per mint**, regardless of editor count.
-
-| Slots per Token | Tokens to m=8 | Tokens to m=128 | Sub-Cent Mints Until |
-|----------------|---------------|-----------------|---------------------|
-| ~4 | **310** | **4,900** | ~150 tokens |
-
-This is a significant improvement over the old on-chain editor model, where 50-editor paid-tier tokens consumed ~151 slots and crossed 1¢ after only ~15 tokens.
+- **No redeployment strategy is needed — and redeploying wouldn't help anyway.** A fresh contract gets a new address, so its keys hash into *different* buckets — but those buckets live in the same 16.7M-bucket global space at the same global fill level. You resample the same distribution. Worse, the old contract's slots are not deleted, so global density doesn't drop. **Redeploying does not reset the multiplier.** The earlier "redeploy every 50K tokens" treadmill solved a problem that does not exist.
+- **Effective token capacity is unbounded from your contract's perspective.** You will not drive your own `m` up by minting; only chain-wide state growth (billions of slots) could, and that is outside any single app's control.
+- **The durable optimizations still pay off** (smaller absolute state, mint gas flat with supply, editor-count-independent storage) — keep them for hygiene, not for multiplier control.
+- **At m=1, the whole cost model collapses to compute gas**, which is standard EVM gas and trivially cheap at 0.001 gwei.
 
 ---
 
-## 6. Redeployment Strategy
+## 6. Monitoring
 
-At any scale, deploying a fresh contract resets m to 1 because the new address maps to a different SALT bucket.
-
-```
-ArbeskAssetFree deployment cost at m=1:
-  Compute: ~32,000 gas
-  Storage: 32,000 × 0 = 0 (m=1 → free)
-  Code deposit: ~5KB × 10,000 × 0 = 0 (m=1 → free)
-  ─────────────────
-  Total: ~32,000 gas → $0.06 at 0.01 gwei
-```
-
-### Recommended Cycle
-
-```
-Contract v1:  0 → 50K tokens     m: 1 → 4,096    Mint cost: $0.003 → $1.77
-              ↓ deploy fresh ($0.06)
-Contract v2:  50K → 100K tokens   m: 1 again      Mint cost: $0.003
-              ↓ deploy fresh ($0.06)
-Contract v3:  100K → 150K tokens  m: 1 again      Mint cost: $0.003
-```
-
-Each redeployment costs less than **one-sixth of a penny**. You can afford to redeploy every 50K tokens at near-zero infrastructure cost.
-
----
-
-## 7. Monitoring Plan
-
-### Weekly Check
+You don't need to track token-count thresholds. The single useful check is whether mint gas has risen above its m=1 baseline — which would signal **chain-wide** congestion, not anything you can fix by redeploying.
 
 ```bash
 curl -s https://carrot.megaeth.com/rpc \
   -X POST -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "eth_estimateGas",
-    "params": [{
-      "from": "0xYourAddress",
-      "to": "0xContractAddress",
-      "data": "0xCalldataForPublishAsset"
-    }],
-    "id": 1
-  }'
+  -d '{"jsonrpc":"2.0","method":"eth_estimateGas","params":[{
+        "from":"0xYourAddress","to":"0xContractAddress",
+        "data":"0xCalldataForPublishAsset"}],"id":1}'
 ```
 
-### Interpreting the Result
+- **Result ≈ compute baseline (~165–200k):** `m = 1`, storage free. Normal — no action.
+- **Result materially above baseline:** some bucket(s) your slots hit have globally expanded (`storage_gas = N × 20,000 × (m−1)`, N ≈ 4 new slots/mint). This is a network-wide condition; redeploying will not help. Re-evaluate whether to keep minting during the congestion window.
 
-| `eth_estimateGas` Result | Approximate `m` | Action |
-|-------------------------|----------------|--------|
-| ~165,000 | 1 | 🟢 No action |
-| ~245,000 | 2 | 🟢 No action |
-| ~405,000 | 4 | 🟢 No action |
-| ~725,000 | 8 | 🟢 Monitor monthly |
-| ~1,365,000 | 16 | 🟡 Plan redeployment |
-| ~2,645,000 | 32 | 🟠 Schedule redeployment |
-| ~10,325,000 | 128 | 🔴 Redeploy soon |
-| ~20,565,000 | 256 | 🔴 Redeploy immediately |
-
-### Formula
-
-```
-m ≈ (eth_estimateGas - 165,000) / (N × 20,000) + 1
-```
-Where N = average new zero→non-zero slots per mint (≈4 with the plain-ERC721 Merkle design).
+`eth_estimateGas` is the **only** authoritative source for `m` on a live contract — never derive it from your own token count.
 
 ---
 
-## Files Changed
+## Files Changed (contracts/frontend — unchanged by this report)
 
 | File | Change |
 |------|--------|
 | `blockchain/contracts/ArbeskAssetBase.sol` | Removed `ERC721Enumerable`; stores only `_tokenURIs`, `editorRoot`, `editorSetVersion`, `editorListURI` (~4 slots/token) |
-| `blockchain/contracts/ArbeskAsset.sol` | `usedPayments` → `paymentNonce` (O(1) per user), removed `block.number` read; updated for Merkle editor ABI |
+| `blockchain/contracts/ArbeskAsset.sol` | `usedPayments` → `paymentNonce` (O(users)), removed `block.number` read; updated for Merkle editor ABI. **Note:** `paymentNonce` is currently inert (never checked/emitted) — see §3 |
 | `blockchain/contracts/ArbeskAssetFree.sol` | Updated for Merkle editor ABI |
-| `blockchain/test/ArbeskAsset.test.js` | Updated for per-user nonce, Merkle authorization, and non-Enumerable ABI |
-| `blockchain/test/ArbeskAssetFree.test.js` | Updated for Merkle authorization and non-Enumerable ABI |
+| `blockchain/test/ArbeskAsset.test.js` · `ArbeskAssetFree.test.js` | Updated for per-user nonce, Merkle authorization, non-Enumerable ABI |
 | `frontend/src/js/ui/asset-library.js` | Replaced `tokenOfOwnerByIndex` with off-chain `Transfer` event scanning |
-| `docs/cost-projection.csv` | Recalculated for ~4 storage slots per mint across 3 chains and all m levels |
-| `frontend/src/js/gltf/merkle-editors.js` | New Merkle tree/proof library |
-| `frontend/src/js/services/team.js` | New Merkle-based editor add/remove service |
+| `frontend/src/js/gltf/merkle-editors.js` · `frontend/src/js/services/team.js` | Merkle tree/proof library + editor service |
+| `docs/cost-projection.csv` | Replaced invalid token-count→m projection with per-1M-gas + m=1 per-operation costs across 4 chains |
 
 **Compilation:** Clean on Solidity 0.8.24, Cancun EVM
 
@@ -419,11 +224,10 @@ Where N = average new zero→non-zero slots per mint (≈4 with the plain-ERC721
 | Resource | URL |
 |----------|-----|
 | MegaETH Gas Model | https://docs.megaeth.com/developer-docs/overview-3/gas-model |
+| MegaEVM | https://docs.megaeth.com/megaevm |
+| SALT source (bucket assignment, segments) | https://github.com/megaeth-labs/salt |
 | MegaETH Resource Limits | https://docs.megaeth.com/developer-docs/overview-3/resource-limits |
 | MegaETH Volatile Data | https://docs.megaeth.com/developer-docs/overview-3/volatile-data |
 | MegaETH Gas Estimation | https://docs.megaeth.com/developer-docs/overview-1/gas-estimation |
-| MegaETH Spec (SALT, m-factor) | https://docs.megaeth.com/spec |
-| Arbesk Contract Base | `blockchain/contracts/ArbeskAssetBase.sol` |
-| Arbesk Paid Contract | `blockchain/contracts/ArbeskAsset.sol` |
-| Arbesk Free Contract | `blockchain/contracts/ArbeskAssetFree.sol` |
+| Arbesk contracts | `blockchain/contracts/ArbeskAsset{,Base,Free}.sol` |
 | Cost Projection CSV | `docs/cost-projection.csv` |

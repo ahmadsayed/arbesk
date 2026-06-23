@@ -16,6 +16,22 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
       return cid;
     },
 
+    /**
+     * Upload multiple files as a single IPFS directory and return the
+     * directory root CID. Used to group a glTF + its buffers/textures into one
+     * browsable folder (organizational only — loading still uses bare CIDs).
+     * @param {{name: string, data: Uint8Array|string}[]} files
+     * @returns {Promise<string>} directory root CID
+     */
+    async addDirectory(files) {
+      const fileObjects = files.map(
+        (f) => new File([f.data], f.name),
+      );
+      const { cid } = await pinata.upload.public.fileArray(fileObjects);
+      console.log(`[IPFS] pinata addDirectory → ${cid}`);
+      return cid;
+    },
+
     async cat(cid) {
       const res = await fetch(`${gatewayBase}${cid}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`pinata gateway ${res.status} for ${cid}`);

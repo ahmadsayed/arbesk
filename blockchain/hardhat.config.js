@@ -30,16 +30,18 @@ module.exports = {
     },
   },
   etherscan: {
-    apiKey: {
-      megaethTestnet: ETHERSCAN_API_KEY || "",
-    },
+    // A single-string apiKey enables Etherscan API v2 (unified endpoint,
+    // multi-chain). MegaETH's legacy per-chain endpoints (megaexplorer.xyz,
+    // api-*-mega.etherscan.io) are deprecated/dead as of mid-2025.
+    // The plugin auto-appends chainid=6343 to every v2 request.
+    apiKey: ETHERSCAN_API_KEY || "",
     customChains: [
       {
         network: "megaethTestnet",
         chainId: 6343,
         urls: {
-          apiURL: "https://megaexplorer.xyz/api",
-          browserURL: "https://megaexplorer.xyz",
+          apiURL: "https://api.etherscan.io/v2/api",
+          browserURL: "https://testnet-mega.etherscan.io",
         },
       },
     ],

@@ -516,6 +516,12 @@
             "minItems": 16,
             "maxItems": 16,
             "example": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+          },
+          "providerKey": {
+            "type": "string",
+            "description": "Bring Your Own Key: user-supplied provider API key. When present, the on-chain payment/quota gate is bypassed and the user pays the provider directly. Never logged or persisted server-side. Max 200 chars.",
+            "maxLength": 200,
+            "example": "sk-..."
           }
         }
       },

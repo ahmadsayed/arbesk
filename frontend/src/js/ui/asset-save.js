@@ -281,14 +281,15 @@ async function decomposeManifestNodes(manifest) {
     try {
       if (format === "glb") {
         const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-        const { compositeCid } = await decomposeGLBAsync(glbBuffer);
+        const { compositeCid, bundleCid } = await decomposeGLBAsync(glbBuffer);
 
         node.source.cid = compositeCid;
         node.source.path = "composite.gltf";
         node.source.format = "gltf";
+        if (bundleCid) node.source.bundleCid = bundleCid;
         decomposed++;
         console.log(
-          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
+          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
         );
         continue;
       }
@@ -310,14 +311,15 @@ async function decomposeManifestNodes(manifest) {
       }
 
       // Decompose and store
-      const { compositeCid } = await decomposeAndStoreAsync(gltf);
+      const { compositeCid, bundleCid } = await decomposeAndStoreAsync(gltf);
 
       // Update the node's source to point to the composite
       node.source.cid = compositeCid;
       node.source.path = "composite.gltf";
+      if (bundleCid) node.source.bundleCid = bundleCid;
       decomposed++;
       console.log(
-        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
+        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
       );
     } catch (err) {
       if (isRateLimitError(err)) throw err;
@@ -428,6 +430,10 @@ async function prepareManifestForWrite(assetName) {
         // format/path truthful so the loader doesn't treat it as a binary GLB.
         if (result.format) node.source.format = result.format;
         if (result.path) node.source.path = result.path;
+        // The composite JSON changed via a color bake; the organizational
+        // bundle (if any) now points at the stale JSON, so drop it. Re-creating
+        // the bundle for a JSON-only edit isn't worth the extra upload.
+        delete node.source.bundleCid;
         console.log(
           `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
         );
@@ -461,6 +467,8 @@ async function prepareManifestForWrite(assetName) {
             pp.color || null
           );
           node.source.cid = result.compositeCid;
+          // Composite JSON changed via a color bake; drop the stale bundle.
+          delete node.source.bundleCid;
           console.log(
             `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
           );
@@ -776,13 +784,13 @@ async function onPublishAsset() {
     // Fetch the current collection manifest (if one exists yet) and merge
     // this asset's new CID into its assets map. If no collection token
     // exists yet, this besk lazily mints the default collection.
+    const c = walletContract || walletState.get().contract;
     const preferredCollectionId =
       assetState.get().selectedCollectionId ||
       assetState.get().activeCollectionTokenId;
     let existingCollectionTokenId = null;
     let collectionManifest = null;
     if (preferredCollectionId) {
-      const c = walletContract || walletState.get().contract;
       try {
         const collectionCid = await c.methods
           .tokenURI(String(preferredCollectionId))
@@ -793,6 +801,30 @@ async function onPublishAsset() {
         }
       } catch {
         // tokenURI reverted or IPFS fetch failed; treat as new collection
+      }
+    }
+
+    // In-memory state is unreliable across reloads / fresh sessions / E2E
+    // isolation: it can be empty even when a default collection was already
+    // minted on-chain. Without this fallback the code would try to re-mint an
+    // existing token and hit `TokenAlreadyMinted`. Probe the chain for the
+    // derived default collection ID and, if it exists, route to republish.
+    if (!existingCollectionTokenId) {
+      const defaultTokenId = deriveDefaultCollectionId(walletAddr);
+      try {
+        // ownerOf reverts (ERC721NonexistentToken) when the token doesn't
+        // exist; a successful call proves it does.
+        await c.methods.ownerOf(String(defaultTokenId)).call();
+        existingCollectionTokenId = defaultTokenId;
+        const collectionCid = await c.methods
+          .tokenURI(String(defaultTokenId))
+          .call();
+        if (collectionCid && collectionCid !== "") {
+          collectionManifest = await getFromRemoteIPFS(collectionCid);
+        }
+      } catch {
+        // Token doesn't exist on-chain — genuine first publish, fall through
+        // to the mint path below.
       }
     }
     const mergedCollection = mergeAssetIntoCollection(

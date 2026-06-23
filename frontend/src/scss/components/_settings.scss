@@ -2,13 +2,6 @@
 // Settings — Asset Definition + Team Panel in Create sidebar view
 // ═══════════════════════════════════════════════════════════════════
 
-#assetSettings {
-  #burnAssetBtn {
-    margin-top: var(--size-3);
-    width: 100%;
-  }
-}
-
 // ─── Team Section (inside asset-settings-body) ───────────────────────
 
 .team-section {
@@ -154,6 +147,26 @@
   button {
     flex-shrink: 0;
   }
+}
+
+// ─── BYOK (Bring Your Own Key) field ──────────────────────────────────
+
+.byok-field {
+  display: flex;
+  gap: var(--size-1);
+
+  input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-0);
+  }
+}
+
+.byok-toggle {
+  flex-shrink: 0;
+  font-size: var(--font-size-0);
+  padding: 0 var(--size-2);
 }
 
 // ─── Asset Library Body (in sidebar) ─────────────────────────────────

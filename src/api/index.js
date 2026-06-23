@@ -442,6 +442,96 @@ export default () => {
     },
   );
 
+  // ─── IPFS Bundle (directory upload) ──────────────────────────────────────
+
+  /**
+   * POST /api/v1/ipfs/bundle
+   *
+   * Upload multiple files as a single IPFS UnixFS directory and return the
+   * directory root CID. Used to group a glTF + its buffers/textures into one
+   * browsable folder — purely organizational. Loading still resolves each file
+   * via its bare `ipfs://<cid>` ref; the directory exists for Pinata/Kubo
+   * browsing and asset archival.
+   *
+   * Body: { files: [{ name: string, data: string (base64 or utf8) }] }
+   * Response: { bundleCid: string }
+   */
+  v1.post(
+    "/ipfs/bundle",
+    authenticate,
+    rateLimit({
+      max: Number(process.env.UPLOAD_URL_RATE_LIMIT_MAX || 20),
+      windowMs: 60 * 1000,
+    }),
+    async (req, res) => {
+      try {
+        const { files } = req.body || {};
+        if (!Array.isArray(files) || files.length === 0) {
+          console.log("[BUNDLE] rejected — files array required");
+          return sendError(
+            res,
+            400,
+            "MISSING_FILES",
+            "files array is required and must be non-empty",
+          );
+        }
+        if (files.length > 200) {
+          console.log(`[BUNDLE] rejected — too many files (${files.length})`);
+          return sendError(
+            res,
+            400,
+            "TOO_MANY_FILES",
+            "bundle may contain at most 200 files",
+          );
+        }
+
+        const dirFiles = [];
+        for (const f of files) {
+          if (
+            !f ||
+            typeof f.name !== "string" ||
+            f.name.length === 0 ||
+            f.name.length > 255 ||
+            typeof f.data !== "string"
+          ) {
+            console.log("[BUNDLE] rejected — invalid file entry");
+            return sendError(
+              res,
+              400,
+              "INVALID_FILE",
+              "each file needs a string name (1–255 chars) and string data",
+            );
+          }
+          // data is base64 (binary-safe). Decode to a Buffer for the adapter.
+          let data;
+          try {
+            data = Buffer.from(f.data, "base64");
+          } catch {
+            return sendError(
+              res,
+              400,
+              "INVALID_FILE",
+              `file "${f.name}" has invalid base64 data`,
+            );
+          }
+          dirFiles.push({ name: f.name, data });
+        }
+
+        console.log(
+          `[BUNDLE] assembling directory of ${dirFiles.length} files for wallet ${res.locals.userAddress}`,
+        );
+        const bundleCid = await getStorage().addDirectory(dirFiles);
+        console.log(
+          `[BUNDLE] directory root → ${bundleCid} (${dirFiles.length} files)`,
+        );
+        res.json({ bundleCid });
+      } catch (error) {
+        console.error("[BUNDLE] error:", error.message);
+        sendError(res, 500, "BUNDLE_FAILED", error.message);
+      }
+    },
+  );
+
   // ─── IPFS Unpin ──────────────────────────────────────────────────────────
 
   /**
@@ -507,15 +597,27 @@ export default () => {
         // Collect source asset CIDs from nodes (current sources + history)
         const nodes = getSceneNodes(manifest);
         for (const node of nodes) {
-          // Current source CID
+          // Current source CID + organizational bundle directory root
           if (node?.source?.cid && typeof node.source.cid === "string") {
             toUnpin.add(node.source.cid);
           }
-          // History entries — each has its own source CID
+          if (
+            node?.source?.bundleCid &&
+            typeof node.source.bundleCid === "string"
+          ) {
+            toUnpin.add(node.source.bundleCid);
+          }
+          // History entries — each has its own source CID + bundle root
           if (Array.isArray(node?.history)) {
             for (const entry of node.history) {
               if (entry?.src?.cid && typeof entry.src.cid === "string") {
                 toUnpin.add(entry.src.cid);
+              }
+              if (
+                entry?.src?.bundleCid &&
+                typeof entry.src.bundleCid === "string"
+              ) {
+                toUnpin.add(entry.src.bundleCid);
               }
             }
           }

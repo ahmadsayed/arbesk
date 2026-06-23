@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "megaeth-developer": {
+      "source": "0xBreadguy/megaeth-ai-developer-skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "18d1c46f9712e9de8ca7bee4c2c831a679662cf7601e07994b54f1021a1c96b6"
+    }
+  }
+}

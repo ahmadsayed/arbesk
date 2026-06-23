@@ -1,11 +1,11 @@
 ---
 name: solidity-smart-contracts
-description: Expert guidance on Solidity smart contract architecture, deployment, debugging, and address alignment verification. Covers the two-tier contract system (ArbeskAssetFree / ArbeskAsset), ERC721 NFTs, PayGo USDC payment patterns, OpenZeppelin v5, Hardhat tooling, multi-network deployment, smart account (ERC-4337) proxy validation, session auth debugging, and the full compile→deploy→verify→integrate pipeline. Use when asked to "debug the contract", "check contract address alignment", "deploy contracts", "audit the contract", "add a function to the contract", "explain the payment flow", "free tier vs paid tier", "ArbeskAssetFree", "smart account", "proxy contract", "session auth", or any Solidity/blockchain/NFT question in this codebase. When you see a contract error, ABI mismatch, or transaction revert, invoke this skill immediately.
+description: Expert guidance on Solidity smart contract architecture, deployment, debugging, and address alignment verification. Covers the two-tier contract system (ArbeskAssetFree / ArbeskAsset), ERC721 NFTs, PayGo USDC payment patterns, OpenZeppelin v5, Hardhat tooling, multi-network deployment, smart account (ERC-4337) proxy validation, session auth debugging, the full compile→deploy→verify→integrate pipeline, and MegaETH/MegaEVM-specific patterns (dual gas model, slot-reuse storage, volatile data access limits, Foundry deployment, eth_sendRawTransactionSync, EIP-7966). Use when asked to "debug the contract", "check contract address alignment", "deploy contracts", "audit the contract", "add a function to the contract", "explain the payment flow", "free tier vs paid tier", "ArbeskAssetFree", "smart account", "proxy contract", "session auth", "MegaETH", "MegaEVM", "Foundry", "gas model", "volatile data", or any Solidity/blockchain/NFT question in this codebase. When you see a contract error, ABI mismatch, or transaction revert, invoke this skill immediately.
 ---
 
 # Solidity Smart Contract Expertise
 
-Use this skill for any task involving Solidity smart contracts: architecture review, function implementation, deployment, debugging, address alignment, event verification, smart account proxy handling, session authentication debugging, test coverage, or security audit.
+Use this skill for any task involving Solidity smart contracts: architecture review, function implementation, deployment, debugging, address alignment, event verification, smart account proxy handling, session authentication debugging, test coverage, security audit, or MegaETH/MegaEVM-specific optimization.
 
 ## Quick Decision
 
@@ -17,6 +17,9 @@ Use this skill for any task involving Solidity smart contracts: architecture rev
 | Session signing every request? | Case-sensitive address bug in localStorage. See [→ Session Auth](./references/session-auth.md) |
 | Need to add a contract function? | Write Solidity → add tests → add to `REQUIRED_ABI_FUNCTIONS` → recompile → redeploy → sync `.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
 | Debugging a failed generation tx? | Check `[GEN]` logs, validate receipt, decode events. See [→ Debugging](./references/debugging.md) |
+| Deploying to MegaETH? | Use Foundry, skip local simulation, hardcode gas limits. See [→ MegaETH Patterns](./references/megaeth-patterns.md) |
+| Out of gas after `block.timestamp`? | Hit MegaEVM volatile data cap (20M compute gas retroactive). Restructure or use timestamp oracle. See [→ MegaETH Patterns](./references/megaeth-patterns.md) |
+| Expensive SSTORE on MegaETH? | New slots cost 2M+ gas. Favor slot reuse, RedBlackTreeLib, transient storage. See [→ MegaETH Patterns](./references/megaeth-patterns.md) |
 
 ## Contract Overview
 
@@ -72,6 +75,30 @@ AssetBurned(uint256,address)
 AssetURIUpdated(uint256,string)
 ```
 
+## MegaETH / MegaEVM Deployment Context
+
+Arbesk targets MegaETH testnet (`chainId 6343`) and eventually mainnet (`chainId 4326`). The Solidity skill now aligns with the `megaeth-developer` skill for deployment and runtime correctness on MegaEVM.
+
+| Network | Chain ID | RPC | EVM Target |
+|---------|----------|-----|------------|
+| MegaETH Mainnet | 4326 | `https://mainnet.megaeth.com/rpc` | MegaEVM |
+| MegaETH Testnet | 6343 | `https://carrot.megaeth.com/rpc` | MegaEVM |
+
+### MegaEVM-Specific Considerations
+
+- **Dual gas model:** compute gas and storage gas are tracked separately. Both come from the gas limit.
+- **Base fee:** fixed at `0.001 gwei` (1,000,000 wei). No EIP-1559 buffer needed; ignore `maxPriorityFeePerGas`.
+- **Intrinsic gas:** simple transfers cost **60,000 gas** on MegaETH, not 21,000.
+- **SSTORE (0 → non-zero):** ~2M gas × bucket multiplier. New storage slots are very expensive; design for slot reuse.
+- **State growth limit:** 1,000 new slots per transaction; 98% forwarded to child frames (Rex4).
+- **Volatile data cap:** `block.timestamp`, `block.number`, etc. retroactively cap total compute gas at 20M for the whole transaction.
+- **High-precision time:** use the timestamp oracle at `0x6342000000000000000000000000000000000002` for microseconds and to avoid the volatile-data cap.
+- **Transaction submission:** prefer `eth_sendRawTransactionSync` (EIP-7966) for near-instant receipts on MegaETH.
+- **Gas estimation:** always use remote `eth_estimateGas`; local Hardhat/Foundry simulation uses standard EVM costs, not MegaEVM.
+- **Foundry on MegaETH:** use `--skip-simulation` and explicit `--gas-limit`; never rely on local gas estimates.
+
+See the full MegaETH playbook in the `megaeth-developer` skill and [→ MegaETH Patterns](./references/megaeth-patterns.md) for code samples.
+
 ## Key Rules
 
 1. **Lowercase ALL addresses** in storage and comparison — prevents case-mismatch session bugs.
@@ -81,6 +108,9 @@ AssetURIUpdated(uint256,string)
 5. **Sync `CONTRACT_ADDRESS`** from `blockchain/.env` → root `.env` after every deploy.
 6. **OZ v5 breaking change:** override `_update`, not `_beforeTokenTransfer`.
 7. **Gas:** use `immutable` for constructor values, `calldata` for params, pack storage slots.
+8. **MegaETH gas model:** new storage slots cost ~2M gas. Prefer slot reuse, fixed-size arrays, RedBlackTreeLib, or off-chain storage over unbounded mappings.
+9. **MegaETH volatile data:** keep total compute gas under 20M in any transaction touching `block.timestamp`/`block.number`/coinbase; otherwise use the timestamp oracle.
+10. **MegaETH transactions:** use `eth_sendRawTransactionSync` (EIP-7966) and remote `eth_estimateGas`; don't rely on local Hardhat/Foundry simulation for gas costs.
 
 ## File Map
 
@@ -110,4 +140,5 @@ AssetURIUpdated(uint256,string)
 | 5-Phase Integration Verification | [→ Checklists](./references/checklists.md) |
 | ERC-4337 Proxy / Smart Account Validation | [→ Smart Accounts](./references/smart-accounts.md) |
 | SIWE Sessions, Case-Sensitive Address Bug | [→ Session Auth](./references/session-auth.md) |
+| MegaETH/MegaEVM patterns, gas, storage, volatile data | [→ MegaETH Patterns](./references/megaeth-patterns.md) |
 | ASCII Quick Reference Card | [→ Quick Reference](./references/quick-reference.md) |

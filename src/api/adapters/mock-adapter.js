@@ -8,8 +8,12 @@ const MOCK_ASSETS_DIR = process.env.MOCK_ASSETS_DIR || "./mock-gltf-assets";
  *   - howdy.glb for cowboy/western prompts
  *   - suka.gltf for character/figure/person/avatar prompts
  *   - intro.gltf for everything else
+ *
+ * @param {string} prompt
+ * @param {{ provider?: string, providerKey?: string }} [opts] — accepted for
+ *   interface compatibility with real cloud adapters; the mock ignores them.
  */
-export async function mockGenerate(prompt) {
+export async function mockGenerate(prompt, opts = {}) {
   const lower = prompt.toLowerCase();
   let filename = "intro.gltf";
   let format = "gltf";
