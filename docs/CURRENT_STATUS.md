@@ -56,9 +56,9 @@ src/
     └── openapi.json            # Static OpenAPI spec
 ```
 
-> **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits happen client-side; the browser sends the full manifest to `POST /api/v1/manifests`.
+> **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits, manifest writes, thumbnail uploads, history walks, and token resolution all happen client-side. The browser writes directly to IPFS via `writeToIPFS()` / `writeJSONToIPFS()`.
 >
-> **Generation endpoint:** `POST /api/v1/generations` validates session auth + rate limit. It does **not** validate an on-chain transaction — the `txHash` field described in older docs is not accepted. The UI handles contract interaction (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
+> **Generation endpoint:** `POST /api/v1/generations` validates session auth + rate limit, calls the mock adapter, and returns raw asset bytes (base64). The browser uploads the asset to IPFS, constructs the manifest, and writes it to IPFS — no server-side IPFS writes.
 
 ### 2.2 Implemented Routes (`/api/v1`)
 
@@ -67,13 +67,9 @@ src/
 | GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag |
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
 | DELETE | `/sessions` | Session | Invalidates session token |
-| POST | `/generations` | Session | Mocks asset, pins to IPFS, returns asset manifest CID (no on-chain tx validation) |
-| POST | `/manifests` | None | Saves draft manifest (asset or collection), extracts thumbnail dataUrl → IPFS |
-| POST | `/manifests/:cid/publish` | None | Same as save but returns `{ cid }` (the `:cid` param is vestigial — not used in handler) |
-| GET | `/manifests/:cid/history` | None | Walks `prev_asset_manifest_cid` chain up to 50 entries |
-| GET | `/tokens/:tokenId/manifest` | None | Calls `tokenURI()` on-chain → fetches manifest from IPFS |
+| POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes (no IPFS writes) |
+| POST | `/assets/snapshot-comments` | None | Snapshots Nostr comment thread to IPFS archive (needs service private key) |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
-| POST | `/ipfs/bundle` | Session | Uploads multiple files as a UnixFS directory, returns root CID |
 | POST | `/ipfs/unpin` | None | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
 | GET | `/openapi.json` | None | Static OpenAPI spec |
@@ -89,25 +85,24 @@ src/
 
 ### 2.4 What Works
 
-- ✅ Mock generation with session auth + rate limiting
+- ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
-- ✅ Manifest save with thumbnail dataUrl extraction → separate IPFS asset
-- ✅ Collection manifest save/validation (`type: "collection"` + `assets` object)
-- ✅ Manifest chain walking (backward `prev_asset_manifest_cid`, cycle detection)
-- ✅ Token resolution (`tokenURI` → IPFS manifest)
+- ✅ Thumbnail capture + direct IPFS upload from browser (`captureAssetThumbnail()` → `writeToIPFS()`)
+- ✅ Manifest save/publish entirely client-side (`writeJSONToIPFS()` — no server round-trip)
+- ✅ Collection manifest merge + direct IPFS upload from browser
+- ✅ Manifest chain walking — client-side via `walkManifestChain()` (IPFS gateway reads)
+- ✅ Token resolution — client-side via `resolveChildRef()` (Web3 + IPFS gateway, cross-chain)
 - ✅ IPFS unpin on burn (walks chain, collects CIDs, calls `pin.rm`)
 - ✅ Multi-network config (Hardhat local `31415822`, MegaETH Testnet `6343`)
 - ✅ Multi-storage backend (`kubo` local, `pinata` testnet)
 - ✅ Presigned upload URLs for browser uploads (Pinata/Kubo)
-- ✅ Nostr comments archive snapshot on republish
+- ✅ Nostr comments archive snapshot on republish (`POST /api/v1/assets/snapshot-comments`)
 
 ### 2.5 What Does NOT Work / Is Missing
 
 - ❌ **Cloud 3D adapters** — `generate-node.js` returns `501 NOT_IMPLEMENTED` when `MOCK_3D_GENERATION` is disabled.
-- ❌ No backend parametric route — handled entirely in browser.
+- ❌ No backend parametric, manifest, thumbnail, history, or token routes — all handled client-side.
 - ❌ `GET /api/health` — planned, not implemented.
-- ❌ `GET /api/manifest/:id` — planned, not implemented.
-- ❌ `GET /api/resolve-token` — planned for Phase 5.1 fallback, not implemented (browser resolver is the current path).
 
 ---
 

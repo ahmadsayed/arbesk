@@ -57,9 +57,9 @@ Authorization: Session <uuid>
 
 Session tokens are stored in browser `localStorage` under the key `arbesk_session` and are cleared on wallet disconnect.
 
-The generation route validates the transaction receipt and the expected `AssetGenerationPaid`, `AssetGenerationPaidUSDC`, or `AssetGenerationRecorded` event from the configured `CONTRACT_ADDRESS` contract, regardless of whether it is the paid tier (`ArbeskAsset`) or free tier (`ArbeskAssetFree`).
+The generation route validates session auth and rate limiting. The backend calls the adapter and returns raw asset bytes (base64). The browser uploads the asset to IPFS, constructs the manifest, and writes it to IPFS — no server-side IPFS writes.
 
-Parametric edits, manifest saves, manifest chain reads, ABI reads, and token manifest reads do not currently require session auth.
+Parametric edits, manifest saves, manifest chain reads, ABI reads, and token manifest reads are all client-side and do not use backend routes.
 
 ---
 
@@ -102,7 +102,7 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
 
 ### `POST /api/v1/generations`
 
-Generates or mocks a 3D asset from a text prompt, uploads it to IPFS, and writes a new manifest snapshot.
+Generates or mocks a 3D asset from a text prompt and returns the raw asset bytes. The browser handles IPFS upload and manifest construction.
 
 **Current behavior**
 
@@ -110,11 +110,10 @@ Generates or mocks a 3D asset from a text prompt, uploads it to IPFS, and writes
 - Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
 - Requires `prompt` and `nodeId`.
 - Accepts optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
-- If `prevAssetManifestCid` is provided, reads and updates the previous manifest.
-- In replace mode, keeps only one root node and preserves that node's history chain.
 - If `MOCK_3D_GENERATION=true` or provider is `"mock"`, uses `src/api/adapters/mock-adapter.js`.
 - If mock mode is disabled and provider is not mock, responds `501` (cloud adapters not implemented yet).
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
+- **No IPFS writes** — returns raw asset bytes (base64). The browser (`api.js` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
 **Request Body**
 
@@ -123,10 +122,6 @@ Generates or mocks a 3D asset from a text prompt, uploads it to IPFS, and writes
   "prompt": "A modern minimalist workbench",
   "nodeId": "node_table_001",
   "provider": "mock",
-  "assetId": "asset_1700000000000",
-  "prevAssetManifestCid": "bafy...",
-  "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-  "tier": 0,
   "providerKey": "sk-..."
 }
 ```
@@ -135,11 +130,14 @@ Generates or mocks a 3D asset from a text prompt, uploads it to IPFS, and writes
 
 ```json
 {
-  "assetManifestCid": "bafy...",
-  "sourceAssetCid": "bafy...",
-  "tier": 0
+  "assetData": "eyJhc3NldCI6eyJnZW5lcmF0b3IiOi...",
+  "format": "gltf",
+  "path": "asset.gltf",
+  "provider": "mock"
 }
 ```
+
+The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the asset to IPFS, constructs the manifest, uploads the manifest, and returns `{ assetManifestCid, sourceAssetCid }` to the UI.
 
 **Errors**
 
@@ -162,7 +160,9 @@ Generates or mocks a 3D asset from a text prompt, uploads it to IPFS, and writes
 1. User selects a node and changes color/scale in the inspector.
 2. `parametric-preview.js` applies the change live to Babylon.js meshes.
 3. `asset-save.js` builds a parametric history entry and appends it to the manifest.
-4. The browser sends the full updated manifest to `POST /api/v1/manifests` (save draft) or through the publish flow.
+4. The browser writes the full updated manifest directly to IPFS via `writeJSONToIPFS()`.
+
+The parametric history entry structure stored in the manifest:
 
 The parametric history entry structure stored in the manifest:
 
@@ -187,116 +187,19 @@ The parametric history entry structure stored in the manifest:
 
 ---
 
-### `POST /api/v1/manifests`
+### `POST /api/v1/assets/snapshot-comments`
 
-Saves a manifest to IPFS without blockchain interaction. Accepts both asset manifests and collection manifests.
+Snapshots the Nostr comment thread for a published asset to a content-addressed IPFS archive. Called by the browser before writing a republish manifest so the archive CID can be embedded.
 
-**Current behavior**
-
-- Ensures `asset_id` exists.
-- Ensures `version` is numeric.
-- For `type: "collection"`, validates that `assets` is a non-array object.
-- For asset manifests, ensures `.scene.nodes` exists via `getSceneNodes()`.
-- If `manifest.thumbnail.dataUrl` is present, uploads the thumbnail bytes as a separate IPFS object and replaces the embedded data with CID metadata.
-- If the request body includes `publishContext` with a `tokenId`, the backend snapshots the asset's Nostr comment thread from the relay, stores it as a JSON archive on IPFS, and writes the archive CID into the manifest as `comments_archive_cid`. The `publishContext` object is removed before the manifest is stored.
-
-**Request Body — Asset Manifest**
-
-```json
-{
-  "type": "asset",
-  "name": "My World",
-  "asset_id": "asset_1700000000000",
-  "version": 4,
-  "scene": { "nodes": [] },
-  "publishContext": {
-    "tokenId": "42",
-    "chainId": 6343,
-    "contractAddress": "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B"
-  }
-}
-```
-
-**Request Body — Collection Manifest**
-
-```json
-{
-  "type": "collection",
-  "asset_id": "collection_1700000000000",
-  "name": "My Collection",
-  "version": 3,
-  "assets": {
-    "asset_1700000000000": "QmAssetManifestA...",
-    "asset_1700000001234": "QmAssetManifestB..."
-  }
-}
-```
-
-**Response `201`**
-
-```json
-{
-  "cid": "QmSavedManifest...",
-  "assetId": "asset_1700000000000",
-  "version": 4
-}
-```
-
-**Errors**
-
-| HTTP | Meaning |
-|---:|---|
-| 400 | Body is missing or not an object; collection missing `assets` object |
-| 500 | IPFS write error |
-
----
-
-### `POST /api/v1/manifests/:cid/publish`
-
-Uploads a JSON payload to IPFS. The publish flow uses this endpoint to push the final named manifest before minting or updating a token URI.
-
-**Current behavior**
-
-- Accepts a manifest-like JSON object.
-- If `thumbnail.dataUrl` exists, uploads it separately to IPFS and replaces it with thumbnail CID metadata.
-- Returns the new CID as JSON.
+Manifests themselves are written directly to IPFS by the browser — this endpoint only handles the server-side Nostr archive work (requires service private key).
 
 **Request Body**
 
 ```json
 {
-  "manifest_id": "manifest_001",
-  "version": 4,
-  "name": "My World",
-  "thumbnail": {
-    "type": "snapshot",
-    "dataUrl": "data:image/webp;base64,...",
-    "mime": "image/webp",
-    "format": "webp",
-    "path": "thumbnail.webp",
-    "width": 512,
-    "height": 288,
-    "timestamp": 1780000000
-  },
-  "scene": { "nodes": [] }
-}
-```
-
-**Stored Manifest Thumbnail Shape**
-
-```json
-{
-  "thumbnail": {
-    "type": "snapshot",
-    "cid": "QmThumbnailCid...",
-    "path": "thumbnail.webp",
-    "format": "webp",
-    "mime": "image/webp",
-    "width": 512,
-    "height": 288,
-    "bytes": 12345,
-    "timestamp": 1780000000
-  }
+  "tokenId": "42",
+  "chainId": 6343,
+  "contractAddress": "0x..."
 }
 ```
 
@@ -304,77 +207,8 @@ Uploads a JSON payload to IPFS. The publish flow uses this endpoint to push the 
 
 ```json
 {
-  "cid": "QmManifestCid..."
-}
-```
-
----
-
-### `GET /api/v1/manifests/:cid/history`
-
-Walks the **IPFS content-addressed version chain** (also called the **manifest chain**) — the backward-linked sequence of `prev_asset_manifest_cid` pointers that connects each manifest version to its predecessor. Because every manifest CID is a cryptographic hash of its contents, the chain is tamper-evident: altering any version invalidates all subsequent CIDs.
-
-This endpoint walks backwards through `prev_asset_manifest_cid` links and returns lightweight summaries.
-
-**Query Parameters**
-
-| Param | Required | Description |
-|---|---:|---|
-| `cid` | Yes | Latest manifest CID to walk from |
-
-**Response `200`**
-
-```json
-{
-  "chain": [
-    {
-      "cid": "QmOldManifest...",
-      "version": 1,
-      "name": "My World",
-      "nodeCount": 1,
-      "timestamp": 1780000000
-    },
-    {
-      "cid": "QmLatestManifest...",
-      "version": 2,
-      "name": "My World",
-      "nodeCount": 1,
-      "timestamp": 1780001000
-    }
-  ]
-}
-```
-
-Notes:
-
-- The route stops at 50 entries.
-- Circular links are detected and stop traversal.
-- `timestamp` currently comes from the manifest's top-level `timestamp` field.
-
----
-
-### `GET /api/v1/tokens/:tokenId/manifest`
-
-Fetches a manifest by on-chain token ID. The backend queries `tokenURI(tokenId)` and then fetches that manifest from IPFS.
-
-**Response `200`**
-
-```json
-{
-  "tokenId": "123",
-  "manifestCid": "QmManifestCid...",
-  "manifest": {
-    "asset_id": "asset_1700000000000",
-    "version": 4,
-    "name": "My World",
-    "thumbnail": {
-      "type": "snapshot",
-      "cid": "QmThumbnailCid...",
-      "format": "webp"
-    },
-    "comments_archive_cid": "QmCommentsArchiveCid...",
-    "scene": { "nodes": [] }
-  }
+  "cid": "bafyArchiveCid...",
+  "eventCount": 3
 }
 ```
 
@@ -383,73 +217,24 @@ Fetches a manifest by on-chain token ID. The backend queries `tokenURI(tokenId)`
 | HTTP | Meaning |
 |---:|---|
 | 400 | `tokenId` missing |
-| 404 | Token not found or empty token URI |
-| 503 | `CONTRACT_ADDRESS` missing or ABI artifact not compiled |
-| 500 | Contract/IPFS error |
+| 503 | Contract address not configured |
+| 500 | Archive creation failed |
+
+---
+
+### Manifests, Thumbnails, History, Tokens — Client-Side
+
+> **These backend routes do not exist.** The browser handles all manifest and thumbnail operations directly:
+>
+> - **Manifest writes:** `writeJSONToIPFS()` in `asset-save.js` and `asset-delete.js`
+> - **Thumbnail upload:** `captureAssetThumbnail()` → `writeToIPFS()` in `scene-graph.js`
+> - **History chain walk:** `walkManifestChain()` in `time-travel.js` (IPFS gateway reads)
+> - **Token resolution:** `resolveChildRef()` in `token-resolver.js` (Web3 + IPFS gateway)
+> - **Bundle directories:** Removed — each file is individually addressable by `ipfs://<cid>`
 
 ---
 
 ### `POST /api/v1/ipfs/upload-url`
-
-Mints a short-lived client upload credential. Session-gated and rate-limited per wallet.
-
-- In **Pinata** mode, returns a presigned upload URL; the master JWT stays server-side.
-- In **Kubo** mode, returns the local Kubo API URL.
-
-**Response `200`**
-
-```json
-{
-  "backend": "pinata",
-  "url": "https://uploads.pinata.cloud/...",
-  "expiresAt": 1780001000
-}
-```
-
-**Errors**
-
-| HTTP | Meaning |
-|---:|---|
-| 401 | Missing/invalid session |
-| 429 | Upload-url rate limit exceeded |
-| 500 | Credential minting failed |
-
----
-
-### `POST /api/v1/ipfs/bundle`
-
-Uploads multiple files as a single IPFS UnixFS directory and returns the directory root CID. Used to group a glTF + its buffers/textures into one browsable folder.
-
-**Request Body**
-
-```json
-{
-  "files": [
-    { "name": "scene.gltf", "data": "<base64>" },
-    { "name": "buffer.bin", "data": "<base64>" }
-  ]
-}
-```
-
-**Response `200`**
-
-```json
-{
-  "bundleCid": "bafy..."
-}
-```
-
-**Errors**
-
-| HTTP | Meaning |
-|---:|---|
-| 400 | `files` array missing, empty, >200 entries, or invalid file entries |
-| 401 | Missing/invalid session |
-| 429 | Upload rate limit exceeded |
-| 500 | Bundle assembly failed |
-
----
-
 ### `POST /api/v1/ipfs/unpin`
 
 Unpins all IPFS CIDs owned by a manifest chain. Called after token burn.

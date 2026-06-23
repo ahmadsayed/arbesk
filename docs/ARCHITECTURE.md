@@ -38,40 +38,51 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  ├─ Chat + asset definition panel                                    │
 │  ├─ Babylon.js viewport                                              │
 │  ├─ Node inspector: color + scale                                    │
-│  ├─ History browser / manifest chain timeline                        │
+│  ├─ History browser / manifest chain timeline (client-side walk)     │
 │  ├─ Gallery with optional thumbnails                                 │
-│  └─ Team editor panel                                                │
+│  ├─ Team editor panel                                                │
+│  └─ Activity ledger (client-side chain walk)                         │
 │                                                                      │
 │  Frontend services                                                   │
 │  ├─ wallet.js: Web3Modal/Web3 + ArbeskAssetFree / ArbeskAsset calls  │
 │  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache           │
+│  ├─ write-to-ipfs.js: direct browser→IPFS writes (Kubo/Pinata)       │
 │  ├─ asset-save.js: save/publish, collection merge, thumbnail capture │
 │  ├─ asset-library.js: token gallery with collection expansion        │
+│  ├─ token-resolver.js: on-chain child_ref resolution (no server)     │
+│  ├─ time-travel.js: manifest chain walking (no server)              │
 │  ├─ team.js: Merkle editor list add/remove                           │
 │  └─ merkle-editors.js: computeRoot / getProof / makeLeaf             │
+│                                                                      │
+│  IPFS writes happen directly from the browser:                       │
+│  ├─ Thumbnails: captureAssetThumbnail() → writeToIPFS()              │
+│  ├─ Manifests: writeJSONToIPFS() in asset-save.js                    │
+│  ├─ Generation: api.js receives bytes, uploads to IPFS               │
+│  └─ glTF parts: decomposer uploads buffers/textures directly         │
 └───────────────────────────────┬─────────────────────────────────────┘
-                                │ HTTP + wallet txs
+                                │ HTTP (auth + adapter calls only)
                                 ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                           Express Backend                            │
+│                     Express Backend (thin gatekeeper)                │
 │                                                                      │
 │  /api/v1/generations                                                 │
-│  ├─ Session (SIWE) auth                                              │
-│  ├─ EVM/Hardhat receipt validation                                  │
-│  ├─ AssetGenerationPaid / AssetGenerationRecorded event validation   │
-│  ├─ Mock generation adapter                                          │
-│  └─ IPFS asset + manifest writes                                     │
+│  └─ Session auth + rate limit + mock adapter → returns raw bytes     │
+│     (no IPFS writes — browser uploads asset + manifest)              │
 │                                                                      │
-│  *(parametric edits are client-side)*                                │
-│  └─ Free color/scale history entries applied in browser              │
+│  /api/v1/assets/snapshot-comments                                    │
+│  └─ Nostr comments archive snapshot (needs service private key)      │
 │                                                                      │
-│  /api/v1/manifests, /api/v1/manifests/:cid/publish                   │
-│  └─ Manifest writes (asset + collection manifests) + thumbnail       │
-│      normalization and optional Nostr comments archive               │
+│  /api/v1/ipfs/upload-url                                             │
+│  └─ Mints presigned upload credentials (protects Pinata JWT)         │
 │                                                                      │
-│  /api/v1/manifests/:cid/history, /api/v1/tokens/:tokenId/manifest,   │
-│  /api/v1/ipfs/upload-url, /api/v1/ipfs/unpin,                        │
-│  /api/v1/contracts/:name/abi, /api/v1/config                         │
+│  /api/v1/ipfs/unpin                                                  │
+│  └─ Burn cleanup — walks chain, collects CIDs, unpins                │
+│                                                                      │
+│  /api/v1/config, /api/v1/contracts/:name/abi, /api/v1/openapi.json   │
+│  /api/v1/sessions (SIWE), /api/v1/chat/ws (Nostr proxy)              │
+│                                                                      │
+│  *(parametric edits, manifest writes, thumbnail upload,              │
+│   history walks, and token resolution are all client-side)*           │
 └───────────────┬───────────────────────────────┬──────────────────────┘
                 │                               │
                 ▼                               ▼
@@ -81,10 +92,9 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │ 127.0.0.1:8080 gateway       │   │ ArbeskAsset.sol (paid tier)      │
 │ No DHT / no bootstrap peers  │   │ ├─ recordGeneration              │
 │ (local Kubo mode)            │   │ ├─ payForGenerationWithUSDC      │
-│ Stores assets, manifests,    │   │ ├─ publishAsset(uri,tokenId,     │
-│ thumbnails, editor lists     │   │ │                editorRoot,uri)   │
-│                              │   │ ├─ updateAssetURI + Merkle proof │
-│                              │   │ ├─ updateEditors + Merkle proof  │
+│ Browser writes directly via  │   │ ├─ publishAsset                  │
+│ writeToIPFS() → Kubo :5001   │   │ ├─ updateAssetURI + Merkle proof │
+│ or Pinata presigned URLs     │   │ ├─ updateEditors + Merkle proof  │
 │                              │   │ └─ burn + Merkle proof           │
 │                              │   │ Local RPC: 127.0.0.1:8545        │
 │                              │   │ MegaETH RPC: carrot.megaeth.com  │
@@ -99,13 +109,13 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 
 | File | Responsibility |
 |---|---|
-| `src/index.js` | Express app, static frontend serving, request logging, body limits, Chat WebSocket |
-| `src/api/index.js` | Route registry, IPFS storage abstraction, manifest save/publish, thumbnail normalization, comments archive, bundle upload |
-| `src/api/assets/generate-node.js` | Session-auth generation route, mock adapter, manifest updates (no on-chain tx validation) |
+| `src/index.js` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
+| `src/api/index.js` | Route registry — thin gatekeeper: auth, rate limiting, adapter calls, credential minting, unpin |
+| `src/api/assets/generate-node.js` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
 | `src/api/storage/index.js` | Storage backend abstraction (`kubo` or `pinata`) |
 | `src/api/storage/pinata-adapter.js` | Pinata v3 SDK uploads + presigned upload URLs |
 | `src/api/storage/kubo-adapter.js` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
-| *(client-side only)* | Parametric editing happens in browser; no dedicated backend route |
+| *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, history walks, token resolution — all browser-side |
 | `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
 | `src/api/sessions.js` | SIWE session create/delete (24h TTL) |
 | `src/api/siwe-verify.js` | EIP-4361 message verification |
@@ -115,7 +125,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | `src/api/comments-archive.js` | Snapshots Nostr comment threads to IPFS on republish |
 | `src/api/chat-proxy.js` | WebSocket bridge: browser ↔ Nostr relay (session-gated) |
 | `src/api/nostr-relay.js` | Shared relay primitives (used by chat-proxy + comments-archive) |
-| `src/api/manifest-utils.js` | getSceneNodes, bumpManifestVersion |
+| `src/api/manifest-utils.js` | getSceneNodes (used by unpin route) |
 | `src/api/ipfs-utils.js` | catManifest() with timeout/abort |
 | `src/config.js` | Multi-network Web3 config (Hardhat local, MegaETH Testnet) |
 
@@ -123,26 +133,27 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Engine | `engine/scene-graph.js` | Babylon engine/scene, GLB/GLTF loading, node metadata, scene clearing, thumbnail capture, collection loading |
-| Engine | `engine/time-travel.js` | History version switching and parametric application |
+| Engine | `engine/scene-graph.js` | Babylon engine/scene, GLB/glTF load, selection, framing, thumbnail capture, collection load |
+| Engine | `engine/time-travel.js` | Manifest chain walking (client-side), history version switching, parametric application |
 | Engine | `engine/parametric-preview.js` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.js` | Gateway reads with memory + IndexedDB cache |
-| IPFS | `ipfs/write-to-ipfs.js` | Direct Kubo/Pinata writes + pin |
+| IPFS | `ipfs/write-to-ipfs.js` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
 | glTF | `gltf/uri_to_cid.js` | Rehydrates CID-based glTF buffer URIs for rendering |
-| glTF | `gltf/decomposer.js` / `async-gltf.js` | Breaks monolithic glTF/GLB into composite IPFS CIDs |
-| glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon |
+| glTF | `gltf/decomposer.js` / `async-gltf.js` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
+| glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
 | glTF | `gltf/merkle-editors.js` | Merkle tree/proof library for editor authorization |
 | Blockchain | `blockchain/wallet.js` | Web3Modal, wallet connection, EVM switching, PayGo, mint/update URI/editor/burn calls |
 | Blockchain | `blockchain/network-config.js` | Per-network contract/USDC/RPC configuration |
-| Blockchain | `blockchain/token-resolver.js` | Resolve `child_ref` tokens to manifest CIDs |
-| UI | `ui/create-panel.js` | Prompt flow and asset definition controls |
-| UI | `ui/asset-save.js` | Save/publish lifecycle, collection merge, WebP thumbnail capture |
+| Blockchain | `blockchain/token-resolver.js` | Resolve `child_ref` tokens to manifest CIDs (client-side, no server) |
+| UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
+| UI | `ui/asset-save.js` | Save/publish lifecycle, collection merge, thumbnail capture, direct IPFS writes |
 | UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
-| UI | `ui/asset-history.js` | Manifest-chain timeline browser |
+| UI | `ui/asset-history.js` | Manifest-chain timeline browser (uses client-side walkManifestChain) |
 | UI | `ui/asset-editors.js` | Editor list / add/remove UI |
-| UI | `ui/collaborators.js` | Burn button visibility helper |
+| UI | `ui/ledger-panel.js` | Activity feed — walks manifest chain client-side, fetches full manifests |
+| Services | `services/api.js` | API client: sessions, generation (with client-side IPFS upload), comments archive, upload credential |
 | Services | `services/team.js` | Merkle-based editor add/remove |
-| Services | `services/asset-delete.js` | Remove an asset from a collection manifest |
+| Services | `services/asset-delete.js` | Remove an asset from a collection (direct IPFS write) |
 
 ### 3.3 Smart Contracts (`blockchain/contracts/`)
 
@@ -362,34 +373,22 @@ During publish:
 
 ### 5.1 Generation Flow
 
-**Paid tier (`ArbeskAsset`)**
-
 ```text
 User prompt
   → wallet.signInWithEthereum() → POST /api/v1/sessions → Session token
-  → wallet.payForGenerationWithUSDC(nodeId, prompt, tier)  (on-chain, independent of backend)
+  → (free tier) wallet.recordGeneration(nodeId, prompt)  (on-chain)
+  → (paid tier)  wallet.payForGenerationWithUSDC(nodeId, prompt, tier)  (on-chain)
   → POST /api/v1/generations (Authorization: Session <token>)
-  → backend verifies session token + rate limit only
-  → mock adapter returns asset bytes
-  → asset bytes added to IPFS
-  → manifest read/update/write on IPFS
+  → backend verifies session token + rate limit
+  → mock adapter returns asset bytes (base64)
+  → browser uploads asset bytes to IPFS via writeToIPFS()
+  → browser constructs manifest, uploads to IPFS via writeJSONToIPFS()
   → frontend loads new manifest in Babylon.js
 ```
 
-**Free tier (`ArbeskAssetFree`) — implemented UI path**
-
-```text
-User prompt
-  → wallet.recordGeneration(nodeId, prompt)  (on-chain, independent of backend)
-  → POST /api/v1/generations
-  → backend verifies session token + rate limit only
-  → mock adapter returns asset bytes
-  → asset bytes added to IPFS
-  → manifest read/update/write on IPFS
-  → frontend loads new manifest in Babylon.js
-```
-
-> The free tier uses on-chain quota enforcement (`recordGeneration` reverts after 10 calls/day per wallet). The contract owner bypasses the quota. `create-panel.js` auto-detects the free tier via `isFreeTierContract()` and dispatches to the correct contract method.
+> The backend only validates auth + rate limit and returns raw bytes. All IPFS
+> writes (asset + manifest) happen in the browser. The free tier uses on-chain
+> quota enforcement (`recordGeneration` reverts after 10 calls/day per wallet).
 
 ### 5.2 Parametric Edit Flow
 
@@ -409,20 +408,21 @@ User selects node
 Save
   → fetch active asset manifest from IPFS gateway/cache
   → set name/version/prev link as needed
-  → POST /api/v1/manifests
+  → writeJSONToIPFS(manifest) — direct browser→IPFS, no server round-trip
   → update active/latest manifest CID
 
 Publish
   → fetch active asset manifest
-  → capture optional WebP thumbnail
-  → POST /api/v1/manifests (asset manifest) with publishContext on republish
+  → capture WebP thumbnail → writeToIPFS(blob) — direct browser→IPFS
+  → snapshot comments archive (POST /api/v1/assets/snapshot-comments)
+  → writeJSONToIPFS(asset manifest) — direct browser→IPFS
   → merge asset CID into collection manifest's `assets` map
-  → POST /api/v1/manifests (collection manifest)
-  → publishAsset(new collection token) or updateAssetURI(existing collection token)
+  → writeJSONToIPFS(collection manifest) — direct browser→IPFS
+  → publishAsset(new collection token) or updateAssetURI(existing token)
   → refresh gallery/history
 ```
 
-The collection token's `tokenURI` always points to the latest collection manifest CID. Updating an existing asset republishes the collection, not a new token.
+The collection token's `tokenURI` always points to the latest collection manifest CID. Updating an existing asset republishes the collection, not a new token. All manifest and thumbnail writes are direct browser→IPFS; only the comments archive snapshot touches the server (needs Nostr private key).
 
 ### 5.4 Gallery Flow
 
@@ -542,8 +542,12 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 
 ## 12. Known Gaps
 
-- Production cloud 3D adapters are not implemented.
+- Production cloud 3D adapters are not implemented (mock-only, returns 501 when disabled).
 - OpenSCAD WASM integration is schema-compatible but deferred.
-- Phase 5 micro-ledger is planned but not implemented (only `anchorManifest()` stubbed).
-- `GET /api/health` and direct `GET /api/manifest/:cid` are planned routes, not current backend routes.
-- `GET /api/resolve-token` backend fallback for token child resolution is planned but not implemented.
+- Phase 5 micro-ledger is planned but not implemented (`anchorManifest()` stubbed; ledger panel derives activities from manifest chain).
+- `GET /api/health` is a planned route, not a current backend route.
+- IPFS browser cache is disabled by default (`IPFS_CACHE_ENABLED = false` in `remote-ipfs.js`).
+- CSP is in report-only mode; should be promoted to enforcing after monitoring.
+- Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`).
+- Chain ID constants are duplicated (`src/constants/chains.js` and `frontend/src/js/constants/chains.js`).
+- Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).
