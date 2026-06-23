@@ -38,7 +38,8 @@ export default function generateAssetNode(storage) {
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
-          process.env.MOCK_3D_GENERATION === "true" || effectiveProvider === "mock";
+          process.env.MOCK_3D_GENERATION === "true" ||
+          effectiveProvider === "mock";
 
         console.log(
           `[GEN] prompt="${prompt}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
@@ -63,7 +64,9 @@ export default function generateAssetNode(storage) {
             providerKey.trim().length === 0 ||
             providerKey.length > 200
           ) {
-            console.log("[GEN] rejected — providerKey required for real provider");
+            console.log(
+              "[GEN] rejected — providerKey required for real provider",
+            );
             return res.status(400).json({
               error: {
                 code: "MISSING_PROVIDER_KEY",
@@ -81,7 +84,10 @@ export default function generateAssetNode(storage) {
           console.log(`[GEN] using MOCK adapter for "${prompt}"`);
           // Pass provider + providerKey for interface compatibility; the mock
           // ignores them, but real cloud adapters will use them.
-          result = await mockGenerate(prompt, { provider: effectiveProvider, providerKey });
+          result = await mockGenerate(prompt, {
+            provider: effectiveProvider,
+            providerKey,
+          });
           console.log(
             `[GEN] mock returned provider=${result.provider || "mock"} size=${result.data?.length || result.buffer?.length || "?"} bytes`,
           );
@@ -96,6 +102,28 @@ export default function generateAssetNode(storage) {
         }
 
         const assetPayload = result.data || result.buffer;
+
+        // Simplified flow: no storage → return raw base64-encoded data directly.
+        // The frontend will handle decompose → compress → upload on save.
+        if (!storage) {
+          const displayName = prompt
+            ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
+            : nodeId;
+          const base64Data = Buffer.isBuffer(assetPayload)
+            ? assetPayload.toString("base64")
+            : Buffer.from(assetPayload, "utf-8").toString("base64");
+          console.log(
+            `[GEN] simplified — returning raw ${result.format || "gltf"} (${base64Data.length} chars base64)`,
+          );
+          return res.json({
+            nodeId,
+            assetData: base64Data,
+            assetFormat: result.format || "gltf",
+            assetName: displayName,
+            provider: result.provider || "mock",
+          });
+        }
+
         console.log(
           `[IPFS] add source asset | size=${assetPayload?.length || "?"} bytes`,
         );

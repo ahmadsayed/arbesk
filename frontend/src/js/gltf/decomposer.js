@@ -87,12 +87,20 @@ function extractDataURI(uri) {
  * @param {boolean} [options.compress=true] - Gzip-compress buffers/images before upload.
  * @returns {Promise<object>} Composite glTF JSON with ipfs:// URI references
  */
+function sanitizeFileName(name) {
+  return String(name || "asset")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .slice(0, 40) || "asset";
+}
+
 export async function decomposeGlTF(
   gltf,
   credential = null,
   options = {},
 ) {
-  const { compress = true } = options;
+  const { compress = true, assetName, assetId } = options;
+  const baseName = sanitizeFileName(assetName || assetId);
   if (!gltf) throw new Error("decomposeGlTF: gltf is null");
 
   // Already decomposed — nothing to do
@@ -123,7 +131,7 @@ export async function decomposeGlTF(
         continue;
       }
 
-      const filename = `buffer_${i}.bin`;
+      const filename = `${baseName}_buffer_${i}.bin`;
       const cid = await writeToIPFS(extracted.bytes, filename, credential, {
         compress,
       });
@@ -159,7 +167,7 @@ export async function decomposeGlTF(
       }
 
       const ext = extracted.mimeType.split("/")[1] || "bin";
-      const filename = `texture_${i}.${ext}`;
+      const filename = `${baseName}_texture_${i}.${ext}`;
       const cid = await writeToIPFS(extracted.bytes, filename, credential, {
         compress,
       });
@@ -186,11 +194,14 @@ export async function decomposeGlTF(
  * @returns {Promise<{composite: object, compositeCid: string}>}
  */
 export async function decomposeAndStore(gltf, credential = null, options = {}) {
-  const { compress = true } = options;
-  const composite = await decomposeGlTF(gltf, credential, { compress });
+  const { compress = true, assetName, assetId } = options;
+  const composite = await decomposeGlTF(gltf, credential, { compress, assetName, assetId });
   const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.js");
+  const baseName = sanitizeFileName(assetName || assetId);
   const compositeCid = await writeJSONToIPFS(composite, credential, {
     compress,
+    assetId,
+    filename: `${baseName}_composite.gltf`,
   });
   console.log(`[DECOMPOSE] composite stored → ${compositeCid}`);
   return { composite, compositeCid };

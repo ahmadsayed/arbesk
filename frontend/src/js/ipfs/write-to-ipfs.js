@@ -16,6 +16,18 @@ function toBlob(data) {
   throw new Error("writeToIPFS: unsupported data type");
 }
 
+function sanitizeFileName(name) {
+  return String(name || "asset")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .slice(0, 40) || "asset";
+}
+
+function compressedFilename(filename) {
+  if (!filename) return "asset.bin.gz";
+  return filename.endsWith(".gz") ? filename : `${filename}.gz`;
+}
+
 async function uploadToPinata(blob, filename, credential, attempt = 1) {
   const form = new FormData();
   form.append("file", blob, filename);
@@ -91,12 +103,13 @@ export async function writeToIPFS(
       `[IPFS-WRITE] gzip ${typeof data === "string" ? data.length : data.byteLength ?? data.length} bytes → ${payload.length} bytes`,
     );
   }
+  const finalFilename = options.compress ? compressedFilename(filename) : filename;
   const blob = toBlob(payload);
   const cred = credential || (await getUploadCredential());
-  console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${cred.backend}`);
+  console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${cred.backend} as ${finalFilename}`);
   return cred.backend === "pinata"
-    ? uploadToPinata(blob, filename, cred)
-    : uploadToKubo(blob, filename, cred);
+    ? uploadToPinata(blob, finalFilename, cred)
+    : uploadToKubo(blob, finalFilename, cred);
 }
 
 /**
@@ -105,8 +118,20 @@ export async function writeToIPFS(
  * @param {object} [credential=null] - Optional reusable upload credential.
  * @param {object} [options={}] - Optional write options.
  * @param {boolean} [options.compress=false] - Gzip-compress before uploading.
+ * @param {string} [options.type] - "collection" or anything else; drives default filename.
+ * @param {string} [options.assetId] - Used to build the default filename.
+ * @param {string} [options.filename] - Override the default filename.
  * @returns {Promise<string>}
  */
 export async function writeJSONToIPFS(json, credential = null, options = {}) {
-  return writeToIPFS(JSON.stringify(json), "composite.gltf", credential, options);
+  const { type, assetId, filename, compress } = options;
+  let baseName;
+  if (filename) {
+    baseName = filename;
+  } else if (type === "collection") {
+    baseName = `collect_${sanitizeFileName(assetId || json.asset_id || Date.now())}.json`;
+  } else {
+    baseName = `asset_${sanitizeFileName(assetId || json.asset_id || "composite")}_composite.gltf`;
+  }
+  return writeToIPFS(JSON.stringify(json), baseName, credential, { compress });
 }

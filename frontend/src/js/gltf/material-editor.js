@@ -218,10 +218,18 @@ export function setDoubleSided(material, value) {
  * remain at their original CIDs.
  *
  * @param {object} composite - Modified composite glTF JSON
+ * @param {object} [options] - Optional parameters
+ * @param {string} [options.assetName] - Asset name for IPFS filename
+ * @param {string} [options.assetId] - Asset ID for IPFS filename
  * @returns {Promise<string>} New composite CID
  */
-export async function commitCompositeChanges(composite) {
-  const newCid = await writeJSONToIPFS(composite, null, { compress: true });
+export async function commitCompositeChanges(composite, options = {}) {
+  const { assetName, assetId } = options;
+  const newCid = await writeJSONToIPFS(composite, null, {
+    compress: true,
+    assetId,
+    filename: assetName || assetId ? `${assetName || assetId}_materials.gltf` : undefined,
+  });
   console.log(`[MAT-EDIT] committed → ${newCid}`);
   return newCid;
 }
@@ -232,11 +240,14 @@ export async function commitCompositeChanges(composite) {
  * @param {string} compositeCid - Current composite CID
  * @param {object} meshOverrides - Per-mesh color overrides
  * @param {string} [defaultColor] - Baseline color for all materials
+ * @param {object} [options] - Optional parameters
+ * @param {string} [options.assetName] - Asset name for IPFS filename
+ * @param {string} [options.assetId] - Asset ID for IPFS filename
  * @returns {Promise<{compositeCid: string, modified: number, skipped: number}>}
  */
-export async function editCompositeColors(compositeCid, meshOverrides, defaultColor = null) {
+export async function editCompositeColors(compositeCid, meshOverrides, defaultColor = null, options = {}) {
   const composite = await fetchComposite(compositeCid);
   const stats = applyMeshOverrideColors(composite, meshOverrides, defaultColor);
-  const newCid = await commitCompositeChanges(composite);
+  const newCid = await commitCompositeChanges(composite, options);
   return { compositeCid: newCid, ...stats };
 }

@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import url from "url";
 import fs from "fs";
+import zlib from "zlib";
 
 const Router = express.Router;
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -62,9 +63,37 @@ function sendError(res, status, code, message, details = null) {
 /**
  * Add a payload to the configured storage backend (adds + pins).
  * Returns the CID string.
+ * @param {string|Uint8Array} payload
+ * @param {string} [filename] - Optional filename for storage backends that support it.
  */
-async function addAndPin(payload) {
-  return getStorage().add(payload);
+async function addAndPin(payload, filename) {
+  return getStorage().add(payload, filename);
+}
+
+/**
+ * Decompress gzipped data if needed, otherwise return as-is.
+ * @param {string} data - The raw data from IPFS (might be gzipped)
+ * @returns {Promise<string>} Decompressed string if gzipped, original string otherwise
+ */
+async function maybeDecompress(data) {
+  // Check if data starts with gzip magic number (0x1f 0x8b)
+  if (
+    data &&
+    data.length > 2 &&
+    data.charCodeAt(0) === 0x1f &&
+    data.charCodeAt(1) === 0x8b
+  ) {
+    try {
+      const buffer = Buffer.from(data, "utf-8");
+      const decompressed = zlib.gunzipSync(buffer);
+      return decompressed.toString("utf-8");
+    } catch (e) {
+      console.warn("[DECOMPRESS] failed to decompress data:", e.message);
+      // If decompression fails, return original data
+      return data;
+    }
+  }
+  return data;
 }
 
 // ─── Thumbnail Helpers ──────────────────────────────────────────────────────
@@ -103,8 +132,14 @@ async function persistEmbeddedThumbnail(manifest) {
     console.log(
       `[IPFS] add thumbnail | size=${buffer.length} bytes mime=${mime}`,
     );
-    const thumbnailCid = await getStorage().add(buffer);
+    const assetName =
+      (manifest.name || manifest.asset_id || "asset")
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "_")
+        .slice(0, 40) || "asset";
     const format = thumbnailExtension(mime);
+    const thumbnailFilename = `${assetName}_thumbnail.${format}`;
+    const thumbnailCid = await getStorage().add(buffer, thumbnailFilename);
     manifest.thumbnail = {
       type: "snapshot",
       cid: thumbnailCid,
@@ -249,9 +284,15 @@ export default () => {
         }
       }
 
-      const resultCid = await addAndPin(JSON.stringify(manifest));
+      const manifestFilename = isCollection
+        ? `collect_${manifest.asset_id || Date.now()}.json`
+        : `asset_${manifest.asset_id || Date.now()}.json`;
+      const resultCid = await addAndPin(
+        JSON.stringify(manifest),
+        manifestFilename,
+      );
       console.log(
-        `[SAVE] asset_id=${manifest.asset_id} type=${manifest.type || "asset"} version=${manifest.version} ${isCollection ? `assets=${Object.keys(manifest.assets).length}` : `nodes=${manifest.scene.nodes.length}`} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} → cid=${resultCid}`,
+        `[SAVE] asset_id=${manifest.asset_id} type=${manifest.type || "asset"} version=${manifest.version} ${isCollection ? `assets=${Object.keys(manifest.assets).length}` : `nodes=${manifest.scene.nodes.length}`} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} filename=${manifestFilename} → cid=${resultCid}`,
       );
 
       res.status(201).json({
@@ -272,10 +313,14 @@ export default () => {
       await persistEmbeddedThumbnail(manifest);
 
       const payload = JSON.stringify(manifest);
+      const isCollection = manifest.type === "collection";
+      const manifestFilename = isCollection
+        ? `collect_${manifest.asset_id || Date.now()}.json`
+        : `asset_${manifest.asset_id || Date.now()}.json`;
       console.log(
-        `[IPFS] publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"}`,
+        `[IPFS] publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"} filename=${manifestFilename}`,
       );
-      const resultCid = await addAndPin(payload);
+      const resultCid = await addAndPin(payload, manifestFilename);
       console.log(`[IPFS] publish → ${resultCid}`);
 
       res.status(200).json({ cid: resultCid });
@@ -316,7 +361,8 @@ export default () => {
 
         try {
           const raw = await getStorage().cat(currentCid);
-          const manifest = JSON.parse(raw);
+          const decompressed = await maybeDecompress(raw);
+          const manifest = JSON.parse(decompressed);
           const nodes = getSceneNodes(manifest);
           const timestamp = manifest.timestamp || null;
 
@@ -404,7 +450,8 @@ export default () => {
 
       console.log(`[TOKEN] token ${tokenId} → CID ${manifestCid}`);
       const raw = await getStorage().cat(manifestCid);
-      const manifest = JSON.parse(raw);
+      const decompressed = await maybeDecompress(raw);
+      const manifest = JSON.parse(decompressed);
 
       res.json({ tokenId, manifestCid, manifest });
     } catch (error) {
@@ -552,7 +599,8 @@ export default () => {
     if (!cid || cids.has(`__json_failed_${cid}`)) return;
     try {
       const raw = await getStorage().cat(cid);
-      const json = JSON.parse(raw);
+      const decompressed = await maybeDecompress(raw);
+      const json = JSON.parse(decompressed);
       extractIpfsCids(json, cids);
     } catch (e) {
       // Not a JSON object (e.g., raw buffer/image) — nothing to recurse into.
@@ -600,7 +648,8 @@ export default () => {
         let manifest;
         try {
           const raw = await getStorage().cat(currentCid);
-          manifest = JSON.parse(raw);
+          const decompressed = await maybeDecompress(raw);
+          manifest = JSON.parse(decompressed);
         } catch (e) {
           console.warn(`[UNPIN] cannot read ${currentCid}: ${e.message}`);
           errors.push(`read ${currentCid}: ${e.message}`);
@@ -751,7 +800,10 @@ export default () => {
   api.use("/v1", v1);
 
   // Expose for test helpers
-  api._getFromIPFS = async (cid) => getStorage().cat(cid);
+  api._getFromIPFS = async (cid) => {
+    const raw = await getStorage().cat(cid);
+    return maybeDecompress(raw);
+  };
 
   return api;
 };

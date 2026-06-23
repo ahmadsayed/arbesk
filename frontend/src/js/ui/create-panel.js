@@ -75,7 +75,7 @@ if (providerKeyToggle && providerKeyInput) {
     providerKeyInput.type = hidden ? "text" : "password";
     providerKeyToggle.setAttribute(
       "aria-label",
-      hidden ? "Hide API key" : "Show API key",
+      hidden ? "Hide API key" : "Show API key"
     );
     providerKeyToggle.textContent = hidden ? "Hide" : "Show";
   });

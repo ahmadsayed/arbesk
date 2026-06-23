@@ -117,7 +117,11 @@ async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
     throw new Error("Current wallet is not an editor of this token");
   }
 
-  const listCid = await writeJSONToIPFS(newEditors);
+  const listCid = await writeJSONToIPFS(newEditors, null, {
+    compress: true,
+    type: "editors",
+    assetId: `token_${tokenId}_v${nextVersion}`,
+  });
   _saveEditorListLocally(tokenId, newEditors, listCid);
 
   const txHash = await updateEditors(

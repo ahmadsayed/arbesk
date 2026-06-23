@@ -18,6 +18,13 @@ import { editSourceColors as editSourceColorsMain } from "./source-color-editor.
 const WORKER_BUFFER_PREFIX = "__worker_buffer_";
 const WORKER_IMAGE_PREFIX = "__worker_image_";
 
+function sanitizeAsyncName(name) {
+  return String(name || "asset")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .slice(0, 40) || "asset";
+}
+
 let workerAvailable = null;
 
 async function checkWorkerAvailable() {
@@ -163,7 +170,8 @@ export async function decomposeGlTFAsync(gltfJson) {
  * @param {object} gltfJson
  * @returns {Promise<{composite: object, compositeCid: string}>}
  */
-export async function decomposeAndStoreAsync(gltfJson) {
+export async function decomposeAndStoreAsync(gltfJson, options = {}) {
+  const { assetName, assetId } = options;
   const credential = await getUploadCredential();
   const reusableCredential = credential?.reusable ? credential : null;
 
@@ -173,6 +181,8 @@ export async function decomposeAndStoreAsync(gltfJson) {
       await uploadExtractedAssets(composite, buffers, images, reusableCredential);
       const compositeCid = await writeJSONToIPFS(composite, reusableCredential, {
         compress: true,
+        assetId,
+        filename: assetName || assetId ? `${sanitizeAsyncName(assetName || assetId)}_composite.gltf` : undefined,
       });
       const bundleCid = await assembleBundle(composite, buffers, images);
       return { composite, compositeCid, bundleCid };
@@ -181,7 +191,7 @@ export async function decomposeAndStoreAsync(gltfJson) {
     }
   }
 
-  const result = await decomposeAndStoreMain(gltfJson, reusableCredential);
+  const result = await decomposeAndStoreMain(gltfJson, reusableCredential, { compress: true, assetName, assetId });
   // Main-thread fallback has no extracted bytes array; skip bundling there.
   return { ...result, bundleCid: null };
 }
@@ -194,7 +204,8 @@ export async function decomposeAndStoreAsync(gltfJson) {
  * @param {boolean} [storeComposite=true]
  * @returns {Promise<{composite: object, compositeCid: string|null}>}
  */
-export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
+export async function decomposeGLBAsync(arrayBuffer, storeComposite = true, options = {}) {
+  const { assetName, assetId } = options;
   if (!arrayBuffer) throw new Error("decomposeGLBAsync: arrayBuffer is required");
 
   const credential = await getUploadCredential();
@@ -217,6 +228,8 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
       if (storeComposite) {
         compositeCid = await writeJSONToIPFS(composite, reusableCredential, {
           compress: true,
+          assetId,
+          filename: assetName || assetId ? `${sanitizeAsyncName(assetName || assetId)}_composite.gltf` : undefined,
         });
         bundleCid = await assembleBundle(composite, buffers, images);
       }
@@ -226,7 +239,7 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
     }
   }
 
-  const result = await decomposeGLBMain(arrayBuffer, undefined, { storeComposite, credential: reusableCredential });
+  const result = await decomposeGLBMain(arrayBuffer, undefined, { storeComposite, credential: reusableCredential, compress: true, assetName, assetId });
   return { ...result, bundleCid: null };
 }
 
@@ -236,9 +249,13 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
  *
  * @param {string} sourceCid
  * @param {object} nodeColors
+ * @param {object} [options] - Optional parameters
+ * @param {string} [options.assetName] - Asset name for IPFS filename
+ * @param {string} [options.assetId] - Asset ID for IPFS filename
  * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
  */
-export async function editSourceColorsAsync(sourceCid, nodeColors) {
+export async function editSourceColorsAsync(sourceCid, nodeColors, options = {}) {
+  const { assetName, assetId } = options;
   if (!sourceCid) throw new Error("editSourceColorsAsync: sourceCid is required");
   if (!nodeColors || Object.keys(nodeColors).length === 0) {
     return { sourceCid, modified: 0, skipped: 0 };
@@ -268,7 +285,11 @@ export async function editSourceColorsAsync(sourceCid, nodeColors) {
         nodeColors,
       }]);
       gltf = result.bakedJson;
-      const newCid = await writeJSONToIPFS(gltf, null, { compress: true });
+      const newCid = await writeJSONToIPFS(gltf, null, {
+        compress: true,
+        assetId,
+        filename: assetName || assetId ? `${assetName || assetId}_colored.gltf` : undefined,
+      });
       const out = { sourceCid: newCid, format: "gltf", modified: result.modified, skipped: result.skipped };
       if (decomposedFromGlb) out.path = "composite.gltf";
       return out;
@@ -277,7 +298,7 @@ export async function editSourceColorsAsync(sourceCid, nodeColors) {
     }
   }
 
-  return editSourceColorsMain(sourceCid, nodeColors);
+  return editSourceColorsMain(sourceCid, nodeColors, options);
 }
 
 export { isComposite };

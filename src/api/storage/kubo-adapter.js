@@ -8,12 +8,13 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
   return {
     backend: "kubo",
 
-    async add(payload) {
-      const { cid } = await ipfs.add(payload);
+    async add(payload, filename) {
+      const options = filename ? { filename } : {};
+      const { cid } = await ipfs.add(payload, options);
       const cidStr = cid.toString();
       try {
         await ipfs.pin.add(cidStr);
-        console.log(`[IPFS] pinned → ${cidStr}`);
+        console.log(`[IPFS] pinned → ${cidStr} (${filename || "default name"})`);
       } catch (e) {
         console.warn(`[IPFS] pin failed (non-fatal): ${e.message}`);
       }

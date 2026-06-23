@@ -350,7 +350,9 @@ async function applyEditorSetChange(tokenId, currentList, newList) {
   try {
     const json = JSON.stringify(newList);
     const blob = new Blob([json], { type: "application/json" });
-    newCid = await writeToIPFS(blob, "editor-list.json");
+    newCid = await writeToIPFS(blob, `editors_token_${tokenId}_v${nextVersion}.json`, null, {
+      compress: true,
+    });
   } catch (e) {
     console.warn("Failed to store editor list on IPFS:", e.message);
   }

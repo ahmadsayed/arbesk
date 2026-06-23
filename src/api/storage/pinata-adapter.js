@@ -9,10 +9,10 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
   return {
     backend: "pinata",
 
-    async add(payload) {
-      const file = new File([payload], "upload.bin");
+    async add(payload, filename) {
+      const file = new File([payload], filename || "upload.bin");
       const { cid } = await pinata.upload.public.file(file);
-      console.log(`[IPFS] pinata add → ${cid}`);
+      console.log(`[IPFS] pinata add → ${cid} (${filename || "upload.bin"})`);
       return cid;
     },
 

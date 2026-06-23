@@ -19,6 +19,13 @@ const IPFS_URI_PREFIX = "ipfs://";
 
 const _io = new WebIO();
 
+function sanitizeFileName(name) {
+  return String(name || "asset")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .slice(0, 40) || "asset";
+}
+
 /**
  * Check if an ArrayBuffer looks like a GLB v2 container.
  */
@@ -296,7 +303,11 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
     storeComposite = true,
     credential = null,
     compress = true,
+    assetName,
+    assetId,
   } = options;
+
+  const baseName = sanitizeFileName(assetName || assetId);
 
   const { json, binaryChunk } = await parseGLB(arrayBuffer);
   const composite = JSON.parse(JSON.stringify(json));
@@ -377,7 +388,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
     }
 
     const ext = extFromMimeType(mimeType);
-    const filename = `texture_${i}.${ext}`;
+    const filename = `${baseName}_texture_${i}.${ext}`;
     const cid = await writeBytes(writer, bytes, filename, credential, { compress });
     const newImg = { ...img, uri: IPFS_URI_PREFIX + cid };
     delete newImg.bufferView;
@@ -428,7 +439,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
       continue;
     }
 
-    const filename = `buffer_${i}.bin`;
+    const filename = `${baseName}_buffer_${i}.bin`;
     const cid = await writeBytes(writer, bytes, filename, credential, { compress });
     buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
     stats.buffers++;
@@ -443,8 +454,8 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   let compositeCid = null;
   if (storeComposite) {
     compositeCid = await (writer
-      ? writeBytes(writer, JSON.stringify(composite), "composite.gltf", null, { compress })
-      : writeJSONToIPFS(composite, credential, { compress }));
+      ? writeBytes(writer, JSON.stringify(composite), `${baseName}_composite.gltf`, null, { compress })
+      : writeJSONToIPFS(composite, credential, { compress, assetId, filename: `${baseName}_composite.gltf` }));
     console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
   } else {
     console.log(`[GLB-DECOMPOSE] composite not stored (caller writes its own)`);

@@ -140,9 +140,13 @@ export function applyNodeColors(gltf, nodeColors) {
  *
  * @param {string} sourceCid — Current source CID
  * @param {object} nodeColors — { "nodeName": "#RRGGBB", ... }
+ * @param {object} [options] — Optional parameters
+ * @param {string} [options.assetName] — Asset name for IPFS filename
+ * @param {string} [options.assetId] — Asset ID for IPFS filename
  * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
  */
-export async function editSourceColors(sourceCid, nodeColors) {
+export async function editSourceColors(sourceCid, nodeColors, options = {}) {
+  const { assetName, assetId } = options;
   if (!sourceCid) throw new Error("editSourceColors: sourceCid is required");
   if (!nodeColors || Object.keys(nodeColors).length === 0) {
     return { sourceCid, modified: 0, skipped: 0 };
@@ -172,7 +176,11 @@ export async function editSourceColors(sourceCid, nodeColors) {
 
   const stats = applyNodeColors(gltf, nodeColors);
 
-  const newCid = await writeJSONToIPFS(gltf, null, { compress: true });
+  const newCid = await writeJSONToIPFS(gltf, null, {
+    compress: true,
+    assetId,
+    filename: assetName || assetId ? `${assetName || assetId}_colored.gltf` : undefined,
+  });
 
   console.log(`[SRC-COLOR] source ${sourceCid} → ${newCid} | modified=${stats.modified} skipped=${stats.skipped}`);
 

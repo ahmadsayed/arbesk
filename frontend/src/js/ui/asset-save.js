@@ -21,6 +21,7 @@ import { getContractAddress } from "../blockchain/network-config.js";
 import { showDialog } from "./dialog.js";
 import {
   clearScene,
+  loadAssetManifest,
   captureAssetThumbnail,
   dismissCreatePulse,
   getPendingChildRefs,
@@ -95,6 +96,7 @@ function updateAssetStatus(name, meta) {
 function updateButtonState() {
   const hasAsset =
     !!assetState.get().activeAssetManifestCid ||
+    !!assetState.get().generatedAsset ||
     getPendingChildRefs().length > 0;
   const hasWallet = !!walletState.get().walletAddress;
   const visible = hasAsset && hasWallet;
@@ -110,8 +112,6 @@ function updateButtonState() {
   if (publishBtn) {
     publishBtn.title = "Besk it: publish this asset";
   }
-
-
 }
 
 async function fetchAssetName(tokenId) {
@@ -281,7 +281,14 @@ async function decomposeManifestNodes(manifest) {
     try {
       if (format === "glb") {
         const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-        const { compositeCid, bundleCid } = await decomposeGLBAsync(glbBuffer);
+        const { compositeCid, bundleCid } = await decomposeGLBAsync(
+          glbBuffer,
+          true,
+          {
+            assetName: manifest.name,
+            assetId: manifest.asset_id,
+          }
+        );
 
         node.source.cid = compositeCid;
         node.source.path = "composite.gltf";
@@ -289,7 +296,11 @@ async function decomposeManifestNodes(manifest) {
         if (bundleCid) node.source.bundleCid = bundleCid;
         decomposed++;
         console.log(
-          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
+          `Decompose save: node ${
+            node.node_id
+          } GLB decomposed | old=${cid} new=${compositeCid} bundle=${
+            bundleCid || "none"
+          }`
         );
         continue;
       }
@@ -311,7 +322,10 @@ async function decomposeManifestNodes(manifest) {
       }
 
       // Decompose and store
-      const { compositeCid, bundleCid } = await decomposeAndStoreAsync(gltf);
+      const { compositeCid, bundleCid } = await decomposeAndStoreAsync(gltf, {
+        assetName: manifest.name,
+        assetId: manifest.asset_id,
+      });
 
       // Update the node's source to point to the composite
       node.source.cid = compositeCid;
@@ -319,7 +333,11 @@ async function decomposeManifestNodes(manifest) {
       if (bundleCid) node.source.bundleCid = bundleCid;
       decomposed++;
       console.log(
-        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
+        `Decompose save: node ${
+          node.node_id
+        } decomposed | old=${cid} new=${compositeCid} bundle=${
+          bundleCid || "none"
+        }`
       );
     } catch (err) {
       if (isRateLimitError(err)) throw err;
@@ -375,10 +393,70 @@ async function prepareManifestForWrite(assetName) {
   const pendingPP = getPendingPostProcessorEdits();
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
+  const generatedAsset = assetState.get().generatedAsset;
 
   if (assetState.get().activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
     manifest.type = "asset";
+  } else if (generatedAsset) {
+    // Handle generated asset - run through decompose → compress → upload pipeline
+    console.log(
+      "[SAVE] Processing generated asset through decompose → compress → upload"
+    );
+
+    const { decomposeAndStoreAsync, decomposeGLBAsync } = await import(
+      "../gltf/async-gltf.js"
+    );
+
+    // Convert base64 back to binary
+    const binaryString = atob(generatedAsset.assetData);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    let decomposedResult;
+    if (generatedAsset.assetFormat === "glb") {
+      const arrayBuffer = bytes.buffer;
+      decomposedResult = await decomposeGLBAsync(arrayBuffer, true, {
+        assetName: generatedAsset.assetName,
+        assetId: `asset_${Date.now()}`,
+      });
+    } else {
+      const gltfJson = JSON.parse(new TextDecoder().decode(bytes));
+      decomposedResult = await decomposeAndStoreAsync(gltfJson, {
+        assetName: generatedAsset.assetName,
+        assetId: `asset_${Date.now()}`,
+      });
+    }
+
+    // Create manifest with decomposed source
+    manifest = {
+      type: "asset",
+      name: assetName || generatedAsset.assetName,
+      asset_id: `asset_${Date.now()}`,
+      version: 1,
+      timestamp: Date.now(),
+      scene: {
+        nodes: [
+          {
+            node_id: generatedAsset.nodeId,
+            name: assetName || generatedAsset.assetName,
+            type: "source_asset",
+            source: {
+              cid: decomposedResult.compositeCid,
+              format: "gltf",
+              path: "composite.gltf",
+            },
+            post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
+          },
+        ],
+      },
+    };
+
+    console.log(
+      `[SAVE] Generated asset decomposed → ${decomposedResult.compositeCid}`
+    );
   } else if (
     pendingRefs.length > 0 ||
     pendingPP.size > 0 ||
@@ -424,7 +502,10 @@ async function prepareManifestForWrite(assetName) {
       }
 
       try {
-        const result = await editSourceColorsAsync(node.source.cid, colorMap);
+        const result = await editSourceColorsAsync(node.source.cid, colorMap, {
+          assetName: manifest.name,
+          assetId: manifest.asset_id,
+        });
         node.source.cid = result.sourceCid;
         // The edited source is always glTF JSON now; keep the node's
         // format/path truthful so the loader doesn't treat it as a binary GLB.
@@ -464,7 +545,11 @@ async function prepareManifestForWrite(assetName) {
           const result = await editCompositeColors(
             node.source.cid,
             pp.meshOverrides || null,
-            pp.color || null
+            pp.color || null,
+            {
+              assetName: manifest.name,
+              assetId: manifest.asset_id,
+            }
           );
           node.source.cid = result.compositeCid;
           // Composite JSON changed via a color bake; drop the stale bundle.
@@ -617,7 +702,13 @@ async function saveAssetDraftCore(
   }
 
   const { cid } = await saveManifest(prepared.manifest, { publishContext });
-  assetState.set({ latestAssetManifestCid: cid, activeAssetManifestCid: cid });
+  const wasGenerated = !!assetState.get().generatedAsset;
+
+  assetState.set({
+    latestAssetManifestCid: cid,
+    activeAssetManifestCid: cid,
+    generatedAsset: null, // Clear generated asset after successful save
+  });
 
   clearPendingChildRefs();
   clearPendingPostProcessorEdits();
@@ -629,6 +720,7 @@ async function saveAssetDraftCore(
     cid,
     manifest: prepared.manifest,
     prevCid: prepared.prevCid,
+    wasGenerated,
   };
 }
 
@@ -666,13 +758,19 @@ async function onSaveAssetDraft() {
       return;
     }
 
-    const { cid } = result;
+    const { cid, wasGenerated } = result;
 
     // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
     // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
     // stashing a draft manifest in query params.
     if (!assetState.get().activeAssetTokenId) {
       updateUrlManifest(cid);
+    }
+
+    // For generated assets (simplified flow), the scene is empty until
+    // the first save creates the manifest. Load it now.
+    if (wasGenerated) {
+      await loadAssetManifest(cid);
     }
 
     emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
@@ -767,7 +865,7 @@ async function onPublishAsset() {
       return;
     }
 
-    const { cid: assetCid, manifest: publishedManifest } = result;
+    const { cid: assetCid, manifest: publishedManifest, wasGenerated } = result;
 
     // Use the manifest's own asset_id as the collection key for new assets;
     // it is generated from Date.now() at creation time and is unique per draft.
@@ -777,6 +875,10 @@ async function onPublishAsset() {
       publishedManifest?.asset_id || `asset_${Date.now()}`
     );
     assetState.set({ activeAssetId: assetID });
+    // For generated assets (simplified flow), load the newly-created manifest.
+    if (wasGenerated) {
+      await loadAssetManifest(assetCid);
+    }
 
     announceStatus("Confirm transaction in MetaMask…");
     const walletAddr = walletState.get().walletAddress;
@@ -973,6 +1075,7 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
   if (saveBtn) saveBtn.hidden = true;
   if (publishBtn) publishBtn.hidden = true;
 });
+on(EVENTS.ASSET_STATE_CHANGED, updateButtonState);
 
 // ── Merkle Editor Helpers ──
 
