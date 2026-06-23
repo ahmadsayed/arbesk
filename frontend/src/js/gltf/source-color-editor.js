@@ -172,7 +172,7 @@ export async function editSourceColors(sourceCid, nodeColors) {
 
   const stats = applyNodeColors(gltf, nodeColors);
 
-  const newCid = await writeJSONToIPFS(gltf);
+  const newCid = await writeJSONToIPFS(gltf, null, { compress: true });
 
   console.log(`[SRC-COLOR] source ${sourceCid} → ${newCid} | modified=${stats.modified} skipped=${stats.skipped}`);
 

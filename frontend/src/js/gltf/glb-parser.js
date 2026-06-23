@@ -163,9 +163,15 @@ function extFromMimeType(mimeType) {
 /**
  * Write bytes to IPFS using the provided writer or the default project writer.
  */
-async function writeBytes(writer, bytes, filename, credential = null) {
+async function writeBytes(
+  writer,
+  bytes,
+  filename,
+  credential = null,
+  options = {},
+) {
   if (writer) return writer(bytes, filename);
-  return writeToIPFS(bytes, filename, credential);
+  return writeToIPFS(bytes, filename, credential, options);
 }
 
 /**
@@ -286,47 +292,38 @@ export function serializeGLB(json, binaryChunk = null) {
  */
 export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
-  const { storeComposite = true, credential = null } = options;
+  const {
+    storeComposite = true,
+    credential = null,
+    compress = true,
+  } = options;
 
   const { json, binaryChunk } = await parseGLB(arrayBuffer);
   const composite = JSON.parse(JSON.stringify(json));
   const stats = { buffers: 0, images: 0, bytesTotal: 0 };
 
-  // Resolve each buffer to bytes and upload to IPFS.
+  // Resolve each buffer to bytes, but don't upload yet — images may be
+  // extracted from bufferViews and pruned before the final buffer CID is written.
   const bufferBytesByIndex = [];
   const buffers = composite.buffers || [];
 
   for (let i = 0; i < buffers.length; i++) {
     const buf = buffers[i];
-
-    // Already composite
-    if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) {
-      stats.buffers++;
-      continue;
-    }
-
-    // External URI — keep as-is
-    if (buf.uri && !buf.uri.startsWith("data:")) {
-      console.log(`[GLB-DECOMPOSE] buffer[${i}] external URI, keeping as-is`);
+    if (
+      buf.uri &&
+      (buf.uri.startsWith(IPFS_URI_PREFIX) || !buf.uri.startsWith("data:"))
+    ) {
       continue;
     }
 
     const bytes = resolveBufferBytes(buf, binaryChunk);
-    if (!bytes) {
-      console.warn(`[GLB-DECOMPOSE] buffer[${i}] could not be resolved, skipping`);
-      continue;
+    if (bytes) {
+      bufferBytesByIndex[i] = bytes;
     }
-
-    const filename = `buffer_${i}.bin`;
-    const cid = await writeBytes(writer, bytes, filename, credential);
-    buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-    bufferBytesByIndex[i] = bytes;
-    stats.buffers++;
-    stats.bytesTotal += bytes.length;
-    console.log(`[GLB-DECOMPOSE] buffer[${i}] → ipfs://${cid} (${bytes.length} bytes)`);
   }
 
-  // Extract images to IPFS.
+  // Extract images to IPFS and record buffer ranges that can be pruned.
+  const imageRemovalsByBuffer = new Map();
   const images = composite.images || [];
   for (let i = 0; i < images.length; i++) {
     const img = images[i];
@@ -381,14 +378,62 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
 
     const ext = extFromMimeType(mimeType);
     const filename = `texture_${i}.${ext}`;
-    const cid = await writeBytes(writer, bytes, filename, credential);
-    images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
-    if (mimeType && !images[i].mimeType) {
-      images[i].mimeType = mimeType;
+    const cid = await writeBytes(writer, bytes, filename, credential, { compress });
+    const newImg = { ...img, uri: IPFS_URI_PREFIX + cid };
+    delete newImg.bufferView;
+    if (mimeType && !newImg.mimeType) {
+      newImg.mimeType = mimeType;
     }
+    images[i] = newImg;
     stats.images++;
     stats.bytesTotal += bytes.length;
     console.log(`[GLB-DECOMPOSE] image[${i}] → ipfs://${cid} (${bytes.length} bytes)`);
+
+    if (img.bufferView !== undefined) {
+      const bv = composite.bufferViews[img.bufferView];
+      const list = imageRemovalsByBuffer.get(bv.buffer) || [];
+      list.push({
+        oldBvIndex: img.bufferView,
+        start: bv.byteOffset || 0,
+        end: (bv.byteOffset || 0) + bv.byteLength,
+      });
+      imageRemovalsByBuffer.set(bv.buffer, list);
+    }
+  }
+
+  // Remove extracted image bytes from the buffer(s) so we don't store them twice.
+  if (imageRemovalsByBuffer.size > 0) {
+    pruneBufferImageData(composite, bufferBytesByIndex, imageRemovalsByBuffer);
+  }
+
+  // Upload the (possibly pruned) buffers to IPFS.
+  for (let i = 0; i < buffers.length; i++) {
+    const buf = buffers[i];
+
+    // Already composite
+    if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) {
+      stats.buffers++;
+      continue;
+    }
+
+    // External URI — keep as-is
+    if (buf.uri && !buf.uri.startsWith("data:")) {
+      console.log(`[GLB-DECOMPOSE] buffer[${i}] external URI, keeping as-is`);
+      continue;
+    }
+
+    const bytes = bufferBytesByIndex[i];
+    if (!bytes) {
+      console.warn(`[GLB-DECOMPOSE] buffer[${i}] could not be resolved, skipping`);
+      continue;
+    }
+
+    const filename = `buffer_${i}.bin`;
+    const cid = await writeBytes(writer, bytes, filename, credential, { compress });
+    buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
+    stats.buffers++;
+    stats.bytesTotal += bytes.length;
+    console.log(`[GLB-DECOMPOSE] buffer[${i}] → ipfs://${cid} (${bytes.length} bytes)`);
   }
 
   console.log(
@@ -398,12 +443,155 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   let compositeCid = null;
   if (storeComposite) {
     compositeCid = await (writer
-      ? writeBytes(writer, JSON.stringify(composite, null, 2), "composite.gltf")
-      : writeJSONToIPFS(composite, credential));
+      ? writeBytes(writer, JSON.stringify(composite), "composite.gltf", null, { compress })
+      : writeJSONToIPFS(composite, credential, { compress }));
     console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
   } else {
     console.log(`[GLB-DECOMPOSE] composite not stored (caller writes its own)`);
   }
 
   return { composite, compositeCid };
+}
+
+/**
+ * Remove image byte ranges from GLB buffers after the images have been extracted
+ * to separate IPFS objects. Updates bufferViews, accessors, and buffer byteLength
+ * so geometry data is preserved and we don't store the image bytes twice.
+ */
+function pruneBufferImageData(composite, bufferBytesByIndex, removalsByBuffer) {
+  const allRemovedIndices = new Set();
+  for (const list of removalsByBuffer.values()) {
+    for (const r of list) allRemovedIndices.add(r.oldBvIndex);
+  }
+
+  // Collect bufferViews referenced by accessors or mesh extensions so we don't
+  // corrupt geometry by pruning a range that is still needed.
+  const referenced = new Set();
+  for (const acc of composite.accessors || []) {
+    if (acc.bufferView !== undefined) referenced.add(acc.bufferView);
+    if (acc.sparse?.indices?.bufferView !== undefined) {
+      referenced.add(acc.sparse.indices.bufferView);
+    }
+    if (acc.sparse?.values?.bufferView !== undefined) {
+      referenced.add(acc.sparse.values.bufferView);
+    }
+  }
+  for (const mesh of composite.meshes || []) {
+    for (const prim of mesh.primitives || []) {
+      const draco = prim.extensions?.KHR_draco_mesh_compression;
+      if (draco?.bufferView !== undefined) referenced.add(draco.bufferView);
+    }
+  }
+
+  const indicesToRemove = new Set();
+  for (const idx of allRemovedIndices) {
+    if (referenced.has(idx)) {
+      console.warn(
+        `[GLB-DECOMPOSE] bufferView ${idx} is also referenced by accessors/extensions, not pruning`
+      );
+    } else {
+      indicesToRemove.add(idx);
+    }
+  }
+
+  if (indicesToRemove.size === 0) return;
+
+  const oldBufferViews = composite.bufferViews || [];
+  const newBufferViews = [];
+  const mapping = new Map();
+  for (let i = 0; i < oldBufferViews.length; i++) {
+    if (indicesToRemove.has(i)) continue;
+    mapping.set(i, newBufferViews.length);
+    newBufferViews.push(oldBufferViews[i]);
+  }
+  composite.bufferViews = newBufferViews;
+
+  // Renumber all remaining bufferView references.
+  for (const acc of composite.accessors || []) {
+    if (acc.bufferView !== undefined) acc.bufferView = mapping.get(acc.bufferView);
+    if (acc.sparse?.indices?.bufferView !== undefined) {
+      acc.sparse.indices.bufferView = mapping.get(acc.sparse.indices.bufferView);
+    }
+    if (acc.sparse?.values?.bufferView !== undefined) {
+      acc.sparse.values.bufferView = mapping.get(acc.sparse.values.bufferView);
+    }
+  }
+  for (const mesh of composite.meshes || []) {
+    for (const prim of mesh.primitives || []) {
+      const draco = prim.extensions?.KHR_draco_mesh_compression;
+      if (draco?.bufferView !== undefined) {
+        draco.bufferView = mapping.get(draco.bufferView);
+      }
+    }
+  }
+
+  for (const [bufferIndex, removals] of removalsByBuffer) {
+    const bytes = bufferBytesByIndex[bufferIndex];
+    if (!bytes) continue;
+
+    const relevant = removals.filter((r) => indicesToRemove.has(r.oldBvIndex));
+    if (relevant.length === 0) continue;
+
+    relevant.sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const r of relevant) {
+      if (merged.length === 0 || r.start > merged[merged.length - 1].end) {
+        merged.push({ start: r.start, end: r.end });
+      } else {
+        merged[merged.length - 1].end = Math.max(
+          merged[merged.length - 1].end,
+          r.end
+        );
+      }
+    }
+
+    // Abort if a remaining bufferView overlaps a range we want to prune.
+    let abort = false;
+    for (const bv of composite.bufferViews) {
+      if (bv.buffer !== bufferIndex) continue;
+      const start = bv.byteOffset || 0;
+      const end = start + bv.byteLength;
+      for (const r of merged) {
+        if (end <= r.start || start >= r.end) continue;
+        console.warn(
+          `[GLB-DECOMPOSE] buffer ${bufferIndex}: remaining bufferView overlaps pruned image range, aborting prune`
+        );
+        abort = true;
+        break;
+      }
+      if (abort) break;
+    }
+    if (abort) continue;
+
+    // Build the new, smaller buffer bytes.
+    const parts = [];
+    let last = 0;
+    for (const r of merged) {
+      if (r.start > last) parts.push(bytes.subarray(last, r.start));
+      last = r.end;
+    }
+    if (last < bytes.length) parts.push(bytes.subarray(last));
+
+    const newLength = parts.reduce((sum, p) => sum + p.length, 0);
+    const newBytes = new Uint8Array(newLength);
+    let pos = 0;
+    for (const p of parts) {
+      newBytes.set(p, pos);
+      pos += p.length;
+    }
+
+    // Adjust byteOffset for every remaining bufferView that uses this buffer.
+    for (const bv of composite.bufferViews) {
+      if (bv.buffer !== bufferIndex) continue;
+      const oldOffset = bv.byteOffset || 0;
+      let adjustment = 0;
+      for (const r of merged) {
+        if (r.end <= oldOffset) adjustment += r.end - r.start;
+      }
+      bv.byteOffset = oldOffset - adjustment;
+    }
+
+    bufferBytesByIndex[bufferIndex] = newBytes;
+    composite.buffers[bufferIndex].byteLength = newBytes.length;
+  }
 }

@@ -10,6 +10,7 @@
  */
 
 import { getConfig } from "../services/api.js";
+import { isGzipped, decompress } from "../utils/compression.js";
 
 const IPFS_CACHE_ENABLED = false; // flip to true to re-enable browser caching
 
@@ -25,7 +26,21 @@ async function gatewayBase() {
   return _gatewayPromise;
 }
 
-async function fetchAndCacheIpfsPayload(cid, kind) {
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Fetch raw bytes from the gateway and transparently gunzip if the payload
+ * was stored compressed. Returns a Uint8Array of the original (uncompressed)
+ * bytes.
+ */
+async function fetchIpfsBytes(cid) {
   const url = `${await gatewayBase()}${cid}`;
   console.log(`[IPFS] get ${url}`);
   const response = await fetch(url, { cache: "no-store" });
@@ -33,24 +48,40 @@ async function fetchAndCacheIpfsPayload(cid, kind) {
     throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
   }
 
-  let payload;
-  if (kind === "blob") {
-    payload = await response.blob();
-  } else {
-    payload = await response.text();
+  const buffer = await response.arrayBuffer();
+  if (isGzipped(buffer)) {
+    const decompressed = decompress(buffer);
+    console.log(
+      `[IPFS] gunzipped ${buffer.byteLength} → ${decompressed.length} bytes`,
+    );
+    return decompressed;
   }
-  return payload;
+  return new Uint8Array(buffer);
+}
+
+async function fetchAndCacheIpfsPayload(cid, kind) {
+  const bytes = await fetchIpfsBytes(cid);
+
+  if (kind === "blob") {
+    return new Blob([bytes]);
+  }
+
+  const text = new TextDecoder().decode(bytes);
+  if (kind === "json") {
+    return JSON.parse(text);
+  }
+  return text;
 }
 
 async function getFromRemoteIPFS(cid) {
-  const text = await fetchAndCacheIpfsPayload(cid, "json");
-  const json = JSON.parse(text);
+  const json = await fetchAndCacheIpfsPayload(cid, "json");
   console.log(`[IPFS] got ${cid} | keys=${Object.keys(json).join(",")}`);
   return json;
 }
 
 async function getBase64FromRemoteIPFS(cid) {
-  return await fetchAndCacheIpfsPayload(cid, "text");
+  const bytes = await fetchIpfsBytes(cid);
+  return arrayBufferToBase64(bytes.buffer);
 }
 
 async function getBlobFromRemoteIPFS(cid) {
@@ -58,13 +89,8 @@ async function getBlobFromRemoteIPFS(cid) {
 }
 
 async function getArrayBufferFromRemoteIPFS(cid) {
-  const url = `${await gatewayBase()}${cid}`;
-  console.log(`[IPFS] getArrayBuffer ${url}`);
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
-  }
-  return await response.arrayBuffer();
+  const bytes = await fetchIpfsBytes(cid);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
 /**

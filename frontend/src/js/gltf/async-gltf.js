@@ -35,12 +35,19 @@ async function checkWorkerAvailable() {
  * @param {object} [credential] - Optional reusable upload credential.
  * @returns {Promise[]} upload promises
  */
-function uploadAndRewrite(items, prefix, targets, credential) {
+function uploadAndRewrite(
+  items,
+  prefix,
+  targets,
+  credential,
+  options = {},
+) {
+  const { compress = true } = options;
   const uploads = [];
   items.forEach((item, idx) => {
     if (item.skip || !item.bytes) return;
     uploads.push(
-      writeToIPFS(item.bytes, item.name, credential).then((cid) => {
+      writeToIPFS(item.bytes, item.name, credential, { compress }).then((cid) => {
         const placeholder = `${prefix}${idx}__`;
         for (const t of targets || []) {
           if (t.uri === placeholder) {
@@ -164,7 +171,9 @@ export async function decomposeAndStoreAsync(gltfJson) {
     try {
       const { composite, buffers, images } = await getGlTFWorkerPool().exec("decomposeGltf", [{ gltfJson }]);
       await uploadExtractedAssets(composite, buffers, images, reusableCredential);
-      const compositeCid = await writeJSONToIPFS(composite, reusableCredential);
+      const compositeCid = await writeJSONToIPFS(composite, reusableCredential, {
+        compress: true,
+      });
       const bundleCid = await assembleBundle(composite, buffers, images);
       return { composite, compositeCid, bundleCid };
     } catch (error) {
@@ -206,7 +215,9 @@ export async function decomposeGLBAsync(arrayBuffer, storeComposite = true) {
       let compositeCid = null;
       let bundleCid = null;
       if (storeComposite) {
-        compositeCid = await writeJSONToIPFS(composite, reusableCredential);
+        compositeCid = await writeJSONToIPFS(composite, reusableCredential, {
+          compress: true,
+        });
         bundleCid = await assembleBundle(composite, buffers, images);
       }
       return { composite, compositeCid, bundleCid };
@@ -257,7 +268,7 @@ export async function editSourceColorsAsync(sourceCid, nodeColors) {
         nodeColors,
       }]);
       gltf = result.bakedJson;
-      const newCid = await writeJSONToIPFS(gltf);
+      const newCid = await writeJSONToIPFS(gltf, null, { compress: true });
       const out = { sourceCid: newCid, format: "gltf", modified: result.modified, skipped: result.skipped };
       if (decomposedFromGlb) out.path = "composite.gltf";
       return out;

@@ -7,6 +7,7 @@
  *   - kubo:   POST multipart to the local Kubo node (E2E/dev fallback)
  */
 import { getUploadCredential } from "../services/api.js";
+import { compress } from "../utils/compression.js";
 
 function toBlob(data) {
   if (data instanceof Blob) return data;
@@ -73,10 +74,24 @@ async function uploadToKubo(blob, filename, credential) {
  * @param {object} [credential=null] - Optional upload credential. When omitted,
  *   a fresh credential is fetched. Callers reusing a credential must ensure it
  *   is marked `reusable` by the backend.
+ * @param {object} [options={}] - Optional write options.
+ * @param {boolean} [options.compress=false] - Gzip-compress before uploading.
  * @returns {Promise<string>}
  */
-export async function writeToIPFS(data, filename = "asset.bin", credential = null) {
-  const blob = toBlob(data);
+export async function writeToIPFS(
+  data,
+  filename = "asset.bin",
+  credential = null,
+  options = {},
+) {
+  let payload = data;
+  if (options.compress) {
+    payload = compress(data);
+    console.log(
+      `[IPFS-WRITE] gzip ${typeof data === "string" ? data.length : data.byteLength ?? data.length} bytes → ${payload.length} bytes`,
+    );
+  }
+  const blob = toBlob(payload);
   const cred = credential || (await getUploadCredential());
   console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${cred.backend}`);
   return cred.backend === "pinata"
@@ -88,8 +103,10 @@ export async function writeToIPFS(data, filename = "asset.bin", credential = nul
  * Write JSON data to IPFS and return its CID.
  * @param {object} json
  * @param {object} [credential=null] - Optional reusable upload credential.
+ * @param {object} [options={}] - Optional write options.
+ * @param {boolean} [options.compress=false] - Gzip-compress before uploading.
  * @returns {Promise<string>}
  */
-export async function writeJSONToIPFS(json, credential = null) {
-  return writeToIPFS(JSON.stringify(json, null, 2), "composite.gltf", credential);
+export async function writeJSONToIPFS(json, credential = null, options = {}) {
+  return writeToIPFS(JSON.stringify(json), "composite.gltf", credential, options);
 }

@@ -221,7 +221,7 @@ export function setDoubleSided(material, value) {
  * @returns {Promise<string>} New composite CID
  */
 export async function commitCompositeChanges(composite) {
-  const newCid = await writeJSONToIPFS(composite);
+  const newCid = await writeJSONToIPFS(composite, null, { compress: true });
   console.log(`[MAT-EDIT] committed → ${newCid}`);
   return newCid;
 }

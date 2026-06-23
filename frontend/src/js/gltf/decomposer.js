@@ -82,9 +82,17 @@ function extractDataURI(uri) {
  * If the glTF is already composite, it is returned as-is.
  *
  * @param {object} gltf - Standard glTF 2.0 JSON (with data-URI buffers/images)
+ * @param {object} [credential=null] - Optional reusable upload credential.
+ * @param {object} [options={}] - Decomposition options.
+ * @param {boolean} [options.compress=true] - Gzip-compress buffers/images before upload.
  * @returns {Promise<object>} Composite glTF JSON with ipfs:// URI references
  */
-export async function decomposeGlTF(gltf, credential = null) {
+export async function decomposeGlTF(
+  gltf,
+  credential = null,
+  options = {},
+) {
+  const { compress = true } = options;
   if (!gltf) throw new Error("decomposeGlTF: gltf is null");
 
   // Already decomposed — nothing to do
@@ -116,7 +124,9 @@ export async function decomposeGlTF(gltf, credential = null) {
       }
 
       const filename = `buffer_${i}.bin`;
-      const cid = await writeToIPFS(extracted.bytes, filename, credential);
+      const cid = await writeToIPFS(extracted.bytes, filename, credential, {
+        compress,
+      });
       composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
       stats.buffers++;
       stats.bytesTotal += extracted.bytes.length;
@@ -150,7 +160,9 @@ export async function decomposeGlTF(gltf, credential = null) {
 
       const ext = extracted.mimeType.split("/")[1] || "bin";
       const filename = `texture_${i}.${ext}`;
-      const cid = await writeToIPFS(extracted.bytes, filename, credential);
+      const cid = await writeToIPFS(extracted.bytes, filename, credential, {
+        compress,
+      });
       composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
       stats.images++;
       stats.bytesTotal += extracted.bytes.length;
@@ -173,10 +185,13 @@ export async function decomposeGlTF(gltf, credential = null) {
  * @param {object} [credential=null] - Optional reusable upload credential.
  * @returns {Promise<{composite: object, compositeCid: string}>}
  */
-export async function decomposeAndStore(gltf, credential = null) {
-  const composite = await decomposeGlTF(gltf, credential);
+export async function decomposeAndStore(gltf, credential = null, options = {}) {
+  const { compress = true } = options;
+  const composite = await decomposeGlTF(gltf, credential, { compress });
   const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.js");
-  const compositeCid = await writeJSONToIPFS(composite, credential);
+  const compositeCid = await writeJSONToIPFS(composite, credential, {
+    compress,
+  });
   console.log(`[DECOMPOSE] composite stored → ${compositeCid}`);
   return { composite, compositeCid };
 }
