@@ -103,27 +103,6 @@ export default function generateAssetNode(storage) {
 
         const assetPayload = result.data || result.buffer;
 
-        // Simplified flow: no storage → return raw base64-encoded data directly.
-        // The frontend will handle decompose → compress → upload on save.
-        if (!storage) {
-          const displayName = prompt
-            ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
-            : nodeId;
-          const base64Data = Buffer.isBuffer(assetPayload)
-            ? assetPayload.toString("base64")
-            : Buffer.from(assetPayload, "utf-8").toString("base64");
-          console.log(
-            `[GEN] simplified — returning raw ${result.format || "gltf"} (${base64Data.length} chars base64)`,
-          );
-          return res.json({
-            nodeId,
-            assetData: base64Data,
-            assetFormat: result.format || "gltf",
-            assetName: displayName,
-            provider: result.provider || "mock",
-          });
-        }
-
         console.log(
           `[IPFS] add source asset | size=${assetPayload?.length || "?"} bytes`,
         );

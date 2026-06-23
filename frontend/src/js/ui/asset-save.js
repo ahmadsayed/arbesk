@@ -21,7 +21,6 @@ import { getContractAddress } from "../blockchain/network-config.js";
 import { showDialog } from "./dialog.js";
 import {
   clearScene,
-  loadAssetManifest,
   captureAssetThumbnail,
   dismissCreatePulse,
   getPendingChildRefs,
@@ -296,11 +295,7 @@ async function decomposeManifestNodes(manifest) {
         if (bundleCid) node.source.bundleCid = bundleCid;
         decomposed++;
         console.log(
-          `Decompose save: node ${
-            node.node_id
-          } GLB decomposed | old=${cid} new=${compositeCid} bundle=${
-            bundleCid || "none"
-          }`
+          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
         );
         continue;
       }
@@ -333,11 +328,7 @@ async function decomposeManifestNodes(manifest) {
       if (bundleCid) node.source.bundleCid = bundleCid;
       decomposed++;
       console.log(
-        `Decompose save: node ${
-          node.node_id
-        } decomposed | old=${cid} new=${compositeCid} bundle=${
-          bundleCid || "none"
-        }`
+        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
       );
     } catch (err) {
       if (isRateLimitError(err)) throw err;
@@ -393,70 +384,10 @@ async function prepareManifestForWrite(assetName) {
   const pendingPP = getPendingPostProcessorEdits();
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
-  const generatedAsset = assetState.get().generatedAsset;
 
   if (assetState.get().activeAssetManifestCid) {
     manifest = await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
     manifest.type = "asset";
-  } else if (generatedAsset) {
-    // Handle generated asset - run through decompose → compress → upload pipeline
-    console.log(
-      "[SAVE] Processing generated asset through decompose → compress → upload"
-    );
-
-    const { decomposeAndStoreAsync, decomposeGLBAsync } = await import(
-      "../gltf/async-gltf.js"
-    );
-
-    // Convert base64 back to binary
-    const binaryString = atob(generatedAsset.assetData);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    let decomposedResult;
-    if (generatedAsset.assetFormat === "glb") {
-      const arrayBuffer = bytes.buffer;
-      decomposedResult = await decomposeGLBAsync(arrayBuffer, true, {
-        assetName: generatedAsset.assetName,
-        assetId: `asset_${Date.now()}`,
-      });
-    } else {
-      const gltfJson = JSON.parse(new TextDecoder().decode(bytes));
-      decomposedResult = await decomposeAndStoreAsync(gltfJson, {
-        assetName: generatedAsset.assetName,
-        assetId: `asset_${Date.now()}`,
-      });
-    }
-
-    // Create manifest with decomposed source
-    manifest = {
-      type: "asset",
-      name: assetName || generatedAsset.assetName,
-      asset_id: `asset_${Date.now()}`,
-      version: 1,
-      timestamp: Date.now(),
-      scene: {
-        nodes: [
-          {
-            node_id: generatedAsset.nodeId,
-            name: assetName || generatedAsset.assetName,
-            type: "source_asset",
-            source: {
-              cid: decomposedResult.compositeCid,
-              format: "gltf",
-              path: "composite.gltf",
-            },
-            post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
-          },
-        ],
-      },
-    };
-
-    console.log(
-      `[SAVE] Generated asset decomposed → ${decomposedResult.compositeCid}`
-    );
   } else if (
     pendingRefs.length > 0 ||
     pendingPP.size > 0 ||
@@ -702,12 +633,10 @@ async function saveAssetDraftCore(
   }
 
   const { cid } = await saveManifest(prepared.manifest, { publishContext });
-  const wasGenerated = !!assetState.get().generatedAsset;
 
   assetState.set({
     latestAssetManifestCid: cid,
     activeAssetManifestCid: cid,
-    generatedAsset: null, // Clear generated asset after successful save
   });
 
   clearPendingChildRefs();
@@ -720,7 +649,6 @@ async function saveAssetDraftCore(
     cid,
     manifest: prepared.manifest,
     prevCid: prepared.prevCid,
-    wasGenerated,
   };
 }
 
@@ -758,19 +686,13 @@ async function onSaveAssetDraft() {
       return;
     }
 
-    const { cid, wasGenerated } = result;
+    const { cid } = result;
 
     // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
     // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
     // stashing a draft manifest in query params.
     if (!assetState.get().activeAssetTokenId) {
       updateUrlManifest(cid);
-    }
-
-    // For generated assets (simplified flow), the scene is empty until
-    // the first save creates the manifest. Load it now.
-    if (wasGenerated) {
-      await loadAssetManifest(cid);
     }
 
     emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
@@ -865,7 +787,7 @@ async function onPublishAsset() {
       return;
     }
 
-    const { cid: assetCid, manifest: publishedManifest, wasGenerated } = result;
+    const { cid: assetCid, manifest: publishedManifest } = result;
 
     // Use the manifest's own asset_id as the collection key for new assets;
     // it is generated from Date.now() at creation time and is unique per draft.
@@ -875,10 +797,6 @@ async function onPublishAsset() {
       publishedManifest?.asset_id || `asset_${Date.now()}`
     );
     assetState.set({ activeAssetId: assetID });
-    // For generated assets (simplified flow), load the newly-created manifest.
-    if (wasGenerated) {
-      await loadAssetManifest(assetCid);
-    }
 
     announceStatus("Confirm transaction in MetaMask…");
     const walletAddr = walletState.get().walletAddress;
