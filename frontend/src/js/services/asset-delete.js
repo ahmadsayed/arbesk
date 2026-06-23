@@ -155,7 +155,7 @@ export async function deleteAssetFromCollection({
   showToast({
     type: "info",
     title: "Asset Deleted",
-    message: `"${assetName || assetId}" removed from collection #${tokenId}.`,
+    message: `"${assetName || assetId}" removed from collection.`,
   });
 
   if (typeof onAfterDelete === "function") {
