@@ -534,13 +534,41 @@ export default () => {
 
   // ─── IPFS Unpin ──────────────────────────────────────────────────────────
 
+  const IPFS_URI_RE = /ipfs:\/\/([a-zA-Z0-9]+)/g;
+
+  function extractIpfsCids(value, cids) {
+    if (typeof value === "string") {
+      for (const match of value.matchAll(IPFS_URI_RE)) {
+        cids.add(match[1]);
+      }
+    } else if (Array.isArray(value)) {
+      for (const item of value) extractIpfsCids(item, cids);
+    } else if (value && typeof value === "object") {
+      for (const v of Object.values(value)) extractIpfsCids(v, cids);
+    }
+  }
+
+  async function collectEmbeddedIpfsCids(cid, cids, errors) {
+    if (!cid || cids.has(`__json_failed_${cid}`)) return;
+    try {
+      const raw = await getStorage().cat(cid);
+      const json = JSON.parse(raw);
+      extractIpfsCids(json, cids);
+    } catch (e) {
+      // Not a JSON object (e.g., raw buffer/image) — nothing to recurse into.
+      errors.push(`read refs from ${cid}: ${e.message}`);
+    }
+  }
+
   /**
    * POST /api/v1/ipfs/unpin
    *
-   * Unpin all IPFS CIDs owned by a manifest chain. Called after token burn.
+   * Unpin all IPFS CIDs owned by a manifest chain. Called after token burn
+   * or asset removal from a collection.
    * Walks prev_asset_manifest_cid backward, collecting manifest CIDs,
-   * source asset CIDs (from every history entry), and thumbnail CIDs,
-   * then unpins them all so they become eligible for garbage collection.
+   * source asset CIDs (and the buffers/images referenced inside them),
+   * thumbnail CIDs, and comments archive CIDs, then unpins them all so
+   * they become eligible for garbage collection.
    *
    * Body: { cid: "baf..." }
    */
@@ -600,6 +628,7 @@ export default () => {
           // Current source CID + organizational bundle directory root
           if (node?.source?.cid && typeof node.source.cid === "string") {
             toUnpin.add(node.source.cid);
+            await collectEmbeddedIpfsCids(node.source.cid, toUnpin, errors);
           }
           if (
             node?.source?.bundleCid &&
@@ -612,6 +641,7 @@ export default () => {
             for (const entry of node.history) {
               if (entry?.src?.cid && typeof entry.src.cid === "string") {
                 toUnpin.add(entry.src.cid);
+                await collectEmbeddedIpfsCids(entry.src.cid, toUnpin, errors);
               }
               if (
                 entry?.src?.bundleCid &&
