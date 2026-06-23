@@ -61,16 +61,6 @@ function sendError(res, status, code, message, details = null) {
 }
 
 /**
- * Add a payload to the configured storage backend (adds + pins).
- * Returns the CID string.
- * @param {string|Uint8Array} payload
- * @param {string} [filename] - Optional filename for storage backends that support it.
- */
-async function addAndPin(payload, filename) {
-  return getStorage().add(payload, filename);
-}
-
-/**
  * Decompress gzipped data if needed, otherwise return as-is.
  * @param {string} data - The raw data from IPFS (might be gzipped)
  * @returns {Promise<string>} Decompressed string if gzipped, original string otherwise
@@ -94,82 +84,6 @@ async function maybeDecompress(data) {
     }
   }
   return data;
-}
-
-// ─── Thumbnail Helpers ──────────────────────────────────────────────────────
-
-const THUMBNAIL_DATA_URL_RE =
-  /^data:(image\/(?:webp|png|jpeg));base64,([A-Za-z0-9+/=]+)$/;
-const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
-
-function thumbnailExtension(mime) {
-  if (mime === "image/jpeg") return "jpg";
-  return mime.split("/")[1] || "webp";
-}
-
-async function persistEmbeddedThumbnail(manifest) {
-  const thumbnail = manifest?.thumbnail;
-  if (!thumbnail || typeof thumbnail !== "object" || !thumbnail.dataUrl) {
-    return manifest;
-  }
-
-  const previousThumbnailCid = thumbnail.cid;
-  try {
-    const match = String(thumbnail.dataUrl).match(THUMBNAIL_DATA_URL_RE);
-    if (!match) {
-      throw new Error("unsupported thumbnail data URL");
-    }
-
-    const mime = match[1];
-    const buffer = Buffer.from(match[2], "base64");
-    if (!buffer.length) {
-      throw new Error("empty thumbnail payload");
-    }
-    if (buffer.length > THUMBNAIL_MAX_BYTES) {
-      throw new Error(`thumbnail too large (${buffer.length} bytes)`);
-    }
-
-    console.log(
-      `[IPFS] add thumbnail | size=${buffer.length} bytes mime=${mime}`,
-    );
-    const assetName =
-      (manifest.name || manifest.asset_id || "asset")
-        .toLowerCase()
-        .replace(/[^a-z0-9_-]+/g, "_")
-        .slice(0, 40) || "asset";
-    const format = thumbnailExtension(mime);
-    const thumbnailFilename = `${assetName}_thumbnail.${format}`;
-    const thumbnailCid = await getStorage().add(buffer, thumbnailFilename);
-    manifest.thumbnail = {
-      type: "snapshot",
-      cid: thumbnailCid,
-      path: thumbnail.path || `thumbnail.${format}`,
-      format,
-      mime,
-      width: Number.isFinite(Number(thumbnail.width))
-        ? Number(thumbnail.width)
-        : null,
-      height: Number.isFinite(Number(thumbnail.height))
-        ? Number(thumbnail.height)
-        : null,
-      bytes: buffer.length,
-      timestamp: thumbnail.timestamp || Date.now(),
-    };
-    console.log(`[IPFS] add thumbnail → ${thumbnailCid}`);
-  } catch (error) {
-    console.warn(`[IPFS] thumbnail skipped — ${error.message}`);
-    if (previousThumbnailCid) {
-      manifest.thumbnail = {
-        ...thumbnail,
-        cid: previousThumbnailCid,
-      };
-      delete manifest.thumbnail.dataUrl;
-    } else {
-      delete manifest.thumbnail;
-    }
-  }
-
-  return manifest;
 }
 
 // ─── Router ─────────────────────────────────────────────────────────────────
@@ -203,132 +117,58 @@ export default () => {
 
   v1.use("/generations", generateAssetNode(getStorage()));
 
-  // ─── Manifests ────────────────────────────────────────────────────────────
+  // ─── Comments Archive ─────────────────────────────────────────────────────
 
-  // Create a new manifest (was save-draft)
-  v1.post("/manifests", async (req, res) => {
+  /**
+   * POST /api/v1/assets/snapshot-comments
+   *
+   * Snapshots the Nostr comment thread for a published asset to a
+   * content-addressed IPFS archive. Called by the browser before it
+   * writes a republish manifest, so the archive CID can be embedded
+   * in the manifest before it is uploaded. Manifests themselves are
+   * written directly to IPFS by the browser.
+   *
+   * Body: { tokenId, chainId, contractAddress }
+   * Response: { cid, eventCount }
+   */
+  v1.post("/assets/snapshot-comments", async (req, res) => {
     try {
-      let manifest = req.body;
-      if (!manifest || typeof manifest !== "object") {
-        console.log(`[SAVE] rejected — manifest object required`);
+      const { tokenId, chainId, contractAddress: reqContract } = req.body || {};
+      if (!tokenId) {
+        return sendError(res, 400, "MISSING_TOKEN_ID", "tokenId is required");
+      }
+
+      const chainIdNum = chainId ? Number(chainId) : null;
+      const contractAddr = reqContract || getContractAddress(chainIdNum);
+      if (!contractAddr) {
         return sendError(
           res,
-          400,
-          "INVALID_MANIFEST",
-          "Manifest object required",
+          503,
+          "CONTRACT_NOT_CONFIGURED",
+          "Contract address not configured",
         );
       }
 
-      // Extract optional publish context used to snapshot comments on republish.
-      // This is removed from the stored manifest; it is only a control signal.
-      const publishContext = manifest.publishContext || null;
-      delete manifest.publishContext;
+      const tokenIdNum = Number(tokenId);
+      const assetId = `${chainIdNum || 31415822}:${contractAddr}:${tokenIdNum}`;
 
-      // Collection-type manifests use a flat `assets` map instead of
-      // `scene.nodes` — skip the scene/nodes default and validate `assets`.
-      const isCollection = manifest.type === "collection";
-      if (isCollection) {
-        if (
-          !manifest.assets ||
-          typeof manifest.assets !== "object" ||
-          Array.isArray(manifest.assets)
-        ) {
-          console.log(
-            `[SAVE] rejected — collection manifest requires an assets object`,
-          );
-          return sendError(
-            res,
-            400,
-            "INVALID_COLLECTION_ASSETS",
-            "Collection manifest requires an `assets` object",
-          );
-        }
-      }
-
-      // Ensure version fields are present
-      if (!manifest.asset_id) {
-        manifest.asset_id = `asset_${Date.now()}`;
-      }
-      if (!isCollection) {
-        getSceneNodes(manifest); // ensure .scene and .nodes exist (assets only)
-      }
-      if (typeof manifest.version !== "number") {
-        manifest.version = 1;
-      }
-
-      await persistEmbeddedThumbnail(manifest);
-
-      // On republish, snapshot the asset's Nostr comment thread to IPFS and
-      // embed the archive CID in the manifest. Failures are logged but never
-      // block the publish.
-      if (publishContext?.tokenId) {
-        const chainId = publishContext.chainId
-          ? Number(publishContext.chainId)
-          : null;
-        const contractAddress =
-          publishContext.contractAddress || getContractAddress(chainId);
-        if (contractAddress) {
-          const tokenIdNum = Number(publishContext.tokenId);
-          const assetId = `${chainId || 31415822}:${contractAddress}:${tokenIdNum}`;
-          try {
-            const { cid: archiveCid } = await archiveCommentsForAsset(
-              assetId,
-              getStorage(),
-            );
-            manifest.comments_archive_cid = archiveCid;
-          } catch (archiveErr) {
-            console.warn(
-              `[ARCHIVE] failed to snapshot comments for ${assetId}: ${archiveErr.message}`,
-            );
-          }
-        }
-      }
-
-      const manifestFilename = isCollection
-        ? `collect_${manifest.asset_id || Date.now()}.json`
-        : `asset_${manifest.asset_id || Date.now()}.json`;
-      const resultCid = await addAndPin(
-        JSON.stringify(manifest),
-        manifestFilename,
+      console.log(`[ARCHIVE] snapshotting comments for ${assetId}`);
+      const { cid: archiveCid, eventCount } = await archiveCommentsForAsset(
+        assetId,
+        getStorage(),
       );
       console.log(
-        `[SAVE] asset_id=${manifest.asset_id} type=${manifest.type || "asset"} version=${manifest.version} ${isCollection ? `assets=${Object.keys(manifest.assets).length}` : `nodes=${manifest.scene.nodes.length}`} prev=${manifest.prev_asset_manifest_cid || "null"} thumbnail=${manifest.thumbnail?.cid || "none"} comments_archive=${manifest.comments_archive_cid || "none"} filename=${manifestFilename} → cid=${resultCid}`,
+        `[ARCHIVE] snapshot complete — ${eventCount} events → ${archiveCid}`,
       );
 
-      res.status(201).json({
-        cid: resultCid,
-        assetId: manifest.asset_id,
-        version: manifest.version,
-      });
+      res.json({ cid: archiveCid, eventCount });
     } catch (error) {
-      console.error("[SAVE] error:", error.message);
-      sendError(res, 500, "SAVE_FAILED", error.message);
+      console.error("[ARCHIVE] snapshot error:", error.message);
+      sendError(res, 500, "ARCHIVE_FAILED", error.message);
     }
   });
 
-  // Publish a manifest (with thumbnail support)
-  v1.post("/manifests/:cid/publish", async (req, res) => {
-    try {
-      const manifest = req.body;
-      await persistEmbeddedThumbnail(manifest);
-
-      const payload = JSON.stringify(manifest);
-      const isCollection = manifest.type === "collection";
-      const manifestFilename = isCollection
-        ? `collect_${manifest.asset_id || Date.now()}.json`
-        : `asset_${manifest.asset_id || Date.now()}.json`;
-      console.log(
-        `[IPFS] publish | payload=${payload.length} chars thumbnail=${manifest?.thumbnail?.cid || "none"} filename=${manifestFilename}`,
-      );
-      const resultCid = await addAndPin(payload, manifestFilename);
-      console.log(`[IPFS] publish → ${resultCid}`);
-
-      res.status(200).json({ cid: resultCid });
-    } catch (error) {
-      console.error("[IPFS] publish error:", error.message);
-      sendError(res, 500, "PUBLISH_FAILED", error.message);
-    }
-  });
+  // ─── Manifests (read-only) ─────────────────────────────────────────────────
 
   // Walk manifest version chain
   v1.get("/manifests/:cid/history", async (req, res) => {

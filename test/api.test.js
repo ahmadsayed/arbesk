@@ -226,6 +226,21 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     return JSON.parse(data);
   }
 
+  /**
+   * Write a manifest JSON directly to the mock IPFS storage and return its
+   * deterministic CID. Replaces the removed POST /api/v1/manifests route —
+   * manifests are now written client-side in production; tests seed storage
+   * directly.
+   */
+  let _manifestSeq = 0;
+  function saveManifestToStorage(manifest) {
+    _manifestSeq++;
+    const hash = `QmTestManifest${String(_manifestSeq).padStart(4, "0")}`;
+    const payload = JSON.stringify(manifest);
+    ipfsStorage.set(hash, payload);
+    return hash;
+  }
+
   describe("POST /api/v1/generations", () => {
     it("creates a new manifest with a generation variant entry", async () => {
       const res = await request(app)
@@ -430,53 +445,28 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
-  describe("POST /api/v1/manifests/:cid/publish", () => {
-    it("stores and returns a CID", async () => {
+  describe("POST /api/v1/assets/snapshot-comments", () => {
+    it("snapshots Nostr comments to IPFS", async () => {
       const res = await request(app)
-        .post("/api/v1/manifests/QmFakePublish/publish")
-        .send({ test: "data" });
-
-      expect(res.status).toBe(200);
-      expect(res.body.cid).toBeDefined();
-    });
-
-    it("stores embedded publish thumbnails as separate IPFS assets", async () => {
-      const dataUrl = `data:image/webp;base64,${Buffer.from("mock-webp-thumbnail").toString("base64")}`;
-      const res = await request(app)
-        .post("/api/v1/manifests/QmFakeThumbPublish/publish")
+        .post("/api/v1/assets/snapshot-comments")
         .send({
-          asset_id: "asset_with_thumbnail",
-          version: 1,
-          scene: { nodes: [] },
-          thumbnail: {
-            type: "snapshot",
-            dataUrl,
-            mime: "image/webp",
-            format: "webp",
-            path: "thumbnail.webp",
-            width: 512,
-            height: 288,
-            timestamp: 1780000000,
-          },
+          tokenId: "42",
+          chainId: 31415822,
+          contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
         });
 
       expect(res.status).toBe(200);
-      const storedManifest = JSON.parse(ipfsStorage.get(res.body.cid));
-      expect(storedManifest.thumbnail).toMatchObject({
-        type: "snapshot",
-        cid: expect.any(String),
-        path: "thumbnail.webp",
-        format: "webp",
-        mime: "image/webp",
-        width: 512,
-        height: 288,
-        bytes: Buffer.from("mock-webp-thumbnail").length,
-        timestamp: 1780000000,
-      });
-      expect(storedManifest.thumbnail.dataUrl).toBeUndefined();
-      expect(ipfsStorage.get(storedManifest.thumbnail.cid)).toBe(
-        Buffer.from("mock-webp-thumbnail").toString("base64"),
-      );
+      expect(res.body.cid).toBeDefined();
+      expect(typeof res.body.eventCount).toBe("number");
+    });
+
+    it("returns 400 when tokenId is missing", async () => {
+      const res = await request(app)
+        .post("/api/v1/assets/snapshot-comments")
+        .send({ chainId: 31415822 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("MISSING_TOKEN_ID");
     });
   });
 
@@ -576,16 +566,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   describe("POST /api/v1/ipfs/unpin via storage", () => {
     it("walks the chain and reports unpinned CIDs", async () => {
-      const manifest = {
+      const startCid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
         scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
-      };
-      const addRes = await request(app)
-        .post("/api/v1/manifests")
-        .send(manifest);
-      const startCid = addRes.body.cid;
-      expect(startCid).toBeTruthy();
+      });
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
@@ -596,7 +581,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("collects source.bundleCid alongside source.cid", async () => {
-      const manifest = {
+      const startCid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
         scene: {
@@ -607,11 +592,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             },
           ],
         },
-      };
-      const addRes = await request(app)
-        .post("/api/v1/manifests")
-        .send(manifest);
-      const startCid = addRes.body.cid;
+      });
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
@@ -638,21 +619,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   });
 
   describe("Token Child Ref Manifest", () => {
-    let baseCid;
-
-    beforeAll(async () => {
-      // Create a base manifest to attach child refs to
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A table",
-          nodeId: "node_table_child_001",
-        });
-      baseCid = res.body.assetManifestCid;
-    });
-
-    it("saves a manifest with token child_ref nodes", async () => {
+    it("stores a manifest with token child_ref nodes in IPFS", () => {
       const manifest = {
         name: "Composed World",
         asset_id: "composed_world_001",
@@ -677,20 +644,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
       };
 
-      const res = await request(app).post("/api/v1/manifests").send(manifest);
+      const cid = saveManifestToStorage(manifest);
+      expect(cid).toBeDefined();
 
-      expect(res.status).toBe(201);
-      expect(res.body.cid).toBeDefined();
-
-      // Verify round-trip: fetch the manifest and check child_ref structure
-      let data = "";
-      for await (const file of mockIPFS.cat(res.body.cid)) {
-        const buffer = new Uint16Array(file);
-        buffer.forEach((code) => {
-          data += String.fromCharCode(code);
-        });
-      }
-      const stored = JSON.parse(data);
+      const stored = JSON.parse(ipfsStorage.get(cid));
 
       expect(stored.scene.nodes.length).toBe(1);
       const childNode = stored.scene.nodes[0];
@@ -711,7 +668,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(childNode.history).toBeUndefined();
     });
 
-    it("saves a mixed manifest with regular and child_ref nodes", async () => {
+    it("stores a mixed manifest with regular and child_ref nodes", () => {
       const manifest = {
         name: "Mixed World",
         asset_id: "mixed_world_001",
@@ -748,18 +705,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
       };
 
-      const res = await request(app).post("/api/v1/manifests").send(manifest);
-
-      expect(res.status).toBe(201);
-
-      let data = "";
-      for await (const file of mockIPFS.cat(res.body.cid)) {
-        const buffer = new Uint16Array(file);
-        buffer.forEach((code) => {
-          data += String.fromCharCode(code);
-        });
-      }
-      const stored = JSON.parse(data);
+      const cid = saveManifestToStorage(manifest);
+      const stored = JSON.parse(ipfsStorage.get(cid));
 
       expect(stored.scene.nodes.length).toBe(2);
 
@@ -776,94 +723,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(childNode.source).toBeUndefined();
       expect(childNode.transform_matrix).toBeDefined();
     });
-
-    it("publish-manifest accepts thumbnails alongside child_ref nodes", async () => {
-      const dataUrl = `data:image/webp;base64,${Buffer.from("child-world-thumb").toString("base64")}`;
-      const res = await request(app)
-        .post("/api/v1/manifests/QmFakeChildPublish/publish")
-        .send({
-          asset_id: "composed_with_thumbnail",
-          version: 2,
-          scene: {
-            nodes: [
-              {
-                node_id: "child_token_314159_12345678_99",
-                transform_matrix: [
-                  1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                ],
-                child_ref: {
-                  type: "token",
-                  chainId: 314159,
-                  contractAddress: "0x1234567890abcdef1234567890abcdef12345678",
-                  tokenId: "99",
-                  standard: "ERC721",
-                  resolution: "latest",
-                },
-              },
-            ],
-          },
-          thumbnail: {
-            type: "snapshot",
-            dataUrl,
-            mime: "image/webp",
-            format: "webp",
-            path: "thumbnail.webp",
-            width: 512,
-            height: 288,
-            timestamp: 1780000000,
-          },
-        });
-
-      expect(res.status).toBe(200);
-      const storedManifest = JSON.parse(ipfsStorage.get(res.body.cid));
-      expect(storedManifest.thumbnail).toMatchObject({
-        type: "snapshot",
-        cid: expect.any(String),
-      });
-      expect(storedManifest.scene.nodes[0].child_ref.tokenId).toBe("99");
-    });
-  });
-
-  // ─── Collection-Type Manifest Persistence ─────────────────────────────────
-
-  describe("POST /api/v1/manifests — collection-type", () => {
-    it("persists a collection-type manifest without forcing scene.nodes", async () => {
-      const collectionManifest = {
-        type: "collection",
-        asset_id: "collection_test_1",
-        version: 1,
-        timestamp: Date.now(),
-        assets: {
-          "chair-01": "bafyChairCid",
-          "room-01": "bafyRoomCid",
-        },
-      };
-
-      const res = await request(app)
-        .post("/api/v1/manifests")
-        .send(collectionManifest);
-
-      expect(res.status).toBe(201);
-      expect(res.body.cid).toBeDefined();
-
-      const stored = await fetchManifestFromIPFS(res.body.cid);
-      expect(stored.type).toBe("collection");
-      expect(stored.assets).toEqual({
-        "chair-01": "bafyChairCid",
-        "room-01": "bafyRoomCid",
-      });
-      // Collection manifests must NOT get a forced scene.nodes default.
-      expect(stored.scene).toBeUndefined();
-    });
-
-    it("rejects a collection-type manifest with a non-object assets field", async () => {
-      const res = await request(app)
-        .post("/api/v1/manifests")
-        .send({ type: "collection", assets: "not-an-object" });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_COLLECTION_ASSETS");
-    });
   });
 
   // ─── Manifest Chain History ──────────────────────────────────────────────
@@ -871,10 +730,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   describe("GET /api/v1/manifests/:cid/history", () => {
     let chainCids = [];
 
-    beforeAll(async () => {
-      // Build a 3-version chain using save-draft (no rate limit) to avoid
-      // interference from the rate-limiter test above that exhausts the quota.
-      // v1: initial draft with a source node (like a generated asset)
+    beforeAll(() => {
+      // Build a 3-version chain using direct IPFS storage writes.
+      // Manifests are now written client-side; tests seed storage directly.
       const v1 = {
         name: "Chain Test",
         asset_id: "chain_test_hist",
@@ -893,12 +751,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           ],
         },
       };
-      const r1 = await request(app).post("/api/v1/manifests").send(v1);
-      chainCids.push(r1.body.cid);
+      chainCids.push(saveManifestToStorage(v1));
 
       // v2: modified color on the node, chained off v1.
-      // The /variants endpoint was removed; the regular /manifests
-      // POST now carries the full manifest with the new post_processor.
       const v2 = {
         ...v1,
         version: 2,
@@ -916,8 +771,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           ],
         },
       };
-      const r2 = await request(app).post("/api/v1/manifests").send(v2);
-      chainCids.push(r2.body.cid);
+      chainCids.push(saveManifestToStorage(v2));
 
       // v3: another color change, chained off v2
       const v3 = {
@@ -937,8 +791,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           ],
         },
       };
-      const r3 = await request(app).post("/api/v1/manifests").send(v3);
-      chainCids.push(r3.body.cid);
+      chainCids.push(saveManifestToStorage(v3));
     });
 
     it("walks manifest chain and returns versions in chronological order", async () => {
@@ -1054,206 +907,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // With CONTRACT_ADDRESS configured, it should attempt resolution
       // (may fail at tokenURI but not at the CONTRACT_ADDRESS guard)
       expect(res.status).not.toBe(503);
-    });
-  });
-
-  // ─── Save Draft ───────────────────────────────────────────────────────────
-
-  describe("POST /api/v1/manifests", () => {
-    it("saves a draft manifest and returns CID with asset_id and version", async () => {
-      const manifest = {
-        name: "Draft Test",
-        asset_id: "draft_test_001",
-        version: 1,
-        scene: { nodes: [] },
-      };
-
-      const res = await request(app).post("/api/v1/manifests").send(manifest);
-
-      expect(res.status).toBe(201);
-      expect(res.body.cid).toBeDefined();
-      expect(res.body.assetId).toBe("draft_test_001");
-      expect(res.body.version).toBe(1);
-
-      // Verify round-trip
-      const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-      expect(stored.name).toBe("Draft Test");
-      expect(stored.scene).toBeDefined();
-    });
-
-    it("auto-generates asset_id when not provided", async () => {
-      const manifest = {
-        name: "No ID Draft",
-        scene: { nodes: [] },
-      };
-
-      const res = await request(app).post("/api/v1/manifests").send(manifest);
-
-      expect(res.status).toBe(201);
-      expect(res.body.assetId).toBeDefined();
-      expect(res.body.assetId).toMatch(/^asset_\d+$/);
-    });
-
-    it("chains versions correctly via prev_asset_manifest_cid", async () => {
-      // Save v1
-      const res1 = await request(app)
-        .post("/api/v1/manifests")
-        .send({
-          name: "Chain Draft",
-          asset_id: "chain_draft",
-          version: 1,
-          scene: { nodes: [] },
-        });
-
-      // Save v2 pointing to v1
-      const res2 = await request(app)
-        .post("/api/v1/manifests")
-        .send({
-          name: "Chain Draft v2",
-          asset_id: "chain_draft",
-          version: 2,
-          prev_asset_manifest_cid: res1.body.cid,
-          scene: { nodes: [] },
-        });
-
-      expect(res2.status).toBe(201);
-      expect(res2.body.cid).not.toBe(res1.body.cid);
-      expect(res2.body.version).toBe(2);
-
-      // Verify the stored manifest has the prev link
-      const stored = JSON.parse(ipfsStorage.get(res2.body.cid));
-      expect(stored.prev_asset_manifest_cid).toBe(res1.body.cid);
-    });
-
-    it("persists embedded thumbnail data URL", async () => {
-      const dataUrl = `data:image/png;base64,${Buffer.from("fake-png-data").toString("base64")}`;
-      const manifest = {
-        name: "Thumbnail Draft",
-        asset_id: "thumb_draft",
-        version: 1,
-        scene: { nodes: [] },
-        thumbnail: {
-          type: "snapshot",
-          dataUrl,
-          mime: "image/png",
-          format: "png",
-          path: "thumbnail.png",
-          width: 256,
-          height: 256,
-          timestamp: 1780000000,
-        },
-      };
-
-      const res = await request(app).post("/api/v1/manifests").send(manifest);
-
-      expect(res.status).toBe(201);
-
-      // The manifest should have the thumbnail CID stored (not the dataUrl)
-      const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-      expect(stored.thumbnail).toMatchObject({
-        type: "snapshot",
-        cid: expect.any(String),
-        format: "png",
-        mime: "image/png",
-        width: 256,
-        height: 256,
-        bytes: Buffer.from("fake-png-data").length,
-      });
-      expect(stored.thumbnail.dataUrl).toBeUndefined();
-
-      // Verify the thumbnail was stored as a separate IPFS asset
-      expect(ipfsStorage.get(stored.thumbnail.cid)).toBe(
-        Buffer.from("fake-png-data").toString("base64"),
-      );
-    });
-
-    it("returns 400 for non-object manifest body", async () => {
-      // body-parser (strict:true default) only accepts objects/arrays.
-      // Sending malformed JSON triggers a syntax error → 400 response.
-      const res = await request(app)
-        .post("/api/v1/manifests")
-        .send("not-valid-json")
-        .set("Content-Type", "application/json");
-
-      expect(res.status).toBe(400);
-    });
-  });
-
-  // ─── Edge Cases ─────────────────────────────────────────────────────────────────
-
-  describe("Edge cases", () => {
-    it("POST /api/v1/manifests/:cid/publish handles missing thumbnail gracefully", async () => {
-      const res = await request(app)
-        .post("/api/v1/manifests/QmNoThumb/publish")
-        .send({
-          asset_id: "no_thumbnail_asset",
-          version: 1,
-          scene: { nodes: [] },
-        });
-
-      expect(res.status).toBe(200);
-      const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-      // Manifest should not have a thumbnail key at all when no thumbnail provided
-      expect(stored.thumbnail).toBeUndefined();
-    });
-
-    it("POST /api/v1/manifests/:cid/publish skips invalid thumbnail data URL", async () => {
-      const res = await request(app)
-        .post("/api/v1/manifests/QmBadThumb/publish")
-        .send({
-          asset_id: "bad_thumb",
-          version: 1,
-          scene: { nodes: [] },
-          thumbnail: {
-            dataUrl: "not-a-data-url",
-            mime: "image/webp",
-          },
-        });
-
-      expect(res.status).toBe(200);
-      const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-      // Invalid data URL should be stripped
-      expect(stored.thumbnail).toBeUndefined();
-    });
-
-    it("POST /api/v1/manifests preserves existing scene nodes on re-save", async () => {
-      // Save a manifest with a node, then re-save it and verify nodes persist
-      const manifest = {
-        name: "Re-save Test",
-        asset_id: "resave_test",
-        version: 1,
-        scene: {
-          nodes: [
-            {
-              node_id: "node_resave_001",
-              source: { cid: "QmTestCid", path: "test.glb", format: "glb" },
-              post_processor: { color: "#FF0000", scale: { x: 1, y: 1, z: 1 } },
-            },
-          ],
-        },
-      };
-
-      const res1 = await request(app).post("/api/v1/manifests").send(manifest);
-      expect(res1.status).toBe(201);
-
-      // Re-save same manifest with incremented version
-      manifest.version = 2;
-      manifest.prev_asset_manifest_cid = res1.body.cid;
-      const res2 = await request(app).post("/api/v1/manifests").send(manifest);
-      expect(res2.status).toBe(201);
-
-      // Verify round-trip preserves node data
-      const stored = JSON.parse(ipfsStorage.get(res2.body.cid));
-      expect(stored.scene.nodes).toHaveLength(1);
-      expect(stored.scene.nodes[0].node_id).toBe("node_resave_001");
-      expect(stored.scene.nodes[0].post_processor.color).toBe("#FF0000");
-    });
-
-    it("GET /api/v1/config returns the configured address", async () => {
-      const res = await request(app).get("/api/v1/config");
-
-      expect(res.status).toBe(200);
-      expect(res.body.contractAddress).toBe("0xArbeskContractAddress");
     });
   });
 

@@ -7,8 +7,8 @@ import {
   getFromRemoteIPFS,
   getArrayBufferFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
-import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
-import { saveManifest } from "../services/api.js";
+import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { snapshotCommentsArchive } from "../services/api.js";
 import {
   contract as walletContract,
   publishAsset,
@@ -295,7 +295,11 @@ async function decomposeManifestNodes(manifest) {
         if (bundleCid) node.source.bundleCid = bundleCid;
         decomposed++;
         console.log(
-          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
+          `Decompose save: node ${
+            node.node_id
+          } GLB decomposed | old=${cid} new=${compositeCid} bundle=${
+            bundleCid || "none"
+          }`
         );
         continue;
       }
@@ -328,7 +332,11 @@ async function decomposeManifestNodes(manifest) {
       if (bundleCid) node.source.bundleCid = bundleCid;
       decomposed++;
       console.log(
-        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid} bundle=${bundleCid || "none"}`
+        `Decompose save: node ${
+          node.node_id
+        } decomposed | old=${cid} new=${compositeCid} bundle=${
+          bundleCid || "none"
+        }`
       );
     } catch (err) {
       if (isRateLimitError(err)) throw err;
@@ -632,7 +640,29 @@ async function saveAssetDraftCore(
     };
   }
 
-  const { cid } = await saveManifest(prepared.manifest, { publishContext });
+  // Write manifest directly to IPFS — no backend middleman.
+  // The browser already writes glTF buffers and textures this way.
+  let cid = await writeJSONToIPFS(prepared.manifest, null, {
+    type: prepared.manifest.type,
+    assetId: prepared.manifest.asset_id,
+  });
+
+  // On republish, snapshot the Nostr comment thread to IPFS so the
+  // archive CID is embedded in the manifest. Failures are logged
+  // but never block the save — the manifest is already uploaded.
+  if (publishContext?.tokenId) {
+    try {
+      const { cid: archiveCid } = await snapshotCommentsArchive(publishContext);
+      prepared.manifest.comments_archive_cid = archiveCid;
+      // Re-upload with the archive CID — content differs, so CID changes.
+      cid = await writeJSONToIPFS(prepared.manifest, null, {
+        type: prepared.manifest.type,
+        assetId: prepared.manifest.asset_id,
+      });
+    } catch (archiveErr) {
+      console.warn(`[SAVE] comments archive skipped: ${archiveErr.message}`);
+    }
+  }
 
   assetState.set({
     latestAssetManifestCid: cid,
@@ -859,8 +889,10 @@ async function onPublishAsset() {
           .call()
       : null;
 
-    const { cid: collectionCid } = await saveManifest(mergedCollection, {
-      publishContext: null,
+    // Write collection manifest directly to IPFS — no backend middleman.
+    const collectionCid = await writeJSONToIPFS(mergedCollection, null, {
+      type: "collection",
+      assetId: mergedCollection.asset_id,
     });
 
     if (existingCollectionTokenId) {

@@ -194,104 +194,71 @@
         }
       }
     },
-    "/manifests": {
+    "/assets/snapshot-comments": {
       "post": {
-        "tags": ["Manifests"],
-        "summary": "Create or update a draft manifest",
-        "description": "Saves a fractal manifest to IPFS. Auto-generates `asset_id` if not provided, ensures `scene.nodes` array exists, and auto-increments version if missing. Embeds any thumbnail data URL as a separate IPFS asset.\n\nThis replaces the legacy `/save-draft` endpoint \u2014 it does not interact with the blockchain.",
-        "operationId": "saveManifest",
+        "tags": ["Comments"],
+        "summary": "Snapshot Nostr comment thread for an asset",
+        "description": "Queries the private Nostr relay for all kind:1 events tagged with the asset, packages them into a deterministic JSON archive, stores it on IPFS, and returns the archive CID. Called by the browser before writing a republish manifest so the archive CID can be embedded.\n\nManifests themselves are written directly to IPFS by the browser — this endpoint only handles the server-side Nostr archive work.",
+        "operationId": "snapshotCommentsArchive",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Manifest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Manifest created/updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SaveManifestResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid manifest object",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "INVALID_MANIFEST",
-                    "message": "Manifest object required"
+                "type": "object",
+                "required": ["tokenId"],
+                "properties": {
+                  "tokenId": {
+                    "type": "string",
+                    "description": "On-chain token ID for the asset"
+                  },
+                  "chainId": {
+                    "type": "integer",
+                    "description": "EVM chain ID (defaults to Hardhat local)"
+                  },
+                  "contractAddress": {
+                    "type": "string",
+                    "description": "Contract address (defaults to configured address)"
                   }
                 }
-              }
-            }
-          },
-          "415": {
-            "description": "Content-Type is not application/json",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "UNSUPPORTED_MEDIA_TYPE",
-                    "message": "Content-Type must be application/json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/manifests/{cid}/publish": {
-      "post": {
-        "tags": ["Manifests"],
-        "summary": "Publish a manifest to IPFS",
-        "description": "Stores a complete manifest to IPFS with optional embedded thumbnail (data URL). The thumbnail is extracted, validated (max 2 MB, supported formats: webp, png, jpeg), uploaded as a separate IPFS asset, and referenced by CID in the manifest.",
-        "operationId": "publishManifest",
-        "parameters": [
-          {
-            "name": "cid",
-            "in": "path",
-            "required": true,
-            "description": "Previous manifest CID in the version chain",
-            "schema": {
-              "type": "string",
-              "example": "QmPrevManifestCid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PublishManifestRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Manifest published successfully",
+            "description": "Comments archived successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublishManifestResponse"
+                  "type": "object",
+                  "properties": {
+                    "cid": {
+                      "type": "string",
+                      "description": "IPFS CID of the archive JSON"
+                    },
+                    "eventCount": {
+                      "type": "integer",
+                      "description": "Number of Nostr events archived"
+                    }
+                  }
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing tokenId",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "500": {
+            "description": "Archive failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
               }
             }
           }

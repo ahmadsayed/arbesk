@@ -350,10 +350,10 @@ Manifest v1 (CID: QmA...)  ←──  Manifest v2 (CID: QmB...)  ←──  Mani
 
 During publish:
 
-1. `scene-graph.js` captures the Babylon canvas into a WebP `dataUrl`.
-2. `asset-save.js` attaches it to `manifest.thumbnail`.
-3. `src/api/index.js` uploads the image bytes to IPFS.
-4. The stored manifest receives only thumbnail metadata + CID.
+1. `scene-graph.js` captures the Babylon canvas into a WebP blob.
+2. `captureAssetThumbnail()` uploads the blob directly to IPFS via `writeToIPFS()` and returns CID metadata (no `dataUrl` — the browser writes to IPFS directly, same as glTF buffer uploads).
+3. `asset-save.js` places the CID metadata into `manifest.thumbnail`.
+4. The stored manifest contains only thumbnail metadata + CID.
 5. `asset-library.js` reads `manifest.thumbnail.cid` and renders it through the IPFS gateway.
 
 ---

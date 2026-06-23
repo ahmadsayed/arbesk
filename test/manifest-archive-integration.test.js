@@ -1,8 +1,12 @@
 /**
  * Manifest comments_archive_cid integration test.
  *
- * Verifies that POST /api/v1/manifests reads publishContext, queries the
- * Nostr relay, and embeds comments_archive_cid in the stored manifest.
+ * Verifies that POST /api/v1/assets/snapshot-comments queries the
+ * Nostr relay, builds a content-addressed archive, stores it on IPFS,
+ * and returns the archive CID + event count.
+ *
+ * Manifests are now written directly to IPFS by the browser;
+ * the comments archive is a standalone server-side operation.
  */
 
 import { jest } from "@jest/globals";
@@ -16,6 +20,7 @@ describe("Manifest comments archive integration", () => {
   let ipfsStorage;
   let relayMessages;
   let actualSubId;
+  let _resetStorage;
 
   beforeAll(async () => {
     ipfsStorage = new Map();
@@ -24,8 +29,9 @@ describe("Manifest comments archive integration", () => {
 
     const mockIPFS = {
       add: jest.fn(async (data) => {
-        const hash = "Qm" + Buffer.from(typeof data === "string" ? data : JSON.stringify(data)).toString("hex").slice(0, 15);
-        ipfsStorage.set(hash, typeof data === "string" ? data : JSON.stringify(data));
+        const payload = typeof data === "string" ? data : JSON.stringify(data);
+        const hash = "Qm" + Buffer.from(payload).toString("hex").slice(0, 15);
+        ipfsStorage.set(hash, payload);
         return { cid: { toString: () => hash } };
       }),
       pin: {
@@ -55,7 +61,8 @@ describe("Manifest comments archive integration", () => {
               for (const msg of relayMessages) {
                 if (this.onmessage) {
                   const rewritten = [...msg];
-                  if (actualSubId && rewritten.length > 1) rewritten[1] = actualSubId;
+                  if (actualSubId && rewritten.length > 1)
+                    rewritten[1] = actualSubId;
                   this.onmessage({ data: JSON.stringify(rewritten) });
                 }
               }
@@ -104,14 +111,17 @@ describe("Manifest comments archive integration", () => {
           rpcUrl: "http://127.0.0.1:8545",
         },
       },
-      getNetworkConfig: jest.fn((id) => ({
-        31337: {
-          name: "Hardhat Local",
-          contractAddress: "0xArbeskContractAddress",
-          paidContractAddress: "0xPaidContractAddress",
-          rpcUrl: "http://127.0.0.1:8545",
-        },
-      }[Number(id)] || null)),
+      getNetworkConfig: jest.fn(
+        (id) =>
+          ({
+            31337: {
+              name: "Hardhat Local",
+              contractAddress: "0xArbeskContractAddress",
+              paidContractAddress: "0xPaidContractAddress",
+              rpcUrl: "http://127.0.0.1:8545",
+            },
+          })[Number(id)] || null,
+      ),
       getContractAddress: jest.fn(() => "0xArbeskContractAddress"),
       getUsdcToken: jest.fn(() => "0xUsdcToken"),
       getRpcUrl: jest.fn(() => "http://127.0.0.1:8545"),
@@ -123,6 +133,8 @@ describe("Manifest comments archive integration", () => {
     }));
 
     const { default: createApi } = await import("../src/api/index.js");
+    const storageMod = await import("../src/api/storage/index.js");
+    _resetStorage = storageMod._resetStorage;
     app = express();
     app.use(express.json({ limit: "50mb" }));
     app.use("/api", createApi());
@@ -133,58 +145,77 @@ describe("Manifest comments archive integration", () => {
     relayMessages = [];
     actualSubId = null;
     jest.clearAllMocks();
+    // Reset storage cache so the mock is fresh for each test.
+    _resetStorage();
   });
 
-  test("embeds comments_archive_cid when publishContext is provided", async () => {
+  test("archives comments and returns CID when relay has events", async () => {
     const assetId = "31337:0xArbeskContractAddress:42";
     relayMessages = [
-      ["EVENT", "sub", { id: "evt-1", kind: 1, content: "nice asset", created_at: 1000, tags: [["asset", assetId], ["sender", "0xaaa"]] }],
+      [
+        "EVENT",
+        "sub",
+        {
+          id: "evt-1",
+          kind: 1,
+          content: "nice asset",
+          created_at: 1000,
+          tags: [
+            ["asset", assetId],
+            ["sender", "0xaaa"],
+          ],
+        },
+      ],
       ["EOSE", "sub"],
     ];
 
-    const manifest = {
-      name: "Archived Asset",
-      asset_id: "archived_asset_001",
-      version: 2,
-      scene: { nodes: [] },
-      publishContext: {
+    const res = await request(app)
+      .post("/api/v1/assets/snapshot-comments")
+      .send({
         tokenId: "42",
         chainId: 31337,
         contractAddress: "0xArbeskContractAddress",
-      },
-    };
+      });
 
-    const res = await request(app).post("/api/v1/manifests").send(manifest);
+    expect(res.status).toBe(200);
+    expect(res.body.cid).toMatch(/^Qm/);
+    expect(res.body.eventCount).toBe(1);
 
-    expect(res.status).toBe(201);
-    const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-    expect(stored.comments_archive_cid).toMatch(/^Qm/);
-    expect(stored.publishContext).toBeUndefined();
-
-    const archive = JSON.parse(ipfsStorage.get(stored.comments_archive_cid));
+    // Verify the archive was stored in IPFS with correct content
+    const archive = JSON.parse(ipfsStorage.get(res.body.cid));
     expect(archive.assetId).toBe(assetId);
     expect(archive.eventCount).toBe(1);
     expect(archive.events[0].id).toBe("evt-1");
   });
 
-  test("does not set comments_archive_cid when publishContext is absent", async () => {
-    const manifest = {
-      name: "Draft Asset",
-      asset_id: "draft_asset_001",
-      version: 1,
-      scene: { nodes: [] },
-    };
+  test("archives zero events when relay has no matching comments", async () => {
+    relayMessages = [["EOSE", "sub"]];
 
-    const res = await request(app).post("/api/v1/manifests").send(manifest);
+    const res = await request(app)
+      .post("/api/v1/assets/snapshot-comments")
+      .send({
+        tokenId: "99",
+        chainId: 31337,
+      });
 
-    expect(res.status).toBe(201);
-    const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-    expect(stored.comments_archive_cid).toBeUndefined();
+    expect(res.status).toBe(200);
+    expect(res.body.cid).toMatch(/^Qm/);
+    expect(res.body.eventCount).toBe(0);
+
+    const archive = JSON.parse(ipfsStorage.get(res.body.cid));
+    expect(archive.events).toEqual([]);
   });
 
-  test("still succeeds when relay query fails", async () => {
-    // Make the WebSocket throw on creation by setting relayMessages to a sentinel?
-    // Instead we override the mock for this test only.
+  test("returns 400 when tokenId is missing", async () => {
+    const res = await request(app)
+      .post("/api/v1/assets/snapshot-comments")
+      .send({ chainId: 31337 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("MISSING_TOKEN_ID");
+  });
+
+  test("returns 500 when relay query fails", async () => {
     const { WebSocket } = await import("ws");
     WebSocket.mockImplementationOnce(function () {
       this.readyState = 0;
@@ -195,22 +226,14 @@ describe("Manifest comments archive integration", () => {
       }, 0);
     });
 
-    const manifest = {
-      name: "Relay Down Asset",
-      asset_id: "relay_down_asset_001",
-      version: 2,
-      scene: { nodes: [] },
-      publishContext: {
+    const res = await request(app)
+      .post("/api/v1/assets/snapshot-comments")
+      .send({
         tokenId: "99",
         chainId: 31337,
-      },
-    };
+      });
 
-    const res = await request(app).post("/api/v1/manifests").send(manifest);
-
-    expect(res.status).toBe(201);
-    const stored = JSON.parse(ipfsStorage.get(res.body.cid));
-    // Archive failure is non-fatal
-    expect(stored.comments_archive_cid).toBeUndefined();
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe("ARCHIVE_FAILED");
   });
 });

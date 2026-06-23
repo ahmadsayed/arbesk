@@ -79,8 +79,7 @@ describe("Frontend Build", () => {
       "getContractAddress",
       "getContractArtifact",
       "generateAsset",
-      "saveManifest",
-      "publishManifest",
+      "snapshotCommentsArchive",
       "getManifestHistory",
       "getTokenManifest",
     ];

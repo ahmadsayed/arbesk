@@ -10,7 +10,8 @@ import { contract as walletContract } from "../blockchain/wallet.js";
 import { updateAssetURI, CollaboratorRole } from "../blockchain/wallet.js";
 import { getProof } from "../gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { saveManifest, unpinAssetCids } from "./api.js";
+import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { unpinAssetCids } from "./api.js";
 import { showConfirmDialog } from "../ui/dialog.js";
 import { showToast } from "../ui/toasts.js";
 import { emit, EVENTS } from "../events/bus.js";
@@ -110,8 +111,10 @@ export async function deleteAssetFromCollection({
   delete newCollection.assets[assetId];
   newCollection.version = (newCollection.version || 0) + 1;
 
-  const { cid: newCollectionCid } = await saveManifest(newCollection, {
-    publishContext: null,
+  // Write updated collection directly to IPFS — no backend middleman.
+  const newCollectionCid = await writeJSONToIPFS(newCollection, null, {
+    type: "collection",
+    assetId: newCollection.asset_id,
   });
 
   const walletAddr = walletState.get().walletAddress;
@@ -123,7 +126,11 @@ export async function deleteAssetFromCollection({
   const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
   if (!proofResult) throw new Error("Not an authorized editor");
 
-  const txHash = await updateAssetURI(tokenId, newCollectionCid, proofResult.proof);
+  const txHash = await updateAssetURI(
+    tokenId,
+    newCollectionCid,
+    proofResult.proof
+  );
   if (!txHash) throw new Error("Update tokenURI transaction failed");
 
   // The on-chain tokenURI now points at the new collection, so the deleted

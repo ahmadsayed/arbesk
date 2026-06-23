@@ -20,7 +20,9 @@ function announceStatus(message) {
   const el = document.getElementById("srStatus");
   if (el) {
     el.textContent = "";
-    requestAnimationFrame(() => { el.textContent = message; });
+    requestAnimationFrame(() => {
+      el.textContent = message;
+    });
   }
 }
 
@@ -77,7 +79,12 @@ export function getCachedSession() {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
-    console.log(`[SESSION] cached valid — addr=${session.address.slice(0, 8)}… expires=${new Date(session.expiresAt).toLocaleTimeString()}`);
+    console.log(
+      `[SESSION] cached valid — addr=${session.address.slice(
+        0,
+        8
+      )}… expires=${new Date(session.expiresAt).toLocaleTimeString()}`
+    );
     return session;
   } catch {
     return null;
@@ -123,7 +130,9 @@ export async function createSession() {
   }
 
   // Build SIWE (EIP-4361) message
-  const { buildSiweMessage, generateNonce } = await import("../blockchain/siwe.js");
+  const { buildSiweMessage, generateNonce } = await import(
+    "../blockchain/siwe.js"
+  );
   const nonce = generateNonce();
   const chainId = Number(walletChainId || 1);
 
@@ -177,7 +186,10 @@ let sessionCreationPromise = null;
 export async function getOrCreateSession() {
   // Try cached session first
   const cached = getCachedSession();
-  if (cached && cached.address === walletState.get().walletAddress?.toLowerCase()) {
+  if (
+    cached &&
+    cached.address === walletState.get().walletAddress?.toLowerCase()
+  ) {
     console.log("[SESSION] reused cached token");
     return cached.token;
   }
@@ -192,7 +204,9 @@ export async function getOrCreateSession() {
   // Create new session (triggers ONE MetaMask pop-up)
   sessionCreationPromise = createSession()
     .then((session) => {
-      console.log("[SESSION] created — token=" + session.token.slice(0, 8) + "…");
+      console.log(
+        "[SESSION] created — token=" + session.token.slice(0, 8) + "…"
+      );
       return session.token;
     })
     .finally(() => {
@@ -338,7 +352,9 @@ export async function generateAsset({
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
-    announceStatus("Generation failed: " + (message || `HTTP ${response.status}`));
+    announceStatus(
+      "Generation failed: " + (message || `HTTP ${response.status}`)
+    );
     throw new ApiError(
       message || `Generation failed (HTTP ${response.status})`,
       response.status,
@@ -350,74 +366,43 @@ export async function generateAsset({
   return data;
 }
 
-// ─── Manifests ───────────────────────────────────────────────────────────────
+// ─── Comments Archive ────────────────────────────────────────────────────────
 
 /**
- * POST /api/v1/manifests
- * Create or update a draft manifest.
- * @param {Object} manifest — Full manifest object
- * @param {Object} [options]
- * @param {Object} [options.publishContext] — Optional republish context that
- *   triggers a comments archive snapshot. Deleted by the server before storage.
- * @returns {Promise<{cid: string, assetId: string, version: number}>}
+ * POST /api/v1/assets/snapshot-comments
+ *
+ * Snapshots the Nostr comment thread for a published asset to a
+ * content-addressed IPFS archive. Called before manifest upload so
+ * the archive CID can be embedded in the manifest.
+ *
+ * @param {{ tokenId: string|number, chainId?: number, contractAddress?: string }} publishContext
+ * @returns {Promise<{cid: string, eventCount: number}>}
  */
-export async function saveManifest(manifest, { publishContext = null } = {}) {
-  announceStatus("Uploading manifest to IPFS…");
-  const body = publishContext
-    ? { ...manifest, publishContext }
-    : manifest;
-  const response = await fetch(`${API_BASE}/manifests`, {
+export async function snapshotCommentsArchive(publishContext) {
+  announceStatus("Archiving comments…");
+  const response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(publishContext),
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
-    announceStatus("Save failed: " + (message || `HTTP ${response.status}`));
+    announceStatus("Archive failed: " + (message || `HTTP ${response.status}`));
     throw new ApiError(
-      message || `Save failed (HTTP ${response.status})`,
+      message || `Archive failed (HTTP ${response.status})`,
       response.status,
       code
     );
   }
 
-  announceStatus("Manifest saved.");
+  announceStatus(`Comments archived (${data.eventCount} events).`);
   return data;
 }
 
-/**
- * POST /api/v1/manifests/:cid/publish
- * Publish a manifest to IPFS with optional thumbnail.
- * @param {string} prevCid — Previous manifest CID (for URL)
- * @param {Object} manifest — Full manifest object
- * @returns {Promise<{cid: string}>}
- */
-export async function publishManifest(prevCid, manifest) {
-  announceStatus("Publishing manifest to IPFS…");
-  const response = await fetch(`${API_BASE}/manifests/${prevCid}/publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(manifest),
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    announceStatus("Publish failed: " + (message || `HTTP ${response.status}`));
-    throw new ApiError(
-      message || `Publish failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-
-  announceStatus("Manifest published.");
-  return data;
-}
+// ─── Manifest History ─────────────────────────────────────────────────────────
 
 /**
  * GET /api/v1/manifests/:cid/history
@@ -492,7 +477,9 @@ export async function getUploadCredential() {
   // If the server lost its session store (e.g. restart), clear the stale
   // cached token and re-authenticate once.
   if (res.status === 401) {
-    console.log("[SESSION] upload-url rejected cached token — re-authenticating");
+    console.log(
+      "[SESSION] upload-url rejected cached token — re-authenticating"
+    );
     clearSession();
     token = await getOrCreateSession();
     res = await fetch(`${API_BASE}/ipfs/upload-url`, {
@@ -621,6 +608,3 @@ function bytesToBase64(data) {
 }
 
 // ─── Ledger ──────────────────────────────────────────────────────────────────
-
-
-

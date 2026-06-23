@@ -1303,11 +1303,19 @@ async function captureAssetThumbnail(options = {}) {
     const blob = await canvasToBlob(thumbnailCanvas, mime, quality);
     if (!blob) return null;
 
-    const dataUrl = await blobToDataUrl(blob);
+    // Upload thumbnail bytes directly to IPFS — no backend middleman.
+    // The browser already writes glTF buffers and textures this way.
+    const { writeToIPFS } = await import("../ipfs/write-to-ipfs.js");
+    const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
+    if (blob.size > THUMBNAIL_MAX_BYTES) {
+      throw new Error(`thumbnail too large (${blob.size} bytes)`);
+    }
+    const cid = await writeToIPFS(blob, `thumbnail.${format}`);
+    console.log(`[THUMB] uploaded thumbnail → ${cid} (${blob.size} bytes)`);
 
     return {
       type: "snapshot",
-      dataUrl,
+      cid,
       mime,
       format,
       path: `thumbnail.${format}`,
