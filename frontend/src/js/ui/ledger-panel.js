@@ -11,6 +11,8 @@ import { truncateAddress, truncateCid } from "../utils/format.js";
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import { walkManifestChain } from "../engine/time-travel.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 const ACTIVITY_CONFIG = {
   GENERATION: { label: "Generation", icon: "✦" },
@@ -42,7 +44,6 @@ function formatDate(ts) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-
 function renderEntry(entry) {
   const config = ACTIVITY_CONFIG[entry.opType] || {
     label: entry.opType,
@@ -53,16 +54,18 @@ function renderEntry(entry) {
   li.className = "ledger-entry";
   li.innerHTML = `
     <span class="ledger-entry-icon">${config.icon}</span>
-    <span class="ledger-entry-type" title="${entry.opType}">${config.label}</span>
+    <span class="ledger-entry-type" title="${entry.opType}">${
+    config.label
+  }</span>
     <span class="ledger-entry-cid" title="${entry.cid}">${truncateCid(
-      entry.cid
-    )}</span>
+    entry.cid
+  )}</span>
     <span class="ledger-entry-actor" title="${
       entry.actorAddress
     }">${truncateAddress(entry.actorAddress)}</span>
     <span class="ledger-entry-time">${formatDate(entry.timestamp)} ${formatTime(
-      entry.timestamp
-    )}</span>
+    entry.timestamp
+  )}</span>
   `;
   return li;
 }
@@ -87,9 +90,8 @@ function render() {
 
   if (statsEl) {
     const total = activities.length;
-    const uniqueCids = new Set(
-      activities.map((a) => a.cid).filter(Boolean)
-    ).size;
+    const uniqueCids = new Set(activities.map((a) => a.cid).filter(Boolean))
+      .size;
     statsEl.textContent = `${total} ops · ${uniqueCids} assets`;
   }
 }
@@ -143,7 +145,9 @@ function extractActivities(chain) {
           cid: h.src?.cid || manifestCid,
           prevCid: null,
           actorType: "USER",
-          actorAddress: h.txHash ? walletState.get().walletAddress || "system" : "system",
+          actorAddress: h.txHash
+            ? walletState.get().walletAddress || "system"
+            : "system",
           payload: {
             prompt: h.prompt,
             provider: h.provider,
@@ -169,9 +173,20 @@ async function loadActivities() {
   }
 
   try {
-    const { getManifestHistory } = await import("../services/api.js");
-    const result = await getManifestHistory(cid);
-    const chain = result?.chain || [];
+    // Walk the manifest chain client-side via IPFS gateway.
+    const summaries = await walkManifestChain(cid);
+
+    // Fetch full manifests for activity extraction.
+    const chain = [];
+    for (const s of summaries) {
+      try {
+        const manifest = await getFromRemoteIPFS(s.cid);
+        chain.push({ cid: s.cid, manifest });
+      } catch {
+        // Skip manifests that fail to fetch
+      }
+    }
+
     activities = extractActivities(chain);
   } catch (err) {
     console.warn("[LEDGER] failed to load manifest history:", err.message);

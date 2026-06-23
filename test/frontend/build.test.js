@@ -80,8 +80,6 @@ describe("Frontend Build", () => {
       "getContractArtifact",
       "generateAsset",
       "snapshotCommentsArchive",
-      "getManifestHistory",
-      "getTokenManifest",
     ];
 
     test("api.js has no window.* function assignments", () => {

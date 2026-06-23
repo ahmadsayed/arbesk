@@ -1,11 +1,7 @@
 import express from "express";
-import path from "path";
-import url from "url";
-import fs from "fs";
 import zlib from "zlib";
 
 const Router = express.Router;
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 // Dynamic import to ensure process.env is populated before config.js reads it.
 // api/index.js is loaded via dynamic import() from index.js after dotenv runs.
@@ -15,8 +11,6 @@ const {
   HARDHAT_RPC_URL,
   NETWORK_CONFIGS,
   getContractAddress,
-  getWeb3,
-  web3,
 } = await import("../config.js");
 
 import generateAssetNode from "./assets/generate-node.js";
@@ -165,138 +159,6 @@ export default () => {
     } catch (error) {
       console.error("[ARCHIVE] snapshot error:", error.message);
       sendError(res, 500, "ARCHIVE_FAILED", error.message);
-    }
-  });
-
-  // ─── Manifests (read-only) ─────────────────────────────────────────────────
-
-  // Walk manifest version chain
-  v1.get("/manifests/:cid/history", async (req, res) => {
-    try {
-      const { cid } = req.params;
-      if (!cid) {
-        console.log(`[CHAIN] rejected — cid param required`);
-        return sendError(
-          res,
-          400,
-          "MISSING_CID",
-          "CID path parameter is required",
-        );
-      }
-
-      console.log(`[CHAIN] walking from ${cid}`);
-      const chain = [];
-      const visited = new Set();
-      let currentCid = cid;
-      const MAX_DEPTH = 50;
-
-      while (currentCid && chain.length < MAX_DEPTH) {
-        if (visited.has(currentCid)) {
-          console.log(
-            `[CHAIN] circular link detected at ${currentCid}, stopping`,
-          );
-          break;
-        }
-        visited.add(currentCid);
-
-        try {
-          const raw = await getStorage().cat(currentCid);
-          const decompressed = await maybeDecompress(raw);
-          const manifest = JSON.parse(decompressed);
-          const nodes = getSceneNodes(manifest);
-          const timestamp = manifest.timestamp || null;
-
-          chain.unshift({
-            cid: currentCid,
-            version: manifest.version || 1,
-            name: manifest.name || null,
-            nodeCount: nodes.length,
-            timestamp,
-          });
-
-          currentCid = manifest.prev_asset_manifest_cid || null;
-        } catch (e) {
-          console.warn(`[CHAIN] walk failed at ${currentCid}: ${e.message}`);
-          break;
-        }
-      }
-
-      console.log(
-        `[CHAIN] returned ${chain.length} entries (depth ${visited.size})`,
-      );
-      res.json({ chain });
-    } catch (error) {
-      console.error("[CHAIN] error:", error.message);
-      sendError(res, 500, "CHAIN_WALK_FAILED", error.message);
-    }
-  });
-
-  // ─── Tokens ───────────────────────────────────────────────────────────────
-
-  // Resolve a token ID to its manifest
-  v1.get("/tokens/:tokenId/manifest", async (req, res) => {
-    try {
-      const { tokenId } = req.params;
-      const chainId = req.query.chainId;
-      if (!tokenId) {
-        console.log(`[TOKEN] rejected — tokenId required`);
-        return sendError(res, 400, "MISSING_TOKEN_ID", "tokenId is required");
-      }
-
-      const contractAddr = getContractAddress(chainId);
-      if (!contractAddr) {
-        console.log(
-          `[TOKEN] rejected — CONTRACT_ADDRESS not configured for chain ${chainId || "default"}`,
-        );
-        return sendError(
-          res,
-          503,
-          "CONTRACT_NOT_CONFIGURED",
-          "Contract address not configured",
-        );
-      }
-
-      // Load ABI
-      let abi;
-      try {
-        const abiPath = path.resolve(
-          __dirname,
-          "../../blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json",
-        );
-        const abiRaw = fs.readFileSync(abiPath, "utf-8");
-        abi = JSON.parse(abiRaw).abi;
-      } catch (e) {
-        console.log(`[TOKEN] ABI not found — compile contracts first`);
-        return sendError(
-          res,
-          503,
-          "ABI_NOT_FOUND",
-          "Contract ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile",
-        );
-      }
-
-      const w3 = chainId ? getWeb3(chainId) : web3;
-      const contract = new w3.eth.Contract(abi, contractAddr);
-      const manifestCid = await contract.methods.tokenURI(tokenId).call();
-      if (!manifestCid) {
-        console.log(`[TOKEN] no manifest URI for token ${tokenId}`);
-        return sendError(
-          res,
-          404,
-          "TOKEN_NOT_FOUND",
-          "Token not found or has no manifest URI",
-        );
-      }
-
-      console.log(`[TOKEN] token ${tokenId} → CID ${manifestCid}`);
-      const raw = await getStorage().cat(manifestCid);
-      const decompressed = await maybeDecompress(raw);
-      const manifest = JSON.parse(decompressed);
-
-      res.json({ tokenId, manifestCid, manifest });
-    } catch (error) {
-      console.error("[TOKEN] error:", error.message);
-      sendError(res, 500, "TOKEN_RESOLUTION_FAILED", error.message);
     }
   });
 

@@ -480,60 +480,6 @@ export async function snapshotCommentsArchive(publishContext) {
   return data;
 }
 
-// ─── Manifest History ─────────────────────────────────────────────────────────
-
-/**
- * GET /api/v1/manifests/:cid/history
- * Walk the manifest version chain.
- * @param {string} cid — Manifest CID to start from
- * @returns {Promise<{chain: Array}>}
- */
-export async function getManifestHistory(cid) {
-  const response = await fetch(
-    `${API_BASE}/manifests/${encodeURIComponent(cid)}/history`
-  );
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `History fetch failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-
-  return data;
-}
-
-// ─── Tokens ──────────────────────────────────────────────────────────────────
-
-/**
- * GET /api/v1/tokens/:tokenId/manifest
- * Resolve a token ID to its manifest.
- * @param {string|number} tokenId
- * @returns {Promise<{tokenId: string, manifestCid: string, manifest: Object}>}
- */
-export async function getTokenManifest(tokenId) {
-  const response = await fetch(
-    `${API_BASE}/tokens/${encodeURIComponent(tokenId)}/manifest`
-  );
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Token resolution failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-
-  return data;
-}
-
 // ─── IPFS Upload Credential ───────────────────────────────────────────────────
 
 /**

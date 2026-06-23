@@ -132,6 +132,9 @@ async function walkManifestChain(startCid, maxDepth = 50) {
       chain.unshift({
         cid,
         version: manifest.version || 0,
+        name: manifest.name || null,
+        nodeCount: (manifest.scene?.nodes || []).length,
+        timestamp: manifest.timestamp || null,
         color: firstNode.post_processor?.color || null,
         scale: firstNode.post_processor?.scale || { x: 1, y: 1, z: 1 },
         sourceCid: firstNode.source?.cid || null,

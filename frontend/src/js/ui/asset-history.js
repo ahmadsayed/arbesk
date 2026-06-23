@@ -13,7 +13,7 @@
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { contract } from "../blockchain/wallet.js";
-import { getManifestHistory } from "../services/api.js";
+import { walkManifestChain } from "../engine/time-travel.js";
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 
@@ -36,7 +36,10 @@ let isLoading = false;
 async function _fetchChain(cid) {
   if (!cid) return [];
   try {
-    const { chain } = await getManifestHistory(cid);
+    // Walk the manifest chain client-side via IPFS gateway — no server round-trip.
+    const chain = await walkManifestChain(cid);
+    // walkManifestChain returns { cid, version, color, scale, sourceCid }.
+    // The history UI needs { cid, version } — the rest is available but unused.
     return chain;
   } catch (err) {
     console.error("History chain fetch failed:", err);
@@ -143,7 +146,8 @@ async function _loadVersion(cid) {
   try {
     // clearScene() resets latestAssetManifestCid, but we need to keep
     // the chain root (latest version) while the user is scrubbing history.
-    const preservedLatest = chainRootCid || assetState.get().latestAssetManifestCid;
+    const preservedLatest =
+      chainRootCid || assetState.get().latestAssetManifestCid;
     clearScene();
     if (preservedLatest) {
       assetState.set({ latestAssetManifestCid: preservedLatest });
