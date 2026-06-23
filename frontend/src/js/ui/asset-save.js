@@ -280,26 +280,17 @@ async function decomposeManifestNodes(manifest) {
     try {
       if (format === "glb") {
         const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-        const { compositeCid, bundleCid } = await decomposeGLBAsync(
-          glbBuffer,
-          true,
-          {
-            assetName: manifest.name,
-            assetId: manifest.asset_id,
-          }
-        );
+        const { compositeCid } = await decomposeGLBAsync(glbBuffer, true, {
+          assetName: manifest.name,
+          assetId: manifest.asset_id,
+        });
 
         node.source.cid = compositeCid;
         node.source.path = "composite.gltf";
         node.source.format = "gltf";
-        if (bundleCid) node.source.bundleCid = bundleCid;
         decomposed++;
         console.log(
-          `Decompose save: node ${
-            node.node_id
-          } GLB decomposed | old=${cid} new=${compositeCid} bundle=${
-            bundleCid || "none"
-          }`
+          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
         );
         continue;
       }
@@ -321,7 +312,7 @@ async function decomposeManifestNodes(manifest) {
       }
 
       // Decompose and store
-      const { compositeCid, bundleCid } = await decomposeAndStoreAsync(gltf, {
+      const { compositeCid } = await decomposeAndStoreAsync(gltf, {
         assetName: manifest.name,
         assetId: manifest.asset_id,
       });
@@ -329,14 +320,9 @@ async function decomposeManifestNodes(manifest) {
       // Update the node's source to point to the composite
       node.source.cid = compositeCid;
       node.source.path = "composite.gltf";
-      if (bundleCid) node.source.bundleCid = bundleCid;
       decomposed++;
       console.log(
-        `Decompose save: node ${
-          node.node_id
-        } decomposed | old=${cid} new=${compositeCid} bundle=${
-          bundleCid || "none"
-        }`
+        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
       );
     } catch (err) {
       if (isRateLimitError(err)) throw err;
@@ -451,9 +437,6 @@ async function prepareManifestForWrite(assetName) {
         if (result.format) node.source.format = result.format;
         if (result.path) node.source.path = result.path;
         // The composite JSON changed via a color bake; the organizational
-        // bundle (if any) now points at the stale JSON, so drop it. Re-creating
-        // the bundle for a JSON-only edit isn't worth the extra upload.
-        delete node.source.bundleCid;
         console.log(
           `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
         );
@@ -491,8 +474,6 @@ async function prepareManifestForWrite(assetName) {
             }
           );
           node.source.cid = result.compositeCid;
-          // Composite JSON changed via a color bake; drop the stale bundle.
-          delete node.source.bundleCid;
           console.log(
             `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
           );

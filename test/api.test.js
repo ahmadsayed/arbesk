@@ -460,41 +460,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
-  describe("POST /api/v1/ipfs/bundle", () => {
-    beforeEach(() => _resetRateLimiter());
-
-    it("rejects without a session (401)", async () => {
-      const res = await request(app)
-        .post("/api/v1/ipfs/bundle")
-        .send({ files: [] });
-      expect(res.status).toBe(401);
-    });
-
-    it("rejects an empty files array (400)", async () => {
-      const res = await request(app)
-        .post("/api/v1/ipfs/bundle")
-        .set("Authorization", await makeSessionHeader())
-        .send({ files: [] });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("MISSING_FILES");
-    });
-
-    it("assembles a directory from base64 files and returns a bundleCid", async () => {
-      // base64 of "glTF JSON content" and a 3-byte binary buffer
-      const res = await request(app)
-        .post("/api/v1/ipfs/bundle")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          files: [
-            { name: "composite.gltf", data: btoa("glTF JSON content") },
-            { name: "buffer_0.bin", data: "AQID" }, // bytes 1,2,3
-          ],
-        });
-      expect(res.status).toBe(200);
-      expect(res.body.bundleCid).toMatch(/^QmDir/);
-    });
-  });
-
   describe("POST /api/v1/ipfs/unpin via storage", () => {
     it("walks the chain and reports unpinned CIDs", async () => {
       const startCid = saveManifestToStorage({
