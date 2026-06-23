@@ -36,11 +36,6 @@ Thumbs.db
 *.swo
 
 # Hardhat
-contracts/cache/
-contracts/artifacts/
-contracts/typechain/
-contracts/typechain-types/
-contracts/coverage/
 blockchain/cache/
 blockchain/artifacts/
 blockchain/typechain/

@@ -102,19 +102,19 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
 
 ### `POST /api/v1/generations`
 
-Validates a paid generation transaction, generates or mocks an asset, uploads it to IPFS, and writes a new manifest snapshot.
+Generates or mocks a 3D asset from a text prompt, uploads it to IPFS, and writes a new manifest snapshot.
 
 **Current behavior**
 
-- Paid tier: requires Session auth tied to a PayGo transaction.
-- Free tier: validates `recordGeneration()` transaction; accepts `AssetGenerationRecorded` event.
-- Applies rate limit: 10 requests/hour per recovered wallet.
+- Requires Session auth (`Authorization: Session <token>`).
+- Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
 - Requires `prompt` and `nodeId`.
-- Uses `txHash` from the request body.
-- If `prevManifestCid` is provided, reads and updates the previous manifest.
+- Accepts optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
+- If `prevAssetManifestCid` is provided, reads and updates the previous manifest.
 - In replace mode, keeps only one root node and preserves that node's history chain.
-- If `MOCK_3D_GENERATION=true`, uses `src/api/adapters/mock-adapter.js`.
-- If mock mode is disabled, responds `501` because production cloud adapters are not implemented yet.
+- If `MOCK_3D_GENERATION=true` or provider is `"mock"`, uses `src/api/adapters/mock-adapter.js`.
+- If mock mode is disabled and provider is not mock, responds `501` (cloud adapters not implemented yet).
+- **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
 
 **Request Body**
 
@@ -122,11 +122,12 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 {
   "prompt": "A modern minimalist workbench",
   "nodeId": "node_table_001",
-  "txHash": "0xabc123...",
   "provider": "mock",
-  "manifestId": "manifest_001",
-  "prevManifestCid": "QmPreviousManifest...",
-  "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+  "assetId": "asset_1700000000000",
+  "prevAssetManifestCid": "bafy...",
+  "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  "tier": 0,
+  "providerKey": "sk-..."
 }
 ```
 
@@ -134,21 +135,9 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 
 ```json
 {
-  "newManifestCid": "QmNewManifest...",
-  "historyEntry": {
-    "v": 1,
-    "timestamp": 1780001000,
-    "src": {
-      "cid": "QmAssetCid...",
-      "path": "asset.gltf",
-      "format": "gltf"
-    },
-    "prompt": "A modern minimalist workbench",
-    "provider": "mock",
-    "txHash": "0xabc123...",
-    "type": "generation"
-  },
-  "assetCID": "QmAssetCid..."
+  "assetManifestCid": "bafy...",
+  "sourceAssetCid": "bafy...",
+  "tier": 0
 }
 ```
 
@@ -156,10 +145,8 @@ Validates a paid generation transaction, generates or mocks an asset, uploads it
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | `prompt` or `nodeId` missing |
+| 400 | `prompt` or `nodeId` missing, or `providerKey` required for non-mock provider |
 | 401 | Missing, malformed, or invalid Session auth |
-| 403 | Auth failed, tx missing/failed, wrong contract, or missing payment event |
-| 409 | Replay detected (`txHash` already consumed or found in manifest history) |
 | 429 | Generation rate limit exceeded |
 | 501 | Cloud adapters not implemented and mock mode disabled |
 | 500 | Unhandled generation/IPFS error |
@@ -429,6 +416,40 @@ Mints a short-lived client upload credential. Session-gated and rate-limited per
 
 ---
 
+### `POST /api/v1/ipfs/bundle`
+
+Uploads multiple files as a single IPFS UnixFS directory and returns the directory root CID. Used to group a glTF + its buffers/textures into one browsable folder.
+
+**Request Body**
+
+```json
+{
+  "files": [
+    { "name": "scene.gltf", "data": "<base64>" },
+    { "name": "buffer.bin", "data": "<base64>" }
+  ]
+}
+```
+
+**Response `200`**
+
+```json
+{
+  "bundleCid": "bafy..."
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 400 | `files` array missing, empty, >200 entries, or invalid file entries |
+| 401 | Missing/invalid session |
+| 429 | Upload rate limit exceeded |
+| 500 | Bundle assembly failed |
+
+---
+
 ### `POST /api/v1/ipfs/unpin`
 
 Unpins all IPFS CIDs owned by a manifest chain. Called after token burn.
@@ -494,17 +515,17 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 1. User connects wallet.
 2. **Paid tier generation:** frontend calls `payForGenerationWithUSDC(nodeId, prompt, tier)` on `ArbeskAsset`.
    **Free tier generation:** frontend calls `recordGeneration(nodeId, prompt)` on `ArbeskAssetFree`.
-3. Frontend signs tx hash and calls `POST /api/v1/generations`.
-4. Backend validates payment/event, uploads asset, writes manifest, returns new manifest CID.
-5. Frontend loads the manifest into Babylon.js and updates asset state.
-6. Parametric edits are applied client-side; the browser sends the updated manifest to `POST /api/v1/manifests`.
-7. Save calls `POST /api/v1/manifests`.
-8. Publish captures an optional WebP thumbnail and calls `POST /api/v1/manifests` (asset manifest).
-9. The asset CID is merged into the collection manifest, which is also saved to IPFS.
-10. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
-11. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
-12. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
-13. Owner or editors burn tokens via `burn(tokenId, proof)`, which then triggers non-blocking IPFS unpin.
+3. Frontend calls `POST /api/v1/generations` (with session auth, prompt, nodeId).
+   The backend does **not** validate the on-chain transaction — it only checks session + rate limit and returns a mock asset.
+4. Frontend loads the manifest into Babylon.js and updates asset state.
+5. Parametric edits are applied client-side; the browser sends the updated manifest to `POST /api/v1/manifests`.
+6. Save calls `POST /api/v1/manifests`.
+7. Publish captures an optional WebP thumbnail and calls `POST /api/v1/manifests` (asset manifest).
+8. The asset CID is merged into the collection manifest, which is also saved to IPFS.
+9. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
+10. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
+11. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
+12. Owner or editors burn tokens via `burn(tokenId, proof)`, which then triggers non-blocking IPFS unpin.
 
 ---
 
@@ -561,7 +582,7 @@ keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))
 
 ## Planned / Not Yet Implemented API
 
-The following are planned for Phase 5.1 (Token ID-Based Child Worlds) and Phase 5 (Micro-Ledger) or later and are not current backend routes:
+The following are planned backend routes not currently implemented. Note that Phase 5.1 (Token ID-Based Child Worlds) is complete — the browser resolver is the current path; a backend fallback is optional:
 
 ### Phase 5.1 — Token Child World Resolution
 
@@ -591,8 +612,9 @@ The following are planned for Phase 5.1 (Token ID-Based Child Worlds) and Phase 
 
 | Route | Limit | Window | Key |
 |---|---:|---:|---|
-| `POST /api/v1/generations` | 10 | 1 hour | recovered wallet address |
+| `POST /api/v1/generations` | 10 (1 000 in mock mode) | 1 hour | recovered wallet address |
 | `POST /api/v1/ipfs/upload-url` | 20 | 1 minute | recovered wallet address |
+| `POST /api/v1/ipfs/bundle` | 20 | 1 minute | recovered wallet address |
 
 The generation route currently emits:
 

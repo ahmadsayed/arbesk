@@ -18,7 +18,7 @@ Conventions, key file references, and practical guidance for AI agents and devel
 - **Blockchain**: EVM-compatible — Hardhat local dev, MegaETH testnet
 - **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
-- **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`)
+- **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`)
 - **Parametric Versions**: Color + scale edits append new history entries client-side — no cloud generation
 - **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
 - **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
@@ -60,7 +60,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
 - `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet.js`) — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `6343`)
+- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `6343`). These two files are identical duplicates; update both when adding a chain.
 - Contract `owner()` bypasses all quotas and Merkle proof checks (useful for admin/test wallets)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
 
@@ -73,12 +73,18 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Backend entry | `src/index.js` |
 | API routes | `src/api/index.js` |
 | Cloud generation route | `src/api/assets/generate-node.js` |
-| Storage backends | `src/api/storage/index.js` |
+| Storage backends | `src/api/storage/index.js` (adapters: `kubo-adapter.js`, `pinata-adapter.js`) |
 | Auth middleware | `src/api/authentication.js` |
 | Session store | `src/api/sessions.js` |
+| SIWE verification | `src/api/siwe-verify.js` |
 | Rate limiter | `src/api/rate-limiter.js` |
 | ABI serving | `src/api/abi-router.js` |
 | Comments archive | `src/api/comments-archive.js` |
+| Chat proxy (WebSocket) | `src/api/chat-proxy.js` |
+| Nostr relay primitives | `src/api/nostr-relay.js` |
+| Manifest utilities | `src/api/manifest-utils.js` |
+| IPFS utilities | `src/api/ipfs-utils.js` |
+| OpenAPI spec | `src/api/openapi.json` |
 | 3D engine | `frontend/src/js/engine/` |
 | Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
 | Wallet / chain | `frontend/src/js/blockchain/` |
@@ -124,11 +130,15 @@ npm start                                     # port 9090
 npm run nodemon                               # with auto-rebuild
 
 # ─── Testing ───
-npm test                                      # all (Jest + Hardhat)
+npm test                                      # Jest unit tests (excludes Hardhat & E2E)
+npm run test:all                              # full suite: frontend → api → contracts
+npm run test:api                              # Jest on test/api.test.js alone
+npm run test:frontend                         # Jest on test/frontend/ + deployment integrity
+npm run test:contracts                        # Hardhat tests inside Docker container
+npm run test:e2e -- --project=chromium        # Playwright E2E critical path
+npm run test:e2e:ui -- --project=chromium     # Playwright E2E with visible browser for debugging
 NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
 docker-compose run --rm hardhat npx hardhat test
-npx playwright test --config=e2e/playwright.config.js --project=chromium   # E2E critical path
-npx playwright test --config=e2e/playwright.config.js --project=chromium --ui # E2E debug UI
 
 # ─── Contract workflow (MANDATORY after any .sol change) ───
 docker-compose run --rm hardhat npx hardhat compile
@@ -159,13 +169,13 @@ Pug templates must **not** include `integrity="sha384-…"` attributes. CDNs sil
 Current pinned versions live in `frontend/src/pug/studio.pug` — update intentionally, never silently.
 
 ### Solidity
-- Version `^0.8.0`, OpenZeppelin v5 base
+- Version `^0.8.20`, OpenZeppelin v5 base; compiled with Solidity `0.8.24` (Cancun EVM)
 - `require()` for validation, emit events for state changes, NatSpec (`@dev`, `@param`, `@return`)
 - Optimize for storage reads over writes
 
 ### Pug / SCSS
 - Build via custom Node.js scripts in `frontend/scripts/` (not Webpack/Vite)
-- Reusable Pug partials in `frontend/src/pug/includes/`
+- Pug templates in `frontend/src/pug/` (no `includes/` subdirectory)
 - Bootstrap 5 with custom Sass overrides
 
 ### Backend Logging
@@ -278,7 +288,7 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**E2E coverage (6 specs):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery → burn · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend. Per-spec contract: `e2e/README.md`.
+**E2E coverage (9 specs):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery → burn · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07a` collection asset cards · `07b` material editor multi-primitive · `08` fork live reference. Per-spec contract: `e2e/README.md`.
 
 ### Running tests
 
@@ -361,8 +371,8 @@ Three `.env` files — all gitignored, **never commit**:
 | File | Purpose | Bootstrap |
 |------|---------|-----------|
 | `blockchain/.env` | Hardhat scripts (keys, contract addresses, RPC) | `cp blockchain/.env.example blockchain/.env` |
-| `.env` (root) | Backend + cloud adapters. `CONTRACT_ADDRESS` + `PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy | Copy from example + set values |
-| `frontend/.env` | Build-time public vars (optional) | — |
+| `.env` (root) | Backend + cloud adapters. `CONTRACT_ADDRESS` + `PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy | Copy from `.env.example` + set values |
+| `frontend/.env` | Build-time public vars (optional, not currently used) | — |
 
 Full variable reference: `docs/CURRENT_STATUS.md §6.5`.
 

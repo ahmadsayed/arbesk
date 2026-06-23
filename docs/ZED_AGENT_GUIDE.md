@@ -19,7 +19,7 @@ This project is initialized for Zed's coding agent workflow.
 |-------|--------|-------|
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution, drag/drop, depth/cycle protection |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` default, `ArbeskAsset.sol` paid tier, owner quota bypass |
-| Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js`; no schema, store, or API |
+| Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; only `anchorManifest()` is stubbed |
 
 **Do not claim the micro-ledger is implemented.** The following files do **not** exist:
 - `src/ledger/schema.js`

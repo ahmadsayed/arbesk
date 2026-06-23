@@ -99,18 +99,24 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 
 | File | Responsibility |
 |---|---|
-| `src/index.js` | Express app, static frontend serving, request logging, body limits |
-| `src/api/index.js` | Route registry, IPFS storage abstraction, manifest save/publish, thumbnail normalization, comments archive |
-| `src/api/assets/generate-node.js` | Authenticated PayGo generation route, tx/event validation, mock adapter, manifest updates |
+| `src/index.js` | Express app, static frontend serving, request logging, body limits, Chat WebSocket |
+| `src/api/index.js` | Route registry, IPFS storage abstraction, manifest save/publish, thumbnail normalization, comments archive, bundle upload |
+| `src/api/assets/generate-node.js` | Session-auth generation route, mock adapter, manifest updates (no on-chain tx validation) |
 | `src/api/storage/index.js` | Storage backend abstraction (`kubo` or `pinata`) |
-| `src/api/storage/pinata.js` | Pinata v3 SDK uploads + presigned upload URLs |
-| `src/api/storage/kubo.js` | Local Kubo `add`/`cat`/`pin.rm` |
+| `src/api/storage/pinata-adapter.js` | Pinata v3 SDK uploads + presigned upload URLs |
+| `src/api/storage/kubo-adapter.js` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
 | *(client-side only)* | Parametric editing happens in browser; no dedicated backend route |
 | `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
+| `src/api/sessions.js` | SIWE session create/delete (24h TTL) |
+| `src/api/siwe-verify.js` | EIP-4361 message verification |
 | `src/api/rate-limiter.js` | In-memory route rate limiter |
 | `src/api/abi-router.js` | Serves compiled contract artifacts by name |
 | `src/api/adapters/mock-adapter.js` | Deterministic local asset generation for development/tests |
 | `src/api/comments-archive.js` | Snapshots Nostr comment threads to IPFS on republish |
+| `src/api/chat-proxy.js` | WebSocket bridge: browser ↔ Nostr relay (session-gated) |
+| `src/api/nostr-relay.js` | Shared relay primitives (used by chat-proxy + comments-archive) |
+| `src/api/manifest-utils.js` | getSceneNodes, bumpManifestVersion |
+| `src/api/ipfs-utils.js` | catManifest() with timeout/abort |
 | `src/config.js` | Multi-network Web3 config (Hardhat local, MegaETH Testnet) |
 
 ### 3.2 Frontend (`frontend/src/js/`)
@@ -361,9 +367,9 @@ During publish:
 ```text
 User prompt
   → wallet.signInWithEthereum() → POST /api/v1/sessions → Session token
-  → wallet.payForGenerationWithUSDC(nodeId, prompt, tier)
+  → wallet.payForGenerationWithUSDC(nodeId, prompt, tier)  (on-chain, independent of backend)
   → POST /api/v1/generations (Authorization: Session <token>)
-  → backend verifies session token + tx receipt + AssetGenerationPaidUSDC event
+  → backend verifies session token + rate limit only
   → mock adapter returns asset bytes
   → asset bytes added to IPFS
   → manifest read/update/write on IPFS
@@ -374,9 +380,9 @@ User prompt
 
 ```text
 User prompt
-  → wallet.recordGeneration(nodeId, prompt)
+  → wallet.recordGeneration(nodeId, prompt)  (on-chain, independent of backend)
   → POST /api/v1/generations
-  → backend verifies tx receipt + AssetGenerationRecorded event
+  → backend verifies session token + rate limit only
   → mock adapter returns asset bytes
   → asset bytes added to IPFS
   → manifest read/update/write on IPFS
@@ -538,7 +544,6 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 
 - Production cloud 3D adapters are not implemented.
 - OpenSCAD WASM integration is schema-compatible but deferred.
-- Frontend E2E tests are not committed.
-- Phase 5 ledger is planned but not implemented.
+- Phase 5 micro-ledger is planned but not implemented (only `anchorManifest()` stubbed).
 - `GET /api/health` and direct `GET /api/manifest/:cid` are planned routes, not current backend routes.
 - `GET /api/resolve-token` backend fallback for token child resolution is planned but not implemented.

@@ -15,13 +15,13 @@
 | Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.js`, `src/api/adapters/mock-adapter.js`, `docker-compose.yml`, `src/api/storage/` |
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.js`, `frontend/src/js/engine/time-travel.js` |
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
-| Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 23 SCSS partials, sidebar/outliner/nesting |
+| Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 29 SCSS partials, sidebar/outliner/nesting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, thumbnail extraction in `src/api/index.js`, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `asset-save.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
-| Phase 5: Micro-Ledger | ❌ Not started | Only a stub comment in `ledger-panel.js` |
+| Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
 
@@ -41,14 +41,16 @@ src/
     │   └── mock-adapter.js     # Reads local .gltf files
     ├── storage/
     │   ├── index.js            # Storage backend factory (kubo/pinata)
-    │   ├── kubo.js             # Local Kubo add/cat/pin.rm
-    │   └── pinata.js           # Pinata v3 SDK + presigned upload URLs
+    │   ├── kubo-adapter.js     # Local Kubo add/cat/pin/directory/unpin
+    │   └── pinata-adapter.js   # Pinata v3 SDK + presigned upload URLs
     ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
     ├── authentication.js       # Session token validation middleware
+    ├── chat-proxy.js           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
     ├── comments-archive.js     # Nostr comment thread → IPFS archive
     ├── ipfs-utils.js           # catManifest() with timeout/abort
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
-    ├── rate-limiter.js         # In-memory per-wallet rate limiter (10/hr)
+    ├── nostr-relay.js          # Shared relay primitives (used by chat-proxy + comments-archive)
+    ├── rate-limiter.js         # In-memory per-wallet rate limiter
     ├── sessions.js             # SIWE session create/delete (24h TTL)
     ├── siwe-verify.js          # EIP-4361 message verification
     └── openapi.json            # Static OpenAPI spec
@@ -56,7 +58,7 @@ src/
 
 > **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits happen client-side; the browser sends the full manifest to `POST /api/v1/manifests`.
 >
-> **Free tier:** `POST /api/v1/generations` validates a transaction receipt. The UI uses `recordGeneration()` on the free tier and `payForGenerationWithUSDC()` on the paid tier; the backend accepts `AssetGenerationRecorded`, `AssetGenerationPaid`, or `AssetGenerationPaidUSDC` events.
+> **Generation endpoint:** `POST /api/v1/generations` validates session auth + rate limit. It does **not** validate an on-chain transaction — the `txHash` field described in older docs is not accepted. The UI handles contract interaction (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
 
 ### 2.2 Implemented Routes (`/api/v1`)
 
@@ -65,16 +67,18 @@ src/
 | GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag |
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
 | DELETE | `/sessions` | Session | Invalidates session token |
-| POST | `/generations` | Session | Validates tx, mocks asset, pins to IPFS |
+| POST | `/generations` | Session | Mocks asset, pins to IPFS, returns asset manifest CID (no on-chain tx validation) |
 | POST | `/manifests` | None | Saves draft manifest (asset or collection), extracts thumbnail dataUrl → IPFS |
-| POST | `/manifests/:cid/publish` | None | Same as save but returns `{ cid }` |
+| POST | `/manifests/:cid/publish` | None | Same as save but returns `{ cid }` (the `:cid` param is vestigial — not used in handler) |
 | GET | `/manifests/:cid/history` | None | Walks `prev_asset_manifest_cid` chain up to 50 entries |
 | GET | `/tokens/:tokenId/manifest` | None | Calls `tokenURI()` on-chain → fetches manifest from IPFS |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
+| POST | `/ipfs/bundle` | Session | Uploads multiple files as a UnixFS directory, returns root CID |
 | POST | `/ipfs/unpin` | None | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
 | GET | `/openapi.json` | None | Static OpenAPI spec |
 | GET | `/docs` | None | Swagger UI HTML bundle |
+| WS | `/v1/chat/ws` | Session (query) | WebSocket bridge to Nostr relay for live comments, rate-limited (10 msg/min) |
 
 ### 2.3 Auth Details
 
@@ -85,9 +89,8 @@ src/
 
 ### 2.4 What Works
 
-- ✅ Mock generation with tier validation (Basic/Standard/Premium/Pro)
-- ✅ Transaction replay prevention (`usedTxHashes` Set + manifest history scan)
-- ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`)
+- ✅ Mock generation with session auth + rate limiting
+- ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
 - ✅ Manifest save with thumbnail dataUrl extraction → separate IPFS asset
 - ✅ Collection manifest save/validation (`type: "collection"` + `assets` object)
 - ✅ Manifest chain walking (backward `prev_asset_manifest_cid`, cycle detection)
@@ -126,7 +129,7 @@ frontend/src/js/
 │   ├── placeholders.js         # Loading/error meshes
 │   ├── studio-init.js          # Studio bootstrap
 │   ├── theme.js / theme-init.js# CSS → Babylon color mapping
-│   └── viewport-gizmo.js       # Corner orientation gizmo
+│   └── viewport-gizmo.js   # Corner orientation gizmo
 ├── ui/
 │   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
 │   ├── asset-save.js           # Save Draft / Publish, collection merge, thumbnail capture
@@ -151,7 +154,6 @@ frontend/src/js/
 │   ├── network-config.js       # Per-network contract/USDC/RPC addresses
 │   ├── error-decoder.js        # Revert reason decoding
 │   ├── explorer.js             # Block explorer links
-│   └── dev-account.js          # Hardhat dev account helper
 ├── ipfs/
 │   ├── remote-ipfs.js          # Gateway reads (cache currently disabled)
 │   └── write-to-ipfs.js        # Direct Kubo/Pinata writes + pin
@@ -161,11 +163,15 @@ frontend/src/js/
 │   ├── composer.js             # Resolve ipfs:// URIs back to base64 for Babylon
 │   ├── material-editor.js      # PBR material color edits, multi-primitive aware, bake to composite
 │   ├── merkle-editors.js       # Merkle tree/proof library for editor authorization
-│   └── uri_to_cid.js           # Legacy helpers (mostly reference now)
+│   ├── source-color-editor.js  # Per-mesh color editor integration
+│   └── glb-parser.js           # Binary glTF container parsing
 ├── state/
-│   ├── asset-state.js        # Replaces window.* asset globals
-│   ├── wallet-state.js       # Replaces window.* wallet globals
-│   └── ui-state.js           # Replaces window.* UI globals
+│   ├── asset-state.js          # Replaces window.* asset globals
+│   ├── wallet-state.js         # Replaces window.* wallet globals
+│   ├── ui-state.js             # Replaces window.* UI globals
+│   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
+│   ├── create-store.js         # Generic createStore factory
+│   └── library-state.js        # Library folders/files state
 └── services/
     ├── api.js                  # API client: sessions, generate, save, publish, history, unpin, upload-url
     ├── team.js                 # Merkle-based editor add/remove
@@ -175,7 +181,7 @@ frontend/src/js/
 
 **Templates & Styles**
 - `frontend/src/pug/studio.pug` — Single consolidated studio page
-- `frontend/src/scss/` — 23 partials including layout, viewport, inspector, timeline, ledger, wallet modals
+- `frontend/src/scss/` — 29 partials including layout, viewport, inspector, timeline, ledger, wallet modals
 
 > **Naming drift from older docs:** `chat-studio.js` → `create-panel.js`, `save-world.js` → `asset-save.js`, `gallery.js` → `asset-library.js`, `history-browser.js` → `asset-history.js`, `team-panel.js` → `asset-editors.js`.
 
@@ -261,10 +267,8 @@ frontend/src/js/
 
 - ❌ **IPFS browser cache disabled** — every read hits the gateway directly.
 - ❌ `anchorManifest()` stubbed in `ledger-panel.js` — "not available in current contract".
-- ❌ `uri_to_cid.js` still has Phase 1/2 comments referencing inactive code paths.
 - ✅ Low-balance toast in `_checkBalance()` is now dismissed when the wallet account changes or disconnects (fixed stale warning + undefined `devAddress`).
 - ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
-- ❌ No automated E2E tests.
 
 ---
 
@@ -416,12 +420,11 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 
 | File | Lines | Coverage |
 |------|-------|----------|
-| `blockchain/test/ArbeskAsset.test.js` | ~1,291 | Payment (USDC tiered), replay prevention, minting, Merkle editor authorization, burn |
-| `blockchain/test/ArbeskAssetFree.test.js` | ~250 | Deployment, `recordGeneration` quota (10/day), minting, Merkle editor auth, burn, pause |
+| `blockchain/test/ArbeskAsset.test.js` | ~918 | Payment (USDC tiered), replay prevention, minting, Merkle editor authorization, burn (both paid + free contracts) |
 
 ### 5.4 Test Gaps
 
-- ❌ No automated E2E tests.
+- ✅ E2E tests: 9 Playwright specs covering wallet connect, generation, save/publish, parametric, republish, nesting, collections, material editor, fork (see `e2e/README.md`).
 - ❌ No reentrancy attack tests (though `nonReentrant` is present).
 - ❌ No fuzzing / property-based tests.
 
@@ -485,6 +488,10 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 | `npm run test:frontend` | Jest on `test/frontend/` |
 | `npm run test:contracts` | Hardhat tests inside Docker container |
 | `npm run test:all` | Sequential: frontend → api → contracts |
+| `npm run test:e2e` | Playwright E2E critical path (`--project=chromium`) |
+| `npm run test:e2e:ui` | Playwright E2E with visible browser for debugging |
+| `npm run test:coverage` | Combined JS + Solidity coverage |
+| `npm run worktree:create` | Create an isolated git worktree for testing |
 
 ### 6.5 Environment Files
 
@@ -492,7 +499,7 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 |------|--------|
 | Root `.env` | ✅ Exists |
 | `blockchain/.env` | ✅ Exists |
-| `frontend/.env` | ❌ Missing (AGENTS.md mentions it, but it does not exist) |
+| `frontend/.env` | ❌ Not present (mentioned in AGENTS.md as optional; no file or example exists) |
 
 #### Storage backend variables
 
@@ -578,10 +585,10 @@ npm run test:frontend
 
 ## 9. Summary
 
-Arbesk is a **functionally complete thick-client 3D world studio** through Phase 5.4. The browser owns rendering, parametric editing, glTF decomposition, IPFS reads/writes, wallet interactions, token resolution, collection management, and Merkle editor proof generation. The Express backend is a thin gatekeeper handling auth, generation validation, manifest persistence, storage abstraction, and IPFS unpin lifecycle.
+Arbesk is a **functionally complete thick-client 3D world studio** through Phase 5.4. The browser owns rendering, parametric editing, glTF decomposition, IPFS reads/writes, wallet interactions (including on-chain tx submission), token resolution, collection management, and Merkle editor proof generation. The Express backend is a thin gatekeeper handling auth, rate limiting, manifest persistence, storage abstraction, comments archiving, and IPFS unpin lifecycle.
 
 **What is production-ready:**
-- Mock-backed generative pipeline with tx validation and replay guards
+- Mock-backed generative pipeline with session auth + rate limiting
 - Full parametric editing with live Babylon.js preview
 - Token-based child world composition with depth/cycle protection
 - Free-tier `recordGeneration()` with packed daily quota and owner bypass
@@ -597,4 +604,3 @@ Arbesk is a **functionally complete thick-client 3D world studio** through Phase
 - Production cloud 3D adapters (returns 501)
 - Micro-ledger / append-only audit trail
 - OpenSCAD WASM
-- E2E tests
