@@ -12,6 +12,13 @@ html(lang="en")
     script(src="https://cdn.jsdelivr.net/npm/tabbable@6.2.0/dist/index.umd.min.js" crossorigin="anonymous")
     script(src="https://cdn.jsdelivr.net/npm/focus-trap@7.6.2/dist/focus-trap.umd.min.js" crossorigin="anonymous")
     script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" crossorigin="anonymous")
+    script(type="importmap").
+      {
+        "imports": {
+          "@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js",
+          "pako": "https://cdn.jsdelivr.net/npm/pako@2.2.0/dist/pako.esm.mjs"
+        }
+      }
   body
     #app
       header.headerbar
