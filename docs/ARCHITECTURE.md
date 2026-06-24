@@ -7,7 +7,7 @@
 
 ## 1. Vision
 
-Arbesk is a local-first 3D world studio built around **fractal manifests**: every world is a content-addressed JSON document whose nodes point to 3D assets, transforms, history entries, child manifests, and optional publish thumbnails.
+Arbesk is a local-first 3D world studio built around **fractal manifests**: every world is a content-addressed JSON document whose nodes point to 3D assets, transforms, optional per-node history entries, child manifests, and optional publish thumbnails. The manifest is agnostic to the underlying asset data — it only references content-addressed sources; the asset bytes themselves (glTF/GLB) carry their own revision state.
 
 The system currently combines:
 
@@ -82,7 +82,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  /api/v1/sessions (SIWE), /api/v1/chat/ws (Nostr proxy)              │
 │                                                                      │
 │  *(parametric edits, manifest writes, thumbnail upload,              │
-│   history walks, and token resolution are all client-side)*           │
+│   manifest-chain walks, and token resolution are all client-side)*           │
 └───────────────┬───────────────────────────────┬──────────────────────┘
                 │                               │
                 ▼                               ▼
@@ -115,7 +115,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | `src/api/storage/index.js` | Storage backend abstraction (`kubo` or `pinata`) |
 | `src/api/storage/pinata-adapter.js` | Pinata v3 SDK uploads + presigned upload URLs |
 | `src/api/storage/kubo-adapter.js` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
-| *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, history walks, token resolution — all browser-side |
+| *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, manifest-chain walks, token resolution — all browser-side |
 | `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
 | `src/api/sessions.js` | SIWE session create/delete (24h TTL) |
 | `src/api/siwe-verify.js` | EIP-4361 message verification |
@@ -134,7 +134,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | Area | Files | Responsibility |
 |---|---|---|
 | Engine | `engine/scene-graph.js` | Babylon engine/scene, GLB/glTF load, selection, framing, thumbnail capture, collection load |
-| Engine | `engine/time-travel.js` | Manifest chain walking (client-side), history version switching, parametric application |
+| Engine | `engine/time-travel.js` | Manifest chain walking (client-side), version switching, parametric application |
 | Engine | `engine/parametric-preview.js` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.js` | Gateway reads with memory + IndexedDB cache |
 | IPFS | `ipfs/write-to-ipfs.js` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
@@ -294,6 +294,8 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 - `format` — `"glb"` or `"gltf"`.
 - `bundleCid` *(optional)* — an IPFS UnixFS directory root CID grouping the composite glTF + its `.bin` buffers + textures under their friendly names (`composite.gltf`, `buffer_0.bin`, `texture_0.png`). **Organizational only** — exists so Pinata/Kubo show a browsable folder for the asset. Loading ignores it. Dropped on color-bake edits (JSON-only changes), since re-bundling isn't worth the upload. Burn unpins it alongside `cid`.
 
+**Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides world-level history. The optional `scene.nodes[].history` array can carry a per-node provenance log (generation events, parametric edits); it is consumed by the activity ledger and burn cleanup, but current generation and save paths do not populate it.
+
 ### 4.2 Collection Manifest
 
 Every published token points to a collection manifest. The collection manifest maps asset IDs to the latest asset manifest CID.
@@ -345,17 +347,20 @@ Manifest v1 (CID: QmA...)  ←──  Manifest v2 (CID: QmB...)  ←──  Mani
 
 | Consumer | Description |
 |---|---|
-| `GET /api/v1/manifests/:cid/history` | Backend walks up to 50 entries and returns lightweight summaries (CID, version, name, node count, timestamp) |
-| History timeline UI | Frontend fetches the chain and renders a draggable circular-node scrubber for version switching |
-| Replay prevention | Backend scans manifest history entries for duplicate `txHash` values to prevent generation replay |
+| History timeline UI | Frontend (`time-travel.js` / `asset-history.js`) walks `prev_asset_manifest_cid` client-side and renders a version scrubber |
+| Activity ledger | Frontend (`ledger-panel.js`) walks the chain and also reads `node.history` entries when present |
+| Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` and `node.history` |
+| Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |
 | Micro-ledger (Phase 5) | The ledger records each manifest CID as an append-only log entry, with optional on-chain anchoring via `anchorManifest()` |
 
-### History Entry Types
+### Version Snapshot Types
+
+Every entry in the manifest chain is a complete snapshot. The difference between snapshot types is in how the node content changes:
 
 | Type | Trigger | Payment | Asset CID changes? | Notes |
 |---|---:|---:|---:|---|
-| `generation` | Prompt generation | Yes | Usually yes | Uses PayGo tx validation and mock/cloud adapter |
-| `parametric` | Color/scale edit | No | No | Reuses node source CID, appends params |
+| `generation` | Prompt generation | Yes | Yes | Uses PayGo tx validation and mock/cloud adapter; new asset bytes are uploaded to IPFS |
+| `parametric` | Color/scale edit | No | Sometimes | Decomposed/color edits are baked into a new composite glTF CID; monolithic/scale edits are stored as `node.post_processor` runtime overlays without changing `source.cid` |
 
 ### Thumbnail Handling
 
@@ -396,9 +401,9 @@ User prompt
 User selects node
   → inspector live-previews color/scale in Babylon.js
   → browser applies color/scale to meshes
-  → browser appends parametric history entry to manifest
-  → POST /api/v1/manifests (save draft) or publish flow
-  → updated manifest added to IPFS
+  → for decomposed/color edits: browser bakes change into new composite glTF CID → updates `node.source.cid`
+  → for monolithic/scale edits: browser stores change in `node.post_processor` overlay
+  → browser writes updated manifest directly to IPFS via `writeJSONToIPFS()`
   → frontend updates active/latest manifest CID
 ```
 
@@ -476,7 +481,7 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 | Risk | Current Mitigation | Planned Improvement |
 |---|---|---|
 | Unpaid generation | Backend validates tx receipt and event before generation | Verify signer/tx sender/event payload alignment |
-| Replay generation | In-memory `usedTxHashes` plus manifest history scan | Phase 5 durable ledger-backed replay index |
+| Replay generation | In-memory `usedTxHashes` plus manifest-chain walk | Phase 5 durable ledger-backed replay index |
 | Private keys/API keys | `.env` files ignored by Git | Secret scanning / deployment secret management |
 | IPFS public exposure | Docker ports bound to loopback, no DHT/bootstrap | Deployment hardening checklist |
 | Mock assets in prod | `MOCK_3D_GENERATION` env flag | Explicit production adapter config validation |
@@ -495,7 +500,7 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 | Root manifest load | gateway read + browser cache |
 | GLB load | blob gateway read + browser cache + Babylon import |
 | GLTF load | JSON gateway read + CID buffer rehydration + Babylon import |
-| History chain UI | backend walks `prev_asset_manifest_cid` up to 50 entries |
+| History chain UI | client-side walk of `prev_asset_manifest_cid` up to 50 entries |
 | Publish thumbnail | one synchronous canvas capture during publish only |
 | Collection publish | one asset manifest write + one collection manifest write + one on-chain URI update |
 
@@ -507,6 +512,7 @@ Child worlds are referenced by on-chain token IDs. The parent manifest stores a 
 
 Key constraints still in force:
 - Every token child node must have a `transform_matrix`; no local `history` array
+- Token child nodes do not contain a local `source`; their state is resolved from the referenced token's manifest chain
 - `MAX_CHILD_WORLD_DEPTH = 5`; cycle detection enforced in `scene-graph.js`
 - Resolver: `frontend/src/js/blockchain/token-resolver.js`
 
@@ -551,3 +557,4 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 - Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`).
 - Chain ID constants are duplicated (`src/constants/chains.js` and `frontend/src/js/constants/chains.js`).
 - Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).
+- `scene.nodes[].history` is defined in the manifest schema and is read by the ledger panel and burn cleanup, but current generation/save paths do not populate it; the manifest chain is the effective source of version history.

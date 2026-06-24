@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Arbesk API",
-    "description": "Cloud-Native 4D Fractal Version-Controlled 3D Asset Platform \u2014 Backend API for asset generation, parametric editing, IPFS manifest storage, on-chain token resolution, and audit trail querying.",
+    "description": "Cloud-Native 4D Fractal Version-Controlled 3D Asset Platform \u2014 Backend API for asset generation, session management, IPFS upload credentials, burn cleanup, and Nostr comment archival. Manifest writes, parametric editing, manifest-chain walks, and token resolution are handled client-side.",
     "version": "1.0.0",
     "contact": {
       "name": "Arbesk",
@@ -28,12 +28,16 @@
       "description": "3D asset generation from text prompts"
     },
     {
-      "name": "Manifests",
-      "description": "Fractal manifest CRUD and version history"
+      "name": "Sessions",
+      "description": "SIWE-based session creation and invalidation"
     },
     {
-      "name": "Tokens",
-      "description": "On-chain token-to-manifest resolution"
+      "name": "Manifests",
+      "description": "Manifest schemas for reference. Manifest writes and chain walks are client-side; no backend manifest CRUD endpoints currently exist."
+    },
+    {
+      "name": "IPFS",
+      "description": "IPFS upload credentials and unpin cleanup"
     },
     {
       "name": "Contracts",
@@ -65,7 +69,7 @@
       "post": {
         "tags": ["Generations"],
         "summary": "Generate a 3D asset from a text prompt",
-        "description": "Authenticated endpoint that validates an on-chain payment transaction, generates a 3D mesh via the configured adapter (mock or cloud), uploads the asset to IPFS, and returns the new manifest and source asset CIDs.\n\n**Rate Limit:** 10 requests per hour per wallet address.\n\n**Replay Protection:** Each transaction hash can only be consumed once.",
+        "description": "Authenticated endpoint that checks session auth and rate limit, calls the configured 3D generation adapter, and returns the raw asset bytes to the browser. The browser uploads the asset to IPFS, constructs the manifest, and writes the manifest to IPFS directly — no server-side IPFS writes and no on-chain transaction validation.\n\n**Rate Limit:** 10 requests per hour per wallet address in production mode, 1000 in mock mode.\n\n**Replay Protection:** Each transaction hash can only be consumed once (client-side and in-memory server-side).",
         "operationId": "generateAsset",
         "security": [
           {
@@ -194,6 +198,94 @@
         }
       }
     },
+    "/sessions": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Create a SIWE session",
+        "description": "Verifies an EIP-4361 SIWE message and signature, then issues an opaque session token valid for 24 hours.",
+        "operationId": "createSession",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message", "signature"],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "Standard SIWE message"
+                  },
+                  "signature": {
+                    "type": "string",
+                    "description": "Wallet signature over the SIWE message"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "Opaque session token"
+                    },
+                    "expiresAt": {
+                      "type": "integer",
+                      "description": "Unix milliseconds expiration time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing message or signature",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "SIWE verification failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{token}": {
+      "delete": {
+        "tags": ["Sessions"],
+        "summary": "Invalidate a session",
+        "description": "Deletes the session token. Called on wallet disconnect.",
+        "operationId": "invalidateSession",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Session invalidated"
+          }
+        }
+      }
+    },
     "/assets/snapshot-comments": {
       "post": {
         "tags": ["Comments"],
@@ -265,96 +357,123 @@
         }
       }
     },
-    "/manifests/{cid}/history": {
-      "get": {
-        "tags": ["Manifests"],
-        "summary": "Walk the manifest version chain",
-        "description": "Walks backwards through `prev_asset_manifest_cid` links on IPFS from the given CID. Returns a chronological list (oldest first) of lightweight version summaries. Detects and breaks on circular links. Maximum depth: 50 entries.",
-        "operationId": "getManifestHistory",
-        "parameters": [
+    "/ipfs/upload-url": {
+      "post": {
+        "tags": ["IPFS"],
+        "summary": "Mint a short-lived client upload credential",
+        "description": "Session-gated and rate-limited per wallet. In Pinata mode returns a presigned upload URL; in Kubo mode returns the local API URL. The master Pinata JWT never reaches the client.",
+        "operationId": "mintUploadCredential",
+        "security": [
           {
-            "name": "cid",
-            "in": "path",
-            "required": true,
-            "description": "IPFS CID to start walking from (typically the latest version)",
-            "schema": {
-              "type": "string",
-              "example": "QmLatestManifestCid"
-            }
+            "sessionAuth": []
           }
         ],
         "responses": {
           "200": {
-            "description": "Version chain returned",
+            "description": "Upload credential returned",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HistoryResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tokens/{tokenId}/manifest": {
-      "get": {
-        "tags": ["Tokens"],
-        "summary": "Resolve a token ID to its manifest",
-        "description": "Queries the on-chain `tokenURI(tokenId)` of the ArbeskAsset contract, then fetches the manifest from IPFS. Returns the token ID, manifest CID, and the full manifest JSON.",
-        "operationId": "getTokenManifest",
-        "parameters": [
-          {
-            "name": "tokenId",
-            "in": "path",
-            "required": true,
-            "description": "On-chain token ID",
-            "schema": {
-              "type": "string",
-              "example": "42"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Token resolved to manifest",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenManifestResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Token not found or has no manifest URI",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "TOKEN_NOT_FOUND",
-                    "message": "Token not found or has no manifest URI"
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "type": "string",
+                      "enum": ["kubo", "pinata"]
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "Presigned upload URL or Kubo API endpoint"
+                    },
+                    "expiresAt": {
+                      "type": "integer",
+                      "description": "Unix milliseconds expiration time (Pinata only)"
+                    }
                   }
                 }
               }
             }
           },
-          "503": {
-            "description": "Contract ABI not found or contract not configured",
+          "401": {
+            "description": "Missing or invalid session",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
               }
             }
           }
         }
       }
     },
+    "/ipfs/unpin": {
+      "post": {
+        "tags": ["IPFS"],
+        "summary": "Unpin all IPFS CIDs owned by a manifest chain",
+        "description": "Called after token burn or asset removal from a collection. Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs (and embedded buffer/image CIDs), thumbnail CIDs, comments archive CIDs, and optional `history` entry CIDs, then unpins them all.",
+        "operationId": "unpinManifestChain",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cid"],
+                "properties": {
+                  "cid": {
+                    "type": "string",
+                    "description": "Starting manifest CID (typically the latest version)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unpin completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unpinned": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "CIDs that were unpinned"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Per-CID unpin errors (do not fail the whole request)"
+                    },
+                    "durationMs": {
+                      "type": "integer",
+                      "description": "Time spent walking and unpinning"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid cid",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+
     "/contracts/{name}/abi": {
       "get": {
         "tags": ["Contracts"],
@@ -453,40 +572,15 @@
             "description": "Unique identifier for this asset node",
             "example": "node_table_001"
           },
-          "txHash": {
-            "type": "string",
-            "description": "On-chain payment transaction hash (auto-extracted from auth token if omitted)",
-            "example": "0xabc123..."
-          },
           "provider": {
             "type": "string",
-            "description": "Generation provider name",
+            "description": "Generation provider name. Defaults to mock.",
             "example": "meshy",
             "default": "mock"
           },
-          "assetId": {
-            "type": "string",
-            "description": "Existing asset ID for manifest chaining",
-            "example": "asset_1700000000000"
-          },
-          "prevAssetManifestCid": {
-            "type": "string",
-            "description": "Previous manifest CID for version chaining",
-            "example": "QmPrevManifestCid"
-          },
-          "transform_matrix": {
-            "type": "array",
-            "description": "4\u00d74 column-major transform matrix (16 floats). Defaults to identity matrix.",
-            "items": {
-              "type": "number"
-            },
-            "minItems": 16,
-            "maxItems": 16,
-            "example": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
-          },
           "providerKey": {
             "type": "string",
-            "description": "Bring Your Own Key: user-supplied provider API key. When present, the on-chain payment/quota gate is bypassed and the user pays the provider directly. Never logged or persisted server-side. Max 200 chars.",
+            "description": "Bring Your Own Key: user-supplied provider API key. When present, the on-chain payment/quota gate is bypassed. Never logged or persisted server-side. Max 200 chars.",
             "maxLength": 200,
             "example": "sk-..."
           }
@@ -495,13 +589,22 @@
       "GenerationResponse": {
         "type": "object",
         "properties": {
-          "assetManifestCid": {
+          "assetData": {
             "type": "string",
-            "description": "IPFS CID of the updated fractal manifest"
+            "description": "Base64-encoded generated asset bytes (GLB or glTF JSON)"
           },
-          "sourceAssetCid": {
+          "format": {
             "type": "string",
-            "description": "IPFS CID of the generated source mesh"
+            "description": "Asset format",
+            "enum": ["glb", "gltf"]
+          },
+          "path": {
+            "type": "string",
+            "description": "Suggested source file path"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider that produced the asset"
           }
         }
       },
@@ -556,23 +659,10 @@
               }
             }
           },
-          "publishContext": {
-            "type": "object",
-            "description": "Republish control signal (removed by server before storage). When present, the backend snapshots the asset's Nostr comment thread to IPFS and writes the archive CID as comments_archive_cid.",
-            "properties": {
-              "tokenId": {
-                "type": "string",
-                "description": "On-chain token ID of the asset being republished"
-              },
-              "chainId": {
-                "type": "integer",
-                "description": "EVM chain ID"
-              },
-              "contractAddress": {
-                "type": "string",
-                "description": "ArbeskAsset contract address (falls back to server config if omitted)"
-              }
-            }
+          "type": {
+            "type": "string",
+            "enum": ["asset"],
+            "description": "Manifest type"
           }
         }
       },
@@ -611,21 +701,10 @@
                 "type": "string",
                 "description": "File format",
                 "example": "glb"
-              }
-            }
-          },
-          "appearance": {
-            "type": "object",
-            "description": "Current visual state",
-            "properties": {
-              "color": {
-                "type": "string",
-                "description": "Hex color",
-                "nullable": true,
-                "example": "#FF5733"
               },
-              "scale": {
-                "$ref": "#/components/schemas/Scale3D"
+              "bundleCid": {
+                "type": "string",
+                "description": "Optional organizational UnixFS directory root CID"
               }
             }
           },
@@ -638,9 +717,24 @@
             "minItems": 16,
             "maxItems": 16
           },
+          "post_processor": {
+            "type": "object",
+            "description": "Runtime color/scale overlay for monolithic assets. Not baked into source mesh bytes.",
+            "properties": {
+              "color": {
+                "type": "string",
+                "description": "Hex color override",
+                "nullable": true,
+                "example": "#FF5733"
+              },
+              "scale": {
+                "$ref": "#/components/schemas/Scale3D"
+              }
+            }
+          },
           "history": {
             "type": "array",
-            "description": "Version history (for source_asset nodes)",
+            "description": "Optional per-node provenance log. Reserved in the schema and consumed by ledger/unpin, but current generation/save paths do not populate it.",
             "items": {
               "$ref": "#/components/schemas/HistoryEntry"
             }

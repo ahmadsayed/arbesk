@@ -159,31 +159,12 @@ The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the ass
 
 1. User selects a node and changes color/scale in the inspector.
 2. `parametric-preview.js` applies the change live to Babylon.js meshes.
-3. `asset-save.js` builds a parametric history entry and appends it to the manifest.
+3. On save, `asset-save.js` either:
+   - bakes color edits into a new composite glTF CID and updates `node.source.cid`, or
+   - stores scale/color overlays in `node.post_processor` for monolithic assets.
 4. The browser writes the full updated manifest directly to IPFS via `writeJSONToIPFS()`.
 
-The parametric history entry structure stored in the manifest:
-
-The parametric history entry structure stored in the manifest:
-
-```json
-{
-  "v": 2,
-  "timestamp": 1780002000,
-  "src": {
-    "cid": "QmAssetCid...",
-    "path": "asset.glb",
-    "format": "glb"
-  },
-  "prompt": "Scale 1.5x,1.5x,1.5x, Color #FF5733",
-  "provider": "parametric",
-  "type": "parametric",
-  "params": {
-    "scale": { "x": 1.5, "y": 1.5, "z": 1.5 },
-    "color": "#FF5733"
-  }
-}
-```
+The manifest schema reserves an optional `scene.nodes[].history` array for provenance, but current write paths do not populate it.
 
 ---
 
@@ -303,9 +284,9 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 3. Frontend calls `POST /api/v1/generations` (with session auth, prompt, nodeId).
    The backend does **not** validate the on-chain transaction — it only checks session + rate limit and returns a mock asset.
 4. Frontend loads the manifest into Babylon.js and updates asset state.
-5. Parametric edits are applied client-side; the browser sends the updated manifest to `POST /api/v1/manifests`.
-6. Save calls `POST /api/v1/manifests`.
-7. Publish captures an optional WebP thumbnail and calls `POST /api/v1/manifests` (asset manifest).
+5. Parametric edits are applied client-side; the browser writes the updated manifest directly to IPFS.
+6. Save writes the asset manifest directly to IPFS via `writeJSONToIPFS()`.
+7. Publish captures an optional WebP thumbnail and writes the asset manifest directly to IPFS.
 8. The asset CID is merged into the collection manifest, which is also saved to IPFS.
 9. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
 10. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
