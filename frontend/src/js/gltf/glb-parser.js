@@ -10,21 +10,16 @@
 
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { sanitizeFileName, extractDataURI } from "../utils/uri.js";
+import { base64ToBytes } from "../utils/encoding.js";
 
 const GLB_MAGIC = 0x46546c67; // "glTF"
 const GLB_VERSION = 2;
 const CHUNK_TYPE_JSON = 0x4e4f534a; // "JSON"
-const CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0"
+const CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0";
 const IPFS_URI_PREFIX = "ipfs://";
 
 const _io = new WebIO();
-
-function sanitizeFileName(name) {
-  return String(name || "asset")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "_")
-    .slice(0, 40) || "asset";
-}
 
 /**
  * Check if an ArrayBuffer looks like a GLB v2 container.
@@ -70,34 +65,6 @@ export async function parseGLB(arrayBuffer) {
     : null;
 
   return { json, binaryChunk };
-}
-
-/**
- * Convert a base64 string to a Uint8Array.
- */
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-/**
- * Extract bytes and mime type from a data URI.
- */
-function extractDataURI(uri) {
-  if (!uri || !uri.startsWith("data:")) return null;
-  const commaIdx = uri.indexOf(",");
-  if (commaIdx === -1) return null;
-  const header = uri.substring(0, commaIdx);
-  const payload = uri.substring(commaIdx + 1);
-  const mimeMatch = header.match(/^data:([^;]+)/);
-  const mimeType = mimeMatch ? mimeMatch[1] : "application/octet-stream";
-  const isBase64 = header.includes(";base64");
-  const bytes = isBase64 ? base64ToBytes(payload) : new TextEncoder().encode(payload);
-  return { bytes, mimeType };
 }
 
 /**

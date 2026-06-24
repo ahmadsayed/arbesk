@@ -8,6 +8,7 @@
  */
 import { getUploadCredential } from "../services/api.js";
 import { compress } from "../utils/compression.js";
+import { sanitizeFileName } from "../utils/uri.js";
 
 // write-to-ipfs.js is imported by both the main thread and the glTF Web Worker.
 // Use a distinct tag in worker context so uploads originating off-thread are
@@ -16,20 +17,13 @@ const IS_WORKER =
   typeof WorkerGlobalScope !== "undefined" &&
   typeof self !== "undefined" &&
   self instanceof WorkerGlobalScope;
-const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "${TAG}";
+const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "[IPFS-WRITE]";
 
 function toBlob(data) {
   if (data instanceof Blob) return data;
   if (data instanceof ArrayBuffer || data instanceof Uint8Array) return new Blob([data]);
   if (typeof data === "string") return new Blob([data], { type: "application/octet-stream" });
   throw new Error("writeToIPFS: unsupported data type");
-}
-
-function sanitizeFileName(name) {
-  return String(name || "asset")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "_")
-    .slice(0, 40) || "asset";
 }
 
 function compressedFilename(filename) {

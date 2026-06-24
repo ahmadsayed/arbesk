@@ -10,17 +10,9 @@
  */
 
 import { getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { arrayBufferToBase64 } from "../utils/encoding.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
 
 async function fetchCIDAsBase64(cid) {
   console.log(`[COMPOSE] fetching ipfs://${cid}`);

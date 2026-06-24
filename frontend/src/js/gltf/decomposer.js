@@ -16,6 +16,8 @@
  */
 
 import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
+import { sanitizeFileName, extractDataURI } from "../utils/uri.js";
+import { base64ToBytes } from "../utils/encoding.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
@@ -41,41 +43,6 @@ export function isComposite(gltf) {
 }
 
 /**
- * Decode a base64 string to a Uint8Array.
- * Handles both standard base64 and URL-safe variants.
- */
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-/**
- * Extract the base64 payload from a data URI.
- * Returns { bytes, mimeType } or null if not a data URI.
- */
-function extractDataURI(uri) {
-  if (!uri || !uri.startsWith("data:")) return null;
-
-  const commaIdx = uri.indexOf(",");
-  if (commaIdx === -1) return null;
-
-  const header = uri.substring(0, commaIdx);
-  const payload = uri.substring(commaIdx + 1);
-
-  const mimeMatch = header.match(/^data:([^;]+)/);
-  const mimeType = mimeMatch ? mimeMatch[1] : "application/octet-stream";
-
-  const isBase64 = header.includes(";base64");
-  const bytes = isBase64 ? base64ToBytes(payload) : new TextEncoder().encode(payload);
-
-  return { bytes, mimeType };
-}
-
-/**
  * Decompose a standard glTF JSON: extract buffers and images, store each
  * on IPFS, replace URIs with `ipfs://<CID>`, and return the composite JSON.
  *
@@ -87,18 +54,7 @@ function extractDataURI(uri) {
  * @param {boolean} [options.compress=true] - Gzip-compress buffers/images before upload.
  * @returns {Promise<object>} Composite glTF JSON with ipfs:// URI references
  */
-function sanitizeFileName(name) {
-  return String(name || "asset")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "_")
-    .slice(0, 40) || "asset";
-}
-
-export async function decomposeGlTF(
-  gltf,
-  credential = null,
-  options = {},
-) {
+export async function decomposeGlTF(gltf, credential = null, options = {}) {
   const { compress = true, assetName, assetId } = options;
   const baseName = sanitizeFileName(assetName || assetId);
   if (!gltf) throw new Error("decomposeGlTF: gltf is null");
@@ -129,7 +85,12 @@ export async function decomposeGlTF(
         // Extract and store binary buffer
         const extracted = extractDataURI(buf.uri);
         if (!extracted) {
-          console.warn(`[DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`);
+          console.warn(
+            `[DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(
+              0,
+              80
+            )}...`
+          );
           return;
         }
 
@@ -140,7 +101,9 @@ export async function decomposeGlTF(
         composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
         stats.buffers++;
         stats.bytesTotal += extracted.bytes.length;
-        console.log(`[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`);
+        console.log(
+          `[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`
+        );
       })
     );
   }
@@ -178,7 +141,9 @@ export async function decomposeGlTF(
         composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
         stats.images++;
         stats.bytesTotal += extracted.bytes.length;
-        console.log(`[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`);
+        console.log(
+          `[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`
+        );
       })
     );
   }
@@ -200,7 +165,11 @@ export async function decomposeGlTF(
  */
 export async function decomposeAndStore(gltf, credential = null, options = {}) {
   const { compress = true, assetName, assetId } = options;
-  const composite = await decomposeGlTF(gltf, credential, { compress, assetName, assetId });
+  const composite = await decomposeGlTF(gltf, credential, {
+    compress,
+    assetName,
+    assetId,
+  });
   const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.js");
   const baseName = sanitizeFileName(assetName || assetId);
   const compositeCid = await writeJSONToIPFS(composite, credential, {

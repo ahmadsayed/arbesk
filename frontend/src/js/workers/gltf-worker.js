@@ -16,6 +16,8 @@
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
+import { base64ToBytes, arrayBufferToBase64 } from "../utils/encoding.js";
+import { extractDataURI } from "../utils/uri.js";
 
 console.log("[WORKER-INIT] gltf-worker module evaluating");
 
@@ -31,61 +33,40 @@ function getIO() {
   return io;
 }
 
-// ─── Shared Utilities ───────────────────────────────────────────────────────
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  const CHUNK = 0x8000; // 32 KiB — avoid `apply` argument limits
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function extractDataURI(uri) {
-  if (!uri || !uri.startsWith("data:")) return null;
-
-  const commaIdx = uri.indexOf(",");
-  if (commaIdx === -1) return null;
-
-  const header = uri.substring(0, commaIdx);
-  const payload = uri.substring(commaIdx + 1);
-
-  const mimeMatch = header.match(/^data:([^;]+)/);
-  const mimeType = mimeMatch ? mimeMatch[1] : "application/octet-stream";
-  const isBase64 = header.includes(";base64");
-  const bytes = isBase64 ? base64ToBytes(payload) : new TextEncoder().encode(payload);
-
-  return { bytes, mimeType };
-}
+// ─── Remaining Worker Utilities ─────────────────────────────────────────
 
 function detectImageMimeType(bytes) {
-  if (bytes.length < 4) return null;
   const b = bytes;
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
+    return "image/png";
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
   if (
     b.length >= 12 &&
-    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
-    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
   ) {
     return "image/webp";
   }
   if (
     b.length >= 12 &&
-    b[0] === 0xab && b[1] === 0x4b && b[2] === 0x54 && b[3] === 0x58 &&
-    b[4] === 0x20 && b[5] === 0x31 && b[6] === 0x31 && b[7] === 0xbb &&
-    b[8] === 0x0d && b[9] === 0x0a && b[10] === 0x1a && b[11] === 0x0a
+    b[0] === 0xab &&
+    b[1] === 0x4b &&
+    b[2] === 0x54 &&
+    b[3] === 0x58 &&
+    b[4] === 0x20 &&
+    b[5] === 0x31 &&
+    b[6] === 0x31 &&
+    b[7] === 0xbb &&
+    b[8] === 0x0d &&
+    b[9] === 0x0a &&
+    b[10] === 0x1a &&
+    b[11] === 0x0a
   ) {
     return "image/ktx2";
   }
@@ -131,13 +112,17 @@ async function fetchCIDAsBase64(cid, gatewayBase) {
   const url = `${gatewayBase.replace(/\/$/, "")}/${cid}`;
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(`Worker compose: gateway returned ${response.status} for ${cid}`);
+    throw new Error(
+      `Worker compose: gateway returned ${response.status} for ${cid}`
+    );
   }
   let bytes = new Uint8Array(await response.arrayBuffer());
   if (isGzipped(bytes)) {
     const before = bytes.length;
     bytes = await gunzip(bytes);
-    console.log(`[WORKER-IPFS] gunzipped ${cid} ${before} → ${bytes.length} bytes`);
+    console.log(
+      `[WORKER-IPFS] gunzipped ${cid} ${before} → ${bytes.length} bytes`
+    );
   }
   return arrayBufferToBase64(bytes.buffer);
 }
@@ -174,7 +159,7 @@ async function compose(payload) {
             uri: `data:application/octet-stream;base64,${base64}`,
           };
         }
-      }),
+      })
     );
   }
 
@@ -192,7 +177,7 @@ async function compose(payload) {
             uri: `data:${mimeType};base64,${base64}`,
           };
         }
-      }),
+      })
     );
   }
 
@@ -218,13 +203,21 @@ function decomposeGltf(payload) {
 
       const extracted = extractDataURI(buf.uri);
       if (!extracted) {
-        console.warn(`[WORKER-DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`);
+        console.warn(
+          `[WORKER-DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(
+            0,
+            80
+          )}...`
+        );
         continue;
       }
 
       const name = `buffer_${i}.bin`;
       buffers.push({ name, bytes: extracted.bytes, mime: extracted.mimeType });
-      composite.buffers[i] = { ...buf, uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1) };
+      composite.buffers[i] = {
+        ...buf,
+        uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1),
+      };
     }
   }
 
@@ -234,20 +227,27 @@ function decomposeGltf(payload) {
       if (!img.uri) continue;
       if (img.uri.startsWith(IPFS_URI_PREFIX)) continue;
       if (!img.uri.startsWith("data:")) {
-        console.log(`[WORKER-DECOMPOSE] image[${i}] external URI, keeping as-is`);
+        console.log(
+          `[WORKER-DECOMPOSE] image[${i}] external URI, keeping as-is`
+        );
         continue;
       }
 
       const extracted = extractDataURI(img.uri);
       if (!extracted) {
-        console.warn(`[WORKER-DECOMPOSE] image[${i}] failed to extract data URI`);
+        console.warn(
+          `[WORKER-DECOMPOSE] image[${i}] failed to extract data URI`
+        );
         continue;
       }
 
       const ext = extFromMimeType(extracted.mimeType);
       const name = `texture_${i}.${ext}`;
       images.push({ name, bytes: extracted.bytes, mime: extracted.mimeType });
-      composite.images[i] = { ...img, uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1) };
+      composite.images[i] = {
+        ...img,
+        uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1),
+      };
     }
   }
 
@@ -257,7 +257,9 @@ function decomposeGltf(payload) {
 function resolveBufferBytes(buf, binaryChunk) {
   if (!buf.uri) {
     if (!binaryChunk) {
-      throw new Error("resolveBufferBytes: GLB buffer has no uri and no binary chunk");
+      throw new Error(
+        "resolveBufferBytes: GLB buffer has no uri and no binary chunk"
+      );
     }
     return new Uint8Array(binaryChunk);
   }
@@ -277,10 +279,15 @@ async function decomposeGlb(payload) {
   const { arrayBuffer } = payload || {};
   if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
 
-  const { json, resources } = await getIO().binaryToJSON(new Uint8Array(arrayBuffer));
+  const { json, resources } = await getIO().binaryToJSON(
+    new Uint8Array(arrayBuffer)
+  );
   const binBytes = resources[GLB_BUFFER];
   const binaryChunk = binBytes
-    ? binBytes.buffer.slice(binBytes.byteOffset, binBytes.byteOffset + binBytes.byteLength)
+    ? binBytes.buffer.slice(
+        binBytes.byteOffset,
+        binBytes.byteOffset + binBytes.byteLength
+      )
     : null;
 
   const composite = JSON.parse(JSON.stringify(json));
@@ -293,25 +300,37 @@ async function decomposeGlb(payload) {
     const buf = gltfBuffers[i];
 
     if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) {
-      buffers.push({ name: `buffer_${i}.bin`, bytes: null, mime: "application/octet-stream", skip: true });
+      buffers.push({
+        name: `buffer_${i}.bin`,
+        bytes: null,
+        mime: "application/octet-stream",
+        skip: true,
+      });
       continue;
     }
 
     if (buf.uri && !buf.uri.startsWith("data:")) {
-      console.log(`[WORKER-DECOMPOSE] GLB buffer[${i}] external URI, keeping as-is`);
+      console.log(
+        `[WORKER-DECOMPOSE] GLB buffer[${i}] external URI, keeping as-is`
+      );
       continue;
     }
 
     const bytes = resolveBufferBytes(buf, binaryChunk);
     if (!bytes) {
-      console.warn(`[WORKER-DECOMPOSE] GLB buffer[${i}] could not be resolved, skipping`);
+      console.warn(
+        `[WORKER-DECOMPOSE] GLB buffer[${i}] could not be resolved, skipping`
+      );
       continue;
     }
 
     const name = `buffer_${i}.bin`;
     buffers.push({ name, bytes, mime: "application/octet-stream" });
     bufferBytesByIndex[i] = bytes;
-    composite.buffers[i] = { ...buf, uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1) };
+    composite.buffers[i] = {
+      ...buf,
+      uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1),
+    };
   }
 
   const gltfImages = composite.images || [];
@@ -320,9 +339,16 @@ async function decomposeGlb(payload) {
 
     if (img.uri && !img.uri.startsWith("data:")) {
       if (img.uri.startsWith(IPFS_URI_PREFIX)) {
-        images.push({ name: `texture_${i}.bin`, bytes: null, mime: "image/png", skip: true });
+        images.push({
+          name: `texture_${i}.bin`,
+          bytes: null,
+          mime: "image/png",
+          skip: true,
+        });
       } else {
-        console.log(`[WORKER-DECOMPOSE] GLB image[${i}] external URI, keeping as-is`);
+        console.log(
+          `[WORKER-DECOMPOSE] GLB image[${i}] external URI, keeping as-is`
+        );
       }
       continue;
     }
@@ -339,12 +365,16 @@ async function decomposeGlb(payload) {
     } else if (img.bufferView !== undefined) {
       const bufferView = composite.bufferViews?.[img.bufferView];
       if (!bufferView) {
-        console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] bufferView ${img.bufferView} not found`);
+        console.warn(
+          `[WORKER-DECOMPOSE] GLB image[${i}] bufferView ${img.bufferView} not found`
+        );
         continue;
       }
       const srcBytes = bufferBytesByIndex[bufferView.buffer];
       if (!srcBytes) {
-        console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] buffer ${bufferView.buffer} could not be resolved`);
+        console.warn(
+          `[WORKER-DECOMPOSE] GLB image[${i}] buffer ${bufferView.buffer} could not be resolved`
+        );
         continue;
       }
       const byteOffset = bufferView.byteOffset || 0;
@@ -354,19 +384,26 @@ async function decomposeGlb(payload) {
         mimeType = detectImageMimeType(bytes);
       }
     } else {
-      console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] has no uri or bufferView, skipping`);
+      console.warn(
+        `[WORKER-DECOMPOSE] GLB image[${i}] has no uri or bufferView, skipping`
+      );
       continue;
     }
 
     if (!bytes || bytes.length === 0) {
-      console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] empty payload, skipping`);
+      console.warn(
+        `[WORKER-DECOMPOSE] GLB image[${i}] empty payload, skipping`
+      );
       continue;
     }
 
     const ext = extFromMimeType(mimeType);
     const name = `texture_${i}.${ext}`;
     images.push({ name, bytes, mime: mimeType });
-    composite.images[i] = { ...img, uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1) };
+    composite.images[i] = {
+      ...img,
+      uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1),
+    };
     if (mimeType && !composite.images[i].mimeType) {
       composite.images[i].mimeType = mimeType;
     }
@@ -391,7 +428,8 @@ function findNodeMaterials(gltf, nodeName) {
 
   for (let ni = 0; ni < gltf.nodes.length; ni++) {
     const node = gltf.nodes[ni];
-    if (!node.name || node.name.toLowerCase() !== nodeName.toLowerCase()) continue;
+    if (!node.name || node.name.toLowerCase() !== nodeName.toLowerCase())
+      continue;
     if (node.mesh === undefined || node.mesh === null) continue;
 
     const mesh = gltf.meshes[node.mesh];
@@ -400,7 +438,11 @@ function findNodeMaterials(gltf, nodeName) {
     for (let pi = 0; pi < mesh.primitives.length; pi++) {
       const prim = mesh.primitives[pi];
       if (prim.material === undefined || prim.material === null) continue;
-      matches.push({ nodeIndex: ni, primitiveIndex: pi, materialIndex: prim.material });
+      matches.push({
+        nodeIndex: ni,
+        primitiveIndex: pi,
+        materialIndex: prim.material,
+      });
     }
   }
   return matches;
@@ -415,7 +457,9 @@ function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
     const mesh = gltf.meshes[node.mesh];
     if (!mesh || !mesh.primitives) return false;
     return mesh.primitives.some((prim, pi) => {
-      const isTarget = matches.some((m) => m.nodeIndex === ni && m.primitiveIndex === pi);
+      const isTarget = matches.some(
+        (m) => m.nodeIndex === ni && m.primitiveIndex === pi
+      );
       return !isTarget && prim.material === targetMaterialIndex;
     });
   });
@@ -431,7 +475,9 @@ function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
   gltf.materials.push(clone);
 
   for (const match of matches) {
-    gltf.meshes[gltf.nodes[match.nodeIndex].mesh].primitives[match.primitiveIndex].material = cloneIndex;
+    gltf.meshes[gltf.nodes[match.nodeIndex].mesh].primitives[
+      match.primitiveIndex
+    ].material = cloneIndex;
     match.materialIndex = cloneIndex;
   }
 }
@@ -523,7 +569,10 @@ try {
     });
     console.log("[WORKER-INIT] initError reporter registered");
   } catch (inner) {
-    console.error("[WORKER-INIT] failed to register initError reporter:", inner);
+    console.error(
+      "[WORKER-INIT] failed to register initError reporter:",
+      inner
+    );
   }
   throw err;
 }

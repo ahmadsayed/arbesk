@@ -11,6 +11,7 @@
 
 import { getConfig } from "../services/api.js";
 import { isGzipped, decompress } from "../utils/compression.js";
+import { arrayBufferToBase64 } from "../utils/encoding.js";
 
 const IPFS_CACHE_ENABLED = true; // in-memory cache by CID (content-addressed, safe)
 const MAX_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB cap for raw gateway bytes
@@ -29,20 +30,6 @@ async function gatewayBase() {
   return _gatewayPromise;
 }
 
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-/**
- * Fetch raw bytes from the gateway and transparently gunzip if the payload
- * was stored compressed. Returns a Uint8Array of the original (uncompressed)
- * bytes.
- */
 async function fetchIpfsBytes(cid) {
   const url = `${await gatewayBase()}${cid}`;
   console.log(`[IPFS] get ${url}`);
@@ -55,7 +42,7 @@ async function fetchIpfsBytes(cid) {
   if (isGzipped(buffer)) {
     const decompressed = decompress(buffer);
     console.log(
-      `[IPFS] gunzipped ${buffer.byteLength} → ${decompressed.length} bytes`,
+      `[IPFS] gunzipped ${buffer.byteLength} → ${decompressed.length} bytes`
     );
     return decompressed;
   }
@@ -125,7 +112,10 @@ async function getBlobFromRemoteIPFS(cid) {
 
 async function getArrayBufferFromRemoteIPFS(cid) {
   const bytes = await fetchIpfsBytes(cid);
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  );
 }
 
 /**
