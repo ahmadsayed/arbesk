@@ -6,12 +6,17 @@
 
 /**
  * Update the browser URL to point to a token ID.
- * Removes ?manifest param, sets ?asset=<tokenId>.
+ * Removes ?manifest param, sets ?asset=<tokenId>, optionally preserves ?assetId.
  */
-export function updateUrlAsset(tokenId) {
+export function updateUrlAsset(tokenId, assetId = null) {
   const url = new URL(window.location);
   url.searchParams.delete("manifest");
   url.searchParams.set("asset", String(tokenId));
+  if (assetId) {
+    url.searchParams.set("assetId", String(assetId));
+  } else {
+    url.searchParams.delete("assetId");
+  }
   window.history.pushState({}, "", url);
 }
 

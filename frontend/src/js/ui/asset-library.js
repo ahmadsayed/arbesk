@@ -286,7 +286,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
         latestAssetManifestCid: targetAssetCid,
       });
       dismissCreatePulse();
-      updateUrlAsset(tokenId);
+      updateUrlAsset(tokenId, targetAssetId);
 
       if (targetAssetCid) {
         await loadAssetManifest(targetAssetCid);
@@ -310,7 +310,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       latestAssetManifestCid: cid,
     });
     dismissCreatePulse();
-    updateUrlAsset(tokenId);
+    updateUrlAsset(tokenId, assetId);
     await loadAssetManifest(cid);
 
     const { showAssetEditors } = await import("./asset-editors.js");
@@ -675,14 +675,16 @@ on(EVENTS.ASSET_CLEARED, async () => {
 });
 
 on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
-  if (e?.tokenId) openAssetByTokenId(e.tokenId);
+  if (e?.tokenId) openAssetByTokenId(e.tokenId, e?.assetId || null);
 });
 
 on(EVENTS.WALLET_CONNECTED, async () => {
   await refreshAssetLibrary();
 
-  const assetTokenId = new URLSearchParams(window.location.search).get("asset");
-  if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId);
+  const params = new URLSearchParams(window.location.search);
+  const assetTokenId = params.get("asset");
+  const assetId = params.get("assetId");
+  if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId, assetId);
 });
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
