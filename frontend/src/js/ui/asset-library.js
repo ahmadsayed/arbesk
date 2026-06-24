@@ -38,7 +38,7 @@ function getContract() {
  * ERC-721 Transfer events. This replaces the ERC721Enumerable
  * `tokenOfOwnerByIndex` function that was removed to save storage slots.
  */
-async function fetchOwnedTokenIds(contract, address) {
+export async function fetchOwnedTokenIds(contract, address) {
   const lowerAddress = address.toLowerCase();
   const ownership = new Map();
 
@@ -119,7 +119,7 @@ async function fetchAssetLibrary(address) {
  * - Collection token → one entry per asset in the collection's `assets` map.
  *   Each card's "Add to Scene" and "Delete" actions operate on its own asset.
  */
-async function expandTokenToAssets(tokenId) {
+export async function expandTokenToAssets(tokenId) {
   const contract = getContract();
   if (!contract) return [];
 
@@ -238,7 +238,7 @@ async function openAssetEntry(entry) {
   }
 }
 
-async function openAssetByTokenId(tokenId) {
+export async function openAssetByTokenId(tokenId, assetId = null) {
   const contract = getContract();
   if (!contract) {
     console.warn("[LIBRARY] No contract available to open asset");
@@ -254,8 +254,10 @@ async function openAssetByTokenId(tokenId) {
 
     const manifest = await getFromRemoteIPFS(cid);
 
-    // Collections: load the collection manifest and auto-open the first asset
-    // so that a page reload with ?asset=TOKENID restores the viewport.
+    // Collections: load the collection manifest and auto-open the requested
+    // asset (or the first asset if none specified) so that navigation from
+    // library.html opens the exact asset the user clicked while still loading
+    // the whole collection into the Gallery sidebar.
     if (manifest?.type === "collection") {
       const { loadCollectionManifest } = await import(
         "../engine/scene-graph.js"
@@ -268,25 +270,30 @@ async function openAssetByTokenId(tokenId) {
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
 
       const assetIds = Object.keys(manifest.assets || {});
-      const firstAssetId = assetIds[0] || null;
-      const firstAssetCid = firstAssetId
-        ? manifest.assets[firstAssetId]
+      const targetAssetId = assetId && assetIds.includes(assetId)
+        ? assetId
+        : assetIds[0] || null;
+      const targetAssetCid = targetAssetId
+        ? manifest.assets[targetAssetId]
         : null;
 
       clearScene();
       assetState.set({
         activeAssetTokenId: String(tokenId),
         activeCollectionTokenId: String(tokenId),
-        activeAssetId: firstAssetId,
-        activeAssetManifestCid: firstAssetCid,
-        latestAssetManifestCid: firstAssetCid,
+        activeAssetId: targetAssetId,
+        activeAssetManifestCid: targetAssetCid,
+        latestAssetManifestCid: targetAssetCid,
       });
       dismissCreatePulse();
       updateUrlAsset(tokenId);
 
-      if (firstAssetCid) {
-        await loadAssetManifest(firstAssetCid);
+      if (targetAssetCid) {
+        await loadAssetManifest(targetAssetCid);
       }
+
+      const { showAssetEditors } = await import("./asset-editors.js");
+      showAssetEditors(tokenId);
 
       if (window.innerWidth <= 900) {
         switchView("library");
@@ -298,6 +305,7 @@ async function openAssetByTokenId(tokenId) {
     clearScene();
     assetState.set({
       activeAssetTokenId: String(tokenId),
+      activeAssetId: assetId,
       activeAssetManifestCid: cid,
       latestAssetManifestCid: cid,
     });
@@ -685,7 +693,6 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 
 export {
   initAssetLibrary,
-  openAssetByTokenId,
   fetchAssetLibrary,
   refreshAssetLibrary,
 };

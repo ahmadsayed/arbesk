@@ -57,9 +57,34 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-5);
   border-radius: var(--radius-2);
-  background-color: rgb(0 0 0 / 15%);
+  background-color: var(--surface-overlay-hover);
+  color: var(--accent-bg);
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--radius-2);
+  }
+}
+
+.library-item-thumbnail .library-item-icon {
+  width: 56%;
+  height: 56%;
+  opacity: 0.9;
+
+  &.collection-icon {
+    width: 60%;
+    height: 60%;
+  }
+}
+
+.library-row .library-item-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-bg);
 }
 
 .library-item-name {
@@ -139,19 +164,19 @@
 .status-check,
 .status-flag {
   position: absolute;
-  bottom: -3px;
-  right: -3px;
-  width: 18px;
-  height: 18px;
+  bottom: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--radius-round);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-2);
 
   svg {
-    width: 11px;
-    height: 11px;
+    width: 13px;
+    height: 13px;
   }
 }
 

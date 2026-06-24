@@ -117,6 +117,7 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
     c.classList.add("hidden");
     c.classList.remove("disconnected");
   }
+  if (d) d.classList.remove("hidden");
 
   const address = e?.address || "";
   const cached = getCachedSession();

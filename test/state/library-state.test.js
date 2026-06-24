@@ -9,21 +9,22 @@ beforeEach(() => _resetForTesting());
 describe("libraryState.get()", () => {
   test("returns defaults", () => {
     expect(libraryState.get()).toEqual({
-      folders: [],
-      files: [],
-      currentFolderId: null,
+      collections: [],
+      assets: [],
+      currentCollectionTokenId: null,
       selectedIds: [],
       viewMode: "grid",
       sortBy: "name",
       searchQuery: "",
+      isLoading: false,
     });
   });
 });
 
 describe("libraryState.set()", () => {
   test("merges partial update", () => {
-    libraryState.set({ currentFolderId: "f1" });
-    expect(libraryState.get().currentFolderId).toBe("f1");
+    libraryState.set({ currentCollectionTokenId: "c1" });
+    expect(libraryState.get().currentCollectionTokenId).toBe("c1");
     expect(libraryState.get().viewMode).toBe("grid");
   });
 
@@ -31,20 +32,20 @@ describe("libraryState.set()", () => {
     return new Promise((resolve) => {
       const handler = (payload) => {
         off(EVENTS.LIBRARY_STATE_CHANGED, handler);
-        expect(payload.currentFolderId).toBe("f1");
+        expect(payload.currentCollectionTokenId).toBe("c1");
         resolve();
       };
       on(EVENTS.LIBRARY_STATE_CHANGED, handler);
-      libraryState.set({ currentFolderId: "f1" });
+      libraryState.set({ currentCollectionTokenId: "c1" });
     });
   });
 });
 
 describe("libraryState.reset()", () => {
   test("restores defaults", () => {
-    libraryState.set({ currentFolderId: "f1", viewMode: "list" });
+    libraryState.set({ currentCollectionTokenId: "c1", viewMode: "list" });
     libraryState.reset();
-    expect(libraryState.get().currentFolderId).toBeNull();
+    expect(libraryState.get().currentCollectionTokenId).toBeNull();
     expect(libraryState.get().viewMode).toBe("grid");
   });
 });

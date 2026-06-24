@@ -123,7 +123,9 @@ function createAnchorNode(name, scene) {
 function initEngine() {
   const canvas = document.getElementById("renderCanvas");
   if (!canvas) {
-    console.error("renderCanvas not found");
+    // Non-Studio pages (e.g. library.html) may import modules that pull in
+    // scene-graph.js; missing canvas there is expected, not an error.
+    console.log("[SCENE] renderCanvas not present — skipping 3D engine init");
     return;
   }
 

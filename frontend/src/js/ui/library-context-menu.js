@@ -1,8 +1,14 @@
 import { libraryState } from "../state/library-state.js";
-import { openInStudio, requestDelete, announce } from "./library-grid.js";
-import { requestNewFolder } from "./library-toolbar.js";
-import { showDialog } from "./dialog.js";
+import { showConfirmDialog, showDialog } from "./dialog.js";
 import { escapeHtml } from "../utils/html.js";
+import { showToast } from "./toasts.js";
+
+// Blockchain/IPFS operations are loaded lazily so that unit tests for this
+// module can run in jsdom without pulling in the full Studio dependency tree.
+const assetLibraryOps = () => import("./asset-library.js");
+const assetDeleteOps = () => import("../services/asset-delete.js");
+const ipfsOps = () => import("../ipfs/remote-ipfs.js");
+const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.js");
 
 let menuEl = null;
 
@@ -13,58 +19,314 @@ export function closeContextMenu() {
   }
 }
 
-function isFolder(id) {
-  return libraryState.get().folders.some((f) => f.id === id);
+function announce(text) {
+  const region = document.getElementById("libraryLiveRegion");
+  if (region) region.textContent = text;
+}
+
+function getItem(id) {
+  const state = libraryState.get();
+  return (
+    state.collections.find((c) => c.id === id) ||
+    state.assets.find((a) => a.id === id) ||
+    null
+  );
+}
+
+function isCollection(id) {
+  return libraryState.get().collections.some((c) => c.id === id);
 }
 
 function singleItemMenuItems(ids) {
   const id = ids[0];
-  if (isFolder(id)) {
+  if (isCollection(id)) {
+    const collection = getItem(id);
     return [
-      { label: "Besk it", action: () => requestBeskIt(ids) },
+      { label: "Open", action: () => openCollection(id) },
       {
-        label: "Open",
-        action: () =>
-          libraryState.set({ currentFolderId: id, selectedIds: [] }),
+        label: "Open in Studio",
+        action: () => openAssetByTokenId(collection.tokenId),
       },
       { label: "Rename", action: () => requestRename(id) },
-      { label: "Move to folder…", action: () => requestMoveToFolder(ids) },
-      { label: "Delete", action: () => requestDelete(ids), danger: true },
     ];
   }
   return [
-    { label: "Besk it", action: () => requestBeskIt(ids) },
-    { label: "Open in Studio", action: () => openInStudio(id) },
+    { label: "Open in Studio", action: () => openSelectedAssetInStudio([id]) },
+    { label: "Send to Collection…", action: () => requestSendToCollection(id) },
     { label: "Rename", action: () => requestRename(id) },
-    { label: "Move to folder…", action: () => requestMoveToFolder(ids) },
-    { label: "Delete", action: () => requestDelete(ids), danger: true },
+    {
+      label: "Delete",
+      action: () => requestDeleteSelected(ids),
+      danger: true,
+    },
   ];
 }
 
 function multiSelectionMenuItems(ids) {
   return [
-    { label: "Besk it", action: () => requestBeskIt(ids) },
-    // openInStudio navigates via window.location.href, so only the first call
-    // takes effect; the remaining ids are dead no-ops. This is a known limitation
-    // — you can't open multiple files simultaneously from a single action.
-    {
-      label: "Open in Studio",
-      action: () => ids.forEach((id) => openInStudio(id)),
-    },
-    { label: "Move to folder…", action: () => requestMoveToFolder(ids) },
-    { label: "Delete", action: () => requestDelete(ids), danger: true },
+    { label: "Open first in Studio", action: () => openSelectedAssetInStudio(ids) },
+    { label: "Delete", action: () => requestDeleteSelected(ids), danger: true },
   ];
 }
 
 function emptySpaceMenuItems() {
   return [
-    { label: "New Folder", action: () => requestNewFolder() },
-    {
-      label: "Upload",
-      action: () => document.getElementById("libraryFileInput")?.click(),
-    },
-    { label: "Paste", action: () => {}, disabled: true, dataAction: "paste" },
+    { label: "Refresh", action: () => refreshLibrary() },
   ];
+}
+
+async function refreshLibrary() {
+  const { refreshLibraryData } = await import("../library-init.js");
+  refreshLibraryData();
+}
+
+function openCollection(id) {
+  const collection = libraryState.get().collections.find((c) => c.id === id);
+  if (!collection) return;
+  libraryState.set({
+    currentCollectionTokenId: collection.tokenId,
+    selectedIds: [],
+  });
+  announce(`Opened collection ${collection.name}`);
+}
+
+async function openSelectedAssetInStudio(ids) {
+  if (!ids.length) return;
+  const asset = libraryState.get().assets.find((a) => a.id === ids[0]);
+  if (!asset) return;
+  const { openAssetByTokenId } = await assetLibraryOps();
+  openAssetByTokenId(asset.tokenId, asset.assetId);
+}
+
+export async function requestRename(id) {
+  const item = getItem(id);
+  if (!item) return;
+
+  const current = item.name || `Item #${id}`;
+  const name = await showDialog("Rename", "New name", current);
+  if (!name) return;
+
+  try {
+    const { updateCollectionManifest } = await assetDeleteOps();
+    if (isCollection(id)) {
+      await updateCollectionManifest(
+        item.tokenId,
+        (col) => {
+          col.name = name;
+          return col;
+        },
+        { label: "rename collection" }
+      );
+      libraryState.set({
+        collections: libraryState.get().collections.map((c) =>
+          c.id === id ? { ...c, name } : c
+        ),
+      });
+    } else {
+      const { getFromRemoteIPFS } = await ipfsOps();
+      const { writeJSONToIPFS } = await ipfsWriteOps();
+      const manifest = await getFromRemoteIPFS(item.manifestCid);
+      const updated = { ...manifest, name };
+      const newCid = await writeJSONToIPFS(updated, null, {
+        type: "asset",
+        assetId: item.assetId,
+      });
+      await updateCollectionManifest(
+        item.tokenId,
+        (col) => {
+          col.assets = { ...col.assets };
+          col.assets[item.assetId] = newCid;
+          return col;
+        },
+        { label: "rename asset" }
+      );
+      libraryState.set({
+        assets: libraryState.get().assets.map((a) =>
+          a.id === id ? { ...a, name, manifestCid: newCid } : a
+        ),
+      });
+    }
+    announce(`Renamed to ${name}`);
+  } catch (err) {
+    console.error("Rename failed:", err);
+    showToast({
+      type: "error",
+      title: "Rename Failed",
+      message: err.message || "Could not rename item.",
+    });
+  }
+}
+
+export async function requestDeleteSelected(ids) {
+  const assets = ids
+    .map((id) => libraryState.get().assets.find((a) => a.id === id))
+    .filter(Boolean);
+  if (assets.length === 0) return;
+
+  const confirmed = await showConfirmDialog(
+    assets.length === 1 ? "Delete asset?" : `Delete ${assets.length} assets?`,
+    "This removes the asset from its collection. The NFT token is not burned.",
+    [
+      { text: "Cancel", value: "cancel", className: "btn btn-secondary" },
+      { text: "Delete", value: "confirm", className: "btn btn-danger" },
+    ]
+  );
+  if (confirmed !== "confirm") return;
+
+  const { deleteAssetFromCollection } = await assetDeleteOps();
+  for (const asset of assets) {
+    try {
+      await deleteAssetFromCollection({
+        tokenId: asset.tokenId,
+        assetId: asset.assetId,
+        assetName: asset.name,
+      });
+    } catch (err) {
+      console.error("Delete asset failed:", err);
+      showToast({
+        type: "error",
+        title: "Delete Failed",
+        message: err.message || "Could not delete asset.",
+      });
+      return;
+    }
+  }
+
+  const state = libraryState.get();
+  libraryState.set({
+    assets: state.assets.filter((a) => !ids.includes(a.id)),
+    selectedIds: [],
+  });
+  announce(`${assets.length} asset${assets.length === 1 ? "" : "s"} deleted`);
+}
+
+export async function requestSendToCollection(assetId) {
+  const asset = libraryState.get().assets.find((a) => a.id === assetId);
+  if (!asset) return;
+
+  const state = libraryState.get();
+  const otherCollections = state.collections.filter(
+    (c) => String(c.tokenId) !== String(asset.tokenId)
+  );
+  if (otherCollections.length === 0) {
+    showToast({
+      type: "warning",
+      title: "No Target Collection",
+      message: "Create or own another collection first.",
+    });
+    return;
+  }
+
+  const targetTokenId = await showTargetCollectionDialog(otherCollections);
+  if (!targetTokenId) return;
+
+  const mode = await showConfirmDialog(
+    "Send Asset",
+    `How would you like to send "${asset.name || asset.assetId}" to the target collection?`,
+    [
+      { text: "Move", value: "move", className: "btn btn-secondary" },
+      { text: "Copy", value: "copy", className: "btn btn-primary" },
+    ]
+  );
+  if (!mode || (mode !== "move" && mode !== "copy")) return;
+
+  try {
+    const { sendAssetToCollection } = await assetDeleteOps();
+    await sendAssetToCollection({
+      sourceTokenId: asset.tokenId,
+      targetTokenId,
+      assetId: asset.assetId,
+      assetName: asset.name,
+      mode,
+    });
+
+    // Refresh the current view
+    const { refreshLibraryData } = await import("../library-init.js");
+    await refreshLibraryData();
+  } catch (err) {
+    console.error("Send to collection failed:", err);
+    showToast({
+      type: "error",
+      title: "Send Failed",
+      message: err.message || "Could not send asset to collection.",
+    });
+  }
+}
+
+function showTargetCollectionDialog(collections) {
+  return new Promise((resolve) => {
+    import("./dialog.js").then(({ showDialog }) => {
+      const options = collections
+        .map(
+          (c) =>
+            `<option value="${escapeHtml(String(c.tokenId))}">${escapeHtml(
+              c.name || `Collection #${c.tokenId}`
+            )}</option>`
+        )
+        .join("");
+
+      const dialogId = "target-collection-dialog-" + Date.now();
+      const backdrop = document.createElement("div");
+      backdrop.className = "dialog-backdrop";
+
+      const dialog = document.createElement("div");
+      dialog.className = "dialog";
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("aria-labelledby", dialogId);
+      dialog.innerHTML = `
+        <div class="dialog-header"><h2 class="dialog-title" id="${dialogId}">Send to Collection</h2></div>
+        <div class="dialog-body">
+          <div class="form-group">
+            <label class="form-label" for="targetCollectionSelect">Target collection</label>
+            <select id="targetCollectionSelect" class="form-select">${options}</select>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary dialog-cancel-btn" type="button">Cancel</button>
+          <button class="btn btn-primary dialog-confirm-btn" type="button">Continue</button>
+        </div>
+      `;
+
+      backdrop.appendChild(dialog);
+      document.body.appendChild(backdrop);
+
+      let resolved = false;
+      function close(value) {
+        if (resolved) return;
+        resolved = true;
+        backdrop.remove();
+        resolve(value);
+      }
+
+      dialog.querySelector(".dialog-cancel-btn")?.addEventListener("click", () => close(null));
+      dialog.querySelector(".dialog-confirm-btn")?.addEventListener("click", () => {
+        const select = dialog.querySelector("#targetCollectionSelect");
+        close(select ? select.value : null);
+      });
+      document.addEventListener("keydown", function onKey(e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          document.removeEventListener("keydown", onKey);
+          close(null);
+        }
+      });
+      backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) close(null);
+      });
+
+      if (window.focusTrap) {
+        try {
+          const trap = window.focusTrap.createFocusTrap(dialog, {
+            initialFocus: dialog.querySelector("#targetCollectionSelect"),
+            escapeDeactivates: false,
+            allowOutsideClick: true,
+          });
+          trap.activate();
+        } catch {}
+      }
+    });
+  });
 }
 
 function focusMenuItem(items, index) {
@@ -95,7 +357,6 @@ export function openContextMenu(x, y, targetIds) {
       "context-menu-item" + (item.danger ? " context-menu-item-danger" : "");
     btn.setAttribute("role", "menuitem");
     btn.textContent = item.label;
-    if (item.dataAction) btn.dataset.action = item.dataAction;
     if (item.disabled) btn.disabled = true;
     btn.addEventListener("click", () => {
       if (item.disabled) return;
@@ -119,159 +380,6 @@ export function openContextMenu(x, y, targetIds) {
 
   document.body.appendChild(menuEl);
   menuEl.querySelector(".context-menu-item")?.focus();
-}
-
-export function requestRename(id) {
-  const state = libraryState.get();
-  const file = state.files.find((f) => f.id === id);
-  const folder = state.folders.find((f) => f.id === id);
-  const current = file ? file.name : folder.name;
-
-  return showDialog("Rename", "New name", current).then((name) => {
-    if (!name) return;
-    if (file) {
-      libraryState.set({
-        files: state.files.map((f) => (f.id === id ? { ...f, name } : f)),
-      });
-    } else {
-      libraryState.set({
-        folders: state.folders.map((f) => (f.id === id ? { ...f, name } : f)),
-      });
-    }
-    announce(`Renamed to ${name}`);
-  });
-}
-
-export function requestMoveToFolder(ids) {
-  return new Promise((resolve) => {
-    const state = libraryState.get();
-    const dialogId = "move-dialog-title-" + Date.now();
-
-    // Backdrop — click outside dismisses
-    const backdrop = document.createElement("div");
-    backdrop.className = "dialog-backdrop";
-
-    const dialog = document.createElement("div");
-    dialog.className = "dialog";
-    dialog.setAttribute("role", "dialog");
-    dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-labelledby", dialogId);
-
-    const folderButtons = state.folders
-      .filter((f) => !ids.includes(f.id))
-      .map(
-        (f) =>
-          `<button type="button" class="context-menu-item" data-move-target="${
-            f.id
-          }">${escapeHtml(f.name)}</button>`
-      )
-      .join("");
-
-    dialog.innerHTML = `
-      <div class="dialog-header"><h2 class="dialog-title" id="${dialogId}">Move to folder…</h2></div>
-      <div class="dialog-body">
-        <button type="button" class="context-menu-item" data-move-target="">Home</button>
-        ${folderButtons}
-      </div>
-      <div class="dialog-actions">
-        <button class="btn btn-secondary dialog-cancel-btn" type="button">Cancel</button>
-      </div>
-    `;
-
-    backdrop.appendChild(dialog);
-    document.body.appendChild(backdrop);
-
-    let resolved = false;
-    let removeTrap = () => {};
-
-    function dismiss() {
-      if (resolved) return;
-      resolved = true;
-      document.removeEventListener("keydown", onKey);
-      removeTrap();
-      backdrop.remove();
-      resolve();
-    }
-
-    function moveTo(targetId) {
-      if (resolved) return;
-      resolved = true;
-      document.removeEventListener("keydown", onKey);
-      removeTrap();
-      backdrop.remove();
-      const next = libraryState.get();
-      libraryState.set({
-        files: next.files.map((f) =>
-          ids.includes(f.id) ? { ...f, parentId: targetId } : f
-        ),
-        folders: next.folders.map((f) =>
-          ids.includes(f.id) ? { ...f, parentId: targetId } : f
-        ),
-        selectedIds: [],
-      });
-      announce(`Moved ${ids.length} item${ids.length === 1 ? "" : "s"}`);
-      resolve();
-    }
-
-    function onKey(e) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        dismiss();
-      }
-    }
-
-    document.addEventListener("keydown", onKey);
-
-    // Click outside (on backdrop) dismisses
-    backdrop.addEventListener("click", (e) => {
-      if (e.target === backdrop) dismiss();
-    });
-
-    // Cancel button
-    dialog
-      .querySelector(".dialog-cancel-btn")
-      ?.addEventListener("click", dismiss);
-
-    // Folder target buttons
-    dialog.querySelectorAll("[data-move-target]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const targetId = btn.dataset.moveTarget || null;
-        moveTo(targetId);
-      });
-    });
-
-    // Focus trap
-    if (window.focusTrap) {
-      const firstBtn =
-        dialog.querySelector("[data-move-target]") ||
-        dialog.querySelector(".dialog-cancel-btn");
-      try {
-        const trap = window.focusTrap.createFocusTrap(dialog, {
-          initialFocus: firstBtn,
-          escapeDeactivates: false,
-          allowOutsideClick: true,
-        });
-        trap.activate();
-        removeTrap = () => trap.deactivate();
-      } catch (_) {
-        // focus-trap unavailable (e.g. test environment) — dialog still works
-      }
-    }
-  });
-}
-
-export function requestBeskIt(ids) {
-  const state = libraryState.get();
-  libraryState.set({
-    files: state.files.map((f) =>
-      ids.includes(f.id) ? { ...f, status: "besked" } : f
-    ),
-    folders: state.folders.map((f) =>
-      ids.includes(f.id) ? { ...f, status: "besked" } : f
-    ),
-  });
-  announce(`${ids.length} item${ids.length === 1 ? "" : "s"} besked`);
-  return Promise.resolve();
 }
 
 export function initLibraryContextMenu() {

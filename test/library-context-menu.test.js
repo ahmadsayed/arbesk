@@ -5,8 +5,7 @@ import {
   openContextMenu,
   closeContextMenu,
   requestRename,
-  requestMoveToFolder,
-  requestBeskIt,
+  requestDeleteSelected,
   initLibraryContextMenu,
 } from "../frontend/src/js/ui/library-context-menu.js";
 import {
@@ -28,13 +27,22 @@ beforeEach(() => {
   };
   document.body.innerHTML = `
     <div id="libraryItems">
-      <div class="library-item" data-id="a" data-type="file"></div>
-      <div class="library-item" data-id="f1" data-type="folder"></div>
+      <div class="library-item" data-id="asset-1-asset-a" data-type="asset"></div>
+      <div class="library-item" data-id="collection-1" data-type="collection"></div>
     </div>
+    <div id="libraryLiveRegion"></div>
   `;
   libraryState.set({
-    folders: [{ id: "f1", name: "Weapons", parentId: null, status: "wip" }],
-    files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }],
+    collections: [{ id: "collection-1", tokenId: "1", name: "Weapons", status: "besked" }],
+    assets: [{
+      id: "asset-1-asset-a",
+      type: "asset",
+      tokenId: "1",
+      assetId: "asset-a",
+      name: "a.glb",
+      status: "besked",
+      manifestCid: "QmA",
+    }],
   });
 });
 
@@ -46,71 +54,64 @@ function menuEl() {
 
 describe("openContextMenu / closeContextMenu", () => {
   test("renders a menu positioned at the given coordinates", () => {
-    openContextMenu(120, 80, ["a"]);
+    openContextMenu(120, 80, ["asset-1-asset-a"]);
     const menu = document.querySelector(".context-menu");
     expect(menu).not.toBeNull();
     expect(menu.style.left).toBe("120px");
     expect(menu.style.top).toBe("80px");
   });
 
-  test("a single selected file shows Besk it, Open in Studio, Rename, Move, Delete", () => {
-    openContextMenu(0, 0, ["a"]);
+  test("a single selected asset shows Open in Studio, Send to Collection, Rename, Delete", () => {
+    openContextMenu(0, 0, ["asset-1-asset-a"]);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
     expect(labels).toEqual([
-      "Besk it",
       "Open in Studio",
+      "Send to Collection…",
       "Rename",
-      "Move to folder…",
       "Delete",
     ]);
   });
 
-  test("a single selected folder shows Besk it, Open, Rename, Move, Delete", () => {
-    openContextMenu(0, 0, ["f1"]);
+  test("a single selected collection shows Open, Open in Studio, Rename", () => {
+    openContextMenu(0, 0, ["collection-1"]);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
     expect(labels).toEqual([
-      "Besk it",
       "Open",
+      "Open in Studio",
       "Rename",
-      "Move to folder…",
-      "Delete",
     ]);
   });
 
   test("a multi-selection omits Rename", () => {
-    openContextMenu(0, 0, ["a", "f1"]);
+    openContextMenu(0, 0, ["asset-1-asset-a", "collection-1"]);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
     expect(labels).not.toContain("Rename");
-    expect(labels).toContain("Besk it");
+    expect(labels).toContain("Open first in Studio");
     expect(labels).toContain("Delete");
   });
 
-  test("empty selection (right-click on empty space) shows New Folder, Upload, and a disabled Paste", () => {
+  test("empty selection (right-click on empty space) shows Refresh", () => {
     openContextMenu(0, 0, []);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
-    expect(labels).toEqual(["New Folder", "Upload", "Paste"]);
-    expect(
-      document.querySelector('.context-menu-item[data-action="paste"]')
-        .disabled,
-    ).toBe(true);
+    expect(labels).toEqual(["Refresh"]);
   });
 
   test("closeContextMenu removes the menu from the DOM", () => {
-    openContextMenu(0, 0, ["a"]);
+    openContextMenu(0, 0, ["asset-1-asset-a"]);
     closeContextMenu();
     expect(document.querySelector(".context-menu")).toBeNull();
   });
 
   test("ArrowDown/ArrowUp move focus between menu items, wrapping at the ends", () => {
-    openContextMenu(0, 0, ["a"]);
+    openContextMenu(0, 0, ["asset-1-asset-a"]);
     const items = [...document.querySelectorAll(".context-menu-item")];
     expect(document.activeElement).toBe(items[0]);
 
@@ -130,83 +131,18 @@ describe("openContextMenu / closeContextMenu", () => {
 });
 
 describe("requestRename", () => {
-  test("renames the file using the typed value", async () => {
-    const promise = requestRename("a");
-    document.querySelector(".dialog-input").value = "renamed.glb";
-    document.querySelector(".dialog-confirm-btn")?.click();
-    await promise;
-    expect(libraryState.get().files.find((f) => f.id === "a").name).toBe(
-      "renamed.glb",
-    );
-  });
-});
-
-describe("requestMoveToFolder", () => {
-  test("moves the file into the chosen folder", async () => {
-    const promise = requestMoveToFolder(["a"]);
-    document.querySelector('[data-move-target="f1"]')?.click();
-    await promise;
-    expect(libraryState.get().files.find((f) => f.id === "a").parentId).toBe(
-      "f1",
-    );
-  });
-
-  test("Escape dismisses the move dialog without moving", async () => {
-    const promise = requestMoveToFolder(["a"]);
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    );
-    await promise;
-    expect(
-      libraryState.get().files.find((f) => f.id === "a").parentId,
-    ).toBeNull();
-  });
-
-  test("clicking the backdrop dismisses the move dialog without moving", async () => {
-    const promise = requestMoveToFolder(["a"]);
-    const backdrop = document.querySelector(".dialog-backdrop");
-    backdrop?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await promise;
-    expect(
-      libraryState.get().files.find((f) => f.id === "a").parentId,
-    ).toBeNull();
-  });
-
-  test("clicking the Cancel button dismisses the move dialog without moving", async () => {
-    const promise = requestMoveToFolder(["a"]);
-    document.querySelector(".dialog-cancel-btn")?.click();
-    await promise;
-    expect(
-      libraryState.get().files.find((f) => f.id === "a").parentId,
-    ).toBeNull();
-  });
-});
-
-describe("requestBeskIt", () => {
-  test("flips status from wip to besked immediately, with no confirmation dialog", async () => {
-    await requestBeskIt(["a"]);
-    expect(document.querySelector(".dialog-overlay")).toBeNull();
-    expect(libraryState.get().files.find((f) => f.id === "a").status).toBe(
-      "besked",
-    );
-  });
-
-  test("besks a folder independently of its children's status", async () => {
-    await requestBeskIt(["f1"]);
-    expect(libraryState.get().folders.find((f) => f.id === "f1").status).toBe(
-      "besked",
-    );
-    // Besking the folder does not cascade to its children.
-    expect(libraryState.get().files.find((f) => f.id === "a").status).toBe(
-      "wip",
-    );
+  test("opens the rename dialog for the selected item", async () => {
+    requestRename("asset-1-asset-a");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector(".dialog-title").textContent).toBe("Rename");
+    expect(document.querySelector(".dialog-input").value).toBe("a.glb");
   });
 });
 
 describe("initLibraryContextMenu", () => {
   test("right-clicking an unselected item selects it and opens the menu for it", () => {
     initLibraryContextMenu();
-    const el = document.querySelector('[data-id="a"]');
+    const el = document.querySelector('[data-id="asset-1-asset-a"]');
     el.dispatchEvent(
       new MouseEvent("contextmenu", {
         bubbles: true,
@@ -214,7 +150,7 @@ describe("initLibraryContextMenu", () => {
         clientY: 10,
       }),
     );
-    expect(libraryState.get().selectedIds).toEqual(["a"]);
+    expect(libraryState.get().selectedIds).toEqual(["asset-1-asset-a"]);
     expect(document.querySelector(".context-menu")).not.toBeNull();
   });
 
@@ -231,12 +167,12 @@ describe("initLibraryContextMenu", () => {
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
-    expect(labels).toEqual(["New Folder", "Upload", "Paste"]);
+    expect(labels).toEqual(["Refresh"]);
   });
 
   test("Escape closes an open menu", () => {
     initLibraryContextMenu();
-    openContextMenu(0, 0, ["a"]);
+    openContextMenu(0, 0, ["asset-1-asset-a"]);
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );

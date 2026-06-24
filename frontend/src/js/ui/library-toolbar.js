@@ -1,12 +1,25 @@
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
-import { buildBreadcrumb } from "../utils/library-items.js";
 import { escapeHtml } from "../utils/html.js";
-import { showDialog } from "./dialog.js";
-import { addFiles } from "./library-grid.js";
 
-export function renderBreadcrumb(container, folders, currentFolderId) {
-  const path = buildBreadcrumb(folders, currentFolderId);
+export function buildBreadcrumb(collections, currentCollectionTokenId) {
+  const path = [{ tokenId: null, name: "Home" }];
+  if (currentCollectionTokenId) {
+    const collection = collections.find(
+      (c) => String(c.tokenId) === String(currentCollectionTokenId)
+    );
+    if (collection) {
+      path.push({
+        tokenId: collection.tokenId,
+        name: collection.name || `Collection #${collection.tokenId}`,
+      });
+    }
+  }
+  return path;
+}
+
+export function renderBreadcrumb(container, collections, currentCollectionTokenId) {
+  const path = buildBreadcrumb(collections, currentCollectionTokenId);
   container.innerHTML = path
     .map((segment, i) => {
       const isLast = i === path.length - 1;
@@ -14,31 +27,19 @@ export function renderBreadcrumb(container, folders, currentFolderId) {
       if (isLast) {
         return `<span class="pathbar-current">${label}</span>`;
       }
-      return `<button type="button" class="pathbar-segment" data-folder-id="${segment.id ?? ""}">${label}</button><span class="pathbar-separator">›</span>`;
+      return `<button type="button" class="pathbar-segment" data-collection-token-id="${segment.tokenId ?? ""}">${label}</button><span class="pathbar-separator">›</span>`;
     })
     .join("");
-}
-
-export function requestNewFolder() {
-  return showDialog("New Folder", "Folder name", "New Folder").then((name) => {
-    if (!name) return;
-    const folder = {
-      id: `folder-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name,
-      parentId: libraryState.get().currentFolderId,
-      status: "wip",
-    };
-    libraryState.set({ folders: [...libraryState.get().folders, folder] });
-  });
 }
 
 function renderToolbar() {
   const state = libraryState.get();
   const breadcrumb = document.getElementById("libraryBreadcrumb");
-  if (breadcrumb) renderBreadcrumb(breadcrumb, state.folders, state.currentFolderId);
+  if (breadcrumb)
+    renderBreadcrumb(breadcrumb, state.collections, state.currentCollectionTokenId);
 
   const upBtn = document.getElementById("libraryUpBtn");
-  if (upBtn) upBtn.hidden = state.currentFolderId === null;
+  if (upBtn) upBtn.hidden = state.currentCollectionTokenId === null;
 
   const gridBtn = document.getElementById("libraryGridViewBtn");
   const listBtn = document.getElementById("libraryListViewBtn");
@@ -48,16 +49,15 @@ function renderToolbar() {
 
 export function initLibraryToolbar() {
   document.getElementById("libraryUpBtn")?.addEventListener("click", () => {
-    const state = libraryState.get();
-    const parent = state.folders.find((f) => f.id === state.currentFolderId);
-    libraryState.set({ currentFolderId: parent ? parent.parentId : null, selectedIds: [] });
+    libraryState.set({ currentCollectionTokenId: null, selectedIds: [] });
+    announce("Returned to collections");
   });
 
   document.getElementById("libraryBreadcrumb")?.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-folder-id]");
+    const btn = e.target.closest("[data-collection-token-id]");
     if (!btn) return;
-    const id = btn.dataset.folderId || null;
-    libraryState.set({ currentFolderId: id, selectedIds: [] });
+    const tokenId = btn.dataset.collectionTokenId || null;
+    libraryState.set({ currentCollectionTokenId: tokenId, selectedIds: [] });
   });
 
   document.getElementById("librarySearchInput")?.addEventListener("input", (e) => {
@@ -68,18 +68,18 @@ export function initLibraryToolbar() {
     libraryState.set({ sortBy: e.target.value });
   });
 
-  document.getElementById("libraryNewFolderBtn")?.addEventListener("click", requestNewFolder);
-
-  const fileInput = document.getElementById("libraryFileInput");
-  document.getElementById("libraryUploadBtn")?.addEventListener("click", () => fileInput?.click());
-  fileInput?.addEventListener("change", (e) => {
-    if (e.target.files?.length) addFiles(e.target.files);
-    e.target.value = "";
-  });
-
-  document.getElementById("libraryGridViewBtn")?.addEventListener("click", () => libraryState.set({ viewMode: "grid" }));
-  document.getElementById("libraryListViewBtn")?.addEventListener("click", () => libraryState.set({ viewMode: "list" }));
+  document.getElementById("libraryGridViewBtn")?.addEventListener("click", () =>
+    libraryState.set({ viewMode: "grid" })
+  );
+  document.getElementById("libraryListViewBtn")?.addEventListener("click", () =>
+    libraryState.set({ viewMode: "list" })
+  );
 
   on(EVENTS.LIBRARY_STATE_CHANGED, renderToolbar);
   renderToolbar();
+}
+
+function announce(text) {
+  const region = document.getElementById("libraryLiveRegion");
+  if (region) region.textContent = text;
 }

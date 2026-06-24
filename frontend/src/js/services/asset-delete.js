@@ -171,3 +171,136 @@ export async function deleteAssetFromCollection({
 
   return newCollectionCid;
 }
+
+export async function loadEditorListForToken(tokenId) {
+  return loadEditorList(tokenId);
+}
+
+export async function getEditorSetVersionForToken(tokenId) {
+  return getEditorSetVersion(tokenId);
+}
+
+/**
+ * Load a collection manifest, apply a mutation, write the new manifest to IPFS,
+ * and update the on-chain tokenURI. Reuses editor-list/proof logic from delete.
+ *
+ * @param {string} tokenId
+ * @param {Function} mutate - Receives the collection manifest; should mutate and return it.
+ * @param {{label?: string, onAfterUpdate?: Function}} [options]
+ * @returns {Promise<string>} New collection CID.
+ */
+export async function updateCollectionManifest(tokenId, mutate, options = {}) {
+  const c = walletContract || walletState.get().contract;
+  if (!c) throw new Error("Wallet or contract not ready");
+
+  const currentCid = await c.methods.tokenURI(tokenId).call();
+  const collection = await getFromRemoteIPFS(currentCid);
+
+  const newCollection = mutate({ ...collection });
+  newCollection.version = (newCollection.version || 0) + 1;
+  newCollection.prev_asset_manifest_cid = currentCid;
+
+  const newCollectionCid = await writeJSONToIPFS(newCollection, null, {
+    type: "collection",
+    assetId: newCollection.asset_id,
+  });
+
+  const walletAddr = walletState.get().walletAddress;
+  let editorList = await loadEditorList(tokenId);
+  if (!editorList) {
+    editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
+  }
+  const currentVersion = await getEditorSetVersion(tokenId);
+  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
+  if (!proofResult) throw new Error("Not an authorized editor");
+
+  const txHash = await updateAssetURI(tokenId, newCollectionCid, proofResult.proof);
+  if (!txHash) throw new Error(`Update tokenURI transaction failed for ${options.label || tokenId}`);
+
+  if (typeof options.onAfterUpdate === "function") {
+    options.onAfterUpdate(newCollectionCid);
+  }
+
+  return newCollectionCid;
+}
+
+/**
+ * Move or copy an asset from one collection to another.
+ *
+ * @param {Object} opts
+ * @param {string} opts.sourceTokenId
+ * @param {string} opts.targetTokenId
+ * @param {string} opts.assetId
+ * @param {string} opts.assetName
+ * @param {"move"|"copy"} opts.mode
+ * @param {Function} [opts.onAfterSend]
+ * @returns {Promise<void>}
+ */
+export async function sendAssetToCollection({
+  sourceTokenId,
+  targetTokenId,
+  assetId,
+  assetName,
+  mode,
+  onAfterSend,
+}) {
+  const c = walletContract || walletState.get().contract;
+  if (!c) throw new Error("Wallet or contract not ready");
+  if (String(sourceTokenId) === String(targetTokenId)) {
+    throw new Error("Source and target collection must be different");
+  }
+
+  const [sourceCid, targetCid] = await Promise.all([
+    c.methods.tokenURI(sourceTokenId).call(),
+    c.methods.tokenURI(targetTokenId).call(),
+  ]);
+  const [sourceCollection, targetCollection] = await Promise.all([
+    getFromRemoteIPFS(sourceCid),
+    getFromRemoteIPFS(targetCid),
+  ]);
+
+  const assetCid = sourceCollection.assets?.[assetId];
+  if (!assetCid) {
+    throw new Error(`Asset ${assetId} not found in source collection`);
+  }
+
+  const updates = [];
+
+  if (mode === "move") {
+    updates.push(
+      updateCollectionManifest(
+        sourceTokenId,
+        (col) => {
+          col.assets = { ...col.assets };
+          delete col.assets[assetId];
+          return col;
+        },
+        { label: "source" }
+      )
+    );
+  }
+
+  updates.push(
+    updateCollectionManifest(
+      targetTokenId,
+      (col) => {
+        col.assets = { ...col.assets };
+        col.assets[assetId] = assetCid;
+        return col;
+      },
+      { label: "target" }
+    )
+  );
+
+  await Promise.all(updates);
+
+  showToast({
+    type: "info",
+    title: mode === "move" ? "Asset Moved" : "Asset Copied",
+    message: `"${assetName || assetId}" ${mode === "move" ? "moved to" : "copied to"} the target collection.`,
+  });
+
+  if (typeof onAfterSend === "function") {
+    onAfterSend();
+  }
+}

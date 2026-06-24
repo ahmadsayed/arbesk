@@ -20,14 +20,11 @@ describe("Library page build", () => {
 
   test("library.html has the toolbar, content, and statusbar regions", () => {
     const html = readDist("library.html");
+    expect(html).toMatch(/id="libraryUpBtn"/);
     expect(html).toMatch(/id="libraryBreadcrumb"/);
     expect(html).toMatch(/id="librarySearchInput"/);
     expect(html).toMatch(/id="librarySortSelect"/);
-    expect(html).toMatch(/id="libraryNewFolderBtn"/);
-    expect(html).toMatch(/id="libraryUploadBtn"/);
-    expect(html).toMatch(/id="libraryFileInput"[^>]*accept="\.glb,\.gltf"/);
     expect(html).toMatch(/id="libraryContent"/);
-    expect(html).toMatch(/id="libraryDropOverlay"/);
     expect(html).toMatch(/id="libraryItems"/);
     expect(html).toMatch(/id="libraryItemCount"/);
     expect(html).toMatch(/id="libraryGridViewBtn"/);

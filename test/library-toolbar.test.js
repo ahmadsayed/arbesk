@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { jest } from "@jest/globals";
-import { renderBreadcrumb, requestNewFolder, initLibraryToolbar } from "../frontend/src/js/ui/library-toolbar.js";
+import { renderBreadcrumb, initLibraryToolbar } from "../frontend/src/js/ui/library-toolbar.js";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
 
 beforeEach(() => {
@@ -14,12 +14,10 @@ beforeEach(() => {
     }),
   };
   document.body.innerHTML = `
+    <button id="libraryUpBtn" hidden></button>
     <nav id="libraryBreadcrumb"></nav>
     <input id="librarySearchInput" />
     <select id="librarySortSelect"><option value="name">Name</option><option value="date">Date</option></select>
-    <button id="libraryNewFolderBtn"></button>
-    <button id="libraryUploadBtn"></button>
-    <input id="libraryFileInput" type="file" />
     <button id="libraryGridViewBtn" class="active" data-view="grid"></button>
     <button id="libraryListViewBtn" data-view="list"></button>
     <div id="libraryItems"></div>
@@ -34,10 +32,10 @@ describe("renderBreadcrumb", () => {
     expect(container.textContent).toContain("Home");
   });
 
-  test("renders the full ancestor chain with the last segment marked current", () => {
-    const folders = [{ id: "f1", name: "Characters", parentId: null }];
+  test("renders Home and the current collection name", () => {
+    const collections = [{ tokenId: "1", name: "Characters" }];
     const container = document.getElementById("libraryBreadcrumb");
-    renderBreadcrumb(container, folders, "f1");
+    renderBreadcrumb(container, collections, "1");
     expect(container.textContent).toContain("Home");
     expect(container.textContent).toContain("Characters");
     expect(container.querySelector(".pathbar-current").textContent).toBe("Characters");
@@ -45,17 +43,14 @@ describe("renderBreadcrumb", () => {
 });
 
 describe("breadcrumb click navigation", () => {
-  test("clicking a non-current segment navigates to that folder", () => {
+  test("clicking Home navigates back to the collections list", () => {
     libraryState.set({
-      folders: [
-        { id: "f1", name: "Characters", parentId: null },
-        { id: "f2", name: "Heroes", parentId: "f1" },
-      ],
-      currentFolderId: "f2",
+      collections: [{ id: "c1", tokenId: "1", name: "Characters" }],
+      currentCollectionTokenId: "1",
     });
     initLibraryToolbar();
-    document.querySelector('[data-folder-id="f1"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(libraryState.get().currentFolderId).toBe("f1");
+    document.querySelector('[data-collection-token-id=""]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(libraryState.get().currentCollectionTokenId).toBeNull();
   });
 });
 
@@ -86,37 +81,5 @@ describe("view toggle", () => {
     expect(libraryState.get().viewMode).toBe("list");
     expect(document.getElementById("libraryListViewBtn").classList.contains("active")).toBe(true);
     expect(document.getElementById("libraryGridViewBtn").classList.contains("active")).toBe(false);
-  });
-});
-
-describe("upload button", () => {
-  test("clicking it triggers the hidden file input", () => {
-    initLibraryToolbar();
-    const fileInput = document.getElementById("libraryFileInput");
-    const clickSpy = jest.spyOn(fileInput, "click");
-    document.getElementById("libraryUploadBtn").dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(clickSpy).toHaveBeenCalled();
-  });
-});
-
-describe("requestNewFolder", () => {
-  test("creates a folder named via the dialog in the current folder", async () => {
-    libraryState.set({ currentFolderId: "f1", folders: [{ id: "f1", name: "Characters", parentId: null }] });
-    const promise = requestNewFolder();
-    const dialogInput = document.querySelector(".dialog-input");
-    dialogInput.value = "New Folder";
-    document.querySelector(".dialog-confirm-btn")?.click();
-    await promise;
-
-    const created = libraryState.get().folders.find((f) => f.name === "New Folder");
-    expect(created).toBeDefined();
-    expect(created.parentId).toBe("f1");
-  });
-
-  test("does nothing if the dialog is cancelled", async () => {
-    const promise = requestNewFolder();
-    document.querySelector(".dialog-cancel-btn")?.click();
-    await promise;
-    expect(libraryState.get().folders).toHaveLength(0);
   });
 });

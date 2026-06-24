@@ -6,34 +6,18 @@ import {
   createItemElement,
   renderItems,
   announce,
-  addFiles,
   initLibraryGrid,
-} from "../frontend/src/js/ui/library-grid.js";
-import {
   openInStudio,
-  requestDelete,
 } from "../frontend/src/js/ui/library-grid.js";
 import {
   libraryState,
   _resetForTesting,
 } from "../frontend/src/js/state/library-state.js";
 
-// showToast() (used by addFiles' rejection path) lazily constructs a
-// window.Notyf instance. Notyf is a CDN global in the real app; stub a
-// minimal stand-in here so showToast doesn't throw in jsdom.
-window.Notyf = class MockNotyf {
-  open() {
-    return { on() {} };
-  }
-  dismiss() {}
-  dismissAll() {}
-};
-
 beforeEach(() => {
   _resetForTesting();
   document.body.innerHTML = `
     <div id="libraryContent">
-      <div id="libraryDropOverlay"></div>
       <div id="libraryItems"></div>
     </div>
     <span id="libraryItemCount"></span>
@@ -42,61 +26,51 @@ beforeEach(() => {
 });
 
 describe("createItemElement", () => {
-  test("renders a folder's name and id/type correctly", () => {
+  test("renders a collection's name and id/type correctly", () => {
     const el = createItemElement(
-      { id: "f1", type: "folder", name: "Weapons", status: "wip" },
+      { id: "c1", type: "collection", name: "Weapons", status: "besked" },
       "grid",
     );
-    expect(el.dataset.id).toBe("f1");
-    expect(el.dataset.type).toBe("folder");
+    expect(el.dataset.id).toBe("c1");
+    expect(el.dataset.type).toBe("collection");
     expect(el.querySelector(".library-item-name").textContent).toBe("Weapons");
   });
 
-  test("grid view: a wip folder shows the flag icon, not the checkmark", () => {
+  test("grid view: a besked collection shows the checkmark icon, not the flag", () => {
     const el = createItemElement(
-      { id: "f1", type: "folder", name: "Weapons", status: "wip" },
-      "grid",
-    );
-    expect(el.querySelector(".status-flag")).not.toBeNull();
-    expect(el.querySelector(".status-check")).toBeNull();
-  });
-
-  test("grid view: a besked folder shows the checkmark icon, not the flag", () => {
-    const el = createItemElement(
-      { id: "f1", type: "folder", name: "Weapons", status: "besked" },
+      { id: "c1", type: "collection", name: "Weapons", status: "besked" },
       "grid",
     );
     expect(el.querySelector(".status-check")).not.toBeNull();
     expect(el.querySelector(".status-flag")).toBeNull();
   });
 
-  test("list view: a folder shows the same text badges as a file", () => {
+  test("grid view: a wip collection shows the flag icon, not the checkmark", () => {
+    const el = createItemElement(
+      { id: "c1", type: "collection", name: "Weapons", status: "wip" },
+      "grid",
+    );
+    expect(el.querySelector(".status-flag")).not.toBeNull();
+    expect(el.querySelector(".status-check")).toBeNull();
+  });
+
+  test("list view: a collection shows the same text badges as an asset", () => {
     const wip = createItemElement(
-      { id: "f1", type: "folder", name: "Weapons", status: "wip" },
+      { id: "c1", type: "collection", name: "Weapons", status: "wip" },
       "list",
     );
     expect(wip.querySelector(".status-wip").textContent).toBe("Work in Progress");
 
     const besked = createItemElement(
-      { id: "f2", type: "folder", name: "Armor", status: "besked" },
+      { id: "c2", type: "collection", name: "Armor", status: "besked" },
       "list",
     );
     expect(besked.querySelector(".status-besked").textContent).toBe("Besked");
   });
 
-  test("grid view: a wip file shows the flag icon, not the checkmark", () => {
+  test("grid view: a besked asset shows the checkmark icon, not the flag", () => {
     const el = createItemElement(
-      { id: "a", type: "file", name: "shield.glb", status: "wip" },
-      "grid",
-    );
-    expect(el.querySelector(".status-flag")).not.toBeNull();
-    expect(el.querySelector(".status-check")).toBeNull();
-    expect(el.querySelector(".status-badge")).toBeNull();
-  });
-
-  test("grid view: a besked file shows the checkmark icon, not the flag", () => {
-    const el = createItemElement(
-      { id: "a", type: "file", name: "shield.glb", status: "besked" },
+      { id: "a", type: "asset", name: "shield.glb", status: "besked" },
       "grid",
     );
     expect(el.querySelector(".status-check")).not.toBeNull();
@@ -104,19 +78,19 @@ describe("createItemElement", () => {
     expect(el.querySelector(".status-badge")).toBeNull();
   });
 
-  test("grid view: an uploading file shows the Uploading… text badge", () => {
+  test("grid view: a wip asset shows the flag icon, not the checkmark", () => {
     const el = createItemElement(
-      { id: "a", type: "file", name: "shield.glb", status: "uploading" },
+      { id: "a", type: "asset", name: "shield.glb", status: "wip" },
       "grid",
     );
-    expect(el.querySelector(".status-uploading").textContent).toBe(
-      "Uploading…",
-    );
+    expect(el.querySelector(".status-flag")).not.toBeNull();
+    expect(el.querySelector(".status-check")).toBeNull();
+    expect(el.querySelector(".status-badge")).toBeNull();
   });
 
-  test("list view: a wip file shows the Work in Progress text badge", () => {
+  test("list view: a wip asset shows the Work in Progress text badge", () => {
     const el = createItemElement(
-      { id: "a", type: "file", name: "shield.glb", status: "wip" },
+      { id: "a", type: "asset", name: "shield.glb", status: "wip" },
       "list",
     );
     expect(el.querySelector(".status-wip").textContent).toBe(
@@ -124,9 +98,9 @@ describe("createItemElement", () => {
     );
   });
 
-  test("list view: a besked file shows the Besked text badge", () => {
+  test("list view: a besked asset shows the Besked text badge", () => {
     const el = createItemElement(
-      { id: "a", type: "file", name: "shield.glb", status: "besked" },
+      { id: "a", type: "asset", name: "shield.glb", status: "besked" },
       "list",
     );
     expect(el.querySelector(".status-besked").textContent).toBe("Besked");
@@ -145,8 +119,8 @@ describe("renderItems", () => {
     renderItems(
       container,
       [
-        { id: "1", type: "folder", name: "A" },
-        { id: "2", type: "file", name: "b.glb", status: "wip" },
+        { id: "1", type: "collection", name: "A" },
+        { id: "2", type: "asset", name: "b.glb", status: "besked" },
       ],
       "grid",
     );
@@ -157,7 +131,7 @@ describe("renderItems", () => {
     const container = document.getElementById("libraryItems");
     renderItems(
       container,
-      [{ id: "2", type: "file", name: "b.glb", status: "wip" }],
+      [{ id: "2", type: "asset", name: "b.glb", status: "besked" }],
       "list",
     );
     expect(container.querySelector("table.library-list-table")).not.toBeNull();
@@ -173,36 +147,8 @@ describe("announce", () => {
   });
 });
 
-describe("addFiles", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
-
-  test("adds supported files in 'uploading' status, then flips to 'wip'", () => {
-    addFiles([{ name: "model.glb", size: 1024 }]);
-    expect(libraryState.get().files).toHaveLength(1);
-    expect(libraryState.get().files[0].status).toBe("uploading");
-
-    jest.runAllTimers();
-    expect(libraryState.get().files[0].status).toBe("wip");
-  });
-
-  test("rejects unsupported files and does not add them", () => {
-    addFiles([{ name: "model.fbx", size: 1024 }]);
-    expect(libraryState.get().files).toHaveLength(0);
-  });
-
-  test("adds the supported subset when given a mix", () => {
-    addFiles([
-      { name: "model.glb", size: 1024 },
-      { name: "model.fbx", size: 1024 },
-    ]);
-    expect(libraryState.get().files).toHaveLength(1);
-    expect(libraryState.get().files[0].name).toBe("model.glb");
-  });
-});
-
 describe("initLibraryGrid", () => {
-  test("renders the current (empty) folder immediately", () => {
+  test("renders the current (empty) view immediately", () => {
     initLibraryGrid();
     expect(
       document.getElementById("libraryItems").querySelector(".empty-state"),
@@ -211,71 +157,52 @@ describe("initLibraryGrid", () => {
       "0 items",
     );
   });
-
-  test("dropping files on #libraryContent calls addFiles and clears the drop overlay", () => {
-    initLibraryGrid();
-    const content = document.getElementById("libraryContent");
-    const overlay = document.getElementById("libraryDropOverlay");
-
-    const dragoverEvent = new Event("dragover", {
-      bubbles: true,
-      cancelable: true,
-    });
-    dragoverEvent.dataTransfer = { types: ["Files"] };
-    content.dispatchEvent(dragoverEvent);
-    expect(overlay.classList.contains("active")).toBe(true);
-
-    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
-    dropEvent.dataTransfer = { files: [{ name: "model.glb", size: 10 }] };
-    content.dispatchEvent(dropEvent);
-
-    expect(overlay.classList.contains("active")).toBe(false);
-    expect(libraryState.get().files).toHaveLength(1);
-  });
 });
 
-describe("selection: click", () => {
-  function seedTwoFiles() {
-    libraryState.set({
-      files: [
-        {
-          id: "a",
-          name: "a.glb",
-          parentId: null,
-          status: "wip",
-          sizeBytes: 1,
-          dateModified: 1,
-        },
-        {
-          id: "b",
-          name: "b.glb",
-          parentId: null,
-          status: "wip",
-          sizeBytes: 1,
-          dateModified: 2,
-        },
-        {
-          id: "c",
-          name: "c.glb",
-          parentId: null,
-          status: "wip",
-          sizeBytes: 1,
-          dateModified: 3,
-        },
-      ],
-    });
-  }
+function seedAssets() {
+  libraryState.set({
+    assets: [
+      {
+        id: "a",
+        type: "asset",
+        assetId: "asset-a",
+        tokenId: "1",
+        name: "a.glb",
+        status: "besked",
+        manifestCid: "QmA",
+      },
+      {
+        id: "b",
+        type: "asset",
+        assetId: "asset-b",
+        tokenId: "1",
+        name: "b.glb",
+        status: "besked",
+        manifestCid: "QmB",
+      },
+      {
+        id: "c",
+        type: "asset",
+        assetId: "asset-c",
+        tokenId: "1",
+        name: "c.glb",
+        status: "besked",
+        manifestCid: "QmC",
+      },
+    ],
+    currentCollectionTokenId: "1",
+  });
+}
 
+describe("selection: click", () => {
   test("plain click selects exactly one item and applies aria-selected", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
     const itemB = container.querySelector('[data-id="b"]');
 
     itemB.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    // render() rebuilds the item DOM on every state change (container.innerHTML = "");
-    // re-query rather than reuse `itemB`, which is now a detached node.
     expect(libraryState.get().selectedIds).toEqual(["b"]);
     expect(
       container.querySelector('[data-id="b"]').getAttribute("aria-selected"),
@@ -286,7 +213,7 @@ describe("selection: click", () => {
   });
 
   test("ctrl-click toggles membership without clearing the rest", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
 
@@ -301,7 +228,7 @@ describe("selection: click", () => {
   });
 
   test("shift-click range-selects from the last clicked item", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
 
@@ -318,7 +245,7 @@ describe("selection: click", () => {
   });
 
   test("clicking empty space clears the selection", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
     container
@@ -330,31 +257,24 @@ describe("selection: click", () => {
     expect(libraryState.get().selectedIds).toEqual([]);
   });
 
-  test("double-clicking a folder navigates into it", () => {
+  test("double-clicking a collection navigates into it", () => {
     libraryState.set({
-      folders: [{ id: "f1", name: "Weapons", parentId: null }],
+      collections: [{ id: "c1", type: "collection", tokenId: "1", name: "Weapons" }],
     });
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
-    // render() replaces every item element on each click, so in a real
-    // browser the second click of a double-click never lands on the same
-    // DOM node as the first and native "dblclick" never fires. The click
-    // handler detects the double-click itself (same id, within the
-    // threshold) instead of relying on the browser's dblclick event — so
-    // the test fires two real "click" events, re-querying the (rebuilt)
-    // element each time, exactly as a real double-click would behave.
     container
-      .querySelector('[data-id="f1"]')
+      .querySelector('[data-id="c1"]')
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     container
-      .querySelector('[data-id="f1"]')
+      .querySelector('[data-id="c1"]')
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    expect(libraryState.get().currentFolderId).toBe("f1");
+    expect(libraryState.get().currentCollectionTokenId).toBe("1");
   });
 
-  test("double-clicking a file opens it in Studio", () => {
-    seedTwoFiles();
+  test("double-clicking an asset opens it in Studio", () => {
+    seedAssets();
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
     container
@@ -364,35 +284,31 @@ describe("selection: click", () => {
       .querySelector('[data-id="a"]')
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    // openInStudio navigates via window.location.href, which jsdom cannot
-    // observe (see the openInStudio describe block below) — this test only
-    // verifies the double-click path is reached without error and that the
-    // item remains the active selection, not the actual navigation target.
     expect(libraryState.get().selectedIds).toEqual(["a"]);
   });
 
   test("two separate clicks on the same item more than the double-click threshold apart do not navigate", () => {
     jest.useFakeTimers();
     libraryState.set({
-      folders: [{ id: "f1", name: "Weapons", parentId: null }],
+      collections: [{ id: "c1", type: "collection", tokenId: "1", name: "Weapons" }],
     });
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
 
     container
-      .querySelector('[data-id="f1"]')
+      .querySelector('[data-id="c1"]')
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     jest.advanceTimersByTime(500);
     container
-      .querySelector('[data-id="f1"]')
+      .querySelector('[data-id="c1"]')
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    expect(libraryState.get().currentFolderId).toBeNull();
+    expect(libraryState.get().currentCollectionTokenId).toBeNull();
     jest.useRealTimers();
   });
 
   test("two quick clicks on different items in a row do not count as a double-click", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     const container = document.getElementById("libraryItems");
 
@@ -408,31 +324,34 @@ describe("selection: click", () => {
 });
 
 describe("keyboard shortcuts", () => {
-  function seedTwoFiles() {
+  function seedAssets() {
     libraryState.set({
-      files: [
+      assets: [
         {
           id: "a",
+          type: "asset",
+          assetId: "asset-a",
+          tokenId: "1",
           name: "a.glb",
-          parentId: null,
-          status: "wip",
-          sizeBytes: 1,
-          dateModified: 1,
+          status: "besked",
+          manifestCid: "QmA",
         },
         {
           id: "b",
+          type: "asset",
+          assetId: "asset-b",
+          tokenId: "1",
           name: "b.glb",
-          parentId: null,
-          status: "wip",
-          sizeBytes: 1,
-          dateModified: 2,
+          status: "besked",
+          manifestCid: "QmB",
         },
       ],
+      currentCollectionTokenId: "1",
     });
   }
 
-  test("Ctrl+A selects every item in the current folder", () => {
-    seedTwoFiles();
+  test("Ctrl+A selects every item in the current view", () => {
+    seedAssets();
     initLibraryGrid();
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true }),
@@ -441,7 +360,7 @@ describe("keyboard shortcuts", () => {
   });
 
   test("Escape clears the selection", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     libraryState.set({ selectedIds: ["a"] });
     document.dispatchEvent(
@@ -450,20 +369,20 @@ describe("keyboard shortcuts", () => {
     expect(libraryState.get().selectedIds).toEqual([]);
   });
 
-  test("Backspace navigates up one folder level", () => {
+  test("Backspace returns to the collections list", () => {
     libraryState.set({
-      folders: [{ id: "f1", name: "Weapons", parentId: null }],
-      currentFolderId: "f1",
+      collections: [{ id: "c1", type: "collection", tokenId: "1", name: "Weapons" }],
+      currentCollectionTokenId: "1",
     });
     initLibraryGrid();
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }),
     );
-    expect(libraryState.get().currentFolderId).toBeNull();
+    expect(libraryState.get().currentCollectionTokenId).toBeNull();
   });
 
   test("keyboard shortcuts are ignored while typing in an input", () => {
-    seedTwoFiles();
+    seedAssets();
     initLibraryGrid();
     const input = document.createElement("input");
     document.body.appendChild(input);
@@ -473,70 +392,11 @@ describe("keyboard shortcuts", () => {
     );
     expect(libraryState.get().selectedIds).toEqual([]);
   });
-
-  test("F2 opens the rename dialog for the single selected item", async () => {
-    window.focusTrap = {
-      createFocusTrap: () => ({
-        activate() {
-          return this;
-        },
-        deactivate() {
-          return this;
-        },
-      }),
-    };
-    seedTwoFiles();
-    initLibraryGrid();
-    libraryState.set({ selectedIds: ["a"] });
-
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "F2", bubbles: true }),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(document.querySelector(".dialog-title").textContent).toBe("Rename");
-  });
 });
 
 describe("openInStudio", () => {
-  // jsdom 26 defines `window.location` as a non-configurable own property
-  // (see node_modules/jsdom/lib/jsdom/browser/Window.js: `location: { configurable: false }`),
-  // and its `href` setter's navigation path is intentionally unimplemented
-  // (jsdom/lib/jsdom/living/window/navigation.js: `notImplemented("navigation (except hash changes)")`).
-  // That means `delete window.location` / reassignment / defineProperty / spyOn
-  // all fail or silently no-op in this Jest+jsdom version, so the assigned
-  // href can't be read back. We assert the call is made without throwing and
-  // that it targets the real `window.location` object (the only externally
-  // observable behavior available under this jsdom version); the literal
-  // assignment statement in `openInStudio` is otherwise visually verified.
-  test("navigates to studio.html with the file id as a query param, without throwing", () => {
-    expect(() => openInStudio("file-1")).not.toThrow();
-  });
-});
-
-describe("requestDelete", () => {
-  test("removes the given ids from files and folders, and clears selection", async () => {
-    window.focusTrap = {
-      createFocusTrap: () => ({
-        activate() {
-          return this;
-        },
-        deactivate() {
-          return this;
-        },
-      }),
-    };
-    libraryState.set({
-      files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }],
-      selectedIds: ["a"],
-    });
-
-    const promise = requestDelete(["a"]);
-    document.querySelector(".dialog-action-btn[data-value='confirm']")?.click();
-    await promise;
-
-    expect(libraryState.get().files).toHaveLength(0);
-    expect(libraryState.get().selectedIds).toEqual([]);
+  test("navigates to studio.html with the token and asset ids, without throwing", () => {
+    expect(() => openInStudio("1", "asset-a")).not.toThrow();
   });
 });
 
@@ -551,10 +411,11 @@ describe("rubber-band selection", () => {
 
   test("dragging a box over empty space selects every item it intersects", () => {
     libraryState.set({
-      files: [
-        { id: "a", name: "a.glb", parentId: null, status: "wip" },
-        { id: "b", name: "b.glb", parentId: null, status: "wip" },
+      assets: [
+        { id: "a", type: "asset", assetId: "asset-a", tokenId: "1", name: "a.glb", status: "besked" },
+        { id: "b", type: "asset", assetId: "asset-b", tokenId: "1", name: "b.glb", status: "besked" },
       ],
+      currentCollectionTokenId: "1",
     });
     initLibraryGrid();
 
@@ -583,7 +444,8 @@ describe("rubber-band selection", () => {
 
   test("a rubber-band drag that starts on an item does not start a selection box", () => {
     libraryState.set({
-      files: [{ id: "a", name: "a.glb", parentId: null, status: "wip" }],
+      assets: [{ id: "a", type: "asset", assetId: "asset-a", tokenId: "1", name: "a.glb", status: "besked" }],
+      currentCollectionTokenId: "1",
     });
     initLibraryGrid();
     const container = document.getElementById("libraryItems");

@@ -1,16 +1,8 @@
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
-import {
-  getChildItems,
-  filterItems,
-  sortItems,
-  isSupportedFile,
-  formatBytes,
-} from "../utils/library-items.js";
 import { escapeHtml } from "../utils/html.js";
-import { showToast } from "./toasts.js";
+import { getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { computeRangeSelection } from "../utils/library-items.js";
-import { showConfirmDialog } from "./dialog.js";
 
 export function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
@@ -18,9 +10,6 @@ export function announce(text) {
 }
 
 function renderGridStatus(item) {
-  if (item.status === "uploading") {
-    return `<span class="status-badge status-uploading">Uploading…</span>`;
-  }
   if (item.status === "besked") {
     return `<span class="status-check" title="Besked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>`;
   }
@@ -28,16 +17,19 @@ function renderGridStatus(item) {
 }
 
 function renderListStatus(item) {
-  if (item.status === "uploading")
-    return `<span class="status-badge status-uploading">Uploading…</span>`;
   if (item.status === "besked")
     return `<span class="status-badge status-besked">Besked</span>`;
   return `<span class="status-badge status-wip">Work in Progress</span>`;
 }
 
-export function createItemElement(item, viewMode) {
-  const icon = item.type === "folder" ? "📁" : "🗎";
+function defaultIcon(type) {
+  if (type === "collection") {
+    return `<svg class="library-item-icon collection-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+  }
+  return `<svg class="library-item-icon asset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`;
+}
 
+export function createItemElement(item, viewMode) {
   if (viewMode === "list") {
     const el = document.createElement("tr");
     el.className = "library-row";
@@ -48,7 +40,9 @@ export function createItemElement(item, viewMode) {
     el.setAttribute("role", "row");
     el.setAttribute("aria-selected", "false");
     el.innerHTML = `
-      <td class="library-row-name"><span>${icon}</span><span class="library-item-name">${escapeHtml(
+      <td class="library-row-name"><span class="library-item-icon">${defaultIcon(
+        item.type
+      )}</span><span class="library-item-name">${escapeHtml(
       item.name
     )}</span></td>
       <td>${renderListStatus(item)}</td>
@@ -71,10 +65,50 @@ export function createItemElement(item, viewMode) {
   el.setAttribute("role", "option");
   el.setAttribute("aria-selected", "false");
   el.innerHTML = `
-    <div class="library-item-thumbnail">${icon}${renderGridStatus(item)}</div>
+    <div class="library-item-thumbnail" data-thumbnail-cid="${escapeHtml(
+      item.thumbnailCid || ""
+    )}">${defaultIcon(item.type)}${renderGridStatus(item)}</div>
     <span class="library-item-name">${escapeHtml(item.name)}</span>
   `;
   return el;
+}
+
+function extractThumbnailCid(thumbnail) {
+  if (!thumbnail) return "";
+  if (typeof thumbnail === "string") return thumbnail;
+  return thumbnail.cid || thumbnail.source?.cid || "";
+}
+
+async function loadItemThumbnail(el, cid, name) {
+  if (!cid || !el) return;
+  try {
+    const blob = await getBlobFromRemoteIPFS(cid);
+    const objectUrl = URL.createObjectURL(blob);
+    const img = document.createElement("img");
+    img.alt = `${name || "Item"} thumbnail`;
+    img.loading = "lazy";
+    img.src = objectUrl;
+    img.addEventListener("load", () => URL.revokeObjectURL(objectUrl), {
+      once: true,
+    });
+    img.addEventListener("error", () => URL.revokeObjectURL(objectUrl), {
+      once: true,
+    });
+    el.textContent = "";
+    el.appendChild(img);
+  } catch (err) {
+    console.warn("Failed to load library thumbnail", cid, err);
+  }
+}
+
+function loadVisibleThumbnails(container) {
+  container?.querySelectorAll("[data-thumbnail-cid]").forEach((el) => {
+    const cid = el.dataset.thumbnailCid;
+    if (!cid) return;
+    const name = el.closest("[data-id]")?.querySelector(".library-item-name")
+      ?.textContent;
+    loadItemThumbnail(el, cid, name);
+  });
 }
 
 function buildEmptyState(searchQuery) {
@@ -82,13 +116,20 @@ function buildEmptyState(searchQuery) {
   el.className = "empty-state";
   if (searchQuery) {
     el.innerHTML = `
-      <p class="empty-state-title">No files match your search</p>
+      <p class="empty-state-title">No items match your search</p>
       <p class="empty-state-sub">Try a different name.</p>
     `;
   } else {
+    const inCollection = libraryState.get().currentCollectionTokenId !== null;
     el.innerHTML = `
-      <p class="empty-state-title">Drag files here to get started</p>
-      <p class="empty-state-sub">.glb and .gltf files are supported.</p>
+      <p class="empty-state-title">${
+        inCollection ? "No assets in this collection" : "No collections yet"
+      }</p>
+      <p class="empty-state-sub">${
+        inCollection
+          ? "Assets you publish to this collection will appear here."
+          : "Connect your wallet and publish your first asset to see collections."
+      }</p>
     `;
   }
   return el;
@@ -116,13 +157,38 @@ export function renderItems(container, items, viewMode) {
     items.forEach((item) =>
       container.appendChild(createItemElement(item, viewMode))
     );
+    loadVisibleThumbnails(container);
   }
+}
+
+function filterItems(items, searchQuery) {
+  const q = searchQuery.trim().toLowerCase();
+  if (!q) return items;
+  return items.filter((item) => item.name.toLowerCase().includes(q));
+}
+
+function sortItems(items, sortBy) {
+  const sorted = [...items];
+  if (sortBy === "name") {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortBy === "date") {
+    sorted.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
+  } else if (sortBy === "status") {
+    const rank = { uploading: 0, wip: 1, besked: 2 };
+    sorted.sort((a, b) => (rank[a.status] ?? -1) - (rank[b.status] ?? -1));
+  }
+  const collections = sorted.filter((i) => i.type === "collection");
+  const assets = sorted.filter((i) => i.type === "asset");
+  return [...collections, ...assets];
 }
 
 function currentItems() {
   const state = libraryState.get();
-  const items = getChildItems(state, state.currentFolderId);
-  return sortItems(filterItems(items, state.searchQuery), state.sortBy);
+  const source =
+    state.currentCollectionTokenId === null
+      ? state.collections
+      : state.assets;
+  return sortItems(filterItems(source, state.searchQuery), state.sortBy);
 }
 
 function applySelection(container, selectedIds) {
@@ -152,38 +218,27 @@ let lastClickedId = null;
 let lastClickTime = 0;
 const DOUBLE_CLICK_MS = 400;
 
-export function openInStudio(fileId) {
-  window.location.href = `/studio.html?libraryFile=${fileId}`;
-}
-
-export function requestDelete(ids) {
-  return showConfirmDialog(
-    ids.length === 1 ? "Delete item?" : `Delete ${ids.length} items?`,
-    "This cannot be undone.",
-    [
-      { text: "Cancel", value: "cancel", className: "btn btn-secondary" },
-      { text: "Delete", value: "confirm", className: "btn btn-danger" },
-    ]
-  ).then((value) => {
-    if (value !== "confirm") return;
-    const state = libraryState.get();
-    libraryState.set({
-      folders: state.folders.filter((f) => !ids.includes(f.id)),
-      files: state.files.filter((f) => !ids.includes(f.id)),
-      selectedIds: [],
-    });
-    announce(`${ids.length} item${ids.length === 1 ? "" : "s"} deleted`);
-  });
+export function openInStudio(tokenId, assetId) {
+  const params = new URLSearchParams();
+  params.set("asset", tokenId);
+  if (assetId) params.set("assetId", assetId);
+  window.location.href = `/studio.html?${params.toString()}`;
 }
 
 function openItem(id) {
   const state = libraryState.get();
-  const isFolder = state.folders.some((f) => f.id === id);
-  if (isFolder) {
-    libraryState.set({ currentFolderId: id, selectedIds: [] });
-    announce(`Opened folder`);
-  } else {
-    openInStudio(id);
+  const collection = state.collections.find((c) => c.id === id);
+  if (collection) {
+    libraryState.set({
+      currentCollectionTokenId: collection.tokenId,
+      selectedIds: [],
+    });
+    announce(`Opened collection ${collection.name}`);
+    return;
+  }
+  const asset = state.assets.find((a) => a.id === id);
+  if (asset) {
+    openInStudio(asset.tokenId, asset.assetId);
   }
 }
 
@@ -198,11 +253,6 @@ function handleItemClick(e) {
 
   const id = el.dataset.id;
   const now = Date.now();
-  // Native dblclick never fires here: render() replaces every item element
-  // on every click (even a no-op reselect), so the second click of any
-  // double-click always lands on a different DOM node than the first, and
-  // browsers only count a dblclick when both clicks hit the same node.
-  // Detect the double-click manually instead, by id + elapsed time.
   const isDoubleClick =
     id === lastClickedId &&
     now - lastClickTime < DOUBLE_CLICK_MS &&
@@ -260,14 +310,14 @@ function handleKeydown(e) {
 
   if (
     (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) &&
-    state.currentFolderId !== null
+    state.currentCollectionTokenId !== null
   ) {
     e.preventDefault();
-    const parent = state.folders.find((f) => f.id === state.currentFolderId);
     libraryState.set({
-      currentFolderId: parent ? parent.parentId : null,
+      currentCollectionTokenId: null,
       selectedIds: [],
     });
+    announce("Returned to collections");
     return;
   }
 
@@ -277,7 +327,9 @@ function handleKeydown(e) {
   }
 
   if (e.key === "Delete" && state.selectedIds.length > 0) {
-    requestDelete(state.selectedIds);
+    import("./library-context-menu.js").then(({ requestDeleteSelected }) =>
+      requestDeleteSelected(state.selectedIds)
+    );
     return;
   }
 
@@ -286,46 +338,6 @@ function handleKeydown(e) {
       requestRename(state.selectedIds[0])
     );
   }
-}
-
-export function addFiles(fileList) {
-  const files = Array.from(fileList);
-  const supported = files.filter((f) => isSupportedFile(f.name));
-  const rejected = files.length - supported.length;
-
-  if (rejected > 0) {
-    showToast({
-      type: "warning",
-      title: "Unsupported file type",
-      message: "Only .glb and .gltf files are supported.",
-    });
-  }
-  if (supported.length === 0) return;
-
-  const currentFolderId = libraryState.get().currentFolderId;
-  const newFiles = supported.map((f) => ({
-    id: `file-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name: f.name,
-    parentId: currentFolderId,
-    status: "uploading",
-    sizeBytes: f.size,
-    dateModified: Date.now(),
-  }));
-
-  libraryState.set({ files: [...libraryState.get().files, ...newFiles] });
-  announce(
-    `${newFiles.length} file${newFiles.length === 1 ? "" : "s"} uploading`
-  );
-
-  newFiles.forEach((nf) => {
-    setTimeout(() => {
-      const files = libraryState
-        .get()
-        .files.map((f) => (f.id === nf.id ? { ...f, status: "wip" } : f));
-      libraryState.set({ files });
-      announce(`${nf.name} added`);
-    }, 600);
-  });
 }
 
 function rectsIntersect(a, b) {
@@ -361,8 +373,6 @@ function initRubberBand() {
     positionBand(band, startX, startY, startX, startY);
   });
 
-  // Listeners live for the page lifetime — initRubberBand is only called once
-  // during initLibraryGrid(). If that ever changes, store refs and remove on cleanup.
   document.addEventListener("mousemove", (e) => {
     if (!band) return;
     endX = e.clientX;
@@ -405,83 +415,8 @@ function positionBand(band, x1, y1, x2, y2) {
   band.style.height = `${Math.abs(y2 - y1)}px`;
 }
 
-function initDropzone() {
-  const content = document.getElementById("libraryContent");
-  const overlay = document.getElementById("libraryDropOverlay");
-  if (!content) return;
-
-  content.addEventListener("dragover", (e) => {
-    if (!e.dataTransfer?.types.includes("Files")) return;
-    e.preventDefault();
-    overlay?.classList.add("active");
-  });
-  content.addEventListener("dragleave", () =>
-    overlay?.classList.remove("active")
-  );
-  content.addEventListener("drop", (e) => {
-    if (!e.dataTransfer?.files?.length) return;
-    e.preventDefault();
-    overlay?.classList.remove("active");
-    addFiles(e.dataTransfer.files);
-  });
-}
-
-function initDragMove() {
-  const container = document.getElementById("libraryItems");
-  if (!container) return;
-
-  container.addEventListener("dragstart", (e) => {
-    const el = e.target.closest("[data-id]");
-    if (!el) return;
-    const state = libraryState.get();
-    const ids = state.selectedIds.includes(el.dataset.id)
-      ? state.selectedIds
-      : [el.dataset.id];
-    e.dataTransfer.setData("text/arbesk-ids", ids.join(","));
-    e.dataTransfer.effectAllowed = "move";
-  });
-
-  container.addEventListener("dragover", (e) => {
-    const el = e.target.closest('[data-type="folder"]');
-    if (!el || !e.dataTransfer?.types.includes("text/arbesk-ids")) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    el.classList.add("drop-target");
-  });
-
-  container.addEventListener("dragleave", (e) => {
-    const el = e.target.closest('[data-type="folder"]');
-    if (!el) return;
-    el.classList.remove("drop-target");
-  });
-
-  container.addEventListener("drop", (e) => {
-    const el = e.target.closest('[data-type="folder"]');
-    const ids = e.dataTransfer?.getData("text/arbesk-ids");
-    if (!el || !ids) return;
-    e.preventDefault();
-    el.classList.remove("drop-target");
-
-    const targetId = el.dataset.id;
-    const idList = ids.split(",");
-    const state = libraryState.get();
-    libraryState.set({
-      files: state.files.map((f) =>
-        idList.includes(f.id) ? { ...f, parentId: targetId } : f
-      ),
-      folders: state.folders.map((f) =>
-        idList.includes(f.id) ? { ...f, parentId: targetId } : f
-      ),
-      selectedIds: [],
-    });
-    announce(`Moved ${idList.length} item${idList.length === 1 ? "" : "s"}`);
-  });
-}
-
 export function initLibraryGrid() {
-  initDropzone();
   initRubberBand();
-  initDragMove();
 
   const container = document.getElementById("libraryItems");
   container?.addEventListener("click", handleItemClick);
@@ -489,4 +424,11 @@ export function initLibraryGrid() {
 
   on(EVENTS.LIBRARY_STATE_CHANGED, render);
   render();
+}
+
+export function formatBytes(bytes) {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

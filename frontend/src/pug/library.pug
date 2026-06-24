@@ -70,36 +70,23 @@ html(lang="en")
                 path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
                 path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
             p.empty-state-title No wallet connected
-            p.empty-state-sub Connect your wallet to organize and publish your 3D assets.
+            p.empty-state-sub Connect your wallet to browse your collections and assets.
             button#libraryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Connect Wallet
 
         #libraryMain.hidden
           .library-toolbar
-            button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to parent folder" title="Up to parent folder" hidden)
+            button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to collections" title="Up to collections" hidden)
               svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 polyline(points="18 15 12 9 6 15")
               span Up
-            nav#libraryBreadcrumb.pathbar(aria-label="Folder path")
-            input#librarySearchInput.form-input.library-search(type="search" placeholder="Search this folder…" aria-label="Search files")
+            nav#libraryBreadcrumb.pathbar(aria-label="Collection path")
+            input#librarySearchInput.form-input.library-search(type="search" placeholder="Search collections and assets…" aria-label="Search items")
             select#librarySortSelect.form-input.library-sort(aria-label="Sort by")
               option(value="name") Name
               option(value="date") Date
               option(value="status") Status
-            button#libraryNewFolderBtn.btn.btn-secondary.btn-sm(type="button")
-              svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                line(x1="12" y1="5" x2="12" y2="19")
-                line(x1="5" y1="12" x2="19" y2="12")
-              span New Folder
-            button#libraryUploadBtn.btn.btn-secondary.btn-sm(type="button")
-              svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                path(d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4")
-                polyline(points="17 8 12 3 7 8")
-                line(x1="12" y1="3" x2="12" y2="15")
-              span Upload
-            input#libraryFileInput(type="file" multiple accept=".glb,.gltf" hidden)
 
           #libraryContent.library-content
-            #libraryDropOverlay.viewport-drop-indicator
             #libraryItems.library-grid(role="listbox" aria-multiselectable="true")
 
           .library-statusbar
