@@ -9,6 +9,15 @@
 import { getUploadCredential } from "../services/api.js";
 import { compress } from "../utils/compression.js";
 
+// write-to-ipfs.js is imported by both the main thread and the glTF Web Worker.
+// Use a distinct tag in worker context so uploads originating off-thread are
+// easy to spot in the console.
+const IS_WORKER =
+  typeof WorkerGlobalScope !== "undefined" &&
+  typeof self !== "undefined" &&
+  self instanceof WorkerGlobalScope;
+const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "${TAG}";
+
 function toBlob(data) {
   if (data instanceof Blob) return data;
   if (data instanceof ArrayBuffer || data instanceof Uint8Array) return new Blob([data]);
@@ -47,12 +56,12 @@ async function uploadToPinata(blob, filename, credential, attempt = 1) {
     const json = await res.json();
     const cid = json?.data?.cid || json?.cid;
     if (!cid) throw new Error("Pinata upload returned no CID");
-    console.log(`[IPFS-WRITE] pinata stored → ${cid}`);
+    console.log(`${TAG} pinata stored → ${cid}`);
     return cid;
   } catch (err) {
     // Retry once on transient network / HTTP2 protocol errors.
     if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(err.message)) {
-      console.warn(`[IPFS-WRITE] Pinata upload error, retrying once: ${err.message}`);
+      console.warn(`${TAG} Pinata upload error, retrying once: ${err.message}`);
       return uploadToPinata(blob, filename, credential, attempt + 1);
     }
     throw err;
@@ -69,12 +78,12 @@ async function uploadToKubo(blob, filename, credential) {
     throw new Error(`IPFS add failed: ${res.status} — ${text}`);
   }
   const result = await res.json();
-  console.log(`[IPFS-WRITE] kubo stored → ${result.Hash} (${result.Size} bytes)`);
+  console.log(`${TAG} kubo stored → ${result.Hash} (${result.Size} bytes)`);
   try {
     await fetch(`${apiUrl}/api/v0/pin/add?arg=${encodeURIComponent(result.Hash)}`, { method: "POST" });
-    console.log(`[IPFS-WRITE] pinned → ${result.Hash}`);
+    console.log(`${TAG} pinned → ${result.Hash}`);
   } catch (e) {
-    console.warn(`[IPFS-WRITE] pin failed (non-fatal): ${e.message}`);
+    console.warn(`${TAG} pin failed (non-fatal): ${e.message}`);
   }
   return result.Hash;
 }
@@ -100,13 +109,13 @@ export async function writeToIPFS(
   if (options.compress) {
     payload = compress(data);
     console.log(
-      `[IPFS-WRITE] gzip ${typeof data === "string" ? data.length : data.byteLength ?? data.length} bytes → ${payload.length} bytes`,
+      `${TAG} gzip ${typeof data === "string" ? data.length : data.byteLength ?? data.length} bytes → ${payload.length} bytes`,
     );
   }
   const finalFilename = options.compress ? compressedFilename(filename) : filename;
   const blob = toBlob(payload);
   const cred = credential || (await getUploadCredential());
-  console.log(`[IPFS-WRITE] uploading ${blob.size} bytes via ${cred.backend} as ${finalFilename}`);
+  console.log(`${TAG} uploading ${blob.size} bytes via ${cred.backend} as ${finalFilename}`);
   return cred.backend === "pinata"
     ? uploadToPinata(blob, finalFilename, cred)
     : uploadToKubo(blob, finalFilename, cred);

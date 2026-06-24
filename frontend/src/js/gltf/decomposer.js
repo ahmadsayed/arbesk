@@ -113,69 +113,74 @@ export async function decomposeGlTF(
   const stats = { buffers: 0, images: 0, bytesTotal: 0 };
 
   // --- Decompose buffers ---
+  // Upload all extracted buffers concurrently. Each promise mutates its own
+  // index in composite.buffers, so there is no cross-index race.
   if (composite.buffers) {
-    for (let i = 0; i < composite.buffers.length; i++) {
-      const buf = composite.buffers[i];
-      if (!buf.uri) continue;
+    await Promise.all(
+      composite.buffers.map(async (buf, i) => {
+        if (!buf.uri) return;
 
-      // Already an ipfs:// URI
-      if (buf.uri.startsWith(IPFS_URI_PREFIX)) {
+        // Already an ipfs:// URI
+        if (buf.uri.startsWith(IPFS_URI_PREFIX)) {
+          stats.buffers++;
+          return;
+        }
+
+        // Extract and store binary buffer
+        const extracted = extractDataURI(buf.uri);
+        if (!extracted) {
+          console.warn(`[DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`);
+          return;
+        }
+
+        const filename = `${baseName}_buffer_${i}.bin`;
+        const cid = await writeToIPFS(extracted.bytes, filename, credential, {
+          compress,
+        });
+        composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
         stats.buffers++;
-        continue;
-      }
-
-      // Extract and store binary buffer
-      const extracted = extractDataURI(buf.uri);
-      if (!extracted) {
-        console.warn(`[DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`);
-        continue;
-      }
-
-      const filename = `${baseName}_buffer_${i}.bin`;
-      const cid = await writeToIPFS(extracted.bytes, filename, credential, {
-        compress,
-      });
-      composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
-      stats.buffers++;
-      stats.bytesTotal += extracted.bytes.length;
-      console.log(`[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`);
-    }
+        stats.bytesTotal += extracted.bytes.length;
+        console.log(`[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`);
+      })
+    );
   }
 
   // --- Decompose images ---
+  // Upload all extracted images concurrently.
   if (composite.images) {
-    for (let i = 0; i < composite.images.length; i++) {
-      const img = composite.images[i];
-      if (!img.uri) continue;
+    await Promise.all(
+      composite.images.map(async (img, i) => {
+        if (!img.uri) return;
 
-      // Already an ipfs:// URI
-      if (img.uri.startsWith(IPFS_URI_PREFIX)) {
+        // Already an ipfs:// URI
+        if (img.uri.startsWith(IPFS_URI_PREFIX)) {
+          stats.images++;
+          return;
+        }
+
+        // External URI or bufferView reference — skip
+        if (!img.uri.startsWith("data:")) {
+          console.log(`[DECOMPOSE] image[${i}] external URI, keeping as-is`);
+          return;
+        }
+
+        const extracted = extractDataURI(img.uri);
+        if (!extracted) {
+          console.warn(`[DECOMPOSE] image[${i}] failed to extract data URI`);
+          return;
+        }
+
+        const ext = extracted.mimeType.split("/")[1] || "bin";
+        const filename = `${baseName}_texture_${i}.${ext}`;
+        const cid = await writeToIPFS(extracted.bytes, filename, credential, {
+          compress,
+        });
+        composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
         stats.images++;
-        continue;
-      }
-
-      // External URI or bufferView reference — skip
-      if (!img.uri.startsWith("data:")) {
-        console.log(`[DECOMPOSE] image[${i}] external URI, keeping as-is`);
-        continue;
-      }
-
-      const extracted = extractDataURI(img.uri);
-      if (!extracted) {
-        console.warn(`[DECOMPOSE] image[${i}] failed to extract data URI`);
-        continue;
-      }
-
-      const ext = extracted.mimeType.split("/")[1] || "bin";
-      const filename = `${baseName}_texture_${i}.${ext}`;
-      const cid = await writeToIPFS(extracted.bytes, filename, credential, {
-        compress,
-      });
-      composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
-      stats.images++;
-      stats.bytesTotal += extracted.bytes.length;
-      console.log(`[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`);
-    }
+        stats.bytesTotal += extracted.bytes.length;
+        console.log(`[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`);
+      })
+    );
   }
 
   console.log(

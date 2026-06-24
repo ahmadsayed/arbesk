@@ -80,6 +80,18 @@ export function tokenIdHexFromUrl(url) {
 }
 
 /**
+ * Locate a gallery asset card by both collection token id (decimal) and asset
+ * name. A single collection token expands to one card per asset, so matching
+ * only by `data-token-id` is ambiguous once the shared default collection
+ * contains multiple assets.
+ */
+export function assetCardLocator(page, tokenIdDec, name) {
+  return page.locator(
+    `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]:has(${SELECTORS.assetCardName}:text-is("${name}"))`,
+  );
+}
+
+/**
  * Select the first node in the Outliner — which auto-opens the parametric
  * component editor — and set its colour. A color input can't be `fill`ed, so
  * set the value and dispatch the input/change events the app listens for.

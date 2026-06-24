@@ -78,9 +78,15 @@ app.use(
       // Workers and their pool must never be cached: a stale worker script
       // that predates a method registration (e.g. "ping") causes the pool to
       // fall back to the main thread and makes save/publish very slow.
+      // Workers, their pool, and the vendored libraries they import must never
+      // be cached. A stale module that predates a method registration (e.g.
+      // "ping") causes the pool to fall back to the main thread.
       if (
         filePath.includes("/workers/") ||
-        filePath.endsWith("gltf-worker-pool.js")
+        filePath.endsWith("gltf-worker-pool.js") ||
+        filePath.includes("/vendor/workerpool") ||
+        filePath.includes("/vendor/gltf-transform-core") ||
+        filePath.includes("/vendor/node-buffer-polyfill")
       ) {
         res.setHeader(
           "Cache-Control",

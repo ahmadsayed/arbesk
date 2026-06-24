@@ -263,13 +263,15 @@ function manifestsSemanticallyEqual(a, b) {
  * @returns {Promise<number>} Count of nodes decomposed
  */
 async function decomposeManifestNodes(manifest) {
-  let decomposed = 0;
   const nodes = manifest.scene?.nodes || [];
 
-  for (const node of nodes) {
+  // Decompose every eligible node concurrently. Each node is independent:
+  // fetch source + decompose + upload, then apply the new CID back to the
+  // manifest node so the order of side-effects is deterministic.
+  const jobs = nodes.map(async (node) => {
     // Only process nodes with a source (not token children)
-    if (!node.source?.cid) continue;
-    if (node.child_ref) continue;
+    if (!node.source?.cid) return null;
+    if (node.child_ref) return null;
 
     const cid = node.source.cid;
     const format = (node.source.format || "gltf").toLowerCase();
@@ -284,15 +286,15 @@ async function decomposeManifestNodes(manifest) {
           assetName: manifest.name,
           assetId: manifest.asset_id,
         });
-
-        node.source.cid = compositeCid;
-        node.source.path = "composite.gltf";
-        node.source.format = "gltf";
-        decomposed++;
         console.log(
           `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
         );
-        continue;
+        return {
+          nodeId: node.node_id,
+          cid: compositeCid,
+          path: "composite.gltf",
+          format: "gltf",
+        };
       }
 
       const gltf = await getFromRemoteIPFS(cid);
@@ -300,7 +302,7 @@ async function decomposeManifestNodes(manifest) {
       // Validate it looks like a glTF
       if (!gltf.asset || !gltf.asset.version) {
         console.log(`Decompose save: CID ${cid} is not a glTF, skipping`);
-        continue;
+        return null;
       }
 
       // Skip if already composite
@@ -308,7 +310,7 @@ async function decomposeManifestNodes(manifest) {
         console.log(
           `Decompose save: node ${node.node_id} already composite, skipping`
         );
-        continue;
+        return null;
       }
 
       // Decompose and store
@@ -317,13 +319,10 @@ async function decomposeManifestNodes(manifest) {
         assetId: manifest.asset_id,
       });
 
-      // Update the node's source to point to the composite
-      node.source.cid = compositeCid;
-      node.source.path = "composite.gltf";
-      decomposed++;
       console.log(
         `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
       );
+      return { nodeId: node.node_id, cid: compositeCid, path: "composite.gltf" };
     } catch (err) {
       if (isRateLimitError(err)) throw err;
       console.warn(
@@ -331,7 +330,20 @@ async function decomposeManifestNodes(manifest) {
         err.message
       );
       // Continue with other nodes — don't block the save
+      return null;
     }
+  });
+
+  const results = await Promise.allSettled(jobs);
+  let decomposed = 0;
+  for (const r of results) {
+    if (r.status !== "fulfilled" || !r.value) continue;
+    const node = nodes.find((n) => n.node_id === r.value.nodeId);
+    if (!node) continue;
+    node.source.cid = r.value.cid;
+    node.source.path = r.value.path;
+    if (r.value.format) node.source.format = r.value.format;
+    decomposed++;
   }
 
   return decomposed;
@@ -416,7 +428,9 @@ async function prepareManifestForWrite(assetName) {
 
   // Apply direct source color edits.
   // These mutate the source glTF/GLB asset and update node.source.cid.
+  // Each node is independent, so bake them concurrently.
   if (pendingColors.size > 0) {
+    const colorJobs = [];
     for (const [nodeId, nodeEdits] of pendingColors) {
       const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
       if (!node || !node.source?.cid) continue;
@@ -426,27 +440,44 @@ async function prepareManifestForWrite(assetName) {
         colorMap[meshName] = color;
       }
 
-      try {
-        const result = await editSourceColorsAsync(node.source.cid, colorMap, {
-          assetName: manifest.name,
-          assetId: manifest.asset_id,
-        });
-        node.source.cid = result.sourceCid;
-        // The edited source is always glTF JSON now; keep the node's
-        // format/path truthful so the loader doesn't treat it as a binary GLB.
-        if (result.format) node.source.format = result.format;
-        if (result.path) node.source.path = result.path;
-        // The composite JSON changed via a color bake; the organizational
-        console.log(
-          `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
-        );
-      } catch (err) {
-        if (isRateLimitError(err)) throw err;
-        console.warn(
-          `Save: failed to bake colors into source for ${nodeId}:`,
-          err.message
-        );
-      }
+      colorJobs.push(
+        (async () => {
+          try {
+            const result = await editSourceColorsAsync(
+              node.source.cid,
+              colorMap,
+              {
+                assetName: manifest.name,
+                assetId: manifest.asset_id,
+              }
+            );
+            return { nodeId, result };
+          } catch (err) {
+            if (isRateLimitError(err)) throw err;
+            console.warn(
+              `Save: failed to bake colors into source for ${nodeId}:`,
+              err.message
+            );
+            return null;
+          }
+        })()
+      );
+    }
+
+    const colorResults = await Promise.allSettled(colorJobs);
+    for (const r of colorResults) {
+      if (r.status !== "fulfilled" || !r.value) continue;
+      const { nodeId, result } = r.value;
+      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      if (!node) continue;
+      node.source.cid = result.sourceCid;
+      // The edited source is always glTF JSON now; keep the node's
+      // format/path truthful so the loader doesn't treat it as a binary GLB.
+      if (result.format) node.source.format = result.format;
+      if (result.path) node.source.path = result.path;
+      console.log(
+        `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
+      );
     }
   }
 
@@ -454,6 +485,7 @@ async function prepareManifestForWrite(assetName) {
   // Decomposed nodes: bake colors directly into the composite glTF.
   // Monolithic nodes: store as node.post_processor (runtime overlay).
   if (pendingPP.size > 0) {
+    const ppJobs = [];
     for (const [nodeId, pp] of pendingPP) {
       const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
       if (!node) continue;
@@ -462,47 +494,36 @@ async function prepareManifestForWrite(assetName) {
         node.source?.path === "composite.gltf" && node.source?.cid;
 
       if (isDecomposed && (pp.color || pp.meshOverrides)) {
-        // Bake colors into the composite glTF (only the JSON changes)
-        try {
-          const result = await editCompositeColors(
-            node.source.cid,
-            pp.meshOverrides || null,
-            pp.color || null,
-            {
-              assetName: manifest.name,
-              assetId: manifest.asset_id,
+        // Decomposed nodes need an async composite bake. Capture the node id
+        // and the edit payload so we can apply the result later.
+        ppJobs.push(
+          (async () => {
+            let result = null;
+            try {
+              result = await editCompositeColors(
+                node.source.cid,
+                pp.meshOverrides || null,
+                pp.color || null,
+                {
+                  assetName: manifest.name,
+                  assetId: manifest.asset_id,
+                }
+              );
+              console.log(
+                `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
+              );
+            } catch (err) {
+              console.warn(
+                `Save: failed to bake colors into composite glTF for ${nodeId}:`,
+                err.message
+              );
             }
-          );
-          node.source.cid = result.compositeCid;
-          console.log(
-            `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
-          );
-        } catch (err) {
-          console.warn(
-            `Save: failed to bake colors into composite glTF for ${nodeId}:`,
-            err.message
-          );
-        }
-
-        // Scale still goes to post_processor (geometry, not material)
-        if (
-          pp.scale &&
-          (pp.scale.x !== 1 || pp.scale.y !== 1 || pp.scale.z !== 1)
-        ) {
-          node.post_processor ||= {};
-          node.post_processor.scale = { ...pp.scale };
-        } else if (node.post_processor) {
-          delete node.post_processor.scale;
-        }
-        // Clean up empty post_processor
-        if (
-          node.post_processor &&
-          Object.keys(node.post_processor).length === 0
-        ) {
-          delete node.post_processor;
-        }
+            return { nodeId, pp, result };
+          })()
+        );
       } else {
-        // Monolithic node — store as post_processor overlay
+        // Monolithic node — store as post_processor overlay (also covers
+        // decomposed nodes with only scale edits, which don't need a fetch).
         node.post_processor ||= {};
         if (pp.color !== undefined) node.post_processor.color = pp.color;
         if (pp.scale !== undefined) node.post_processor.scale = { ...pp.scale };
@@ -512,6 +533,37 @@ async function prepareManifestForWrite(assetName) {
           delete node.post_processor.meshOverrides;
       }
     }
+
+    const ppResults = await Promise.allSettled(ppJobs);
+    for (const r of ppResults) {
+      if (r.status !== "fulfilled" || !r.value) continue;
+      const { nodeId, pp, result } = r.value;
+      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      if (!node) continue;
+
+      if (result) {
+        node.source.cid = result.compositeCid;
+      }
+
+      // Scale still goes to post_processor (geometry, not material)
+      if (
+        pp.scale &&
+        (pp.scale.x !== 1 || pp.scale.y !== 1 || pp.scale.z !== 1)
+      ) {
+        node.post_processor ||= {};
+        node.post_processor.scale = { ...pp.scale };
+      } else if (node.post_processor) {
+        delete node.post_processor.scale;
+      }
+      // Clean up empty post_processor
+      if (
+        node.post_processor &&
+        Object.keys(node.post_processor).length === 0
+      ) {
+        delete node.post_processor;
+      }
+    }
+
     console.log(
       `Save: applied ${pendingPP.size} pending post-processor edit(s)`
     );
@@ -554,30 +606,35 @@ async function prepareManifestForWrite(assetName) {
     } chosenPrev=${latestCid}`
   );
 
-  let prevManifest = null;
-  let baseManifest = null;
+  // Fetch the active (fallback) and latest (version baseline) manifests
+  // concurrently. Deduplicate when they point to the same CID.
+  const cidToFetch = new Map();
+  if (activeCid) cidToFetch.set(activeCid, "base");
+  if (latestCid && latestCid !== activeCid) cidToFetch.set(latestCid, "prev");
 
-  // baseManifest is the currently loaded manifest (used for fallback only).
-  if (activeCid) {
-    try {
-      baseManifest = await getFromRemoteIPFS(activeCid);
-    } catch {
-      baseManifest = null;
-    }
-  }
+  const fetched = new Map();
+  await Promise.all(
+    [...cidToFetch.entries()].map(async ([cid, key]) => {
+      try {
+        fetched.set(cid, await getFromRemoteIPFS(cid));
+      } catch {
+        // Leave missing manifests as undefined; callers fall back gracefully.
+      }
+    })
+  );
+
+  const baseManifest = fetched.get(activeCid) || null;
+  let prevManifest = (latestCid ? fetched.get(latestCid) : null) || baseManifest;
 
   // prevManifest is the tip of the chain that supplies version + prev link
   // and is also the baseline for no-op detection. When the user has navigated
   // to an older version (v2 of v1..v6), edits/saves still append to the tip
   // as the next linear version (v7), not branch off as v3.
-  if (latestCid) {
-    try {
-      prevManifest = await getFromRemoteIPFS(latestCid);
-      manifest.version = (prevManifest.version || 0) + 1;
-      manifest.prev_asset_manifest_cid = latestCid;
-    } catch {
-      advanceManifestVersion(manifest, latestCid);
-    }
+  if (prevManifest) {
+    manifest.version = (prevManifest.version || 0) + 1;
+    manifest.prev_asset_manifest_cid = latestCid;
+  } else if (latestCid) {
+    advanceManifestVersion(manifest, latestCid);
   }
 
   return {
@@ -599,9 +656,9 @@ async function saveAssetDraftCore(
   if (captureThumbnail) {
     try {
       const thumbnail = await captureAssetThumbnail();
-      if (thumbnail) {
+      if (thumbnail?.cid) {
         prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
-          ? { ...thumbnail, cid: prepared.manifest.thumbnail.cid }
+          ? { ...prepared.manifest.thumbnail, cid: thumbnail.cid }
           : thumbnail;
       }
     } catch (thumbnailError) {

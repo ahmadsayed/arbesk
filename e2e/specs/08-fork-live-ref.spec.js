@@ -11,6 +11,7 @@ import {
   generate,
   saveDraft,
   generateSaveAndPublish,
+  assetCardLocator,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -46,9 +47,7 @@ test.describe("fork vs live-reference", () => {
 
     // 4. Open gallery, find the child's card, click "Add to Scene".
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const childCard = page.locator(
-      `${SELECTORS.assetCard}[data-token-id="${childTokenDec}"]`,
-    );
+    const childCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await childCard.getByRole("button", { name: "Add to Scene" }).click();
 
@@ -108,9 +107,7 @@ test.describe("fork vs live-reference", () => {
 
     // 4. Open gallery, find the child's card, click "Add to Scene".
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const childCard = page.locator(
-      `${SELECTORS.assetCard}[data-token-id="${childTokenDec}"]`,
-    );
+    const childCard = assetCardLocator(page, childTokenDec, "Live Child");
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await childCard.getByRole("button", { name: "Add to Scene" }).click();
 

@@ -176,16 +176,18 @@ async function loadActivities() {
     // Walk the manifest chain client-side via IPFS gateway.
     const summaries = await walkManifestChain(cid);
 
-    // Fetch full manifests for activity extraction.
-    const chain = [];
-    for (const s of summaries) {
-      try {
-        const manifest = await getFromRemoteIPFS(s.cid);
-        chain.push({ cid: s.cid, manifest });
-      } catch {
-        // Skip manifests that fail to fetch
-      }
-    }
+    // Fetch full manifests for activity extraction concurrently.
+    const manifestResults = await Promise.allSettled(
+      summaries.map((s) =>
+        getFromRemoteIPFS(s.cid).then((manifest) => ({
+          cid: s.cid,
+          manifest,
+        }))
+      )
+    );
+    const chain = manifestResults
+      .filter((r) => r.status === "fulfilled")
+      .map((r) => r.value);
 
     activities = extractActivities(chain);
   } catch (err) {

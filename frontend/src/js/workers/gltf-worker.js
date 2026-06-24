@@ -17,13 +17,19 @@
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
 
+console.log("[WORKER-INIT] gltf-worker module evaluating");
+
 const IPFS_URI_PREFIX = "ipfs://";
 const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
 const BASE64_IMAGE_PREFIX = "data:image/";
 const WORKER_BUFFER_PLACEHOLDER = (i) => `__worker_buffer_${i}__`;
 const WORKER_IMAGE_PLACEHOLDER = (i) => `__worker_image_${i}__`;
 
-const io = new WebIO();
+let io = null;
+function getIO() {
+  if (!io) io = new WebIO();
+  return io;
+}
 
 // ─── Shared Utilities ───────────────────────────────────────────────────────
 
@@ -100,14 +106,40 @@ function extFromMimeType(mimeType) {
   return map[mimeType] || mimeType.split("/").pop() || "bin";
 }
 
+/**
+ * Decompress a gzip stream (magic bytes 0x1f 0x8b) using the native
+ * DecompressionStream API. Web Workers can't use the page import map, so we
+ * can't import pako here — but DecompressionStream is a global in module
+ * workers in all evergreen browsers (Chrome 80+, FF 113+, Safari 16.4+).
+ * Assets are stored gzipped on IPFS (see commit 401da4b), so without this the
+ * worker hands compressed bytes to Babylon.js, which fails with errors like
+ * "Invalid typed array length".
+ */
+function isGzipped(bytes) {
+  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+async function gunzip(bytes) {
+  const ds = new DecompressionStream("gzip");
+  // DecompressionStream works on ReadableStream; wrap the bytes once.
+  const readable = new Response(bytes).body.pipeThrough(ds);
+  const decompressed = await new Response(readable).arrayBuffer();
+  return new Uint8Array(decompressed);
+}
+
 async function fetchCIDAsBase64(cid, gatewayBase) {
   const url = `${gatewayBase.replace(/\/$/, "")}/${cid}`;
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Worker compose: gateway returned ${response.status} for ${cid}`);
   }
-  const buffer = await response.arrayBuffer();
-  return arrayBufferToBase64(buffer);
+  let bytes = new Uint8Array(await response.arrayBuffer());
+  if (isGzipped(bytes)) {
+    const before = bytes.length;
+    bytes = await gunzip(bytes);
+    console.log(`[WORKER-IPFS] gunzipped ${cid} ${before} → ${bytes.length} bytes`);
+  }
+  return arrayBufferToBase64(bytes.buffer);
 }
 
 function isComposite(gltf) {
@@ -186,7 +218,7 @@ function decomposeGltf(payload) {
 
       const extracted = extractDataURI(buf.uri);
       if (!extracted) {
-        console.warn(`[WORKER] buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`);
+        console.warn(`[WORKER-DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`);
         continue;
       }
 
@@ -202,13 +234,13 @@ function decomposeGltf(payload) {
       if (!img.uri) continue;
       if (img.uri.startsWith(IPFS_URI_PREFIX)) continue;
       if (!img.uri.startsWith("data:")) {
-        console.log(`[WORKER] image[${i}] external URI, keeping as-is`);
+        console.log(`[WORKER-DECOMPOSE] image[${i}] external URI, keeping as-is`);
         continue;
       }
 
       const extracted = extractDataURI(img.uri);
       if (!extracted) {
-        console.warn(`[WORKER] image[${i}] failed to extract data URI`);
+        console.warn(`[WORKER-DECOMPOSE] image[${i}] failed to extract data URI`);
         continue;
       }
 
@@ -245,7 +277,7 @@ async function decomposeGlb(payload) {
   const { arrayBuffer } = payload || {};
   if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
 
-  const { json, resources } = await io.binaryToJSON(new Uint8Array(arrayBuffer));
+  const { json, resources } = await getIO().binaryToJSON(new Uint8Array(arrayBuffer));
   const binBytes = resources[GLB_BUFFER];
   const binaryChunk = binBytes
     ? binBytes.buffer.slice(binBytes.byteOffset, binBytes.byteOffset + binBytes.byteLength)
@@ -266,13 +298,13 @@ async function decomposeGlb(payload) {
     }
 
     if (buf.uri && !buf.uri.startsWith("data:")) {
-      console.log(`[WORKER] GLB buffer[${i}] external URI, keeping as-is`);
+      console.log(`[WORKER-DECOMPOSE] GLB buffer[${i}] external URI, keeping as-is`);
       continue;
     }
 
     const bytes = resolveBufferBytes(buf, binaryChunk);
     if (!bytes) {
-      console.warn(`[WORKER] GLB buffer[${i}] could not be resolved, skipping`);
+      console.warn(`[WORKER-DECOMPOSE] GLB buffer[${i}] could not be resolved, skipping`);
       continue;
     }
 
@@ -290,7 +322,7 @@ async function decomposeGlb(payload) {
       if (img.uri.startsWith(IPFS_URI_PREFIX)) {
         images.push({ name: `texture_${i}.bin`, bytes: null, mime: "image/png", skip: true });
       } else {
-        console.log(`[WORKER] GLB image[${i}] external URI, keeping as-is`);
+        console.log(`[WORKER-DECOMPOSE] GLB image[${i}] external URI, keeping as-is`);
       }
       continue;
     }
@@ -307,12 +339,12 @@ async function decomposeGlb(payload) {
     } else if (img.bufferView !== undefined) {
       const bufferView = composite.bufferViews?.[img.bufferView];
       if (!bufferView) {
-        console.warn(`[WORKER] GLB image[${i}] bufferView ${img.bufferView} not found`);
+        console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] bufferView ${img.bufferView} not found`);
         continue;
       }
       const srcBytes = bufferBytesByIndex[bufferView.buffer];
       if (!srcBytes) {
-        console.warn(`[WORKER] GLB image[${i}] buffer ${bufferView.buffer} could not be resolved`);
+        console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] buffer ${bufferView.buffer} could not be resolved`);
         continue;
       }
       const byteOffset = bufferView.byteOffset || 0;
@@ -322,12 +354,12 @@ async function decomposeGlb(payload) {
         mimeType = detectImageMimeType(bytes);
       }
     } else {
-      console.warn(`[WORKER] GLB image[${i}] has no uri or bufferView, skipping`);
+      console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] has no uri or bufferView, skipping`);
       continue;
     }
 
     if (!bytes || bytes.length === 0) {
-      console.warn(`[WORKER] GLB image[${i}] empty payload, skipping`);
+      console.warn(`[WORKER-DECOMPOSE] GLB image[${i}] empty payload, skipping`);
       continue;
     }
 
@@ -469,10 +501,29 @@ function wrapWithTransfer(handler) {
   };
 }
 
-workerpool.worker({
-  compose: wrapWithTransfer(compose),
-  decomposeGltf: wrapWithTransfer(decomposeGltf),
-  decomposeGlb: wrapWithTransfer(decomposeGlb),
-  bakeSourceColors: wrapWithTransfer(bakeSourceColors),
-  ping: () => "pong",
-});
+try {
+  workerpool.worker({
+    compose: wrapWithTransfer(compose),
+    decomposeGltf: wrapWithTransfer(decomposeGltf),
+    decomposeGlb: wrapWithTransfer(decomposeGlb),
+    bakeSourceColors: wrapWithTransfer(bakeSourceColors),
+    ping: () => "pong",
+  });
+  console.log("[WORKER-INIT] methods registered");
+} catch (err) {
+  console.error("[WORKER-INIT] failed to register methods:", err);
+  // Register an emergency reporter so the main thread can retrieve the
+  // initialization error instead of guessing why custom methods are missing.
+  try {
+    workerpool.worker({
+      initError: () => ({
+        message: err?.message || String(err),
+        stack: err?.stack || null,
+      }),
+    });
+    console.log("[WORKER-INIT] initError reporter registered");
+  } catch (inner) {
+    console.error("[WORKER-INIT] failed to register initError reporter:", inner);
+  }
+  throw err;
+}

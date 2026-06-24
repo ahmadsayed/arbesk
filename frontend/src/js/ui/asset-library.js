@@ -339,26 +339,27 @@ async function renderAssetLibrary(owned, shared) {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
 
-  const ownedNested = await Promise.all(
-    owned.map(async (tokenId) => {
-      const entries = await expandTokenToAssets(tokenId);
-      entries.forEach((e) => {
-        e.role = "owner";
-      });
-      return entries;
-    })
-  );
+  const [ownedNested, sharedNested] = await Promise.all([
+    Promise.all(
+      owned.map(async (tokenId) => {
+        const entries = await expandTokenToAssets(tokenId);
+        entries.forEach((e) => {
+          e.role = "owner";
+        });
+        return entries;
+      })
+    ),
+    Promise.all(
+      shared.map(async (tokenId) => {
+        const entries = await expandTokenToAssets(tokenId);
+        entries.forEach((e) => {
+          e.role = "editor";
+        });
+        return entries;
+      })
+    ),
+  ]);
   const ownedEntries = ownedNested.flat();
-
-  const sharedNested = await Promise.all(
-    shared.map(async (tokenId) => {
-      const entries = await expandTokenToAssets(tokenId);
-      entries.forEach((e) => {
-        e.role = "editor";
-      });
-      return entries;
-    })
-  );
   const sharedEntries = sharedNested.flat();
 
   assetLibraryBody.appendChild(createSection("My Assets", ownedEntries));

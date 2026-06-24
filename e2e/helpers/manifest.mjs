@@ -1,6 +1,56 @@
-import { BACKEND_URL } from "../lib/infra.mjs";
+import { BACKEND_URL, HARDHAT_RPC } from "../lib/infra.mjs";
+import Web3 from "web3";
 
 const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
+
+/** Minimal ERC-721 ABI for tokenURI resolution. */
+const TOKEN_URI_ABI = [
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "tokenURI",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
+    stateMutability: "view",
+    type: "function",
+  },
+];
+
+let contractCache = null;
+
+async function getFreeTierContract() {
+  if (contractCache) return contractCache;
+
+  // Fetch the configured free-tier contract address from the backend.
+  const configRes = await fetch(`${BACKEND_URL}/api/v1/config`);
+  if (!configRes.ok) {
+    throw new Error(`Failed to fetch backend config: ${configRes.status}`);
+  }
+  const config = await configRes.json();
+  const contractAddress = config.contractAddress;
+  if (!contractAddress) {
+    throw new Error("Backend config missing contractAddress");
+  }
+
+  const web3 = new Web3(HARDHAT_RPC);
+  contractCache = new web3.eth.Contract(TOKEN_URI_ABI, contractAddress);
+  return contractCache;
+}
+
+function normalizeTokenURI(uri) {
+  if (!uri || typeof uri !== "string") return "";
+  let normalized = uri.trim();
+  if (normalized.startsWith("ipfs://")) {
+    normalized = normalized.slice(7);
+  }
+  const ipfsPathMatch = normalized.match(/\/ipfs\/([A-Za-z0-9]{46,})/);
+  if (ipfsPathMatch) {
+    normalized = ipfsPathMatch[1];
+  }
+  const cidMatch = normalized.match(/^([A-Za-z0-9]{46,})/);
+  if (cidMatch) {
+    normalized = cidMatch[1];
+  }
+  return normalized;
+}
 
 export async function fetchManifest(cid) {
   const res = await fetch(`${IPFS_GATEWAY}/${cid}`);
@@ -9,14 +59,24 @@ export async function fetchManifest(cid) {
   return res.json();
 }
 
-/** Read the on-chain manifest the backend resolves for a token id (hex). */
+/**
+ * Resolve a token id (hex string) to its on-chain tokenURI collection manifest.
+ * The backend `/api/v1/tokens/:id/manifest` route was removed as part of the
+ * client-side-first refactoring; this helper calls the free-tier contract's
+ * `tokenURI()` directly via the local Hardhat RPC and then fetches the CID
+ * from the IPFS gateway.
+ */
 export async function fetchTokenManifest(tokenIdHex) {
-  const res = await fetch(
-    `${BACKEND_URL}/api/v1/tokens/${tokenIdHex}/manifest`,
-  );
-  if (!res.ok) throw new Error(`token manifest ${tokenIdHex}: ${res.status}`);
-  const payload = await res.json();
-  return payload.manifest;
+  const contract = await getFreeTierContract();
+  const uri = await contract.methods.tokenURI(tokenIdHex).call();
+  if (!uri) {
+    throw new Error(`tokenURI returned empty for token ${tokenIdHex}`);
+  }
+  const cid = normalizeTokenURI(uri);
+  if (!cid) {
+    throw new Error(`Could not extract CID from tokenURI "${uri}"`);
+  }
+  return fetchManifest(cid);
 }
 
 /** Pull the `?manifest=` CID the studio writes to the URL after a generate/save. */

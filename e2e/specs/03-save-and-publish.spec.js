@@ -9,6 +9,7 @@ import {
   assertPublishedManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
+import { assetCardLocator } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
 const ASSET_NAME = "Cowboy Test";
@@ -88,9 +89,7 @@ test.describe("save and publish", () => {
     // The card is scoped to THIS token's on-chain (decimal) id and shows
     // the published asset name.
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const assetCard = page.locator(
-      `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]`,
-    );
+    const assetCard = assetCardLocator(page, tokenIdDec, ASSET_NAME);
     await expect(assetCard).toHaveCount(1);
     await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
       ASSET_NAME,

@@ -12,7 +12,10 @@
 import { getConfig } from "../services/api.js";
 import { isGzipped, decompress } from "../utils/compression.js";
 
-const IPFS_CACHE_ENABLED = false; // flip to true to re-enable browser caching
+const IPFS_CACHE_ENABLED = true; // in-memory cache by CID (content-addressed, safe)
+const MAX_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB cap for raw gateway bytes
+const _cache = new Map();
+let _cacheBytes = 0;
 
 const FALLBACK_GATEWAY = "http://127.0.0.1:8080/ipfs/";
 let _gatewayPromise = null;
@@ -59,8 +62,40 @@ async function fetchIpfsBytes(cid) {
   return new Uint8Array(buffer);
 }
 
+function clearRemoteIPFSCache() {
+  _cache.clear();
+  _cacheBytes = 0;
+}
+
+function cacheBytes(cid, bytes) {
+  if (!IPFS_CACHE_ENABLED) return;
+  if (_cache.has(cid)) return;
+  // Simple LRU eviction if adding this entry would exceed the cap.
+  while (_cacheBytes + bytes.length > MAX_CACHE_BYTES && _cache.size > 0) {
+    const firstKey = _cache.keys().next().value;
+    const first = _cache.get(firstKey);
+    _cacheBytes -= first?.bytes?.length || 0;
+    _cache.delete(firstKey);
+  }
+  _cache.set(cid, { bytes, added: Date.now() });
+  _cacheBytes += bytes.length;
+}
+
 async function fetchAndCacheIpfsPayload(cid, kind) {
+  if (IPFS_CACHE_ENABLED && _cache.has(cid)) {
+    const bytes = _cache.get(cid).bytes;
+    if (kind === "blob") {
+      return new Blob([bytes]);
+    }
+    const text = new TextDecoder().decode(bytes);
+    if (kind === "json") {
+      return JSON.parse(text);
+    }
+    return text;
+  }
+
   const bytes = await fetchIpfsBytes(cid);
+  cacheBytes(cid, bytes);
 
   if (kind === "blob") {
     return new Blob([bytes]);
@@ -140,4 +175,5 @@ export {
   getArrayBufferFromRemoteIPFS,
   getManifestChain,
   isIpfsCidReachable,
+  clearRemoteIPFSCache,
 };

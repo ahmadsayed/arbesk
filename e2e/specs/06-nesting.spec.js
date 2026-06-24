@@ -10,6 +10,7 @@ import {
   generate,
   saveDraft,
   generateSaveAndPublish,
+  assetCardLocator,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -55,9 +56,7 @@ test.describe("nesting / linked child worlds", () => {
     // first asset ID, so buildLinkedAssetPayload includes assetID.
     // handleLinkedAssetDropped sees assetID → shows fork/live-ref dialog.
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const childCard = page.locator(
-      `${SELECTORS.assetCard}[data-token-id="${childTokenDec}"]`,
-    );
+    const childCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await childCard.getByRole("button", { name: "Add to Scene" }).click();
 

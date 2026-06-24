@@ -6,6 +6,7 @@ import {
   fetchTokenManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
+import { assetCardLocator } from "../helpers/flows.mjs";
 
 const PROMPT_1 = "a wooden chair";
 const PROMPT_2 = "a small round table";
@@ -144,7 +145,8 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, ASSET_NAME_1);
+    const viewportName = "Chair Viewport";
+    await page.fill(SELECTORS.dialogInput, viewportName);
     await page.click(SELECTORS.dialogConfirmBtn);
 
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
@@ -152,9 +154,7 @@ test.describe.serial("Collection/asset model", () => {
     const tokenIdDec = BigInt(tokenIdHex).toString();
 
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const assetCard = page.locator(
-      `${SELECTORS.assetCard}[data-token-id="${tokenIdDec}"]`,
-    );
+    const assetCard = assetCardLocator(page, tokenIdDec, viewportName);
     await expect(assetCard).toHaveCount(1);
 
     await assetCard.click({ position: { x: 10, y: 10 } });
@@ -167,7 +167,7 @@ test.describe.serial("Collection/asset model", () => {
       "No asset open",
     );
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      ASSET_NAME_1,
+      viewportName,
     );
 
     const urlTokenHex = tokenIdHexFromUrl(page.url());
@@ -195,7 +195,8 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, ASSET_NAME_1);
+    const contextChairName = "Chair Context";
+    await page.fill(SELECTORS.dialogInput, contextChairName);
     await page.click(SELECTORS.dialogConfirmBtn);
 
     await page.waitForURL(
@@ -222,7 +223,8 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, ASSET_NAME_2);
+    const contextTableName = "Table Context";
+    await page.fill(SELECTORS.dialogInput, contextTableName);
     await page.click(SELECTORS.dialogConfirmBtn);
 
     await page.waitForURL(
