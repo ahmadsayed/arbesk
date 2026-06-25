@@ -174,16 +174,10 @@ html(lang="en")
                     .form-help#tierHelp Higher tiers produce better quality meshes.
                   #teamPanel.team-section(hidden)
                     .team-header
-                      h4 Collaborators
-                      span#teamOwnerBadge.owner-badge(hidden) Owner
-                    #teamList.team-list
-                    label.form-label(for="teamAddInput") Wallet Address
-                    .team-add
-                      input#teamAddInput.form-control(type="text", placeholder="0x… wallet address")
-                      select#teamRoleSelect.form-select(aria-label="Collaborator role")
-                        option(value="2" selected) Editor
-                        option(value="1") Viewer
-                      button#teamAddBtn.btn.btn-secondary Add
+                      h5 Collection Collaborators
+                      span.owner-badge Owner
+                    .team-list
+                    p.team-help Open this collection in the Library to add or remove collaborators.
 
             //- View: Chat
             .sidebar-view(data-view="chat" hidden)
@@ -375,7 +369,6 @@ html(lang="en")
     script(type="module", src="/js/services/api.js")
     script(type="module", src="/js/services/team.js")
     script(type="module", src="/js/ui/toasts.js")
-    script(type="module", src="/js/ui/asset-editors.js")
     script(type="module", src="/js/ui/asset-save.js")
     script(type="module", src="/js/ui/asset-history.js")
     script(type="module", src="/js/ui/create-panel.js")

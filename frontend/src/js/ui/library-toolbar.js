@@ -74,11 +74,32 @@ async function handleCreateCollection() {
 
   try {
     const { tokenId, manifestCid, isNew } = await createNamedCollection(name);
+
+    // Optimistically show the new collection immediately. getPastEvents scans
+    // can lag one block behind the mint transaction on local nodes, so the card
+    // would otherwise only appear after the next page load.
+    const existing = libraryState.get().collections;
+    if (!existing.some((c) => String(c.tokenId) === String(tokenId))) {
+      libraryState.set({
+        collections: [
+          {
+            id: `collection-${tokenId}`,
+            type: "collection",
+            tokenId: String(tokenId),
+            manifestCid,
+            name,
+            thumbnailCid: "",
+            status: "besked",
+            role: "owner",
+          },
+          ...existing,
+        ],
+        currentCollectionTokenId: String(tokenId),
+        selectedIds: [],
+      });
+    }
+
     await refreshLibraryData();
-    libraryState.set({
-      currentCollectionTokenId: String(tokenId),
-      selectedIds: [],
-    });
     announce(isNew ? `Created collection ${name}` : `Opened existing collection ${name}`);
     showToast({
       type: "success",

@@ -133,6 +133,8 @@ export async function writeJSONToIPFS(json, credential = null, options = {}) {
     baseName = filename;
   } else if (type === "collection") {
     baseName = `collect_${sanitizeFileName(assetId || json.asset_id || Date.now())}.json`;
+  } else if (type === "editors") {
+    baseName = `editors_${sanitizeFileName(assetId || Date.now())}.json`;
   } else {
     baseName = `asset_${sanitizeFileName(assetId || json.asset_id || "composite")}_composite.gltf`;
   }

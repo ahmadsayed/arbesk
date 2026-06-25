@@ -149,6 +149,13 @@
   }
 }
 
+.team-help {
+  margin: var(--size-2) 0 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  line-height: var(--font-lineheight-2);
+}
+
 // ─── BYOK (Bring Your Own Key) field ──────────────────────────────────
 
 .byok-field {

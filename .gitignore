@@ -57,3 +57,4 @@ frontend/dist/js/blockchain/dev-account.js
 
 # Isolated worktrees
 .worktrees/
+.aider*

@@ -230,12 +230,11 @@ function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
 
 /**
  * Derive the assetID an asset occupies within its collection. Reuses the
- * existing assetID if the asset has one; otherwise derives a fresh one from
- * the given seed (e.g. Date.now()) the first time the asset is besked.
+ * existing assetID if the asset has one; otherwise uses the provided fallback
+ * (typically the manifest's own asset_id, or a fresh `asset_${Date.now()}`).
  */
-function deriveDefaultAssetId(existingAssetId, fallbackSeed) {
-  if (existingAssetId) return existingAssetId;
-  return `asset_${fallbackSeed}`;
+function deriveDefaultAssetId(existingAssetId, fallbackAssetId) {
+  return existingAssetId || fallbackAssetId || `asset_${Date.now()}`;
 }
 
 /**
@@ -823,6 +822,24 @@ async function onPublishAsset() {
     // Republishes (existing tokenId) snapshot the live comment thread into the
     // manifest via publishContext. First-time publishes have no prior comments.
     const existingTokenId = assetState.get().activeAssetTokenId;
+    const walletAddr = walletState.get().walletAddress;
+
+    // Fail fast on unauthorized republish attempts so the user gets immediate
+    // feedback instead of paying for gas on a transaction that will revert.
+    if (existingTokenId) {
+      const editorList = await _loadEditorList(existingTokenId);
+      const currentVersion = await _getEditorSetVersion(existingTokenId);
+      const proofResult = getProof(
+        editorList,
+        walletAddr,
+        existingTokenId,
+        currentVersion,
+      );
+      if (!proofResult) {
+        throw new Error("Not an authorized editor");
+      }
+    }
+
     const publishContext = existingTokenId
       ? {
           tokenId: existingTokenId,
@@ -864,10 +881,12 @@ async function onPublishAsset() {
       assetState.get().activeAssetId,
       publishedManifest?.asset_id || `asset_${Date.now()}`
     );
+    console.log(
+      `[PUBLISH] assetID derived | activeAssetId=${assetState.get().activeAssetId} manifestAssetId=${publishedManifest?.asset_id} chosen=${assetID}`
+    );
     assetState.set({ activeAssetId: assetID });
 
     announceStatus("Confirm transaction in MetaMask…");
-    const walletAddr = walletState.get().walletAddress;
 
     // Fetch the current collection manifest (if one exists yet) and merge
     // this asset's new CID into its assets map. If no collection token
@@ -876,6 +895,7 @@ async function onPublishAsset() {
     const preferredCollectionId =
       assetState.get().selectedCollectionId ||
       assetState.get().activeCollectionTokenId;
+    console.log("[PUBLISH] preferredCollectionId:", preferredCollectionId, "activeAssetTokenId:", assetState.get().activeAssetTokenId);
     let existingCollectionTokenId = null;
     let collectionManifest = null;
     if (preferredCollectionId) {
@@ -915,6 +935,7 @@ async function onPublishAsset() {
         // to the mint path below.
       }
     }
+    console.log("[PUBLISH] existingCollectionTokenId after fallback:", existingCollectionTokenId);
     const mergedCollection = mergeAssetIntoCollection(
       collectionManifest,
       assetID,
@@ -955,6 +976,13 @@ async function onPublishAsset() {
         proofResult.proof
       );
       if (!txHash) throw new Error("Republish transaction failed");
+      // Ensure the UI knows which token was just republished (critical when
+      // the chain already has a default collection but the in-memory state
+      // was cleared, e.g. page reload or fresh browser context).
+      assetState.set({
+        activeCollectionTokenId: String(tokenId),
+        activeAssetTokenId: String(tokenId),
+      });
       updateUrlAsset(tokenId);
       announceStatus("Collection republished successfully.");
     } else {
@@ -963,12 +991,20 @@ async function onPublishAsset() {
         { address: walletAddr, role: CollaboratorRole.Editor },
       ];
       const editorRoot = computeRoot(editorList, tokenId, 1);
-      const editorListUri = _saveEditorListLocally(tokenId, editorList, null);
+      // Persist the initial editor list on IPFS so collaborators (and the
+      // owner in a fresh browser context) can rebuild Merkle proofs.
+      const editorListUri =
+        (await writeJSONToIPFS(editorList, null, {
+          compress: true,
+          type: "editors",
+          assetId: `token_${tokenId}_v1`,
+        })) || "";
+      _saveEditorListLocally(tokenId, editorList, editorListUri || null);
       const txHash = await publishAsset(
         collectionCid,
         tokenId,
         editorRoot,
-        editorListUri || ""
+        editorListUri
       );
       if (!txHash) throw new Error("Publish transaction failed");
       assetState.set({
@@ -977,8 +1013,8 @@ async function onPublishAsset() {
       });
       updateUrlAsset(tokenId);
 
-      const { showAssetEditors } = await import("./asset-editors.js");
-      showAssetEditors(tokenId);
+      const { refreshTeamPanel } = await import("./collaborators.js");
+      refreshTeamPanel();
       announceStatus("Default collection published and minted.");
     }
 
@@ -1090,6 +1126,30 @@ function _saveEditorListLocally(tokenId, editorList, ipfsCid) {
 }
 
 async function _loadEditorList(tokenId) {
+  // Authoritative source: the on-chain editorListURI is bumped together with
+  // editorSetVersion, so the list at this CID always matches the current root.
+  // Always read it first to avoid building proofs from a stale localStorage copy.
+  try {
+    const c = walletContract || walletState.get().contract;
+    if (c) {
+      const cid = await c.methods.editorListURI(tokenId).call();
+      if (cid) {
+        const fresh = await getFromRemoteIPFS(cid);
+        if (Array.isArray(fresh)) {
+          _saveEditorListLocally(tokenId, fresh, cid);
+          return fresh;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[SAVE] failed to load editor list from chain for ${tokenId}:`,
+      err.message,
+    );
+  }
+
+  // Fallback: localStorage cache (may be stale, but usable if chain/IPFS is
+  // temporarily unreachable).
   try {
     const stored = localStorage.getItem(_editorListKey(tokenId));
     if (stored) {
@@ -1110,6 +1170,7 @@ async function _loadEditorList(tokenId) {
   } catch {
     // localStorage unavailable or corrupted
   }
+
   return null;
 }
 

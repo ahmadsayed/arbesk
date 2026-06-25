@@ -1405,6 +1405,8 @@ export {
           if (cid) {
             assetState.set({
               activeAssetTokenId: String(assetTokenId),
+              activeCollectionTokenId: String(assetTokenId),
+              selectedCollectionId: null,
               activeAssetManifestCid: cid,
               latestAssetManifestCid: cid,
             });

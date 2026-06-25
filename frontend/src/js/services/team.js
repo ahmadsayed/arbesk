@@ -13,7 +13,7 @@ import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { computeRoot, getProof } from "../gltf/merkle-editors.js";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
-const CollaboratorRole = Object.freeze({ None: 0, Viewer: 1, Editor: 2 });
+export const CollaboratorRole = Object.freeze({ None: 0, Viewer: 1, Editor: 2 });
 
 /**
  * List editors for a token from IPFS (with localStorage cache fallback).
@@ -23,7 +23,30 @@ const CollaboratorRole = Object.freeze({ None: 0, Viewer: 1, Editor: 2 });
 export async function fetchEditors(tokenId) {
   if (!tokenId) return [];
 
-  // Try localStorage first
+  // Authoritative source: the editor list CID stored on-chain is updated
+  // atomically whenever editorSetVersion bumps, so it is always in sync with
+  // the current Merkle root. Use this for proof generation and mutations.
+  try {
+    const c = contract || walletState.get().contract;
+    if (c) {
+      const cid = await c.methods.editorListURI(tokenId).call();
+      if (cid) {
+        const fresh = await getFromRemoteIPFS(cid);
+        if (Array.isArray(fresh)) {
+          _saveEditorListLocally(tokenId, fresh, cid);
+          return fresh;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[TEAM] failed to load editor list from chain for ${tokenId}:`,
+      err.message,
+    );
+  }
+
+  // Fallback: localStorage cache (may be stale, but better than nothing when
+  // the chain or IPFS is unreachable).
   try {
     const key = `arbesk_editor_list_${tokenId}`;
     const stored = localStorage.getItem(key);
@@ -174,6 +197,30 @@ export async function removeTeamMember(tokenId, address) {
   if (nextEditors.length === editors.length) {
     throw new Error("Address is not an editor");
   }
+  if (nextEditors.length === 0) {
+    throw new Error("Cannot remove the last editor");
+  }
 
+  return _updateEditorRoot(tokenId, editors, nextEditors);
+}
+
+/**
+ * Change the role of an existing team member.
+ * @param {string|number} tokenId
+ * @param {string} address
+ * @param {number} newRole
+ * @returns {Promise<string>} transaction hash
+ */
+export async function changeTeamMemberRole(tokenId, address, newRole) {
+  const normalized = _normalizeAddress(address);
+  const editors = await fetchEditors(tokenId);
+
+  if (!editors.some((e) => e.address.toLowerCase() === normalized)) {
+    throw new Error("Address is not a collaborator");
+  }
+
+  const nextEditors = editors.map((e) =>
+    e.address.toLowerCase() === normalized ? { ...e, role: newRole } : e
+  );
   return _updateEditorRoot(tokenId, editors, nextEditors);
 }

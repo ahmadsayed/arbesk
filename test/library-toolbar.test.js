@@ -165,6 +165,18 @@ describe("create collection button", () => {
 
     expect(_createNamedCollection).toHaveBeenCalledWith("My Collection");
     expect(libraryState.get().currentCollectionTokenId).toBe("12345");
+
+    // The new collection should appear immediately, before refreshLibraryData resolves.
+    const collections = libraryState.get().collections;
+    expect(collections).toHaveLength(1);
+    expect(collections[0]).toMatchObject({
+      id: "collection-12345",
+      tokenId: "12345",
+      type: "collection",
+      name: "My Collection",
+      manifestCid: "QmCollection",
+      role: "owner",
+    });
   });
 });
 

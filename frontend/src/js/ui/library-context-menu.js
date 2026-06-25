@@ -1,5 +1,5 @@
 import { libraryState } from "../state/library-state.js";
-import { showConfirmDialog, showDialog } from "./dialog.js";
+import { showConfirmDialog, showCustomDialog, showDialog } from "./dialog.js";
 import { escapeHtml } from "../utils/html.js";
 import { showToast } from "./toasts.js";
 import { createNamedCollection } from "../services/library-ops.js";
@@ -11,6 +11,7 @@ const assetDeleteOps = () => import("../services/asset-delete.js");
 const ipfsOps = () => import("../ipfs/remote-ipfs.js");
 const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.js");
 const libraryInitOps = () => import("../library-init.js");
+const collaboratorsPanelOps = () => import("./collaborators-panel.js");
 
 let menuEl = null;
 
@@ -50,6 +51,10 @@ function singleItemMenuItems(ids) {
         action: () => openAssetByTokenId(collection.tokenId),
       },
       { label: "Rename", action: () => requestRename(id) },
+      {
+        label: "Manage Collaborators",
+        action: () => requestManageCollaborators(id),
+      },
     ];
   }
   return [
@@ -93,13 +98,34 @@ async function requestCreateCollection() {
   if (!name) return;
 
   try {
-    const { tokenId, isNew } = await createNamedCollection(name);
+    const { tokenId, manifestCid, isNew } = await createNamedCollection(name);
     const { refreshLibraryData } = await libraryInitOps();
+
+    // Optimistically show the new collection immediately. getPastEvents scans
+    // can lag one block behind the mint transaction on local nodes, so the card
+    // would otherwise only appear after the next page load.
+    const existing = libraryState.get().collections;
+    if (!existing.some((c) => String(c.tokenId) === String(tokenId))) {
+      libraryState.set({
+        collections: [
+          {
+            id: `collection-${tokenId}`,
+            type: "collection",
+            tokenId: String(tokenId),
+            manifestCid,
+            name,
+            thumbnailCid: "",
+            status: "besked",
+            role: "owner",
+          },
+          ...existing,
+        ],
+        currentCollectionTokenId: String(tokenId),
+        selectedIds: [],
+      });
+    }
+
     await refreshLibraryData();
-    libraryState.set({
-      currentCollectionTokenId: String(tokenId),
-      selectedIds: [],
-    });
     announce(isNew ? `Created collection ${name}` : `Opened collection ${name}`);
     showToast({
       type: "success",
@@ -148,6 +174,20 @@ async function openSelectedAssetInStudio(ids) {
   if (!asset) return;
   const { openInStudio } = await import("./library-grid.js");
   openInStudio(asset.tokenId, asset.assetId);
+}
+
+async function requestManageCollaborators(id) {
+  const collection = getItem(id);
+  if (!collection) return;
+
+  const { initCollaboratorPanel } = await collaboratorsPanelOps();
+  const container = document.createElement("div");
+  const panel = initCollaboratorPanel(container, collection.tokenId, {
+    editable: true,
+  });
+
+  await showCustomDialog("Manage Collaborators", container);
+  panel.destroy();
 }
 
 export async function requestRename(id) {

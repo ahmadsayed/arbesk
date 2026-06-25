@@ -42,6 +42,15 @@ export const SELECTORS = {
   assetTokenIdLabel: "#assetStatusMeta",
   inspectorDiveBtn: "#inspectorDiveBtn",
   backBtn: "#backBtn",
+  // Settings / team (collaborators) panel
+  teamPanel: "#teamPanel",
+  collaboratorList: "#collaboratorList",
+  collaboratorAddInput: "#collaboratorAddInput",
+  collaboratorAddBtn: "#collaboratorAddBtn",
+  collaboratorRoleSelect: "#collaboratorRoleSelect",
+  teamItemByAddress: (address) =>
+    `#collaboratorList .team-item[data-address="${address.toLowerCase()}"]`,
+  contextMenuItemByText: (text) => `.context-menu-item:text-is("${text}")`,
   // Comments section in right inspector
   commentsSection: "#commentsSection",
   commentList: "#commentList",

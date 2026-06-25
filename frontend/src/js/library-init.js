@@ -162,21 +162,36 @@ export async function refreshLibraryData() {
       buildCollectionEntries(owned, "owner", walletAddress),
       buildCollectionEntries(shared, "editor", walletAddress),
     ]);
-    const collections = [...ownedEntries, ...sharedEntries];
+    const fetchedCollections = [...ownedEntries, ...sharedEntries];
 
-    const currentTokenId = libraryState.get().currentCollectionTokenId;
-    const stillExists = collections.some(
-      (c) => String(c.tokenId) === String(currentTokenId)
-    );
+    const currentState = libraryState.get();
+    const currentTokenId = currentState.currentCollectionTokenId;
+
+    // getPastEvents scans can lag behind a freshly mined mint on local nodes,
+    // so keep the active collection in the list if it vanished from the scan.
+    let collections = fetchedCollections;
+    if (
+      currentTokenId &&
+      !fetchedCollections.some(
+        (c) => String(c.tokenId) === String(currentTokenId)
+      )
+    ) {
+      const active = currentState.collections.find(
+        (c) => String(c.tokenId) === String(currentTokenId)
+      );
+      if (active) {
+        collections = [active, ...fetchedCollections];
+      }
+    }
 
     libraryState.set({
       collections,
-      currentCollectionTokenId: stillExists ? currentTokenId : null,
+      currentCollectionTokenId: currentTokenId,
       selectedIds: [],
       isLoading: false,
     });
 
-    if (libraryState.get().currentCollectionTokenId) {
+    if (currentTokenId) {
       await loadCurrentAssets();
     }
   } catch (err) {

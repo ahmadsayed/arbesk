@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
+import { HARDHAT_ACCOUNTS } from "../fixtures/multi-wallet.mjs";
 import { SELECTORS } from "./studio-selectors.mjs";
 import { manifestCidFromUrl } from "./manifest.mjs";
 
@@ -17,6 +18,33 @@ export async function connectStudio(page) {
   await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
     "Sign In",
   );
+}
+
+/**
+ * Connect the Studio as a specific Hardhat dev account (index 0, 1, 2…).
+ * Useful for multi-wallet E2E scenarios where each wallet needs its own
+ * browser context to keep sessions and localStorage isolated.
+ */
+export async function connectStudioAs(page, accountIndex) {
+  const account = HARDHAT_ACCOUNTS[accountIndex];
+  if (!account) {
+    throw new Error(`Unknown Hardhat account index ${accountIndex}`);
+  }
+  await injectHardhatProvider(page, { accountIndex });
+  await page.goto("/studio.html");
+  await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+  // Wait for SIWE auth to complete (button no longer shows "Sign In")…
+  await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
+    "Sign In",
+  );
+  // …and confirm we connected as the expected account.
+  await expect(page.locator(SELECTORS.disconnectWalletBtn)).toContainText(
+    truncateAddress(account.address),
+  );
+}
+
+function truncateAddress(address) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 /**
@@ -204,4 +232,58 @@ export async function uploadLibraryFile(page, filePath, expectedAssetName) {
   await expect(libraryAssetLocator(page, expectedAssetName).first()).toBeVisible({
     timeout: 30000,
   });
+}
+
+// ── Multi-wallet / editor collaboration helpers ──────────────────────────────
+
+/**
+ * Add an address as a collaborator of a collection from the Library.
+ * Defaults to the "Default" collection. Waits until the new collaborator
+ * appears in the collaborator list.
+ */
+export async function addCollaborator(
+  page,
+  address,
+  collectionName = "Default",
+) {
+  await page.goto("/library.html");
+  await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
+  await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
+  await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+
+  const card = libraryCollectionLocator(page, collectionName);
+  await expect(card).toBeVisible();
+  await card.click({ button: "right" });
+  await page.click(
+    SELECTORS.contextMenuItemByText("Manage Collaborators"),
+  );
+
+  await expect(page.locator(SELECTORS.collaboratorAddInput)).toBeVisible();
+  await page.fill(SELECTORS.collaboratorAddInput, address);
+  await page.click(SELECTORS.collaboratorAddBtn);
+  await expect(page.locator(SELECTORS.teamItemByAddress(address))).toBeVisible({
+    timeout: 30000,
+  });
+
+  await page.locator(".dialog-close-btn").click();
+}
+
+/**
+ * Open a shared asset in Studio via direct URL. Shared assets are not
+ * discoverable in the Library sidebar without an off-chain indexer, so the
+ * editor wallet must navigate directly using the tokenId + assetId.
+ */
+export async function openSharedAsset(page, tokenId, assetId) {
+  const url = assetId
+    ? `/studio.html?asset=${tokenId}&assetId=${assetId}`
+    : `/studio.html?asset=${tokenId}`;
+  await page.goto(url);
+  await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+  // Wait until the Studio has resolved the asset token from the URL. The team
+  // panel's `hidden` attribute is removed once activeAssetTokenId is set; it
+  // may still be inside a non-active sidebar view, so we check the attribute
+  // rather than layout visibility.
+  await expect(
+    page.locator(SELECTORS.teamPanel),
+  ).not.toHaveAttribute("hidden", "", { timeout: 30000 });
 }

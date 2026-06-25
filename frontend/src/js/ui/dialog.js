@@ -269,3 +269,43 @@ export function showInfoDialog(title, bodyHtml) {
     }
   });
 }
+
+/**
+ * Show a dialog whose body is a caller-supplied DOM element.
+ *
+ * Useful when the body needs its own internal state and event handling.
+ * The dialog resolves with `null` when closed.
+ *
+ * @param {string} title
+ * @param {HTMLElement} bodyEl
+ * @returns {Promise<null>}
+ */
+export function showCustomDialog(title, bodyEl) {
+  return new Promise((resolve) => {
+    try {
+      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
+        title,
+        resolve
+      );
+
+      const bodyDiv = document.createElement("div");
+      bodyDiv.className = "dialog-body collaborator-dialog-body";
+      bodyDiv.appendChild(bodyEl);
+
+      const actionsDiv = document.createElement("div");
+      actionsDiv.className = "dialog-actions";
+      actionsDiv.innerHTML = `<button class="btn btn-primary dialog-close-btn" type="button">Close</button>`;
+
+      dialog.appendChild(bodyDiv);
+      dialog.appendChild(actionsDiv);
+
+      const closeBtn = dialog.querySelector(".dialog-close-btn");
+      closeBtn.addEventListener("click", () => closeDialog(null));
+
+      setRemoveTrap(_trapFocus(dialog, closeBtn));
+    } catch (err) {
+      console.error("[DIALOG] error creating custom dialog:", err);
+      resolve(null);
+    }
+  });
+}

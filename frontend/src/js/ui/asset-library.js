@@ -210,6 +210,7 @@ async function openAssetEntry(entry) {
       assetState.set({
         activeAssetTokenId: String(entry.tokenId),
         activeCollectionTokenId: String(entry.tokenId),
+        selectedCollectionId: null,
         activeAssetId: entry.assetId,
         activeAssetManifestCid: entry.manifestCid,
         latestAssetManifestCid: entry.manifestCid,
@@ -217,6 +218,7 @@ async function openAssetEntry(entry) {
     } else {
       assetState.set({
         activeAssetTokenId: String(entry.tokenId),
+        selectedCollectionId: null,
         activeAssetManifestCid: entry.manifestCid,
         latestAssetManifestCid: entry.manifestCid,
       });
@@ -226,8 +228,8 @@ async function openAssetEntry(entry) {
     updateUrlAsset(entry.tokenId);
     await loadAssetManifest(entry.manifestCid);
 
-    const { showAssetEditors } = await import("./asset-editors.js");
-    showAssetEditors(entry.tokenId);
+    const { refreshTeamPanel } = await import("./collaborators.js");
+    refreshTeamPanel();
 
     if (window.innerWidth <= 900) {
       switchView("library");
@@ -245,6 +247,8 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     return;
   }
 
+  console.log("[LIBRARY] openAssetByTokenId", tokenId, "assetId", assetId);
+
   try {
     const cid = await contract.methods.tokenURI(tokenId).call();
     if (!cid) {
@@ -253,6 +257,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     }
 
     const manifest = await getFromRemoteIPFS(cid);
+    console.log("[LIBRARY] tokenURI resolved, manifest type:", manifest?.type);
 
     // Collections: load the collection manifest and auto-open the requested
     // asset (or the first asset if none specified) so that navigation from
@@ -281,10 +286,12 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       assetState.set({
         activeAssetTokenId: String(tokenId),
         activeCollectionTokenId: String(tokenId),
+        selectedCollectionId: null,
         activeAssetId: targetAssetId,
         activeAssetManifestCid: targetAssetCid,
         latestAssetManifestCid: targetAssetCid,
       });
+      console.log("[LIBRARY] collection asset state set, activeCollectionTokenId:", String(tokenId));
       dismissCreatePulse();
       updateUrlAsset(tokenId, targetAssetId);
 
@@ -292,8 +299,8 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
         await loadAssetManifest(targetAssetCid);
       }
 
-      const { showAssetEditors } = await import("./asset-editors.js");
-      showAssetEditors(tokenId);
+      const { refreshTeamPanel } = await import("./collaborators.js");
+      refreshTeamPanel();
 
       if (window.innerWidth <= 900) {
         switchView("library");
@@ -305,6 +312,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     clearScene();
     assetState.set({
       activeAssetTokenId: String(tokenId),
+      selectedCollectionId: null,
       activeAssetId: assetId,
       activeAssetManifestCid: cid,
       latestAssetManifestCid: cid,
@@ -313,8 +321,8 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     updateUrlAsset(tokenId, assetId);
     await loadAssetManifest(cid);
 
-    const { showAssetEditors } = await import("./asset-editors.js");
-    showAssetEditors(tokenId);
+    const { refreshTeamPanel } = await import("./collaborators.js");
+    refreshTeamPanel();
 
     if (window.innerWidth <= 900) {
       switchView("library");
@@ -686,6 +694,17 @@ on(EVENTS.WALLET_CONNECTED, async () => {
   const assetId = params.get("assetId");
   if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId, assetId);
 });
+
+// Wallet may already be connected by the time this module loads (e.g. page
+// reload with an injected provider). In that case the WALLET_CONNECTED event
+// already fired before our listener was registered, so open the URL asset now.
+(function openUrlAssetIfReady() {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  const assetTokenId = params.get("asset");
+  const assetId = params.get("assetId");
+  if (assetTokenId && getContract()) openAssetByTokenId(assetTokenId, assetId);
+})();
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
   if (assetLibraryBody) {
