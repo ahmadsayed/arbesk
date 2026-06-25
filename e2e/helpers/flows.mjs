@@ -118,3 +118,65 @@ export async function scrubHistorySlider(page, index) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }, String(index));
 }
+
+// ── Library helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Open the library with the Hardhat dev wallet injected and wait until it has
+ * auto-connected + authenticated. Returns once the main browser UI is visible.
+ */
+export async function connectLibrary(page) {
+  await injectHardhatProvider(page);
+  await page.goto("/library.html");
+  await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
+  await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
+  await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+}
+
+/** Locate a collection card in the library by its display name. */
+export function libraryCollectionLocator(page, name) {
+  return page.locator(
+    `${SELECTORS.libraryCollectionItem}:has(${SELECTORS.libraryItemName}:text-is("${name}"))`,
+  );
+}
+
+/** Locate an asset card in the library by its display name. */
+export function libraryAssetLocator(page, name) {
+  return page.locator(
+    `${SELECTORS.libraryAssetItem}:has(${SELECTORS.libraryItemName}:text-is("${name}"))`,
+  );
+}
+
+/** Double-click a collection to open it and wait for the breadcrumb to update. */
+export async function openLibraryCollection(page, name) {
+  const card = libraryCollectionLocator(page, name);
+  await expect(card).toBeVisible();
+  await card.dblclick();
+  await expect(page.locator(SELECTORS.libraryBreadcrumb)).toContainText(name);
+}
+
+/** Double-click the first matching asset card and wait for navigation to Studio. */
+export async function openLibraryAssetInStudio(page, name) {
+  const card = libraryAssetLocator(page, name).first();
+  await expect(card).toBeVisible();
+  await card.dblclick();
+  await page.waitForURL(/\/studio\.html\?asset=/, { timeout: 10000 });
+}
+
+/** Wait until the library grid contains exactly `count` items. */
+export async function waitForLibraryItemCount(page, count) {
+  await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(count);
+}
+
+/**
+ * Read the displayed names of every library item in the current view.
+ * Returns an array of strings in DOM order.
+ */
+export async function libraryItemNames(page) {
+  return page.locator(`${SELECTORS.libraryItem} ${SELECTORS.libraryItemName}`).allTextContents();
+}
+
+/** Generate a unique asset name to avoid collisions across retries/shared chain. */
+export function uniqueAssetName(base) {
+  return `${base} ${Date.now()}`;
+}

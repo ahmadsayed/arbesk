@@ -1,8 +1,8 @@
 # Arbesk End-to-End (E2E) Tests
 
-> **Critical path coverage:** wallet connection → free-tier generation → save draft → publish ERC-721 token.
+> **Critical path coverage:** wallet connection → free-tier generation → save draft → publish ERC-721 token → library collection/asset browser.
 >
-> Run these tests **before any major change** that touches the Studio UI, wallet flow, generation pipeline, save/publish logic, smart-contract integration, or IPFS manifest shape.
+> Run these tests **before any major change** that touches the Studio UI, library page, wallet flow, generation pipeline, save/publish logic, smart-contract integration, or IPFS manifest shape.
 
 ---
 
@@ -147,6 +147,39 @@ Validates the "dollhouse architecture" — linking a token as a child world and 
 
 > **Note:** the outliner only renders a linked child node **after a save** (it refreshes on `ASSET_DRAFT_SAVED`, not on `SCENE_TOKEN_CHILD_ADDED`), so the spec saves before locating the child node.
 
+### 9. Library basics (`e2e/specs/09-library-basics.spec.js`)
+
+Validates the Nautilus-style collection browser on `/library.html`:
+
+1. Confirms the wallet gate appears before connection and auto-connects via injected provider.
+2. Asserts the wallet-derived default collection is labeled **Default**.
+3. Publishes an asset in Studio and verifies it appears inside **Default** in the library.
+4. Tests breadcrumb navigation and the **Up** button to return to the collection list.
+5. Tests search filtering (matching and empty states).
+6. Tests grid/list view toggle and sort-by-name.
+
+**Why it matters:** `library.html` is a standalone page with its own state, routing, and selection model. Changes to `library-init.js`, `library-grid.js`, `library-toolbar.js`, or the wallet gate can break this.
+
+### 10. Library asset actions (`e2e/specs/10-library-asset-actions.spec.js`)
+
+Validates the context-menu actions available on library assets:
+
+1. **Rename** — opens the GNOME dialog, changes the asset name, and asserts the grid updates.
+2. **Delete** — confirms deletion and asserts the asset is removed from the collection (NFT is not burned).
+3. **Open in Studio** — navigates to `/studio.html?asset=TOKEN&assetId=ID` and asserts the asset loads.
+4. **Send to Collection…** — with only the default collection present, asserts a warning toast explains that another collection is required.
+
+**Why it matters:** These actions exercise `library-context-menu.js`, `services/asset-delete.js`, collection manifest updates, and the Studio deep-link handling.
+
+### 11. Library ↔ Studio round-trip (`e2e/specs/11-library-studio-roundtrip.spec.js`)
+
+Validates the publish-in-Studio / browse-in-Library / open-in-Studio loop:
+
+1. Publishes an asset in Studio, then asserts it appears in the library and in the on-chain collection manifest.
+2. Opens the asset from the library and asserts the Studio URL contains both `asset` and `assetId`, and the asset name appears in the status bar.
+
+**Why it matters:** This verifies the library is not just a read-only gallery but a true entry point back into the Studio editor. Parametric republish flows are covered in Spec 5.
+
 ---
 
 ## When you MUST run these tests
@@ -154,11 +187,12 @@ Validates the "dollhouse architecture" — linking a token as a child world and 
 Run the E2E suite **before merging** any PR that changes:
 
 - **Studio UI/UX:** headerbar buttons, chat history, prompt input, settings panel, dialogs, wallet controls.
+- **Library page:** `library.html`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, collection/asset rendering, search/sort/view controls.
 - **Wallet integration:** EIP-1193/EIP-6963 discovery, `wallet.js`, `wallet-connect.js`, `wallet-discovery.js`, `siwe.js`, session auth.
 - **Generation flow:** `create-panel.js`, generation API, transaction validation, mock adapter, provider selection.
 - **Save/publish logic:** `asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture.
 - **Smart contracts or ABI:** `ArbeskAssetFree.sol`, `ArbeskAsset.sol`, deployment scripts, contract addresses.
-- **Manifest schema:** `scene.nodes`, `source_asset`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`.
+- **Manifest schema:** `scene.nodes`, `source_asset`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `child_ref`, `comments_archive_cid`.
 - **IPFS integration:** storage format, CID encoding, pin/unpin behavior.
 
 Running `npm test` (unit/Jest) and `npm run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
@@ -183,6 +217,19 @@ export const SELECTORS = {
   srStatus: "#srStatus",
   dialogInput: ".dialog-input",
   dialogConfirmBtn: ".dialog-confirm-btn",
+  // Library / collection browser
+  libraryGate: "#libraryGate",
+  libraryMain: "#libraryMain",
+  libraryItems: "#libraryItems",
+  libraryCollectionItem: '[data-type="collection"]',
+  libraryAssetItem: '[data-type="asset"]',
+  libraryItemName: ".library-item-name",
+  libraryBreadcrumb: "#libraryBreadcrumb",
+  libraryUpBtn: "#libraryUpBtn",
+  librarySearchInput: "#librarySearchInput",
+  librarySortSelect: "#librarySortSelect",
+  libraryGridViewBtn: "#libraryGridViewBtn",
+  libraryListViewBtn: "#libraryListViewBtn",
   // ...
 };
 ```

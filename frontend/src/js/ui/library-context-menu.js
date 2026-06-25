@@ -94,8 +94,8 @@ async function openSelectedAssetInStudio(ids) {
   if (!ids.length) return;
   const asset = libraryState.get().assets.find((a) => a.id === ids[0]);
   if (!asset) return;
-  const { openAssetByTokenId } = await assetLibraryOps();
-  openAssetByTokenId(asset.tokenId, asset.assetId);
+  const { openInStudio } = await import("./library-grid.js");
+  openInStudio(asset.tokenId, asset.assetId);
 }
 
 export async function requestRename(id) {
@@ -163,24 +163,16 @@ export async function requestDeleteSelected(ids) {
     .filter(Boolean);
   if (assets.length === 0) return;
 
-  const confirmed = await showConfirmDialog(
-    assets.length === 1 ? "Delete asset?" : `Delete ${assets.length} assets?`,
-    "This removes the asset from its collection. The NFT token is not burned.",
-    [
-      { text: "Cancel", value: "cancel", className: "btn btn-secondary" },
-      { text: "Delete", value: "confirm", className: "btn btn-danger" },
-    ]
-  );
-  if (confirmed !== "confirm") return;
-
   const { deleteAssetFromCollection } = await assetDeleteOps();
   for (const asset of assets) {
     try {
-      await deleteAssetFromCollection({
+      const newCid = await deleteAssetFromCollection({
         tokenId: asset.tokenId,
         assetId: asset.assetId,
         assetName: asset.name,
       });
+      // A null CID means the user cancelled the service-level confirmation dialog.
+      if (newCid === null) return;
     } catch (err) {
       console.error("Delete asset failed:", err);
       showToast({
