@@ -271,10 +271,11 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     const manifest = await getFromRemoteIPFS(cid);
     console.log("[LIBRARY] tokenURI resolved, manifest type:", manifest?.type);
 
-    // Collections: load the collection manifest and auto-open the requested
-    // asset (or the first asset if none specified) so that navigation from
-    // library.html opens the exact asset the user clicked while still loading
-    // the whole collection into the Gallery sidebar.
+    // Collections: load the collection manifest into the Gallery sidebar.
+    // Only load a specific asset if the caller explicitly passed an assetId
+    // (e.g. from a gallery card or a shared ?assetId= link); a bare
+    // ?asset=<collectionTokenId> opens an empty studio so the user can choose
+    // which asset to load.
     if (manifest?.type === "collection") {
       const { loadCollectionManifest } = await import(
         "../engine/scene-graph.js"
@@ -287,11 +288,9 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
 
       const assetIds = Object.keys(manifest.assets || {});
-      const targetAssetId = assetId && assetIds.includes(assetId)
-        ? assetId
-        : assetIds[0] || null;
-      const targetAssetCid = targetAssetId
-        ? manifest.assets[targetAssetId]
+      const hasExplicitAssetId = assetId && assetIds.includes(assetId);
+      const targetAssetCid = hasExplicitAssetId
+        ? manifest.assets[assetId]
         : null;
 
       clearScene();
@@ -299,13 +298,13 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
         activeAssetTokenId: String(tokenId),
         activeCollectionTokenId: String(tokenId),
         selectedCollectionId: null,
-        activeAssetId: targetAssetId,
+        activeAssetId: hasExplicitAssetId ? assetId : null,
         activeAssetManifestCid: targetAssetCid,
         latestAssetManifestCid: targetAssetCid,
       });
       console.log("[LIBRARY] collection asset state set, activeCollectionTokenId:", String(tokenId));
       dismissCreatePulse();
-      updateUrlAsset(tokenId, targetAssetId);
+      updateUrlAsset(tokenId, hasExplicitAssetId ? assetId : null);
 
       if (targetAssetCid) {
         await loadAssetManifest(targetAssetCid);
