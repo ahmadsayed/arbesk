@@ -180,6 +180,19 @@ Validates the publish-in-Studio / browse-in-Library / open-in-Studio loop:
 
 **Why it matters:** This verifies the library is not just a read-only gallery but a true entry point back into the Studio editor. Parametric republish flows are covered in Spec 5.
 
+### 12. Library create collection and upload (`e2e/specs/12-library-create-upload.spec.js`)
+
+Validates the new Library toolbar flows for collection creation and desktop file upload:
+
+1. Clicks **New Collection**, names it, and confirms.
+2. Asserts the new collection is minted and the browser navigates into it.
+3. Uses the **Upload** button to select `mock-gltf-assets/howdy.glb` from disk.
+4. Asserts the uploaded file appears as an asset named `howdy` inside the collection.
+5. Opens the uploaded asset in Studio and asserts it loads.
+6. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
+
+**Why it matters:** These flows exercise `library-toolbar.js`, `library-ops.js`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads.
+
 ---
 
 ## When you MUST run these tests

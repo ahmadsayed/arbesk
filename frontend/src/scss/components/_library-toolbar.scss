@@ -32,6 +32,19 @@
   flex: 0 0 auto;
 }
 
+.library-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin-left: auto;
+}
+
+.library-toolbar-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+
 .library-toolbar .btn {
   min-height: 40px;
   min-width: 40px;

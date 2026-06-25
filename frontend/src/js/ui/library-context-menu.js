@@ -2,6 +2,7 @@ import { libraryState } from "../state/library-state.js";
 import { showConfirmDialog, showDialog } from "./dialog.js";
 import { escapeHtml } from "../utils/html.js";
 import { showToast } from "./toasts.js";
+import { createNamedCollection } from "../services/library-ops.js";
 
 // Blockchain/IPFS operations are loaded lazily so that unit tests for this
 // module can run in jsdom without pulling in the full Studio dependency tree.
@@ -9,6 +10,7 @@ const assetLibraryOps = () => import("./asset-library.js");
 const assetDeleteOps = () => import("../services/asset-delete.js");
 const ipfsOps = () => import("../ipfs/remote-ipfs.js");
 const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.js");
+const libraryInitOps = () => import("../library-init.js");
 
 let menuEl = null;
 
@@ -71,13 +73,63 @@ function multiSelectionMenuItems(ids) {
 
 function emptySpaceMenuItems() {
   return [
+    { label: "New Collection", action: () => requestCreateCollection() },
+    { label: "Upload File…", action: () => requestUploadFile() },
     { label: "Refresh", action: () => refreshLibrary() },
   ];
 }
 
 async function refreshLibrary() {
-  const { refreshLibraryData } = await import("../library-init.js");
+  const { refreshLibraryData } = await libraryInitOps();
   refreshLibraryData();
+}
+
+async function requestCreateCollection() {
+  const name = await showDialog(
+    "New Collection",
+    "Choose a name for the new collection.",
+    ""
+  );
+  if (!name) return;
+
+  try {
+    const { tokenId, isNew } = await createNamedCollection(name);
+    const { refreshLibraryData } = await libraryInitOps();
+    await refreshLibraryData();
+    libraryState.set({
+      currentCollectionTokenId: String(tokenId),
+      selectedIds: [],
+    });
+    announce(isNew ? `Created collection ${name}` : `Opened collection ${name}`);
+    showToast({
+      type: "success",
+      title: isNew ? "Collection Created" : "Collection Already Exists",
+      message: isNew
+        ? `"${name}" has been minted on-chain.`
+        : `"${name}" already exists and was opened.`,
+    });
+  } catch (err) {
+    console.error("[LIBRARY-CONTEXT-MENU] create collection failed:", err);
+    showToast({
+      type: "error",
+      title: "Create Collection Failed",
+      message: err.message || "Could not create the collection.",
+    });
+  }
+}
+
+function requestUploadFile() {
+  const input = document.getElementById("libraryUploadInput");
+  if (!input) return;
+  if (!libraryState.get().currentCollectionTokenId) {
+    showToast({
+      type: "warning",
+      title: "No Collection Open",
+      message: "Open or create a collection first to upload a file into it.",
+    });
+    return;
+  }
+  input.click();
 }
 
 function openCollection(id) {

@@ -33,6 +33,11 @@ function applyWalletGate(connected) {
   if (!gate || !main) return;
   gate.classList.toggle("hidden", connected);
   main.classList.toggle("hidden", !connected);
+
+  const createBtn = document.getElementById("libraryCreateCollectionBtn");
+  const uploadBtn = document.getElementById("libraryUploadBtn");
+  if (createBtn) createBtn.hidden = !connected;
+  if (uploadBtn) uploadBtn.hidden = !connected;
 }
 
 function updateWalletButtonState(address, isAuthenticated) {

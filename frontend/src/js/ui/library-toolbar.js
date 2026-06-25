@@ -1,6 +1,17 @@
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
 import { escapeHtml } from "../utils/html.js";
+import { showDialog } from "./dialog.js";
+import { showToast } from "./toasts.js";
+import {
+  createNamedCollection,
+  uploadFileToCollection,
+} from "../services/library-ops.js";
+
+async function refreshLibraryData() {
+  const { refreshLibraryData: doRefresh } = await import("../library-init.js");
+  return doRefresh();
+}
 
 export function buildBreadcrumb(collections, currentCollectionTokenId) {
   const path = [{ tokenId: null, name: "Home" }];
@@ -47,6 +58,96 @@ function renderToolbar() {
   listBtn?.classList.toggle("active", state.viewMode === "list");
 }
 
+async function handleCreateCollection() {
+  const name = await showDialog(
+    "New Collection",
+    "Choose a name for the new collection.",
+    ""
+  );
+  if (!name) return;
+
+  const btn = document.getElementById("libraryCreateCollectionBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.title = "Creating…";
+  }
+
+  try {
+    const { tokenId, manifestCid, isNew } = await createNamedCollection(name);
+    await refreshLibraryData();
+    libraryState.set({
+      currentCollectionTokenId: String(tokenId),
+      selectedIds: [],
+    });
+    announce(isNew ? `Created collection ${name}` : `Opened existing collection ${name}`);
+    showToast({
+      type: "success",
+      title: isNew ? "Collection Created" : "Collection Already Exists",
+      message: isNew
+        ? `"${name}" has been minted on-chain.`
+        : `"${name}" already exists and was opened.`,
+    });
+  } catch (err) {
+    console.error("[LIBRARY-TOOLBAR] create collection failed:", err);
+    showToast({
+      type: "error",
+      title: "Create Collection Failed",
+      message: err.message || "Could not create the collection.",
+    });
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.title = "";
+    }
+  }
+}
+
+async function handleUploadFile(file) {
+  const state = libraryState.get();
+  const collectionTokenId = state.currentCollectionTokenId;
+  if (!collectionTokenId) {
+    showToast({
+      type: "warning",
+      title: "No Collection Open",
+      message: "Open or create a collection first to upload a file into it.",
+    });
+    return;
+  }
+
+  const btn = document.getElementById("libraryUploadBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.title = "Uploading…";
+  }
+
+  try {
+    const { assetId } = await uploadFileToCollection(file, collectionTokenId);
+    await refreshLibraryData();
+    libraryState.set({ selectedIds: [`asset-${collectionTokenId}-${assetId}`] });
+    announce(`Uploaded ${file.name}`);
+    showToast({
+      type: "success",
+      title: "Upload Complete",
+      message: `"${file.name}" was added to the collection.`,
+    });
+  } catch (err) {
+    console.error("[LIBRARY-TOOLBAR] upload failed:", err);
+    showToast({
+      type: "error",
+      title: "Upload Failed",
+      message: err.message || "Could not upload the file.",
+    });
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.title = "";
+    }
+    // Reset the input so the same file can be selected again
+    const input = document.getElementById("libraryUploadInput");
+    if (input) input.value = "";
+  }
+}
+
 export function initLibraryToolbar() {
   document.getElementById("libraryUpBtn")?.addEventListener("click", () => {
     libraryState.set({ currentCollectionTokenId: null, selectedIds: [] });
@@ -74,6 +175,31 @@ export function initLibraryToolbar() {
   document.getElementById("libraryListViewBtn")?.addEventListener("click", () =>
     libraryState.set({ viewMode: "list" })
   );
+
+  document
+    .getElementById("libraryCreateCollectionBtn")
+    ?.addEventListener("click", handleCreateCollection);
+
+  document
+    .getElementById("libraryUploadBtn")
+    ?.addEventListener("click", () => {
+      if (!libraryState.get().currentCollectionTokenId) {
+        showToast({
+          type: "warning",
+          title: "No Collection Open",
+          message: "Open or create a collection first to upload a file into it.",
+        });
+        return;
+      }
+      document.getElementById("libraryUploadInput")?.click();
+    });
+
+  document
+    .getElementById("libraryUploadInput")
+    ?.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) handleUploadFile(file);
+    });
 
   on(EVENTS.LIBRARY_STATE_CHANGED, renderToolbar);
   renderToolbar();

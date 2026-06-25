@@ -180,3 +180,28 @@ export async function libraryItemNames(page) {
 export function uniqueAssetName(base) {
   return `${base} ${Date.now()}`;
 }
+
+/**
+ * Create a new named collection from the Library toolbar and wait until the
+ * browser navigates into it.
+ */
+export async function createLibraryCollection(page, name) {
+  await page.click(SELECTORS.libraryCreateCollectionBtn);
+  await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
+  await page.fill(SELECTORS.dialogInput, name);
+  await page.click(SELECTORS.dialogConfirmBtn);
+  await expect(page.locator(SELECTORS.libraryBreadcrumb)).toContainText(name, {
+    timeout: 30000,
+  });
+}
+
+/**
+ * Upload a file from disk into the currently-open Library collection and wait
+ * until the asset card appears.
+ */
+export async function uploadLibraryFile(page, filePath, expectedAssetName) {
+  await page.setInputFiles(SELECTORS.libraryUploadInput, filePath);
+  await expect(libraryAssetLocator(page, expectedAssetName).first()).toBeVisible({
+    timeout: 30000,
+  });
+}

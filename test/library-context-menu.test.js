@@ -96,12 +96,12 @@ describe("openContextMenu / closeContextMenu", () => {
     expect(labels).toContain("Delete");
   });
 
-  test("empty selection (right-click on empty space) shows Refresh", () => {
+  test("empty selection (right-click on empty space) shows New Collection, Upload, and Refresh", () => {
     openContextMenu(0, 0, []);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
-    expect(labels).toEqual(["Refresh"]);
+    expect(labels).toEqual(["New Collection", "Upload File…", "Refresh"]);
   });
 
   test("closeContextMenu removes the menu from the DOM", () => {
@@ -167,7 +167,7 @@ describe("initLibraryContextMenu", () => {
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
     );
-    expect(labels).toEqual(["Refresh"]);
+    expect(labels).toEqual(["New Collection", "Upload File…", "Refresh"]);
   });
 
   test("Escape closes an open menu", () => {
