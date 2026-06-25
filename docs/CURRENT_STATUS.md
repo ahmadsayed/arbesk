@@ -198,6 +198,10 @@ frontend/src/js/
 - Named collections derive token ID from `soliditySha3(address, name)`.
 - `asset-library.js` expands collection tokens into one card per asset.
 - `scene-graph.js` can load a collection manifest without immediately opening an asset.
+- Studio URL semantics:
+  - `/studio.html?asset=<collectionTokenId>` loads the collection into the Gallery sidebar but leaves the viewport empty (no first-asset auto-load, no `assetId` appended to the URL).
+  - `/studio.html?asset=<collectionTokenId>&assetId=<assetID>` loads the collection and opens the specified asset.
+  - Standalone asset tokens load normally with `?asset=<tokenId>`.
 
 **Token Child Worlds (Phase 5.1)**
 - `loadTokenChildNode()` fully implemented with placeholder → async resolution

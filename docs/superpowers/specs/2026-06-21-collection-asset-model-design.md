@@ -111,6 +111,7 @@ Studio shows a virtual "default collection" placeholder before the user has mint
 
 - Gallery now lists **collections** (tokenId-level), not individual assets. The token ID always means "collection."
 - Selecting a collection in the gallery shows its `assets` map as a browsable list; selecting an asset within shows that asset's scene.
+- Deep-linking a collection token without naming an asset opens the collection in an empty viewport with the Gallery populated, letting the user choose which asset to load. Only a URL that explicitly includes `assetId` opens a specific asset on arrival.
 - "Besk" is the explicit publish/republish action — anchors the *current* collection's manifest on-chain. A plain save (no besk) only writes IPFS drafts and never touches the chain.
 - Adding an asset to a scene always happens within "the same collection" by default (point 6) — fork/live-reference choice (above) only applies when pulling in an asset that originates in *another* collection.
 

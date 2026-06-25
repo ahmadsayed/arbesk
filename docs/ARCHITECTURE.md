@@ -440,6 +440,23 @@ Wallet connected
   → display asset name and optional thumbnail
 ```
 
+### 5.5 Studio URL Loading Flow
+
+The Studio supports deep-linking tokens and individual assets via query params:
+
+```text
+/studio.html?asset=<tokenId>
+/studio.html?asset=<tokenId>&assetId=<assetID>
+```
+
+| URL | Behavior |
+|---|---|
+| `?asset=<tokenId>` (standalone asset token) | Loads the asset manifest into the viewport. |
+| `?asset=<tokenId>` (collection token) | Loads the collection manifest into the **Gallery sidebar** but leaves the **viewport empty**. No asset is auto-opened. The URL is not rewritten with an `assetId`. |
+| `?asset=<tokenId>&assetId=<assetID>` (collection token) | Loads the collection manifest into the Gallery and opens the specified asset in the viewport. |
+
+This means a bare collection URL is a "collection overview" state: the user sees all assets in the Gallery and can choose which one to load. Gallery card clicks and "Open in Studio" context-menu items still navigate with an explicit `assetId` when a specific asset is intended.
+
 ---
 
 ## 6. Storage and Caching Strategy
