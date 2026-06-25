@@ -252,7 +252,18 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
   try {
     const cid = await contract.methods.tokenURI(tokenId).call();
     if (!cid) {
-      alert(`Asset not found for Token ID: ${tokenId}`);
+      console.warn(`[LIBRARY] No tokenURI for Token ID: ${tokenId}; keeping studio empty`);
+      clearScene();
+      assetState.set({
+        activeAssetManifestCid: null,
+        activeAssetTokenId: null,
+        activeAssetName: null,
+        latestAssetManifestCid: null,
+        currentManifest: null,
+        activeCollectionTokenId: null,
+        activeAssetId: null,
+        selectedCollectionId: null,
+      });
       return;
     }
 
@@ -328,8 +339,18 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       switchView("library");
     }
   } catch (err) {
-    console.error("Failed to open asset by Token ID:", err);
-    alert(`Failed to open asset #${tokenId}`);
+    console.warn(`[LIBRARY] Failed to open asset #${tokenId}; keeping studio empty:`, err.message);
+    clearScene();
+    assetState.set({
+      activeAssetManifestCid: null,
+      activeAssetTokenId: null,
+      activeAssetName: null,
+      latestAssetManifestCid: null,
+      currentManifest: null,
+      activeCollectionTokenId: null,
+      activeAssetId: null,
+      selectedCollectionId: null,
+    });
   }
 }
 
