@@ -11,7 +11,6 @@ import { createNamedCollection } from "../services/library-ops.js";
 
 // Blockchain/IPFS operations are loaded lazily so that unit tests for this
 // module can run in jsdom without pulling in the full Studio dependency tree.
-const assetLibraryOps = () => import("./asset-library.js");
 const assetDeleteOps = () => import("../services/asset-delete.js");
 const ipfsOps = () => import("../ipfs/remote-ipfs.js");
 const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.js");
@@ -54,8 +53,8 @@ function singleItemMenuItems(ids) {
       {
         label: "Open in Studio",
         action: async () => {
-          const { openAssetByTokenId } = await assetLibraryOps();
-          openAssetByTokenId(collection.tokenId);
+          const { openInStudio } = await import("./library-grid.js");
+          openInStudio(collection.tokenId);
         },
       },
       { label: "Rename", action: () => requestRename(id) },
