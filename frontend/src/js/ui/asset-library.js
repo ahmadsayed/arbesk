@@ -254,6 +254,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     if (!cid) {
       console.warn(`[LIBRARY] No tokenURI for Token ID: ${tokenId}; keeping studio empty`);
       clearScene();
+      clearUrlAssetParams();
       assetState.set({
         activeAssetManifestCid: null,
         activeAssetTokenId: null,
@@ -341,6 +342,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
   } catch (err) {
     console.warn(`[LIBRARY] Failed to open asset #${tokenId}; keeping studio empty:`, err.message);
     clearScene();
+    clearUrlAssetParams();
     assetState.set({
       activeAssetManifestCid: null,
       activeAssetTokenId: null,
