@@ -36,11 +36,12 @@ export function updateUrlManifest(cid, tokenId = null) {
 }
 
 /**
- * Clear ?asset and ?manifest query params from the URL without reloading.
+ * Clear ?asset, ?assetId, and ?manifest query params from the URL without reloading.
  */
 export function clearUrlAssetParams() {
   const url = new URL(window.location);
   url.searchParams.delete("asset");
+  url.searchParams.delete("assetId");
   url.searchParams.delete("manifest");
   window.history.replaceState({}, "", url);
 }
