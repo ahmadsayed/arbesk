@@ -53,7 +53,10 @@ function singleItemMenuItems(ids) {
       { label: "Open", action: () => openCollection(id) },
       {
         label: "Open in Studio",
-        action: () => openAssetByTokenId(collection.tokenId),
+        action: async () => {
+          const { openAssetByTokenId } = await assetLibraryOps();
+          openAssetByTokenId(collection.tokenId);
+        },
       },
       { label: "Rename", action: () => requestRename(id) },
       {
