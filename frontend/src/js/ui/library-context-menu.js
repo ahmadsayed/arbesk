@@ -1,5 +1,10 @@
 import { libraryState } from "../state/library-state.js";
-import { showConfirmDialog, showCustomDialog, showDialog } from "./dialog.js";
+import {
+  showBurnCollectionDialog,
+  showConfirmDialog,
+  showCustomDialog,
+  showDialog,
+} from "./dialog.js";
 import { escapeHtml } from "../utils/html.js";
 import { showToast } from "./toasts.js";
 import { createNamedCollection } from "../services/library-ops.js";
@@ -55,6 +60,11 @@ function singleItemMenuItems(ids) {
         label: "Manage Collaborators",
         action: () => requestManageCollaborators(id),
       },
+      {
+        label: "Burn Collection",
+        action: () => requestBurnCollection(id),
+        danger: true,
+      },
     ];
   }
   return [
@@ -77,11 +87,15 @@ function multiSelectionMenuItems(ids) {
 }
 
 function emptySpaceMenuItems() {
-  return [
-    { label: "New Collection", action: () => requestCreateCollection() },
+  const inCollection = libraryState.get().currentCollectionTokenId !== null;
+  const items = [
     { label: "Upload File…", action: () => requestUploadFile() },
     { label: "Refresh", action: () => refreshLibrary() },
   ];
+  if (!inCollection) {
+    items.unshift({ label: "New Collection", action: () => requestCreateCollection() });
+  }
+  return items;
 }
 
 async function refreshLibrary() {
@@ -103,7 +117,8 @@ async function requestCreateCollection() {
 
     // Optimistically show the new collection immediately. getPastEvents scans
     // can lag one block behind the mint transaction on local nodes, so the card
-    // would otherwise only appear after the next page load.
+    // would otherwise only appear after the next page load. Stay at the top
+    // level (collections list) rather than opening the new collection.
     const existing = libraryState.get().collections;
     if (!existing.some((c) => String(c.tokenId) === String(tokenId))) {
       libraryState.set({
@@ -120,7 +135,6 @@ async function requestCreateCollection() {
           },
           ...existing,
         ],
-        currentCollectionTokenId: String(tokenId),
         selectedIds: [],
       });
     }
@@ -188,6 +202,36 @@ async function requestManageCollaborators(id) {
 
   await showCustomDialog("Manage Collaborators", container);
   panel.destroy();
+}
+
+async function requestBurnCollection(id) {
+  const collection = getItem(id);
+  if (!collection) return;
+
+  const confirmed = await showBurnCollectionDialog(collection.name);
+  if (confirmed !== "burn") return;
+
+  try {
+    const { burnCollection } = await assetDeleteOps();
+    const txHash = await burnCollection(collection.tokenId);
+    if (!txHash) throw new Error("Burn transaction failed");
+
+    const { refreshLibraryData } = await libraryInitOps();
+    await refreshLibraryData();
+    announce(`Burned collection ${collection.name}`);
+    showToast({
+      type: "info",
+      title: "Collection Burned",
+      message: `"${collection.name}" and its assets have been burned.`,
+    });
+  } catch (err) {
+    console.error("[LIBRARY-CONTEXT-MENU] burn collection failed:", err);
+    showToast({
+      type: "error",
+      title: "Burn Failed",
+      message: err.message || "Could not burn the collection.",
+    });
+  }
 }
 
 export async function requestRename(id) {
@@ -433,6 +477,8 @@ export function openContextMenu(x, y, targetIds) {
   menuEl.style.left = `${x}px`;
   menuEl.style.top = `${y}px`;
   menuEl.setAttribute("role", "menu");
+  menuEl.setAttribute("aria-label", "Library actions");
+  menuEl.setAttribute("aria-orientation", "vertical");
 
   items.forEach((item) => {
     const btn = document.createElement("button");

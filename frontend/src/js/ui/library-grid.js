@@ -116,15 +116,15 @@ function buildEmptyState(searchQuery) {
   el.className = "empty-state";
   if (searchQuery) {
     el.innerHTML = `
-      <p class="empty-state-title">No items match your search</p>
+      <h2 class="empty-state-title">No items match your search</h2>
       <p class="empty-state-sub">Try a different name.</p>
     `;
   } else {
     const inCollection = libraryState.get().currentCollectionTokenId !== null;
     el.innerHTML = `
-      <p class="empty-state-title">${
+      <h2 class="empty-state-title">${
         inCollection ? "No assets in this collection" : "No collections yet"
-      }</p>
+      }</h2>
       <p class="empty-state-sub">${
         inCollection
           ? "Assets you publish to this collection will appear here."
@@ -203,11 +203,23 @@ function render() {
   const container = document.getElementById("libraryItems");
   if (!container) return;
   const state = libraryState.get();
+
+  const countEl = document.getElementById("libraryItemCount");
+  if (state.isLoading) {
+    container.innerHTML = `
+      <div class="library-loading">
+        <div class="library-spinner" aria-hidden="true"></div>
+        <span>Loading collections…</span>
+      </div>`;
+    if (countEl) countEl.textContent = "Loading…";
+    announce("Loading collections");
+    return;
+  }
+
   const items = currentItems();
   renderItems(container, items, state.viewMode);
   applySelection(container, state.selectedIds);
 
-  const countEl = document.getElementById("libraryItemCount");
   if (countEl)
     countEl.textContent = `${items.length} item${
       items.length === 1 ? "" : "s"

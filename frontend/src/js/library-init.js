@@ -92,6 +92,17 @@ async function fetchCollectionMetadata(tokenId) {
   }
 }
 
+async function isTokenOwnedBy(tokenId, address) {
+  const c = walletContract || walletState.get().contract;
+  if (!c || !address) return false;
+  try {
+    const owner = await c.methods.ownerOf(tokenId).call();
+    return owner.toLowerCase() === address.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 async function buildCollectionEntries(tokenIds, role, walletAddr) {
   const entries = await Promise.all(
     tokenIds.map((tokenId) => fetchCollectionMetadata(tokenId))
@@ -168,25 +179,34 @@ export async function refreshLibraryData() {
     const currentTokenId = currentState.currentCollectionTokenId;
 
     // getPastEvents scans can lag behind a freshly mined mint on local nodes,
-    // so keep the active collection in the list if it vanished from the scan.
-    let collections = fetchedCollections;
-    if (
-      currentTokenId &&
-      !fetchedCollections.some(
-        (c) => String(c.tokenId) === String(currentTokenId)
+    // causing optimistic collections to disappear on refresh. Verify ownership
+    // of any missing collections via ownerOf before dropping them.
+    const missing = currentState.collections.filter(
+      (current) =>
+        !fetchedCollections.some(
+          (fetched) => String(fetched.tokenId) === String(current.tokenId)
+        )
+    );
+    const keptMissing = (
+      await Promise.all(
+        missing.map(async (current) => {
+          const stillOwned = await isTokenOwnedBy(
+            current.tokenId,
+            walletAddress
+          );
+          return stillOwned ? current : null;
+        })
       )
-    ) {
-      const active = currentState.collections.find(
-        (c) => String(c.tokenId) === String(currentTokenId)
-      );
-      if (active) {
-        collections = [active, ...fetchedCollections];
-      }
-    }
+    ).filter(Boolean);
+    const collections = [...fetchedCollections, ...keptMissing];
+
+    const stillExists = collections.some(
+      (c) => String(c.tokenId) === String(currentTokenId)
+    );
 
     libraryState.set({
       collections,
-      currentCollectionTokenId: currentTokenId,
+      currentCollectionTokenId: stillExists ? currentTokenId : null,
       selectedIds: [],
       isLoading: false,
     });

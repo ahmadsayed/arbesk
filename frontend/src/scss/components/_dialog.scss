@@ -74,6 +74,11 @@
   }
 }
 
+.dialog-warning {
+  color: var(--error-bg, #c01c28);
+  font-weight: var(--font-weight-6);
+}
+
 // Reduce motion
 @media (prefers-reduced-motion: reduce) {
   .dialog-backdrop,

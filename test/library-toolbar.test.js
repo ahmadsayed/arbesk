@@ -164,9 +164,10 @@ describe("create collection button", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(_createNamedCollection).toHaveBeenCalledWith("My Collection");
-    expect(libraryState.get().currentCollectionTokenId).toBe("12345");
 
-    // The new collection should appear immediately, before refreshLibraryData resolves.
+    // The new collection should appear immediately, before refreshLibraryData resolves,
+    // but the user should stay at the top-level collections list.
+    expect(libraryState.get().currentCollectionTokenId).toBeNull();
     const collections = libraryState.get().collections;
     expect(collections).toHaveLength(1);
     expect(collections[0]).toMatchObject({
@@ -177,6 +178,15 @@ describe("create collection button", () => {
       manifestCid: "QmCollection",
       role: "owner",
     });
+  });
+
+  test("is disabled when a collection is open", async () => {
+    libraryState.set({ currentCollectionTokenId: "99" });
+    const { initLibraryToolbar } = await loadModule();
+    initLibraryToolbar();
+
+    const btn = document.getElementById("libraryCreateCollectionBtn");
+    expect(btn.disabled).toBe(true);
   });
 });
 

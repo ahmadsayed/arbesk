@@ -56,9 +56,27 @@ function renderToolbar() {
   const listBtn = document.getElementById("libraryListViewBtn");
   gridBtn?.classList.toggle("active", state.viewMode === "grid");
   listBtn?.classList.toggle("active", state.viewMode === "list");
+
+  const createBtn = document.getElementById("libraryCreateCollectionBtn");
+  if (createBtn) {
+    createBtn.disabled = state.currentCollectionTokenId !== null;
+    createBtn.title =
+      state.currentCollectionTokenId !== null
+        ? "Return to collections to create a new collection"
+        : "";
+  }
 }
 
 async function handleCreateCollection() {
+  if (libraryState.get().currentCollectionTokenId !== null) {
+    showToast({
+      type: "warning",
+      title: "Cannot Create Collection",
+      message: "Return to the collections list to create a new collection.",
+    });
+    return;
+  }
+
   const name = await showDialog(
     "New Collection",
     "Choose a name for the new collection.",
@@ -77,7 +95,8 @@ async function handleCreateCollection() {
 
     // Optimistically show the new collection immediately. getPastEvents scans
     // can lag one block behind the mint transaction on local nodes, so the card
-    // would otherwise only appear after the next page load.
+    // would otherwise only appear after the next page load. Stay at the top
+    // level (collections list) rather than opening the new collection.
     const existing = libraryState.get().collections;
     if (!existing.some((c) => String(c.tokenId) === String(tokenId))) {
       libraryState.set({
@@ -94,7 +113,6 @@ async function handleCreateCollection() {
           },
           ...existing,
         ],
-        currentCollectionTokenId: String(tokenId),
         selectedIds: [],
       });
     }

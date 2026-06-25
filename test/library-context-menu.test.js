@@ -74,7 +74,7 @@ describe("openContextMenu / closeContextMenu", () => {
     ]);
   });
 
-  test("a single selected collection shows Open, Open in Studio, Rename", () => {
+  test("a single selected collection shows Open, Open in Studio, Rename, Manage Collaborators, Burn Collection", () => {
     openContextMenu(0, 0, ["collection-1"]);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
@@ -83,6 +83,8 @@ describe("openContextMenu / closeContextMenu", () => {
       "Open",
       "Open in Studio",
       "Rename",
+      "Manage Collaborators",
+      "Burn Collection",
     ]);
   });
 
@@ -102,6 +104,16 @@ describe("openContextMenu / closeContextMenu", () => {
       (el) => el.textContent.trim(),
     );
     expect(labels).toEqual(["New Collection", "Upload File…", "Refresh"]);
+  });
+
+  test("empty selection inside a collection hides New Collection", () => {
+    libraryState.set({ currentCollectionTokenId: "1" });
+    openContextMenu(0, 0, []);
+    const labels = [...document.querySelectorAll(".context-menu-item")].map(
+      (el) => el.textContent.trim(),
+    );
+    expect(labels).toEqual(["Upload File…", "Refresh"]);
+    expect(labels).not.toContain("New Collection");
   });
 
   test("closeContextMenu removes the menu from the DOM", () => {

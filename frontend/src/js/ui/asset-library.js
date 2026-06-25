@@ -399,7 +399,7 @@ function createEmptyState(title, sub) {
   </svg>`;
   wrap.appendChild(icon);
 
-  const h = document.createElement("p");
+  const h = document.createElement("h2");
   h.className = "empty-state-title";
   h.textContent = title;
   wrap.appendChild(h);
@@ -653,7 +653,7 @@ const DISCONNECTED_GALLERY_HTML = `
         <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
       </svg>
     </div>
-    <p class="empty-state-title">No assets yet</p>
+    <h2 class="empty-state-title">No assets yet</h2>
     <p class="empty-state-sub">Connect your wallet to browse and open the asset tokens you own.</p>
     <button id="galleryConnectBtn" class="empty-state-action btn btn-primary btn-sm" type="button">Connect Wallet</button>
   </div>`;

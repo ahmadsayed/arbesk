@@ -7,7 +7,11 @@
  */
 
 import { contract as walletContract } from "../blockchain/wallet.js";
-import { updateAssetURI, CollaboratorRole } from "../blockchain/wallet.js";
+import {
+  updateAssetURI,
+  CollaboratorRole,
+  burn,
+} from "../blockchain/wallet.js";
 import { getProof } from "../gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
@@ -170,6 +174,28 @@ export async function deleteAssetFromCollection({
   }
 
   return newCollectionCid;
+}
+
+/**
+ * Burn a collection token and unpin its IPFS footprint.
+ *
+ * @param {string} tokenId
+ * @returns {Promise<string|null>} txHash on success, null on failure.
+ */
+export async function burnCollection(tokenId) {
+  const c = walletContract || walletState.get().contract;
+  if (!c) throw new Error("Wallet or contract not ready");
+
+  const walletAddr = walletState.get().walletAddress;
+  let editorList = await loadEditorList(tokenId);
+  if (!editorList) {
+    editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
+  }
+  const currentVersion = await getEditorSetVersion(tokenId);
+  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
+  if (!proofResult) throw new Error("Not authorized to burn this collection");
+
+  return burn(tokenId, proofResult.proof);
 }
 
 export async function loadEditorListForToken(tokenId) {

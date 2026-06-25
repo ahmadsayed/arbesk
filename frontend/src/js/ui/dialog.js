@@ -309,3 +309,71 @@ export function showCustomDialog(title, bodyEl) {
     }
   });
 }
+
+/**
+ * Show a destructive confirmation dialog that requires typing the collection
+ * name before the burn button is enabled.
+ *
+ * @param {string} collectionName
+ * @returns {Promise<"burn"|null>} "burn" if confirmed, null if cancelled.
+ */
+export function showBurnCollectionDialog(collectionName) {
+  return new Promise((resolve) => {
+    try {
+      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
+        "Burn Collection",
+        resolve
+      );
+
+      const bodyDiv = document.createElement("div");
+      bodyDiv.className = "dialog-body";
+      bodyDiv.innerHTML = `
+        <p class="dialog-warning" style="margin:0 0 var(--size-2)">
+          Burning collection will delete all assets unless it is part of besked collection
+        </p>
+        <p style="margin:0 0 var(--size-2)">Type <strong>${escapeHtml(
+          collectionName
+        )}</strong> to confirm.</p>
+        <div class="form-group">
+          <input type="text" class="form-input dialog-input" placeholder="${escapeHtml(
+            collectionName
+          )}" autocomplete="off">
+        </div>`;
+
+      const actionsDiv = document.createElement("div");
+      actionsDiv.className = "dialog-actions";
+      actionsDiv.innerHTML = `
+        <button class="btn btn-secondary dialog-cancel-btn" type="button">Cancel</button>
+        <button class="btn btn-danger dialog-burn-btn" type="button" disabled>Burn Collection</button>`;
+
+      dialog.appendChild(bodyDiv);
+      dialog.appendChild(actionsDiv);
+
+      const input = dialog.querySelector(".dialog-input");
+      const cancelBtn = dialog.querySelector(".dialog-cancel-btn");
+      const burnBtn = dialog.querySelector(".dialog-burn-btn");
+
+      input.addEventListener("input", () => {
+        burnBtn.disabled =
+          input.value.trim() !== collectionName.trim();
+      });
+
+      cancelBtn.addEventListener("click", () => closeDialog(null));
+      burnBtn.addEventListener("click", () => closeDialog("burn"));
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeDialog(null);
+        } else if (e.key === "Enter" && !burnBtn.disabled) {
+          e.preventDefault();
+          closeDialog("burn");
+        }
+      });
+
+      setRemoveTrap(_trapFocus(dialog, input));
+    } catch (err) {
+      console.error("[DIALOG] error creating burn dialog:", err);
+      resolve(null);
+    }
+  });
+}
