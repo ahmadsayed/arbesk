@@ -65,7 +65,7 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
     return gltf;
   }
 
-  const composite = JSON.parse(JSON.stringify(gltf));
+  const composite = structuredClone(gltf);
   const stats = { buffers: 0, images: 0, bytesTotal: 0 };
 
   // --- Decompose buffers ---

@@ -97,6 +97,11 @@ describe("Manifest comments archive integration", () => {
       };
     });
 
+    jest.unstable_mockModule("../src/api/sessions.js", () => ({
+      default: jest.fn(() => express.Router()),
+      validateSession: jest.fn(() => "0xTestAddress"),
+    }));
+
     jest.unstable_mockModule("../src/config.js", () => ({
       CONTRACT_ADDRESS: "0xArbeskContractAddress",
       PAID_CONTRACT_ADDRESS: "0xPaidContractAddress",
@@ -150,7 +155,7 @@ describe("Manifest comments archive integration", () => {
   });
 
   test("archives comments and returns CID when relay has events", async () => {
-    const assetId = "31337:0xArbeskContractAddress:42";
+    const assetTag = "31337:0xarbeskcontractaddress:42:asset_42";
     relayMessages = [
       [
         "EVENT",
@@ -161,7 +166,7 @@ describe("Manifest comments archive integration", () => {
           content: "nice asset",
           created_at: 1000,
           tags: [
-            ["asset", assetId],
+            ["asset", assetTag],
             ["sender", "0xaaa"],
           ],
         },
@@ -171,10 +176,12 @@ describe("Manifest comments archive integration", () => {
 
     const res = await request(app)
       .post("/api/v1/assets/snapshot-comments")
+      .set("Authorization", "Session test-token")
       .send({
         tokenId: "42",
         chainId: 31337,
         contractAddress: "0xArbeskContractAddress",
+        assetId: "asset_42",
       });
 
     expect(res.status).toBe(200);
@@ -183,7 +190,7 @@ describe("Manifest comments archive integration", () => {
 
     // Verify the archive was stored in IPFS with correct content
     const archive = JSON.parse(ipfsStorage.get(res.body.cid));
-    expect(archive.assetId).toBe(assetId);
+    expect(archive.assetTag).toBe(assetTag);
     expect(archive.eventCount).toBe(1);
     expect(archive.events[0].id).toBe("evt-1");
   });
@@ -193,9 +200,11 @@ describe("Manifest comments archive integration", () => {
 
     const res = await request(app)
       .post("/api/v1/assets/snapshot-comments")
+      .set("Authorization", "Session test-token")
       .send({
         tokenId: "99",
         chainId: 31337,
+        assetId: "asset_99",
       });
 
     expect(res.status).toBe(200);
@@ -209,10 +218,21 @@ describe("Manifest comments archive integration", () => {
   test("returns 400 when tokenId is missing", async () => {
     const res = await request(app)
       .post("/api/v1/assets/snapshot-comments")
-      .send({ chainId: 31337 });
+      .set("Authorization", "Session test-token")
+      .send({ chainId: 31337, assetId: "asset_x" });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("MISSING_TOKEN_ID");
+  });
+
+  test("returns 400 when assetId is missing", async () => {
+    const res = await request(app)
+      .post("/api/v1/assets/snapshot-comments")
+      .set("Authorization", "Session test-token")
+      .send({ tokenId: "99", chainId: 31337 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("MISSING_ASSET_ID");
   });
 
   test("returns 500 when relay query fails", async () => {
@@ -228,9 +248,11 @@ describe("Manifest comments archive integration", () => {
 
     const res = await request(app)
       .post("/api/v1/assets/snapshot-comments")
+      .set("Authorization", "Session test-token")
       .send({
         tokenId: "99",
         chainId: 31337,
+        assetId: "asset_99",
       });
 
     expect(res.status).toBe(500);

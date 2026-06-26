@@ -9,7 +9,7 @@
  * when the user switches networks in their wallet.
  */
 
-import { CHAIN_IDS } from "../constants/chains.js";
+import { CHAIN_IDS } from "../../../../constants/chains.js";
 
 export const NETWORK_CONFIGS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {

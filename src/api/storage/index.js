@@ -8,6 +8,10 @@ let _storage = null;
 /**
  * Returns the process-wide storage adapter, selected by IPFS_BACKEND.
  * Defaults to "kubo" so the E2E suite and local Docker stack keep working.
+ *
+ * Env-var selection is used over dependency injection because the backend
+ * has exactly two implementations selected at deploy time (never at runtime),
+ * making DI indirection unnecessary for this two-implementation scenario.
  */
 export function getStorage() {
   if (_storage) return _storage;

@@ -201,3 +201,21 @@ export async function findAssetCidByName(collectionManifest, name) {
   }
   return null;
 }
+
+/**
+ * Resolve the asset id for a given name within a collection manifest.
+ * @param {object} collectionManifest
+ * @param {string} name
+ * @returns {Promise<string|null>} asset id, or null if not found
+ */
+export async function findAssetIdByName(collectionManifest, name) {
+  for (const [assetId, cid] of Object.entries(collectionManifest.assets || {})) {
+    try {
+      const asset = await fetchManifest(cid);
+      if (asset.name === name) return assetId;
+    } catch {
+      // ignore unreadable entries
+    }
+  }
+  return null;
+}

@@ -7,7 +7,7 @@
  *
  * Archive format:
  *   {
- *     "assetId": "<chainId>:<contract>:<tokenId>",
+ *     "assetTag": "<chainId>:<contract>:<tokenId>:<assetId>",
  *     "generatedAt": 1718803200000,
  *     "eventCount": 3,
  *     "events": [ Nostr kind:1 events signed by the service key ]
@@ -28,13 +28,13 @@ const RELAY_EVENT_LIMIT = 10000;
  * Query the private Nostr relay for all kind:1 events tagged with the asset,
  * package them into a deterministic archive object, and return it.
  *
- * @param {string} assetId - Canonical asset identifier (chain:contract:tokenId)
+ * @param {string} assetTag - Canonical asset-level tag (chain:contract:tokenId:assetId)
  * @returns {Promise<object>} Archive object
  */
-export async function fetchCommentsArchive(assetId) {
-  const events = await queryRelayForAsset(assetId);
+export async function fetchCommentsArchive(assetTag) {
+  const events = await queryRelayForAsset(assetTag);
   return {
-    assetId,
+    assetTag,
     generatedAt: Date.now(),
     eventCount: events.length,
     events,
@@ -44,18 +44,18 @@ export async function fetchCommentsArchive(assetId) {
 /**
  * Build a comments archive for the asset and persist it to IPFS.
  *
- * @param {string} assetId - Canonical asset identifier
+ * @param {string} assetTag - Canonical asset-level tag
  * @param {{ add: (payload: string) => Promise<string> }} storage - Storage adapter (Kubo or Pinata)
  * @returns {Promise<{cid: string, eventCount: number}>}
  */
-export async function archiveCommentsForAsset(assetId, storage) {
-  const archive = await fetchCommentsArchive(assetId);
+export async function archiveCommentsForAsset(assetTag, storage) {
+  const archive = await fetchCommentsArchive(assetTag);
   const payload = JSON.stringify(archive);
 
   const archiveCid = await storage.add(payload);
 
   console.log(
-    `[ARCHIVE] archived ${archive.eventCount} comment(s) for ${assetId} → ${archiveCid}`,
+    `[ARCHIVE] archived ${archive.eventCount} comment(s) for ${assetTag} → ${archiveCid}`,
   );
   return { cid: archiveCid, eventCount: archive.eventCount };
 }
@@ -66,14 +66,14 @@ export async function archiveCommentsForAsset(assetId, storage) {
  * Query the private Nostr relay for all kind:1 events carrying the given asset
  * tag. Uses nostr-tools SimplePool to handle the REQ/EVENT/EOSE lifecycle.
  *
- * @param {string} assetId
+ * @param {string} assetTag
  * @returns {Promise<Array<object>>}
  */
-async function queryRelayForAsset(assetId) {
+async function queryRelayForAsset(assetTag) {
   const relay = createRelay(NOSTR_RELAY_URL);
   const filter = {
     kinds: [KIND_CHAT],
-    [`#${TAG_ASSET}`]: [assetId],
+    [`#${TAG_ASSET}`]: [assetTag],
     limit: RELAY_EVENT_LIMIT,
   };
 
@@ -103,7 +103,7 @@ async function queryRelayForAsset(assetId) {
     return events;
   } catch (err) {
     const message = err?.message || String(err);
-    console.warn(`[ARCHIVE] relay query failed for ${assetId}:`, message);
+    console.warn(`[ARCHIVE] relay query failed for ${assetTag}:`, message);
     throw new Error(message);
   } finally {
     relay.close();

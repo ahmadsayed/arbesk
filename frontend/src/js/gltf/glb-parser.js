@@ -19,7 +19,11 @@ const CHUNK_TYPE_JSON = 0x4e4f534a; // "JSON"
 const CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0";
 const IPFS_URI_PREFIX = "ipfs://";
 
-const _io = new WebIO();
+let _io = null;
+function getIO() {
+  if (!_io) _io = new WebIO();
+  return _io;
+}
 
 /**
  * Check if an ArrayBuffer looks like a GLB v2 container.
@@ -58,10 +62,15 @@ export async function parseGLB(arrayBuffer) {
     throw new Error(`parseGLB: unsupported GLB version ${version}`);
   }
 
-  const { json, resources } = await _io.binaryToJSON(new Uint8Array(arrayBuffer));
+  const { json, resources } = await getIO().binaryToJSON(
+    new Uint8Array(arrayBuffer)
+  );
   const binBytes = resources[GLB_BUFFER];
   const binaryChunk = binBytes
-    ? binBytes.buffer.slice(binBytes.byteOffset, binBytes.byteOffset + binBytes.byteLength)
+    ? binBytes.buffer.slice(
+        binBytes.byteOffset,
+        binBytes.byteOffset + binBytes.byteLength
+      )
     : null;
 
   return { json, binaryChunk };
@@ -142,7 +151,7 @@ async function writeBytes(
   bytes,
   filename,
   credential = null,
-  options = {},
+  options = {}
 ) {
   if (writer) return writer(bytes, filename);
   return writeToIPFS(bytes, filename, credential, options);
@@ -154,7 +163,9 @@ async function writeBytes(
 function resolveBufferBytes(buf, binaryChunk) {
   if (!buf.uri) {
     if (!binaryChunk) {
-      throw new Error("resolveBufferBytes: GLB buffer has no uri and no binary chunk");
+      throw new Error(
+        "resolveBufferBytes: GLB buffer has no uri and no binary chunk"
+      );
     }
     if (buf.byteLength && buf.byteLength !== binaryChunk.byteLength) {
       console.warn(
@@ -194,7 +205,11 @@ function serializeGLBCustom(json, binaryChunk = null) {
   const binChunkHeaderLength = binaryChunk ? 8 : 0;
   const binChunkLength = binaryChunk ? binaryChunk.byteLength + binPadding : 0;
   const totalLength =
-    headerLength + jsonChunkHeaderLength + jsonChunkLength + binChunkHeaderLength + binChunkLength;
+    headerLength +
+    jsonChunkHeaderLength +
+    jsonChunkLength +
+    binChunkHeaderLength +
+    binChunkLength;
 
   const buffer = new ArrayBuffer(totalLength);
   const view = new DataView(buffer);
@@ -328,7 +343,9 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
     } else if (img.bufferView !== undefined) {
       const bufferView = composite.bufferViews?.[img.bufferView];
       if (!bufferView) {
-        console.warn(`[GLB-DECOMPOSE] image[${i}] bufferView ${img.bufferView} not found`);
+        console.warn(
+          `[GLB-DECOMPOSE] image[${i}] bufferView ${img.bufferView} not found`
+        );
         continue;
       }
       const srcBytes = bufferBytesByIndex[bufferView.buffer];
@@ -345,7 +362,9 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
         mimeType = detectImageMimeType(bytes);
       }
     } else {
-      console.warn(`[GLB-DECOMPOSE] image[${i}] has no uri or bufferView, skipping`);
+      console.warn(
+        `[GLB-DECOMPOSE] image[${i}] has no uri or bufferView, skipping`
+      );
       continue;
     }
 
@@ -356,7 +375,9 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
 
     const ext = extFromMimeType(mimeType);
     const filename = `${baseName}_texture_${i}.${ext}`;
-    const cid = await writeBytes(writer, bytes, filename, credential, { compress });
+    const cid = await writeBytes(writer, bytes, filename, credential, {
+      compress,
+    });
     const newImg = { ...img, uri: IPFS_URI_PREFIX + cid };
     delete newImg.bufferView;
     if (mimeType && !newImg.mimeType) {
@@ -365,7 +386,9 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
     images[i] = newImg;
     stats.images++;
     stats.bytesTotal += bytes.length;
-    console.log(`[GLB-DECOMPOSE] image[${i}] → ipfs://${cid} (${bytes.length} bytes)`);
+    console.log(
+      `[GLB-DECOMPOSE] image[${i}] → ipfs://${cid} (${bytes.length} bytes)`
+    );
 
     if (img.bufferView !== undefined) {
       const bv = composite.bufferViews[img.bufferView];
@@ -402,16 +425,22 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
 
     const bytes = bufferBytesByIndex[i];
     if (!bytes) {
-      console.warn(`[GLB-DECOMPOSE] buffer[${i}] could not be resolved, skipping`);
+      console.warn(
+        `[GLB-DECOMPOSE] buffer[${i}] could not be resolved, skipping`
+      );
       continue;
     }
 
     const filename = `${baseName}_buffer_${i}.bin`;
-    const cid = await writeBytes(writer, bytes, filename, credential, { compress });
+    const cid = await writeBytes(writer, bytes, filename, credential, {
+      compress,
+    });
     buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
     stats.buffers++;
     stats.bytesTotal += bytes.length;
-    console.log(`[GLB-DECOMPOSE] buffer[${i}] → ipfs://${cid} (${bytes.length} bytes)`);
+    console.log(
+      `[GLB-DECOMPOSE] buffer[${i}] → ipfs://${cid} (${bytes.length} bytes)`
+    );
   }
 
   console.log(
@@ -421,8 +450,18 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   let compositeCid = null;
   if (storeComposite) {
     compositeCid = await (writer
-      ? writeBytes(writer, JSON.stringify(composite), `${baseName}_composite.gltf`, null, { compress })
-      : writeJSONToIPFS(composite, credential, { compress, assetId, filename: `${baseName}_composite.gltf` }));
+      ? writeBytes(
+          writer,
+          JSON.stringify(composite),
+          `${baseName}_composite.gltf`,
+          null,
+          { compress }
+        )
+      : writeJSONToIPFS(composite, credential, {
+          compress,
+          assetId,
+          filename: `${baseName}_composite.gltf`,
+        }));
     console.log(`[GLB-DECOMPOSE] composite stored → ${compositeCid}`);
   } else {
     console.log(`[GLB-DECOMPOSE] composite not stored (caller writes its own)`);
@@ -486,9 +525,12 @@ function pruneBufferImageData(composite, bufferBytesByIndex, removalsByBuffer) {
 
   // Renumber all remaining bufferView references.
   for (const acc of composite.accessors || []) {
-    if (acc.bufferView !== undefined) acc.bufferView = mapping.get(acc.bufferView);
+    if (acc.bufferView !== undefined)
+      acc.bufferView = mapping.get(acc.bufferView);
     if (acc.sparse?.indices?.bufferView !== undefined) {
-      acc.sparse.indices.bufferView = mapping.get(acc.sparse.indices.bufferView);
+      acc.sparse.indices.bufferView = mapping.get(
+        acc.sparse.indices.bufferView
+      );
     }
     if (acc.sparse?.values?.bufferView !== undefined) {
       acc.sparse.values.bufferView = mapping.get(acc.sparse.values.bufferView);

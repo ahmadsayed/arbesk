@@ -14,19 +14,24 @@
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { normalizeTokenURI } from "./uri-utils.js";
 import { web3 as walletWeb3 } from "./wallet.js";
-import { CHAIN_IDS } from "../constants/chains.js";
+import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { walletState } from "../state/wallet-state.js";
+import { getRpcUrl } from "./network-config.js";
 
 /** @type {Map<string, {manifestCid: string, timestamp: number}>} */
 const resolutionCache = new Map();
 
 const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 
-// Well-known RPC endpoints for common chains
-const KNOWN_RPC_ENDPOINTS = {
-  [CHAIN_IDS.HARDHAT_LOCAL]: "http://127.0.0.1:8545", // Hardhat local dev node
-  [CHAIN_IDS.MEGAETH_TESTNET]: "https://carrot.megaeth.com/rpc", // MegaETH testnet
-};
+function _resolveError(message) {
+  return {
+    manifestCid: null,
+    manifest: null,
+    resolved: false,
+    error: message,
+    fromCache: false,
+  };
+}
 
 /**
  * @typedef {Object} ChildRef
@@ -107,7 +112,7 @@ function getTokenContract(chainId, contractAddress) {
     try {
       const connectedChainId = walletState.get().chainId;
       if (connectedChainId && Number(chainId) !== Number(connectedChainId)) {
-        const rpcUrl = KNOWN_RPC_ENDPOINTS[chainId];
+        const rpcUrl = getRpcUrl(chainId);
         if (rpcUrl) {
           console.log(
             `[TOKEN] using external RPC for chain ${chainId}: ${rpcUrl}`
@@ -133,7 +138,8 @@ function getTokenContract(chainId, contractAddress) {
   }
 }
 
-// Re-export normalizeTokenURI for backward compatibility
+// Re-export normalizeTokenURI for backward compatibility — prefer importing
+// directly from "./uri-utils.js" in new code.
 export { normalizeTokenURI } from "./uri-utils.js";
 
 /**
@@ -154,23 +160,11 @@ export { normalizeTokenURI } from "./uri-utils.js";
  */
 export async function resolveChildRef(childRef, options = {}) {
   if (!childRef || childRef.type !== "token") {
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: "Invalid child_ref: must have type 'token'",
-      fromCache: false,
-    };
+    return _resolveError("Invalid child_ref: must have type 'token'");
   }
 
   if (!childRef.tokenId) {
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: "Invalid child_ref: missing tokenId",
-      fromCache: false,
-    };
+    return _resolveError("Invalid child_ref: missing tokenId");
   }
 
   // Fall back to connected wallet's chain/contract when not provided.
@@ -209,13 +203,7 @@ export async function resolveChildRef(childRef, options = {}) {
   if (!tokenContract) {
     const err = `No Web3 provider available to resolve token #${childRef.tokenId}`;
     console.error(`[TOKEN] ${err}`);
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: err,
-      fromCache: false,
-    };
+    return _resolveError(err);
   }
 
   // Call tokenURI
@@ -225,25 +213,13 @@ export async function resolveChildRef(childRef, options = {}) {
   } catch (err) {
     const errMsg = `tokenURI call failed for token #${childRef.tokenId}: ${err.message}`;
     console.error(`[TOKEN] ${errMsg}`);
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: errMsg,
-      fromCache: false,
-    };
+    return _resolveError(errMsg);
   }
 
   if (!rawURI) {
     const err = `Token #${childRef.tokenId} has no tokenURI`;
     console.warn(`[TOKEN] ${err}`);
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: err,
-      fromCache: false,
-    };
+    return _resolveError(err);
   }
 
   // Normalize the URI to a plain CID
@@ -251,13 +227,7 @@ export async function resolveChildRef(childRef, options = {}) {
   if (!manifestCid) {
     const err = `Could not extract CID from tokenURI: "${rawURI}"`;
     console.warn(`[TOKEN] ${err}`);
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: err,
-      fromCache: false,
-    };
+    return _resolveError(err);
   }
 
   console.log(`[TOKEN] resolved token #${childRef.tokenId} -> ${manifestCid}`);
@@ -324,13 +294,7 @@ export async function resolveCollectionChildRef(
   activeCollectionAssets
 ) {
   if (!childRef || !childRef.assetID) {
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: "Invalid collection child_ref: missing assetID",
-      fromCache: false,
-    };
+    return _resolveError("Invalid collection child_ref: missing assetID");
   }
 
   let assetsMap = activeCollectionAssets;
@@ -348,26 +312,18 @@ export async function resolveCollectionChildRef(
       { validate: true }
     );
     if (!collectionResolution.resolved || !collectionResolution.manifest) {
-      return {
-        manifestCid: null,
-        manifest: null,
-        resolved: false,
-        error: `Could not resolve cross-collection reference: ${collectionResolution.error}`,
-        fromCache: false,
-      };
+      return _resolveError(
+        `Could not resolve cross-collection reference: ${collectionResolution.error}`
+      );
     }
     assetsMap = collectionResolution.manifest.assets;
   }
 
   const lookup = resolveAssetIdFromCollection(assetsMap, childRef.assetID);
   if (lookup.kind === "missing") {
-    return {
-      manifestCid: null,
-      manifest: null,
-      resolved: false,
-      error: `assetID "${childRef.assetID}" not found in collection`,
-      fromCache: false,
-    };
+    return _resolveError(
+      `assetID "${childRef.assetID}" not found in collection`
+    );
   }
   if (lookup.kind === "collection") {
     // Nested collection: caller is responsible for recursing — surface the

@@ -11,6 +11,7 @@ import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { CommentThread } from "../state/comment-thread.js";
 import { truncateAddress } from "../utils/format.js";
+import { escapeHtml } from "../utils/html.js";
 import { getCachedSession } from "../services/api.js";
 
 const elements = {};
@@ -63,7 +64,8 @@ function bindThreadEvents() {
 async function onAssetContextChanged(e) {
   const tokenId = assetState.get().activeAssetTokenId;
   const chainId = walletState.get().chainId;
-  await thread.setContext({ tokenId, chainId, manifest: e?.manifest });
+  const assetId = assetState.get().activeAssetId;
+  await thread.setContext({ tokenId, chainId, assetId, manifest: e?.manifest });
 }
 
 function onAuthChanged() {
@@ -129,7 +131,9 @@ function renderEvent(event) {
     : "";
 
   const li = document.createElement("li");
-  li.className = `comment-item ${mentioned || isMe ? "comment-mentioned-you" : ""}`;
+  li.className = `comment-item ${
+    mentioned || isMe ? "comment-mentioned-you" : ""
+  }`;
   li.setAttribute("data-event-id", event.id);
 
   const avatar = document.createElement("div");
@@ -176,18 +180,15 @@ function renderMentions(html) {
   );
 }
 
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
-
 function updateCount() {
   if (elements.count) elements.count.textContent = String(thread.events.length);
 }
 
 function scrollToBottom() {
-  elements.list?.scrollTo({ top: elements.list.scrollHeight, behavior: "smooth" });
+  elements.list?.scrollTo({
+    top: elements.list.scrollHeight,
+    behavior: "smooth",
+  });
 }
 
 function updateUI() {
@@ -210,7 +211,10 @@ function updateUI() {
   } else if (!hasSession) {
     setEmptyState("Sign in", "Sign in with your wallet to view comments.");
   } else if (thread.events.length === 0) {
-    setEmptyState("No comments yet", "Mention an editor to request a change or review.");
+    setEmptyState(
+      "No comments yet",
+      "Mention an editor to request a change or review."
+    );
   } else if (elements.empty) {
     elements.empty.hidden = true;
   }
@@ -291,7 +295,7 @@ export function getInitials(value) {
 export function isMentioned(text, walletAddress) {
   if (!text || !walletAddress) return false;
   const address = walletAddress.toLowerCase();
-  const truncated = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const truncated = truncateAddress(address);
   const lowerText = text.toLowerCase();
   return (
     lowerText.includes(`@${address}`) || lowerText.includes(`@${truncated}`)

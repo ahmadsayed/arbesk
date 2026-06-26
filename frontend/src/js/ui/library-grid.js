@@ -2,24 +2,27 @@ import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
 import { escapeHtml } from "../utils/html.js";
 import { getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { computeRangeSelection } from "../utils/library-items.js";
+import {
+  computeRangeSelection,
+  filterItems,
+  formatBytes,
+} from "../utils/library-items.js";
 
 export function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
   if (region) region.textContent = text;
 }
 
-function renderGridStatus(item) {
+function renderStatus(item, viewMode = "grid") {
+  const isGrid = viewMode === "grid";
   if (item.status === "besked") {
-    return `<span class="status-check" title="Besked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>`;
+    return isGrid
+      ? `<span class="status-check" title="Besked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>`
+      : `<span class="status-badge status-besked">Besked</span>`;
   }
-  return `<span class="status-flag" title="Work in Progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4M4 4h14l-2.5 4L18 12H4"/></svg></span>`;
-}
-
-function renderListStatus(item) {
-  if (item.status === "besked")
-    return `<span class="status-badge status-besked">Besked</span>`;
-  return `<span class="status-badge status-wip">Work in Progress</span>`;
+  return isGrid
+    ? `<span class="status-flag" title="Work in Progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4M4 4h14l-2.5 4L18 12H4"/></svg></span>`
+    : `<span class="status-badge status-wip">Work in Progress</span>`;
 }
 
 function defaultIcon(type) {
@@ -45,7 +48,7 @@ export function createItemElement(item, viewMode) {
       )}</span><span class="library-item-name">${escapeHtml(
       item.name
     )}</span></td>
-      <td>${renderListStatus(item)}</td>
+      <td>${renderStatus(item, "list")}</td>
       <td>${
         item.dateModified
           ? new Date(item.dateModified).toLocaleDateString()
@@ -67,7 +70,7 @@ export function createItemElement(item, viewMode) {
   el.innerHTML = `
     <div class="library-item-thumbnail" data-thumbnail-cid="${escapeHtml(
       item.thumbnailCid || ""
-    )}">${defaultIcon(item.type)}${renderGridStatus(item)}</div>
+    )}">${defaultIcon(item.type)}${renderStatus(item)}</div>
     <span class="library-item-name">${escapeHtml(item.name)}</span>
   `;
   return el;
@@ -105,8 +108,9 @@ function loadVisibleThumbnails(container) {
   container?.querySelectorAll("[data-thumbnail-cid]").forEach((el) => {
     const cid = el.dataset.thumbnailCid;
     if (!cid) return;
-    const name = el.closest("[data-id]")?.querySelector(".library-item-name")
-      ?.textContent;
+    const name = el
+      .closest("[data-id]")
+      ?.querySelector(".library-item-name")?.textContent;
     loadItemThumbnail(el, cid, name);
   });
 }
@@ -161,12 +165,6 @@ export function renderItems(container, items, viewMode) {
   }
 }
 
-function filterItems(items, searchQuery) {
-  const q = searchQuery.trim().toLowerCase();
-  if (!q) return items;
-  return items.filter((item) => item.name.toLowerCase().includes(q));
-}
-
 function sortItems(items, sortBy) {
   const sorted = [...items];
   if (sortBy === "name") {
@@ -185,9 +183,7 @@ function sortItems(items, sortBy) {
 function currentItems() {
   const state = libraryState.get();
   const source =
-    state.currentCollectionTokenId === null
-      ? state.collections
-      : state.assets;
+    state.currentCollectionTokenId === null ? state.collections : state.assets;
   return sortItems(filterItems(source, state.searchQuery), state.sortBy);
 }
 
@@ -436,11 +432,4 @@ export function initLibraryGrid() {
 
   on(EVENTS.LIBRARY_STATE_CHANGED, render);
   render();
-}
-
-export function formatBytes(bytes) {
-  if (bytes == null) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

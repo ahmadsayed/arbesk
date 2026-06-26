@@ -37,10 +37,7 @@ async function _fetchChain(cid) {
   if (!cid) return [];
   try {
     // Walk the manifest chain client-side via IPFS gateway — no server round-trip.
-    const chain = await walkManifestChain(cid);
-    // walkManifestChain returns { cid, version, color, scale, sourceCid }.
-    // The history UI needs { cid, version } — the rest is available but unused.
-    return chain;
+    return await walkManifestChain(cid);
   } catch (err) {
     console.error("History chain fetch failed:", err);
     return [];

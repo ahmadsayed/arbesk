@@ -19,10 +19,26 @@ const IS_WORKER =
   self instanceof WorkerGlobalScope;
 const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "[IPFS-WRITE]";
 
+// Cache the upload credential for 5 minutes to avoid sequential fetches
+let _cachedCredential = null;
+let _credentialExpiresAt = 0;
+const CREDENTIAL_TTL_MS = 5 * 60 * 1000;
+
+async function getCachedUploadCredential() {
+  if (_cachedCredential && Date.now() < _credentialExpiresAt) {
+    return _cachedCredential;
+  }
+  _cachedCredential = await getUploadCredential();
+  _credentialExpiresAt = Date.now() + CREDENTIAL_TTL_MS;
+  return _cachedCredential;
+}
+
 function toBlob(data) {
   if (data instanceof Blob) return data;
-  if (data instanceof ArrayBuffer || data instanceof Uint8Array) return new Blob([data]);
-  if (typeof data === "string") return new Blob([data], { type: "application/octet-stream" });
+  if (data instanceof ArrayBuffer || data instanceof Uint8Array)
+    return new Blob([data]);
+  if (typeof data === "string")
+    return new Blob([data], { type: "application/octet-stream" });
   throw new Error("writeToIPFS: unsupported data type");
 }
 
@@ -66,7 +82,10 @@ async function uploadToKubo(blob, filename, credential) {
   const apiUrl = credential.apiUrl || "http://127.0.0.1:5001";
   const form = new FormData();
   form.append("file", blob, filename);
-  const res = await fetch(`${apiUrl}/api/v0/add`, { method: "POST", body: form });
+  const res = await fetch(`${apiUrl}/api/v0/add`, {
+    method: "POST",
+    body: form,
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`IPFS add failed: ${res.status} — ${text}`);
@@ -74,7 +93,10 @@ async function uploadToKubo(blob, filename, credential) {
   const result = await res.json();
   console.log(`${TAG} kubo stored → ${result.Hash} (${result.Size} bytes)`);
   try {
-    await fetch(`${apiUrl}/api/v0/pin/add?arg=${encodeURIComponent(result.Hash)}`, { method: "POST" });
+    await fetch(
+      `${apiUrl}/api/v0/pin/add?arg=${encodeURIComponent(result.Hash)}`,
+      { method: "POST" }
+    );
     console.log(`${TAG} pinned → ${result.Hash}`);
   } catch (e) {
     console.warn(`${TAG} pin failed (non-fatal): ${e.message}`);
@@ -97,19 +119,25 @@ export async function writeToIPFS(
   data,
   filename = "asset.bin",
   credential = null,
-  options = {},
+  options = {}
 ) {
   let payload = data;
   if (options.compress) {
     payload = compress(data);
     console.log(
-      `${TAG} gzip ${typeof data === "string" ? data.length : data.byteLength ?? data.length} bytes → ${payload.length} bytes`,
+      `${TAG} gzip ${
+        typeof data === "string" ? data.length : data.byteLength ?? data.length
+      } bytes → ${payload.length} bytes`
     );
   }
-  const finalFilename = options.compress ? compressedFilename(filename) : filename;
+  const finalFilename = options.compress
+    ? compressedFilename(filename)
+    : filename;
   const blob = toBlob(payload);
-  const cred = credential || (await getUploadCredential());
-  console.log(`${TAG} uploading ${blob.size} bytes via ${cred.backend} as ${finalFilename}`);
+  const cred = credential || (await getCachedUploadCredential());
+  console.log(
+    `${TAG} uploading ${blob.size} bytes via ${cred.backend} as ${finalFilename}`
+  );
   return cred.backend === "pinata"
     ? uploadToPinata(blob, finalFilename, cred)
     : uploadToKubo(blob, finalFilename, cred);
@@ -132,11 +160,15 @@ export async function writeJSONToIPFS(json, credential = null, options = {}) {
   if (filename) {
     baseName = filename;
   } else if (type === "collection") {
-    baseName = `collect_${sanitizeFileName(assetId || json.asset_id || Date.now())}.json`;
+    baseName = `collect_${sanitizeFileName(
+      assetId || json.asset_id || Date.now()
+    )}.json`;
   } else if (type === "editors") {
     baseName = `editors_${sanitizeFileName(assetId || Date.now())}.json`;
   } else {
-    baseName = `asset_${sanitizeFileName(assetId || json.asset_id || "composite")}_composite.gltf`;
+    baseName = `asset_${sanitizeFileName(
+      assetId || json.asset_id || "composite"
+    )}_composite.gltf`;
   }
   return writeToIPFS(JSON.stringify(json), baseName, credential, { compress });
 }

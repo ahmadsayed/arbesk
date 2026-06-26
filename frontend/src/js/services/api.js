@@ -12,6 +12,7 @@ import {
   getContractAddress as getNetworkContractAddress,
   getNetworkConfig,
 } from "../blockchain/network-config.js";
+import { log, warn, error } from "../utils/log.js";
 
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
@@ -65,21 +66,21 @@ export function getCachedSession() {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) {
-      console.log("[SESSION] no cached session in localStorage");
+      log("[SESSION] no cached session in localStorage");
       return null;
     }
     const session = JSON.parse(raw);
     if (!session.token || !session.expiresAt || !session.address) {
-      console.warn("[SESSION] cached session malformed");
+      warn("[SESSION] cached session malformed");
       return null;
     }
     // Check expiry (with 60s grace period for clock skew)
     if (session.expiresAt <= Date.now() - 60_000) {
-      console.log("[SESSION] cached session expired");
+      log("[SESSION] cached session expired");
       localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
-    console.log(
+    log(
       `[SESSION] cached valid — addr=${session.address.slice(
         0,
         8
@@ -143,7 +144,7 @@ export async function createSession() {
   try {
     signature = await web3.eth.personal.sign(message, walletAddress, "");
   } catch (err) {
-    console.error("Session sign failed:", err);
+    error("Session sign failed:", err);
     throw new ApiError(
       "Failed to sign session creation message",
       401,
@@ -190,21 +191,21 @@ export async function getOrCreateSession() {
     cached &&
     cached.address === walletState.get().walletAddress?.toLowerCase()
   ) {
-    console.log("[SESSION] reused cached token");
+    log("[SESSION] reused cached token");
     return cached.token;
   }
 
   // If another call is already creating a session, wait on that same promise.
   if (sessionCreationPromise) {
-    console.log("[SESSION] waiting on in-flight session creation…");
+    log("[SESSION] waiting on in-flight session creation…");
     return sessionCreationPromise;
   }
 
-  console.log("[SESSION] no cached token — creating new session…");
+  log("[SESSION] no cached token — creating new session…");
   // Create new session (triggers ONE MetaMask pop-up)
   sessionCreationPromise = createSession()
     .then((session) => {
-      console.log(
+      log(
         "[SESSION] created — token=" + session.token.slice(0, 8) + "…"
       );
       return session.token;
@@ -337,7 +338,7 @@ export async function generateAsset({
   if (response.status === 401) {
     const { code } = parseErrorBody(data);
     if (code === "INVALID_SESSION" || code === "MISSING_AUTH") {
-      console.log("[SESSION] backend rejected token — creating fresh session…");
+      log("[SESSION] backend rejected token — creating fresh session…");
       clearSession();
       const freshToken = await createSession();
       authHeader = `Session ${freshToken.token}`;
@@ -374,7 +375,7 @@ export async function generateAsset({
     assetBytes,
     data.path || `asset.${data.format}`
   );
-  console.log(`[GEN] browser uploaded source asset → ${sourceAssetCid}`);
+  log(`[GEN] browser uploaded source asset → ${sourceAssetCid}`);
 
   // Build the manifest (same logic previously done server-side)
   const displayName = prompt
@@ -385,9 +386,9 @@ export async function generateAsset({
   if (prevAssetManifestCid) {
     try {
       manifest = await getFromRemoteIPFS(prevAssetManifestCid);
-      console.log(`[GEN] previous manifest loaded — v${manifest.version}`);
+      log(`[GEN] previous manifest loaded — v${manifest.version}`);
     } catch (e) {
-      console.warn(
+      warn(
         `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${e.message}`
       );
     }
@@ -434,7 +435,7 @@ export async function generateAsset({
   const assetManifestCid = await writeJSONToIPFS(manifest, null, {
     assetId: manifest.asset_id,
   });
-  console.log(`[GEN] browser uploaded manifest → ${assetManifestCid}`);
+  log(`[GEN] browser uploaded manifest → ${assetManifestCid}`);
 
   announceStatus("Asset generated successfully.");
   return {
@@ -453,16 +454,35 @@ export async function generateAsset({
  * content-addressed IPFS archive. Called before manifest upload so
  * the archive CID can be embedded in the manifest.
  *
- * @param {{ tokenId: string|number, chainId?: number, contractAddress?: string }} publishContext
+ * @param {{ tokenId: string|number, chainId?: number, contractAddress?: string, assetId: string }} publishContext
  * @returns {Promise<{cid: string, eventCount: number}>}
  */
 export async function snapshotCommentsArchive(publishContext) {
   announceStatus("Archiving comments…");
-  const response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
+  let token = await getOrCreateSession();
+  let response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Session ${token}`,
+    },
     body: JSON.stringify(publishContext),
   });
+
+  // If the server lost its session store (e.g. restart), re-authenticate once.
+  if (response.status === 401) {
+    log("[SESSION] snapshot-comments rejected cached token — re-authenticating");
+    clearSession();
+    token = await getOrCreateSession();
+    response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Session ${token}`,
+      },
+      body: JSON.stringify(publishContext),
+    });
+  }
 
   const data = await response.json().catch(() => ({}));
 
@@ -501,7 +521,7 @@ export async function getUploadCredential() {
   // If the server lost its session store (e.g. restart), clear the stale
   // cached token and re-authenticate once.
   if (res.status === 401) {
-    console.log(
+    log(
       "[SESSION] upload-url rejected cached token — re-authenticating"
     );
     clearSession();
@@ -532,11 +552,30 @@ export async function getUploadCredential() {
  * @returns {Promise<{unpinned: string[], count: number, errors?: string[]}>}
  */
 export async function unpinAssetCids(cid, actorAddress) {
-  const response = await fetch(`${API_BASE}/ipfs/unpin`, {
+  let token = await getOrCreateSession();
+  let response = await fetch(`${API_BASE}/ipfs/unpin`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Session ${token}`,
+    },
     body: JSON.stringify({ cid, ...(actorAddress && { actorAddress }) }),
   });
+
+  // If the server lost its session store (e.g. restart), re-authenticate once.
+  if (response.status === 401) {
+    log("[SESSION] unpin rejected cached token — re-authenticating");
+    clearSession();
+    token = await getOrCreateSession();
+    response = await fetch(`${API_BASE}/ipfs/unpin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Session ${token}`,
+      },
+      body: JSON.stringify({ cid, ...(actorAddress && { actorAddress }) }),
+    });
+  }
 
   const data = await response.json().catch(() => ({}));
 

@@ -6,7 +6,7 @@
  */
 
 import { web3 } from "../config.js";
-import { SUPPORTED_CHAIN_IDS } from "../constants/chains.js";
+import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
 
 // Nonce store: Map<nonce, expiresAt> — auto-cleans on verification
 const usedNonces = new Map();
@@ -71,7 +71,16 @@ export function parseSiweMessage(message) {
       }
     }
 
-    return { domain, address, statement, uri, version, chainId, nonce, issuedAt };
+    return {
+      domain,
+      address,
+      statement,
+      uri,
+      version,
+      chainId,
+      nonce,
+      issuedAt,
+    };
   } catch {
     return null;
   }
@@ -90,19 +99,31 @@ export async function verifySiwe(message, signature, { expectedDomain } = {}) {
   // 1. Parse message
   const parsed = parseSiweMessage(message);
   if (!parsed) {
-    return { valid: false, address: null, error: "Invalid SIWE message format" };
+    return {
+      valid: false,
+      address: null,
+      error: "Invalid SIWE message format",
+    };
   }
 
   const { domain, address, version, chainId, nonce, issuedAt } = parsed;
 
   // 2. Validate required fields
   if (!domain || !address || !version || !chainId || !nonce || !issuedAt) {
-    return { valid: false, address: null, error: "Missing required SIWE fields" };
+    return {
+      valid: false,
+      address: null,
+      error: "Missing required SIWE fields",
+    };
   }
 
   // 3. Validate Ethereum address format
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    return { valid: false, address: null, error: "Invalid Ethereum address in SIWE message" };
+    return {
+      valid: false,
+      address: null,
+      error: "Invalid Ethereum address in SIWE message",
+    };
   }
 
   // 4. Domain binding — accept either host-only (localhost:9090)
@@ -122,22 +143,38 @@ export async function verifySiwe(message, signature, { expectedDomain } = {}) {
 
   // 5. Version check
   if (version !== "1") {
-    return { valid: false, address: null, error: `Unsupported SIWE version: ${version}` };
+    return {
+      valid: false,
+      address: null,
+      error: `Unsupported SIWE version: ${version}`,
+    };
   }
 
   // 6. Chain ID validation
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
-    return { valid: false, address: null, error: `Unsupported chain ID: ${chainId}` };
+    return {
+      valid: false,
+      address: null,
+      error: `Unsupported chain ID: ${chainId}`,
+    };
   }
 
   // 7. Issued At freshness
   const issuedTimestamp = new Date(issuedAt).getTime();
   if (isNaN(issuedTimestamp)) {
-    return { valid: false, address: null, error: "Invalid Issued At timestamp" };
+    return {
+      valid: false,
+      address: null,
+      error: "Invalid Issued At timestamp",
+    };
   }
   const age = Date.now() - issuedTimestamp;
   if (age < 0) {
-    return { valid: false, address: null, error: "Message timestamp is in the future" };
+    return {
+      valid: false,
+      address: null,
+      error: "Message timestamp is in the future",
+    };
   }
   if (age > MESSAGE_MAX_AGE_MS) {
     return { valid: false, address: null, error: "SIWE message is too old" };
@@ -146,15 +183,25 @@ export async function verifySiwe(message, signature, { expectedDomain } = {}) {
   // 8. Nonce replay protection
   cleanExpiredNonces();
   if (usedNonces.has(nonce)) {
-    return { valid: false, address: null, error: "Nonce has already been used" };
+    return {
+      valid: false,
+      address: null,
+      error: "Nonce has already been used",
+    };
   }
 
   // 9. Recover address from signature
   let recoveredAddress;
   try {
-    recoveredAddress = (await web3.eth.accounts.recover(message, signature)).toLowerCase();
+    recoveredAddress = (
+      await web3.eth.accounts.recover(message, signature)
+    ).toLowerCase();
   } catch (e) {
-    return { valid: false, address: null, error: "Failed to recover address from signature" };
+    return {
+      valid: false,
+      address: null,
+      error: "Failed to recover address from signature",
+    };
   }
 
   if (recoveredAddress !== address.toLowerCase()) {

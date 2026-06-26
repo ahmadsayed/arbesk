@@ -97,10 +97,10 @@ describe("Frontend Build", () => {
     });
   });
 
-  // ── P1: wallet.js contract init ──────────────────────────────────────────
+  // ── P1: wallet-core.js contract init ────────────────────────────────────
 
   describe("wallet.js contract init", () => {
-    const wallet = readBuilt("blockchain/wallet.js");
+    const wallet = readBuilt("blockchain/wallet-core.js");
 
     test("_initContract calls getContractAddress()", () => {
       expect(wallet).toMatch(/getContractAddress\(\)/);
@@ -124,10 +124,10 @@ describe("Frontend Build", () => {
     });
   });
 
-  // ── P1: wallet.js USDC payment ──────────────────────────────────────────
+  // ── P1: wallet-payments.js USDC payment ────────────────────────────────
 
   describe("wallet.js USDC payment", () => {
-    const wallet = readBuilt("blockchain/wallet.js");
+    const wallet = readBuilt("blockchain/wallet-payments.js");
 
     test("payWithUSDC is defined", () => {
       expect(wallet).toMatch(/async function payWithUSDC/);
@@ -146,19 +146,19 @@ describe("Frontend Build", () => {
     });
   });
 
-  // ── P1: scene-graph.js asset drop rendering ──────────────────────────────
+  // ── P1: scene-loader.js asset drop rendering ───────────────────────────
 
-  describe("scene-graph.js asset drop", () => {
-    const sceneGraph = readBuilt("engine/scene-graph.js");
+  describe("scene-loader.js asset drop", () => {
+    const sceneLoader = readBuilt("engine/scene-loader.js");
 
     test("handleLinkedAssetDropped calls loadTokenChildNode", () => {
-      expect(sceneGraph).toMatch(
+      expect(sceneLoader).toMatch(
         /await loadTokenChildNode\(nodeEntry,\s*parentNode/,
       );
     });
 
     test("handleLinkedAssetDropped uses rootSceneAnchor as parent", () => {
-      expect(sceneGraph).toMatch(/state\.rootSceneAnchor/);
+      expect(sceneLoader).toMatch(/state\.rootSceneAnchor/);
     });
   });
 

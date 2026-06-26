@@ -73,7 +73,7 @@ function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
   const original = gltf.materials[targetMaterialIndex];
   if (!original) return;
 
-  const clone = JSON.parse(JSON.stringify(original));
+  const clone = structuredClone(original);
   clone.name = newMaterialName;
   const cloneIndex = gltf.materials.length;
   gltf.materials.push(clone);

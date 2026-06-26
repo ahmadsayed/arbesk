@@ -11,7 +11,7 @@ import {
   connectWallet,
   contract as walletContract,
 } from "./blockchain/wallet.js";
-import { CHAIN_IDS } from "./constants/chains.js";
+import { CHAIN_IDS } from "../../../constants/chains.js";
 import { initWalletPopover } from "./ui/wallet-popover.js";
 import { initTheme, toggleTheme } from "./engine/theme.js";
 import { walletState } from "./state/wallet-state.js";
@@ -19,6 +19,7 @@ import { libraryState } from "./state/library-state.js";
 import { truncateAddress } from "./utils/format.js";
 import { getCachedSession } from "./services/api.js";
 import { getFromRemoteIPFS } from "./ipfs/remote-ipfs.js";
+import { deriveDefaultCollectionId } from "./utils/collections.js";
 import {
   fetchAssetLibrary,
   expandTokenToAssets,
@@ -61,16 +62,14 @@ function extractThumbnailCid(thumbnail) {
   return thumbnail.cid || thumbnail.source?.cid || "";
 }
 
-/**
- * Derive the wallet's default collection token ID. Matches the contract and
- * create-panel.js/asset-save.js derivation so the UI can label it "Default".
- */
-function deriveDefaultCollectionId(walletAddr) {
-  if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
-  return window.Web3.utils.soliditySha3({
-    type: "address",
-    value: walletAddr,
-  });
+function isNonexistentTokenError(err) {
+  const msg = (err?.message || err?.data || "").toString().toLowerCase();
+  return (
+    msg.includes("nonexistent") ||
+    msg.includes("erc721nonexistenttoken") ||
+    msg.includes("invalid token") ||
+    msg.includes("token id does not exist")
+  );
 }
 
 async function fetchCollectionMetadata(tokenId) {
@@ -87,7 +86,10 @@ async function fetchCollectionMetadata(tokenId) {
       thumbnail: manifest?.thumbnail || null,
     };
   } catch (err) {
-    console.warn(`[LIBRARY] Failed to load collection metadata for ${tokenId}`, err);
+    // Named collections that have not been minted yet are expected; don't warn.
+    if (!isNonexistentTokenError(err)) {
+      console.warn(`[LIBRARY] Failed to load collection metadata for ${tokenId}`, err);
+    }
     return null;
   }
 }

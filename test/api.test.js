@@ -377,13 +377,28 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   });
 
   describe("POST /api/v1/assets/snapshot-comments", () => {
-    it("snapshots Nostr comments to IPFS", async () => {
+    it("rejects without a session (401)", async () => {
       const res = await request(app)
         .post("/api/v1/assets/snapshot-comments")
         .send({
           tokenId: "42",
           chainId: 31415822,
           contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          assetId: "asset_42",
+        });
+
+      expect(res.status).toBe(401);
+    });
+
+    it("snapshots Nostr comments to IPFS", async () => {
+      const res = await request(app)
+        .post("/api/v1/assets/snapshot-comments")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          tokenId: "42",
+          chainId: 31415822,
+          contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          assetId: "asset_42",
         });
 
       expect(res.status).toBe(200);
@@ -394,10 +409,21 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("returns 400 when tokenId is missing", async () => {
       const res = await request(app)
         .post("/api/v1/assets/snapshot-comments")
-        .send({ chainId: 31415822 });
+        .set("Authorization", await makeSessionHeader())
+        .send({ chainId: 31415822, assetId: "asset_42" });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("MISSING_TOKEN_ID");
+    });
+
+    it("returns 400 when assetId is missing", async () => {
+      const res = await request(app)
+        .post("/api/v1/assets/snapshot-comments")
+        .set("Authorization", await makeSessionHeader())
+        .send({ tokenId: "42", chainId: 31415822 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("MISSING_ASSET_ID");
     });
   });
 
@@ -461,6 +487,19 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   });
 
   describe("POST /api/v1/ipfs/unpin via storage", () => {
+    it("rejects without a session (401)", async () => {
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+      });
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .send({ cid: startCid });
+      expect(res.status).toBe(401);
+    });
+
     it("walks the chain and reports unpinned CIDs", async () => {
       const startCid = saveManifestToStorage({
         version: 1,
@@ -470,6 +509,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
         .send({ cid: startCid });
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.unpinned)).toBe(true);
@@ -492,6 +532,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
         .send({ cid: startCid });
       expect(res.status).toBe(200);
       // Both the loose source CID and the directory root must be unpinned.

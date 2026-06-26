@@ -287,3 +287,39 @@ export async function openSharedAsset(page, tokenId, assetId) {
     page.locator(SELECTORS.teamPanel),
   ).not.toHaveAttribute("hidden", "", { timeout: 30000 });
 }
+
+/**
+ * Ensure the right inspector is expanded so its sections (parametric editor,
+ * comments, etc.) are interactable.
+ */
+export async function openInspector(page) {
+  await page.evaluate(() => {
+    const inspector = document.getElementById("inspector");
+    if (inspector) inspector.classList.remove("collapsed");
+  });
+}
+
+/**
+ * Post a comment in the Studio comments panel and wait for it to appear.
+ */
+export async function postComment(page, text) {
+  await openInspector(page);
+  const input = page.locator(SELECTORS.commentComposerInput);
+  await expect(input).toBeVisible();
+  await expect(input).not.toBeDisabled({ timeout: 15000 });
+  await input.fill(text);
+  await page.click(SELECTORS.postCommentBtn);
+  await expect(page.locator(SELECTORS.commentList)).toContainText(text, {
+    timeout: 15000,
+  });
+}
+
+/**
+ * Wait for a comment with the given text to appear in the comments panel.
+ */
+export async function expectComment(page, text) {
+  await openInspector(page);
+  await expect(page.locator(SELECTORS.commentList)).toContainText(text, {
+    timeout: 30000,
+  });
+}

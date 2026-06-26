@@ -262,14 +262,17 @@ test.describe.serial("Collection/asset model", () => {
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const tokenIdHex = tokenIdHexFromUrl(page.url());
 
-    // The collection auto-loads its first asset on open. In the shared default
-    // collection that may be an asset from an earlier spec, so resolve the
-    // actual first asset name instead of hard-coding ASSET_NAME_1.
+    // A bare ?asset=<collectionTokenId> opens the collection in the Gallery
+    // sidebar with an empty viewport. To restore the viewport we must include
+    // an explicit assetId. Pick the first asset of the published collection.
     const collection = await fetchTokenManifest(tokenIdHex);
-    const firstAssetCid = Object.values(collection.assets)[0];
+    const firstAssetId = Object.keys(collection.assets)[0];
+    const firstAssetCid = collection.assets[firstAssetId];
     const firstAsset = await fetchManifest(firstAssetCid);
 
-    await page.goto(`/studio.html?asset=${tokenIdHex}`);
+    await page.goto(
+      `/studio.html?asset=${tokenIdHex}&assetId=${firstAssetId}`,
+    );
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden({
       timeout: 5000,
     });

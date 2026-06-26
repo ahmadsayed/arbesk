@@ -15,6 +15,7 @@ import { arrayBufferToBase64 } from "../utils/encoding.js";
 
 const IPFS_CACHE_ENABLED = true; // in-memory cache by CID (content-addressed, safe)
 const MAX_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB cap for raw gateway bytes
+const MAX_CACHE_ENTRIES = 500; // Maximum number of cache entries to prevent Map overhead
 const _cache = new Map();
 let _cacheBytes = 0;
 
@@ -33,7 +34,7 @@ async function gatewayBase() {
 async function fetchIpfsBytes(cid) {
   const url = `${await gatewayBase()}${cid}`;
   console.log(`[IPFS] get ${url}`);
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(url, { cache: "default" });
   if (!response.ok) {
     throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
   }
@@ -57,13 +58,19 @@ function clearRemoteIPFSCache() {
 function cacheBytes(cid, bytes) {
   if (!IPFS_CACHE_ENABLED) return;
   if (_cache.has(cid)) return;
-  // Simple LRU eviction if adding this entry would exceed the cap.
-  while (_cacheBytes + bytes.length > MAX_CACHE_BYTES && _cache.size > 0) {
+  // Simple LRU eviction if adding this entry would exceed the byte cap or entry count.
+  while (
+    (_cacheBytes + bytes.length > MAX_CACHE_BYTES ||
+      _cache.size >= MAX_CACHE_ENTRIES) &&
+    _cache.size > 0
+  ) {
     const firstKey = _cache.keys().next().value;
     const first = _cache.get(firstKey);
     _cacheBytes -= first?.bytes?.length || 0;
     _cache.delete(firstKey);
   }
+  // Don't cache if this single entry exceeds the byte limit
+  if (bytes.length > MAX_CACHE_BYTES) return;
   _cache.set(cid, { bytes, added: Date.now() });
   _cacheBytes += bytes.length;
 }
@@ -150,7 +157,7 @@ async function isIpfsCidReachable(cid) {
   if (!cid) return false;
   try {
     const url = `${await gatewayBase()}${cid}`;
-    const response = await fetch(url, { method: "HEAD", cache: "no-store" });
+    const response = await fetch(url, { method: "HEAD", cache: "default" });
     return response.ok;
   } catch {
     return false;

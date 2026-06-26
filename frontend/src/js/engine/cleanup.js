@@ -59,6 +59,7 @@ export function disposeNode(nodeId) {
       }
     }
     state.nodeMeshes.delete(nodeId);
+    state._nonChromeMeshCache = null;
   }
   const anchor = state.nodeAnchors.get(nodeId);
   if (anchor) {
@@ -91,29 +92,39 @@ export function clearScene() {
 
   state.scene.stopAllAnimations();
 
+  // Remove event listeners to prevent memory leaks
+  if (state.resizeObserverInstance) {
+    state.resizeObserverInstance.disconnect();
+    state.resizeObserverInstance = null;
+  }
+
+  if (state.pointerObservableCallback && state.scene) {
+    state.scene.onPointerObservable.remove(
+      state.pointerObservableCallback,
+      BABYLON.PointerEventTypes.POINTERPICK
+    );
+    state.pointerObservableCallback = null;
+  }
+
   // Capture the shared material reference so we don't cascade-dispose it
   const sharedMat = state.defaultWoodMaterial;
 
-  for (const [, meshes] of state.nodeMeshes) {
-    for (const mesh of meshes) {
+  state.nodeMeshes.forEach((meshes) => {
+    meshes.forEach((mesh) => {
       if (mesh && !mesh.isDisposed()) {
-        // Only cascade-dispose materials that are unique to this import,
-        // never the shared defaultWoodMaterial (handled separately below).
         if (mesh.material && mesh.material !== sharedMat) {
           mesh.dispose(false, true);
         } else {
           mesh.dispose();
         }
       }
-    }
-  }
+    });
+  });
   state.nodeMeshes.clear();
 
-  for (const [, anchor] of state.nodeAnchors) {
-    if (anchor && !anchor.isDisposed()) {
-      anchor.dispose();
-    }
-  }
+  state.nodeAnchors.forEach((anchor) => {
+    if (anchor && !anchor.isDisposed()) anchor.dispose();
+  });
   state.nodeAnchors.clear();
 
   if (state.rootSceneAnchor && !state.rootSceneAnchor.isDisposed()) {
@@ -121,23 +132,23 @@ export function clearScene() {
   }
   state.rootSceneAnchor = null;
 
-  for (const transformNode of [...state.scene.transformNodes]) {
+  [...state.scene.transformNodes].forEach((transformNode) => {
     if (transformNode && !transformNode.isDisposed()) {
-      if (transformNode.metadata?.isViewportChrome) continue;
+      if (transformNode.metadata?.isViewportChrome) return;
       transformNode.dispose();
     }
-  }
+  });
 
-  for (const mesh of [...state.scene.meshes]) {
+  [...state.scene.meshes].forEach((mesh) => {
     if (mesh && !mesh.isDisposed()) {
-      if (mesh.metadata?.isViewportChrome) continue;
+      if (mesh.metadata?.isViewportChrome) return;
       if (mesh.material && mesh.material !== sharedMat) {
         mesh.dispose(false, true);
       } else {
         mesh.dispose();
       }
     }
-  }
+  });
 
   if (state.defaultWoodMaterial) {
     try {
@@ -150,12 +161,18 @@ export function clearScene() {
 
   emit(EVENTS.SCENE_CLEARED);
 
-  assetState.set({ activeAssetManifestCid: null, latestAssetManifestCid: null });
+  assetState.set({
+    activeAssetManifestCid: null,
+    latestAssetManifestCid: null,
+  });
   uiState.set({ selectedNodeId: null });
 
   state.pendingChildRefs.length = 0;
   state.pendingPostProcessorEdits.clear();
   state.pendingTransformEdits.clear();
+
+  // Invalidate cached mesh filter
+  state._nonChromeMeshCache = null;
 
   // Clear selection highlight state
   state.highlightedNodeId = null;

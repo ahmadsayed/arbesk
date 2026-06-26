@@ -6,7 +6,7 @@
  */
 
 import { switchNetwork } from "./wallet.js";
-import { CHAIN_IDS } from "../constants/chains.js";
+import { CHAIN_IDS } from "../../../../constants/chains.js";
 
 const EXPLORER_URLS = {
   // Hardhat local — no explorer

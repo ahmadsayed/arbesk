@@ -39,6 +39,8 @@ export const state = {
   /** @type {ResizeObserver|null} */
   resizeObserverInstance: null,
   /** @type {Function|null} */
+  windowResizeHandler: null,
+  /** @type {Function|null} */
   pointerObservableCallback: null,
   /** @type {BABYLON.HighlightLayer|null} */
   highlightLayer: null,
@@ -79,4 +81,6 @@ export const state = {
    * @type {string|null}
    */
   activeCollectionCurrentAssetID: null,
+  /** @type {BABYLON.AbstractMesh[]|null} Cached non-chrome meshes for frameAll/snapView */
+  _nonChromeMeshCache: null,
 };

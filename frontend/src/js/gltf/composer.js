@@ -64,42 +64,39 @@ export async function composeGlTF(gltfJson) {
   if (!gltfJson) throw new Error("composeGlTF: gltfJson is null");
 
   // Deep clone to avoid mutating the original
-  const composed = JSON.parse(JSON.stringify(gltfJson));
+  const composed = structuredClone(gltfJson);
 
-  // Resolve buffer URIs in parallel
+  // Resolve buffer and image URIs in parallel
+  const jobs = [];
   if (composed.buffers) {
-    await Promise.all(
-      composed.buffers.map(async (buf, i) => {
-        composed.buffers[i] = {
-          ...buf,
-          uri: await resolveURI(buf.uri, "application/octet-stream"),
-        };
-      }),
-    );
+    composed.buffers.forEach((buf, i) => {
+      jobs.push(
+        resolveURI(buf.uri, "application/octet-stream").then((uri) => {
+          composed.buffers[i] = { ...buf, uri };
+        })
+      );
+    });
   }
-
-  // Resolve image URIs in parallel
   if (composed.images) {
-    await Promise.all(
-      composed.images.map(async (img, i) => {
-        if (!img.uri) return;
-
-        // Detect MIME type from the URI or existing mimeType
-        let mimeType = img.mimeType || "image/png";
-        if (img.uri.startsWith(IPFS_URI_PREFIX) && !img.mimeType) {
-          // We don't know the MIME type from the CID alone; default to PNG
-          mimeType = "image/png";
-        }
-
-        composed.images[i] = {
-          ...img,
-          uri: await resolveURI(img.uri, mimeType),
-        };
-      }),
-    );
+    composed.images.forEach((img, i) => {
+      if (!img.uri) return;
+      const mimeType =
+        img.mimeType ||
+        (img.uri.startsWith(IPFS_URI_PREFIX) ? "image/png" : "image/png");
+      jobs.push(
+        resolveURI(img.uri, mimeType).then((uri) => {
+          composed.images[i] = { ...img, uri };
+        })
+      );
+    });
   }
+  await Promise.all(jobs);
 
-  console.log(`[COMPOSE] resolved ${composed.buffers?.length || 0} buffers, ${composed.images?.length || 0} images`);
+  console.log(
+    `[COMPOSE] resolved ${composed.buffers?.length || 0} buffers, ${
+      composed.images?.length || 0
+    } images`
+  );
   return composed;
 }
 

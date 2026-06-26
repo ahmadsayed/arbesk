@@ -44,7 +44,7 @@ import {
   connectWallet,
   switchNetwork,
 } from "/js/blockchain/wallet.js";
-import { CHAIN_IDS } from "/js/constants/chains.js";
+import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { getCachedSession } from "/js/services/api.js";
 import { truncateAddress } from "/js/utils/format.js";
 import { walletState } from "/js/state/wallet-state.js";

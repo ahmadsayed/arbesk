@@ -12,6 +12,7 @@ import {
   CollaboratorRole,
   burn,
 } from "../blockchain/wallet.js";
+import { requireWallet } from "../blockchain/wallet-guard.js";
 import { getProof } from "../gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
@@ -75,10 +76,7 @@ export async function deleteAssetFromCollection({
   assetName,
   onAfterDelete,
 }) {
-  const c = walletContract || walletState.get().contract;
-  if (!c) {
-    throw new Error("Wallet or contract not ready");
-  }
+  const { contract: c, walletAddress } = requireWallet();
 
   const confirmed = await showConfirmDialog(
     "Delete Asset",
@@ -183,10 +181,7 @@ export async function deleteAssetFromCollection({
  * @returns {Promise<string|null>} txHash on success, null on failure.
  */
 export async function burnCollection(tokenId) {
-  const c = walletContract || walletState.get().contract;
-  if (!c) throw new Error("Wallet or contract not ready");
-
-  const walletAddr = walletState.get().walletAddress;
+  const { contract: c, walletAddress: walletAddr } = requireWallet();
   let editorList = await loadEditorList(tokenId);
   if (!editorList) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
@@ -216,8 +211,7 @@ export async function getEditorSetVersionForToken(tokenId) {
  * @returns {Promise<string>} New collection CID.
  */
 export async function updateCollectionManifest(tokenId, mutate, options = {}) {
-  const c = walletContract || walletState.get().contract;
-  if (!c) throw new Error("Wallet or contract not ready");
+  const { contract: c } = requireWallet();
 
   const currentCid = await c.methods.tokenURI(tokenId).call();
   const collection = await getFromRemoteIPFS(currentCid);
@@ -240,8 +234,15 @@ export async function updateCollectionManifest(tokenId, mutate, options = {}) {
   const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
   if (!proofResult) throw new Error("Not an authorized editor");
 
-  const txHash = await updateAssetURI(tokenId, newCollectionCid, proofResult.proof);
-  if (!txHash) throw new Error(`Update tokenURI transaction failed for ${options.label || tokenId}`);
+  const txHash = await updateAssetURI(
+    tokenId,
+    newCollectionCid,
+    proofResult.proof
+  );
+  if (!txHash)
+    throw new Error(
+      `Update tokenURI transaction failed for ${options.label || tokenId}`
+    );
 
   if (typeof options.onAfterUpdate === "function") {
     options.onAfterUpdate(newCollectionCid);
@@ -270,8 +271,7 @@ export async function sendAssetToCollection({
   mode,
   onAfterSend,
 }) {
-  const c = walletContract || walletState.get().contract;
-  if (!c) throw new Error("Wallet or contract not ready");
+  const { contract: c } = requireWallet();
   if (String(sourceTokenId) === String(targetTokenId)) {
     throw new Error("Source and target collection must be different");
   }
@@ -323,7 +323,9 @@ export async function sendAssetToCollection({
   showToast({
     type: "info",
     title: mode === "move" ? "Asset Moved" : "Asset Copied",
-    message: `"${assetName || assetId}" ${mode === "move" ? "moved to" : "copied to"} the target collection.`,
+    message: `"${assetName || assetId}" ${
+      mode === "move" ? "moved to" : "copied to"
+    } the target collection.`,
   });
 
   if (typeof onAfterSend === "function") {

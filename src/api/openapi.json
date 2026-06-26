@@ -292,17 +292,26 @@
         "summary": "Snapshot Nostr comment thread for an asset",
         "description": "Queries the private Nostr relay for all kind:1 events tagged with the asset, packages them into a deterministic JSON archive, stores it on IPFS, and returns the archive CID. Called by the browser before writing a republish manifest so the archive CID can be embedded.\n\nManifests themselves are written directly to IPFS by the browser — this endpoint only handles the server-side Nostr archive work.",
         "operationId": "snapshotCommentsArchive",
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["tokenId"],
+                "required": ["tokenId", "assetId"],
                 "properties": {
                   "tokenId": {
                     "type": "string",
-                    "description": "On-chain token ID for the asset"
+                    "description": "On-chain token ID for the collection"
+                  },
+                  "assetId": {
+                    "type": "string",
+                    "description": "Asset identifier inside the collection manifest"
                   },
                   "chainId": {
                     "type": "integer",
@@ -339,7 +348,15 @@
             }
           },
           "400": {
-            "description": "Missing tokenId",
+            "description": "Missing tokenId or assetId",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }
@@ -418,6 +435,11 @@
         "summary": "Unpin all IPFS CIDs owned by a manifest chain",
         "description": "Called after token burn or asset removal from a collection. Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs (and embedded buffer/image CIDs), thumbnail CIDs, comments archive CIDs, and optional `history` entry CIDs, then unpins them all.",
         "operationId": "unpinManifestChain",
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -464,6 +486,14 @@
           },
           "400": {
             "description": "Missing or invalid cid",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }

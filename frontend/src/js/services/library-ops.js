@@ -15,6 +15,12 @@ import {
 import { computeRoot, getProof } from "../gltf/merkle-editors.js";
 import { updateCollectionManifest } from "./asset-delete.js";
 import { walletState } from "../state/wallet-state.js";
+import {
+  deriveNamedCollectionId,
+  mergeAssetIntoCollection,
+  identityMatrix,
+} from "../utils/collections.js";
+import { log, warn, error } from "../utils/log.js";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -35,7 +41,7 @@ function saveEditorListLocally(tokenId, editorList, ipfsCid = null) {
       })
     );
   } catch (e) {
-    console.warn("[LIBRARY-OPS] failed to cache editor list:", e.message);
+    warn("[LIBRARY-OPS] failed to cache editor list:", e.message);
   }
   return ipfsCid || "";
 }
@@ -72,35 +78,6 @@ async function getEditorSetVersion(tokenId) {
   } catch {
     return 1;
   }
-}
-
-function deriveNamedCollectionId(walletAddr, name) {
-  return window.Web3.utils.soliditySha3(
-    { type: "address", value: walletAddr },
-    { type: "string", value: name }
-  );
-}
-
-function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
-  const base = collectionManifest
-    ? { ...collectionManifest }
-    : {
-        type: "collection",
-        asset_id: `collection_${Date.now()}`,
-        version: 0,
-        assets: {},
-      };
-  const assets = { ...(base.assets || {}) };
-  assets[assetID] = assetCid;
-  return {
-    ...base,
-    type: "collection",
-    assets,
-  };
-}
-
-function identityMatrix() {
-  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 }
 
 function getContract() {
@@ -155,7 +132,7 @@ export async function createNamedCollection(name) {
     type: "collection",
     assetId: collectionManifest.asset_id,
   });
-  console.log(`[LIBRARY-OPS] collection manifest → ${collectionCid}`);
+  log(`[LIBRARY-OPS] collection manifest → ${collectionCid}`);
 
   const editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   const editorRoot = computeRoot(editorList, tokenId, 1);
@@ -169,7 +146,7 @@ export async function createNamedCollection(name) {
   );
   if (!txHash) throw new Error("Publish collection transaction failed");
 
-  console.log(`[LIBRARY-OPS] minted collection token ${tokenId} (hex ${tokenIdHex}) → ${txHash}`);
+  log(`[LIBRARY-OPS] minted collection token ${tokenId} (hex ${tokenIdHex}) → ${txHash}`);
   return { tokenId, manifestCid: collectionCid, isNew: true };
 }
 
@@ -219,7 +196,7 @@ export async function uploadFileToCollection(file, collectionTokenId) {
     new Uint8Array(arrayBuffer),
     file.name
   );
-  console.log(`[LIBRARY-OPS] uploaded source asset → ${sourceCid}`);
+  log(`[LIBRARY-OPS] uploaded source asset → ${sourceCid}`);
 
   const assetManifest = {
     type: "asset",
@@ -252,7 +229,7 @@ export async function uploadFileToCollection(file, collectionTokenId) {
     type: "asset",
     assetId,
   });
-  console.log(`[LIBRARY-OPS] uploaded asset manifest → ${assetManifestCid}`);
+  log(`[LIBRARY-OPS] uploaded asset manifest → ${assetManifestCid}`);
 
   const newCollectionCid = await updateCollectionManifest(
     collectionTokenId,
@@ -264,7 +241,7 @@ export async function uploadFileToCollection(file, collectionTokenId) {
     { label: "upload asset" }
   );
 
-  console.log(`[LIBRARY-OPS] added ${assetId} to collection ${collectionTokenId} → ${newCollectionCid}`);
+  log(`[LIBRARY-OPS] added ${assetId} to collection ${collectionTokenId} → ${newCollectionCid}`);
 
   return { assetId, assetManifestCid, newCollectionCid };
 }

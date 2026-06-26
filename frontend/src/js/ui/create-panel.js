@@ -19,6 +19,7 @@ import {
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import { deriveDefaultCollectionId } from "../utils/collections.js";
 
 // ─── DOM References ───
 const chatHistory = document.getElementById("chatHistory");
@@ -82,18 +83,6 @@ if (providerKeyToggle && providerKeyInput) {
 }
 
 // ─── Collection Selector ───
-
-/**
- * Derive the default collection ID from the connected wallet address.
- * Uses keccak256(soliditySha3(address)) — same as asset-save.js.
- */
-function deriveDefaultCollectionId(walletAddr) {
-  if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
-  return window.Web3.utils.soliditySha3({
-    type: "address",
-    value: walletAddr,
-  });
-}
 
 /**
  * Populate the collection dropdown with available collections.

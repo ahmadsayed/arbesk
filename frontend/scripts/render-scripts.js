@@ -15,6 +15,15 @@ module.exports = function renderScripts() {
 
     sh.cp('-R', sourcePath, destPath);
 
+    // Copy shared root-level constants so browser imports like
+    // `../../../../constants/chains.js` resolve at runtime.
+    const sourcePathConstants = upath.resolve(upath.dirname(__filename), '../../constants');
+    const destPathConstants = upath.resolve(upath.dirname(__filename), '../dist/constants');
+    if (sh.test('-e', sourcePathConstants)) {
+        sh.mkdir('-p', destPathConstants);
+        sh.cp('-R', `${sourcePathConstants}/*`, destPathConstants);
+    }
+
     const sourcePathScriptsJS = upath.resolve(upath.dirname(__filename), '../src/js/scripts.js');
     const destPathScriptsJS = upath.resolve(upath.dirname(__filename), '../dist/js/scripts.js');
 

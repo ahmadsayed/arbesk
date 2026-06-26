@@ -20,7 +20,7 @@ import { deleteAssetFromCollection } from "../services/asset-delete.js";
 import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
-import { CHAIN_IDS } from "../constants/chains.js";
+import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
@@ -640,13 +640,21 @@ async function refreshAssetLibrary() {
     return;
   }
 
-  do {
-    libraryRenderInFlight = true;
-    libraryRenderPending = false;
-    const { owned, shared } = await fetchAssetLibrary(walletAddress);
-    await renderAssetLibrary(owned, shared);
+  libraryRenderInFlight = true;
+  try {
+    do {
+      libraryRenderPending = false;
+      const { owned, shared } = await fetchAssetLibrary(walletAddress);
+      await renderAssetLibrary(owned, shared);
+    } while (libraryRenderPending);
+  } finally {
     libraryRenderInFlight = false;
-  } while (libraryRenderPending);
+  }
+
+  // A new refresh may have been requested while we were releasing the flag.
+  if (libraryRenderPending) {
+    return refreshAssetLibrary();
+  }
 }
 
 function highlightActiveAsset() {

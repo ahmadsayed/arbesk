@@ -11,9 +11,14 @@ import { walletState } from "../state/wallet-state.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { computeRoot, getProof } from "../gltf/merkle-editors.js";
+import { requireWallet } from "../blockchain/wallet-guard.js";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
-export const CollaboratorRole = Object.freeze({ None: 0, Viewer: 1, Editor: 2 });
+export const CollaboratorRole = Object.freeze({
+  None: 0,
+  Viewer: 1,
+  Editor: 2,
+});
 
 /**
  * List editors for a token from IPFS (with localStorage cache fallback).
@@ -41,7 +46,7 @@ export async function fetchEditors(tokenId) {
   } catch (err) {
     console.warn(
       `[TEAM] failed to load editor list from chain for ${tokenId}:`,
-      err.message,
+      err.message
     );
   }
 
@@ -112,6 +117,12 @@ async function _getEditorSetVersion(tokenId) {
   }
 }
 
+/** Export for use by asset-save.js */
+export {
+  _getEditorSetVersion as getEditorSetVersion,
+  _saveEditorListLocally as saveEditorListLocally,
+};
+
 function _normalizeAddress(address) {
   if (!address || typeof address !== "string" || !address.startsWith("0x")) {
     throw new Error("Invalid Ethereum address");
@@ -120,10 +131,7 @@ function _normalizeAddress(address) {
 }
 
 async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
-  const walletAddress = walletState.get().walletAddress;
-  if (!contract || !walletAddress) {
-    throw new Error("Wallet not connected");
-  }
+  const { walletAddress } = requireWallet();
 
   const currentVersion = await _getEditorSetVersion(tokenId);
   const nextVersion = currentVersion + 1;

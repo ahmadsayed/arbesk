@@ -38,6 +38,17 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     createSession: jest.fn(),
   }));
 
+  jest.unstable_mockModule("../../frontend/src/js/services/team.js", () => ({
+    __esModule: true,
+    fetchEditors: jest.fn().mockResolvedValue([]),
+    getEditorSetVersion: jest.fn().mockResolvedValue(1),
+  }));
+
+  jest.unstable_mockModule("../../frontend/src/js/gltf/merkle-editors.js", () => ({
+    __esModule: true,
+    getProof: jest.fn(() => null),
+  }));
+
   const mod = await import("../../frontend/src/js/state/comment-thread.js");
   return { CommentThread: mod.CommentThread, emitMock, EVENTS: EVENTS_MOCK };
 }
@@ -103,10 +114,10 @@ describe("CommentThread", () => {
     });
   });
 
-  test("setContext clears events on token change and loads archive", async () => {
+  test("setContext clears events on token/asset change and loads archive", async () => {
     const { CommentThread, emitMock, EVENTS } = await loadThreadModule(
       {},
-      { activeAssetManifestCid: "QmManifest", currentManifest: null }
+      { activeAssetManifestCid: "QmManifest", currentManifest: null, activeAssetId: "asset_1" }
     );
     const thread = new CommentThread();
 
@@ -114,22 +125,30 @@ describe("CommentThread", () => {
       "../../frontend/src/js/ipfs/remote-ipfs.js"
     );
     getFromRemoteIPFS.mockResolvedValue({
+      asset_id: "asset_1",
       comments_archive_cid: "bafyOld",
       events: [{ id: "old", created_at: 1 }],
     });
 
-    await thread.setContext({ tokenId: "1", chainId: "31337", manifest: null });
+    await thread.setContext({
+      tokenId: "1",
+      chainId: "31337",
+      assetId: "asset_1",
+      manifest: null,
+    });
 
     expect(thread.status.tokenId).toBe("1");
+    expect(thread.status.assetId).toBe("asset_1");
     expect(thread.events).toHaveLength(1);
 
     await thread.setContext({
-      tokenId: "2",
+      tokenId: "1",
       chainId: "31337",
-      manifest: { comments_archive_cid: "bafyNew" },
+      assetId: "asset_2",
+      manifest: { asset_id: "asset_2", comments_archive_cid: "bafyNew" },
     });
 
-    expect(thread.status.tokenId).toBe("2");
+    expect(thread.status.assetId).toBe("asset_2");
     expect(getFromRemoteIPFS).toHaveBeenCalledWith("bafyNew");
   });
 

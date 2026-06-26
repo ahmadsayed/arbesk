@@ -90,22 +90,6 @@ export function isServiceRunning(service) {
   }
 }
 
-/**
- * @deprecated Use isServiceRunning(service) instead; container names are now
- * per-worktree and should not be hard-coded.
- */
-export function isContainerRunning(name) {
-  try {
-    const out = execSync(
-      `docker ps --filter "name=${name}" --filter "status=running" --format "{{.Names}}"`,
-      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
-    );
-    return out.trim().includes(name);
-  } catch {
-    return false;
-  }
-}
-
 export function writeState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state), "utf8");
 }

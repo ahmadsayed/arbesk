@@ -11,6 +11,8 @@ import { walletState } from "./wallet-state.js";
 import { assetState } from "./asset-state.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { clearSession, createSession, getCachedSession } from "../services/api.js";
+import { fetchEditors, getEditorSetVersion } from "../services/team.js";
+import { getProof } from "../gltf/merkle-editors.js";
 
 const RELAY_PATH = "/api/v1/chat/ws";
 const RECONNECT_DELAY_MS = 3000;
@@ -26,6 +28,7 @@ export class CommentThread {
 
     this._currentTokenId = null;
     this._currentChainId = null;
+    this._currentAssetId = null;
     this._currentArchiveCid = null;
 
     this._knownEventIds = new Set();
@@ -44,20 +47,25 @@ export class CommentThread {
       connecting: this._isConnecting,
       tokenId: this._currentTokenId,
       chainId: this._currentChainId,
+      assetId: this._currentAssetId,
     };
   }
 
   // ─── Context & lifecycle ────────────────────────────────────────────────────
 
-  async setContext({ tokenId, chainId, manifest }) {
+  async setContext({ tokenId, chainId, manifest, assetId }) {
+    const nextAssetId = assetId || manifest?.asset_id || null;
     const contextChanged =
-      tokenId !== this._currentTokenId || chainId !== this._currentChainId;
+      tokenId !== this._currentTokenId ||
+      chainId !== this._currentChainId ||
+      nextAssetId !== this._currentAssetId;
 
     if (contextChanged) {
       this.disconnect();
       this._clearEvents();
       this._currentTokenId = tokenId;
       this._currentChainId = chainId;
+      this._currentAssetId = nextAssetId;
       this._currentArchiveCid = null;
     }
 
@@ -85,13 +93,14 @@ export class CommentThread {
     return true;
   }
 
-  connect() {
+  async connect() {
     if (this._ws || this._isConnecting) return;
 
     const tokenId = this._currentTokenId;
     const chainId = this._currentChainId;
+    const assetId = this._currentAssetId;
     const address = walletState.get().walletAddress;
-    if (!tokenId || !address) return;
+    if (!tokenId || !address || !assetId) return;
 
     const session = getCachedSession();
     if (!session) return;
@@ -100,10 +109,31 @@ export class CommentThread {
     this._reconnectAttempts = 0;
     this._emitStatus();
 
+    // Build a Merkle editor proof for non-owner collaborators. Owners are
+    // authorized by ownership and do not need a proof, but if a proof can be
+    // built (e.g. owner is also in the editor list) we send it anyway.
+    const proofData = await this._loadEditorProof(tokenId, chainId, address);
+
+    // Abort if the context changed while we were loading the proof.
+    if (
+      tokenId !== this._currentTokenId ||
+      chainId !== this._currentChainId ||
+      assetId !== this._currentAssetId ||
+      !this._isConnecting
+    ) {
+      this._isConnecting = false;
+      this._emitStatus();
+      return;
+    }
+
     const token = encodeURIComponent(session.token);
     const encTokenId = encodeURIComponent(tokenId);
     const encChainId = chainId ? encodeURIComponent(chainId) : "";
-    const url = `${this._getWsBase()}${RELAY_PATH}?token=${token}&tokenId=${encTokenId}&chainId=${encChainId}`;
+    const encAssetId = encodeURIComponent(assetId);
+    let url = `${this._getWsBase()}${RELAY_PATH}?token=${token}&tokenId=${encTokenId}&chainId=${encChainId}&assetId=${encAssetId}`;
+    if (proofData) {
+      url += `&proof=${encodeURIComponent(JSON.stringify(proofData.proof))}&role=${encodeURIComponent(proofData.role)}`;
+    }
 
     try {
       this._ws = new WebSocket(url);
@@ -211,22 +241,50 @@ export class CommentThread {
     }
   }
 
+  /**
+   * Build a Merkle proof for the current wallet against the token's editor list.
+   * Returns null for owners or when the wallet is not a listed collaborator.
+   */
+  async _loadEditorProof(tokenId, chainId, address) {
+    try {
+      const editorList = await fetchEditors(tokenId);
+      if (!editorList || editorList.length === 0) return null;
+      const version = await getEditorSetVersion(tokenId);
+      const result = getProof(editorList, address, tokenId, version);
+      if (!result) return null;
+      return { proof: result.proof, role: result.role };
+    } catch (err) {
+      console.warn(
+        "[COMMENT_THREAD] could not build editor proof:",
+        err.message
+      );
+      return null;
+    }
+  }
+
   // ─── Archive loading ────────────────────────────────────────────────────────
 
   async _loadArchiveForCurrentManifest(manifest) {
+    const assetId =
+      manifest?.asset_id || this._currentAssetId || assetState.get().activeAssetId;
     let archiveCid = manifest?.comments_archive_cid;
 
     // If no manifest was passed in the event, try to fetch the currently loaded
     // manifest from IPFS so we can read its comments_archive_cid.
-    if (!archiveCid && this._currentTokenId) {
+    if (!archiveCid && assetId) {
       const activeCid = assetState.get().activeAssetManifestCid;
       const cachedManifest = assetState.get().currentManifest;
-      if (cachedManifest?.comments_archive_cid) {
+      if (
+        cachedManifest?.asset_id === assetId &&
+        cachedManifest?.comments_archive_cid
+      ) {
         archiveCid = cachedManifest.comments_archive_cid;
       } else if (activeCid) {
         try {
           const fetched = await getFromRemoteIPFS(activeCid);
-          archiveCid = fetched?.comments_archive_cid;
+          if (fetched?.asset_id === assetId) {
+            archiveCid = fetched?.comments_archive_cid;
+          }
         } catch (err) {
           console.warn(
             "[COMMENT_THREAD] failed to fetch manifest for archive CID:",
@@ -237,18 +295,18 @@ export class CommentThread {
     }
 
     if (archiveCid) {
-      await this._loadArchive(archiveCid);
+      await this._loadArchive(archiveCid, assetId);
     }
   }
 
-  async _loadArchive(cid) {
+  async _loadArchive(cid, assetId) {
     if (!cid || cid === this._currentArchiveCid) return;
 
-    const tokenIdWhenStarted = this._currentTokenId;
+    const assetIdWhenStarted = assetId || this._currentAssetId;
     try {
       const archive = await getFromRemoteIPFS(cid);
       // Drop stale results if the user switched assets while the archive was loading.
-      if (this._currentTokenId !== tokenIdWhenStarted) return;
+      if (this._currentAssetId !== assetIdWhenStarted) return;
       this._currentArchiveCid = cid;
       const events = Array.isArray(archive?.events) ? archive.events : [];
       // Render oldest first so the thread reads top-to-bottom.

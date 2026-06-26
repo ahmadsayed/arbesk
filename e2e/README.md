@@ -147,6 +147,40 @@ Validates the "dollhouse architecture" — linking a token as a child world and 
 
 > **Note:** the outliner only renders a linked child node **after a save** (it refreshes on `ASSET_DRAFT_SAVED`, not on `SCENE_TOKEN_CHILD_ADDED`), so the spec saves before locating the child node.
 
+### 7. Collection/asset model (`e2e/specs/07-collection-assets.spec.js`)
+
+Validates that every ERC-721 token is a collection manifest containing one or more asset manifests:
+
+1. Publishes a first asset and asserts the on-chain `tokenURI` resolves to a collection manifest with at least one entry.
+2. Publishes a second asset and asserts it lands in the **same** default collection token without disturbing the first asset.
+3. Opens the published token in the gallery, clicks an asset card, and asserts the Studio viewport loads the asset name.
+4. Uses **New Asset** to clear the scene while preserving the selected collection context, then publishes again into the same collection.
+5. Reloads `?asset=TOKENID` and asserts the viewport restores the first asset.
+6. Asserts the collection selector populates on wallet connect with the wallet-derived default collection ID.
+
+**Why it matters:** This is the only spec that exercises the collection manifest shape end-to-end, the `activeAssetId` → collection `assets` map, and the gallery asset-card deep-link into the Studio. Changes to `asset-save.js`, `collection-publish.js`, the collection selector, or the gallery card rendering can break it.
+
+### 7b. Material editor: multi-primitive mesh color override (`e2e/specs/07-material-editor-multi-primitive.spec.js`)
+
+Regression test for issue #25: `applyMeshOverrideColors()` must update **all** primitives of a mesh, not just the first matching one.
+
+- Dynamically imports `material-editor.js` in the browser and runs it against a minimal two-primitive, two-material glTF fixture.
+- Asserts both materials receive the override color.
+- Also validates the `defaultColor` baseline branch.
+
+**Why it matters:** A pure-JS regression test that protects the color-editing pipeline without requiring wallet setup or IPFS writes. Changes to `material-editor.js`, especially `findMaterialByMeshName()` or `applyMeshOverrideColors()`, can break it.
+
+### 8. Fork vs live reference (`e2e/specs/08-fork-live-ref.spec.js`)
+
+Validates the two ways to reuse another collection's asset inside a parent scene:
+
+1. Publishes a child world.
+2. Starts a fresh parent draft and uses the gallery card's **Add to Scene**.
+3. **Fork (copy)** — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
+4. **Live reference** — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
+
+**Why it matters:** Fork/live-ref is the core fractal-reuse mechanism. Changes to `nesting.js`, the gallery card actions, the fork/live-ref dialog, or the `child_ref` schema can break it.
+
 ### 9. Library basics (`e2e/specs/09-library-basics.spec.js`)
 
 Validates the Nautilus-style collection browser on `/library.html`:
@@ -192,6 +226,17 @@ Validates the new Library toolbar flows for collection creation and desktop file
 6. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
 
 **Why it matters:** These flows exercise `library-toolbar.js`, `library-ops.js`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads.
+
+### 13. Editor collaboration (`e2e/specs/13-editor-collaboration.spec.js`)
+
+Validates the Merkle-editor authorization flow across three wallets:
+
+1. **Owner** publishes an asset.
+2. **Owner** adds a second wallet as an editor via the collaborators panel.
+3. **Editor** opens the shared asset, edits a node colour, and republishes — asserts the on-chain collection manifest version increases.
+4. **Outsider** (third wallet) opens the same asset, attempts to republish, and is rejected with `Not an authorized editor`; asserts the on-chain version does **not** advance.
+
+**Why it matters:** This is the only multi-wallet E2E coverage for the Merkle editor-list feature. Changes to `editor-publish.js`, `team.js`, `merkle-editors.js`, the collaborator UI, or the republish authorization path can break it.
 
 ---
 

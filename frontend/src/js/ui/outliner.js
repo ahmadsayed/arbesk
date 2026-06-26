@@ -11,6 +11,7 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
+import { getManifestNodes } from "../engine/transforms.js";
 
 let outlinerTree = null;
 let outlinerFooter = null;
@@ -77,9 +78,7 @@ async function getCurrentManifest() {
 }
 
 function getNodes() {
-  const manifest = assetState.get().currentManifest;
-  if (!manifest?.scene?.nodes) return [];
-  return manifest.scene.nodes;
+  return getManifestNodes(assetState.get().currentManifest);
 }
 
 /**

@@ -7,7 +7,7 @@
  */
 
 import Web3 from "web3";
-import { CHAIN_IDS } from "./constants/chains.js";
+import { CHAIN_IDS } from "../constants/chains.js";
 
 // ─── Per-Network Configuration ───────────────────────────────────────────────
 

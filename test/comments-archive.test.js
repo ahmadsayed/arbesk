@@ -91,43 +91,43 @@ describe("Comments Archive Service", () => {
   });
 
   test("fetches events from the relay and builds an archive object", async () => {
-    const assetId = "31337:0xabc:1";
+    const assetTag = "31337:0xabc:1:asset_1";
     relayMessages = [
-      ["EVENT", "sub-1", { id: "evt-1", kind: 1, content: "hello", created_at: 1000, tags: [["asset", assetId], ["sender", "0xaaa"]] }],
-      ["EVENT", "sub-1", { id: "evt-2", kind: 1, content: "world", created_at: 1001, tags: [["asset", assetId], ["sender", "0xbbb"]] }],
+      ["EVENT", "sub-1", { id: "evt-1", kind: 1, content: "hello", created_at: 1000, tags: [["asset", assetTag], ["sender", "0xaaa"]] }],
+      ["EVENT", "sub-1", { id: "evt-2", kind: 1, content: "world", created_at: 1001, tags: [["asset", assetTag], ["sender", "0xbbb"]] }],
       ["EOSE", "sub-1"],
     ];
 
-    const archive = await fetchCommentsArchive(assetId);
+    const archive = await fetchCommentsArchive(assetTag);
 
-    expect(archive.assetId).toBe(assetId);
+    expect(archive.assetTag).toBe(assetTag);
     expect(archive.eventCount).toBe(2);
     expect(archive.events).toHaveLength(2);
     expect(archive.events[0].id).toBe("evt-1");
   });
 
   test("archives comments to IPFS and returns the CID", async () => {
-    const assetId = "31337:0xabc:2";
+    const assetTag = "31337:0xabc:2:asset_2";
     relayMessages = [
-      ["EVENT", "sub-1", { id: "evt-3", kind: 1, content: " archived ", created_at: 2000, tags: [["asset", assetId], ["sender", "0xccc"]] }],
+      ["EVENT", "sub-1", { id: "evt-3", kind: 1, content: " archived ", created_at: 2000, tags: [["asset", assetTag], ["sender", "0xccc"]] }],
       ["EOSE", "sub-1"],
     ];
 
-    const result = await archiveCommentsForAsset(assetId, mockStorage);
+    const result = await archiveCommentsForAsset(assetTag, mockStorage);
 
     expect(result.cid).toMatch(/^Qm/);
     expect(result.eventCount).toBe(1);
     expect(mockStorage.add).toHaveBeenCalledTimes(1);
 
     const archivePayload = JSON.parse(mockStorage.add.mock.calls[0][0]);
-    expect(archivePayload.assetId).toBe(assetId);
+    expect(archivePayload.assetTag).toBe(assetTag);
     expect(archivePayload.events[0].id).toBe("evt-3");
   });
 
   test("returns empty archive when relay sends EOSE with no events", async () => {
     relayMessages = [["EOSE", "sub-1"]];
 
-    const result = await archiveCommentsForAsset("31337:0xabc:3", mockStorage);
+    const result = await archiveCommentsForAsset("31337:0xabc:3:asset_3", mockStorage);
 
     expect(result.eventCount).toBe(0);
     const archivePayload = JSON.parse(mockStorage.add.mock.calls[0][0]);

@@ -1,52 +1,27 @@
 /**
  * Arbesk Asset Save/Publish Controller.
  * Phase B: Updated for GNOME headerbar — buttons managed individually, no wrapper div.
+ *
+ * This module is the UI orchestrator. Manifest construction lives in
+ * `services/asset-save/manifest-builder.js`; collection and editor publishing
+ * live in `services/asset-save/collection-publish.js` and
+ * `services/asset-save/editor-publish.js`.
  */
 
-import {
-  getFromRemoteIPFS,
-  getArrayBufferFromRemoteIPFS,
-} from "../ipfs/remote-ipfs.js";
-import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
-import { snapshotCommentsArchive } from "../services/api.js";
-import {
-  contract as walletContract,
-  publishAsset,
-  updateAssetURI,
-  updateEditors,
-  CollaboratorRole,
-} from "../blockchain/wallet.js";
-import { computeRoot, getProof } from "../gltf/merkle-editors.js";
 import { getContractAddress } from "../blockchain/network-config.js";
 import { showDialog } from "./dialog.js";
-import {
-  clearScene,
-  captureAssetThumbnail,
-  dismissCreatePulse,
-  getPendingChildRefs,
-  clearPendingChildRefs,
-  getPendingPostProcessorEdits,
-  clearPendingPostProcessorEdits,
-  getPendingTransformEdits,
-  clearPendingTransformEdits,
-} from "../engine/scene-graph.js";
+import { getPendingChildRefs } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
-import { isComposite } from "../gltf/decomposer.js";
-import {
-  decomposeAndStoreAsync,
-  decomposeGLBAsync,
-  editSourceColorsAsync,
-} from "../gltf/async-gltf.js";
-import { editCompositeColors } from "../gltf/material-editor.js";
-import {
-  getPendingSourceColorEdits,
-  clearPendingSourceColorEdits,
-} from "../engine/parametric-preview.js";
-
+import { getAssetName } from "../services/token.js";
 import { showToast } from "./toasts.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import { deriveDefaultAssetId } from "../utils/collections.js";
+import { log, error } from "../utils/log.js";
+import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.js";
+import { verifyCanEdit } from "../services/asset-save/editor-publish.js";
+import { publishCollectionForAsset } from "../services/asset-save/collection-publish.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -114,17 +89,7 @@ function updateButtonState() {
 }
 
 async function fetchAssetName(tokenId) {
-  try {
-    const { contract } = await import("../blockchain/wallet.js");
-    const c = contract || walletState.get().contract;
-    if (!c) return null;
-    const cid = await c.methods.tokenURI(tokenId).call();
-    if (!cid) return null;
-    const manifest = await getFromRemoteIPFS(cid);
-    return manifest.name || null;
-  } catch {
-    return null;
-  }
+  return getAssetName(tokenId);
 }
 
 const DEFAULT_NAMES = new Set([
@@ -177,548 +142,6 @@ async function ensureExplicitName() {
   return "Untitled Asset";
 }
 
-function advanceManifestVersion(manifest, latestCid) {
-  manifest.version = (manifest.version || 0) + 1;
-  manifest.prev_asset_manifest_cid =
-    latestCid || assetState.get().activeAssetManifestCid || null;
-}
-
-/**
- * Derive a deterministic collection token ID from the user's wallet address.
- * Uses keccak256(soliditySha3(address)) so the contract can recompute
- * and verify ownership. One wallet = one default collection.
- */
-function deriveDefaultCollectionId(walletAddr) {
-  return window.Web3.utils.soliditySha3({
-    type: "address",
-    value: walletAddr,
-  });
-}
-
-/**
- * Derive a deterministic named collection token ID from wallet + name.
- * Same keccak256 ABI-encoding approach; unique per wallet+name pair.
- */
-function deriveNamedCollectionId(walletAddr, name) {
-  return window.Web3.utils.soliditySha3(
-    { type: "address", value: walletAddr },
-    { type: "string", value: name }
-  );
-}
-
-/**
- * Merge an asset's CID into a collection manifest's `assets` map.
- * Pure function — does not touch IPFS or chain state.
- */
-function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
-  const base = collectionManifest
-    ? { ...collectionManifest }
-    : {
-        type: "collection",
-        asset_id: `collection_${Date.now()}`,
-        version: 0,
-        assets: {},
-      };
-  const assets = { ...(base.assets || {}) };
-  assets[assetID] = assetCid;
-  return {
-    ...base,
-    type: "collection",
-    assets,
-  };
-}
-
-/**
- * Derive the assetID an asset occupies within its collection. Reuses the
- * existing assetID if the asset has one; otherwise uses the provided fallback
- * (typically the manifest's own asset_id, or a fresh `asset_${Date.now()}`).
- */
-function deriveDefaultAssetId(existingAssetId, fallbackAssetId) {
-  return existingAssetId || fallbackAssetId || `asset_${Date.now()}`;
-}
-
-/**
- * Compare two manifests for semantic equality, ignoring auto-generated fields.
- */
-function manifestsSemanticallyEqual(a, b) {
-  if (!a || !b) return false;
-  const strip = (m) => {
-    const copy = JSON.parse(JSON.stringify(m));
-    delete copy.timestamp;
-    delete copy.version;
-    delete copy.prev_asset_manifest_cid;
-    return copy;
-  };
-  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
-}
-
-/**
- * Decompose all monolithic glTF source nodes in a manifest.
- * Fetches each glTF, decomposes buffers/images to separate IPFS CIDs,
- * and updates node.source.cid to point to the composite JSON.
- * Already-composite nodes (ipfs:// URIs) are skipped.
- *
- * @param {object} manifest - The manifest being prepared for write
- * @returns {Promise<number>} Count of nodes decomposed
- */
-async function decomposeManifestNodes(manifest) {
-  const nodes = manifest.scene?.nodes || [];
-
-  // Decompose every eligible node concurrently. Each node is independent:
-  // fetch source + decompose + upload, then apply the new CID back to the
-  // manifest node so the order of side-effects is deterministic.
-  const jobs = nodes.map(async (node) => {
-    // Only process nodes with a source (not token children)
-    if (!node.source?.cid) return null;
-    if (node.child_ref) return null;
-
-    const cid = node.source.cid;
-    const format = (node.source.format || "gltf").toLowerCase();
-    console.log(
-      `Decompose save: checking node ${node.node_id} | sourceCid=${cid} format=${format}`
-    );
-
-    try {
-      if (format === "glb") {
-        const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-        const { compositeCid } = await decomposeGLBAsync(glbBuffer, true, {
-          assetName: manifest.name,
-          assetId: manifest.asset_id,
-        });
-        console.log(
-          `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
-        );
-        return {
-          nodeId: node.node_id,
-          cid: compositeCid,
-          path: "composite.gltf",
-          format: "gltf",
-        };
-      }
-
-      const gltf = await getFromRemoteIPFS(cid);
-
-      // Validate it looks like a glTF
-      if (!gltf.asset || !gltf.asset.version) {
-        console.log(`Decompose save: CID ${cid} is not a glTF, skipping`);
-        return null;
-      }
-
-      // Skip if already composite
-      if (isComposite(gltf)) {
-        console.log(
-          `Decompose save: node ${node.node_id} already composite, skipping`
-        );
-        return null;
-      }
-
-      // Decompose and store
-      const { compositeCid } = await decomposeAndStoreAsync(gltf, {
-        assetName: manifest.name,
-        assetId: manifest.asset_id,
-      });
-
-      console.log(
-        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
-      );
-      return { nodeId: node.node_id, cid: compositeCid, path: "composite.gltf" };
-    } catch (err) {
-      if (isRateLimitError(err)) throw err;
-      console.warn(
-        `Decompose save: failed to decompose node ${node.node_id}:`,
-        err.message
-      );
-      // Continue with other nodes — don't block the save
-      return null;
-    }
-  });
-
-  const results = await Promise.allSettled(jobs);
-  let decomposed = 0;
-  for (const r of results) {
-    if (r.status !== "fulfilled" || !r.value) continue;
-    const node = nodes.find((n) => n.node_id === r.value.nodeId);
-    if (!node) continue;
-    node.source.cid = r.value.cid;
-    node.source.path = r.value.path;
-    if (r.value.format) node.source.format = r.value.format;
-    decomposed++;
-  }
-
-  return decomposed;
-}
-
-/**
- * Resolve the canonical "latest" manifest CID for versioning.
- * Prefer the in-memory tip of the version chain (latest draft) so every
- * Save appends linearly. Only fall back to the on-chain tokenURI for
- * tokenized assets when no in-memory latest exists yet (e.g. on first load).
- * For drafts without a token, fall back to the currently loaded manifest.
- */
-async function resolveLatestManifestCid() {
-  if (assetState.get().latestAssetManifestCid) {
-    return assetState.get().latestAssetManifestCid;
-  }
-
-  const tokenId = assetState.get().activeAssetTokenId;
-  if (tokenId) {
-    try {
-      const c = walletContract || walletState.get().contract;
-      if (c) {
-        const onChainCid = await c.methods.tokenURI(String(tokenId)).call();
-        if (onChainCid) {
-          console.log(
-            `Save: using on-chain tokenURI for token #${tokenId} → ${onChainCid}`
-          );
-          return onChainCid;
-        }
-      }
-    } catch (err) {
-      console.warn(
-        `Save: failed to read on-chain tokenURI for #${tokenId}:`,
-        err.message
-      );
-    }
-  }
-  return assetState.get().activeAssetManifestCid || null;
-}
-
-async function prepareManifestForWrite(assetName) {
-  let manifest;
-  const pendingRefs = getPendingChildRefs();
-  const pendingPP = getPendingPostProcessorEdits();
-  const pendingTransforms = getPendingTransformEdits();
-  const pendingColors = getPendingSourceColorEdits();
-
-  if (assetState.get().activeAssetManifestCid) {
-    manifest = await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
-    manifest.type = "asset";
-  } else if (
-    pendingRefs.length > 0 ||
-    pendingPP.size > 0 ||
-    pendingTransforms.size > 0 ||
-    pendingColors.size > 0
-  ) {
-    manifest = {
-      type: "asset",
-      name: assetName,
-      asset_id: `asset_${Date.now()}`,
-      version: 1,
-      timestamp: Date.now(),
-      scene: { nodes: [] },
-    };
-    console.log(
-      `Save: creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingTransforms.size} pending transform edits / ${pendingColors.size} pending source color edits`
-    );
-  } else {
-    return null;
-  }
-
-  manifest.name = assetName;
-  manifest.asset_id ||= `asset_${Date.now()}`;
-  manifest.scene ||= { nodes: [] };
-  manifest.scene.nodes ||= [];
-
-  for (const pendingNode of pendingRefs) {
-    if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
-      manifest.scene.nodes.push(pendingNode);
-    }
-  }
-
-  // Apply direct source color edits.
-  // These mutate the source glTF/GLB asset and update node.source.cid.
-  // Each node is independent, so bake them concurrently.
-  if (pendingColors.size > 0) {
-    const colorJobs = [];
-    for (const [nodeId, nodeEdits] of pendingColors) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
-      if (!node || !node.source?.cid) continue;
-
-      const colorMap = {};
-      for (const [meshName, color] of nodeEdits) {
-        colorMap[meshName] = color;
-      }
-
-      colorJobs.push(
-        (async () => {
-          try {
-            const result = await editSourceColorsAsync(
-              node.source.cid,
-              colorMap,
-              {
-                assetName: manifest.name,
-                assetId: manifest.asset_id,
-              }
-            );
-            return { nodeId, result };
-          } catch (err) {
-            if (isRateLimitError(err)) throw err;
-            console.warn(
-              `Save: failed to bake colors into source for ${nodeId}:`,
-              err.message
-            );
-            return null;
-          }
-        })()
-      );
-    }
-
-    const colorResults = await Promise.allSettled(colorJobs);
-    for (const r of colorResults) {
-      if (r.status !== "fulfilled" || !r.value) continue;
-      const { nodeId, result } = r.value;
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
-      if (!node) continue;
-      node.source.cid = result.sourceCid;
-      // The edited source is always glTF JSON now; keep the node's
-      // format/path truthful so the loader doesn't treat it as a binary GLB.
-      if (result.format) node.source.format = result.format;
-      if (result.path) node.source.path = result.path;
-      console.log(
-        `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
-      );
-    }
-  }
-
-  // Apply post-processor edits.
-  // Decomposed nodes: bake colors directly into the composite glTF.
-  // Monolithic nodes: store as node.post_processor (runtime overlay).
-  if (pendingPP.size > 0) {
-    const ppJobs = [];
-    for (const [nodeId, pp] of pendingPP) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
-      if (!node) continue;
-
-      const isDecomposed =
-        node.source?.path === "composite.gltf" && node.source?.cid;
-
-      if (isDecomposed && (pp.color || pp.meshOverrides)) {
-        // Decomposed nodes need an async composite bake. Capture the node id
-        // and the edit payload so we can apply the result later.
-        ppJobs.push(
-          (async () => {
-            let result = null;
-            try {
-              result = await editCompositeColors(
-                node.source.cid,
-                pp.meshOverrides || null,
-                pp.color || null,
-                {
-                  assetName: manifest.name,
-                  assetId: manifest.asset_id,
-                }
-              );
-              console.log(
-                `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
-              );
-            } catch (err) {
-              console.warn(
-                `Save: failed to bake colors into composite glTF for ${nodeId}:`,
-                err.message
-              );
-            }
-            return { nodeId, pp, result };
-          })()
-        );
-      } else {
-        // Monolithic node — store as post_processor overlay (also covers
-        // decomposed nodes with only scale edits, which don't need a fetch).
-        node.post_processor ||= {};
-        if (pp.color !== undefined) node.post_processor.color = pp.color;
-        if (pp.scale !== undefined) node.post_processor.scale = { ...pp.scale };
-        if (pp.meshOverrides && Object.keys(pp.meshOverrides).length > 0)
-          node.post_processor.meshOverrides = { ...pp.meshOverrides };
-        else if (node.post_processor.meshOverrides)
-          delete node.post_processor.meshOverrides;
-      }
-    }
-
-    const ppResults = await Promise.allSettled(ppJobs);
-    for (const r of ppResults) {
-      if (r.status !== "fulfilled" || !r.value) continue;
-      const { nodeId, pp, result } = r.value;
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
-      if (!node) continue;
-
-      if (result) {
-        node.source.cid = result.compositeCid;
-      }
-
-      // Scale still goes to post_processor (geometry, not material)
-      if (
-        pp.scale &&
-        (pp.scale.x !== 1 || pp.scale.y !== 1 || pp.scale.z !== 1)
-      ) {
-        node.post_processor ||= {};
-        node.post_processor.scale = { ...pp.scale };
-      } else if (node.post_processor) {
-        delete node.post_processor.scale;
-      }
-      // Clean up empty post_processor
-      if (
-        node.post_processor &&
-        Object.keys(node.post_processor).length === 0
-      ) {
-        delete node.post_processor;
-      }
-    }
-
-    console.log(
-      `Save: applied ${pendingPP.size} pending post-processor edit(s)`
-    );
-  }
-
-  // Apply viewport gizmo transform edits.
-  // Updates node.transform_matrix so the saved manifest renders the node
-  // in its edited position/rotation/scale on next load.
-  if (pendingTransforms.size > 0) {
-    for (const [nodeId, matrixArray] of pendingTransforms) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
-      if (!node) continue;
-      node.transform_matrix = matrixArray;
-      console.log(`Save: applied transform edit | node=${nodeId}`);
-    }
-  }
-
-  // Decompose monolithic glTF nodes into composite (ipfs://) format.
-  // Only affects glTF nodes that haven't been decomposed yet.
-  // Runs on both Save Draft and Publish.
-  const decomposedCount = await decomposeManifestNodes(manifest);
-  if (decomposedCount > 0) {
-    console.log(
-      `Save: decomposed ${decomposedCount} glTF node(s) to composite format`
-    );
-  }
-
-  // Determine the manifest that supplies the version number and chain link.
-  // When the user has navigated to an older version (v2 of v1..v6), edits
-  // should still append to the tip of the chain as the next linear version
-  // (v7), not branch off as v3. Use latestAssetManifestCid as the previous
-  // link; fall back to the currently loaded manifest if no latest is tracked.
-  const activeCid = assetState.get().activeAssetManifestCid;
-  const latestCid = await resolveLatestManifestCid();
-  console.log(
-    `Save: versioning base | active=${activeCid} latest=${
-      assetState.get().latestAssetManifestCid
-    } onChain=${
-      assetState.get().activeAssetTokenId || "none"
-    } chosenPrev=${latestCid}`
-  );
-
-  // Fetch the active (fallback) and latest (version baseline) manifests
-  // concurrently. Deduplicate when they point to the same CID.
-  const cidToFetch = new Map();
-  if (activeCid) cidToFetch.set(activeCid, "base");
-  if (latestCid && latestCid !== activeCid) cidToFetch.set(latestCid, "prev");
-
-  const fetched = new Map();
-  await Promise.all(
-    [...cidToFetch.entries()].map(async ([cid, key]) => {
-      try {
-        fetched.set(cid, await getFromRemoteIPFS(cid));
-      } catch {
-        // Leave missing manifests as undefined; callers fall back gracefully.
-      }
-    })
-  );
-
-  const baseManifest = fetched.get(activeCid) || null;
-  let prevManifest = (latestCid ? fetched.get(latestCid) : null) || baseManifest;
-
-  // prevManifest is the tip of the chain that supplies version + prev link
-  // and is also the baseline for no-op detection. When the user has navigated
-  // to an older version (v2 of v1..v6), edits/saves still append to the tip
-  // as the next linear version (v7), not branch off as v3.
-  if (prevManifest) {
-    manifest.version = (prevManifest.version || 0) + 1;
-    manifest.prev_asset_manifest_cid = latestCid;
-  } else if (latestCid) {
-    advanceManifestVersion(manifest, latestCid);
-  }
-
-  return {
-    manifest,
-    prevCid: latestCid,
-    prevManifest: prevManifest || baseManifest,
-  };
-}
-
-async function saveAssetDraftCore(
-  assetName,
-  { captureThumbnail = false, publishContext = null } = {}
-) {
-  const prepared = await prepareManifestForWrite(assetName);
-  if (!prepared) {
-    return { ok: false, reason: "empty" };
-  }
-
-  if (captureThumbnail) {
-    try {
-      const thumbnail = await captureAssetThumbnail();
-      if (thumbnail?.cid) {
-        prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
-          ? { ...prepared.manifest.thumbnail, cid: thumbnail.cid }
-          : thumbnail;
-      }
-    } catch (thumbnailError) {
-      console.warn("[SAVE] thumbnail capture skipped:", thumbnailError.message);
-    }
-  }
-
-  if (
-    prepared.prevManifest &&
-    manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
-  ) {
-    return {
-      ok: false,
-      reason: "no-changes",
-      cid: prepared.prevCid,
-      manifest: prepared.prevManifest,
-    };
-  }
-
-  // Write manifest directly to IPFS — no backend middleman.
-  // The browser already writes glTF buffers and textures this way.
-  let cid = await writeJSONToIPFS(prepared.manifest, null, {
-    type: prepared.manifest.type,
-    assetId: prepared.manifest.asset_id,
-  });
-
-  // On republish, snapshot the Nostr comment thread to IPFS so the
-  // archive CID is embedded in the manifest. Failures are logged
-  // but never block the save — the manifest is already uploaded.
-  if (publishContext?.tokenId) {
-    try {
-      const { cid: archiveCid } = await snapshotCommentsArchive(publishContext);
-      prepared.manifest.comments_archive_cid = archiveCid;
-      // Re-upload with the archive CID — content differs, so CID changes.
-      cid = await writeJSONToIPFS(prepared.manifest, null, {
-        type: prepared.manifest.type,
-        assetId: prepared.manifest.asset_id,
-      });
-    } catch (archiveErr) {
-      console.warn(`[SAVE] comments archive skipped: ${archiveErr.message}`);
-    }
-  }
-
-  assetState.set({
-    latestAssetManifestCid: cid,
-    activeAssetManifestCid: cid,
-  });
-
-  clearPendingChildRefs();
-  clearPendingPostProcessorEdits();
-  clearPendingTransformEdits();
-  clearPendingSourceColorEdits();
-
-  return {
-    ok: true,
-    cid,
-    manifest: prepared.manifest,
-    prevCid: prepared.prevCid,
-  };
-}
-
 async function onSaveAssetDraft() {
   if (isSaving) return;
   if (!requireWallet()) return;
@@ -769,7 +192,7 @@ async function onSaveAssetDraft() {
     );
     announceStatus("Draft saved.");
   } catch (err) {
-    console.error("Save asset draft failed:", err);
+    error("Save asset draft failed:", err);
     const rateLimited = isRateLimitError(err);
     announceStatus(
       rateLimited
@@ -827,17 +250,7 @@ async function onPublishAsset() {
     // Fail fast on unauthorized republish attempts so the user gets immediate
     // feedback instead of paying for gas on a transaction that will revert.
     if (existingTokenId) {
-      const editorList = await _loadEditorList(existingTokenId);
-      const currentVersion = await _getEditorSetVersion(existingTokenId);
-      const proofResult = getProof(
-        editorList,
-        walletAddr,
-        existingTokenId,
-        currentVersion,
-      );
-      if (!proofResult) {
-        throw new Error("Not an authorized editor");
-      }
+      await verifyCanEdit(existingTokenId, walletAddr);
     }
 
     const publishContext = existingTokenId
@@ -881,144 +294,36 @@ async function onPublishAsset() {
       assetState.get().activeAssetId,
       publishedManifest?.asset_id || `asset_${Date.now()}`
     );
-    console.log(
-      `[PUBLISH] assetID derived | activeAssetId=${assetState.get().activeAssetId} manifestAssetId=${publishedManifest?.asset_id} chosen=${assetID}`
+    log(
+      `[PUBLISH] assetID derived | activeAssetId=${
+        assetState.get().activeAssetId
+      } manifestAssetId=${publishedManifest?.asset_id} chosen=${assetID}`
     );
     assetState.set({ activeAssetId: assetID });
 
     announceStatus("Confirm transaction in MetaMask…");
 
-    // Fetch the current collection manifest (if one exists yet) and merge
-    // this asset's new CID into its assets map. If no collection token
-    // exists yet, this besk lazily mints the default collection.
-    const c = walletContract || walletState.get().contract;
-    const preferredCollectionId =
-      assetState.get().selectedCollectionId ||
-      assetState.get().activeCollectionTokenId;
-    console.log("[PUBLISH] preferredCollectionId:", preferredCollectionId, "activeAssetTokenId:", assetState.get().activeAssetTokenId);
-    let existingCollectionTokenId = null;
-    let collectionManifest = null;
-    if (preferredCollectionId) {
-      try {
-        const collectionCid = await c.methods
-          .tokenURI(String(preferredCollectionId))
-          .call();
-        if (collectionCid && collectionCid !== "") {
-          collectionManifest = await getFromRemoteIPFS(collectionCid);
-          existingCollectionTokenId = preferredCollectionId;
-        }
-      } catch {
-        // tokenURI reverted or IPFS fetch failed; treat as new collection
-      }
-    }
-
-    // In-memory state is unreliable across reloads / fresh sessions / E2E
-    // isolation: it can be empty even when a default collection was already
-    // minted on-chain. Without this fallback the code would try to re-mint an
-    // existing token and hit `TokenAlreadyMinted`. Probe the chain for the
-    // derived default collection ID and, if it exists, route to republish.
-    if (!existingCollectionTokenId) {
-      const defaultTokenId = deriveDefaultCollectionId(walletAddr);
-      try {
-        // ownerOf reverts (ERC721NonexistentToken) when the token doesn't
-        // exist; a successful call proves it does.
-        await c.methods.ownerOf(String(defaultTokenId)).call();
-        existingCollectionTokenId = defaultTokenId;
-        const collectionCid = await c.methods
-          .tokenURI(String(defaultTokenId))
-          .call();
-        if (collectionCid && collectionCid !== "") {
-          collectionManifest = await getFromRemoteIPFS(collectionCid);
-        }
-      } catch {
-        // Token doesn't exist on-chain — genuine first publish, fall through
-        // to the mint path below.
-      }
-    }
-    console.log("[PUBLISH] existingCollectionTokenId after fallback:", existingCollectionTokenId);
-    const mergedCollection = mergeAssetIntoCollection(
-      collectionManifest,
+    const { tokenId, isNew } = await publishCollectionForAsset(
+      assetCid,
       assetID,
-      assetCid
+      walletAddr
     );
-    mergedCollection.version = (mergedCollection.version || 0) + 1;
-    mergedCollection.prev_asset_manifest_cid = existingCollectionTokenId
-      ? await (walletContract || walletState.get().contract).methods
-          .tokenURI(String(existingCollectionTokenId))
-          .call()
-      : null;
 
-    // Write collection manifest directly to IPFS — no backend middleman.
-    const collectionCid = await writeJSONToIPFS(mergedCollection, null, {
-      type: "collection",
-      assetId: mergedCollection.asset_id,
+    assetState.set({
+      activeCollectionTokenId: String(tokenId),
+      activeAssetTokenId: String(tokenId),
     });
+    updateUrlAsset(tokenId);
+    announceStatus(
+      isNew
+        ? "Default collection published and minted."
+        : "Collection republished successfully."
+    );
 
-    if (existingCollectionTokenId) {
-      const tokenId = existingCollectionTokenId;
-      let editorList = await _loadEditorList(tokenId);
-      // When localStorage is empty (fresh browser context or E2E isolation),
-      // fall back to a default editor list with the current wallet as Editor.
-      if (!editorList) {
-        editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
-      }
-      const currentVersion = await _getEditorSetVersion(tokenId);
-      const proofResult = getProof(
-        editorList,
-        walletAddr,
-        tokenId,
-        currentVersion
-      );
-      if (!proofResult) throw new Error("Not an authorized editor");
-      const txHash = await updateAssetURI(
-        tokenId,
-        collectionCid,
-        proofResult.proof
-      );
-      if (!txHash) throw new Error("Republish transaction failed");
-      // Ensure the UI knows which token was just republished (critical when
-      // the chain already has a default collection but the in-memory state
-      // was cleared, e.g. page reload or fresh browser context).
-      assetState.set({
-        activeCollectionTokenId: String(tokenId),
-        activeAssetTokenId: String(tokenId),
-      });
-      updateUrlAsset(tokenId);
-      announceStatus("Collection republished successfully.");
-    } else {
-      const tokenId = deriveDefaultCollectionId(walletAddr);
-      const editorList = [
-        { address: walletAddr, role: CollaboratorRole.Editor },
-      ];
-      const editorRoot = computeRoot(editorList, tokenId, 1);
-      // Persist the initial editor list on IPFS so collaborators (and the
-      // owner in a fresh browser context) can rebuild Merkle proofs.
-      const editorListUri =
-        (await writeJSONToIPFS(editorList, null, {
-          compress: true,
-          type: "editors",
-          assetId: `token_${tokenId}_v1`,
-        })) || "";
-      _saveEditorListLocally(tokenId, editorList, editorListUri || null);
-      const txHash = await publishAsset(
-        collectionCid,
-        tokenId,
-        editorRoot,
-        editorListUri
-      );
-      if (!txHash) throw new Error("Publish transaction failed");
-      assetState.set({
-        activeCollectionTokenId: tokenId,
-        activeAssetTokenId: tokenId,
-      });
-      updateUrlAsset(tokenId);
-
+    if (isNew) {
       const { refreshTeamPanel } = await import("./collaborators.js");
       refreshTeamPanel();
-      announceStatus("Default collection published and minted.");
     }
-
-    // latestCid / activeCid / pending edits were already updated by saveAssetDraftCore.
 
     emit(EVENTS.ASSET_PUBLISHED, {
       tokenId: assetState.get().activeAssetTokenId,
@@ -1026,7 +331,7 @@ async function onPublishAsset() {
     });
     updateAssetStatus(assetName, "Published");
   } catch (err) {
-    console.error("Publish asset failed:", err);
+    error("Publish asset failed:", err);
     const rateLimited = isRateLimitError(err);
     announceStatus(
       rateLimited
@@ -1100,88 +405,3 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
   if (publishBtn) publishBtn.hidden = true;
 });
 on(EVENTS.ASSET_STATE_CHANGED, updateButtonState);
-
-// ── Merkle Editor Helpers ──
-
-const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
-
-function _editorListKey(tokenId) {
-  return EDITOR_LIST_PREFIX + tokenId;
-}
-
-function _saveEditorListLocally(tokenId, editorList, ipfsCid) {
-  try {
-    localStorage.setItem(
-      _editorListKey(tokenId),
-      JSON.stringify({
-        list: editorList,
-        cid: ipfsCid || null,
-        saved: Date.now(),
-      })
-    );
-  } catch (e) {
-    console.warn("Failed to save editor list locally:", e.message);
-  }
-  return ipfsCid || "";
-}
-
-async function _loadEditorList(tokenId) {
-  // Authoritative source: the on-chain editorListURI is bumped together with
-  // editorSetVersion, so the list at this CID always matches the current root.
-  // Always read it first to avoid building proofs from a stale localStorage copy.
-  try {
-    const c = walletContract || walletState.get().contract;
-    if (c) {
-      const cid = await c.methods.editorListURI(tokenId).call();
-      if (cid) {
-        const fresh = await getFromRemoteIPFS(cid);
-        if (Array.isArray(fresh)) {
-          _saveEditorListLocally(tokenId, fresh, cid);
-          return fresh;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(
-      `[SAVE] failed to load editor list from chain for ${tokenId}:`,
-      err.message,
-    );
-  }
-
-  // Fallback: localStorage cache (may be stale, but usable if chain/IPFS is
-  // temporarily unreachable).
-  try {
-    const stored = localStorage.getItem(_editorListKey(tokenId));
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.cid) {
-        try {
-          const fresh = await getFromRemoteIPFS(parsed.cid);
-          if (Array.isArray(fresh)) {
-            _saveEditorListLocally(tokenId, fresh, parsed.cid);
-            return fresh;
-          }
-        } catch {
-          // IPFS fetch failed, use cached
-        }
-      }
-      if (Array.isArray(parsed.list)) return parsed.list;
-    }
-  } catch {
-    // localStorage unavailable or corrupted
-  }
-
-  return null;
-}
-
-async function _getEditorSetVersion(tokenId) {
-  try {
-    const { contract } = await import("../blockchain/wallet.js");
-    const c = contract || walletState.get().contract;
-    if (!c) return 1;
-    const version = await c.methods.editorSetVersion(tokenId).call();
-    return Number(version);
-  } catch {
-    return 1;
-  }
-}

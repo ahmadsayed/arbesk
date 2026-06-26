@@ -5,12 +5,13 @@
  *
  * Authentication: the browser passes the existing SIWE session token in the
  * WebSocket query string. The proxy validates it via src/api/sessions.js,
- * resolves the wallet address, then checks on-chain asset ownership or
- * collaborator role (Viewer+).
+ * resolves the wallet address, then checks on-chain asset ownership or a
+ * Merkle proof that the wallet holds a collaborator role (Viewer+).
  *
  * Authorization model:
  *   - ownerOf(tokenId) === address  => allowed
- *   - otherwise => connection closed with 4401
+ *   - valid Merkle proof for the current editorRoot/version/role => allowed
+ *   - otherwise => connection closed with 4403
  *
  * The proxy signs all published Nostr events with a service private key and
  * injects the verified Ethereum sender address into the event tags. The relay
@@ -20,13 +21,15 @@
 import { WebSocketServer } from "ws";
 import { finalizeEvent, getPublicKey, utils } from "nostr-tools";
 import url from "url";
-import { validateSession } from "./sessions.js";
 import { KIND_CHAT, TAG_ASSET, createRelay, safeClose } from "./nostr-relay.js";
 import {
-  getWeb3,
-  getContractAddress,
+  authorizeAssetAccess,
+  checkAssetAccess,
+} from "./authorization.js";
+import {
   NOSTR_RELAY_URL,
   NOSTR_SERVICE_PRIVATE_KEY,
+  getContractAddress,
 } from "../config.js";
 
 const { hexToBytes } = utils;
@@ -41,18 +44,19 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const CLIENT_PING_INTERVAL_MS = 30000;
 const CLIENT_PONG_TIMEOUT_MS = 10000;
 
+/**
+ * Build the canonical asset-level Nostr tag.
+ * Each asset inside a collection has its own isolated thread.
+ */
+function buildAssetTag(chainId, contractAddress, tokenId, assetId) {
+  const cid = chainId ? Number(chainId) : 31415822;
+  const addr = (contractAddress || getContractAddress(cid) || "unknown").toLowerCase();
+  const id = assetId || "";
+  return `${cid}:${addr}:${tokenId}:${id}`;
+}
+
 // Global wallet-level sliding window: address -> [timestamps within window]
 const walletMessageTimestamps = new Map();
-
-const MINIMAL_COLLAB_ABI = [
-  {
-    inputs: [{ name: "tokenId", type: "uint256" }],
-    name: "ownerOf",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-];
 
 // ─── Service Key ────────────────────────────────────────────────────────────
 
@@ -105,7 +109,7 @@ export function createChatProxy(httpServer) {
 async function handleConnection(clientWs, req) {
   const remote = req.socket.remoteAddress || "unknown";
   const parsedUrl = url.parse(req.url, true);
-  const { token, tokenId, chainId } = parsedUrl.query;
+  const { token, tokenId, chainId, proof, role, assetId } = parsedUrl.query;
 
   if (!token || !tokenId) {
     console.log(
@@ -115,47 +119,62 @@ async function handleConnection(clientWs, req) {
     return;
   }
 
-  // 1. Validate SIWE session
-  const address = validateSession(token);
-  if (!address) {
+  if (!assetId) {
+    console.log(`[CHAT] rejected — missing assetId | client=${remote}`);
+    safeClose(clientWs, 4400, "Missing assetId");
+    return;
+  }
+
+  // Parse optional Merkle proof from query string.
+  let proofArray = null;
+  if (proof) {
+    try {
+      proofArray = JSON.parse(decodeURIComponent(proof));
+      if (!Array.isArray(proofArray)) proofArray = null;
+    } catch {
+      proofArray = null;
+    }
+  }
+  const requiredRole = role ? Number(role) : null;
+
+  // 1. Validate SIWE session and check asset access in one call
+  const authResult = await authorizeAssetAccess(token, tokenId, chainId, {
+    proof: proofArray,
+    requiredRole,
+  });
+  if (!authResult) {
     console.log(`[CHAT] rejected — invalid session | client=${remote}`);
     safeClose(clientWs, 4401, "Invalid session");
     return;
   }
 
-  // 2. Check asset access
-  let access;
-  try {
-    access = await checkAssetAccess(tokenId, chainId, address);
-  } catch (err) {
-    console.error(
-      `[CHAT] access check failed | client=${remote}:`,
-      err.message,
-    );
-    safeClose(clientWs, 4403, "Access check failed");
-    return;
-  }
-
-  if (!access.allowed) {
+  if (!authResult.allowed) {
     console.log(
-      `[CHAT] rejected — not viewer/owner | tokenId=${tokenId} addr=${address} client=${remote}`,
+      `[CHAT] rejected — not authorized | tokenId=${tokenId} addr=${authResult.address} client=${remote}`,
     );
     safeClose(clientWs, 4403, "Not authorized for this asset");
     return;
   }
 
+  const assetTag = buildAssetTag(
+    authResult.chainId,
+    getContractAddress(authResult.chainId),
+    tokenId,
+    assetId,
+  );
+
   console.log(
-    `[CHAT] connected | tokenId=${tokenId} asset=${access.assetId} addr=${address} client=${remote}`,
+    `[CHAT] connected | tokenId=${tokenId} assetTag=${assetTag} addr=${authResult.address} role=${authResult.role} owner=${authResult.isOwner} client=${remote}`,
   );
 
   // 3. Attach rate limiter and heartbeat
-  const session = createSessionState(address, clientWs);
+  const session = createSessionState(authResult.address, clientWs);
   setupClientHeartbeat(session);
 
   // 4. Bridge to relay
   let relay;
   try {
-    relay = await openRelayBridge(access.assetId, clientWs, session);
+    relay = await openRelayBridge(assetTag, clientWs, session);
   } catch (err) {
     console.error(
       `[CHAT] relay bridge failed | client=${remote}:`,
@@ -168,10 +187,11 @@ async function handleConnection(clientWs, req) {
   // 5. Welcome / ready message
   sendClient(clientWs, {
     type: "ready",
-    assetId: access.assetId,
+    assetId: authResult.assetId,
+    assetTag,
     tokenId,
-    chainId: access.chainId,
-    address,
+    chainId: authResult.chainId,
+    address: authResult.address,
   });
 
   // 6. Handle incoming chat messages from browser
@@ -207,17 +227,17 @@ async function handleConnection(clientWs, req) {
         return;
       }
 
-      const event = buildSignedEvent(content, access.assetId, address);
+      const event = buildSignedEvent(content, assetTag, authResult.address);
       relay
         .publish(event)
         .then(() => {
           console.log(
-            `[CHAT] published | asset=${access.assetId} sender=${address.slice(0, 10)}… len=${content.length}`,
+            `[CHAT] published | assetTag=${assetTag} sender=${authResult.address.slice(0, 10)}… len=${content.length}`,
           );
         })
         .catch((err) => {
           console.warn(
-            `[CHAT] publish rejected | asset=${access.assetId}:`,
+            `[CHAT] publish rejected | assetTag=${assetTag}:`,
             err.message,
           );
           sendClient(clientWs, {
@@ -236,7 +256,7 @@ async function handleConnection(clientWs, req) {
 
   clientWs.on("close", (code, reason) => {
     console.log(
-      `[CHAT] client disconnected | tokenId=${tokenId} code=${code} reason=${reason}`,
+      `[CHAT] client disconnected | tokenId=${tokenId} assetTag=${assetTag} code=${code} reason=${reason}`,
     );
     session.dispose();
     relay.close();
@@ -249,52 +269,9 @@ async function handleConnection(clientWs, req) {
   });
 }
 
-// ─── Asset Access Check ─────────────────────────────────────────────────────
-
-async function checkAssetAccess(tokenId, chainId, address) {
-  // Token IDs are uint256 and can exceed Number.MAX_SAFE_INTEGER, so keep them
-  // as strings/BigInt throughout this check.
-  let id;
-  try {
-    id = BigInt(tokenId);
-  } catch {
-    throw new Error("Invalid tokenId");
-  }
-  if (id < 0n) {
-    throw new Error("Invalid tokenId");
-  }
-
-  const cid = chainId ? Number(chainId) : null;
-  const contractAddr = getContractAddress(cid);
-  if (!contractAddr) {
-    throw new Error(`No contract address for chain ${chainId || "default"}`);
-  }
-
-  const w3 = getWeb3(cid);
-  const contract = new w3.eth.Contract(MINIMAL_COLLAB_ABI, contractAddr);
-
-  const owner = await contract.methods.ownerOf(id.toString()).call();
-
-  const normalizedAddress = address.toLowerCase();
-  const isOwner = owner.toLowerCase() === normalizedAddress;
-
-  return {
-    allowed: isOwner,
-    assetId: `${cid || defaultChainId()}:${contractAddr}:${id.toString()}`,
-    chainId: cid,
-    isOwner,
-    role: isOwner ? 2 : 0,
-  };
-}
-
-function defaultChainId() {
-  // Matches CHAIN_IDS.HARDHAT_LOCAL for local dev when chainId not supplied.
-  return 31415822;
-}
-
 // ─── Relay Bridge ───────────────────────────────────────────────────────────
 
-function openRelayBridge(assetId, clientWs, session) {
+function openRelayBridge(assetTag, clientWs, session) {
   return new Promise((resolve, reject) => {
     const relay = createRelay(NOSTR_RELAY_URL);
     let resolved = false;
@@ -309,7 +286,7 @@ function openRelayBridge(assetId, clientWs, session) {
       .connect()
       .then(() => {
         relay.subscribe(
-          [{ kinds: [KIND_CHAT], [`#${TAG_ASSET}`]: [assetId], limit: 100 }],
+          [{ kinds: [KIND_CHAT], [`#${TAG_ASSET}`]: [assetTag], limit: 100 }],
           {
             onevent(event) {
               // Defensive: only forward events that carry the expected asset tag.
@@ -317,14 +294,14 @@ function openRelayBridge(assetId, clientWs, session) {
                 Array.isArray(event.tags) &&
                 event.tags.some(
                   (t) =>
-                    Array.isArray(t) && t[0] === TAG_ASSET && t[1] === assetId,
+                    Array.isArray(t) && t[0] === TAG_ASSET && t[1] === assetTag,
                 )
               ) {
                 sendClient(clientWs, { type: "event", event });
               }
             },
             oneose() {
-              sendClient(clientWs, { type: "eose", assetId });
+              sendClient(clientWs, { type: "eose", assetTag });
             },
             onnotice(message) {
               sendClient(clientWs, { type: "relayNotice", message });
@@ -360,13 +337,13 @@ function openRelayBridge(assetId, clientWs, session) {
 
 // ─── Nostr Event Building ───────────────────────────────────────────────────
 
-function buildSignedEvent(content, assetId, senderAddress) {
+function buildSignedEvent(content, assetTag, senderAddress) {
   const eventTemplate = {
     kind: KIND_CHAT,
     created_at: Math.floor(Date.now() / 1000),
     content,
     tags: [
-      [TAG_ASSET, assetId],
+      [TAG_ASSET, assetTag],
       [TAG_SENDER, senderAddress.toLowerCase()],
     ],
   };

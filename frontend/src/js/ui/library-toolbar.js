@@ -118,6 +118,14 @@ async function handleCreateCollection() {
     }
 
     await refreshLibraryData();
+
+    // Open the new/existing collection so the user can immediately add assets
+    // to it (the create button is disabled while inside a collection).
+    libraryState.set({
+      currentCollectionTokenId: String(tokenId),
+      selectedIds: [],
+    });
+
     announce(isNew ? `Created collection ${name}` : `Opened existing collection ${name}`);
     showToast({
       type: "success",

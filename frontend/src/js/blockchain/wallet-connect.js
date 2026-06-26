@@ -17,7 +17,7 @@ let provider = null;
 let initPromise = null;
 let EthereumProvider = null;
 
-import { SUPPORTED_CHAIN_IDS } from "../constants/chains.js";
+import { SUPPORTED_CHAIN_IDS } from "../../../../constants/chains.js";
 import { getConfig } from "../services/api.js";
 
 // Default chains supported by WalletConnect (Hardhat local + MegaETH Testnet)
