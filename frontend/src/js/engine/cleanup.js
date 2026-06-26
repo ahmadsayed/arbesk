@@ -98,6 +98,11 @@ export function clearScene() {
     state.resizeObserverInstance = null;
   }
 
+  if (state.resizeEngineHandler) {
+    window.removeEventListener("resize", state.resizeEngineHandler);
+    state.resizeEngineHandler = null;
+  }
+
   if (state.pointerObservableCallback && state.scene) {
     state.scene.onPointerObservable.remove(
       state.pointerObservableCallback,

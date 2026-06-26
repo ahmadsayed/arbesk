@@ -100,6 +100,49 @@ on(EVENTS.THEME_CHANGED, _syncViewportBackground);
 // Engine initialization
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * When the canvas aspect ratio changes while the camera is in orthographic
+ * mode, the explicitly-set frustum becomes stale and the scene stretches.
+ * Re-balance the frustum so the smaller dimension is preserved and the larger
+ * one is expanded to match the new canvas aspect ratio.
+ */
+function _updateOrthoFrustumOnResize() {
+  const cam = state.camera;
+  if (
+    !cam ||
+    cam.mode !== BABYLON.Camera.ORTHOGRAPHIC_CAMERA ||
+    cam.orthoLeft == null ||
+    cam.orthoRight == null ||
+    cam.orthoBottom == null ||
+    cam.orthoTop == null
+  ) {
+    return;
+  }
+
+  const canvas = state.engine.getRenderingCanvas();
+  if (!canvas || canvas.height === 0) return;
+
+  const halfW = (cam.orthoRight - cam.orthoLeft) / 2;
+  const halfH = (cam.orthoTop - cam.orthoBottom) / 2;
+  if (halfW === 0 || halfH === 0) return;
+
+  const canvasAspect = canvas.width / canvas.height;
+  const frustumAspect = halfW / halfH;
+
+  let newHalfW = halfW;
+  let newHalfH = halfH;
+  if (canvasAspect > frustumAspect) {
+    newHalfW = halfH * canvasAspect;
+  } else {
+    newHalfH = halfW / canvasAspect;
+  }
+
+  cam.orthoLeft = -newHalfW;
+  cam.orthoRight = newHalfW;
+  cam.orthoBottom = -newHalfH;
+  cam.orthoTop = newHalfH;
+}
+
 function createAnchorNode(name, scene) {
   if (
     typeof BABYLON !== "undefined" &&
@@ -273,23 +316,29 @@ function initEngine() {
       console.warn("[SCENE] transform gizmo init failed:", e.message);
     });
 
-  // Throttled render loop: cap at ~60 FPS to avoid wasting GPU on
-  // high-refresh-rate displays when the scene is static.
-  let _lastFrameTime = 0;
-  const MIN_FRAME_MS = 1000 / 60;
+  // Resize the drawing buffer at the start of every render loop iteration so
+  // the camera always uses the current canvas CSS size. Doing this only in
+  // window/ResizeObserver handlers leaves a one-frame race during CSS
+  // transitions (e.g. sidebar collapse) where a render can use the new canvas
+  // size with the old projection matrix and show stretching.
   state.engine.runRenderLoop(() => {
-    const now = performance.now();
-    if (now - _lastFrameTime >= MIN_FRAME_MS) {
-      _lastFrameTime = now;
-      state.scene.render();
-    }
+    state.engine.resize();
+    _updateOrthoFrustumOnResize();
+    state.scene.render();
   });
 
-  // ResizeObserver on the canvas is sufficient for all resize scenarios
-  // (window resize cascades to canvas via CSS layout).
-  state.resizeObserverInstance = new ResizeObserver(() =>
-    state.engine.resize()
-  );
+  // Also resize immediately on window resize and canvas ResizeObserver so
+  // non-render-loop code (e.g. screenshots) sees the updated size right away.
+  function resizeEngine() {
+    if (!state.engine || !state.scene) return;
+    state.engine.resize();
+    _updateOrthoFrustumOnResize();
+  }
+
+  state.resizeEngineHandler = resizeEngine;
+  window.addEventListener("resize", resizeEngine);
+
+  state.resizeObserverInstance = new ResizeObserver(() => resizeEngine());
   state.resizeObserverInstance.observe(canvas);
 
   // Click-to-select
