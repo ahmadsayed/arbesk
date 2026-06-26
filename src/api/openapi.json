@@ -69,7 +69,7 @@
       "post": {
         "tags": ["Generations"],
         "summary": "Generate a 3D asset from a text prompt",
-        "description": "Authenticated endpoint that checks session auth and rate limit, calls the configured 3D generation adapter, and returns the raw asset bytes to the browser. The browser uploads the asset to IPFS, constructs the manifest, and writes the manifest to IPFS directly — no server-side IPFS writes and no on-chain transaction validation.\n\n**Rate Limit:** 10 requests per hour per wallet address in production mode, 1000 in mock mode.\n\n**Replay Protection:** Each transaction hash can only be consumed once (client-side and in-memory server-side).",
+        "description": "Authenticated endpoint that checks session auth and rate limit, calls the configured 3D generation adapter, and returns the raw asset bytes to the browser. The browser uploads the asset to IPFS, constructs the manifest, and writes the manifest to IPFS directly — no server-side IPFS writes and no on-chain transaction validation.\n\n**Rate Limit:** 10 requests per hour per wallet address in production mode, 1000 in mock mode.\n\n**On-chain validation:** The backend does not validate transaction hashes. The UI calls the free- or paid-tier contract separately before/after calling this endpoint.",
         "operationId": "generateAsset",
         "security": [
           {
@@ -884,7 +884,7 @@
           },
           "cid": {
             "type": "string",
-            "description": "IPFS CID of the thumbnail (set by server after upload)"
+            "description": "IPFS CID of the thumbnail (set by the browser after upload)"
           },
           "path": {
             "type": "string",

@@ -16,11 +16,11 @@
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.js`, `frontend/src/js/engine/time-travel.js` |
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 29 SCSS partials, sidebar/outliner/nesting |
-| Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, thumbnail extraction in `src/api/index.js`, unpin lifecycle |
+| Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, browser-side thumbnail upload to IPFS, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
-| Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `asset-save.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
+| Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
 | Standalone Library Page | ✅ Complete | `library.pug`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
 | Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
@@ -91,7 +91,8 @@ src/
 **Session auth** (`Authorization: Session <token>`):
 - SIWE-based (EIP-4361). Domain-bound, 5-minute message age, nonce replay protection.
 - 24-hour TTL, in-memory Map with hourly cleanup.
-- Used for `POST /generations` and `POST /ipfs/upload-url` after wallet connect creates the session.
+- Used for `POST /generations`, `POST /ipfs/upload-url`, `POST /ipfs/unpin`, and `POST /assets/snapshot-comments` after wallet connect creates the session.
+- The WebSocket chat proxy (`/api/v1/chat/ws`) receives the same token in the query string.
 
 ### 2.4 What Works
 
@@ -219,11 +220,11 @@ frontend/src/js/utils/
 - GLB loading via blob + `URL.createObjectURL`
 - glTF loading via JSON → `composeGlTF` resolves `ipfs://` CIDs → `ImportMeshAsync`
 - Asset centering (bounding box → shift root nodes)
-- Thumbnail capture: offscreen canvas crop → WebP blob → dataUrl
+- Thumbnail capture: offscreen canvas crop → WebP blob
 - Keyboard: Escape (deselect), Home (frame all), F (frame selected), 1/3/7 (views), Ctrl+N (new), Ctrl+B (sidebar), Ctrl+1-4 (switch views)
 
 **Collection Manifests (Phase 5.4)**
-- `asset-save.js` merges each published asset CID into a collection manifest's `assets` map.
+- `services/asset-save/manifest-builder.js` merges each published asset CID into a collection manifest's `assets` map.
 - Default collection token ID derived deterministically from wallet address via `soliditySha3(address)`.
 - Named collections derive token ID from `soliditySha3(address, name)`.
 - `asset-library.js` expands collection tokens into one card per asset.

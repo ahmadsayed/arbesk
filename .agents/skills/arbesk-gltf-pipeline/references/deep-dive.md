@@ -34,12 +34,11 @@ Arbesk stores 3D content on a **private Kubo IPFS node** and renders it in the b
 | `frontend/src/js/gltf/composer.js` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
 | `frontend/src/js/gltf/decomposer.js` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
 | `frontend/src/js/gltf/material-editor.js` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
-| `frontend/src/js/gltf/uri_to_cid.js` | **Legacy** — converts between CID-prefix URIs and base64 data URIs | Legacy compat only; new code uses composer/decomposer |
 | `frontend/src/js/engine/transforms.js` | `extractCid()`, `detectAssetFormat()`, `applyDefaultMaterial()` | Add new format detection, change default material |
 | `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatches GLB vs glTF; `loadNode()` applies `post_processor` | Fix loading, add OBJ/FBX support |
 | `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` — runtime color/scale overlays | Fix color application, add new post-processor effects |
 | `frontend/src/js/engine/parametric-preview.js` | Inspector UI: node color, per-component mesh overrides, scale | Add inspector controls |
-| `frontend/src/js/ui/asset-save.js` | `prepareManifestForWrite()` — bakes colors into composite glTF or stores as post_processor | Fix save flow, change edit persistence |
+| `frontend/src/js/services/asset-save/manifest-builder.js` | `prepareManifestForWrite()` — bakes colors into composite glTF or stores as post_processor | Fix save flow, change edit persistence |
 | `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS write via `POST /api/v0/add` | Debug upload failures |
 | `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS read via gateway `GET /ipfs/<CID>` | Debug fetch failures |
 
@@ -49,13 +48,13 @@ Arbesk stores 3D content on a **private Kubo IPFS node** and renders it in the b
 
 The codebase handles three stages of buffer/image URI encoding. Understanding these is critical to debugging any glTF pipeline issue.
 
-### 3.1 Legacy CID-Prefix Format (uri_to_cid.js — deprecated)
+### 3.1 Legacy CID-Prefix Format (deprecated)
 
 ```
 data:application/cid;base64,<CID>
 ```
 
-Used in early Phase 1. The CID itself was base64-encoded in the URI. `convertToDataURI()` in `uri_to_cid.js` handles this. **Only used for backward compatibility; new code should NOT produce this format.**
+Used in early Phase 1. The CID itself was base64-encoded in the URI. **No production code produces this format today.** The composer/decomposer handle the supported `data:` and `ipfs://` URI formats.
 
 ### 3.2 Standard Monolithic Format (data URIs)
 
@@ -105,7 +104,7 @@ Composite glTF JSON with ipfs:// URIs
 decomposeAndStore(gltf) → writeJSONToIPFS(composite) → compositeCid
 ```
 
-**When does decomposition happen?** During `prepareManifestForWrite()` in `asset-save.js`, at both Save Draft and Publish time. Every monolithic glTF node in the manifest is decomposed once. Already-composite nodes are skipped (`isComposite()` check).
+**When does decomposition happen?** During `prepareManifestForWrite()` in `services/asset-save/manifest-builder.js`, at both Save Draft and Publish time. Every monolithic glTF node in the manifest is decomposed once. Already-composite nodes are skipped (`isComposite()` check).
 
 **Critical details in `decomposer.js`:**
 - `isComposite(gltf)` checks if any `buffers[].uri` or `images[].uri` starts with `ipfs://`
@@ -144,8 +143,8 @@ Standard glTF with data URIs → Babylon.js ImportMeshAsync(".gltf")
 | Operation | Function | Trigger |
 |-----------|----------|---------|
 | **Load into scene** | `composeGlTF()` | `scene-graph.js → loadAsset()` when format is `gltf` |
-| **First save/publish** | `decomposeGlTF()` + `decomposeAndStore()` | `asset-save.js → decomposeManifestNodes()` |
-| **Material edit** | `editCompositeColors()` | `asset-save.js → prepareManifestForWrite()` for decomposed nodes |
+| **First save/publish** | `decomposeGlTF()` + `decomposeAndStore()` | `manifest-builder.js → decomposeManifestNodes()` |
+| **Material edit** | `editCompositeColors()` | `manifest-builder.js → prepareManifestForWrite()` for decomposed nodes |
 
 ---
 
@@ -209,7 +208,7 @@ The inspector accumulates edits in `state.pendingPostProcessorEdits` (a `Map<nod
 
 ### 6.2 Save Flow: Decomposed vs Monolithic
 
-In `asset-save.js → prepareManifestForWrite()`:
+In `manifest-builder.js → prepareManifestForWrite()`:
 
 **For decomposed glTF nodes** (`node.source.path === "composite.gltf"`):
 - Colors **and mesh overrides** are **baked directly into the composite glTF JSON** via `editCompositeColors()`
@@ -290,7 +289,7 @@ Only the composite JSON CID changes. Buffers and images are untouched — IPFS d
 
 ## 8. Save & Publish Flow (GLTF-specific)
 
-`asset-save.js → prepareManifestForWrite()` is the single function that handles all GLTF format concerns during save/publish. The order matters:
+`manifest-builder.js → prepareManifestForWrite()` is the single function that handles all GLTF format concerns during save/publish. The order matters:
 
 ```
 1. Apply post-processor edits
@@ -335,6 +334,6 @@ Key rules:
 
 6. **All IPFS reads go through the gateway.** The browser uses `http://127.0.0.1:8080/ipfs/<CID>`. The backend uses the IPFS HTTP client at `http://127.0.0.1:5001`. Never mix them.
 
-7. **`uri_to_cid.js` is legacy.** New code should use the composer/decomposer. The legacy module only handles buffer URIs (not images) and uses the now-deprecated CID-prefix format.
+7. **The legacy CID-prefix format is no longer produced.** New code should use the composer/decomposer. The old format only handled buffer URIs (not images) and is preserved only for reading very early manifests.
 
 8. **Token child nodes have no glTF source.** Nodes with `child_ref` skip `loadAsset()` entirely. They never go through compose/decompose.

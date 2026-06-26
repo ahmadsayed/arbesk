@@ -170,7 +170,7 @@ The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the ass
 
 1. User selects a node and changes color/scale in the inspector.
 2. `parametric-preview.js` applies the change live to Babylon.js meshes.
-3. On save, `asset-save.js` either:
+3. On save, `services/asset-save/manifest-builder.js` either:
    - bakes color edits into a new composite glTF CID and updates `node.source.cid`, or
    - stores scale/color overlays in `node.post_processor` for monolithic assets.
 4. The browser writes the full updated manifest directly to IPFS via `writeJSONToIPFS()`.
@@ -224,7 +224,7 @@ Comments are scoped per asset using the canonical tag `<chainId>:<contractAddres
 
 > **These backend routes do not exist.** The browser handles all manifest and thumbnail operations directly:
 >
-> - **Manifest writes:** `writeJSONToIPFS()` in `asset-save.js` and `asset-delete.js`
+> - **Manifest writes:** `writeJSONToIPFS()` in `services/asset-save/manifest-builder.js` and `asset-delete.js`
 > - **Thumbnail upload:** `captureAssetThumbnail()` → `writeToIPFS()` in `scene-graph.js`
 > - **History chain walk:** `walkManifestChain()` in `time-travel.js` (IPFS gateway reads)
 > - **Token resolution:** `resolveChildRef()` in `token-resolver.js` (Web3 + IPFS gateway)
@@ -242,11 +242,23 @@ Empty (`{}`).
 
 **Response `200`**
 
+Pinata:
+```json
+{
+  "backend": "pinata",
+  "url": "https://uploads.pinata.cloud/v3/files?signed=...",
+  "gateway": "https://gateway.pinata.cloud/ipfs/",
+  "reusable": false
+}
+```
+
+Kubo:
 ```json
 {
   "backend": "kubo",
-  "url": "http://127.0.0.1:5001/api/v0/add?pin=true",
-  "apiUrl": "http://127.0.0.1:5001/api/v0"
+  "apiUrl": "http://127.0.0.1:5001",
+  "gateway": "http://127.0.0.1:8080/ipfs/",
+  "reusable": true
 }
 ```
 
@@ -279,8 +291,17 @@ Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset
 ```json
 {
   "unpinned": ["bafy...", "Qm..."],
-  "count": 2,
-  "errors": []
+  "count": 2
+}
+```
+
+If individual unpin attempts fail (e.g. CID was already unpinned), the response includes:
+
+```json
+{
+  "unpinned": ["bafy..."],
+  "count": 1,
+  "errors": ["unpin Qm...: not pinned"]
 }
 ```
 

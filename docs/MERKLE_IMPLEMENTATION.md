@@ -105,7 +105,8 @@ function updateEditors(
     require(callerRole == CollaboratorRole.Editor, "Only editors can modify the set");
     editorSetVersion[tokenId]++;
     editorRoot[tokenId] = newRoot;
-    emit EditorSetChanged(tokenId, newRoot, editorSetVersion[tokenId], newListUri);
+    editorListURI[tokenId] = newListUri;
+    emit EditorSetChanged(tokenId, newRoot, editorSetVersion[tokenId]);
 }
 
 function burn(uint256 tokenId, bytes32[] calldata proof) public {
@@ -147,9 +148,9 @@ function _requireEditor(
 |------|--------|---------|
 | `src/api/abi-router.js` | **None** | Serves compiled ABI by name; no change needed |
 | `src/api/authentication.js` | **None** | No contract function calls — validates sessions only |
-| `src/api/assets/generate-node.js` | **None** | Reads events, doesn't call contract functions directly |
+| `src/api/assets/generate-node.js` | **None** | Returns raw asset bytes; does not call contract functions |
 | `src/api/manifest-utils.js` | **None** | Works with IPFS manifests, not contract state |
-| `src/api/index.js` | **Minor** | Accepts `type: "collection"` manifests |
+| `src/api/routes/*` | **None** | No Merkle-specific route logic |
 | `.env` (root) | **Update** | New `CONTRACT_ADDRESS` and `PAID_CONTRACT_ADDRESS` after deploy |
 
 ### 3.2 Frontend (`frontend/src/js/`)

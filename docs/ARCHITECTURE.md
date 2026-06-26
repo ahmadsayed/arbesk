@@ -64,7 +64,8 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │                                                                      │
 │  IPFS writes happen directly from the browser:                       │
 │  ├─ Thumbnails: captureAssetThumbnail() → writeToIPFS()              │
-│  ├─ Manifests: writeJSONToIPFS() in asset-save.js                    │
+│  ├─ Manifests: writeJSONToIPFS() in services/api.js (generation) and │
+│  │  services/asset-save/manifest-builder.js (save/publish)           │
 │  ├─ Generation: api.js receives bytes, uploads to IPFS               │
 │  └─ glTF parts: decomposer uploads buffers/textures directly         │
 └───────────────────────────────┬─────────────────────────────────────┘
@@ -148,8 +149,8 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | Engine | `engine/parametric-preview.js` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.js` | Gateway reads with memory + IndexedDB cache |
 | IPFS | `ipfs/write-to-ipfs.js` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
-| glTF | `gltf/uri_to_cid.js` | Rehydrates CID-based glTF buffer URIs for rendering |
 | glTF | `gltf/decomposer.js` / `async-gltf.js` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
+| glTF | `gltf/material-editor.js` | Edits PBR material properties on composite glTFs and commits new CIDs |
 | glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
 | glTF | `gltf/merkle-editors.js` | Merkle tree/proof library for editor authorization |
 | Blockchain | `blockchain/wallet.js` | Backward-compat barrel re-exporting `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
@@ -396,7 +397,7 @@ During publish:
 
 1. `scene-graph.js` captures the Babylon canvas into a WebP blob.
 2. `captureAssetThumbnail()` uploads the blob directly to IPFS via `writeToIPFS()` and returns CID metadata (no `dataUrl` — the browser writes to IPFS directly, same as glTF buffer uploads).
-3. `asset-save.js` places the CID metadata into `manifest.thumbnail`.
+3. `services/asset-save/manifest-builder.js` places the CID metadata into `manifest.thumbnail`.
 4. The stored manifest contains only thumbnail metadata + CID.
 5. `asset-library.js` reads `manifest.thumbnail.cid` and renders it through the IPFS gateway.
 
@@ -408,7 +409,7 @@ During publish:
 
 ```text
 User prompt
-  → wallet.signInWithEthereum() → POST /api/v1/sessions → Session token
+  → services/api.js#getOrCreateSession() → POST /api/v1/sessions → Session token
   → (free tier) wallet.recordGeneration(nodeId, prompt)  (on-chain)
   → (paid tier)  wallet.payForGenerationWithUSDC(nodeId, prompt, tier)  (on-chain)
   → POST /api/v1/generations (Authorization: Session <token>)

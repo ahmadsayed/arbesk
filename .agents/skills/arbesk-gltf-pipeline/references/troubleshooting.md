@@ -9,7 +9,7 @@ Common operations, debugging guides, and force re-decomposition.
 1. Add the setter function in `material-editor.js` (e.g., `setClearcoatFactor()`)
 2. If it should be exposed in the inspector UI, add a control in `parametric-preview.js`
 3. Wire it to `state.pendingPostProcessorEdits` or extend the `meshOverrides` schema
-4. Update `prepareManifestForWrite()` in `asset-save.js` if the property bakes differently for decomposed vs monolithic
+4. Update `prepareManifestForWrite()` in `services/asset-save/manifest-builder.js` if the property bakes differently for decomposed vs monolithic
 
 ### 10.2 Add Support for a New 3D Format (e.g., OBJ, FBX)
 
@@ -17,7 +17,7 @@ Common operations, debugging guides, and force re-decomposition.
 2. Add a loading branch in `loadAsset()` in `scene-graph.js`
 3. If the format needs preprocessing (like glTF composition), create a new module in `frontend/src/js/gltf/` or a new directory
 4. Decide whether the format should be decomposed or treated monolithically
-5. Update `decomposeManifestNodes()` in `asset-save.js` to skip the new format if it shouldn't be decomposed
+5. Update `decomposeManifestNodes()` in `services/asset-save/manifest-builder.js` to skip the new format if it shouldn't be decomposed
 6. Update the manifest schema documentation in `AGENTS.md` section 7
 
 ### 10.3 Debug "glTF Loading Failure"

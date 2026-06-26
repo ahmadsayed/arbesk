@@ -24,7 +24,7 @@ Use this skill when working with any glTF or GLB-related code in the Arbesk proj
 4. **Scale is always `post_processor`** — even for decomposed nodes, it's a geometry transform, not a material property.
 5. **The composer deep-clones** — `composeGlTF()` uses `JSON.parse(JSON.stringify())` before modifying.
 6. **All IPFS reads go through the gateway** — browser: `127.0.0.1:8080`; backend: `127.0.0.1:5001`.
-7. **`uri_to_cid.js` is legacy** — new code uses composer/decomposer.
+7. **Legacy CID-prefix format (`data:application/cid;base64,<CID>`) is no longer produced** — new code uses composer/decomposer.
 8. **Token child nodes have no glTF source** — they skip `loadAsset()` entirely.
 
 ## File Map
@@ -37,7 +37,8 @@ Use this skill when working with any glTF or GLB-related code in the Arbesk proj
 | `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatcher, `loadNode()` orchestration | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` runtime overlays | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/engine/parametric-preview.js` | Inspector UI for color/scale/mesh overrides | [→ Deep Dive](./references/deep-dive.md) |
-| `frontend/src/js/ui/asset-save.js` | `prepareManifestForWrite()` — save flow | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/services/asset-save/manifest-builder.js` | `prepareManifestForWrite()` — save/publish flow | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/gltf/async-gltf.js` | Off-main-thread decompose fallback (`decomposeGlTFAsync`, `decomposeAndStoreAsync`) | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS write | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS read | [→ Deep Dive](./references/deep-dive.md) |
 

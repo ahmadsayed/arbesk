@@ -35,7 +35,7 @@ Update + run the suite before merging any change that touches:
 | Wallet connect/disconnect buttons, SIWE | `01-connect-wallet` | `connectWalletBtn`, `disconnectWalletBtn` |
 | Prompt input, Generate, chat status | `02`, `03`, `04`, `05`, `06` | `promptInput`, `generateBtn`, `chatHistoryList`, text `Model carved via mock` |
 | Save / Publish / Name dialog | `03`, `05`, `06` | `saveAssetBtn`, `publishAssetBtn`, `dialogInput`, `dialogConfirmBtn`; URL `?manifest=`, `?asset=` |
-| Gallery cards, Burn, Add to Scene | `03` (burn), `06` (add) | `assetCard` + `[data-token-id]`, `assetCardName`, `assetCardBurnBtn`, `dialogBurnBtn`, button `Add to Scene` |
+| Gallery cards, Add to Scene | `03`, `06` | `assetCard` + `[data-token-id]`, `assetCardName`, button `Add to Scene` |
 | Outliner tree / node rows | `04`, `06` | `outlinerSwitcherBtn`, `outlinerNode` |
 | Parametric component color editor | `04`, `05`, `06` | `componentEditor`, `componentColorInput` |
 | Version slider / time-travel | `04` | `assetHistory`, `historySlider`, `historyVersionBadge` |
