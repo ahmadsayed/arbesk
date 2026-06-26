@@ -14,7 +14,7 @@ export default function generateAssetNode(_storage) {
    * Validates the session, checks the rate limit, calls the generation
    * adapter (mock or cloud), and returns the raw asset bytes to the
    * browser. The browser uploads the asset to IPFS, constructs the
-   * manifest, and writes it to IPFS directly — no server-side IPFS
+   * manifest, and writes it to IPFS directly - no server-side IPFS
    * writes. The only server-side concerns are auth, rate limiting,
    * and the adapter call (which may need filesystem or API key access).
    */
@@ -41,7 +41,7 @@ export default function generateAssetNode(_storage) {
           `[GEN] prompt="${prompt}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
         );
         if (!prompt || !nodeId) {
-          console.log("[GEN] rejected — prompt and nodeId required");
+          console.log("[GEN] rejected - prompt and nodeId required");
           return res.status(400).json({
             error: {
               code: "MISSING_PARAMS",
@@ -61,7 +61,7 @@ export default function generateAssetNode(_storage) {
             providerKey.length > 200
           ) {
             console.log(
-              "[GEN] rejected — providerKey required for real provider",
+              "[GEN] rejected - providerKey required for real provider",
             );
             return res.status(400).json({
               error: {
@@ -71,7 +71,7 @@ export default function generateAssetNode(_storage) {
             });
           }
           console.log(
-            `[GEN] byok provider=${effectiveProvider} key=*** (len=${providerKey.trim().length}) — on-chain gate bypassed`,
+            `[GEN] byok provider=${effectiveProvider} key=*** (len=${providerKey.trim().length}) - on-chain gate bypassed`,
           );
         }
 
@@ -86,7 +86,7 @@ export default function generateAssetNode(_storage) {
             `[GEN] mock returned provider=${result.provider || "mock"} size=${result.data?.length || result.buffer?.length || "?"} bytes`,
           );
         } else {
-          console.log("[GEN] cloud adapter not implemented — rejecting");
+          console.log("[GEN] cloud adapter not implemented - rejecting");
           return res.status(501).json({
             error: {
               code: "NOT_IMPLEMENTED",
@@ -107,12 +107,12 @@ export default function generateAssetNode(_storage) {
           : Buffer.from(assetPayload, "utf-8").toString("base64");
 
         console.log(
-          `[GEN] success — returning ${assetPayload.length} bytes of ${assetFormat} (base64: ${assetBase64.length} chars) to browser for client-side IPFS upload`,
+          `[GEN] success - returning ${assetPayload.length} bytes of ${assetFormat} (base64: ${assetBase64.length} chars) to browser for client-side IPFS upload`,
         );
 
         // Return raw asset bytes to the browser. The browser uploads the
         // asset to IPFS, constructs the manifest, and writes the manifest
-        // to IPFS directly — no server-side IPFS writes.
+        // to IPFS directly - no server-side IPFS writes.
         res.json({
           assetData: assetBase64,
           format: assetFormat,

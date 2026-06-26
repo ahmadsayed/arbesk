@@ -32,11 +32,11 @@ console.log("\n----------------------------------------");
 console.log("  Copy-paste into blockchain/.env:");
 console.log("----------------------------------------\n");
 
-console.log(`# Wallet #1 — Deployer`);
+console.log(`# Wallet #1 - Deployer`);
 console.log(`PRIVATE_KEY=${deployer.privateKey.replace(/^0x/, "")}`);
 console.log(`PUBLIC_KEY=${deployer.address}`);
 console.log("");
-console.log(`# Wallet #2 — Treasury (receives generation fees)`);
+console.log(`# Wallet #2 - Treasury (receives generation fees)`);
 console.log(`TREASURY_ADDRESS=${treasury.address}`);
 
 console.log("\n----------------------------------------");

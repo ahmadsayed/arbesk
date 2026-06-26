@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import request from "supertest";
+import zlib from "zlib";
 import { _resetRateLimiter } from "../src/api/rate-limiter.js";
 
 jest.setTimeout(30000);
@@ -43,7 +44,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       }),
       cat: jest.fn(async function* (cid) {
         const stored = ipfsStorage.get(cid);
-        if (stored) {
+        if (!stored) return;
+        if (stored instanceof Uint8Array || Buffer.isBuffer(stored)) {
+          yield stored;
+        } else {
           const chars = stored.split("").map((c) => c.charCodeAt(0));
           yield new Uint16Array(chars);
         }
@@ -228,16 +232,19 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   /**
    * Write a manifest JSON directly to the mock IPFS storage and return its
-   * deterministic CID. Replaces the removed POST /api/v1/manifests route —
+   * deterministic CID. Replaces the removed POST /api/v1/manifests route -
    * manifests are now written client-side in production; tests seed storage
    * directly.
    */
   let _manifestSeq = 0;
-  function saveManifestToStorage(manifest) {
+  function saveManifestToStorage(manifest, { compress = false } = {}) {
     _manifestSeq++;
     const hash = `QmTestManifest${String(_manifestSeq).padStart(4, "0")}`;
     const payload = JSON.stringify(manifest);
-    ipfsStorage.set(hash, payload);
+    ipfsStorage.set(
+      hash,
+      compress ? zlib.gzipSync(Buffer.from(payload, "utf-8")) : payload,
+    );
     return hash;
   }
 
@@ -538,6 +545,38 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // Both the loose source CID and the directory root must be unpinned.
       expect(res.body.unpinned).toContain("QmSource");
       expect(res.body.unpinned).toContain("QmBundleRoot");
+    });
+
+    it("walks and unpins a gzip-compressed manifest chain", async () => {
+      const prevCid = saveManifestToStorage(
+        {
+          version: 1,
+          prev_asset_manifest_cid: null,
+          scene: { nodes: [] },
+        },
+        { compress: true },
+      );
+      const startCid = saveManifestToStorage(
+        {
+          version: 2,
+          prev_asset_manifest_cid: prevCid,
+          scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+        },
+        { compress: true },
+      );
+      // Source asset must exist and be readable JSON for the ref-walker.
+      ipfsStorage.set("QmSource", '{"buffers":[{"uri":"ipfs://QmBuffer"}]}');
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: startCid });
+      expect(res.status).toBe(200);
+      expect(res.body.errors).toBeUndefined();
+      expect(res.body.unpinned).toContain(startCid);
+      expect(res.body.unpinned).toContain(prevCid);
+      expect(res.body.unpinned).toContain("QmSource");
+      expect(res.body.unpinned).toContain("QmBuffer");
     });
   });
 

@@ -1,11 +1,12 @@
+// @ts-nocheck
 /**
- * Merkle Editor Tree — JS library
+ * Merkle Editor Tree - JS library
  *
  * Builds Merkle trees and proofs compatible with OpenZeppelin's
  * MerkleProof.sol (used in ArbeskAssetBase._requireEditor).
  *
  * Uses window.Web3.utils.soliditySha3 (static, available from CDN before
- * wallet connection) — NOT window.web3 (instance, only after connection).
+ * wallet connection) - NOT window.web3 (instance, only after connection).
  */
 
 function _soliditySha3(...args) {

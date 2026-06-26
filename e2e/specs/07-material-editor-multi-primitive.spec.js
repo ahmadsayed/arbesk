@@ -7,11 +7,11 @@ import { test, expect } from "@playwright/test";
  * material at its original colour.
  *
  * The test imports the gltf utility directly in the browser via dynamic import
- * (no wallet / scene setup needed — the function is a pure JSON transform).
+ * (no wallet / scene setup needed - the function is a pure JSON transform).
  */
 
 // Minimal composite glTF with one mesh split across two primitives referencing
-// two distinct materials — the canonical pattern for e.g. a vehicle body + glass.
+// two distinct materials - the canonical pattern for e.g. a vehicle body + glass.
 const FIXTURE = {
   asset: { version: "2.0" },
   meshes: [
@@ -58,12 +58,12 @@ test.describe("material-editor: multi-primitive mesh color override (#25)", () =
       };
     }, FIXTURE);
 
-    // Primitive 0 (material index 0) — was already updated before the fix.
+    // Primitive 0 (material index 0) - was already updated before the fix.
     expect(colors.mat0[0]).toBeCloseTo(0, 2); // r
     expect(colors.mat0[1]).toBeCloseTo(0, 2); // g
     expect(colors.mat0[2]).toBeCloseTo(1, 2); // b → blue
 
-    // Primitive 1 (material index 1) — was silently skipped before the fix.
+    // Primitive 1 (material index 1) - was silently skipped before the fix.
     expect(colors.mat1[0]).toBeCloseTo(0, 2); // r
     expect(colors.mat1[1]).toBeCloseTo(0, 2); // g
     expect(colors.mat1[2]).toBeCloseTo(1, 2); // b → blue (previously stayed green)
@@ -77,7 +77,7 @@ test.describe("material-editor: multi-primitive mesh color override (#25)", () =
       const gltf = JSON.parse(JSON.stringify(fixture));
 
       // The default-colour branch iterates composite.materials directly,
-      // so it was never affected by the bug — but the fixture still validates
+      // so it was never affected by the bug - but the fixture still validates
       // that path alongside the per-mesh override path.
       applyMeshOverrideColors(gltf, { VehicleBody: { color: "#0000ff" } }, "#ffffff");
 
@@ -90,6 +90,6 @@ test.describe("material-editor: multi-primitive mesh color override (#25)", () =
     // Both materials should carry the per-mesh override (blue), not the default (white),
     // because the per-mesh map is applied after the baseline.
     expect(colors.mat0[2]).toBeCloseTo(1, 2); // blue
-    expect(colors.mat1[2]).toBeCloseTo(1, 2); // blue — not white and not the original green
+    expect(colors.mat1[2]).toBeCloseTo(1, 2); // blue - not white and not the original green
   });
 });

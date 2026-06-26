@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Manifest construction helpers for save/publish.
  *
@@ -22,6 +23,7 @@ import {
   editSourceColorsAsync,
 } from "../../gltf/async-gltf.js";
 import { editCompositeColors } from "../../gltf/material-editor.js";
+import { buildDedupMap } from "../../gltf/dedup.js";
 import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,
@@ -70,7 +72,7 @@ export function manifestsSemanticallyEqual(a, b) {
  * Try to decompose a single node's source asset.
  * Returns a { nodeId, cid, path, format } result or null if not applicable.
  */
-async function _decomposeOneNode(node, manifest) {
+async function _decomposeOneNode(node, manifest, dedupMap = null) {
   if (!node.source?.cid || node.child_ref) return null;
 
   const cid = node.source.cid;
@@ -85,6 +87,7 @@ async function _decomposeOneNode(node, manifest) {
       const { compositeCid } = await decomposeGLBAsync(glbBuffer, true, {
         assetName: manifest.name,
         assetId: manifest.asset_id,
+        dedupMap,
       });
       log(
         `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
@@ -112,6 +115,7 @@ async function _decomposeOneNode(node, manifest) {
     const { compositeCid } = await decomposeAndStoreAsync(gltf, {
       assetName: manifest.name,
       assetId: manifest.asset_id,
+      dedupMap,
     });
     log(
       `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
@@ -136,10 +140,10 @@ async function _decomposeOneNode(node, manifest) {
  * @param {object} manifest - The manifest being prepared for write
  * @returns {Promise<number>} Count of nodes decomposed
  */
-export async function decomposeManifestNodes(manifest) {
+export async function decomposeManifestNodes(manifest, dedupMap = null) {
   const nodes = manifest.scene?.nodes || [];
 
-  const jobs = nodes.map((node) => _decomposeOneNode(node, manifest));
+  const jobs = nodes.map((node) => _decomposeOneNode(node, manifest, dedupMap));
 
   const results = await Promise.allSettled(jobs);
   let decomposed = 0;
@@ -188,6 +192,40 @@ export async function resolveLatestManifestCid() {
   return assetState.get().activeAssetManifestCid || null;
 }
 
+/**
+ * Build a hash → CID map from the composite glTFs referenced by one or more
+ * asset manifests. Used to skip re-uploading unchanged buffers/images when
+ * saving a new version.
+ */
+async function buildDedupMapFromManifests(manifests) {
+  const composites = [];
+  for (const manifest of manifests) {
+    if (!manifest?.scene?.nodes) continue;
+    const jobs = manifest.scene.nodes
+      .filter(
+        (n) =>
+          n.source?.cid &&
+          (n.source.path === "composite.gltf" || n.source.format === "gltf")
+      )
+      .map(async (n) => {
+        try {
+          return await getFromRemoteIPFS(n.source.cid);
+        } catch (err) {
+          warn(
+            `Save: failed to fetch composite for dedup | cid=${n.source.cid}:`,
+            err.message
+          );
+          return null;
+        }
+      });
+    const results = await Promise.all(jobs);
+    for (const composite of results) {
+      if (composite) composites.push(composite);
+    }
+  }
+  return buildDedupMap(composites);
+}
+
 export async function prepareManifestForWrite(assetName) {
   let manifest;
   const pendingRefs = getPendingChildRefs();
@@ -221,6 +259,11 @@ export async function prepareManifestForWrite(assetName) {
 
   manifest.name = assetName;
   manifest.asset_id ||= `asset_${Date.now()}`;
+  // Always refresh the timestamp so every saved/published version is a
+  // distinct IPFS object. This prevents Pinata (and other backends that
+  // reject exact duplicates) from returning a 409 when a manifest is saved
+  // again without semantic changes.
+  manifest.timestamp = Date.now();
   manifest.scene ||= { nodes: [] };
   manifest.scene.nodes ||= [];
 
@@ -229,6 +272,43 @@ export async function prepareManifestForWrite(assetName) {
       manifest.scene.nodes.push(pendingNode);
     }
   }
+
+  // Resolve the previous manifest(s) early so we can build a hash→CID map for
+  // component deduplication. We fetch both the active manifest and the latest
+  // chain tip; either may reference composites whose buffers/images can be
+  // reused without re-uploading.
+  const activeCid = assetState.get().activeAssetManifestCid;
+  const latestCid = await resolveLatestManifestCid();
+  log(
+    `Save: versioning base | active=${activeCid} latest=${
+      assetState.get().latestAssetManifestCid
+    } onChain=${
+      assetState.get().activeAssetTokenId || "none"
+    } chosenPrev=${latestCid}`
+  );
+
+  const cidToFetch = new Map();
+  if (activeCid) cidToFetch.set(activeCid, "base");
+  if (latestCid && latestCid !== activeCid) cidToFetch.set(latestCid, "prev");
+
+  const fetched = new Map();
+  await Promise.all(
+    [...cidToFetch.entries()].map(async ([cid, key]) => {
+      try {
+        fetched.set(cid, await getFromRemoteIPFS(cid));
+      } catch {
+        // Leave missing manifests as undefined; callers fall back gracefully.
+      }
+    })
+  );
+
+  const baseManifest = fetched.get(activeCid) || null;
+  const prevManifest =
+    (latestCid ? fetched.get(latestCid) : null) || baseManifest;
+  const dedupMap = await buildDedupMapFromManifests(
+    [baseManifest, prevManifest].filter(Boolean)
+  );
+  log(`Save: dedup map built | entries=${dedupMap.size}`);
 
   // Apply direct source color edits.
   // These mutate the source glTF/GLB asset and update node.source.cid.
@@ -253,6 +333,7 @@ export async function prepareManifestForWrite(assetName) {
               {
                 assetName: manifest.name,
                 assetId: manifest.asset_id,
+                dedupMap,
               }
             );
             return { nodeId, result };
@@ -326,7 +407,7 @@ export async function prepareManifestForWrite(assetName) {
           })()
         );
       } else {
-        // Monolithic node — store as post_processor overlay (also covers
+        // Monolithic node - store as post_processor overlay (also covers
         // decomposed nodes with only scale edits, which don't need a fetch).
         node.post_processor ||= {};
         if (pp.color !== undefined) node.post_processor.color = pp.color;
@@ -388,48 +469,12 @@ export async function prepareManifestForWrite(assetName) {
   // Decompose monolithic glTF nodes into composite (ipfs://) format.
   // Only affects glTF nodes that haven't been decomposed yet.
   // Runs on both Save Draft and Publish.
-  const decomposedCount = await decomposeManifestNodes(manifest);
+  const decomposedCount = await decomposeManifestNodes(manifest, dedupMap);
   if (decomposedCount > 0) {
     log(
       `Save: decomposed ${decomposedCount} glTF node(s) to composite format`
     );
   }
-
-  // Determine the manifest that supplies the version number and chain link.
-  // When the user has navigated to an older version (v2 of v1..v6), edits
-  // should still append to the tip of the chain as the next linear version
-  // (v7), not branch off as v3. Use latestAssetManifestCid as the previous
-  // link; fall back to the currently loaded manifest if no latest is tracked.
-  const activeCid = assetState.get().activeAssetManifestCid;
-  const latestCid = await resolveLatestManifestCid();
-  log(
-    `Save: versioning base | active=${activeCid} latest=${
-      assetState.get().latestAssetManifestCid
-    } onChain=${
-      assetState.get().activeAssetTokenId || "none"
-    } chosenPrev=${latestCid}`
-  );
-
-  // Fetch the active (fallback) and latest (version baseline) manifests
-  // concurrently. Deduplicate when they point to the same CID.
-  const cidToFetch = new Map();
-  if (activeCid) cidToFetch.set(activeCid, "base");
-  if (latestCid && latestCid !== activeCid) cidToFetch.set(latestCid, "prev");
-
-  const fetched = new Map();
-  await Promise.all(
-    [...cidToFetch.entries()].map(async ([cid, key]) => {
-      try {
-        fetched.set(cid, await getFromRemoteIPFS(cid));
-      } catch {
-        // Leave missing manifests as undefined; callers fall back gracefully.
-      }
-    })
-  );
-
-  const baseManifest = fetched.get(activeCid) || null;
-  let prevManifest =
-    (latestCid ? fetched.get(latestCid) : null) || baseManifest;
 
   // prevManifest is the tip of the chain that supplies version + prev link
   // and is also the baseline for no-op detection. When the user has navigated
@@ -475,6 +520,13 @@ export async function saveAssetDraftCore(
     prepared.prevManifest &&
     manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
   ) {
+    // Pending edits are already reflected in the prepared manifest (otherwise
+    // it would differ from the previous one). Clear them so the UI doesn't
+    // keep trying to re-apply a settled state.
+    clearPendingChildRefs();
+    clearPendingPostProcessorEdits();
+    clearPendingTransformEdits();
+    clearPendingSourceColorEdits();
     return {
       ok: false,
       reason: "no-changes",
@@ -483,7 +535,7 @@ export async function saveAssetDraftCore(
     };
   }
 
-  // Write manifest directly to IPFS — no backend middleman.
+  // Write manifest directly to IPFS - no backend middleman.
   // The browser already writes glTF buffers and textures this way.
   let cid = await writeJSONToIPFS(prepared.manifest, null, {
     type: prepared.manifest.type,
@@ -492,7 +544,7 @@ export async function saveAssetDraftCore(
 
   // On republish, snapshot the Nostr comment thread to IPFS so the
   // archive CID is embedded in the manifest. Failures are logged
-  // but never block the save — the manifest is already uploaded.
+  // but never block the save - the manifest is already uploaded.
   if (publishContext?.tokenId) {
     try {
       const archiveContext = {
@@ -501,7 +553,7 @@ export async function saveAssetDraftCore(
       };
       const { cid: archiveCid } = await snapshotCommentsArchive(archiveContext);
       prepared.manifest.comments_archive_cid = archiveCid;
-      // Re-upload with the archive CID — content differs, so CID changes.
+      // Re-upload with the archive CID - content differs, so CID changes.
       cid = await writeJSONToIPFS(prepared.manifest, null, {
         type: prepared.manifest.type,
         assetId: prepared.manifest.asset_id,

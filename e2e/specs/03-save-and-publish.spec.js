@@ -42,7 +42,7 @@ test.describe("save and publish", () => {
     const genManifest = await fetchManifest(genCid);
     assertGenerationManifest(genManifest, { prompt: PROMPT, provider: "mock" });
 
-    // 2. Save draft (no rename dialog — draft keeps current name). Wait on the
+    // 2. Save draft (no rename dialog - draft keeps current name). Wait on the
     // URL flipping to a new manifest CID, which is the durable signal that the
     // save completed (the screen-reader status text is transient/overwritten).
     await page.click(SELECTORS.saveAssetBtn);
@@ -56,7 +56,7 @@ test.describe("save and publish", () => {
     const savedManifest = await fetchManifest(saveCid);
     assertSavedManifest(savedManifest, genCid);
 
-    // 3. Publish — first-time publish prompts for an explicit name.
+    // 3. Publish - first-time publish prompts for an explicit name.
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, ASSET_NAME);
@@ -65,7 +65,7 @@ test.describe("save and publish", () => {
     // Minting is the slowest step; wait on the durable ?asset=<tokenId> anchor.
     // Publish writes the token id to the URL in HEX (it derives it as a hash of
     // the CID), but the gallery lists the same token by its DECIMAL on-chain id.
-    // They are the same number — compare numerically, never as strings.
+    // They are the same number - compare numerically, never as strings.
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const tokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
     const tokenIdDec = BigInt(tokenIdHex).toString();
@@ -107,7 +107,7 @@ test.describe("save and publish", () => {
     );
 
     // 5. Re-enter the Gallery and confirm the published card persists.
-    // (Burn was removed from the UI — see the asset-library card. This step
+    // (Burn was removed from the UI - see the asset-library card. This step
     // now verifies the published token survives a view switch and remains
     // listed by its decimal on-chain id, instead of tearing it down.)
     await page.click(SELECTORS.gallerySwitcherBtn);

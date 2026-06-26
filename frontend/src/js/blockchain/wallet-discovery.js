@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * EIP-6963 Multi-Injected Wallet Discovery
  *

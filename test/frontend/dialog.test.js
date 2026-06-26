@@ -4,7 +4,7 @@
  * Lock in the public API behaviour of showDialog / showConfirmDialog /
  * showInfoDialog so the focus-trap refactor (issue #23) has a safety net.
  *
- * window.focusTrap is provided by MockFocusTrap — a minimal stand-in that
+ * window.focusTrap is provided by MockFocusTrap - a minimal stand-in that
  * mirrors the createFocusTrap API the wrapper will use after the refactor,
  * so the CDN script is not required at test time. The current implementation
  * ignores window.focusTrap entirely, so its presence does not affect the
@@ -125,7 +125,7 @@ test("showDialog does not resolve twice if closed twice", async () => {
   let calls = 0;
   const p = showDialog("Title", "Body").then((v) => { calls++; return v; });
   document.querySelector(".dialog-cancel-btn").click();
-  pressKey(document, "Escape"); // second close — should be a no-op
+  pressKey(document, "Escape"); // second close - should be a no-op
   await p;
   expect(calls).toBe(1);
 });

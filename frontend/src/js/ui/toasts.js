@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Toast Notification System — Notyf wrapper
+ * Arbesk Toast Notification System - Notyf wrapper
  *
  * Thin adapter over window.Notyf (loaded via CDN in studio.pug).
  * Preserves the same public API as the previous hand-rolled implementation.
@@ -24,7 +25,7 @@ function getNotyf() {
       // own --success / --error modifier classes for the two built-in types;
       // custom types get no modifier, so we attach our own class to each so
       // the SCSS can apply per-type accent borders. icon: false keeps Notyf's
-      // default check/cross glyphs out — our toasts are text-only.
+      // default check/cross glyphs out - our toasts are text-only.
       types: [
         { type: "info",    className: "toast--info",    icon: false, dismissible: true },
         { type: "success", className: "toast--success", icon: false, dismissible: true },
@@ -47,16 +48,16 @@ const MAX_TOASTS = 5;
  *
  * @param {Object} opts
  * @param {'info'|'success'|'warning'|'error'|'pending'} opts.type
- * @param {string} opts.title — Short heading (required)
- * @param {string} [opts.message] — Optional body text
- * @param {number} [opts.duration=3000] — ms until auto-dismiss. 0 = persist until manual close.
- * @param {Array<{label:string, onClick:Function}>} [opts.actions] — Inline action buttons
+ * @param {string} opts.title - Short heading (required)
+ * @param {string} [opts.message] - Optional body text
+ * @param {number} [opts.duration=3000] - ms until auto-dismiss. 0 = persist until manual close.
+ * @param {Array<{label:string, onClick:Function}>} [opts.actions] - Inline action buttons
  * @returns {string} toastId
  */
 export function showToast({ type = "info", title, message = "", duration = 3000, actions = [] }) {
   const notyf = getNotyf();
 
-  // Enforce max visible toasts — evict oldest
+  // Enforce max visible toasts - evict oldest
   if (activeToasts.size >= MAX_TOASTS) {
     const oldestId = activeToasts.keys().next().value;
     dismissToast(oldestId);

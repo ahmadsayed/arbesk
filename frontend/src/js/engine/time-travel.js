@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Time-Travel Engine
  *
@@ -5,7 +6,7 @@
  * per-node state history. Applies color/scale from any historical manifest
  * version to the current scene meshes.
  *
- * No more variants array — current state lives directly on each node
+ * No more variants array - current state lives directly on each node
  * (color, scale, source). History is the manifest chain.
  */
 

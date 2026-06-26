@@ -518,7 +518,7 @@ describe("Deployment Pipeline Integrity", () => {
         console.warn(
           "Hardhat node not reachable at " +
             HARDHAT_RPC +
-            " — skipping all on-chain tests.",
+            " - skipping all on-chain tests.",
         );
       }
       expect(true).toBe(true);

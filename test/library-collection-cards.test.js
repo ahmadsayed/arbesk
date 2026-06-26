@@ -11,7 +11,7 @@ function buildCollectionCardSummary(manifest, tokenId) {
   };
 }
 
-describe("asset-library — buildCollectionCardSummary", () => {
+describe("asset-library - buildCollectionCardSummary", () => {
   it("counts assets in the collection's assets map", () => {
     const manifest = {
       type: "collection",

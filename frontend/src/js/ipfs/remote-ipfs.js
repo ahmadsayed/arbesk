@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Remote IPFS Reader (Gateway-Only)
  *
@@ -13,7 +14,7 @@ import { getConfig } from "../services/api.js";
 import { isGzipped, decompress } from "../utils/compression.js";
 import { arrayBufferToBase64 } from "../utils/encoding.js";
 
-const IPFS_CACHE_ENABLED = true; // in-memory cache by CID (content-addressed, safe)
+const IPFS_CACHE_ENABLED = false; // disabled: validation must not depend on cached reads
 const MAX_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB cap for raw gateway bytes
 const MAX_CACHE_ENTRIES = 500; // Maximum number of cache entries to prevent Map overhead
 const _cache = new Map();

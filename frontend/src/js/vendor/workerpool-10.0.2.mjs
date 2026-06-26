@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * ESM shim for the vendored workerpool UMD bundle.
  *

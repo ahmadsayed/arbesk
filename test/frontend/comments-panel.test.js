@@ -1,5 +1,5 @@
 /**
- * Comments Panel — unit tests for helpers
+ * Comments Panel - unit tests for helpers
  */
 
 import {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Collection manifest resolution and on-chain publishing.
  *
@@ -72,8 +73,13 @@ export async function publishCollectionForAsset(assetCid, assetID, walletAddr) {
   mergedCollection.prev_asset_manifest_cid = existingCollectionTokenId
     ? await getTokenURI(existingCollectionTokenId)
     : null;
+  // Always refresh the timestamp so every published collection manifest is a
+  // distinct IPFS object. This prevents Pinata (and other backends that reject
+  // exact duplicates) from returning a 409 when the asset CID or version has
+  // not otherwise changed.
+  mergedCollection.timestamp = Date.now();
 
-  // Write collection manifest directly to IPFS — no backend middleman.
+  // Write collection manifest directly to IPFS - no backend middleman.
   const collectionCid = await writeJSONToIPFS(mergedCollection, null, {
     type: "collection",
     assetId: mergedCollection.asset_id,

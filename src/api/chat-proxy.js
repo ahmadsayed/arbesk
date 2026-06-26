@@ -113,14 +113,14 @@ async function handleConnection(clientWs, req) {
 
   if (!token || !tokenId) {
     console.log(
-      `[CHAT] rejected — missing token or tokenId | client=${remote}`,
+      `[CHAT] rejected - missing token or tokenId | client=${remote}`,
     );
     safeClose(clientWs, 4400, "Missing token or tokenId");
     return;
   }
 
   if (!assetId) {
-    console.log(`[CHAT] rejected — missing assetId | client=${remote}`);
+    console.log(`[CHAT] rejected - missing assetId | client=${remote}`);
     safeClose(clientWs, 4400, "Missing assetId");
     return;
   }
@@ -129,7 +129,8 @@ async function handleConnection(clientWs, req) {
   let proofArray = null;
   if (proof) {
     try {
-      proofArray = JSON.parse(decodeURIComponent(proof));
+      const proofStr = Array.isArray(proof) ? proof[0] : proof;
+      proofArray = JSON.parse(decodeURIComponent(proofStr));
       if (!Array.isArray(proofArray)) proofArray = null;
     } catch {
       proofArray = null;
@@ -138,19 +139,24 @@ async function handleConnection(clientWs, req) {
   const requiredRole = role ? Number(role) : null;
 
   // 1. Validate SIWE session and check asset access in one call
-  const authResult = await authorizeAssetAccess(token, tokenId, chainId, {
-    proof: proofArray,
-    requiredRole,
-  });
+  const authResult = await authorizeAssetAccess(
+    String(token),
+    String(tokenId),
+    chainId ? Number(chainId) : null,
+    {
+      proof: proofArray,
+      requiredRole,
+    },
+  );
   if (!authResult) {
-    console.log(`[CHAT] rejected — invalid session | client=${remote}`);
+    console.log(`[CHAT] rejected - invalid session | client=${remote}`);
     safeClose(clientWs, 4401, "Invalid session");
     return;
   }
 
   if (!authResult.allowed) {
     console.log(
-      `[CHAT] rejected — not authorized | tokenId=${tokenId} addr=${authResult.address} client=${remote}`,
+      `[CHAT] rejected - not authorized | tokenId=${tokenId} addr=${authResult.address} client=${remote}`,
     );
     safeClose(clientWs, 4403, "Not authorized for this asset");
     return;
@@ -303,6 +309,7 @@ function openRelayBridge(assetTag, clientWs, session) {
             oneose() {
               sendClient(clientWs, { type: "eose", assetTag });
             },
+            // @ts-ignore nostr-tools SubscriptionParams does not declare onnotice
             onnotice(message) {
               sendClient(clientWs, { type: "relayNotice", message });
             },
@@ -394,7 +401,7 @@ function setupClientHeartbeat(session) {
     }
     ws.ping();
     session.pongTimeout = setTimeout(() => {
-      console.log("[CHAT] client pong timeout — terminating");
+      console.log("[CHAT] client pong timeout - terminating");
       session.dispose();
       ws.terminate();
     }, CLIENT_PONG_TIMEOUT_MS);

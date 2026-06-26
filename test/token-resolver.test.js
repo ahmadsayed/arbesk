@@ -33,7 +33,7 @@ function normalizeTokenURI(uri) {
   return normalized;
 }
 
-describe("Token Resolver — normalizeTokenURI", () => {
+describe("Token Resolver - normalizeTokenURI", () => {
   it("returns empty string for empty input", () => {
     expect(normalizeTokenURI("")).toBe("");
     expect(normalizeTokenURI(null)).toBe("");
@@ -92,7 +92,7 @@ describe("Token Resolver — normalizeTokenURI", () => {
   });
 });
 
-describe("Token Resolver — child_ref validation", () => {
+describe("Token Resolver - child_ref validation", () => {
   it("valid child_ref has correct structure", () => {
     const validRef = {
       type: "token",
@@ -149,7 +149,7 @@ describe("Token Resolver — child_ref validation", () => {
   });
 });
 
-describe("Token Resolver — resolveAssetIdFromCollection", () => {
+describe("Token Resolver - resolveAssetIdFromCollection", () => {
   /**
    * Inline copy of resolveAssetIdFromCollection from
    * frontend/src/js/blockchain/token-resolver.js

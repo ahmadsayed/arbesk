@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Nesting Navigation — Dive/Ascend State Machine
+ * Arbesk Nesting Navigation - Dive/Ascend State Machine
  *
  * Manages breadcrumb path bar, back button, and depth gating
  * for fractal world nesting.

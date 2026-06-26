@@ -49,7 +49,7 @@ function truncateAddress(address) {
 
 /**
  * Generate a mock asset and return the resulting generation manifest CID. The
- * `?manifest=` URL is the durable completion signal — the screen-reader status
+ * `?manifest=` URL is the durable completion signal - the screen-reader status
  * text is transient and gets overwritten.
  */
 export async function generate(page, prompt = DEFAULT_PROMPT) {
@@ -65,7 +65,7 @@ export async function generate(page, prompt = DEFAULT_PROMPT) {
 /**
  * Save the current draft and return the new manifest CID. Save flips the
  * `?manifest=` CID to a fresh value; that change is the durable signal the save
- * landed (no rename dialog — a draft keeps its current name).
+ * landed (no rename dialog - a draft keeps its current name).
  */
 export async function saveDraft(page, prevCid) {
   await page.click(SELECTORS.saveAssetBtn);
@@ -79,7 +79,7 @@ export async function saveDraft(page, prevCid) {
 /**
  * First-time publish: confirm the name dialog and wait for the on-chain token
  * anchor. Returns the token id in HEX (publish derives it as a hash of the CID;
- * the gallery lists the same token in DECIMAL — compare numerically, never as
+ * the gallery lists the same token in DECIMAL - compare numerically, never as
  * strings).
  */
 export async function publishWithName(page, name) {
@@ -120,8 +120,8 @@ export function assetCardLocator(page, tokenIdDec, name) {
 }
 
 /**
- * Select the first node in the Outliner — which auto-opens the parametric
- * component editor — and set its colour. A color input can't be `fill`ed, so
+ * Select the first node in the Outliner - which auto-opens the parametric
+ * component editor - and set its colour. A color input can't be `fill`ed, so
  * set the value and dispatch the input/change events the app listens for.
  */
 export async function editFirstNodeColor(page, color) {

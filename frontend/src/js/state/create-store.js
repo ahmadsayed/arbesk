@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { emit } from "../events/bus.js";
 
 export function createStore(defaults, eventName) {

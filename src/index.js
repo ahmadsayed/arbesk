@@ -11,7 +11,7 @@ const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirnameRoot, "../.env") });
 dotenv.config({ path: path.resolve(__dirnameRoot, "../blockchain/.env") });
 
-// Now safe to import — config.js reads from process.env which is populated
+// Now safe to import - config.js reads from process.env which is populated
 const { default: api } = await import("./api/index.js");
 const { createChatProxy } = await import("./api/chat-proxy.js");
 

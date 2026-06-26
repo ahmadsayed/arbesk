@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createStore } from "./create-store.js";
 import { EVENTS } from "../events/bus.js";
 

@@ -1,5 +1,5 @@
 /**
- * Merkle Editor Tree — Node backend version
+ * Merkle Editor Tree - Node backend version
  *
  * Builds and verifies Merkle proofs compatible with ArbeskAssetBase._requireEditor.
  *

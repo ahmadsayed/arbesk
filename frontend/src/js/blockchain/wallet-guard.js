@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Wallet readiness guard — shared by services that require a connected wallet.
+ * Wallet readiness guard - shared by services that require a connected wallet.
  *
  * Consolidates scattered "Wallet not connected" / "Wallet or contract not ready"
  * checks from team.js, asset-delete.js, and other service layers.

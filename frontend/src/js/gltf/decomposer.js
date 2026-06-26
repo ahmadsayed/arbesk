@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk glTF Decomposer
  *
@@ -15,9 +16,13 @@
  * buffers and images stay at their original CIDs (IPFS deduplication).
  */
 
-import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
 import { sanitizeFileName, extractDataURI } from "../utils/uri.js";
 import { base64ToBytes } from "../utils/encoding.js";
+import {
+  uploadWithDedup,
+  attachDedupMeta,
+  ipfsUriFromCid,
+} from "./dedup.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
@@ -55,18 +60,23 @@ export function isComposite(gltf) {
  * @returns {Promise<object>} Composite glTF JSON with ipfs:// URI references
  */
 export async function decomposeGlTF(gltf, credential = null, options = {}) {
-  const { compress = true, assetName, assetId } = options;
+  const { compress = true, assetName, assetId, dedupMap = null } = options;
   const baseName = sanitizeFileName(assetName || assetId);
   if (!gltf) throw new Error("decomposeGlTF: gltf is null");
 
-  // Already decomposed — nothing to do
+  // Already decomposed - nothing to do
   if (isComposite(gltf)) {
     console.log("[DECOMPOSE] glTF already composite, skipping");
     return gltf;
   }
 
   const composite = structuredClone(gltf);
-  const stats = { buffers: 0, images: 0, bytesTotal: 0 };
+  const stats = {
+    buffers: 0,
+    images: 0,
+    bytesTotal: 0,
+    skipped: 0,
+  };
 
   // --- Decompose buffers ---
   // Upload all extracted buffers concurrently. Each promise mutates its own
@@ -95,14 +105,24 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
         }
 
         const filename = `${baseName}_buffer_${i}.bin`;
-        const cid = await writeToIPFS(extracted.bytes, filename, credential, {
-          compress,
-        });
-        composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
+        const { cid, meta, skipped } = await uploadWithDedup(
+          extracted.bytes,
+          filename,
+          credential,
+          { compress },
+          dedupMap
+        );
+        composite.buffers[i] = attachDedupMeta(
+          { ...buf, uri: ipfsUriFromCid(cid) },
+          meta
+        );
         stats.buffers++;
         stats.bytesTotal += extracted.bytes.length;
+        if (skipped) stats.skipped++;
         console.log(
-          `[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`
+          `[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)${
+            skipped ? " [dedup]" : ""
+          }`
         );
       })
     );
@@ -121,7 +141,7 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
           return;
         }
 
-        // External URI or bufferView reference — skip
+        // External URI or bufferView reference - skip
         if (!img.uri.startsWith("data:")) {
           console.log(`[DECOMPOSE] image[${i}] external URI, keeping as-is`);
           return;
@@ -135,21 +155,31 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
 
         const ext = extracted.mimeType.split("/")[1] || "bin";
         const filename = `${baseName}_texture_${i}.${ext}`;
-        const cid = await writeToIPFS(extracted.bytes, filename, credential, {
-          compress,
-        });
-        composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
+        const { cid, meta, skipped } = await uploadWithDedup(
+          extracted.bytes,
+          filename,
+          credential,
+          { compress },
+          dedupMap
+        );
+        composite.images[i] = attachDedupMeta(
+          { ...img, uri: ipfsUriFromCid(cid) },
+          meta
+        );
         stats.images++;
         stats.bytesTotal += extracted.bytes.length;
+        if (skipped) stats.skipped++;
         console.log(
-          `[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)`
+          `[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)${
+            skipped ? " [dedup]" : ""
+          }`
         );
       })
     );
   }
 
   console.log(
-    `[DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} totalBytes=${stats.bytesTotal}`
+    `[DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} skipped=${stats.skipped} totalBytes=${stats.bytesTotal}`
   );
 
   return composite;
@@ -164,11 +194,12 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
  * @returns {Promise<{composite: object, compositeCid: string}>}
  */
 export async function decomposeAndStore(gltf, credential = null, options = {}) {
-  const { compress = true, assetName, assetId } = options;
+  const { compress = true, assetName, assetId, dedupMap = null } = options;
   const composite = await decomposeGlTF(gltf, credential, {
     compress,
     assetName,
     assetId,
+    dedupMap,
   });
   const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.js");
   const baseName = sanitizeFileName(assetName || assetId);

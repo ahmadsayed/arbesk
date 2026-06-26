@@ -14,7 +14,7 @@ async function loadModule(credential, uploadResponse) {
   return { mod, fetchMock, getUploadCredential };
 }
 
-describe("writeToIPFS — pinata mode", () => {
+describe("writeToIPFS - pinata mode", () => {
   it("POSTs the file to the presigned URL and returns the CIDv1", async () => {
     const { mod, fetchMock } = await loadModule(
       { backend: "pinata", url: "https://uploads.pinata.cloud/signed", gateway: "https://gw/ipfs/" },
@@ -41,7 +41,7 @@ describe("writeToIPFS — pinata mode", () => {
   });
 });
 
-describe("writeToIPFS — kubo mode", () => {
+describe("writeToIPFS - kubo mode", () => {
   it("POSTs multipart to the kubo /api/v0/add endpoint and returns the hash", async () => {
     const { mod, fetchMock } = await loadModule(
       { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },

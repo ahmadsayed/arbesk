@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk glTF Composer
  *
@@ -11,6 +12,7 @@
 
 import { getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { arrayBufferToBase64 } from "../utils/encoding.js";
+import { stripDedupMeta } from "./dedup.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
 
@@ -35,19 +37,19 @@ async function fetchCIDAsBase64(cid) {
 async function resolveURI(uri, defaultMime = "application/octet-stream") {
   if (!uri) return uri;
 
-  // ipfs://<CID> — fetch binary
+  // ipfs://<CID> - fetch binary
   if (uri.startsWith(IPFS_URI_PREFIX)) {
     const cid = uri.replace(IPFS_URI_PREFIX, "");
     const base64 = await fetchCIDAsBase64(cid);
     return `data:${defaultMime};base64,${base64}`;
   }
 
-  // Already a data URI — pass through
+  // Already a data URI - pass through
   if (uri.startsWith("data:")) {
     return uri;
   }
 
-  // External URL or file path — pass through
+  // External URL or file path - pass through
   return uri;
 }
 
@@ -63,8 +65,9 @@ async function resolveURI(uri, defaultMime = "application/octet-stream") {
 export async function composeGlTF(gltfJson) {
   if (!gltfJson) throw new Error("composeGlTF: gltfJson is null");
 
-  // Deep clone to avoid mutating the original
-  const composed = structuredClone(gltfJson);
+  // Deep clone to avoid mutating the original, and strip Arbesk metadata so
+  // Babylon.js receives a standard glTF JSON.
+  const composed = stripDedupMeta(gltfJson);
 
   // Resolve buffer and image URIs in parallel
   const jobs = [];

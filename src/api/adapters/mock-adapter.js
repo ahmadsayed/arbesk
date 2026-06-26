@@ -10,7 +10,7 @@ const MOCK_ASSETS_DIR = process.env.MOCK_ASSETS_DIR || "./mock-gltf-assets";
  *   - intro.gltf for everything else
  *
  * @param {string} prompt
- * @param {{ provider?: string, providerKey?: string }} [opts] — accepted for
+ * @param {{ provider?: string, providerKey?: string }} [opts] - accepted for
  *   interface compatibility with real cloud adapters; the mock ignores them.
  */
 export async function mockGenerate(prompt, opts = {}) {

@@ -5,7 +5,7 @@
  * replacement (issue #20) has a safety net.
  *
  * Key invariant: handlers registered with on() receive the payload DIRECTLY,
- * not wrapped in a CustomEvent — this is the main behavioural difference
+ * not wrapped in a CustomEvent - this is the main behavioural difference
  * from the old registry.js which used document.dispatchEvent.
  *
  * @jest-environment jsdom

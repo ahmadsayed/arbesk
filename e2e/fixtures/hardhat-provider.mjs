@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { HARDHAT_ACCOUNTS, HARDHAT_RPC } from "./multi-wallet.mjs";
 import { TEST_WALLET } from "./test-wallet.mjs";
 

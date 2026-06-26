@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Collaborator Panel — Reusable Merkle Editor UI
+ * Arbesk Collaborator Panel - Reusable Merkle Editor UI
  *
  * Renders the editor list for a token and optionally allows add/remove/role
  * changes. Used by the Studio read-only indicator and by the Library's

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Theme Helpers
  *

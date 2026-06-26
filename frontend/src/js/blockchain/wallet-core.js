@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Wallet Core
  *
@@ -108,7 +109,7 @@ async function _initContract() {
       );
     } else {
       log(
-        `[CONTRACT] Using ${network.name} config — ` +
+        `[CONTRACT] Using ${network.name} config - ` +
           `contract=${addr} usdc=${network.usdcToken}`
       );
     }
@@ -234,7 +235,7 @@ async function autoConnectWallet() {
             return;
           }
         } catch {
-          // Silent fail — wallet not authorized
+          // Silent fail - wallet not authorized
         }
       }
     }
@@ -254,7 +255,7 @@ async function autoConnectWallet() {
       }
     }
 
-    // No previous connection — stay disconnected
+    // No previous connection - stay disconnected
   } catch (error) {
     error("Auto-connect failed:", error);
   }
@@ -422,7 +423,7 @@ async function connectWallet() {
       }
       await _finishWalletSetup(accounts[0]);
     } else {
-      // Injected wallet — request accounts to trigger popup
+      // Injected wallet - request accounts to trigger popup
       web3Provider = provider;
       web3 = new Web3(provider);
       activeConnectionSource = "injected";

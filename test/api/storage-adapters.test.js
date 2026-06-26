@@ -65,6 +65,16 @@ describe("kubo adapter", () => {
     expect(await a.cat("QmX")).toBe('{"hello":"world"}');
   });
 
+  it("catBytes() returns raw bytes without text decoding", async () => {
+    const a = createKuboAdapter(fakeIpfs(), {
+      apiUrl: "http://127.0.0.1:5001",
+      gatewayBase: "http://127.0.0.1:8080/ipfs/",
+    });
+    const bytes = await a.catBytes("QmX");
+    expect(Buffer.isBuffer(bytes)).toBe(true);
+    expect(bytes.toString("utf-8")).toBe('{"hello":"world"}');
+  });
+
   it("unpin() treats 'not pinned' as success", async () => {
     const ipfs = fakeIpfs();
     ipfs.pin.rm = jest.fn(async () => {
@@ -183,5 +193,25 @@ describe("pinata adapter", () => {
     });
     expect(await a.unpin("bafyMissing")).toBe(true);
     expect(p.files.public.delete).not.toHaveBeenCalled();
+  });
+
+  it("catBytes() returns raw bytes from the gateway", async () => {
+    const savedFetch = global.fetch;
+    const payload = Buffer.from('{"hello":"world"}', "utf-8");
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
+    }));
+    try {
+      const a = createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+      });
+      const bytes = await a.catBytes("bafyWorld");
+      expect(Buffer.isBuffer(bytes)).toBe(true);
+      expect(bytes.toString("utf-8")).toBe('{"hello":"world"}');
+    } finally {
+      global.fetch = savedFetch;
+    }
   });
 });

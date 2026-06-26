@@ -1,3 +1,4 @@
+// @ts-nocheck
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
 export const MOD = isMac ? '⌘' : 'Ctrl';

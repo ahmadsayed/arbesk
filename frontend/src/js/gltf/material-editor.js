@@ -1,9 +1,10 @@
+// @ts-nocheck
 /**
  * Arbesk glTF Material Editor
  *
  * Operates on composite glTF JSON (ipfs:// URI format). Fetches the
  * composite, modifies material properties, and uploads a new composite
- * CID — leaving buffer and image CIDs untouched (IPFS deduplication).
+ * CID - leaving buffer and image CIDs untouched (IPFS deduplication).
  *
  * Supported edits:
  *   - baseColorFactor (RGBA array)

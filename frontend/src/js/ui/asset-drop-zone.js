@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Viewport drop zone for linked asset composition.
  * The full persistence/rendering path is handled by the linked asset feature;

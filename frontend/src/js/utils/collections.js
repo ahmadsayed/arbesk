@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Shared collection/asset ID helpers.
  *
@@ -39,7 +40,7 @@ export function deriveNamedCollectionId(walletAddr, name) {
 
 /**
  * Merge an asset CID into a collection manifest's `assets` map.
- * Pure function — does not touch IPFS or chain state.
+ * Pure function - does not touch IPFS or chain state.
  *
  * @param {Object|null} collectionManifest
  * @param {string} assetID

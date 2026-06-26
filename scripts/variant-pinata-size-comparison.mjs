@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Upload all 15 variants to Pinata three ways and compare actual Pinata storage:
  *   - 15 full standalone files (no dedup)
@@ -114,7 +115,7 @@ async function pinataAdd(bytes, filename) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Pinata upload failed: ${res.status} — ${text}`);
+    throw new Error(`Pinata upload failed: ${res.status} - ${text}`);
   }
   const data = await res.json();
   const cid = data.IpfsHash;
@@ -130,7 +131,7 @@ async function pinataUnpin(cid) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    console.warn(`[PINATA] failed to unpin ${cid}: ${res.status} — ${text}`);
+    console.warn(`[PINATA] failed to unpin ${cid}: ${res.status} - ${text}`);
     return false;
   }
   console.log(`[PINATA] unpinned ${cid}`);

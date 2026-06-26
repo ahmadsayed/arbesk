@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Chat Studio UI Controller
  *
@@ -37,7 +38,7 @@ const providerKeyInput = document.getElementById("providerKeyInput");
 const providerKeyToggle = document.getElementById("providerKeyToggle");
 
 // BYOK (Bring Your Own Key): a user-supplied generation provider key. Real
-// providers require a key — the user pays the provider directly, bypassing the
+// providers require a key - the user pays the provider directly, bypassing the
 // on-chain quota/payment gate. The mock provider needs no key. The key lives in
 // localStorage and is sent per-request to the backend; it is never persisted
 // server-side.

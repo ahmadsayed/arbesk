@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 // ════════════════════════════════════════════════════════════════════════════
-// Merkle Helpers — must match ArbeskAssetBase._requireEditor leaf structure
+// Merkle Helpers - must match ArbeskAssetBase._requireEditor leaf structure
 // ════════════════════════════════════════════════════════════════════════════
 
 function makeLeaf(address, role, tokenId, setVersion) {
@@ -184,7 +184,7 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // Payment — Native Token (unchanged logic)
+  // Payment - Native Token (unchanged logic)
   // ════════════════════════════════════════════════════════════════════
 
   describe("payForGeneration (native token)", function () {
@@ -261,7 +261,7 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // Payment — USDC (unchanged logic)
+  // Payment - USDC (unchanged logic)
   // ════════════════════════════════════════════════════════════════════
 
   describe("payForGenerationWithUSDC", function () {
@@ -518,7 +518,7 @@ describe("ArbeskAsset (Merkle)", function () {
       // Get proof for tokenId2
       const { proof } = getProof(editors2, user.address, tokenId2, 1);
 
-      // Try to use it on tokenId (100) — leaf has tokenId baked in
+      // Try to use it on tokenId (100) - leaf has tokenId baked in
       await expect(
         asset.connect(user).updateAssetURI(tokenId, "ipfs://nope", proof)
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
@@ -640,7 +640,7 @@ describe("ArbeskAsset (Merkle)", function () {
         tokenId,
         2
       );
-      // editor2 is not in the tree — their "proof" is garbage
+      // editor2 is not in the tree - their "proof" is garbage
       await expect(
         asset
           .connect(editor2)
@@ -784,7 +784,7 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // Free Tier (ArbeskAssetFree) — Merkle version
+  // Free Tier (ArbeskAssetFree) - Merkle version
   // ════════════════════════════════════════════════════════════════════
 
   describe("ArbeskAssetFree", function () {
@@ -838,7 +838,7 @@ describe("ArbeskAsset (Merkle)", function () {
           .connect(owner)
           .recordGeneration(ethers.id(`o${i}`), `prompt ${i}`);
       }
-      // No revert — owner is exempt
+      // No revert - owner is exempt
       expect(await freeAsset.generationCountToday(owner.address)).to.equal(15n);
     });
 
@@ -874,7 +874,7 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // transfer — no auto-editor on transfer
+  // transfer - no auto-editor on transfer
   // ════════════════════════════════════════════════════════════════════
 
   describe("transfer (no auto-editor)", function () {
@@ -894,7 +894,7 @@ describe("ArbeskAsset (Merkle)", function () {
         .transferFrom(user.address, editor.address, tokenId);
 
       expect(await asset.ownerOf(tokenId)).to.equal(editor.address);
-      // Editor set unchanged — no auto-add/remove on transfer
+      // Editor set unchanged - no auto-add/remove on transfer
       expect(await asset.editorRoot(tokenId)).to.equal(rootBefore);
       expect(await asset.editorSetVersion(tokenId)).to.equal(versionBefore);
     });
@@ -908,7 +908,7 @@ describe("ArbeskAsset (Merkle)", function () {
         .connect(user)
         .transferFrom(user.address, editor.address, tokenId);
 
-      // editor tries to update URI — they need a valid proof, but they're
+      // editor tries to update URI - they need a valid proof, but they're
       // not in the tree
       await expect(
         asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", [])

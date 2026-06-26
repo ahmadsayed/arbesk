@@ -133,7 +133,7 @@ export async function checkAssetAccess(tokenId, chainId, address, opts = {}) {
  * @param {object} [opts] - Optional proof for non-owner collaborators
  * @param {string[]} [opts.proof] - Merkle proof (bytes32 hex strings)
  * @param {number} [opts.requiredRole] - Claimed collaborator role (1=Viewer, 2=Editor)
- * @returns {Promise<{allowed: boolean, assetId: string, address: string, isOwner: boolean, role: number}|null>}
+ * @returns {Promise<{allowed: boolean, assetId: string, chainId: number, address: string, isOwner: boolean, role: number}|null>}
  */
 export async function authorizeAssetAccess(token, tokenId, chainId, opts = {}) {
   const address = validateSession(token);

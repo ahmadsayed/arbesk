@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Team / Editor Management Service — Merkle Architecture
+ * Arbesk Team / Editor Management Service - Merkle Architecture
  *
  * Editor list is stored on IPFS; on-chain only has the Merkle root.
  * All reads go through IPFS (with localStorage cache fallback).

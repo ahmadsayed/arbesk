@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Outliner — Scene Hierarchy Tree
+ * Arbesk Outliner - Scene Hierarchy Tree
  *
  * Renders the scene graph from the current level's manifest.
  * Click to select, double-click child worlds to dive in.

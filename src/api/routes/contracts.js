@@ -14,6 +14,7 @@ export default function contractsRoutes() {
     const abiRouterInstance = abiRouter();
     // Forward to the existing ABI router logic
     req.url = `/${req.params.name}.json`;
+    // @ts-ignore express.Router callable type expects a third next argument
     abiRouterInstance(req, res);
   });
 

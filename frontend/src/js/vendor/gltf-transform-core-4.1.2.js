@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* Vendored from https://esm.sh/@gltf-transform/core@4.1.2/es2022/core.bundle.mjs
  * See frontend/src/js/vendor/README.md for the refresh procedure.
  */

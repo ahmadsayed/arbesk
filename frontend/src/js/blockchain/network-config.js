@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Network-aware contract configuration for Arbesk.
  *

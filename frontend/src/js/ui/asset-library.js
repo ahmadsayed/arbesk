@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Asset Library — token-centric browser for owned and shared assets.
+ * Arbesk Asset Library - token-centric browser for owned and shared assets.
  * Phase C: Library is now a sidebar view navigated by the View Switcher.
  *
  * Gallery semantics: each card represents one asset. Collection tokens are

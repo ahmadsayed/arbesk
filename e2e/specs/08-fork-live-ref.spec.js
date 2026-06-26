@@ -51,7 +51,7 @@ test.describe("fork vs live-reference", () => {
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await childCard.getByRole("button", { name: "Add to Scene" }).click();
 
-    // 5. Fork/live-ref dialog appears — choose "Fork (copy)".
+    // 5. Fork/live-ref dialog appears - choose "Fork (copy)".
     await expect(page.locator(SELECTORS.dialogForkBtn)).toBeVisible({
       timeout: 30000,
     });
@@ -71,7 +71,7 @@ test.describe("fork vs live-reference", () => {
     expect(forkNode.source).toBeTruthy();
     expect(typeof forkNode.source.cid).toBe("string");
     expect(forkNode.child_ref).toBeUndefined();
-    // Fork nodes have no local history — the CID is a frozen snapshot.
+    // Fork nodes have no local history - the CID is a frozen snapshot.
     expect(forkNode.history).toBeUndefined();
   });
 
@@ -111,7 +111,7 @@ test.describe("fork vs live-reference", () => {
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await childCard.getByRole("button", { name: "Add to Scene" }).click();
 
-    // 5. Fork/live-ref dialog appears — choose "Live reference".
+    // 5. Fork/live-ref dialog appears - choose "Live reference".
     await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
       timeout: 30000,
     });
@@ -143,7 +143,7 @@ test.describe("fork vs live-reference", () => {
     // Live-ref node must NOT have a source (source is for frozen forks).
     expect(refNode.source).toBeUndefined();
 
-    // No local history — the live-ref resolves the collection every load.
+    // No local history - the live-ref resolves the collection every load.
     expect(refNode.history).toBeUndefined();
   });
 });

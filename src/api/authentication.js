@@ -14,7 +14,7 @@ export default async function authorize(request, response, next) {
   try {
     const authHeader = request.headers["authorization"];
     if (!authHeader) {
-      console.log(`[AUTH] rejected — missing Authorization header`);
+      console.log(`[AUTH] rejected - missing Authorization header`);
       return response.status(401).json({
         error: {
           code: "MISSING_AUTH",
@@ -25,7 +25,7 @@ export default async function authorize(request, response, next) {
 
     const parts = authHeader.split(" ");
     if (parts.length !== 2 || parts[0].toLowerCase() !== "session") {
-      console.log(`[AUTH] rejected — invalid format or scheme`);
+      console.log(`[AUTH] rejected - invalid format or scheme`);
       return response.status(401).json({
         error: {
           code: "INVALID_AUTH_FORMAT",
@@ -38,7 +38,7 @@ export default async function authorize(request, response, next) {
     const address = validateSession(token);
 
     if (!address) {
-      console.log(`[AUTH] rejected — invalid or expired session token`);
+      console.log(`[AUTH] rejected - invalid or expired session token`);
       return response.status(401).json({
         error: {
           code: "INVALID_SESSION",
@@ -50,7 +50,7 @@ export default async function authorize(request, response, next) {
 
     response.locals.userAddress = address;
     response.locals.txHash = null;
-    console.log(`[AUTH] session valid — address=${address}`);
+    console.log(`[AUTH] session valid - address=${address}`);
     return next();
   } catch (error) {
     console.error("[AUTH] error:", error.message);

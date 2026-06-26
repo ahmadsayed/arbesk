@@ -1,14 +1,15 @@
+// @ts-nocheck
 /**
- * Arbesk Wallet — Re-export Barrel
+ * Arbesk Wallet - Re-export Barrel
  *
  * All wallet functionality has been split into domain-specific modules.
  * This file re-exports everything for backward compatibility.
  *
  * Modules:
- *   wallet-core.js      — init, connect, disconnect, autoConnect, auth
- *   wallet-network.js   — network switching
- *   wallet-payments.js  — USDC + free-tier generation payments
- *   wallet-publishing.js — NFT mint, tokenURI update, editor set, burn
+ *   wallet-core.js      - init, connect, disconnect, autoConnect, auth
+ *   wallet-network.js   - network switching
+ *   wallet-payments.js  - USDC + free-tier generation payments
+ *   wallet-publishing.js - NFT mint, tokenURI update, editor set, burn
  */
 
 // Core (shared state web3/contract + connection lifecycle)

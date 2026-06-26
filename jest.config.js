@@ -14,5 +14,9 @@ export default {
     "/e2e/",
     "/blockchain/"
   ],
+  setupFiles: ["<rootDir>/test/jest.setup.js"],
+  moduleNameMapper: {
+    "^multiformats/hashes/sha2$": "<rootDir>/node_modules/multiformats/src/hashes/sha2.js",
+  },
   transform: {},
 };

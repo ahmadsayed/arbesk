@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Dialog Utility
  *
@@ -234,7 +235,7 @@ export function showForkOrLiveRefDialog(assetID) {
 
 /**
  * Show a read-only informational dialog with trusted internal HTML content.
- * Do NOT pass user-supplied strings as bodyHtml — use showConfirmDialog for that.
+ * Do NOT pass user-supplied strings as bodyHtml - use showConfirmDialog for that.
  *
  * @param {string} title
  * @param {string} bodyHtml  - Trusted HTML string (no user content)

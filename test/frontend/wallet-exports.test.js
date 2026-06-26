@@ -90,7 +90,7 @@ describe("wallet.js export block", () => {
     expect(exported).toContain(name);
   });
 
-  // Implementation lives in sub-modules — some as function declarations,
+  // Implementation lives in sub-modules - some as function declarations,
   // some as async function declarations
   test.each(REQUIRED_EXPORTS)("%s is defined in a sub-module", (name) => {
     const allSources = [CORE, NETWORK, PAYMENTS, PUBLISHING].join("\n");

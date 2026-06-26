@@ -1,6 +1,7 @@
+// @ts-nocheck
 /**
  * Arbesk Asset Save/Publish Controller.
- * Phase B: Updated for GNOME headerbar — buttons managed individually, no wrapper div.
+ * Phase B: Updated for GNOME headerbar - buttons managed individually, no wrapper div.
  *
  * This module is the UI orchestrator. Manifest construction lives in
  * `services/asset-save/manifest-builder.js`; collection and editor publishing
@@ -123,7 +124,7 @@ async function resolveAssetName() {
 async function ensureExplicitName() {
   const currentName = assetState.get().activeAssetName || "";
   if (!isDefaultName(currentName)) {
-    return currentName; // already explicitly named — skip dialog
+    return currentName; // already explicitly named - skip dialog
   }
   const input = await showDialog(
     "Name Your Asset",
@@ -275,14 +276,13 @@ async function onPublishAsset() {
           title: "Nothing to Publish",
           message: "Generate an asset or add linked worlds first.",
         });
-      } else if (result.reason === "no-changes") {
-        showToast({
-          type: "info",
-          title: "No Changes",
-          message: "Nothing new to publish.",
-        });
+        return;
       }
-      return;
+      // A publish request should always anchor the current asset to the
+      // collection, even when the asset manifest itself has not changed
+      // semantically (e.g. the user already saved the color edit as a draft).
+      // The collection manifest still gets a version bump + new prev link.
+      if (result.reason !== "no-changes") return;
     }
 
     const { cid: assetCid, manifest: publishedManifest } = result;
@@ -381,7 +381,7 @@ document.addEventListener("keydown", (e) => {
 
 on(EVENTS.SCENE_READY, (e) => {
   const manifest = e?.manifest;
-  // Preserve an existing rename — don't overwrite with fallback defaults.
+  // Preserve an existing rename - don't overwrite with fallback defaults.
   const name =
     manifest?.name || assetState.get().activeAssetName || "Untitled Asset";
   if (manifest?.name || !assetState.get().activeAssetName) {

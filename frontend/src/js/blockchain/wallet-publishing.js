@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Wallet Publishing
  *
@@ -181,7 +182,7 @@ async function burn(tokenId, proof) {
       `[BURN] could not resolve manifest CID for token ${tokenId}:`,
       e.message
     );
-    // Continue with burn even if resolution fails — unpin is best-effort
+    // Continue with burn even if resolution fails - unpin is best-effort
   }
 
   try {
@@ -197,7 +198,7 @@ async function burn(tokenId, proof) {
       txHash: receipt.transactionHash,
     });
 
-    // Unpin IPFS content after burn — fully non-blocking, skipped if unreachable
+    // Unpin IPFS content after burn - fully non-blocking, skipped if unreachable
     if (manifestCid) {
       const capturedCid = manifestCid;
       const capturedWallet = walletState.get().walletAddress;

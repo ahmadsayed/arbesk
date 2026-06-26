@@ -11,12 +11,12 @@ const Router = express.Router;
 async function collectEmbeddedIpfsCids(cid, cids, errors) {
   if (!cid || cids.has(`__json_failed_${cid}`)) return;
   try {
-    const raw = await getStorage().cat(cid);
+    const raw = await getStorage().catBytes(cid);
     const decompressed = await maybeDecompress(raw);
     const json = JSON.parse(decompressed);
     extractIpfsCids(json, cids);
   } catch (e) {
-    // Not a JSON object (e.g., raw buffer/image) — nothing to recurse into.
+    // Not a JSON object (e.g., raw buffer/image) - nothing to recurse into.
     errors.push(`read refs from ${cid}: ${e.message}`);
   }
 }
@@ -41,7 +41,7 @@ export default function ipfsRoutes() {
       try {
         const credential = await getStorage().mintUploadCredential();
         console.log(
-          `[IPFS] minted upload credential — backend=${credential.backend} wallet=${res.locals.userAddress}`,
+          `[IPFS] minted upload credential - backend=${credential.backend} wallet=${res.locals.userAddress}`,
         );
         res.json(credential);
       } catch (error) {
@@ -70,7 +70,7 @@ export default function ipfsRoutes() {
     try {
       const { cid: startCid } = req.body || {};
       if (!startCid || typeof startCid !== "string") {
-        console.log(`[UNPIN] rejected — cid required`);
+        console.log(`[UNPIN] rejected - cid required`);
         return sendError(res, 400, "MISSING_CID", "CID is required in body");
       }
 
@@ -92,7 +92,7 @@ export default function ipfsRoutes() {
 
         let manifest;
         try {
-          const raw = await getStorage().cat(currentCid);
+          const raw = await getStorage().catBytes(currentCid);
           const decompressed = await maybeDecompress(raw);
           manifest = JSON.parse(decompressed);
         } catch (e) {
@@ -130,7 +130,7 @@ export default function ipfsRoutes() {
           ) {
             toUnpin.add(node.source.bundleCid);
           }
-          // History entries — each has its own source CID + bundle root
+          // History entries - each has its own source CID + bundle root
           if (Array.isArray(node?.history)) {
             for (const entry of node.history) {
               if (entry?.src?.cid && typeof entry.src.cid === "string") {
@@ -171,7 +171,7 @@ export default function ipfsRoutes() {
 
       const elapsed = Date.now() - startTime;
       console.log(
-        `[UNPIN] done — ${unpinned.length} unpinned, ${errors.length} errors (${elapsed}ms)`,
+        `[UNPIN] done - ${unpinned.length} unpinned, ${errors.length} errors (${elapsed}ms)`,
       );
 
       res.json({

@@ -1,7 +1,8 @@
+// @ts-nocheck
 /**
  * Arbesk Scene Loader
  *
- * Extracted from scene-graph.js — handles IPFS asset loading, manifest parsing,
+ * Extracted from scene-graph.js - handles IPFS asset loading, manifest parsing,
  * token child world resolution, collection manifest loading, and drag/drop
  * linked asset composition.
  */
@@ -148,7 +149,7 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
 /**
  * Decide how a node's child_ref should be resolved: same-collection lookup
  * or cross-collection asset lookup.
- * Pure decision logic — no I/O.
+ * Pure decision logic - no I/O.
  */
 function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
   if (!childRef) return { kind: "invalid" };
@@ -332,7 +333,7 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
     meshes = await loadAsset(node.source, anchor, node.node_id);
   } else {
     console.warn(
-      `[SCENE] node ${node.node_id} has no source — no geometry to load`
+      `[SCENE] node ${node.node_id} has no source - no geometry to load`
     );
   }
 
@@ -369,7 +370,7 @@ async function loadAssetManifest(
 
   const manifest = await getFromRemoteIPFS(manifestCid);
 
-  // Collection manifests don't have scene.nodes — delegate to
+  // Collection manifests don't have scene.nodes - delegate to
   // loadCollectionManifest and auto-load the first asset.
   if (manifest?.type === "collection") {
     const { assetEntries } = await loadCollectionManifest(manifestCid, null);
@@ -417,7 +418,7 @@ async function loadAssetManifest(
 
 /**
  * Load a collection manifest and populate the active-collection state.
- * Does NOT render any 3D content — returns the manifest plus a flat list
+ * Does NOT render any 3D content - returns the manifest plus a flat list
  * of its entries so gallery UI can let the user pick which asset to open.
  *
  * @param {string} collectionCid
@@ -445,7 +446,7 @@ async function loadCollectionManifest(collectionCid, collectionRef) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Drag/drop — linked asset composition
+// Drag/drop - linked asset composition
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -531,7 +532,7 @@ async function handleLinkedAssetDropped(event) {
     return;
   }
 
-  // Legacy drops without assetID are no longer supported — the caller must
+  // Legacy drops without assetID are no longer supported - the caller must
   // include an assetID so the drop handler can route through the collection
   // resolution path above.
   console.warn(

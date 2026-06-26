@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Collaborator Manager — Studio read-only indicator
+ * Arbesk Collaborator Manager - Studio read-only indicator
  *
  * The Studio only shows who can edit the current collection. Actual add/remove
  * management happens in the Library collection menu, which matches the

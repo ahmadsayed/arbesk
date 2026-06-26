@@ -123,22 +123,22 @@ async function benchAsset(asset) {
 
   const results = [];
 
-  results.push(benchSync(`${asset.name} — isGLB`, () => isGLB(buffer), 1000));
-  results.push(await benchAsync(`${asset.name} — parseGLB`, () => parseGLB(buffer), 100));
+  results.push(benchSync(`${asset.name} - isGLB`, () => isGLB(buffer), 1000));
+  results.push(await benchAsync(`${asset.name} - parseGLB`, () => parseGLB(buffer), 100));
   results.push(
-    await benchAsync(`${asset.name} — serializeGLB (custom)`, () => serializeGLB(json, binaryChunk), 100)
+    await benchAsync(`${asset.name} - serializeGLB (custom)`, () => serializeGLB(json, binaryChunk), 100)
   );
 
   results.push(
     await benchAsync(
-      `${asset.name} — decomposeGLB (mock writer)`,
+      `${asset.name} - decomposeGLB (mock writer)`,
       () => decomposeGLB(buffer, createMockWriter()),
       20
     )
   );
 
   results.push(
-    await benchAsync(`${asset.name} — round-trip parse/serialize`, async () => {
+    await benchAsync(`${asset.name} - round-trip parse/serialize`, async () => {
       const parsed = await parseGLB(buffer);
       parsed.json.asset = { ...parsed.json.asset, generator: "arbesk-bench" };
       return serializeGLB(parsed.json, parsed.binaryChunk);
@@ -147,7 +147,7 @@ async function benchAsset(asset) {
 
   const serialized = await serializeGLB(json, binaryChunk);
   results.push({
-    name: `${asset.name} — output byte length`,
+    name: `${asset.name} - output byte length`,
     value: serialized.byteLength,
     unit: "bytes",
   });

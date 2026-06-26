@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Benchmark the CPU and wall-clock overhead of gzip compression/decompression
  * in the Arbesk browser decomposition pipeline compared to a plain upload.

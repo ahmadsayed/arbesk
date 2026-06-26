@@ -133,7 +133,7 @@ export default async function globalSetup() {
       log(`Backend already running on ${BACKEND_PORT}; reusing it`);
     }
   } catch {
-    // not running — start it
+    // not running - start it
   }
 
   let backendPid = null;
@@ -172,7 +172,7 @@ export default async function globalSetup() {
   try {
     // The /api/v1 router enforces Content-Type: application/json (requireJson),
     // so this POST must send the header + a body or it 415s and the reset
-    // silently no-ops — letting the per-wallet 10-gen/hour limit accumulate
+    // silently no-ops - letting the per-wallet 10-gen/hour limit accumulate
     // across runs until generation starts failing with "Rate limit reached".
     const resetRes = await fetch(
       `${BACKEND_URL}/api/v1/test/reset-rate-limit`,

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Studio Initializer
  *
@@ -69,7 +70,7 @@ if (networkSelect) {
         console.error("Network switch failed:", err);
       }
     } else {
-      // Not connected yet — just store preference for when we connect
+      // Not connected yet - just store preference for when we connect
       localStorage.setItem("arbesk-preferred-network", key);
       console.log("[NETWORK] Preferred network set to:", key);
     }

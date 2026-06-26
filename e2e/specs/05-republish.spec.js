@@ -27,7 +27,7 @@ test.describe("republish existing token", () => {
     // ── Reach a published token (proven generate → save → publish path) ──
     const tokenIdHex = await generateSaveAndPublish(page, ASSET_NAME, PROMPT);
 
-    // tokenURI returns a collection manifest — walk through collection → asset.
+    // tokenURI returns a collection manifest - walk through collection → asset.
     const firstCollection = await fetchTokenManifest(tokenIdHex);
     assertCollectionManifest(firstCollection, { expectedAssetIds: undefined });
     expect(Object.keys(firstCollection.assets).length).toBeGreaterThanOrEqual(1);
@@ -45,7 +45,7 @@ test.describe("republish existing token", () => {
     await editFirstNodeColor(page, EDIT_COLOR);
 
     // ── Republish: "Besk it" on an already-named token updates the tokenURI
-    //    (no name dialog, no new mint — the ?asset token id stays the same). ──
+    //    (no name dialog, no new mint - the ?asset token id stays the same). ──
     await page.click(SELECTORS.publishAssetBtn);
 
     // Durable signal: the on-chain tokenURI now resolves to a newer collection
@@ -57,7 +57,7 @@ test.describe("republish existing token", () => {
       })
       .toBeGreaterThan(firstVersion);
 
-    // Same token — just a newer collection manifest version pinned to it.
+    // Same token - just a newer collection manifest version pinned to it.
     const republishedCollection = await fetchTokenManifest(tokenIdHex);
     assertCollectionManifest(republishedCollection, {
       expectedAssetIds: undefined,

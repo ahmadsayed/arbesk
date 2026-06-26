@@ -1,5 +1,5 @@
 /**
- * Arbesk Scene Graph — Phase 1 Unit Tests
+ * Arbesk Scene Graph - Phase 1 Unit Tests
  *
  * Tests pure logic functions from scene-graph.js.
  * Functions are tested inline (matching token-resolver.test.js pattern)
@@ -517,7 +517,7 @@ describe("DEFAULT_WOOD_COLOR", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Phase 2 — BABYLON-dependent integration tests
+// Phase 2 - BABYLON-dependent integration tests
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ─── Shared mock state (simulating scene-graph.js module state) ────────────
@@ -993,7 +993,7 @@ describe("getNodeAnchor and getNodeMeshes", () => {
   });
 });
 
-describe("Scene Graph — buildChildRefResolutionPlan", () => {
+describe("Scene Graph - buildChildRefResolutionPlan", () => {
   function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
     if (!childRef) return { kind: "invalid" };
     if (childRef.assetID) {
@@ -1053,7 +1053,7 @@ describe("Scene Graph — buildChildRefResolutionPlan", () => {
   });
 });
 
-describe("Scene Graph — buildForkOrLiveRefNode", () => {
+describe("Scene Graph - buildForkOrLiveRefNode", () => {
   function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
     const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
     const baseNode = {

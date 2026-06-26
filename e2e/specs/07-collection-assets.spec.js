@@ -17,7 +17,7 @@ function tokenIdHexFromUrl(url) {
   return new URL(url).searchParams.get("asset");
 }
 
-// Run tests sequentially — they share the same wallet + Hardhat chain.
+// Run tests sequentially - they share the same wallet + Hardhat chain.
 test.describe.serial("Collection/asset model", () => {
   test.beforeEach(({ page }) => {
     // startNewAsset() uses a native confirm(); auto-accept so the new-asset
@@ -50,7 +50,7 @@ test.describe.serial("Collection/asset model", () => {
     assertCollectionManifest(collectionManifest, {
       expectedAssetIds: undefined,
     });
-    // At least one asset — other test files may have published to this wallet too.
+    // At least one asset - other test files may have published to this wallet too.
     expect(
       Object.keys(collectionManifest.assets).length,
     ).toBeGreaterThanOrEqual(1);

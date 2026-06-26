@@ -9,7 +9,7 @@ import {
   deriveDefaultAssetId,
 } from "../../frontend/src/js/utils/collections.js";
 
-describe("collections — mergeAssetIntoCollection", () => {
+describe("collections - mergeAssetIntoCollection", () => {
   it("creates a fresh collection manifest when none exists yet (default collection lazy-mint)", () => {
     const result = mergeAssetIntoCollection(null, "asset_1", "bafyAssetCid");
     expect(result.type).toBe("collection");
@@ -44,7 +44,7 @@ describe("collections — mergeAssetIntoCollection", () => {
   });
 });
 
-describe("collections — deriveDefaultAssetId", () => {
+describe("collections - deriveDefaultAssetId", () => {
   it("reuses an existing assetID when present", () => {
     expect(deriveDefaultAssetId("chair-01", "asset_123")).toBe("chair-01");
   });

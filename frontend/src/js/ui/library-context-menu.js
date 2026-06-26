@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { libraryState } from "../state/library-state.js";
 import {
   showBurnCollectionDialog,

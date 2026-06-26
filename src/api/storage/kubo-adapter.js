@@ -1,7 +1,7 @@
-import { catManifest } from "../ipfs-utils.js";
+import { catManifest, catBytes } from "../ipfs-utils.js";
 
 /**
- * Kubo storage adapter — wraps the local ipfs-http-client.
+ * Kubo storage adapter - wraps the local ipfs-http-client.
  * Used only by the automated E2E suite (IPFS_BACKEND=kubo).
  */
 export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
@@ -24,7 +24,7 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
     /**
      * Upload multiple files as a single IPFS UnixFS directory and return the
      * directory root CID. Used to group a glTF + its buffers/textures into one
-     * browsable folder (organizational only — loading still uses bare CIDs).
+     * browsable folder (organizational only - loading still uses bare CIDs).
      * @param {{name: string, data: Uint8Array|string}[]} files
      * @returns {Promise<string>} directory root CID
      */
@@ -57,6 +57,12 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
       // Reuse the shared multi-encoding decoder (Uint16Array test mock,
       // Uint8Array/Buffer real Kubo, string) so reads stay consistent.
       return catManifest(ipfs, cid);
+    },
+
+    async catBytes(cid) {
+      // Raw bytes path for callers that need to decompress gzip content
+      // before text decoding corrupts it.
+      return catBytes(ipfs, cid);
     },
 
     async unpin(cid) {

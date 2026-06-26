@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { showInfoDialog } from "./dialog.js";
 import { MOD } from "../utils/platform.js";
 

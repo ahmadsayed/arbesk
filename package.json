@@ -15,6 +15,8 @@
     "test:api": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
     "test:frontend": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/frontend",
     "test:all": "npm run test:frontend && npm run test:api && npm run test:contracts",
+    "typecheck": "tsc --noEmit",
+    "typecheck:frontend": "tsc --noEmit -p frontend/tsconfig.json",
     "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",
     "test:e2e:ui": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js --ui",
     "test:e2e:setup": "node e2e/setup.mjs",
@@ -44,11 +46,17 @@
   "devDependencies": {
     "@gltf-transform/core": "^4.1.2",
     "@playwright/test": "^1.60.0",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.0.1",
+    "@types/supertest": "^7.2.0",
+    "@types/ws": "^8.18.1",
     "gltf-pipeline": "^4.3.1",
     "jest": "^30.4.1",
     "jest-environment-jsdom": "^30.4.1",
     "nodemon": "^3.0.0",
-    "supertest": "^6.3.1"
+    "supertest": "^6.3.1",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18.0.0"

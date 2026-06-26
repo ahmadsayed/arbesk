@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Shared encoding utilities for binary data and base64 conversion.
  * Consolidated from glb-parser.js, decomposer.js, composer.js, and remote-ipfs.js.

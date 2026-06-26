@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Asset Version Scrubber
  *
@@ -36,7 +37,7 @@ let isLoading = false;
 async function _fetchChain(cid) {
   if (!cid) return [];
   try {
-    // Walk the manifest chain client-side via IPFS gateway — no server round-trip.
+    // Walk the manifest chain client-side via IPFS gateway - no server round-trip.
     return await walkManifestChain(cid);
   } catch (err) {
     console.error("History chain fetch failed:", err);
@@ -177,7 +178,7 @@ async function _refresh() {
     return;
   }
 
-  // On history navigation, don't change the chain root — just update active state
+  // On history navigation, don't change the chain root - just update active state
   if (isHistoryNavigation) {
     activeCid = manifestCid;
     _render();
@@ -243,7 +244,7 @@ on(EVENTS.SCENE_READY, (e) => {
     return;
   }
 
-  // Normal load — refresh everything
+  // Normal load - refresh everything
   chainRootCid = manifestCid;
   activeCid = manifestCid;
   assetState.set({ latestAssetManifestCid: manifestCid });

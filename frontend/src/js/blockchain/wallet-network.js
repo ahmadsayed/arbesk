@@ -1,7 +1,8 @@
+// @ts-nocheck
 /**
  * Arbesk Wallet Network Switching
  *
- * Extracted from wallet.js — handles network detection, switching,
+ * Extracted from wallet.js - handles network detection, switching,
  * and wallet_addEthereumChain fallback for chains not yet known to the wallet.
  */
 
@@ -42,7 +43,7 @@ async function _promptNetworkSwitch(networkKey) {
     return true;
   } catch (switchError) {
     if (_isChainUnknownError(switchError)) {
-      // Chain not in wallet — try wallet_addEthereumChain first.
+      // Chain not in wallet - try wallet_addEthereumChain first.
       // MetaMask signals this with code 4902; Rabby uses -32603 / "Unrecognized chain ID".
       try {
         await ethereum.request({

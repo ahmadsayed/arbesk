@@ -1,5 +1,5 @@
 /**
- * Arbesk glTF Decomposer & Composer — Unit Tests
+ * Arbesk glTF Decomposer & Composer - Unit Tests
  *
  * Tests pure logic functions from decomposer.js and composer.js.
  * Functions are tested inline (matching the project test convention)
@@ -182,7 +182,7 @@ async function decomposeGLB(arrayBuffer, writer) {
   for (let i = 0; i < images.length; i++) {
     const img = images[i];
     if (img.uri && !img.uri.startsWith("data:")) {
-      // External non-IPFS URI — kept as-is.
+      // External non-IPFS URI - kept as-is.
       continue;
     }
     let bytes = null;
@@ -410,7 +410,7 @@ function makeCompositeGlTF(overrides = {}) {
 // Decomposer: isComposite
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Decomposer — isComposite", () => {
+describe("Decomposer - isComposite", () => {
   it("returns false for null/undefined", () => {
     expect(isComposite(null)).toBe(false);
     expect(isComposite(undefined)).toBe(false);
@@ -476,7 +476,7 @@ describe("Decomposer — isComposite", () => {
 // Decomposer: base64ToBytes
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Decomposer — base64ToBytes", () => {
+describe("Decomposer - base64ToBytes", () => {
   it("decodes a simple base64 string", () => {
     const bytes = base64ToBytes("SGVsbG8=");
     expect(bytes).toBeInstanceOf(Uint8Array);
@@ -522,7 +522,7 @@ describe("Decomposer — base64ToBytes", () => {
 // Decomposer: extractDataURI
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Decomposer — extractDataURI", () => {
+describe("Decomposer - extractDataURI", () => {
   it("returns null for non-data URI", () => {
     expect(extractDataURI("ipfs://QmTest")).toBeNull();
     expect(extractDataURI("http://example.com/file.bin")).toBeNull();
@@ -616,7 +616,7 @@ describe("Decomposer — extractDataURI", () => {
 // Composer: arrayBufferToBase64
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Composer — arrayBufferToBase64", () => {
+describe("Composer - arrayBufferToBase64", () => {
   it("converts empty buffer", () => {
     const buffer = new ArrayBuffer(0);
     expect(arrayBufferToBase64(buffer)).toBe("");
@@ -668,9 +668,14 @@ describe("Composer — arrayBufferToBase64", () => {
 // Decomposer: decomposeGlTF (with mocked IPFS writes)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Decomposer — decomposeGlTF (mocked IPFS)", () => {
-  // Replicate decomposeGlTF logic with mocked writeToIPFS
-  async function decomposeGlTF(gltf, mockWrite) {
+describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
+  // Simple deterministic key for the inline dedup map tests.
+  function dedupKey(bytes) {
+    return Array.from(bytes).join(",");
+  }
+
+  // Replicate decomposeGlTF logic with mocked writeToIPFS and optional dedup.
+  async function decomposeGlTF(gltf, mockWrite, dedupMap = null) {
     if (!gltf) throw new Error("decomposeGlTF: gltf is null");
     if (isComposite(gltf)) {
       return gltf;
@@ -688,8 +693,22 @@ describe("Decomposer — decomposeGlTF (mocked IPFS)", () => {
         const extracted = extractDataURI(buf.uri);
         if (!extracted) continue;
 
-        const cid = await mockWrite(extracted.bytes, `buffer_${i}.bin`);
-        composite.buffers[i] = { ...buf, uri: IPFS_URI_PREFIX + cid };
+        const filename = `buffer_${i}.bin`;
+        const key = dedupKey(extracted.bytes);
+        let cid;
+        let skipped = false;
+        if (dedupMap?.has(key)) {
+          cid = dedupMap.get(key);
+          skipped = true;
+        } else {
+          cid = await mockWrite(extracted.bytes, filename);
+        }
+        composite.buffers[i] = {
+          ...buf,
+          uri: IPFS_URI_PREFIX + cid,
+          _arbesk: { hash: key, hashAlgo: "test", compressed: false, bytes: extracted.bytes.length },
+        };
+        if (skipped) composite.buffers[i]._arbesk.skipped = true;
       }
     }
 
@@ -705,8 +724,22 @@ describe("Decomposer — decomposeGlTF (mocked IPFS)", () => {
         if (!extracted) continue;
 
         const ext = extracted.mimeType.split("/")[1] || "bin";
-        const cid = await mockWrite(extracted.bytes, `texture_${i}.${ext}`);
-        composite.images[i] = { ...img, uri: IPFS_URI_PREFIX + cid };
+        const filename = `texture_${i}.${ext}`;
+        const key = dedupKey(extracted.bytes);
+        let cid;
+        let skipped = false;
+        if (dedupMap?.has(key)) {
+          cid = dedupMap.get(key);
+          skipped = true;
+        } else {
+          cid = await mockWrite(extracted.bytes, filename);
+        }
+        composite.images[i] = {
+          ...img,
+          uri: IPFS_URI_PREFIX + cid,
+          _arbesk: { hash: key, hashAlgo: "test", compressed: false, bytes: extracted.bytes.length },
+        };
+        if (skipped) composite.images[i]._arbesk.skipped = true;
       }
     }
 
@@ -884,13 +917,54 @@ describe("Decomposer — decomposeGlTF (mocked IPFS)", () => {
     // Scene graph preserved
     expect(result.scenes[0].nodes).toEqual([0]);
   });
+
+  it("attaches _arbesk metadata to uploaded buffers and images", async () => {
+    const gltf = makeTestGlTF({
+      buffers: [
+        { uri: "data:application/octet-stream;base64,SGVsbG8=", byteLength: 5 },
+      ],
+      images: [
+        { uri: "data:image/png;base64,iVBORw0KGgo=", mimeType: "image/png" },
+      ],
+    });
+
+    const mockWrite = jest.fn().mockResolvedValue("QmTestCid");
+    const result = await decomposeGlTF(gltf, mockWrite);
+
+    expect(result.buffers[0]._arbesk).toMatchObject({
+      hashAlgo: "test",
+      compressed: false,
+      bytes: 5,
+    });
+    expect(result.images[0]._arbesk).toMatchObject({
+      hashAlgo: "test",
+      compressed: false,
+    });
+  });
+
+  it("reuses a CID from the dedup map and skips the upload", async () => {
+    const gltf = makeTestGlTF({
+      buffers: [
+        { uri: "data:application/octet-stream;base64,SGVsbG8=", byteLength: 5 },
+      ],
+      images: [],
+    });
+
+    const dedupMap = new Map([["72,101,108,108,111", "QmReused"]]);
+    const mockWrite = jest.fn();
+    const result = await decomposeGlTF(gltf, mockWrite, dedupMap);
+
+    expect(result.buffers[0].uri).toBe("ipfs://QmReused");
+    expect(result.buffers[0]._arbesk.skipped).toBe(true);
+    expect(mockWrite).not.toHaveBeenCalled();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Composer: resolveURI (with mocked fetch)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Composer — resolveURI", () => {
+describe("Composer - resolveURI", () => {
   const GATEWAY_URL = "http://127.0.0.1:8080/ipfs/";
 
   async function resolveURI(uri, defaultMime = "application/octet-stream") {
@@ -995,10 +1069,15 @@ describe("Composer — resolveURI", () => {
 // Composer: composeGlTF (with mocked resolveURI)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("Composer — composeGlTF", () => {
+describe("Composer - composeGlTF", () => {
   async function composeGlTF(gltfJson, mockResolveURI) {
     if (!gltfJson) throw new Error("composeGlTF: gltfJson is null");
     const composed = JSON.parse(JSON.stringify(gltfJson));
+
+    // Strip Arbesk dedup metadata before returning a clean glTF.
+    for (const item of [...(composed.buffers || []), ...(composed.images || [])]) {
+      delete item._arbesk;
+    }
 
     if (composed.buffers) {
       for (let i = 0; i < composed.buffers.length; i++) {
@@ -1125,6 +1204,33 @@ describe("Composer — composeGlTF", () => {
     expect(result.accessors[0].count).toBe(3);
     expect(result.scenes[0].nodes).toEqual([0]);
   });
+
+  it("strips _arbesk metadata from buffers and images", async () => {
+    const gltf = makeCompositeGlTF({
+      buffers: [
+        {
+          uri: "ipfs://QmBuf",
+          byteLength: 36,
+          _arbesk: { hash: "abc", hashAlgo: "murmur3-32" },
+        },
+      ],
+      images: [
+        {
+          uri: "ipfs://QmImg",
+          mimeType: "image/png",
+          _arbesk: { hash: "def", hashAlgo: "murmur3-32" },
+        },
+      ],
+    });
+    const mockResolve = jest.fn((uri) => Promise.resolve(uri));
+
+    const result = await composeGlTF(gltf, mockResolve);
+
+    expect(result.buffers[0]._arbesk).toBeUndefined();
+    expect(result.images[0]._arbesk).toBeUndefined();
+    expect(result.buffers[0].uri).toBe("ipfs://QmBuf");
+    expect(result.images[0].uri).toBe("ipfs://QmImg");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1142,7 +1248,7 @@ describe("Decompose → Compose round-trip", () => {
   // Mock write: stores bytes and returns a deterministic CID
   async function mockWriteToIPFS(bytes, filename) {
     const hashBuffer = new TextEncoder().encode(filename + ":" + bytes.length);
-    // Simple hash for deterministic testing — not cryptographically sound
+    // Simple hash for deterministic testing - not cryptographically sound
     let hash = 0;
     for (let i = 0; i < hashBuffer.length; i++) {
       hash = ((hash << 5) - hash + hashBuffer[i]) | 0;
@@ -1447,7 +1553,7 @@ function makeGLTFJsonWithBinary(binaryLength, imageBufferViews = []) {
   };
 }
 
-describe("GLB Parser — parseGLB", () => {
+describe("GLB Parser - parseGLB", () => {
   it("returns false for non-GLB data", () => {
     expect(isGLB(new ArrayBuffer(0))).toBe(false);
     expect(isGLB(new ArrayBuffer(20))).toBe(false);
@@ -1484,7 +1590,7 @@ describe("GLB Parser — parseGLB", () => {
   });
 });
 
-describe("GLB Parser — decomposeGLB", () => {
+describe("GLB Parser - decomposeGLB", () => {
   // Simple deterministic mock writer
   function makeMockWriter() {
     let counter = 0;

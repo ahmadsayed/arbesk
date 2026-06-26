@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Library Page Initializer
  *

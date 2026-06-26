@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk glTF Web Worker Pool
  *
@@ -12,8 +13,8 @@ import workerpool from "../vendor/workerpool-10.0.2.mjs";
 // workerpool's WorkerHandler checks `script || getDefaultWorker()` and, when
 // the script is not a plain string, falls back to its embedded *classic*
 // bootstrap worker (a blob URL created WITHOUT {type:"module"}). A classic
-// worker cannot use top-level `import`/`export`, so gltf-worker.js — an ES
-// module — fails to evaluate and only workerpool's built-in [run, methods]
+// worker cannot use top-level `import`/`export`, so gltf-worker.js - an ES
+// module - fails to evaluate and only workerpool's built-in [run, methods]
 // methods register. Passing a string (via .href) keeps workerpool on the
 // direct-load path with the {type:"module"} workerOpts intact.
 const WORKER_SCRIPT = new URL("./gltf-worker.js?v=4", import.meta.url).href;
@@ -68,7 +69,7 @@ export async function isWorkerPoolAvailable() {
       try {
         initError = await p.exec("initError", [], { timeout: 5000 });
       } catch {
-        // ignore — we'll still report the missing-methods fallback below
+        // ignore - we'll still report the missing-methods fallback below
       }
     }
     console.warn(

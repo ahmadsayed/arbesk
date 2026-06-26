@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Shared collection asset deletion helper.
  *
@@ -113,7 +114,7 @@ export async function deleteAssetFromCollection({
   delete newCollection.assets[assetId];
   newCollection.version = (newCollection.version || 0) + 1;
 
-  // Write updated collection directly to IPFS — no backend middleman.
+  // Write updated collection directly to IPFS - no backend middleman.
   const newCollectionCid = await writeJSONToIPFS(newCollection, null, {
     type: "collection",
     assetId: newCollection.asset_id,
@@ -136,7 +137,7 @@ export async function deleteAssetFromCollection({
   if (!txHash) throw new Error("Update tokenURI transaction failed");
 
   // The on-chain tokenURI now points at the new collection, so the deleted
-  // asset's manifest chain is orphaned. Unpin it best-effort, non-blocking —
+  // asset's manifest chain is orphaned. Unpin it best-effort, non-blocking -
   // the backend walks the chain and unpins the manifest, source glTF, and
   // thumbnail CIDs. Failures are non-fatal (the asset is already detached).
   if (deletedAssetManifestCid) {

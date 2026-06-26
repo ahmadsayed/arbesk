@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Hardhat dev wallet accounts for multi-wallet E2E scenarios.
  *

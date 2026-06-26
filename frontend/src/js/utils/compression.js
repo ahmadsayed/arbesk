@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Browser-safe gzip / gunzip helpers.
  *

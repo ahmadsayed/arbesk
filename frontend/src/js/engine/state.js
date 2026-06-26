@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Scene Graph — Shared State
+ * Arbesk Scene Graph - Shared State
  *
  * Mutable module-level state shared across engine sub-modules.
  * Uses an object wrapper because ESM imported bindings are read-only.
@@ -38,8 +39,6 @@ export const state = {
   resizeEngineHandler: null,
   /** @type {ResizeObserver|null} */
   resizeObserverInstance: null,
-  /** @type {Function|null} */
-  windowResizeHandler: null,
   /** @type {Function|null} */
   pointerObservableCallback: null,
   /** @type {BABYLON.HighlightLayer|null} */

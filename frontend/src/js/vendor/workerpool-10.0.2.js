@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * workerpool.js
  * https://github.com/josdejong/workerpool

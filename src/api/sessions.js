@@ -7,7 +7,7 @@
  * Subsequent generation calls use that token instead of a new signature.
  *
  * The token is stored in the browser's localStorage. The only attack vector
- * is physical access to the browser — accepted as a reasonable trade-off
+ * is physical access to the browser - accepted as a reasonable trade-off
  * for eliminating the per-generation MetaMask pop-up.
  */
 
@@ -32,7 +32,7 @@ setInterval(() => {
   for (const [token, session] of sessions) {
     if (session.expiresAt <= now) {
       sessions.delete(token);
-      console.log(`[SESSION] expired — token=${token.slice(0, 8)}...`);
+      console.log(`[SESSION] expired - token=${token.slice(0, 8)}...`);
     }
   }
 }, 60 * 60 * 1000).unref();
@@ -41,7 +41,7 @@ setInterval(() => {
 
 /**
  * Create a new session for the given address.
- * @param {string} address — 0x-prefixed wallet address
+ * @param {string} address - 0x-prefixed wallet address
  * @returns {string} opaque session token
  */
 function createSession(address) {
@@ -53,7 +53,7 @@ function createSession(address) {
     expiresAt: now + SESSION_TTL,
   });
   console.log(
-    `[SESSION] created — token=${token.slice(0, 8)}... address=${address}`,
+    `[SESSION] created - token=${token.slice(0, 8)}... address=${address}`,
   );
   return token;
 }
@@ -66,12 +66,12 @@ function createSession(address) {
 function validateSession(token) {
   const session = sessions.get(token);
   if (!session) {
-    console.log(`[SESSION] not found — token=${token.slice(0, 8)}...`);
+    console.log(`[SESSION] not found - token=${token.slice(0, 8)}...`);
     return null;
   }
   if (session.expiresAt <= Date.now()) {
     sessions.delete(token);
-    console.log(`[SESSION] expired — token=${token.slice(0, 8)}...`);
+    console.log(`[SESSION] expired - token=${token.slice(0, 8)}...`);
     return null;
   }
   return session.address;
@@ -84,7 +84,7 @@ function validateSession(token) {
 function invalidateSession(token) {
   const existed = sessions.delete(token);
   console.log(
-    `[SESSION] invalidated — token=${token.slice(0, 8)}... existed=${existed}`,
+    `[SESSION] invalidated - token=${token.slice(0, 8)}... existed=${existed}`,
   );
 }
 
@@ -107,7 +107,7 @@ export default function sessionRouter() {
       const { message, signature } = req.body;
 
       if (!message || !signature) {
-        console.log("[SESSION] rejected — missing message or signature");
+        console.log("[SESSION] rejected - missing message or signature");
         return res.status(400).json({
           error: {
             code: "MISSING_PARAMS",
@@ -122,7 +122,7 @@ export default function sessionRouter() {
       });
 
       if (!result.valid) {
-        console.log(`[SESSION] rejected — ${result.error}`);
+        console.log(`[SESSION] rejected - ${result.error}`);
         return res.status(400).json({
           error: {
             code: "INVALID_SIWE",
@@ -131,7 +131,7 @@ export default function sessionRouter() {
         });
       }
 
-      console.log(`[SESSION] verified SIWE — address=${result.address}`);
+      console.log(`[SESSION] verified SIWE - address=${result.address}`);
 
       // Create session
       const token = createSession(result.address);

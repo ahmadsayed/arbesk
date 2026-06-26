@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Library operations — create collections and upload desktop files.
+ * Library operations - create collections and upload desktop files.
  *
  * These helpers run in the browser, reuse the existing IPFS writers, and
  * anchor changes on-chain via the wallet contract. They deliberately do not
@@ -115,7 +116,7 @@ export async function createNamedCollection(name) {
     const existingCid = await c.methods.tokenURI(tokenId).call();
     return { tokenId, manifestCid: existingCid, isNew: false };
   } catch {
-    // Token does not exist — proceed to mint.
+    // Token does not exist - proceed to mint.
   }
 
   const collectionManifest = {

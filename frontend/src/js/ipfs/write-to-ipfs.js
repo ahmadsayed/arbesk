@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Browser-Side IPFS Writer
  *
@@ -19,18 +20,11 @@ const IS_WORKER =
   self instanceof WorkerGlobalScope;
 const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "[IPFS-WRITE]";
 
-// Cache the upload credential for 5 minutes to avoid sequential fetches
-let _cachedCredential = null;
-let _credentialExpiresAt = 0;
-const CREDENTIAL_TTL_MS = 5 * 60 * 1000;
+// Caches are intentionally disabled. Validation must depend on the manifest
+// itself always being unique (timestamp + version), not on memoization.
 
-async function getCachedUploadCredential() {
-  if (_cachedCredential && Date.now() < _credentialExpiresAt) {
-    return _cachedCredential;
-  }
-  _cachedCredential = await getUploadCredential();
-  _credentialExpiresAt = Date.now() + CREDENTIAL_TTL_MS;
-  return _cachedCredential;
+async function blobToBytes(blob) {
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 function toBlob(data) {
@@ -61,7 +55,7 @@ async function uploadToPinata(blob, filename, credential, attempt = 1) {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`Pinata upload failed: ${res.status} — ${text}`);
+      throw new Error(`Pinata upload failed: ${res.status} - ${text}`);
     }
     const json = await res.json();
     const cid = json?.data?.cid || json?.cid;
@@ -88,7 +82,7 @@ async function uploadToKubo(blob, filename, credential) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`IPFS add failed: ${res.status} — ${text}`);
+    throw new Error(`IPFS add failed: ${res.status} - ${text}`);
   }
   const result = await res.json();
   console.log(`${TAG} kubo stored → ${result.Hash} (${result.Size} bytes)`);
@@ -134,13 +128,18 @@ export async function writeToIPFS(
     ? compressedFilename(filename)
     : filename;
   const blob = toBlob(payload);
-  const cred = credential || (await getCachedUploadCredential());
+  const bytes = await blobToBytes(blob);
+
+  const cred = credential || (await getUploadCredential());
   console.log(
-    `${TAG} uploading ${blob.size} bytes via ${cred.backend} as ${finalFilename}`
+    `${TAG} uploading ${bytes.length} bytes via ${cred.backend} as ${finalFilename}`
   );
-  return cred.backend === "pinata"
-    ? uploadToPinata(blob, finalFilename, cred)
-    : uploadToKubo(blob, finalFilename, cred);
+  const cid =
+    cred.backend === "pinata"
+      ? await uploadToPinata(blob, finalFilename, cred)
+      : await uploadToKubo(blob, finalFilename, cred);
+
+  return cid;
 }
 
 /**

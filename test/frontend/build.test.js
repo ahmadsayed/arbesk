@@ -68,7 +68,7 @@ describe("Frontend Build", () => {
   });
 
   // ── P1: api.js ES module exports ────────────────────────────────────────────
-  // These functions are consumed via ES module imports — window.* assignments
+  // These functions are consumed via ES module imports - window.* assignments
   // were removed in the state-layer refactor (all callers import directly).
 
   describe("api.js ES module exports", () => {

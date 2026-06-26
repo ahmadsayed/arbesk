@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Compare total IPFS storage when all 15 variants exist at the same time,
  * accounting for content-addressed deduplication in the Arbesk decomposition.

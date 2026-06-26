@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { execSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -54,7 +55,7 @@ export const HARDHAT_RPC = "http://127.0.0.1:8545";
 // Shared handoff between global setup and global teardown. Playwright loads the
 // setup and teardown modules in separate evaluations, so in-memory state (the
 // spawned backend pid, whether we started Docker) cannot be shared via module
-// scope — it must round-trip through a file. Keep the file per-worktree so
+// scope - it must round-trip through a file. Keep the file per-worktree so
 // concurrent runs from different worktrees do not clobber each other.
 export const STATE_FILE = path.join(
   os.tmpdir(),
@@ -133,7 +134,7 @@ async function rpc(method, params = []) {
  * start-dev.sh re-detects that and redeploys fresh contracts at the same
  * deterministic addresses.
  *
- * No-op when the Hardhat node isn't reachable yet — in that case
+ * No-op when the Hardhat node isn't reachable yet - in that case
  * start-dev.sh will start it and deploy fresh anyway.
  */
 export async function resetHardhatChain() {

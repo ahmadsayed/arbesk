@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Block Explorer Utilities
  *
@@ -9,7 +10,7 @@ import { switchNetwork } from "./wallet.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 
 const EXPLORER_URLS = {
-  // Hardhat local — no explorer
+  // Hardhat local - no explorer
   [CHAIN_IDS.HARDHAT_LOCAL]: null,
   // MegaETH Testnet
   [CHAIN_IDS.MEGAETH_TESTNET]: "https://megaexplorer.xyz",

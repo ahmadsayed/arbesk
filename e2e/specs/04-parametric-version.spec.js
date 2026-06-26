@@ -36,7 +36,7 @@ test.describe("parametric versioning + time-travel", () => {
     // 2-3. Select the node and change its component colour.
     await editFirstNodeColor(page, EDIT_COLOR);
 
-    // 4. Save — the pending colour edit is baked into a NEW version (v2).
+    // 4. Save - the pending colour edit is baked into a NEW version (v2).
     const saveCid = await saveDraft(page, genCid);
     const savedManifest = await fetchManifest(saveCid);
     expect(savedManifest.version).toBe(2);
@@ -89,7 +89,7 @@ test.describe("parametric versioning + time-travel", () => {
       .toBe(saveCid);
 
     // 8. Publish the parametric asset. tokenURI now returns a collection
-    // manifest, not an asset manifest — walk through collection → asset
+    // manifest, not an asset manifest - walk through collection → asset
     // to validate the published content.
     const tokenIdHex = await publishWithName(page, ASSET_NAME);
 

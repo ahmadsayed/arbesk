@@ -2,7 +2,7 @@
  * Toast notification contract tests.
  *
  * Tests run against the Notyf wrapper in toasts.js. window.Notyf is provided
- * by MockNotyf — a minimal in-memory stand-in that mirrors the subset of
+ * by MockNotyf - a minimal in-memory stand-in that mirrors the subset of
  * Notyf's API the wrapper depends on, so the CDN script is not required.
  *
  * @jest-environment jsdom

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Generate 5 color variants of each of the 3 mock assets, write them to disk,
  * add all 15 files to local Kubo IPFS, and confirm the counts.

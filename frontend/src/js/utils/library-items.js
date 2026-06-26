@@ -1,3 +1,4 @@
+// @ts-nocheck
 const SUPPORTED_EXTENSIONS = [".glb", ".gltf"];
 
 export function isSupportedFile(filename) {
@@ -75,7 +76,7 @@ export function computeRangeSelection(items, anchorId, targetId) {
 }
 
 export function formatBytes(bytes) {
-  if (bytes == null) return "—";
+  if (bytes == null) return "-";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

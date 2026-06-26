@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Token Resolver
  *
@@ -138,7 +139,7 @@ function getTokenContract(chainId, contractAddress) {
   }
 }
 
-// Re-export normalizeTokenURI for backward compatibility — prefer importing
+// Re-export normalizeTokenURI for backward compatibility - prefer importing
 // directly from "./uri-utils.js" in new code.
 export { normalizeTokenURI } from "./uri-utils.js";
 
@@ -168,7 +169,7 @@ export async function resolveChildRef(childRef, options = {}) {
   }
 
   // Fall back to connected wallet's chain/contract when not provided.
-  // Normalize chainId to Number — getChainId() returns BigInt in Web3 v4.
+  // Normalize chainId to Number - getChainId() returns BigInt in Web3 v4.
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
   const chainId = Number(childRef.chainId || walletChainId) || null;
@@ -326,7 +327,7 @@ export async function resolveCollectionChildRef(
     );
   }
   if (lookup.kind === "collection") {
-    // Nested collection: caller is responsible for recursing — surface the
+    // Nested collection: caller is responsible for recursing - surface the
     // token ref so scene-graph.js can treat it as a nested collection load.
     return {
       manifestCid: null,

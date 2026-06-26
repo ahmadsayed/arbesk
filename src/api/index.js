@@ -97,8 +97,10 @@ export default () => {
   api.use("/v1", v1);
 
   // Expose for test helpers
-  api._getFromIPFS = async (cid) => {
-    const raw = await getStorage().cat(cid);
+  /** @type {any} */
+  const apiAny = api;
+  apiAny._getFromIPFS = async (cid) => {
+    const raw = await getStorage().catBytes(cid);
     return maybeDecompress(raw);
   };
 

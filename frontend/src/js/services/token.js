@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Token Service
  *

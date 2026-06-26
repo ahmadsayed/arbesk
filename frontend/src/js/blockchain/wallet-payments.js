@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Wallet Payments
  *
@@ -6,7 +7,7 @@
  *
  * Shared module-level state (web3, contract) is imported from ./wallet.js
  * pending migration to ./wallet-core.js.  contractAddress is not exported by
- * wallet.js — it is read from walletState (synced by _initContract).
+ * wallet.js - it is read from walletState (synced by _initContract).
  *
  * @module wallet-payments
  */
@@ -64,9 +65,9 @@ function isFreeTierContract() {
 /**
  * Pay for a generation using USDC at the selected quality tier.
  * Requires the user to first approve() the contract for the tier cost.
- * @param {string} nodeId — hex or string node identifier
- * @param {string} prompt — generation prompt
- * @param {number} tier — 0=Basic, 1=Standard, 2=Premium, 3=Pro
+ * @param {string} nodeId - hex or string node identifier
+ * @param {string} prompt - generation prompt
+ * @param {number} tier - 0=Basic, 1=Standard, 2=Premium, 3=Pro
  * @returns {string|null} txHash on success, null on failure
  */
 async function payForGenerationWithUSDC(nodeId, prompt, tier) {
@@ -81,9 +82,9 @@ async function payForGenerationWithUSDC(nodeId, prompt, tier) {
  * Calls ArbeskAssetFree.recordGeneration(bytes32 nodeId, string prompt).
  * No payment is required; the contract enforces a daily limit per wallet.
  *
- * @param {string} nodeId — hex-string or human-readable node identifier
+ * @param {string} nodeId - hex-string or human-readable node identifier
  *   (padded to bytes32 on-chain).
- * @param {string} prompt — generation prompt stored in the event.
+ * @param {string} prompt - generation prompt stored in the event.
  * @returns {string|null} transaction hash on success, null on failure.
  */
 async function recordGeneration(nodeId, prompt) {
@@ -346,7 +347,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
         await new Promise((r) => setTimeout(r, 500));
       } else {
         console.warn(
-          "[USDC] allowance still not visible after 5 attempts. Proceeding anyway — the payment tx may revert if the RPC is stale."
+          "[USDC] allowance still not visible after 5 attempts. Proceeding anyway - the payment tx may revert if the RPC is stale."
         );
       }
     }
@@ -427,7 +428,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
       msg.includes("revert") ||
       msg.includes("VM Exception")
     ) {
-      // Transaction mined but reverted — usually balance/allowance related.
+      // Transaction mined but reverted - usually balance/allowance related.
       // Check on-chain state for the specific reason.
       showToast({
         type: "error",

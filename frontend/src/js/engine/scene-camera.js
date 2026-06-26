@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Scene Camera
  *
@@ -9,7 +10,7 @@ import { state } from "./state.js";
 import { getRenderableMeshes, getWorldBounds } from "./transforms.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// View presets — Blender-style 1/3/7 orthographic view snapping
+// View presets - Blender-style 1/3/7 orthographic view snapping
 // ═══════════════════════════════════════════════════════════════════════════
 
 const VIEW_FRONT = { name: "Front", alpha: 0, beta: Math.PI / 2 };
@@ -150,7 +151,7 @@ function snapView(preset) {
       cam.orthoBottom = -halfH;
       cam.orthoTop = halfH;
       // Radius is irrelevant for ortho rendering but ArcRotateCamera uses
-      // it for direction calc — keep a safe distance.
+      // it for direction calc - keep a safe distance.
       cam.radius = (spanW + spanH) / 2 + 2;
 
       console.log(

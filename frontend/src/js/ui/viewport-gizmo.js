@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk Viewport Gizmo
  *
@@ -91,7 +92,7 @@ function draw(camera) {
   gizmoCtx.clearRect(0, 0, GizmoPx(), GizmoPx());
   gizmoCtx.scale(dpr, dpr);
 
-  // Background disc — subtle, non-intrusive.
+  // Background disc - subtle, non-intrusive.
   gizmoCtx.beginPath();
   gizmoCtx.arc(cx, cy, GIZMO_SIZE / 2 - 2, 0, Math.PI * 2);
   gizmoCtx.fillStyle = "rgba(20, 20, 20, 0.55)";

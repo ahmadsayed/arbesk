@@ -1,9 +1,10 @@
+// @ts-nocheck
 /**
  * Arbesk Wallet Popover
  *
  * GNOME HIG-compliant dropdown for the connected wallet button.
  * Shows: address (with copy), explorer link, disconnect action.
- * Network switching lives in the headerbar — not duplicated here.
+ * Network switching lives in the headerbar - not duplicated here.
  */
 
 import {
@@ -108,7 +109,7 @@ function updateContent() {
 
   // Address with truncation
   if (els.address) {
-    els.address.textContent = truncateAddress(address) || "—";
+    els.address.textContent = truncateAddress(address) || "-";
     els.address.title = address;
   }
 
@@ -167,7 +168,7 @@ async function onSignIn() {
     const { getOrCreateSession } = await import("../services/api.js");
     await getOrCreateSession();
   } catch (err) {
-    // User rejected — state remains auth-required
+    // User rejected - state remains auth-required
   }
 }
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Editor / collaborator helpers for publish and republish.
  *
@@ -5,27 +6,79 @@
  * and persistence of the initial editor list for a new token.
  */
 
-import { computeRoot, getProof } from "../../gltf/merkle-editors.js";
+import { computeRoot, getProof, makeLeaf } from "../../gltf/merkle-editors.js";
 import {
   CollaboratorRole,
+  contract,
   publishAsset,
   updateAssetURI,
 } from "../../blockchain/wallet.js";
 import {
   fetchEditors as fetchEditorsFromTeam,
   getEditorSetVersion,
+  isOwner,
   saveEditorListLocally,
 } from "../team.js";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.js";
+
+async function getEditorRoot(tokenId) {
+  if (!contract) return null;
+  try {
+    return await contract.methods.editorRoot(tokenId).call();
+  } catch (err) {
+    console.warn("[EDITOR-PUBLISH] failed to read editorRoot:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Build a proof for the current wallet against the current editor set.
+ * Falls back to a single-editor owner proof when the editor list cannot be
+ * fetched from IPFS/chain/localStorage but the on-chain root proves the owner
+ * is the only editor. This keeps existing tokens editable by their owners
+ * without changing the smart contract.
+ */
+async function buildWalletProof(tokenId, walletAddr) {
+  const currentVersion = await getEditorSetVersion(tokenId);
+  const editorList = await fetchEditorsFromTeam(tokenId);
+
+  // Normal path: wallet is in the fetched editor list.
+  const proofFromList = getProof(editorList, walletAddr, tokenId, currentVersion);
+  if (proofFromList) return proofFromList;
+
+  // Fallback path: the wallet owns the token and the on-chain Merkle root
+  // matches a tree containing only the owner as Editor. This is the default
+  // tree created by prepareInitialEditors, so it resolves cases where the
+  // editor list CID is unreachable or localStorage has been cleared.
+  const owner = await isOwner(tokenId);
+  if (owner) {
+    const root = await getEditorRoot(tokenId);
+    const ownerLeaf = makeLeaf(
+      walletAddr,
+      CollaboratorRole.Editor,
+      tokenId,
+      currentVersion
+    );
+    if (root && root.toLowerCase() === ownerLeaf.toLowerCase()) {
+      return { proof: [], role: CollaboratorRole.Editor };
+    }
+  }
+
+  return null;
+}
 
 /**
  * Throw if the connected wallet is not an authorized editor of the token.
  */
 export async function verifyCanEdit(tokenId, walletAddr) {
-  const editorList = await fetchEditorsFromTeam(tokenId);
-  const currentVersion = await getEditorSetVersion(tokenId);
-  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
+  const proofResult = await buildWalletProof(tokenId, walletAddr);
   if (!proofResult) {
+    const owner = await isOwner(tokenId);
+    if (owner) {
+      throw new Error(
+        "Token owner is not in the current editor list. Add this wallet as an editor in the Team panel, or update the smart contract to allow owner bypass."
+      );
+    }
     throw new Error("Not an authorized editor");
   }
 }
@@ -36,15 +89,16 @@ export async function verifyCanEdit(tokenId, walletAddr) {
  * Returns the transaction hash.
  */
 export async function republishCollection(tokenId, collectionCid, walletAddr) {
-  let editorList = await fetchEditorsFromTeam(tokenId);
-  // When localStorage is empty (fresh browser context or E2E isolation),
-  // fall back to a default editor list with the current wallet as Editor.
-  if (!editorList || editorList.length === 0) {
-    editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
+  const proofResult = await buildWalletProof(tokenId, walletAddr);
+  if (!proofResult) {
+    const owner = await isOwner(tokenId);
+    if (owner) {
+      throw new Error(
+        "Token owner is not in the current editor list. Add this wallet as an editor in the Team panel, or update the smart contract to allow owner bypass."
+      );
+    }
+    throw new Error("Not an authorized editor");
   }
-  const currentVersion = await getEditorSetVersion(tokenId);
-  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
-  if (!proofResult) throw new Error("Not an authorized editor");
   const txHash = await updateAssetURI(tokenId, collectionCid, proofResult.proof);
   if (!txHash) throw new Error("Republish transaction failed");
   return txHash;

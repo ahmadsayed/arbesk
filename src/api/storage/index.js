@@ -41,7 +41,7 @@ export function getStorage() {
   return _storage;
 }
 
-/** Test helper — clears the cached adapter so IPFS_BACKEND can be re-read. */
+/** Test helper - clears the cached adapter so IPFS_BACKEND can be re-read. */
 export function _resetStorage() {
   _storage = null;
 }

@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Scene Graph — Transforms & Helpers
+ * Arbesk Scene Graph - Transforms & Helpers
  *
  * Pure helper functions for CID extraction, format detection,
  * transform matrix application, material defaults, bounding boxes,

@@ -1,5 +1,5 @@
 /**
- * Pinata storage adapter — Pinata v3 public IPFS.
+ * Pinata storage adapter - Pinata v3 public IPFS.
  * `add` uses the master JWT (backend writes); `mintUploadCredential`
  * returns a short-lived presigned URL for browser uploads (JWT never leaves
  * the server). Public IPFS so CIDs resolve through a normal gateway and can be
@@ -19,13 +19,13 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
     /**
      * Upload multiple files as a single IPFS directory and return the
      * directory root CID. Used to group a glTF + its buffers/textures into one
-     * browsable folder (organizational only — loading still uses bare CIDs).
+     * browsable folder (organizational only - loading still uses bare CIDs).
      * @param {{name: string, data: Uint8Array|string}[]} files
      * @returns {Promise<string>} directory root CID
      */
     async addDirectory(files) {
       const fileObjects = files.map(
-        (f) => new File([f.data], f.name),
+        (f) => new File([/** @type {any} */ (f.data)], f.name),
       );
       const { cid } = await pinata.upload.public.fileArray(fileObjects);
       console.log(`[IPFS] pinata addDirectory → ${cid}`);
@@ -36,6 +36,12 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
       const res = await fetch(`${gatewayBase}${cid}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`pinata gateway ${res.status} for ${cid}`);
       return await res.text();
+    },
+
+    async catBytes(cid) {
+      const res = await fetch(`${gatewayBase}${cid}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`pinata gateway ${res.status} for ${cid}`);
+      return Buffer.from(await res.arrayBuffer());
     },
 
     async unpin(cid) {

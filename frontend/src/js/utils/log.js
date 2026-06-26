@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Tiny tagged logger for the browser.
  *

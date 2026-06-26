@@ -1,8 +1,9 @@
+// @ts-nocheck
 /**
  * Sign-In with Ethereum (EIP-4361) Message Builder
  *
  * Builds standard SIWE messages for wallet authentication.
- * No external dependencies — pure string formatting.
+ * No external dependencies - pure string formatting.
  *
  * Usage:
  *   import { buildSiweMessage, generateNonce } from './siwe.js';

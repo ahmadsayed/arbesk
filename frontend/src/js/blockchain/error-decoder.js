@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Solidity Transaction Revert Reason Decoder
  *
@@ -56,7 +57,7 @@ function decodeCustomError(selector, data, selectorMap) {
 
   const { name, inputs } = meta;
 
-  // No params — return simple message
+  // No params - return simple message
   if (inputs.length === 0) {
     return formatErrorName(name);
   }
@@ -175,7 +176,7 @@ export async function decodeRevertReason(error, contractABI = null) {
   console.log("[ERROR-DECODER] extracted revertData:", revertData);
 
   if (!revertData || typeof revertData !== "string" || !revertData.startsWith("0x")) {
-    // No revert data — return the original message or a generic fallback
+    // No revert data - return the original message or a generic fallback
     if (msg.includes("insufficient funds")) return "Insufficient funds for transaction.";
     if (msg.includes("User denied") || msg.includes("rejected") || error.code === 4001) {
       return "Transaction rejected by user.";

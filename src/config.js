@@ -9,6 +9,11 @@
 import Web3 from "web3";
 import { CHAIN_IDS } from "../constants/chains.js";
 
+// TypeScript sees the default import as the module namespace under NodeNext,
+// so alias it to any for construction while keeping the runtime default import.
+/** @type {any} */
+const Web3Ctor = Web3;
+
 // ─── Per-Network Configuration ───────────────────────────────────────────────
 
 export const NETWORK_CONFIGS = {
@@ -74,7 +79,7 @@ export function getWeb3(chainId) {
   const id = chainId ? Number(chainId) : null;
   if (!id) return web3;
   if (!web3Instances.has(id)) {
-    web3Instances.set(id, new Web3(getRpcUrl(id)));
+    web3Instances.set(id, new Web3Ctor(getRpcUrl(id)));
   }
   return web3Instances.get(id);
 }
@@ -92,4 +97,4 @@ export const NOSTR_RELAY_URL =
 export const NOSTR_SERVICE_PRIVATE_KEY = process.env.NOSTR_SERVICE_PRIVATE_KEY;
 
 // Default shared Web3 instance (Hardhat local or env-configured RPC)
-export const web3 = new Web3(API_URL);
+export const web3 = new Web3Ctor(API_URL);

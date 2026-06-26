@@ -8,7 +8,7 @@
 import { web3 } from "../config.js";
 import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
 
-// Nonce store: Map<nonce, expiresAt> — auto-cleans on verification
+// Nonce store: Map<nonce, expiresAt> - auto-cleans on verification
 const usedNonces = new Map();
 const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MESSAGE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
@@ -91,8 +91,8 @@ export function parseSiweMessage(message) {
  *
  * @param {string} message - The SIWE message
  * @param {string} signature - The Ethereum signature
- * @param {Object} options
- * @param {string} options.expectedDomain - The expected domain (req.headers.host)
+ * @param {Object} [options]
+ * @param {string} [options.expectedDomain] - The expected domain (req.headers.host)
  * @returns {Promise<{valid: boolean, address: string|null, error: string|null}>}
  */
 export async function verifySiwe(message, signature, { expectedDomain } = {}) {
@@ -126,7 +126,7 @@ export async function verifySiwe(message, signature, { expectedDomain } = {}) {
     };
   }
 
-  // 4. Domain binding — accept either host-only (localhost:9090)
+  // 4. Domain binding - accept either host-only (localhost:9090)
   // or full origin (https://localhost:9090) format. Some wallets
   // (Brave) include the protocol in the domain field.
   if (expectedDomain) {

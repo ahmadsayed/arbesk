@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BACKEND_URL, HARDHAT_RPC } from "../lib/infra.mjs";
 import Web3 from "web3";
 
@@ -157,7 +158,7 @@ export function assertCommentsArchive(manifest) {
 
 /**
  * Validate a collection manifest's shape: type, assets map, version chain.
- * Does not assert on individual asset manifest contents — use
+ * Does not assert on individual asset manifest contents - use
  * assertGenerationManifest/assertSavedManifest on the resolved asset CID
  * for that.
  */

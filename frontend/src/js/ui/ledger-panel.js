@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk UI Activity Panel (Manifest-Driven)
  *
@@ -99,7 +100,7 @@ function render() {
 /**
  * Extract activity entries from a manifest chain response.
  * The manifest chain is walked by the server via /api/v1/manifests/:cid/history,
- * which simply follows prev_manifest_cid links — no separate ledger store.
+ * which simply follows prev_manifest_cid links - no separate ledger store.
  */
 function extractActivities(chain) {
   const entries = [];
@@ -118,7 +119,7 @@ function extractActivities(chain) {
         id: `manifest-${manifestCid}`,
         timestamp: manifest.timestamp || 0,
         opType: manifest.version === 1 ? "SAVE" : "LOAD",
-        manifestId: manifest.asset_id || manifest.manifest_id || "—",
+        manifestId: manifest.asset_id || manifest.manifest_id || "-",
         cid: manifestCid,
         prevCid: manifest.prev_manifest_cid || null,
         actorType: "USER",
@@ -141,7 +142,7 @@ function extractActivities(chain) {
           id: key,
           timestamp: h.timestamp || 0,
           opType: h.type?.toUpperCase() || "GENERATION",
-          manifestId: manifest.asset_id || manifest.manifest_id || "—",
+          manifestId: manifest.asset_id || manifest.manifest_id || "-",
           cid: h.src?.cid || manifestCid,
           prevCid: null,
           actorType: "USER",

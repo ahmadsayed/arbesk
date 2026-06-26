@@ -1,8 +1,9 @@
+// @ts-nocheck
 /**
  * Arbesk URI Utilities
  *
  * Pure functions for normalizing IPFS URIs and extracting CIDs.
- * Zero external dependencies — safe to import from Node.js test runners.
+ * Zero external dependencies - safe to import from Node.js test runners.
  */
 
 /**

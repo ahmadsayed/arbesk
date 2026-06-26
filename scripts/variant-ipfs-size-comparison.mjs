@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Generate 5 color variants per asset and measure actual IPFS disk usage
  * (CumulativeSize from Kubo files/stat) for:

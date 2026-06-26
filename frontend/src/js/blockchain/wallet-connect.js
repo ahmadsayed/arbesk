@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * WalletConnect v2 Ethereum Provider
  *
@@ -77,7 +78,7 @@ async function loadEthereumProvider() {
 
 /**
  * Initialize the WalletConnect Ethereum provider.
- * Uses a singleton pattern — subsequent calls return the same instance.
+ * Uses a singleton pattern - subsequent calls return the same instance.
  *
  * @returns {Promise<EthereumProvider|null>}
  */

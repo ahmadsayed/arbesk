@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Reads freshly deployed Hardhat-local contract addresses straight off the
 // host filesystem (the hardhat container volume-mounts ./blockchain, so its
-// deployment artifacts are already readable here — no docker exec needed)
+// deployment artifacts are already readable here - no docker exec needed)
 // and syncs them into every place that needs them: blockchain/.env, root
 // .env, and the frontend/backend network configs for Hardhat Local.
 import fs from "node:fs";

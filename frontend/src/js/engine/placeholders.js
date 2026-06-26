@@ -1,5 +1,6 @@
+// @ts-nocheck
 /**
- * Arbesk Scene Graph — Placeholders
+ * Arbesk Scene Graph - Placeholders
  *
  * Box placeholder creation and disposal for token child nodes
  * in loading or error states.

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Arbesk API Service
  *
@@ -81,7 +82,7 @@ export function getCachedSession() {
       return null;
     }
     log(
-      `[SESSION] cached valid — addr=${session.address.slice(
+      `[SESSION] cached valid - addr=${session.address.slice(
         0,
         8
       )}… expires=${new Date(session.expiresAt).toLocaleTimeString()}`
@@ -201,12 +202,12 @@ export async function getOrCreateSession() {
     return sessionCreationPromise;
   }
 
-  log("[SESSION] no cached token — creating new session…");
+  log("[SESSION] no cached token - creating new session…");
   // Create new session (triggers ONE MetaMask pop-up)
   sessionCreationPromise = createSession()
     .then((session) => {
       log(
-        "[SESSION] created — token=" + session.token.slice(0, 8) + "…"
+        "[SESSION] created - token=" + session.token.slice(0, 8) + "…"
       );
       return session.token;
     })
@@ -260,7 +261,7 @@ export async function getContractAddress() {
 
 /**
  * GET /api/v1/contracts/:name/abi
- * @param {string} contractName — e.g. "ArbeskAsset"
+ * @param {string} contractName - e.g. "ArbeskAsset"
  * @returns {Promise<Object|null>} Full Hardhat artifact
  */
 export async function getContractArtifact(contractName = "ArbeskAsset") {
@@ -280,7 +281,7 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
  *
  * The backend validates the session, checks the rate limit, calls the
  * adapter, and returns raw asset bytes. The browser uploads the asset
- * to IPFS, constructs the manifest, and writes it to IPFS directly —
+ * to IPFS, constructs the manifest, and writes it to IPFS directly -
  * no server-side IPFS writes.
  *
  * @param {Object} params
@@ -290,7 +291,7 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
  * @param {string} [params.assetId]
  * @param {string} [params.prevAssetManifestCid]
  * @param {number[]} [params.transformMatrix]
- * @param {number} [params.tier] — 0=Basic, 1=Standard, 2=Premium, 3=Pro
+ * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string}>}
  */
 export async function generateAsset({
@@ -338,7 +339,7 @@ export async function generateAsset({
   if (response.status === 401) {
     const { code } = parseErrorBody(data);
     if (code === "INVALID_SESSION" || code === "MISSING_AUTH") {
-      log("[SESSION] backend rejected token — creating fresh session…");
+      log("[SESSION] backend rejected token - creating fresh session…");
       clearSession();
       const freshToken = await createSession();
       authHeader = `Session ${freshToken.token}`;
@@ -360,7 +361,7 @@ export async function generateAsset({
   }
 
   // Browser uploads the asset bytes to IPFS, constructs the manifest,
-  // and uploads the manifest — no server-side IPFS writes.
+  // and uploads the manifest - no server-side IPFS writes.
   announceStatus("Uploading asset to IPFS…");
   const { writeToIPFS, writeJSONToIPFS } = await import(
     "../ipfs/write-to-ipfs.js"
@@ -386,7 +387,7 @@ export async function generateAsset({
   if (prevAssetManifestCid) {
     try {
       manifest = await getFromRemoteIPFS(prevAssetManifestCid);
-      log(`[GEN] previous manifest loaded — v${manifest.version}`);
+      log(`[GEN] previous manifest loaded - v${manifest.version}`);
     } catch (e) {
       warn(
         `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${e.message}`
@@ -471,7 +472,7 @@ export async function snapshotCommentsArchive(publishContext) {
 
   // If the server lost its session store (e.g. restart), re-authenticate once.
   if (response.status === 401) {
-    log("[SESSION] snapshot-comments rejected cached token — re-authenticating");
+    log("[SESSION] snapshot-comments rejected cached token - re-authenticating");
     clearSession();
     token = await getOrCreateSession();
     response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
@@ -522,7 +523,7 @@ export async function getUploadCredential() {
   // cached token and re-authenticate once.
   if (res.status === 401) {
     log(
-      "[SESSION] upload-url rejected cached token — re-authenticating"
+      "[SESSION] upload-url rejected cached token - re-authenticating"
     );
     clearSession();
     token = await getOrCreateSession();
@@ -547,8 +548,8 @@ export async function getUploadCredential() {
 /**
  * POST /api/v1/ipfs/unpin
  * Unpin all CIDs in a manifest chain (called after token burn).
- * @param {string} cid — Manifest CID to start unpinning from
- * @param {string} [actorAddress] — Wallet address of the burner
+ * @param {string} cid - Manifest CID to start unpinning from
+ * @param {string} [actorAddress] - Wallet address of the burner
  * @returns {Promise<{unpinned: string[], count: number, errors?: string[]}>}
  */
 export async function unpinAssetCids(cid, actorAddress) {
@@ -564,7 +565,7 @@ export async function unpinAssetCids(cid, actorAddress) {
 
   // If the server lost its session store (e.g. restart), re-authenticate once.
   if (response.status === 401) {
-    log("[SESSION] unpin rejected cached token — re-authenticating");
+    log("[SESSION] unpin rejected cached token - re-authenticating");
     clearSession();
     token = await getOrCreateSession();
     response = await fetch(`${API_BASE}/ipfs/unpin`, {

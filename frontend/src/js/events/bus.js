@@ -1,8 +1,9 @@
+// @ts-nocheck
 /**
  * Arbesk Studio Event Bus
  *
  * Singleton mitt instance. Import EVENTS constants and on/off/emit from here
- * instead of using document.dispatchEvent — handlers receive the payload
+ * instead of using document.dispatchEvent - handlers receive the payload
  * directly, not wrapped in a CustomEvent.
  *
  * Usage:

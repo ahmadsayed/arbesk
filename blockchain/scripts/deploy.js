@@ -10,7 +10,7 @@ const path = require("path");
  *   megaethTestnet     → deploy ArbeskAssetFree only (no paid, no USDC)
  *   any other          → error
  *
- * ArbeskAssetFree() — no constructor args
+ * ArbeskAssetFree() - no constructor args
  */
 
 async function main() {
@@ -30,7 +30,7 @@ async function main() {
     process.exit(1);
   }
 
-  // ── Deploy ArbeskAssetFree (free tier) — always deployed ──
+  // ── Deploy ArbeskAssetFree (free tier) - always deployed ──
   const ArbeskAssetFree = await hre.ethers.getContractFactory(
     "ArbeskAssetFree"
   );
@@ -47,7 +47,7 @@ async function main() {
     usdcAddress = process.env.USDC_TOKEN;
     if (!usdcAddress) {
       console.log(
-        "No USDC_TOKEN env var — deploying MockUSDC for local testing..."
+        "No USDC_TOKEN env var - deploying MockUSDC for local testing..."
       );
       const MockUSDC = await hre.ethers.getContractFactory("MockUSDC");
       const mockUsdc = await MockUSDC.deploy();
@@ -73,7 +73,7 @@ async function main() {
   } else {
     // ── Testnet: free tier only ──
     console.log(
-      "Skipping ArbeskAsset (paid) and USDC — not deployed on testnet"
+      "Skipping ArbeskAsset (paid) and USDC - not deployed on testnet"
     );
   }
 

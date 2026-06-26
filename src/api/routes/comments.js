@@ -57,7 +57,7 @@ export default function commentsRoutes({ getContractAddress }) {
         getStorage(),
       );
       console.log(
-        `[ARCHIVE] snapshot complete — ${eventCount} events → ${archiveCid}`,
+        `[ARCHIVE] snapshot complete - ${eventCount} events → ${archiveCid}`,
       );
 
       res.json({ cid: archiveCid, eventCount });
