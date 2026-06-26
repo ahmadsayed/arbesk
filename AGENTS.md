@@ -94,6 +94,11 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | IPFS read/write | `frontend/src/js/ipfs/` |
 | glTF pipeline | `frontend/src/js/gltf/` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` |
+| Standalone Library page | `frontend/src/pug/library.pug` → `frontend/dist/library.html` |
+| Library page bootstrap | `frontend/src/js/library-init.js` |
+| Library grid / toolbar / context menu | `frontend/src/js/ui/library-grid.js`, `library-toolbar.js`, `library-context-menu.js` |
+| Library operations | `frontend/src/js/services/library-ops.js` (create collection, upload file) |
+| Library state / item helpers | `frontend/src/js/state/library-state.js`, `frontend/src/js/utils/library-items.js` |
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
 | Save/publish helpers | `frontend/src/js/services/asset-save/` (`manifest-builder.js`, `collection-publish.js`, `editor-publish.js`) |
 | Comments panel | `frontend/src/js/ui/comments-panel.js` |

@@ -22,6 +22,7 @@
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `asset-save.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
+| Standalone Library Page | ✅ Complete | `library.pug`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
 | Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
@@ -106,6 +107,7 @@ src/
 - ✅ Multi-storage backend (`kubo` local, `pinata` testnet)
 - ✅ Presigned upload URLs for browser uploads (Pinata/Kubo)
 - ✅ Nostr comments archive snapshot on republish (`POST /api/v1/assets/snapshot-comments`)
+- ✅ Standalone Library page with collections, uploads, grid/list, search/sort, context actions, and Studio round-trip
 
 ### 2.5 What Does NOT Work / Is Missing
 
@@ -146,6 +148,9 @@ frontend/src/js/
 │   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
 │   ├── sidebar.js              # 4-view switcher (Create/Outline/Library/Ledger)
+│   ├── library-grid.js         # Library grid/list rendering, selection, keyboard shortcuts, rubber-band select
+│   ├── library-toolbar.js      # Breadcrumb, search, sort, view toggle, New Collection, Upload
+│   ├── library-context-menu.js # Library right-click actions (Open, Rename, Burn, Delete, Send to Collection…)
 │   ├── collaborators.js        # Burn button visibility helper
 │   ├── dialog.js / toasts.js / wallet-modal.js / wallet-popover.js
 │   └── ...
@@ -181,20 +186,26 @@ frontend/src/js/
 │   ├── ui-state.js             # Replaces window.* UI globals
 │   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
 │   ├── create-store.js         # Generic createStore factory
-│   └── library-state.js        # Library folders/files state
+│   └── library-state.js        # Library page state (collections, assets, selection, view mode, sort, search)
 └── services/
     ├── api.js                  # API client: sessions, generate, comments archive, unpin, upload-url
     ├── asset-save/             # Save/publish helpers
     │   ├── manifest-builder.js # Manifest assembly, version bumping, comment archive embedding
     │   ├── collection-publish.js # Collection mint / URI update
     │   └── editor-publish.js   # Editor republish authorization (Merkle proof)
+    ├── library-ops.js          # Create named collection, upload glTF/GLB file into collection
     ├── team.js                 # Merkle-based editor add/remove
     ├── asset-delete.js         # Remove an asset from a collection
     └── url-utils.js            # URL param helpers
+
+frontend/src/js/utils/
+├── library-items.js          # Library filter, sort, range selection, bytes formatter
+└── ...
 ```
 
 **Templates & Styles**
 - `frontend/src/pug/studio.pug` — Single consolidated studio page
+- `frontend/src/pug/library.pug` — Standalone Library page (built to `dist/library.html`)
 - `frontend/src/scss/` — 29 partials including layout, viewport, inspector, timeline, ledger, wallet modals
 
 > **Naming drift from older docs:** `chat-studio.js` → `create-panel.js`, `save-world.js` → `asset-save.js`, `gallery.js` → `asset-library.js`, `history-browser.js` → `asset-history.js`, `team-panel.js` → `asset-editors.js`.
@@ -271,6 +282,15 @@ frontend/src/js/
 - Republish snapshots the thread to IPFS via `POST /api/v1/assets/snapshot-comments` and stores `comments_archive_cid` in the asset manifest.
 - The frontend loads the archive first, then subscribes to live relay events through `/api/v1/chat/ws` and deduplicates by `event.id`.
 - Chat proxy authorization: valid SIWE session + (owner of token OR valid Merkle editor proof for the current editor root/version).
+
+**Standalone Library Page (`library.pug`, `library-init.js`, `ui/library-*.js`, `services/library-ops.js`)**
+- Page switcher in headerbar links between `/library.html` and `/studio.html`.
+- Loads owned collections (via owner Transfer events) and shared collections (via editor events).
+- Displays collections and, when opened, their assets using the same collection manifest expansion as the Studio gallery.
+- Supports grid/list views, search by name, sort by name/date/status, and keyboard navigation (Ctrl+A, Enter, Delete, F2, Esc/Backspace).
+- **New Collection**: mints a deterministic token id from `keccak256(address, name)`; handles already-minted names by opening the existing collection.
+- **Upload**: accepts `.glb` / `.gltf` files up to 50 MB, writes the source asset and asset manifest to IPFS, then updates the collection manifest.
+- **Context-menu actions**: Open, Open in Studio, Rename, Manage Collaborators, Burn Collection (collections); Open in Studio, Send to Collection (move/copy), Rename, Delete (assets).
 
 **API Service (`services/api.js`)**
 - Session auth with auto-retry on `INVALID_SESSION`

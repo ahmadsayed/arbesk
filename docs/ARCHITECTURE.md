@@ -57,7 +57,10 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  ├─ team.js: Merkle editor list add/remove                           │
 │  ├─ merkle-editors.js: computeRoot / getProof / makeLeaf             │
 │  ├─ comment-thread.js: per-asset Nostr thread state                  │
-│  └─ comments-panel.js: asset comment UI                              │
+│  ├─ comments-panel.js: asset comment UI                              │
+│  ├─ library-init.js + library-grid.js / library-toolbar.js           │
+│  │  / library-context-menu.js: standalone Library page               │
+│  └─ library-ops.js: create collection, upload glTF/GLB file          │
 │                                                                      │
 │  IPFS writes happen directly from the browser:                       │
 │  ├─ Thumbnails: captureAssetThumbnail() → writeToIPFS()              │
@@ -170,6 +173,12 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | Services | `services/team.js` | Merkle-based editor add/remove |
 | Services | `services/asset-delete.js` | Remove an asset from a collection (direct IPFS write) |
 | State | `state/comment-thread.js` | Per-asset Nostr WebSocket + archive state |
+| UI | `pug/library.pug` | Standalone Library page (built to `dist/library.html`) |
+| UI | `ui/library-grid.js` | Library grid/list rendering, selection, keyboard shortcuts, rubber-band select |
+| UI | `ui/library-toolbar.js` | Breadcrumb, search, sort, view mode, New Collection, Upload |
+| UI | `ui/library-context-menu.js` | Right-click actions: Open, Open in Studio, Rename, Manage Collaborators, Burn, Delete, Send to Collection |
+| Services | `services/library-ops.js` | `createNamedCollection()`, `uploadFileToCollection()` |
+| Services | `utils/library-items.js` | Filter, sort, range selection, bytes formatter |
 
 ### 3.3 Smart Contracts (`blockchain/contracts/`)
 
@@ -449,7 +458,31 @@ Publish
 
 The collection token's `tokenURI` always points to the latest collection manifest CID. Updating an existing asset republishes the collection, not a new token. All manifest and thumbnail writes are direct browser→IPFS; only the comments archive snapshot touches the server (needs Nostr private key).
 
-### 5.4 Gallery Flow
+### 5.4 Library Page Flow
+
+`frontend/dist/library.html` is a standalone page linked from the headerbar page-switcher. It shares the wallet/theme chrome with Studio but keeps its own state.
+
+```text
+Wallet connected
+  → fetch owned + shared collections via Transfer events
+  → display collections (grid/list) with thumbnails and role badges
+  → double-click / Enter opens a collection
+  → inside a collection: expand assets from collection manifest assets map
+  → double-click asset opens /studio.html?asset=<tokenId>&assetId=<assetId>
+
+Toolbar actions:
+  New Collection → mint named collection token (deterministic token id from address+name)
+  Upload → choose .glb/.gltf file → write source + asset manifest to IPFS → update collection manifest
+
+Context-menu actions:
+  Collection: Open, Open in Studio, Rename, Manage Collaborators, Burn Collection
+  Asset: Open in Studio, Send to Collection (move/copy), Rename, Delete
+
+Keyboard shortcuts:
+  Ctrl/Cmd+A select all, Delete delete selected assets, F2 rename, Enter open, Esc clear/back
+```
+
+### 5.5 Gallery Flow
 
 ```text
 Wallet connected
@@ -460,7 +493,7 @@ Wallet connected
   → display asset name and optional thumbnail
 ```
 
-### 5.5 Studio URL Loading Flow
+### 5.6 Studio URL Loading Flow
 
 The Studio supports deep-linking tokens and individual assets via query params:
 

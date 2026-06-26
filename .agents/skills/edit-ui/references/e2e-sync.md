@@ -24,6 +24,7 @@ Update + run the suite before merging any change that touches:
 - **Nesting**: Add to Scene, dive (`#inspectorDiveBtn`), back button, breadcrumb, the `nesting:*` events.
 - **Manifest schema**: `scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`, version numbering.
 - **Comments panel**: `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount`.
+- **Library page**: `library.html`, wallet gate, collection grid, toolbar buttons, context menu, breadcrumb.
 
 `npm test` (Jest) is **not** enough for any of the above.
 
@@ -41,6 +42,7 @@ Update + run the suite before merging any change that touches:
 | New asset, dive/ascend breadcrumb | `06` | `newAssetBtn`, `inspectorDiveBtn`, `backBtn` |
 | Manifest shape / versioning | matching spec + `e2e/helpers/manifest.mjs` | the validators in `manifest.mjs` |
 | Comments panel / composer | `14`, `15` | `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount` |
+| Library page (wallet gate, grid, toolbar, context menu) | `09`, `10`, `11`, `12` | `libraryGate`, `libraryMain`, `libraryItems`, `librarySearchInput`, `librarySortSelect`, `libraryCreateCollectionBtn`, `libraryUploadBtn`, `libraryBreadcrumb`, `libraryUpBtn`, `libraryGridViewBtn`, `libraryListViewBtn` |
 
 ## The four-step sync workflow
 
