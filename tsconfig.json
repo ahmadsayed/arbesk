@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "lib": ["ES2022"],
+    "types": ["node", "jest"],
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "include": [
+    "src/**/*",
+    "constants/**/*",
+    "scripts/**/*",
+    "e2e/helpers/**/*",
+    "e2e/lib/**/*",
+    "e2e/fixtures/**/*"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/artifacts/**",
+    "**/deployments/**",
+    "**/test-results/**",
+    "blockchain/**",
+    "frontend/**",
+    "test/**",
+    "e2e/specs/**"
+  ]
+}
