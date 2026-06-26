@@ -171,7 +171,7 @@ docker-compose run --rm hardhat sh
 - **Modules**: ES modules (`import`/`export`) in root + frontend; CommonJS (`require`) in `blockchain/scripts/` only
 - **Frontend globals**: `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` are CDN-loaded — don't import them
 - **Naming**: camelCase variables/functions, PascalCase classes, UPPER_SNAKE module-level constants
-- **No TypeScript**: Pure JavaScript; add JSDoc when documenting new public functions
+- **Pure JavaScript source, TypeScript-powered checking**: Source files remain `.js`. TypeScript is used only as a static type-checking layer via `allowJs`/`checkJs` (`npm run typecheck`, `npm run typecheck:frontend`). Add JSDoc when documenting new public functions; files that are too dynamic to type cleanly can use `// @ts-nocheck` with a TODO.
 
 ### CDN Script Tags — No SRI Hashes
 Pug templates must **not** include `integrity="sha384-…"` attributes. CDNs silently rebuild assets, breaking SRI and blocking scripts entirely (symptom: `BABYLON.Engine is not a constructor`). Pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"`.
@@ -208,6 +208,27 @@ All logs use `[TAG]` prefixes. Log start + outcome of every async operation; inc
 | `[BURN]` | Token burn |
 
 Use `console.error()` for exceptions only; `console.log()` for operational flow.
+
+### Viewport Resize Handling
+
+The 3D viewport must never stretch during window resize or sidebar collapse/expand. The only reliable pattern is to resize the Babylon engine **inside `runRenderLoop`, immediately before `scene.render()`**:
+
+```js
+state.engine.runRenderLoop(() => {
+  state.engine.resize();
+  updateOrthoFrustumOnResize(); // for orthographic front/right/top views
+  state.scene.render();
+});
+```
+
+Also keep `window.addEventListener("resize")` and a canvas `ResizeObserver` for immediate updates when the render loop is not active, and remove both in `clearScene()` to avoid leaks.
+
+**Do not:**
+- Throttle the render loop to 60 FPS — it delays the corrected frame after a resize.
+- Rely only on `ResizeObserver` or only on `window.resize` — both can race with the render loop.
+- Render synchronously inside the resize handler — this still allows a render-loop frame to use the new canvas size with the old projection matrix.
+
+See `frontend/src/js/engine/scene-graph.js` for the current implementation.
 
 ---
 

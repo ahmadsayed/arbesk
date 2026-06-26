@@ -69,6 +69,45 @@ canvas.addEventListener("wheel", (e) => {
 }, { passive: false });
 ```
 
+### Rebalancing the ortho frustum on resize
+
+Once the frustum is set explicitly, it does **not** update automatically when the canvas aspect changes. If the user resizes the window or collapses the sidebar, the model will stretch unless the frustum is recomputed.
+
+Call this inside the render loop (and in any resize handler):
+
+```js
+function updateOrthoFrustumOnResize() {
+  const cam = state.camera;
+  if (
+    !cam ||
+    cam.mode !== BABYLON.Camera.ORTHOGRAPHIC_CAMERA ||
+    cam.orthoLeft == null
+  ) return;
+
+  const canvas = state.engine.getRenderingCanvas();
+  const halfW = (cam.orthoRight - cam.orthoLeft) / 2;
+  const halfH = (cam.orthoTop - cam.orthoBottom) / 2;
+
+  const canvasAspect = canvas.width / canvas.height;
+  const frustumAspect = halfW / halfH;
+
+  let newHalfW = halfW;
+  let newHalfH = halfH;
+  if (canvasAspect > frustumAspect) {
+    newHalfW = halfH * canvasAspect;   // wider canvas → expand width
+  } else {
+    newHalfH = halfW / canvasAspect;   // taller canvas → expand height
+  }
+
+  cam.orthoLeft   = -newHalfW;
+  cam.orthoRight  = +newHalfW;
+  cam.orthoBottom = -newHalfH;
+  cam.orthoTop    = +newHalfH;
+}
+```
+
+**Rule of thumb:** preserve the smaller dimension and expand the larger one to match the new aspect ratio. This keeps the model’s world-space scale constant in one axis while adding padding in the other.
+
 ## Camera Framing
 
 ### Frame all (Home key)
@@ -137,6 +176,7 @@ The gizmo canvas has `pointer-events: none` so it never intercepts scene interac
 |-------|-------|-----|
 | Ortho view is 100× too large | Relying on `radius`-derived frustum | Set `orthoLeft/Right/Top/Bottom` explicitly |
 | Wheel zoom doesn't work in ortho | Default handler scales `radius` | Add custom wheel listener for ortho mode |
+| Ortho view stretches on window resize | Frustum not rebalanced | Call `updateOrthoFrustumOnResize()` inside render loop |
 | Camera spins wildly | `beta` exactly 0 causes gimbal lock | Use `beta = 0.01` for top view |
 | Framing snaps instantly | No animation | Use `CreateAndStartAnimation` with 18 frames (~300ms) |
 | Gizmo blocks clicks | Missing `pointer-events: none` | Set in CSS |
