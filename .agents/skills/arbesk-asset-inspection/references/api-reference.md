@@ -1,77 +1,47 @@
 # API Reference — Arbesk Asset Inspection
 
-Full API endpoint documentation for asset inspection.
+Asset inspection is **client-side first**. There are no backend routes that proxy token or manifest reads. Use the contract + IPFS gateway directly, or call the same helpers the frontend uses.
 
-## Backend API: Fetching Assets
+## Resolve a token ID to its manifest
 
-The backend runs on `http://127.0.0.1:9090`. All asset endpoints are under `/api/v1/`.
+Call `tokenURI(tokenId)` on the ERC-721 contract, then fetch the returned CID from the IPFS gateway.
 
-### Resolve a token ID to its manifest
+```js
+import { normalizeTokenURI } from "frontend/src/js/blockchain/uri-utils.js";
 
+const tokenURI = await contract.methods.tokenURI(tokenId).call();
+const cid = normalizeTokenURI(tokenURI);
+const manifest = await fetch(`http://127.0.0.1:8080/ipfs/${cid}`).then(r => r.json());
 ```
-GET /api/v1/tokens/:tokenId/manifest
+
+For collection tokens, `manifest.type === "collection"` and `manifest.assets` maps `assetId` → asset manifest CID. For standalone asset tokens, the manifest itself is `type: "asset"`.
+
+## Walk the manifest version chain
+
+`frontend/src/js/engine/time-travel.js` provides `walkManifestChain(cid, options)`:
+
+```js
+import { walkManifestChain } from "frontend/src/js/engine/time-travel.js";
+
+const chain = await walkManifestChain(cid, { maxDepth: 50 });
+// chain: [{ cid, version, name, timestamp }, ...]
 ```
 
-This calls `tokenURI(tokenId)` on the `ArbeskAsset` contract, fetches the manifest from IPFS, and returns:
-- `tokenId` — the token ID
-- `manifestCid` — the current IPFS CID
-- `manifest` — the full parsed manifest JSON
+It follows `prev_asset_manifest_cid` links client-side via IPFS gateway reads.
+
+## Direct IPFS fetch
 
 ```bash
-curl -s http://127.0.0.1:9090/api/v1/tokens/172409538/manifest
+# In a browser/dev context:
+curl -s http://127.0.0.1:8080/ipfs/<CID>
+
+# Inside the Kubo container:
+docker compose exec ipfs ipfs cat <CID>
 ```
 
-**Response example:**
+## Backend helper (tests only)
 
-```json
-{
-  "tokenId": "172409538",
-  "manifestCid": "bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri",
-  "manifest": {
-    "asset_id": "asset_1780583355628",
-    "version": 3,
-    "timestamp": 1780583355628,
-    "prev_asset_manifest_cid": "bafkrei6fbquzn4igq3usxqjtanbio4q6lbhxoiwvdktpi54s3tuole5bq",
-    "scene": { "nodes": [...] },
-    "name": "Untitled Asset",
-    "thumbnail": { ... }
-  }
-}
-```
-
-**Error conditions:**
-- `503 CONTRACT_NOT_CONFIGURED` — `CONTRACT_ADDRESS` not set in root `.env`
-- `503 ABI_NOT_FOUND` — contracts not compiled; run `docker-compose run --rm hardhat npx hardhat compile`
-- `404 TOKEN_NOT_FOUND` — token exists but has no `tokenURI`
-- `500 TOKEN_RESOLUTION_FAILED` — IPFS read or contract call failed
-
-### Walk the manifest version chain
-
-```
-GET /api/v1/manifests/:cid/history
-```
-
-Walks `prev_asset_manifest_cid` links backward up to 50 entries deep. Returns all versions, oldest first:
-
-```bash
-curl -s http://127.0.0.1:9090/api/v1/manifests/bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri/history
-```
-
-Returns:
-
-```json
-{
-  "chain": [
-    { "cid": "bafkreia7kc...", "version": 1, "name": "...", "nodeCount": 1, "timestamp": 1780000000 },
-    { "cid": "bafkreib8ld...", "version": 2, "name": "...", "nodeCount": 1, "timestamp": 1780100000 },
-    { "cid": "bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri", "version": 3, "name": "...", "nodeCount": 1, "timestamp": 1780583355628 }
-  ]
-}
-```
-
-### Direct IPFS fetch (via the API test helper)
-
-In a Node.js context (tests or scripts), the API exposes `_getFromIPFS(cid)`:
+In a Node.js test context, the API app exposes `api._getFromIPFS(cid)`:
 
 ```js
 const raw = await api._getFromIPFS("bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri");

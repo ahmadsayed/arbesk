@@ -1,6 +1,6 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-06-21
+> **Generated:** 2026-06-25
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
@@ -21,6 +21,7 @@
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `asset-save.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
+| Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
 | Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
@@ -45,12 +46,20 @@ src/
     │   └── pinata-adapter.js   # Pinata v3 SDK + presigned upload URLs
     ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
     ├── authentication.js       # Session token validation middleware
+    ├── authorization.js        # On-chain asset access checks for chat proxy
     ├── chat-proxy.js           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
-    ├── comments-archive.js     # Nostr comment thread → IPFS archive
+    ├── comments-archive.js     # Asset-level Nostr comment thread → IPFS archive
+    ├── errors.js               # Standardized error response helper
     ├── ipfs-utils.js           # catManifest() with timeout/abort
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
     ├── nostr-relay.js          # Shared relay primitives (used by chat-proxy + comments-archive)
     ├── rate-limiter.js         # In-memory per-wallet rate limiter
+    ├── routes/                 # Per-domain route modules
+    │   ├── comments.js         # POST /assets/snapshot-comments
+    │   ├── contracts.js        # GET /contracts/:name/abi
+    │   ├── ipfs.js             # POST /ipfs/upload-url + /ipfs/unpin
+    │   ├── openapi.js          # GET /openapi.json + /docs
+    │   └── test-utils.js       # Test-only reset helpers
     ├── sessions.js             # SIWE session create/delete (24h TTL)
     ├── siwe-verify.js          # EIP-4361 message verification
     └── openapi.json            # Static OpenAPI spec
@@ -68,9 +77,9 @@ src/
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
 | DELETE | `/sessions` | Session | Invalidates session token |
 | POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes (no IPFS writes) |
-| POST | `/assets/snapshot-comments` | None | Snapshots Nostr comment thread to IPFS archive (needs service private key) |
+| POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId` |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
-| POST | `/ipfs/unpin` | None | Walks up to 100 manifests, collects all CIDs, unpins them |
+| POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
 | GET | `/openapi.json` | None | Static OpenAPI spec |
 | GET | `/docs` | None | Swagger UI HTML bundle |
@@ -127,11 +136,12 @@ frontend/src/js/
 │   └── viewport-gizmo.js   # Corner orientation gizmo
 ├── ui/
 │   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
-│   ├── asset-save.js           # Save Draft / Publish, collection merge, thumbnail capture
+│   ├── asset-save.js           # Save Draft / Publish UI; delegates building to services/asset-save/
 │   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag
 │   ├── asset-drop-zone.js      # Viewport drag/drop overlay
 │   ├── asset-history.js        # Draggable horizontal timeline scrubber
 │   ├── asset-editors.js        # Team panel (add/remove editors, owner badge)
+│   ├── comments-panel.js       # Asset-level comment thread UI
 │   ├── ledger-panel.js         # Activity feed derived from manifest chain
 │   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
@@ -140,7 +150,12 @@ frontend/src/js/
 │   ├── dialog.js / toasts.js / wallet-modal.js / wallet-popover.js
 │   └── ...
 ├── blockchain/
-│   ├── wallet.js               # Web3Modal, WalletConnect, USDC PayGo, contract calls, burn, Merkle proof calls
+│   ├── wallet.js               # Backward-compat barrel; re-exports the split wallet modules
+│   ├── wallet-core.js          # Web3 init, connect/disconnect, auto-connect, account state
+│   ├── wallet-network.js       # Network switching
+│   ├── wallet-payments.js      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
+│   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn()
+│   ├── wallet-guard.js         # Guards / helpers for publishing auth
 │   ├── token-resolver.js       # Resolve child_ref tokens to manifest CIDs
 │   ├── uri-utils.js            # Normalize tokenURIs to plain CIDs
 │   ├── siwe.js                 # EIP-4361 message builder
@@ -168,7 +183,11 @@ frontend/src/js/
 │   ├── create-store.js         # Generic createStore factory
 │   └── library-state.js        # Library folders/files state
 └── services/
-    ├── api.js                  # API client: sessions, generate, save, publish, history, unpin, upload-url
+    ├── api.js                  # API client: sessions, generate, comments archive, unpin, upload-url
+    ├── asset-save/             # Save/publish helpers
+    │   ├── manifest-builder.js # Manifest assembly, version bumping, comment archive embedding
+    │   ├── collection-publish.js # Collection mint / URI update
+    │   └── editor-publish.js   # Editor republish authorization (Merkle proof)
     ├── team.js                 # Merkle-based editor add/remove
     ├── asset-delete.js         # Remove an asset from a collection
     └── url-utils.js            # URL param helpers
@@ -246,10 +265,18 @@ frontend/src/js/
 - Collaboration: `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)` — full editor list stored on IPFS
 - Burn: resolves manifest CID before burn, calls `burn(tokenId, proof)`, `unpinAssetCids` non-blocking after on-chain success
 
+**Asset-Level Comments (`state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`)**
+- Each asset has its own isolated Nostr thread, tagged `<chainId>:<contractAddress>:<tokenId>:<assetId>`.
+- The tag is derived from the manifest `asset_id`; no manifest schema change is required.
+- Republish snapshots the thread to IPFS via `POST /api/v1/assets/snapshot-comments` and stores `comments_archive_cid` in the asset manifest.
+- The frontend loads the archive first, then subscribes to live relay events through `/api/v1/chat/ws` and deduplicates by `event.id`.
+- Chat proxy authorization: valid SIWE session + (owner of token OR valid Merkle editor proof for the current editor root/version).
+
 **API Service (`services/api.js`)**
 - Session auth with auto-retry on `INVALID_SESSION`
 - Generation requires a valid session; no fallback auth scheme
-- Endpoints: `POST /generations`, `POST /manifests`, `POST /manifests/:cid/publish`, `GET /manifests/:cid/history`, `GET /tokens/:tokenId/manifest`, `POST /ipfs/unpin`, `POST /ipfs/upload-url`, `GET /config`, `GET /contracts/:name/abi`
+- Backend endpoints actually used: `POST /sessions`, `POST /generations`, `POST /assets/snapshot-comments`, `POST /ipfs/unpin`, `POST /ipfs/upload-url`, `GET /config`, `GET /contracts/:name/abi`
+- Manifest writes, chain walks, token resolution, and publish metadata are all client-side (no `POST /manifests` routes exist)
 
 **UI Systems**
 - Sidebar: 4 views persisted to `localStorage`, collapsible, responsive auto-collapse
@@ -258,7 +285,8 @@ frontend/src/js/
 - Outliner: tree with 📦/🧩 icons, click select, double-click dive, library drag
 - Nesting: breadcrumb path bar, Alt+Left ascend, depth status in bottom bar
 - History: draggable horizontal track, active vs published states
-- Ledger: derives activity from manifest chain via `/api/v1/manifests/:cid/history` — **no localStorage ledger**
+- Comments: asset-level Nostr thread in the sidebar; archives loaded from `comments_archive_cid`, live events via `/api/v1/chat/ws`
+- Ledger: derives activity from manifest chain via client-side `walkManifestChain()` — **no localStorage ledger**
 - Dialogs: GNOME HIG-styled modals using `focus-trap@7.6.2` (CDN) for robust Tab cycling and MetaMask overlay coexistence
 - Toasts: Notyf@3.10.0 (CDN) wrapper preserving `showToast` / `showTxToast` / `showErrorToast` call sites with GNOME-styled glass accents
 
@@ -362,7 +390,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 | `megaethTestnet` (chain 6343) | ArbeskAsset (paid) | — | **Not deployed on testnet** |
 
 > `CONTRACT_ADDRESS` in `.env` now points to the **free** contract. The paid contract is stored in `PAID_CONTRACT_ADDRESS`.
-> Contract addresses are also hardcoded in `src/config.js` and `frontend/src/js/blockchain/network-config.js`.
+> Contract addresses are also hardcoded in `src/config.js` and `frontend/src/js/blockchain/network-config.js`. Chain IDs are consolidated in `constants/chains.js`.
 
 ### 4.4 Hardhat Config
 
@@ -423,7 +451,7 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 
 ### 5.4 Test Gaps
 
-- ✅ E2E tests: 9 Playwright specs covering wallet connect, generation, save/publish, parametric, republish, nesting, collections, material editor, fork (see `e2e/README.md`).
+- ✅ E2E tests: 16 Playwright specs (34 tests) covering wallet connect, generation, save/publish, parametric, republish, nesting, collections, material editor, fork, library basics/actions/round-trip/create-upload, editor collaboration, and asset-level comments (see `e2e/README.md`).
 - ❌ No reentrancy attack tests (though `nonReentrant` is present).
 - ❌ No fuzzing / property-based tests.
 
@@ -551,6 +579,8 @@ Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/uplo
 | File `frontend/src/js/events/registry.js` | Replaced by `frontend/src/js/events/bus.js` (mitt singleton) |
 | Network target Optimism Sepolia/Mainnet | Replaced by MegaETH Testnet |
 | On-chain editor roles (`addEditor`/`removeEditor`) | Replaced by off-chain Merkle editor list + `updateEditors` |
+| Comments scoped to collection/token | Comments are asset-level; Nostr tag includes `assetId` |
+| Chain ID constants in `src/constants/chains.js` + `frontend/src/js/constants/chains.js` | Consolidated into single `constants/chains.js` |
 
 ---
 

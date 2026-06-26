@@ -1,6 +1,6 @@
 # Arbesk System Architecture
 
-> Status: Current v0.6 — Phases 1–5.2 complete (token child worlds, free-tier contract, Merkle editor proofs, collection tokens). Phase 5 micro-ledger planned.
+> Status: Current v0.8 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). Asset-level Nostr comments implemented. Phase 5 micro-ledger planned.
 > Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child worlds, collection manifests, and studio publishing
 
 ---
@@ -44,15 +44,20 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  └─ Activity ledger (client-side chain walk)                         │
 │                                                                      │
 │  Frontend services                                                   │
-│  ├─ wallet.js: Web3Modal/Web3 + ArbeskAssetFree / ArbeskAsset calls  │
+│  ├─ wallet-core.js / wallet-payments.js / wallet-publishing.js:      │
+│  │  Web3Modal, network switching, free/paid generation, mint/update/  │
+│  │  editor/burn calls (re-exported via wallet.js barrel)             │
 │  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache           │
 │  ├─ write-to-ipfs.js: direct browser→IPFS writes (Kubo/Pinata)       │
-│  ├─ asset-save.js: save/publish, collection merge, thumbnail capture │
+│  ├─ asset-save.js + services/asset-save/:                            │
+│  │  save/publish, manifest builder, collection merge, thumbnail capture│
 │  ├─ asset-library.js: token gallery with collection expansion        │
 │  ├─ token-resolver.js: on-chain child_ref resolution (no server)     │
 │  ├─ time-travel.js: manifest chain walking (no server)              │
 │  ├─ team.js: Merkle editor list add/remove                           │
-│  └─ merkle-editors.js: computeRoot / getProof / makeLeaf             │
+│  ├─ merkle-editors.js: computeRoot / getProof / makeLeaf             │
+│  ├─ comment-thread.js: per-asset Nostr thread state                  │
+│  └─ comments-panel.js: asset comment UI                              │
 │                                                                      │
 │  IPFS writes happen directly from the browser:                       │
 │  ├─ Thumbnails: captureAssetThumbnail() → writeToIPFS()              │
@@ -70,7 +75,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │     (no IPFS writes — browser uploads asset + manifest)              │
 │                                                                      │
 │  /api/v1/assets/snapshot-comments                                    │
-│  └─ Nostr comments archive snapshot (needs service private key)      │
+│  └─ Asset-level Nostr comments archive snapshot (needs service key)  │
 │                                                                      │
 │  /api/v1/ipfs/upload-url                                             │
 │  └─ Mints presigned upload credentials (protects Pinata JWT)         │
@@ -110,11 +115,13 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | File | Responsibility |
 |---|---|
 | `src/index.js` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
-| `src/api/index.js` | Route registry — thin gatekeeper: auth, rate limiting, adapter calls, credential minting, unpin |
+| `src/api/index.js` | Route registry — mounts all `/api/v1` routes |
+| `src/api/routes/` | Per-domain route modules (`comments.js`, `ipfs.js`, `contracts.js`, `openapi.js`, `test-utils.js`) |
 | `src/api/assets/generate-node.js` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
 | `src/api/storage/index.js` | Storage backend abstraction (`kubo` or `pinata`) |
 | `src/api/storage/pinata-adapter.js` | Pinata v3 SDK uploads + presigned upload URLs |
 | `src/api/storage/kubo-adapter.js` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
+| `src/api/authorization.js` | On-chain asset access checks for chat proxy (owner or Merkle editor proof) |
 | *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, manifest-chain walks, token resolution — all browser-side |
 | `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
 | `src/api/sessions.js` | SIWE session create/delete (24h TTL) |
@@ -142,18 +149,27 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | glTF | `gltf/decomposer.js` / `async-gltf.js` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
 | glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
 | glTF | `gltf/merkle-editors.js` | Merkle tree/proof library for editor authorization |
-| Blockchain | `blockchain/wallet.js` | Web3Modal, wallet connection, EVM switching, PayGo, mint/update URI/editor/burn calls |
+| Blockchain | `blockchain/wallet.js` | Backward-compat barrel re-exporting `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
+| Blockchain | `blockchain/wallet-core.js` | Web3 init, connect/disconnect, auto-connect, account state |
+| Blockchain | `blockchain/wallet-network.js` | Network switching |
+| Blockchain | `blockchain/wallet-payments.js` | Free-tier `recordGeneration()`, USDC PayGo `payForGenerationWithUSDC()` |
+| Blockchain | `blockchain/wallet-publishing.js` | Mint, `updateAssetURI()`, `updateEditors()`, `burn()` |
 | Blockchain | `blockchain/network-config.js` | Per-network contract/USDC/RPC configuration |
 | Blockchain | `blockchain/token-resolver.js` | Resolve `child_ref` tokens to manifest CIDs (client-side, no server) |
 | UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
-| UI | `ui/asset-save.js` | Save/publish lifecycle, collection merge, thumbnail capture, direct IPFS writes |
+| UI | `ui/asset-save.js` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
 | UI | `ui/asset-history.js` | Manifest-chain timeline browser (uses client-side walkManifestChain) |
 | UI | `ui/asset-editors.js` | Editor list / add/remove UI |
+| UI | `ui/comments-panel.js` | Asset-level comment thread UI |
 | UI | `ui/ledger-panel.js` | Activity feed — walks manifest chain client-side, fetches full manifests |
-| Services | `services/api.js` | API client: sessions, generation (with client-side IPFS upload), comments archive, upload credential |
+| Services | `services/api.js` | API client: sessions, generation, comments archive snapshot, upload credential, unpin |
+| Services | `services/asset-save/manifest-builder.js` | Manifest assembly, version bumping, comment archive embedding |
+| Services | `services/asset-save/collection-publish.js` | New collection mint / existing collection URI update |
+| Services | `services/asset-save/editor-publish.js` | Republish authorization for editors (Merkle proof) |
 | Services | `services/team.js` | Merkle-based editor add/remove |
 | Services | `services/asset-delete.js` | Remove an asset from a collection (direct IPFS write) |
+| State | `state/comment-thread.js` | Per-asset Nostr WebSocket + archive state |
 
 ### 3.3 Smart Contracts (`blockchain/contracts/`)
 
@@ -175,7 +191,7 @@ There are two concrete contracts sharing `ArbeskAssetBase.sol`:
 - admin controls: cost, treasury, pause/unpause
 
 Shared responsibilities (in `ArbeskAssetBase.sol`):
-- ERC-721 enumerable minting and URI storage
+- ERC-721 minting and URI storage (non-enumerable)
 - Merkle-root-based editor authorization (`editorRoot[tokenId]`, `editorSetVersion[tokenId]`)
 - burn with Merkle proof
 - pause/unpause and ownership
@@ -220,6 +236,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
   "version": 4,
   "timestamp": 1780000000,
   "prev_asset_manifest_cid": "QmPreviousManifest...",
+  "comments_archive_cid": "QmCommentsArchiveCid...",
   "thumbnail": {
     "type": "snapshot",
     "cid": "QmThumbnailCid...",
@@ -293,6 +310,8 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 - `path` — the source file name (`asset.glb` or `composite.gltf`); metadata only.
 - `format` — `"glb"` or `"gltf"`.
 - `bundleCid` *(optional)* — an IPFS UnixFS directory root CID grouping the composite glTF + its `.bin` buffers + textures under their friendly names (`composite.gltf`, `buffer_0.bin`, `texture_0.png`). **Organizational only** — exists so Pinata/Kubo show a browsable folder for the asset. Loading ignores it. Dropped on color-bake edits (JSON-only changes), since re-bundling isn't worth the upload. Burn unpins it alongside `cid`.
+
+**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `state/comment-thread.js` before live relay events are merged.
 
 **Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides world-level history. The optional `scene.nodes[].history` array can carry a per-node provenance log (generation events, parametric edits); it is consumed by the activity ledger and burn cleanup, but current generation and save paths do not populate it.
 
@@ -419,7 +438,8 @@ Save
 Publish
   → fetch active asset manifest
   → capture WebP thumbnail → writeToIPFS(blob) — direct browser→IPFS
-  → snapshot comments archive (POST /api/v1/assets/snapshot-comments)
+  → snapshot asset-level comments archive
+     (POST /api/v1/assets/snapshot-comments with `assetId`)
   → writeJSONToIPFS(asset manifest) — direct browser→IPFS
   → merge asset CID into collection manifest's `assets` map
   → writeJSONToIPFS(collection manifest) — direct browser→IPFS
@@ -469,6 +489,7 @@ This means a bare collection URL is a "collection overview" state: the user sees
 | Asset manifest | JSON | collection manifest `assets` map |
 | Collection manifest | JSON | token URI |
 | Publish thumbnail | WebP bytes | `manifest.thumbnail.cid` |
+| Comments archive | JSON array of Nostr events | `manifest.comments_archive_cid` |
 | Editor list | JSON array | `editorListUri` + localStorage cache |
 | glTF buffers | CID/base64 converted content | glTF `buffers[].uri` transformation |
 
@@ -571,7 +592,6 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 - `GET /api/health` is a planned route, not a current backend route.
 - IPFS browser cache is disabled by default (`IPFS_CACHE_ENABLED = false` in `remote-ipfs.js`).
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.
-- Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`).
-- Chain ID constants are duplicated (`src/constants/chains.js` and `frontend/src/js/constants/chains.js`).
+- Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`). Chain IDs are consolidated in `constants/chains.js`.
 - Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).
 - `scene.nodes[].history` is defined in the manifest schema and is read by the ledger panel and burn cleanup, but current generation/save paths do not populate it; the manifest chain is the effective source of version history.

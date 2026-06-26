@@ -132,9 +132,9 @@ function _requireEditor(
 
 | Event | Signature |
 |---|---|
-| `AssetPublished` | `(address indexed publisher, uint256 indexed tokenId, string uri, bytes32 editorRoot, string editorListUri)` |
-| `AssetURIUpdated` | `(uint256 indexed tokenId, string newURI)` |
-| `EditorSetChanged` | `(uint256 indexed tokenId, bytes32 newRoot, uint256 newVersion, string newListUri)` |
+| `AssetPublished` | `(address indexed owner, uint256 indexed tokenId, string tokenURI)` |
+| `AssetURIUpdated` | `(uint256 indexed tokenId, string newAssetURI)` |
+| `EditorSetChanged` | `(uint256 indexed tokenId, bytes32 newRoot, uint256 newVersion)` |
 | `AssetBurned` | `(uint256 indexed tokenId, address indexed burner)` |
 
 ---
@@ -156,9 +156,11 @@ function _requireEditor(
 
 | File | Impact | Functions Changed |
 |------|--------|-------------------|
-| `blockchain/wallet.js` | **HIGH** | `publishAsset` (+`editorRoot` + `editorListUri`), `updateAssetURI` (+`proof`), `burn` (+`proof`), `updateEditors` (+proof params), removed old editor/burn-permission functions |
+| `blockchain/wallet.js` | **HIGH** | Backward-compat barrel; logic moved to `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
+| `blockchain/wallet-publishing.js` | **HIGH** | `publishAsset` (+`editorRoot` + `editorListUri`), `updateAssetURI` (+`proof`), `burn` (+`proof`), `updateEditors` (+proof params) |
 | `ui/create-panel.js` | **MEDIUM** | After gen, compute Merkle root → pass to `publishAsset` |
-| `ui/asset-save.js` | **HIGH** | Before `updateAssetURI`, get proof from IPFS editor list; merges asset into collection manifest |
+| `ui/asset-save.js` | **HIGH** | Save/publish UI; delegates manifest building to `services/asset-save/manifest-builder.js` |
+| `services/asset-save/manifest-builder.js` | **HIGH** | Before `updateAssetURI`, get proof from IPFS editor list; merges asset into collection manifest |
 | `ui/asset-editors.js` | **HIGH** | Complete rewrite — IPFS-based editor list display, Merkle-based add/remove |
 | `services/team.js` | **NEW** | Merkle-based editor add/remove with IPFS persistence |
 | `gltf/merkle-editors.js` | **NEW** | Merkle tree JS library (`computeRoot`, `getProof`, `makeLeaf`) |

@@ -1,6 +1,6 @@
 # Arbesk API Specification
 
-> Version: 0.7.0 — aligned with the current Express implementation
+> Version: 0.8.0 — aligned with the current Express implementation
 > Base URL: `/api`
 > Content-Type: `application/json` unless noted
 
@@ -20,7 +20,18 @@
 
 ## Authentication
 
-`POST /api/v1/generations` and `POST /api/v1/ipfs/upload-url` require a valid session token obtained through the SIWE (EIP-4361) sign-in flow:
+The following routes require a valid SIWE (EIP-4361) session token:
+
+- `POST /api/v1/generations`
+- `POST /api/v1/ipfs/upload-url`
+- `POST /api/v1/ipfs/unpin`
+- `POST /api/v1/assets/snapshot-comments`
+
+The WebSocket chat proxy (`/api/v1/chat/ws`) receives the same session token in the query string.
+
+All other endpoints are public.
+
+Protected routes use this header:
 
 ```text
 Authorization: Session <opaque-token>
@@ -170,9 +181,9 @@ The manifest schema reserves an optional `scene.nodes[].history` array for prove
 
 ### `POST /api/v1/assets/snapshot-comments`
 
-Snapshots the Nostr comment thread for a published asset to a content-addressed IPFS archive. Called by the browser before writing a republish manifest so the archive CID can be embedded.
+Snapshots the asset-level Nostr comment thread for a published asset to a content-addressed IPFS archive. Called by the browser before writing a republish manifest so the archive CID can be embedded.
 
-Manifests themselves are written directly to IPFS by the browser — this endpoint only handles the server-side Nostr archive work (requires service private key).
+Comments are scoped per asset using the canonical tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`. This tag is derived from the manifest `asset_id`, so no manifest schema change is required. Manifests themselves are written directly to IPFS by the browser — this endpoint only handles the server-side Nostr archive work (requires the service private key).
 
 **Request Body**
 
@@ -180,9 +191,14 @@ Manifests themselves are written directly to IPFS by the browser — this endpoi
 {
   "tokenId": "42",
   "chainId": 6343,
-  "contractAddress": "0x..."
+  "contractAddress": "0x...",
+  "assetId": "asset_1700000000000"
 }
 ```
+
+- `tokenId` and `assetId` are required.
+- `chainId` defaults to Hardhat local (`31415822`).
+- `contractAddress` defaults to the configured contract for the chain.
 
 **Response `200`**
 
@@ -197,7 +213,8 @@ Manifests themselves are written directly to IPFS by the browser — this endpoi
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | `tokenId` missing |
+| 400 | `tokenId` or `assetId` missing |
+| 401 | Missing or invalid session |
 | 503 | Contract address not configured |
 | 500 | Archive creation failed |
 
@@ -216,9 +233,38 @@ Manifests themselves are written directly to IPFS by the browser — this endpoi
 ---
 
 ### `POST /api/v1/ipfs/upload-url`
+
+Mints a short-lived client upload credential. Session-gated and rate-limited per wallet. In Pinata mode it returns a presigned URL; in Kubo mode it returns the local API URL. The master Pinata JWT never reaches the browser.
+
+**Request Body**
+
+Empty (`{}`).
+
+**Response `200`**
+
+```json
+{
+  "backend": "kubo",
+  "url": "http://127.0.0.1:5001/api/v0/add?pin=true",
+  "apiUrl": "http://127.0.0.1:5001/api/v0"
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 401 | Missing or invalid session |
+| 429 | Rate limit exceeded |
+| 500 | Credential minting failed |
+
+---
+
 ### `POST /api/v1/ipfs/unpin`
 
-Unpins all IPFS CIDs owned by a manifest chain. Called after token burn.
+Unpins all IPFS CIDs owned by a manifest chain. Called after token burn or asset removal from a collection.
+
+Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs, thumbnail CIDs, comments archive CIDs, and optional `history` entry CIDs, then unpins them all so they become eligible for garbage collection.
 
 **Request Body**
 
@@ -233,7 +279,8 @@ Unpins all IPFS CIDs owned by a manifest chain. Called after token burn.
 ```json
 {
   "unpinned": ["bafy...", "Qm..."],
-  "count": 2
+  "count": 2,
+  "errors": []
 }
 ```
 
@@ -242,6 +289,7 @@ Unpins all IPFS CIDs owned by a manifest chain. Called after token burn.
 | HTTP | Meaning |
 |---:|---|
 | 400 | Missing `cid` |
+| 401 | Missing or invalid session |
 | 500 | Unpin failed |
 
 ---
@@ -283,19 +331,21 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
    **Free tier generation:** frontend calls `recordGeneration(nodeId, prompt)` on `ArbeskAssetFree`.
 3. Frontend calls `POST /api/v1/generations` (with session auth, prompt, nodeId).
    The backend does **not** validate the on-chain transaction — it only checks session + rate limit and returns a mock asset.
-4. Frontend loads the manifest into Babylon.js and updates asset state.
+4. Frontend uploads the asset bytes to IPFS, constructs the manifest, and writes the manifest to IPFS directly in the browser.
 5. Parametric edits are applied client-side; the browser writes the updated manifest directly to IPFS.
 6. Save writes the asset manifest directly to IPFS via `writeJSONToIPFS()`.
 7. Publish captures an optional WebP thumbnail and writes the asset manifest directly to IPFS.
-8. The asset CID is merged into the collection manifest, which is also saved to IPFS.
-9. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
-10. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
-11. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
-12. Owner or editors burn tokens via `burn(tokenId, proof)`, which then triggers non-blocking IPFS unpin.
+8. On republish, the browser calls `POST /api/v1/assets/snapshot-comments` (with `assetId`) to archive the asset-level comment thread and embed the archive CID in the manifest.
+9. The asset CID is merged into the collection manifest, which is also saved to IPFS.
+10. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
+11. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
+12. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
+13. Owner or editors burn tokens via `burn(tokenId, proof)`, which then triggers non-blocking IPFS unpin via `POST /api/v1/ipfs/unpin`.
+14. Asset-level live comments travel through `/api/v1/chat/ws`; the proxy checks the SIWE session and either owner status or a Merkle editor proof before bridging to the Nostr relay.
 
 ---
 
-## Collaboration Contract Endpoints (v0.7.0)
+## Collaboration Contract Endpoints (v0.8.0)
 
 These are on-chain functions exposed by both `ArbeskAsset` and `ArbeskAssetFree` through the shared `ArbeskAssetBase` contract. The frontend calls them directly via Web3.js — the backend does NOT proxy these. Documented here for completeness.
 
@@ -380,7 +430,6 @@ The following are planned backend routes not currently implemented. Note that Ph
 |---|---:|---:|---|
 | `POST /api/v1/generations` | 10 (1 000 in mock mode) | 1 hour | recovered wallet address |
 | `POST /api/v1/ipfs/upload-url` | 20 | 1 minute | recovered wallet address |
-| `POST /api/v1/ipfs/bundle` | 20 | 1 minute | recovered wallet address |
 
 The generation route currently emits:
 

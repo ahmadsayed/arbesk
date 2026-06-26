@@ -1,6 +1,6 @@
 # Arbesk End-to-End (E2E) Tests
 
-> **Critical path coverage:** wallet connection → free-tier generation → save draft → publish ERC-721 token → library collection/asset browser.
+> **Critical path coverage:** wallet connection → free-tier generation → save draft → publish ERC-721 token → library collection/asset browser → asset-level comments.
 >
 > Run these tests **before any major change** that touches the Studio UI, library page, wallet flow, generation pipeline, save/publish logic, smart-contract integration, or IPFS manifest shape.
 
@@ -98,16 +98,17 @@ Validates free-tier mock generation end-to-end:
 Validates the full draft-save → publish → on-chain token lifecycle:
 
 1. Generates `cowboy` (same as Spec 2).
-2. Clicks **Save Draft** and waits for the screen-reader status to say `saved`.
+2. Clicks **Save Draft** and waits for the URL to flip to a new manifest CID.
 3. Extracts the new manifest CID from the URL and asserts it is different from the generation CID.
 4. Validates the saved manifest is version `2` and links back to the generation CID via `prev_asset_manifest_cid`.
 5. Clicks **Besk it** (publish), fills the **Name Your Asset** dialog with `Cowboy Test`, and confirms.
-6. Waits for the status to say `published`.
-7. Extracts the hex token ID from `?asset=0x...` in the URL.
-8. Calls `GET /api/v1/tokens/<tokenId>/manifest` to resolve the on-chain `tokenURI`.
-9. Asserts the published manifest name is `Cowboy Test` and validates its structure.
+6. Waits for the URL to show `?asset=0x...`.
+7. Extracts the hex token ID from the URL.
+8. Resolves the on-chain `tokenURI` through the contract and walks the collection manifest to the first asset.
+9. Asserts the published asset manifest name is `Cowboy Test` and validates its structure.
+10. Opens the gallery and asserts an asset card appears for the decimal token id.
 
-**Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, and the token URI resolution API. UI changes to any of those controls or changes to the manifest schema/versioning logic can break it.
+**Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, collection manifests, and gallery rendering. UI changes to any of those controls or changes to the manifest schema/versioning logic can break it.
 
 ### 4. Parametric versioning + time-travel (`e2e/specs/04-parametric-version.spec.js`)
 
@@ -128,9 +129,9 @@ Validates the edit → **republish** branch (no new mint):
 1. Generates, saves, and publishes a token.
 2. Edits the published asset's colour.
 3. Clicks **Besk it** again — an already-named token skips the dialog and calls `updateAssetURI` instead of minting.
-4. Polls `GET /api/v1/tokens/<tokenId>/manifest` until the on-chain version increases; asserts the same name, a newer version, and an unchanged `?asset=<tokenId>` anchor.
+4. Polls the on-chain collection manifest until the asset's manifest CID changes; asserts the same name, a newer version, and an unchanged `?asset=<tokenId>` anchor.
 
-**Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.js`'s publish branch or the token-URI API can break it.
+**Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.js` / `services/asset-save/` publish branch or collection manifest resolution can break it.
 
 ### 6. Nesting / linked child worlds (`e2e/specs/06-nesting.spec.js`)
 
@@ -238,6 +239,30 @@ Validates the Merkle-editor authorization flow across three wallets:
 
 **Why it matters:** This is the only multi-wallet E2E coverage for the Merkle editor-list feature. Changes to `editor-publish.js`, `team.js`, `merkle-editors.js`, the collaborator UI, or the republish authorization path can break it.
 
+### 14. Collaborative comments (`e2e/specs/14-collaborative-comments.spec.js`)
+
+Validates live asset-level comments across an owner and an editor:
+
+1. **Owner** publishes an asset.
+2. **Owner** adds a second wallet as an editor via the collaborators panel.
+3. **Owner** posts a comment on the asset.
+4. **Editor** opens the shared asset and sees the owner's comment.
+5. **Editor** replies; the owner's session sees the reply live.
+
+**Why it matters:** This is the only multi-wallet coverage for the Nostr chat proxy and comment thread state. Changes to `comment-thread.js`, `comments-panel.js`, `chat-proxy.js`, Merkle editor proof wiring in comments, or the comments archive snapshot can break it.
+
+### 15. Asset-level comment isolation (`e2e/specs/15-asset-level-comments.spec.js`)
+
+Validates that comments do not leak between assets in the same collection:
+
+1. Publishes two assets (`A` and `B`) in the same default collection.
+2. Resolves both `assetId`s from the on-chain collection manifest.
+3. Posts a comment on asset `A`.
+4. Switches to asset `B` and asserts the comment is not present and the count is `0`.
+5. Switches back to asset `A` and asserts the comment is still present.
+
+**Why it matters:** Comments are keyed by asset, not by collection or token. Any regression in `comment-thread.js` context reset, the chat proxy `assetTag`, or the archive snapshot `assetId` would cause cross-asset leakage.
+
 ---
 
 ## When you MUST run these tests
@@ -252,6 +277,7 @@ Run the E2E suite **before merging** any PR that changes:
 - **Smart contracts or ABI:** `ArbeskAssetFree.sol`, `ArbeskAsset.sol`, deployment scripts, contract addresses.
 - **Manifest schema:** `scene.nodes`, `source_asset`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `child_ref`, `comments_archive_cid`.
 - **IPFS integration:** storage format, CID encoding, pin/unpin behavior.
+- **Asset-level comments:** `comments-panel.js`, `comment-thread.js`, chat proxy, comments archive.
 
 Running `npm test` (unit/Jest) and `npm run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
 
@@ -288,6 +314,11 @@ export const SELECTORS = {
   librarySortSelect: "#librarySortSelect",
   libraryGridViewBtn: "#libraryGridViewBtn",
   libraryListViewBtn: "#libraryListViewBtn",
+  // Comments
+  commentsSection: "#commentsSection",
+  commentComposerInput: "#commentComposerInput",
+  postCommentBtn: "#postCommentBtn",
+  commentsCount: "#commentsCount",
   // ...
 };
 ```

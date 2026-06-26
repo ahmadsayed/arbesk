@@ -33,7 +33,7 @@ Use this skill when working with any IPFS-related code in the Arbesk project —
 
 | File | Role | Details |
 |------|------|---------|
-| `src/api/index.js` | Backend routes: save, publish, unpin, chain, token resolver | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/routes/ipfs.js` | Backend routes: `POST /ipfs/upload-url`, `POST /ipfs/unpin` (both session-gated) | [→ Deep Dive](./references/deep-dive.md) |
 | `src/api/ipfs-utils.js` | `catManifest()` — IPFS read with timeout | [→ Deep Dive](./references/deep-dive.md) |
 | `src/api/assets/generate-node.js` | Generation pipeline: add asset, build manifest, pin | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS writer | [→ Deep Dive](./references/deep-dive.md) |

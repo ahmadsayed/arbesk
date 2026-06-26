@@ -27,8 +27,8 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
 
 | Contract | File | Role | Limits |
 |----------|------|------|--------|
-| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, 5 editors/token |
-| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, 50 editors/token |
+| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, ~5000 editors/token (safety net) |
+| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, ~5000 editors/token (safety net) |
 
 **`CONTRACT_ADDRESS`** → `ArbeskAssetFree` (default); **`PAID_CONTRACT_ADDRESS`** → `ArbeskAsset`
 

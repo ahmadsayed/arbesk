@@ -24,6 +24,7 @@ Every Arbesk manifest is a JSON document stored on the private IPFS node. Key fi
     "bytes": 5248,
     "timestamp": 1780000000
   },
+  "comments_archive_cid": "bafkrei...",     // Optional asset-level Nostr archive
   "scene": {
     "nodes": [ ... ]                         // Array of scene nodes
   }
@@ -80,9 +81,10 @@ Each entry in `scene.nodes` is one of two types:
 To determine how many child worlds an asset contains, inspect `manifest.scene.nodes` and count nodes that have a `child_ref` (or legacy `child_manifest_id`) field:
 
 ```bash
-# Quick count using curl + jq
-curl -s http://127.0.0.1:9090/api/v1/tokens/1409751252/manifest \
-  | jq '[.manifest.scene.nodes[] | select(.child_ref != null or .child_manifest_id != null)] | length'
+# Quick count using curl + jq (pass the asset manifest CID)
+MANIFEST_CID=$1
+curl -s "http://127.0.0.1:8080/ipfs/${MANIFEST_CID}" \
+  | jq '[.scene.nodes[] | select(.child_ref != null or .child_manifest_id != null)] | length'
 ```
 
 A node is a **child** if it has `.child_ref` or `.child_manifest_id`. Nodes with only `.source` are self-contained GLTF assets, not children.

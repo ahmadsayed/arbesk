@@ -112,14 +112,12 @@ When a token is burned:
 
 Every write path includes both `ipfs.add()` (which pins by default) and an explicit `ipfs.pin.add()` for defense-in-depth:
 
-| File | Line | What's written | Pin call |
-|------|------|---------------|----------|
-| `src/api/index.js` | L94 | Thumbnail WebP buffer | `ipfs.pin.add(thumbnailCid)` L99 |
-| `src/api/index.js` | L197 | Saved manifest JSON | `ipfs.pin.add(resultCid)` L200 |
-| `src/api/index.js` | L249 | Published manifest JSON | `ipfs.pin.add(resultCid)` L252 |
-| `src/api/assets/generate-node.js` | L188 | Source GLTF/GLB binary | `ipfs.pin.add(sourceAssetCid)` L195 |
-| `src/api/assets/generate-node.js` | L270 | Generation manifest JSON | `ipfs.pin.add(assetManifestCid)` L284 |
-| `frontend/src/js/ipfs/write-to-ipfs.js` | L43 | Browser-side binary/JSON | `POST /api/v0/pin/add?arg=...` L60 |
+| File | What's written | Pin call |
+|------|---------------|----------|
+| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side binary/JSON writes (manifests, thumbnails, glTF parts) | `POST /api/v0/pin/add?arg=...` |
+| `src/api/storage/kubo-adapter.js` | Backend `pin.rm` during unpin | `ipfs.pin.rm(cid)` |
+
+(All manifest, thumbnail, and asset writes are client-side; the backend only unpins and mints upload credentials.)
 
 **Pinning is fire-and-forget safe**: every pin call is wrapped in `try/catch`. A failed pin logs a warning but never blocks the operation, because the underlying `ipfs.add()` already pins by default.
 
@@ -131,9 +129,7 @@ Every write path includes both `ipfs.add()` (which pins by default) and an expli
 
 | Function | File | Purpose |
 |----------|------|---------|
-| `catManifest(ipfs, cid, timeoutMs)` | `src/api/ipfs-utils.js` | Read manifest JSON from IPFS with 15s AbortController timeout |
-| `GET /api/v1/manifests/:cid/history` | `src/api/index.js` L256 | Walk `prev_asset_manifest_cid` chain up to 50 entries |
-| `GET /api/v1/tokens/:tokenId/manifest` | `src/api/index.js` L318 | Resolve token → manifest CID → IPFS read |
+| `catManifest(cid, timeoutMs)` | `src/api/ipfs-utils.js` | Read manifest JSON from IPFS with 15s AbortController timeout (used by unpin + comments archive) |
 
 ### Frontend
 

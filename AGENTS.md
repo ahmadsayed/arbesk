@@ -24,7 +24,7 @@ Conventions, key file references, and practical guidance for AI agents and devel
 - **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
 - **Editor Authorization**: Off-chain Merkle editor lists; the contract stores only a Merkle root and version
 
-**Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). See `docs/CURRENT_STATUS.md` for the definitive snapshot.
+**Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). Asset-level Nostr comments are also implemented. See `docs/CURRENT_STATUS.md` for the definitive snapshot.
 
 ---
 
@@ -59,8 +59,8 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
-- `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet.js`) — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `src/constants/chains.js` / `frontend/src/js/constants/chains.js` — no magic numbers (`31415822`, `6343`). These two files are identical duplicates; update both when adding a chain.
+- `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet-payments.js`, re-exported through `wallet.js`) — never hard-code the paid path in new generation UI code
+- Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `6343`).
 - Contract `owner()` bypasses all quotas and Merkle proof checks (useful for admin/test wallets)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
 
@@ -79,9 +79,11 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | SIWE verification | `src/api/siwe-verify.js` |
 | Rate limiter | `src/api/rate-limiter.js` |
 | ABI serving | `src/api/abi-router.js` |
+| Asset access checks | `src/api/authorization.js` |
 | Comments archive | `src/api/comments-archive.js` |
 | Chat proxy (WebSocket) | `src/api/chat-proxy.js` |
 | Nostr relay primitives | `src/api/nostr-relay.js` |
+| Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `openapi.js`, `test-utils.js`) |
 | Manifest utilities | `src/api/manifest-utils.js` |
 | IPFS utilities | `src/api/ipfs-utils.js` |
 | OpenAPI spec | `src/api/openapi.json` |
@@ -93,6 +95,9 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | glTF pipeline | `frontend/src/js/gltf/` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` |
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
+| Save/publish helpers | `frontend/src/js/services/asset-save/` (`manifest-builder.js`, `collection-publish.js`, `editor-publish.js`) |
+| Comments panel | `frontend/src/js/ui/comments-panel.js` |
+| Comment thread state | `frontend/src/js/state/comment-thread.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
 | Activity panel | `frontend/src/js/ui/ledger-panel.js` |
 | Team / editor service | `frontend/src/js/services/team.js` |
@@ -242,8 +247,9 @@ Every world is a content-addressed JSON manifest stored on IPFS. Each manifest l
 **Thumbnail:** best-effort publish metadata — all code must tolerate missing thumbnails.
 
 **Comments Archive (`comments_archive_cid`):**
-- Republishing an existing token snapshots the asset's Nostr comment thread to a JSON archive on IPFS and stores the archive CID in the manifest.
-- The archive is created by `src/api/comments-archive.js` via the `publishContext` control field on `POST /api/v1/manifests`.
+- Comments are scoped to an **asset**, not the whole collection. The canonical Nostr tag is `<chainId>:<contractAddress>:<tokenId>:<assetId>`.
+- Republishing an existing asset snapshots that asset's Nostr thread to a JSON archive on IPFS and stores the archive CID in the asset manifest.
+- The archive is created by `src/api/comments-archive.js` via `POST /api/v1/assets/snapshot-comments` (requires `assetId` in the request body).
 - First-time publishes have no prior comments and therefore no archive CID.
 - On token burn, the archive CID is unpinned alongside the manifest chain.
 - The frontend loads the archive before subscribing to live relay events and deduplicates by `event.id`.
@@ -260,7 +266,8 @@ The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't
 ## 8. Session Authentication
 
 - Header: `Authorization: Session <token>` (not Bearer)
-- `POST /api/v1/generations` requires a valid session; no session = generation blocked
+- `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, and `POST /api/v1/assets/snapshot-comments` all require a valid session
+- The WebSocket chat proxy (`/api/v1/chat/ws`) receives the session token in the query string
 - Wallet connect triggers one SIWE signature → session token (24 h TTL, bound to wallet address)
 - Auto-cleared on wallet disconnect; entry point: `getOrCreateSession()` in `frontend/src/js/services/api.js`
 
@@ -288,7 +295,7 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**E2E coverage (9 specs):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery → burn · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07a` collection asset cards · `07b` material editor multi-primitive · `08` fork live reference. Per-spec contract: `e2e/README.md`.
+**E2E coverage (16 specs, 34 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07a` collection asset cards · `07b` material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation. Per-spec contract: `e2e/README.md`.
 
 ### Running tests
 
@@ -323,6 +330,7 @@ E2E is isolated per git worktree: each checkout gets its own Docker Compose proj
 - Smart contracts, ABI, or deployment scripts
 - Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`)
 - IPFS storage format or CID handling
+- Asset-level comments (`comments-panel.js`, `comment-thread.js`, chat proxy, comments archive)
 
 `npm test` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
 

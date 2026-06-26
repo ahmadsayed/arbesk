@@ -22,7 +22,8 @@ Update + run the suite before merging any change that touches:
 - **Outliner**: node rows, child-node labels, selection behavior.
 - **Parametric editor**: component color editor, the node-selection → editor path.
 - **Nesting**: Add to Scene, dive (`#inspectorDiveBtn`), back button, breadcrumb, the `nesting:*` events.
-- **Manifest schema**: `scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, version numbering.
+- **Manifest schema**: `scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`, version numbering.
+- **Comments panel**: `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount`.
 
 `npm test` (Jest) is **not** enough for any of the above.
 
@@ -39,6 +40,7 @@ Update + run the suite before merging any change that touches:
 | Version slider / time-travel | `04` | `assetHistory`, `historySlider`, `historyVersionBadge` |
 | New asset, dive/ascend breadcrumb | `06` | `newAssetBtn`, `inspectorDiveBtn`, `backBtn` |
 | Manifest shape / versioning | matching spec + `e2e/helpers/manifest.mjs` | the validators in `manifest.mjs` |
+| Comments panel / composer | `14`, `15` | `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount` |
 
 ## The four-step sync workflow
 
