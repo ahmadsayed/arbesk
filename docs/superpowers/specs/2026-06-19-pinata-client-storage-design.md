@@ -44,11 +44,13 @@ path server-side:
 - **`kubo`** (automated E2E suite only): retains today's `ipfs-http-client`
   against the local node. `e2e/` specs and the Docker stack are untouched.
 
-The abstraction is a thin server-side module (e.g. `src/api/storage/index.js`)
-exposing `add(payload)`, `mintUploadCredential(session)`, `unpin(cid)`, and
-`gatewayBase()`, dispatching on `IPFS_BACKEND`. Existing call sites
-(`generate-node.js`, `index.js` thumbnail/manifest add, `/ipfs/unpin`) call
-through this module rather than `ipfs.*` directly.
+The abstraction is a server-side module (`src/api/storage/index.js`)
+exposing `add(payload)`, `addDirectory(files)`, `cat(cid)`, `catBytes(cid)`,
+`unpin(cid)`, `listPinned()`, `mintUploadCredential()`, and `gatewayBase()`,
+dispatching on `IPFS_BACKEND`. The `/ipfs/unpin` and `/ipfs/gc` routes call
+through this module; generation and manifest writes happen client-side in the
+browser (`frontend/src/js/ipfs/write-to-ipfs.js`), so `generate-node.js` no
+longer performs server-side IPFS writes.
 
 ### 3.2 Pinata products — public, not private
 
@@ -79,11 +81,13 @@ Pinata v3 public uploads return **CIDv1 (`baf…`)** by default (e.g. `bafy…` 
 - **Kubo mode:** unchanged (`ipfs.pin.rm`).
 
 ### 4.3 Backend-originated writes
-- `generate-node.js`: replace `ipfs.add` + `ipfs.pin.add` for the source asset
-  and manifest with `storage.add(...)` (Pinata mode → `upload.public.file` with
-  master JWT; Kubo mode → current path).
-- `index.js`: the thumbnail and manifest `ipfs.add`/`pin.add` (lines ~69, ~116)
-  move to `storage.add(...)` the same way.
+- `generate-node.js`: no longer performs IPFS writes. It validates the session,
+  rate-limits, calls the adapter, and returns raw asset bytes to the browser.
+  The browser uploads the source asset and manifest via
+  `frontend/src/js/ipfs/write-to-ipfs.js`.
+- `index.js`: manifest/thumbnail writes were removed from the backend; these
+  are now client-side operations. The backend only routes `/ipfs/unpin` and
+  `/ipfs/gc` through `src/api/storage/index.js`.
 
 ## 5. Frontend changes
 
@@ -112,12 +116,12 @@ Pinata v3 public uploads return **CIDv1 (`baf…`)** by default (e.g. `bafy…` 
 
 ## 6. Rate limiting
 
-`src/api/rate-limiter.js` currently keys on `res.locals.userAddress` only when
-`req.body.txHash` is present, else `req.ip`. Generalize: **prefer
-`res.locals.userAddress` whenever a session set it** (authenticate runs first),
-falling back to `req.ip`. The `/upload-url` route uses
-`rateLimit({ max: 5, windowMs: 60_000 })`. This change is backward-compatible
-with the generation route (still wallet-keyed there).
+`src/api/rate-limiter.js` was rewritten on top of `express-rate-limit` and
+already keys every limiter by `res.locals.userAddress` (set by the
+`authenticate` middleware) falling back to `req.ip`. The legacy `req.body.txHash`
+branch no longer exists. The `/upload-url` route uses
+`uploadUrlRateLimit` (default max 20/min, configurable via
+`UPLOAD_URL_RATE_LIMIT_MAX`).
 
 ## 7. Config
 
@@ -153,6 +157,12 @@ Specs `01`–`06` run with `IPFS_BACKEND=kubo`, unchanged. No selector/manifest
 rewrites expected.
 
 ### 8.4 E2E — new Pinata spec (`e2e/specs/07-pinata-storage.spec.js`)
+> **Implemented as:** This dedicated Pinata E2E spec is **not in the current
+> suite**. The default E2E specs (`01`–`15`) run with `IPFS_BACKEND=kubo`.
+> Pinata branching is covered by unit tests (`test/api/storage-adapters.test.js`,
+> `test/frontend/write-to-ipfs.test.js`) and manual acceptance with
+> `IPFS_BACKEND=pinata`.
+
 Runs with `IPFS_BACKEND=pinata` against **real Pinata**. The only spec that
 touches the network/third party.
 - Generate/save an asset; assert a `baf…` **CIDv1** is returned.
@@ -173,9 +183,10 @@ touches the network/third party.
 ## 9. Affected files
 
 - `src/api/storage/index.js` (new — backend abstraction)
-- `src/api/index.js` (`/ipfs/upload-url` new route, `/ipfs/unpin` Pinata path, thumbnail/manifest add)
-- `src/api/assets/generate-node.js` (source asset + manifest add via storage module)
-- `src/api/rate-limiter.js` (prefer session wallet key)
+- `src/api/routes/ipfs.js` (`/ipfs/upload-url`, `/ipfs/unpin`, `/ipfs/gc`)
+- `src/api/index.js` (mount `/ipfs` router; `/config` exposes storage backend)
+- `src/api/assets/generate-node.js` (returns raw asset bytes; no server-side IPFS writes)
+- `src/api/rate-limiter.js` (rewritten on `express-rate-limit`, wallet-keyed)
 - `frontend/src/js/ipfs/write-to-ipfs.js` (write path)
 - `frontend/src/js/ipfs/remote-ipfs.js` (read gateway)
 - `frontend/src/js/blockchain/uri-utils.js`, `token-resolver.js` (CIDv1 verify + test)

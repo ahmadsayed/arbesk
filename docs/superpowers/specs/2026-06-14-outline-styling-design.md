@@ -49,8 +49,10 @@ Adopt a **Hybrid + Contained Card** design:
 | File | Change |
 |------|--------|
 | `frontend/src/scss/components/_outliner.scss` | Add card container styling, row layout, indentation guides, chevron/blank-spacer slots, hover/selected states. |
-| `frontend/src/js/ui/outliner.js` | Render depth-based indentation, chevrons for parents, blank spacers for leaves, and any expanded/collapsed state. |
+| `frontend/src/js/ui/outliner.js` | Render depth-based indentation, chevrons for parents, blank spacers for leaves, and expanded/collapsed state. |
 | `frontend/src/pug/studio.pug` | Likely no change; the existing `.outliner-tree` wrapper can be styled via CSS. Verify during implementation. |
+
+> **Implemented as:** `createNodeElement` in `frontend/src/js/ui/outliner.js` uses a `<button>` toggle showing `▶`/`▼` states and `aria-expanded`, rather than a single rotated chevron. Toggle state is tracked in a module-level `collapsedNodeIds` set.
 
 ## Out of Scope
 

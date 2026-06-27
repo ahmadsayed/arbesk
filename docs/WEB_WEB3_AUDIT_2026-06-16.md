@@ -79,9 +79,9 @@
 | Web3.js for blockchain | ✅ | v1.10.0 |
 | TypeScript | ❌ | Pure JS — acceptable for this project |
 | Service Worker | ❌ | None |
-| Web Workers | ❌ | None — heavy 3D/GLTF operations run on main thread |
+| Web Workers | ✅ (Fixed) | GLTF processing offloaded to `frontend/src/js/workers/gltf-worker.js` via `frontend/src/js/workers/gltf-worker-pool.js` |
 
-**Finding**: Excellent modular architecture. The move from `document.dispatchEvent` to `mitt` and the introduction of typed state stores are significant improvements. Missing service workers and web workers for background processing.
+**Finding**: Excellent modular architecture. The move from `document.dispatchEvent` to `mitt` and the introduction of typed state stores are significant improvements. Web workers now handle heavy GLTF processing; service workers are still not implemented.
 
 ---
 
@@ -92,7 +92,7 @@
 | Single CSS file (`styles.css`) | ✅ | One request for all styles |
 | WebP images | ✅ | Logo, favicon, apple-touch-icon |
 | No render-blocking resources | ⚠️ | CSS is render-blocking; scripts are `type="module"` (deferred) |
-| JavaScript bundler | ❌ | **No bundler** — `build-scripts.js` copies `src/js → dist/js` |
+| JavaScript bundler | ❌ | **No bundler** — `render-scripts.js` (invoked by `build-scripts.js`) copies `src/js → dist/js` |
 | Tree-shaking | ❌ | Impossible without a bundler |
 | Code splitting | ❌ | No dynamic chunks beyond 2 lazy imports |
 | Minification | ❌ | JS files are unminified in dist |
@@ -133,7 +133,7 @@
 | Content Security Policy (CSP) | ⚠️ | Report-only header added (`src/index.js`), not enforcing |
 | Subresource Integrity (SRI) | ❌ | CDN scripts lack `integrity` attributes |
 | HTTPS enforcement | ❌ | Localhost only — no `upgrade-insecure-requests` |
-| Hardcoded private key in source | ❌ | Hardhat dev account key embedded in `wallet.js` — acceptable for local dev only |
+| Hardcoded private key in source | ⚠️ (Fixed) | Private key was removed from `wallet.js`; only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.js` for the low-balance warning path |
 | Input sanitization | ⚠️ | `escapeHtml()` used in dialogs and toasts; API inputs rely on backend validation |
 | `X-Frame-Options` / frame ancestors | ❌ | No clickjacking protection headers |
 | `X-Content-Type-Options: nosniff` | ❌ | Not set |
@@ -240,12 +240,12 @@
 | `wallet_addEthereumChain` | ✅ | Adds chains if not present |
 | Wrong network detection | ✅ | Dialog prompts to switch |
 | Chain ID badge in headerbar | ✅ | Shows network name |
-| Network switch in headerbar | ✅ | `<select>` with Hardhat, SEI Testnet, and (disabled) Optimism options |
-| Multi-network config object | ✅ | `NETWORK_CONFIGS` covers Hardhat, Optimism Sepolia, Optimism Mainnet, SEI Testnet |
-| Production network support (Mainnet, Sepolia) | ⚠️ | Configured but contracts not deployed on Optimism mainnet |
+| Network switch in headerbar | ✅ | `<select>` with Hardhat Local and MegaETH Testnet options |
+| Multi-network config object | ✅ | `NETWORK_CONFIGS` covers Hardhat Local and MegaETH Testnet only |
+| Production/testnet contract deployment | ✅ | Contracts deployed on MegaETH Testnet; paid tier and USDC are not deployed there |
 | Custom RPC endpoint input | ❌ | Not implemented |
 
-**Finding**: Network configuration expanded significantly (added SEI Testnet and Optimism configs). The UI now exposes a network selector, though some production networks lack deployed contracts.
+**Finding**: Network configuration is now multi-chain aware, supporting Hardhat Local and MegaETH Testnet. Optimism/SEI targets were removed; MegaETH Testnet is the current public testnet target. The UI exposes a network selector for the supported networks. Paid-tier USDC payments are only available on Hardhat Local because USDC is not deployed on MegaETH Testnet.
 
 ---
 
@@ -291,7 +291,7 @@
 |-------|--------|-------|
 | Private Kubo node | ✅ | Dockerized, loopback-only |
 | Gateway reads | ✅ | `http://127.0.0.1:8080/ipfs/` |
-| Backend API for writes | ✅ | POST `/api/v1/generations`, `/api/v1/manifests` |
+| Backend API for writes | ✅ | POST `/api/v1/generations`, `/api/v1/ipfs/upload-url`; manifests are written client-side directly to IPFS (`/api/v1/manifests` was removed) |
 | Manifest chain walking | ✅ | `getManifestChain()` up to 50 depth |
 | CID validation | ✅ | `extractCid()` in transforms.js |
 | Browser caching toggle | ✅ | `IPFS_CACHE_ENABLED` flag (disabled for dev) |
@@ -300,7 +300,7 @@
 | IPFS content routing (DHT) | ❌ | Disabled in Kubo config |
 | CAR file import/export | ❌ | Not implemented |
 
-**Finding**: IPFS integration is appropriate for a private-node architecture. All writes go through the backend; reads hit the gateway directly. No browser-native IPFS for peer-to-peer sharing.
+**Finding**: IPFS integration is appropriate for a private-node architecture. Generation goes through the backend (`POST /api/v1/generations`); upload credentials and unpin are backend-gated (`POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`); manifest writes happen client-side directly to IPFS. Reads hit the gateway directly. No browser-native IPFS for peer-to-peer sharing.
 
 ---
 
@@ -315,11 +315,11 @@
 | Auto-clear on disconnect | ✅ | Event listener clears session |
 | Clock skew grace period | ✅ | 60-second buffer |
 | Address-bound sessions | ✅ | Token tied to wallet address |
-| SIWE (EIP-4361 / Sign-In with Ethereum) | ❌ | Not implemented — uses custom message format |
+| SIWE (EIP-4361 / Sign-In with Ethereum) | ✅ (Fixed) | Implemented using the `siwe` package in `src/api/siwe-verify.js`; frontend builds standard SIWE messages in `frontend/src/js/blockchain/siwe.js` |
 | JWT / structured tokens | ❌ | Opaque UUIDs only |
 | Session revocation API | ✅ | `DELETE /api/v1/sessions` exists |
 
-**Finding**: Session auth is well-implemented for reducing wallet friction. Missing SIWE compliance, which is the modern standard for Ethereum authentication.
+**Finding**: Session auth is well-implemented and now uses standard SIWE (EIP-4361) for the initial wallet ownership proof, satisfying the modern standard for Ethereum authentication.
 
 ---
 
@@ -327,15 +327,16 @@
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| `NETWORK_CONFIGS` for mainnet/Sepolia/SEI | ✅ | `eth.llamarpc.com`, `https://sepolia.optimism.io`, SEI testnet RPC |
+| `NETWORK_CONFIGS` for Hardhat/MegaETH | ✅ | Hardhat Local (`http://127.0.0.1:8545`) and MegaETH Testnet (`https://carrot.megaeth.com/rpc`) |
 | External RPC fallback | ✅ | Token resolver creates new Web3 instance for different chains |
 | Hardhat local dev | ✅ | Primary network |
-| Calibration / Filecoin Mainnet | ⚠️ | Chain IDs in constants but no RPC configured |
+| MegaETH Testnet | ✅ | Deployed contract with RPC configured |
+| Calibration / Filecoin Mainnet | ❌ | No longer in `constants/chains.js` |
 | Polygon / Arbitrum / Base | ❌ | No RPC or UI support |
 | Chain switch UI | ✅ | Headerbar `<select>` |
 | Cross-chain asset references | ⚠️ | `child_ref` stores `chainId` but resolution only works for known RPCs |
 
-**Finding**: The architecture supports multi-chain via `child_ref.chainId` and external RPC fallbacks, and the UI now exposes a network selector. Adding more production networks is primarily a config change, not a code change.
+**Finding**: The architecture supports multi-chain via `child_ref.chainId` and external RPC fallbacks for configured networks. The UI exposes a network selector for Hardhat Local and MegaETH Testnet. Adding more networks is primarily a config change, not a code change.
 
 ---
 
@@ -348,12 +349,12 @@
 | Toast notifications with actions | ✅ | Retry, View on Explorer |
 | User rejection silent handling | ✅ | No spam on cancel |
 | Specific error classification | ✅ | Insufficient funds, wrong network, user denied |
-| Transaction revert reason parsing | ❌ | Raw error message shown, no decoded revert reason |
+| Transaction revert reason parsing | ✅ (Fixed) | `frontend/src/js/blockchain/error-decoder.js` decodes string reverts and custom error selectors; used by publishing flows |
 | Automatic retry with backoff | ❌ | Not implemented |
 | Circuit breaker for failed RPC | ❌ | Not implemented |
 | RPC fallback rotation | ❌ | Single RPC per chain |
 
-**Finding**: Error handling is user-friendly at the UI layer. Missing: revert reason decoding, automatic retries, and RPC failover.
+**Finding**: Error handling is user-friendly at the UI layer and now includes revert reason decoding for failed transactions. Missing: automatic retries and RPC failover.
 
 ---
 
@@ -366,7 +367,7 @@
 | No cookies | ✅ | |
 | Wallet address not in URL | ✅ | Not exposed in query params |
 | `navigator.clipboard` with fallback | ✅ | Secure context + textarea fallback |
-| Hardcoded dev private key | ⚠️ | In `wallet.js` source — acceptable for local dev only |
+| Hardcoded dev private key | ⚠️ (Fixed) | Private key removed from `wallet.js`; only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.js` for the low-balance warning path |
 | Privacy policy | ❌ | None |
 | Terms of service | ❌ | None |
 
@@ -382,7 +383,7 @@
 | `estimateGas` before `send` | ✅ | All mutating calls estimate first |
 | Gas buffer (1.2×) | ✅ | Consistent pattern |
 | USDC approval + payment flow | ✅ | Two-step ERC-20 pattern |
-| Role-based access (Viewer/Editor/Owner) | ✅ | `CollaboratorRole` enum + contract methods |
+| Role-based access (Viewer/Editor + token owner) | ✅ | `CollaboratorRole` enum (`None/Viewer/Editor`) in contract and frontend; token owner bypasses editor checks as contract `owner()` |
 | Burn with IPFS unpin lifecycle | ✅ | Resolves CID before burn, unpins after |
 | Custom events for contract actions | ✅ | `wallet:generationPaid`, `asset:published`, `asset:burned` |
 | Contract read caching | ❌ | No caching for `tokenURI`, `costPerGeneration`, etc. |
@@ -398,11 +399,11 @@
 
 | # | Gap | Risk | Fix |
 |---|-----|------|-----|
-| 1 | **No enforcing CSP / no SRI on CDN scripts** | XSS and supply-chain attack if CDN is compromised | Promote CSP to enforcing and add `integrity` + `crossorigin="anonymous"` to CDN `<script>` tags |
-| 2 | **Hardcoded dev private key in source** | Accidental mainnet deployment could leak funds | Move to environment variable or dev-only config file |
-| 3 | **No production contract deployment on Optimism mainnet** | App cannot publish on production network | Deploy contracts and populate `NETWORK_CONFIGS` |
-| 4 | **No transaction revert reason decoding** | Users see raw hex/errors instead of human-readable revert reasons | Parse `error.data` and map to contract error definitions |
-| 5 | **No SIWE (EIP-4361)** | Non-standard auth message; not interoperable with SIWE-verifying backends | Replace custom `arbesk-session:` message with SIWE format |
+| 1 | **No enforcing CSP / no SRI on CDN scripts** | XSS and supply-chain attack if CDN is compromised | Promote CSP to enforcing. SRI hashes are intentionally omitted per `AGENTS.md` because CDNs rebuild assets; the safer fix is self-hosting or a pinned build pipeline. |
+| 2 | **Hardcoded dev private key in source** (Fixed) | Accidental mainnet deployment could leak funds | Already removed from source; only dev account address remains for the low-balance warning |
+| 3 | **No paid-tier deployment on public testnet** | App cannot use USDC PayGo on MegaETH Testnet | Deploy `ArbeskAsset` paid tier and USDC token on MegaETH Testnet when ready |
+| 4 | **No transaction revert reason decoding** (Fixed) | Users see raw hex/errors instead of human-readable revert reasons | `frontend/src/js/blockchain/error-decoder.js` now parses `error.data` against the ABI |
+| 5 | **No SIWE (EIP-4361)** (Fixed) | Non-standard auth message; not interoperable with SIWE-verifying backends | Standard SIWE verification implemented in `src/api/siwe-verify.js` |
 | 6 | **No PWA / service worker / manifest** | Cannot install as desktop app or work offline | Add `manifest.json` and a minimal service worker for asset caching |
 | 7 | **No bundler / minification / SRI** | 35+ unminified modules served individually in production | Add a production bundler (e.g., Rollup) with SRI generation |
 
@@ -411,11 +412,11 @@
 ## What's Done Well (Web 3.0)
 
 - **Modern wallet integration**: Custom EIP-6963 discovery + WalletConnect v2 modal replaces the deprecated Web3Modal v1.
-- **Multi-network config**: Hardhat, Optimism Sepolia, Optimism Mainnet, and SEI Testnet are all configured.
+- **Multi-network config**: Hardhat Local and MegaETH Testnet are configured; `NETWORK_CONFIGS` is network-aware so the UI uses the correct contract per chain.
 - **Session auth reduces friction**: Clever session token system cuts wallet popups after the first generation.
 - **Transaction lifecycle UX**: Notyf-based toasts give clear feedback through pending → confirmed/failed states with explorer links.
 - **Token resolver architecture**: Clean separation with caching, external RPC fallback, and URI normalization for cross-contract compatibility.
-- **Role-based collaboration**: Full Viewer/Editor/Owner role system wired through the contract.
+- **Role-based collaboration**: Viewer/Editor `CollaboratorRole` enum wired through the contract; token owner and contract `owner()` bypass editor checks.
 - **Burn → unpin lifecycle**: Thoughtful cleanup that resolves the manifest CID before burning, then unpins IPFS content afterward.
 - **USDC payment flow**: Proper two-step ERC-20 approval pattern with gas estimation.
 
@@ -440,4 +441,4 @@
 | Web 3.0 / dApp | 72/100 | -18 |
 | **Combined Web** | **67/100** | **-23** |
 
-**Interpretation**: Arbesk Studio is now a **visually excellent and increasingly mature** web application. The Web 3.0 score improved from 63 to 72 thanks to the wallet modernization and multi-chain work. The remaining gaps are expected for a dev tool but must be addressed before any public mainnet deployment: enforcing CSP/SRI, contract deployment, revert decoding, SIWE, and production bundling.
+**Interpretation**: Arbesk Studio is now a **visually excellent and increasingly mature** web application. The Web 3.0 score improved from 63 to 72 thanks to the wallet modernization and multi-chain work. Revert decoding and SIWE have since been implemented. The remaining gaps are expected for a dev tool but must be addressed before any public mainnet deployment: enforcing CSP/SRI, paid-tier deployment on MegaETH Testnet, and production bundling.

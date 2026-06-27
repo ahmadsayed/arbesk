@@ -16,12 +16,14 @@
 
 | File | What changes |
 |------|-------------|
-| `frontend/src/pug/studio.pug` | Add headerbar doc-actions group; remove sidebar action rows; move Burn to Settings; remove sidebar New button (all one edit) |
+| `frontend/src/pug/studio.pug` | Add headerbar doc-actions group; remove sidebar action rows; place Burn inside Settings view; remove sidebar New button (all one edit) |
 | `frontend/src/scss/components/_headerbar.scss` | Add `.headerbar-divider` and `.headerbar-doc-actions` |
 | `frontend/src/scss/components/_sidebar.scss` | Remove dead `.sidebar-action-row`, `.asset-lifecycle-row`, `.besk-it-row` blocks |
-| `frontend/src/js/engine/scene-graph.js` | Replace `"newAssetSidebarBtn"` with `"newAssetBtn"` in button-wiring array |
+| `frontend/src/js/engine/scene-graph.js` | Wire `#newAssetBtn` click handler |
 
 **No changes needed in:** `asset-save.js`, `collaborators.js`, `nesting.js` — all reference elements by the same IDs, which are preserved.
+
+> **Implemented as:** The sidebar tabs are Settings, Chat, Outline, Gallery, and Activity; there is no Asset tab. Burn sits inside the Settings view (team/collaborators section). `scene-graph.js` is a barrel file that wires `#newAssetBtn` in its DOM-ready block.
 
 ---
 
@@ -81,9 +83,11 @@ All four sub-changes happen in a single session so no intermediate state has dup
 
   **Critical:** `#saveAssetBtn`, `#publishAssetBtn`, `#publishAssetBtnText` must keep these exact IDs — `asset-save.js` (lines 37–40) and `nesting.js` (line 198) query them by ID at module load time. The `hidden` attribute on Save and Besk is correct — `asset-save.js:updateButtonState()` removes it once a wallet is connected and an asset is open.
 
-- [ ] **Step 2: Remove `#newAssetSidebarBtn` from the Asset tab header**
+> **Implemented as:** There is no `.sidebar-view(data-view="create")` / Asset tab in the live UI. The New button only exists in the headerbar (`#newAssetBtn`). This step is retained as a historical record of the intended template edit.
 
-  Find this block in the `.sidebar-view(data-view="create")` header:
+- [ ] **Step 2: Remove `#newAssetSidebarBtn` from the sidebar (if present)**
+
+  Find this block in any sidebar view header that still contains it:
 
   ```pug
               .sidebar-view-header
@@ -101,7 +105,7 @@ All four sub-changes happen in a single session so no intermediate state has dup
                 h3 Asset
   ```
 
-- [ ] **Step 3: Remove `.sidebar-action-row.asset-lifecycle-row` from the Asset tab body**
+- [ ] **Step 3: Remove `.sidebar-action-row.asset-lifecycle-row` from the sidebar (if present)**
 
   Find and delete this entire block (Save + Burn sidebar row):
 
@@ -123,7 +127,7 @@ All four sub-changes happen in a single session so no intermediate state has dup
 
   Delete all 13 lines.
 
-- [ ] **Step 4: Remove `.sidebar-action-row.besk-it-row` from the Asset tab body**
+- [ ] **Step 4: Remove `.sidebar-action-row.besk-it-row` from the sidebar (if present)**
 
   Find and delete this entire block (Besk it sidebar row):
 
@@ -140,7 +144,7 @@ All four sub-changes happen in a single session so no intermediate state has dup
 
 - [ ] **Step 5: Move `#burnAssetBtn` into the Settings collapsible**
 
-  Inside `.asset-def-body(hidden)`, find the end of `#teamPanel` (the last line of that block is `button#teamAddBtn.btn.btn-secondary Add`). Add the Burn button immediately after, as a sibling of `#teamPanel`:
+  Inside the Settings view body, find the end of `#teamPanel` (the last line of that block is the team help text). Add the Burn button immediately after, as a sibling of `#teamPanel`:
 
   ```pug
                       button#burnAssetBtn.btn.btn-outline.btn-danger.btn-sm(hidden type="button" aria-label="Burn asset" title="Burn (delete) this token" style="margin-top: var(--size-3); width: 100%;")
@@ -239,25 +243,14 @@ All four sub-changes happen in a single session so no intermediate state has dup
 
 - [ ] **Step 1: Find and update the button-ID array**
 
-  Search for `newAssetSidebarBtn` in `scene-graph.js` (only one occurrence, at line 1289):
+  In `frontend/src/js/engine/scene-graph.js`, locate the DOM-ready block and wire `#newAssetBtn`:
 
   ```js
-      ["newAssetTopBtn", "newAssetSidebarBtn"].forEach(function (id) {
-        const btn = document.getElementById(id);
-        if (btn) btn.addEventListener("click", startNewAsset);
-      });
+    const newBtn = document.getElementById("newAssetBtn");
+    if (newBtn) newBtn.addEventListener("click", startNewAsset);
   ```
 
-  Replace `"newAssetSidebarBtn"` with `"newAssetBtn"`:
-
-  ```js
-      ["newAssetTopBtn", "newAssetBtn"].forEach(function (id) {
-        const btn = document.getElementById(id);
-        if (btn) btn.addEventListener("click", startNewAsset);
-      });
-  ```
-
-  `"newAssetTopBtn"` is a pre-existing legacy no-op (the element doesn't exist in the HTML) — the `if (btn)` null-check makes it harmless; leave it as-is.
+  The live `scene-graph.js` is a barrel file; the actual DOM-ready wiring lives in its inline IIFE.
 
 ---
 
@@ -281,9 +274,9 @@ All four sub-changes happen in a single session so no intermediate state has dup
 
 - [ ] **Step 3: Verify — no asset open**
 
-  - Headerbar shows `[New]` between the history area and the theme/network/wallet cluster.
+  - Headerbar shows `[New]` between the version controls and the theme/network/wallet cluster.
   - `[Save]` and `[Besk it]` are **not** visible.
-  - Asset tab body has no Save/Besk/Burn rows — only the Settings collapsible and the chat area.
+  - Sidebar tabs are Settings, Chat, Outline, Gallery, Activity; no Save/Besk/Burn rows remain in the sidebar.
   - Settings is collapsed by default; expanding it shows the provider, quality, team, and Burn button at the bottom.
 
 - [ ] **Step 4: Verify — the target workflow**
@@ -299,8 +292,8 @@ All four sub-changes happen in a single session so no intermediate state has dup
 - [ ] **Step 5: Verify — Burn is in Settings**
 
   1. Open an asset that your wallet owns.
-  2. In Asset tab → expand Settings (click the chevron).
-  3. **Burn** button is visible at the bottom of the Settings panel.
+  2. In the Settings sidebar tab → expand Settings (click the chevron).
+  3. **Burn** button is visible at the bottom of the Settings panel (inside the team/collaborators section).
   4. Click Burn — the confirmation dialog appears; behavior is unchanged.
 
 - [ ] **Step 6: Verify — keyboard shortcuts**
@@ -326,3 +319,5 @@ All four sub-changes happen in a single session so no intermediate state has dup
   EOF
   )"
   ```
+
+> **Note:** This plan predates the `scene-graph.js` refactor. Save/Besk/New wiring is currently orchestrated by `studio-init.js` and the Save panel (`frontend/src/js/ui/asset-save.js`), not directly inside `scene-graph.js`.

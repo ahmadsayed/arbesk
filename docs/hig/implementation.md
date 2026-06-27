@@ -8,7 +8,7 @@
 
 ### Phase A: CSS Foundation — 2 days (no dependencies)
 
-Drop Bootstrap. Build token system + 16 component SCSS files.
+Drop Bootstrap. Build token system + 27 component SCSS files.
 
 **Files created:**
 ```
@@ -28,20 +28,33 @@ frontend/src/scss/
 │   ├── _history.scss
 │   ├── _outliner.scss
 │   ├── _pathbar.scss
-│   └── _ledger.scss
+│   ├── _ledger.scss
+│   ├── _comments.scss
+│   ├── _chat.scss
+│   ├── _timeline.scss
+│   ├── _settings.scss
+│   ├── _layout.scss
+│   ├── _dialog.scss
+│   ├── _toasts.scss
+│   ├── _empty-state.scss
+│   ├── _wallet-popover.scss
+│   ├── _wallet-modal.scss
+│   ├── _library-toolbar.scss
+│   ├── _library-grid.scss
+│   └── _library-context-menu.scss
 └── utilities/_responsive.scss
 ```
 
 **Files changed:**
 - `styles.scss` — replace Bootstrap import with `@use` lines
-- `studio.scss` — **delete** (superseded)
+- `studio.scss` — renamed to `_studio-legacy.scss` and retained as legacy reference, no longer imported
 
 **Rules enforced:**
-- No `!important`
 - Colors only through semantic tokens
 - System font stack
 - No custom scrollbar hiding
 - `background-image` pattern on `#app::before` removed
+- Minimal `!important` (only utility helpers such as `.hidden`)
 
 ---
 
@@ -50,48 +63,49 @@ frontend/src/scss/
 **Template (`studio.pug`):**
 - Replace `.arabesque-topbar` with `<header class="headerbar">`
 - Brand icon only (no text)
-- Document title with `contenteditable`
-- History timeline pill
-- Save + Publish as header buttons
-- New footer: `<footer class="bottombar">` with status + wallet button
+- Page switcher tabs linking `/library.html` and `/studio.html`
+- Document title (read-only span, `#assetStatusName`)
+- History timeline pill (`#assetHistory` slider)
+- Save + Besk it as header buttons (`#saveAssetBtn`, `#publishAssetBtn`)
+- Wallet connect/disconnect button remains in header actions (`#connectWalletBtn`, `#disconnectWalletBtn`)
+- New footer: `<footer class="bottombar">` with status text + keyboard-help button
 
 **Removed from template:**
 - `.arabesque-lattice-border`
-- `.asset-status` block
+- `.asset-status` block (replaced by `#assetStatusName` / `#assetStatusMeta`)
 - `#mobileMenuBtn`
 - `#newAssetTopBtn`
-- `#connectWalletBtn` / `#disconnectWalletBtn`
 
 ---
 
-### Phase C: Unified Sidebar + 4-View Switcher + Outliner — 2.5 days (depends on A, B)
+### Phase C: Unified Sidebar + 5-View Switcher + Outliner — 2.5 days (depends on A, B)
 
 **Template:**
-- Merge `#chatSidebar`, `#assetLibraryPanel`, `#ledgerPanel` into one `<aside class="sidebar">`
-- Add View Switcher: 4 icon buttons (Create, Outline, Library, Ledger)
-- Content sections: `[data-view="create"]`, `[data-view="outline"]`, `[data-view="library"]`, `[data-view="ledger"]`
+- Merge the previous left chat/library panels and bottom ledger into one `<aside class="sidebar">`
+- Add View Switcher: 5 icon buttons (Settings, Chat, Outline, Gallery, Activity)
+- Content sections: `[data-view="settings"]`, `[data-view="chat"]`, `[data-view="outline"]`, `[data-view="library"]`, `[data-view="ledger"]`
 
 **Removed:**
-- `#showSidebarBtn`, `#showAssetLibraryBtn`, `#ledgerPanelToggle`
-- All 3 separate collapse/expand code paths
+- Separate left/right/bottom panel toggles
+- All separate collapse/expand code paths
 
 **New modules:**
-- `ui/sidebar.js` — unified controller
+- `ui/sidebar.js` — unified 5-view controller
 - `ui/outliner.js` — scene hierarchy tree
 
 **Refactored:**
-- `create-panel.js` → `[data-view="create"]`
-- `asset-library.js` → `[data-view="library"]`
-- `ledger-panel.js` → `[data-view="ledger"]`
+- `create-panel.js` → drives Settings and Chat view controls
+- `asset-library.js` → `[data-view="library"]` (labeled **Gallery**)
+- `ledger-panel.js` → `[data-view="ledger"]` (labeled **Activity**)
 
 ---
 
 ### Phase D: Inspector + Outliner Integration — 1.5 days (depends on A, C)
 
 - Move inspector from floating `position: absolute` to right sidebar column
-- Two modes: mesh editor / child world info
+- Three inspector modes: parametric color editor, token child world info, asset comments
 - Selection sync: Outliner ↔ viewport ↔ inspector
-- Width: 260px
+- Width: 340px
 
 ---
 
@@ -161,22 +175,23 @@ Three breakpoints:
 | File | Fate |
 |---|---|
 | `studio.pug` | Rewritten (headerbar, pathbar, sidebar, outliner, bottombar) |
-| `studio.scss` | **Deleted** |
+| `studio.scss` | Renamed to `_studio-legacy.scss`; retained as legacy reference, not imported |
 | `styles.scss` | Simplified to `@use` imports |
-| `ui/create-panel.js` | Refactored to `[data-view="create"]` |
-| `ui/sidebar.js` | **New** — 4-view controller |
+| `ui/create-panel.js` | Refactored to drive Settings and Chat view controls |
+| `ui/sidebar.js` | **New** — 5-view controller |
 | `ui/outliner.js` | **New** — scene hierarchy tree |
 | `ui/nesting.js` | **New** — dive/ascend, breadcrumbs |
-| `ui/asset-library.js` | Refactored to `[data-view="library"]` |
-| `ui/ledger-panel.js` | Refactored to `[data-view="ledger"]` |
-| `ui/asset-editors.js` | Updated DOM refs |
+| `ui/asset-library.js` | Refactored to `[data-view="library"]` (Gallery) |
+| `ui/ledger-panel.js` | Refactored to `[data-view="ledger"]` (Activity) |
+| `ui/comments-panel.js` | **New** — asset-level comments in inspector |
+| `engine/parametric-preview.js` | **New** — node inspector / parametric color binding |
 | `ui/asset-history.js` | History pill in headerbar, scoped to current level |
-| `ui/asset-save.js` | Buttons in headerbar, Publish hidden when nested |
+| `ui/asset-save.js` | Buttons in headerbar, Publish hidden for non-token nested worlds |
 | `ui/asset-drop-zone.js` | Drop overlay → viewport border + Outliner highlight |
 | `engine/scene-graph.js` | Minor: expose dive/ascend hooks |
 | `services/*.js` | **No changes** |
 | `blockchain/*.js` | **No changes** |
-| `scripts/build-scss.js` | Updated SCSS paths |
+| `scripts/render-scss.js` | Updated SCSS paths (called by `scripts/build-scss.js`) |
 
 ---
 
@@ -189,12 +204,12 @@ Three breakpoints:
 | Navigation | None (hunt for panels) | View Switcher + Path Bar |
 | Scene hierarchy | Invisible | Outline view + breadcrumb path |
 | Nesting UX | Double-click dive, no orientation | Dive + back + breadcrumbs + depth indicator |
-| Topbar elements | 7 | 4 at root; adds back + path bar when nested |
-| CSS files | 1 (2136 lines) | 16 (~200 lines each) |
+| Topbar elements | 7 | Headerbar with brand, page switcher, title, history, actions, wallet |
+| CSS files | 1 (2136 lines) | 29 SCSS partials |
 | Framework | Bootstrap 5 | None (tokens only) |
 | Custom properties | 10 | ~50 semantic tokens |
-| Color scheme | Dark-only | `prefers-color-scheme` |
-| `!important` | Sprinkled throughout | Zero |
+| Color scheme | Dark-only | `prefers-color-scheme` + manual `data-theme` |
+| `!important` | Sprinkled throughout | Minimal (e.g., `.hidden` utility) |
 
 ---
 

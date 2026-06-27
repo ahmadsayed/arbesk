@@ -55,15 +55,15 @@ Authorization: Session <token>
 |---|---|
 | `src/api/authentication.js` | Accept only `Session <token>`. Remove Bearer parsing, base64 decode, `web3.eth.accounts.recover` for txHash messages, and tx receipt validation from auth middleware. |
 | `src/api/openapi.json` | Replace `bearerAuth` security scheme with `sessionAuth` describing the `Session <token>` header. |
-| `src/api/rate-limiter.js` | No change. It already reads `res.locals.userAddress` set by the auth middleware. |
+| `src/api/rate-limiter.js` | Rewritten on `express-rate-limit`; keys every limiter by `res.locals.userAddress` (set by auth middleware) falling back to `req.ip`. |
 
 ### Frontend
 
 | File | Change |
 |---|---|
 | `frontend/src/js/services/api.js` | Remove `signTxHash()`. Remove Bearer fallback inside `generateAsset()`. Remove the `usedSession` retry fallback to Bearer. Keep session creation, caching, and auto-retry on `INVALID_SESSION`. |
-| `frontend/src/js/ui/create-panel.js` | No change. It already calls `getOrCreateSession()` before payment. |
-| `frontend/src/js/blockchain/wallet.js` | No change. It already calls `getOrCreateSession()` after wallet connection. |
+| `frontend/src/js/ui/create-panel.js` | Calls `getOrCreateSession()` before `generateAsset()` to ensure the SIWE sign popup appears before any provider payment/key prompt. |
+| `frontend/src/js/blockchain/wallet.js` | `authenticateUser()` now lives in `frontend/src/js/blockchain/wallet-core.js` and is re-exported through `wallet.js`; it eagerly creates a session after wallet connection. |
 
 ### Tests
 
@@ -89,20 +89,20 @@ Authorization: Session <token>
 User clicks Generate
   └── create-panel.js
       ├── getOrCreateSession() → cache hit or SIWE sign popup
-      ├── payForGenerationWithUSDC() → approve + pay (2 popups)
-      └── generateAsset({ prompt, nodeId, txHash })
+      └── generateAsset({ prompt, nodeId, txHash: null })
           └── POST /api/v1/generations
               Header: Authorization: Session <token>
-              Body: { prompt, nodeId, txHash, ... }
+              Body: { prompt, nodeId, ... }
                   └── backend authenticate middleware
                       ├── parse Session header
                       ├── validate token against in-memory store
                       ├── set res.locals.userAddress
                       └── next()
                   └── generate-node.js
-                      ├── validate tx receipt + payment event
                       ├── rate limit by res.locals.userAddress
-                      └── generate, pin, respond
+                      └── generate, return raw asset bytes
+
+> **Implemented as:** The current generation flow is free/mock tier and does not use `payForGenerationWithUSDC()`. The browser uploads the source asset and manifest to IPFS directly; `generate-node.js` returns raw asset bytes and performs no server-side IPFS writes.
 ```
 
 ### Session creation

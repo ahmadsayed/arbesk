@@ -1,10 +1,10 @@
 # Cross-chain gas cost comparison — per unit of gas and realistic (m=1) per-operation costs.
-# Prices are POINT-IN-TIME (June 2026) and volatile: ETH=$1725 (re-verified), MON=$0.0207, SEI=$0.053 (from supplied research, re-check before use).
+# Prices are POINT-IN-TIME (June 2026) and volatile: ETH=$1727 (re-verified), MON=$0.0207, SEI=$0.053 (from supplied research, re-check before use).
 # Per-operation gas-used figures are ESTIMATES — use eth_estimateGas against the compiled contract for real values.
 # MegaETH base fee 0.001 gwei; storage gas is 0 at m=1 (the normal case). Optimism adds a variable L1 data fee NOT included below.
 # Monad bills the gas LIMIT (not gas used) and min base fee ~100 gwei. Sei reportedly charges 72,000 gas per SSTORE (unverified).
 Chain,Gas Token,Token Price USD,Gas Price (gwei),Cost per 1M Gas USD,Mint Gas (est),Mint Cost USD,Light Op Gas (est),Light Op Cost USD,Notes
 Sei,SEI,0.053,10,0.00053,430000,0.00023,50000,0.00003,72k-gas SSTORE reported; charges gas used
-MegaETH,ETH,1725,0.001,0.00173,200000,0.00035,50000,0.00009,storage free at m=1; testnet 6343 / mainnet 4326
-Optimism,ETH,1725,0.001,0.00173,180000,0.00031,50000,0.00009,L2 only — add variable L1 data fee
+MegaETH,ETH,1727,0.001,0.00173,165000,0.00029,35000,0.00006,storage free at m=1; Arbesk targets testnet 6343 (mainnet 4326)
+Optimism,ETH,1727,0.001,0.00173,180000,0.00031,50000,0.00009,L2 only — add variable L1 data fee
 Monad,MON,0.0207,100,0.00207,234000,0.00048,65000,0.00013,bills gas LIMIT not used (~1.3x pad)

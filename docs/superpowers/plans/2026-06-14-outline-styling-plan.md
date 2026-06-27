@@ -483,6 +483,8 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/outliner
 
 Expected: PASS.
 
+> **Implemented as:** The live `createNodeElement` renders a `<button>` toggle with `aria-expanded` and switches between `▶` (collapsed) and `▼` (expanded), rather than rotating a single chevron via CSS.
+
 - [ ] **Step 4: Run the full frontend test suite**
 
 ```bash
@@ -540,11 +542,9 @@ Check the Outline panel for:
 5. No visual regressions in drag-and-drop or footer.
 6. With mock data containing nested `children`, indentation guides and chevrons appear.
 
-- [ ] **Step 4: Stop the visual companion server (if still running)**
+- [ ] **Step 4: Stop any local development servers (if still running)**
 
-```bash
-/home/ahmedh/.kimi-code/plugins/managed/superpowers/skills/brainstorming/scripts/stop-server.sh /home/ahmedh/projects/arbesk/arabesk/.superpowers/brainstorm/30473-1781432212
-```
+> The exact path in the original plan referred to a transient brainstorming server; use the standard dev teardown (`docker compose down`, stop `npm start`, etc.) instead.
 
 - [ ] **Step 5: Final commit (if any verification fixes were made)**
 

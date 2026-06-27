@@ -90,7 +90,7 @@ To resolve `collectionRef/assetID`:
 3. Apply `transform_matrix` from the referencing node.
 4. Cycle/depth protection: reuse the existing `MAX_CHILD_WORLD_DEPTH = 5` counter, incremented on every `child_ref` traversal (whether same-collection or cross-collection) and every nested-collection traversal.
 
-This is a direct generalization of today's `scene-graph.js` child_ref resolution (`token-resolver.js` already caches `tokenURI` lookups by `chainId:contractAddress:tokenId` — that cache is reused unchanged).
+This is a direct generalization of today's child_ref resolution, implemented in `frontend/src/js/engine/scene-loader.js` (`token-resolver.js` already caches `tokenURI` lookups by `chainId:contractAddress:tokenId` — that cache is reused unchanged). `scene-graph.js` is now a barrel file that re-exports `loadAssetManifest`, `loadCollectionManifest`, and related helpers from `scene-loader.js`.
 
 ## Fork vs. live reference — user-facing flow
 
@@ -109,6 +109,8 @@ Studio shows a virtual "default collection" placeholder before the user has mint
 
 ## Studio UX implications (high-level — detailed in implementation plan)
 
+> **Implemented as:** The Studio sidebar Gallery and the standalone Library page both expand each collection token into one card per `assets` entry (`frontend/src/js/ui/asset-library.js::expandTokenToAssets`). The token ID still means "collection," but the user browses and opens individual assets, not a raw collection card. The default collection token ID is derived deterministically from the wallet address via `deriveDefaultCollectionId` (`frontend/src/js/utils/collections.js`), not from the manifest CID. Manifest and collection writes happen client-side directly to IPFS; there is no `POST /api/v1/manifests` backend route.
+
 - Gallery now lists **collections** (tokenId-level), not individual assets. The token ID always means "collection."
 - Selecting a collection in the gallery shows its `assets` map as a browsable list; selecting an asset within shows that asset's scene.
 - Deep-linking a collection token without naming an asset opens the collection in an empty viewport with the Gallery populated, letting the user choose which asset to load. Only a URL that explicitly includes `assetId` opens a specific asset on arrival.
@@ -126,7 +128,7 @@ Studio shows a virtual "default collection" placeholder before the user has mint
 ## Testing impact
 
 - E2E spec `06` (nesting) needs to cover same-collection sibling `child_ref` (the room/chair case) in addition to cross-collection live references.
-- New E2E coverage needed: fork vs. live-reference UX, default collection lazy-mint on first besk, gallery showing collections instead of flat assets.
+- New E2E coverage needed: fork vs. live-reference UX, default collection lazy-mint on first besk, gallery showing collections instead of flat assets. The live implementation covers these in specs `03`, `05`, `06`, `07a`, `07b`, `08`, `11`, etc.; the original `07` was split into `07a`/`07b`.
 - `e2e/helpers/manifest.mjs` needs updating to generate collection-shaped manifests (`assets` map) instead of the current single `source_asset` shape.
-- `frontend/src/js/blockchain/token-resolver.js` and `frontend/src/js/engine/scene-graph.js` get unit/integration coverage for the new two-tier resolution (collection → assets map → asset manifest → nested child_ref/nested-collection).
+- `frontend/src/js/blockchain/token-resolver.js` and `frontend/src/js/engine/scene-loader.js` get unit/integration coverage for the new two-tier resolution (collection → assets map → asset manifest → nested child_ref/nested-collection). `scene-graph.js` is a barrel file that re-exports the loader helpers.
 - No contract test changes needed (no Solidity changes).

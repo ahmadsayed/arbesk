@@ -89,6 +89,7 @@ function updateAssetURI(
     string memory newAssetURI,
     bytes32[] calldata proof
 ) public {
+    if (!_exists(tokenId)) revert NonexistentToken(tokenId);
     _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, proof);
     _setTokenURI(tokenId, newAssetURI);
     emit AssetURIUpdated(tokenId, newAssetURI);
@@ -97,23 +98,29 @@ function updateAssetURI(
 function updateEditors(
     uint256 tokenId,
     bytes32 newRoot,
-    string calldata newListUri,
+    string memory newListUri,
     CollaboratorRole callerRole,
     bytes32[] calldata callerProof
 ) external {
     _requireEditor(tokenId, msg.sender, callerRole, callerProof);
-    require(callerRole == CollaboratorRole.Editor, "Only editors can modify the set");
-    editorSetVersion[tokenId]++;
+    if (callerRole != CollaboratorRole.Editor)
+        revert InvalidCollaboratorRole();
+
+    unchecked {
+        editorSetVersion[tokenId]++;
+    }
     editorRoot[tokenId] = newRoot;
     editorListURI[tokenId] = newListUri;
     emit EditorSetChanged(tokenId, newRoot, editorSetVersion[tokenId]);
 }
 
 function burn(uint256 tokenId, bytes32[] calldata proof) public {
+    if (!_exists(tokenId)) revert NonexistentToken(tokenId);
     _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, proof);
     _burn(tokenId);
     delete editorRoot[tokenId];
     delete editorSetVersion[tokenId];
+    delete editorListURI[tokenId];
     emit AssetBurned(tokenId, msg.sender);
 }
 
@@ -123,9 +130,9 @@ function _requireEditor(
     CollaboratorRole requiredRole,
     bytes32[] calldata proof
 ) internal view {
-    if (ownerOf(tokenId) == caller) return;
     bytes32 leaf = keccak256(abi.encodePacked(caller, requiredRole, tokenId, editorSetVersion[tokenId]));
-    require(MerkleProof.verify(proof, editorRoot[tokenId], leaf), "Not an authorized editor");
+    if (!MerkleProof.verify(proof, editorRoot[tokenId], leaf))
+        revert NotAuthorizedEditor(tokenId, caller);
 }
 ```
 
@@ -159,10 +166,11 @@ function _requireEditor(
 |------|--------|-------------------|
 | `blockchain/wallet.js` | **HIGH** | Backward-compat barrel; logic moved to `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
 | `blockchain/wallet-publishing.js` | **HIGH** | `publishAsset` (+`editorRoot` + `editorListUri`), `updateAssetURI` (+`proof`), `burn` (+`proof`), `updateEditors` (+proof params) |
-| `ui/create-panel.js` | **MEDIUM** | After gen, compute Merkle root → pass to `publishAsset` |
+| `ui/create-panel.js` | **MEDIUM** | After generation, delegates save/publish; initial Merkle root built by `services/asset-save/editor-publish.js` |
 | `ui/asset-save.js` | **HIGH** | Save/publish UI; delegates manifest building to `services/asset-save/manifest-builder.js` |
-| `services/asset-save/manifest-builder.js` | **HIGH** | Before `updateAssetURI`, get proof from IPFS editor list; merges asset into collection manifest |
-| `ui/asset-editors.js` | **HIGH** | Complete rewrite — IPFS-based editor list display, Merkle-based add/remove |
+| `services/asset-save/manifest-builder.js` | **MEDIUM** | Manifest versioning, glTF decomposition, comment-archive embedding |
+| `services/asset-save/editor-publish.js` | **NEW** | Build Merkle proofs for republish; prepare initial editor list |
+| `ui/collaborators-panel.js` | **HIGH** | Reusable Merkle editor list UI (add/remove/role, owner-aware) |
 | `services/team.js` | **NEW** | Merkle-based editor add/remove with IPFS persistence |
 | `gltf/merkle-editors.js` | **NEW** | Merkle tree JS library (`computeRoot`, `getProof`, `makeLeaf`) |
 | `services/asset-delete.js` | **NEW** | Remove asset from collection manifest |
@@ -235,8 +243,13 @@ frontend/src/js/gltf/
   merkle-editors.js            ← Merkle tree JS library
 
 frontend/src/js/services/
+  asset-save/
+    editor-publish.js          ← Merkle proof building + initial editor list
   team.js                      ← Merkle editor add/remove
   asset-delete.js              ← collection asset removal
+
+frontend/src/js/ui/
+  collaborators-panel.js       ← Merkle editor list UI
 
 docs/
   MEGAETH_ANALYSIS.md          ← cost projections updated for Merkle

@@ -14,7 +14,7 @@ The system currently combines:
 - **Mock-backed generative 3D flow** via Express and private IPFS
 - **Parametric versioning** for free color/scale changes
 - **Babylon.js rendering** with GLB/GLTF loading and one-node-per-world replacement behavior
-- **Free-tier on-chain generation quota** via `ArbeskAssetFree.recordGeneration()` (10/day per wallet, owner bypass)
+- **Free-tier on-chain generation quota** via `ArbeskAssetFree.recordGeneration()` (10/day per wallet; contract `owner()` bypasses quota)
 - **EVM PayGo** generation payments and ERC721 world ownership via `ArbeskAsset` (paid tier)
 - **Collection manifests** — every published token is a collection manifest that maps `assetID`s to asset manifest CIDs
 - **Off-chain Merkle editor proofs** — the contract stores only a Merkle root; the full editor list lives on IPFS and is proved at call time
@@ -164,7 +164,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | UI | `ui/asset-save.js` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
 | UI | `ui/asset-history.js` | Manifest-chain timeline browser (uses client-side walkManifestChain) |
-| UI | `ui/asset-editors.js` | Editor list / add/remove UI |
+| UI | `ui/collaborators-panel.js` | Editor list / add/remove UI |
 | UI | `ui/comments-panel.js` | Asset-level comment thread UI |
 | UI | `ui/ledger-panel.js` | Activity feed — walks manifest chain client-side, fetches full manifests |
 | Services | `services/api.js` | API client: sessions, generation, comments archive snapshot, upload credential, unpin |
@@ -186,7 +186,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 There are two concrete contracts sharing `ArbeskAssetBase.sol`:
 
 **`ArbeskAssetFree.sol` (free tier, default)**
-- `recordGeneration(bytes32 nodeId, string prompt)` — 10/day quota per wallet, owner bypass
+- `recordGeneration(bytes32 nodeId, string prompt)` — 10/day quota per wallet (contract `owner()` bypasses quota)
 - All shared minting, URI, editor, and burn functions
 - No payment, no treasury, no USDC
 
@@ -214,7 +214,7 @@ The contract never stores per-address roles. Instead:
 - `editorSetVersion[tokenId]` increments on every editor set change.
 - The full editor list (address + role) is stored on IPFS; `publishAsset` and `updateEditors` record the list CID as `editorListUri`.
 - To call `updateAssetURI`, `updateEditors`, or `burn`, the caller submits a Merkle proof showing their address + role is in the tree for the current version.
-- The token owner always bypasses the proof check.
+- The token owner has no special bypass; callers must prove Editor membership (the contract `owner()` bypasses only the free-tier daily generation quota).
 
 ### 3.4 Infrastructure
 
@@ -552,13 +552,13 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 
 | Risk | Current Mitigation | Planned Improvement |
 |---|---|---|
-| Unpaid generation | Backend validates tx receipt and event before generation | Verify signer/tx sender/event payload alignment |
+| Unpaid generation | Backend validates session auth + rate limit; on-chain payment/quota is enforced by the contract (`recordGeneration` / `payForGenerationWithUSDC`) | Verify signer/tx sender/event payload alignment |
 | Replay generation | In-memory `usedTxHashes` plus manifest-chain walk | Phase 5 durable ledger-backed replay index |
 | Private keys/API keys | `.env` files ignored by Git | Secret scanning / deployment secret management |
 | IPFS public exposure | Docker ports bound to loopback, no DHT/bootstrap | Deployment hardening checklist |
 | Mock assets in prod | `MOCK_3D_GENERATION` env flag | Explicit production adapter config validation |
 | Embedded thumbnail bloat | Backend strips `dataUrl` and stores CID only | Optional thumbnail size/crop UI |
-| Unauthorized URI update/burn | Merkle proof required; owner bypass | Multi-sig owner for high-value collections |
+| Unauthorized URI update/burn | Merkle proof required | Multi-sig owner for high-value collections |
 | Editor list tampering | On-chain Merkle root verifies IPFS list integrity | Periodic root consistency checks |
 | Ledger tampering | Not implemented yet | Append-only JSONL/SQLite + IPFS snapshots + contract anchors |
 

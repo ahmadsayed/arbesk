@@ -81,9 +81,9 @@
 | Web3Modal for wallet connection | ✅ | v1.9.12 |
 | TypeScript | ❌ | Pure JS — acceptable for this project |
 | Service Worker | ❌ | None |
-| Web Workers | ❌ | None — heavy 3D/GLTF operations run on main thread |
+| Web Workers | ❌ (Fixed) | None at audit time; GLTF processing was later offloaded to `frontend/src/js/workers/gltf-worker.js` via a worker pool |
 
-**Finding**: Excellent modular architecture with clean decoupling via a typed `mitt` event bus (`frontend/src/js/events/bus.js`). Missing service workers and web workers for background processing.
+**Finding**: Excellent modular architecture with clean decoupling via a typed `mitt` event bus (`frontend/src/js/events/bus.js`). Web workers for GLTF processing were added after this audit; service workers remain unimplemented.
 
 ---
 
@@ -132,14 +132,14 @@
 | `rel="noopener noreferrer"` on external links | ✅ | Wallet explorer link has it |
 | No analytics / tracking scripts | ✅ | No Google Analytics, Mixpanel, etc. |
 | No third-party cookies | ✅ | No cookie usage |
-| Content Security Policy (CSP) | ❌ | No `Content-Security-Policy` meta tag or header |
+| Content Security Policy (CSP) | ❌ (Fixed) | No `Content-Security-Policy` at audit time; a report-only CSP header was later added in `src/index.js` via Helmet |
 | Subresource Integrity (SRI) | ❌ | CDN scripts lack `integrity` attributes |
 | HTTPS enforcement | ❌ | Localhost only — no `upgrade-insecure-requests` |
-| Hardcoded private key in source | ❌ | Hardhat dev account key `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` is embedded in `wallet.js` (lines 134-135, 421-422) |
+| Hardcoded private key in source | ❌ (Fixed) | Hardhat dev account key `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` was embedded in `wallet.js`; the private key was later removed and only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.js` |
 | Input sanitization | ⚠️ | `escapeHtml()` used in dialogs and toasts; API inputs rely on backend validation |
 | `X-Frame-Options` / frame ancestors | ❌ | No clickjacking protection headers |
 
-**Finding**: The hardcoded Hardhat dev private key is acceptable for local development but must be removed before any production deployment. Lack of CSP and SRI on CDN scripts creates XSS and supply-chain risks. No tracking is a privacy win.
+**Finding**: The hardcoded Hardhat dev private key was acceptable for local development but has since been removed from `wallet.js`; only the dev account address remains in `frontend/src/js/blockchain/dev-account.js`. A report-only CSP header was added after this audit. SRI on CDN scripts remains unimplemented. No tracking is a privacy win.
 
 ---
 
@@ -151,11 +151,11 @@
 | `-webkit-` / `-moz-` prefixes for range slider | ✅ | Both engines covered |
 | `appearance: none` for form controls | ✅ | |
 | Web3.js v1.10.0 | ⚠️ | Stable but aging; v4 is current |
-| Web3Modal v1.9.12 | ❌ | **Deprecated** — v2 (now Reown AppKit) is the modern standard |
+| Web3Modal v1.9.12 | ❌ (Fixed) | **Deprecated** — replaced by EIP-6963 discovery + WalletConnect v2 in `frontend/src/js/blockchain/wallet-discovery.js` and `wallet-connect.js` |
 | `@supports` feature queries | ❌ | No progressive enhancement guards |
 | Safari-specific quirks | ⚠️ | `color-mix()` supported in Safari 16.2+; Babylon.js WebGL compatibility varies |
 
-**Finding**: Web3Modal v1 is the biggest compatibility concern. It lacks modern wallet support (WalletConnect v2, Coinbase Smart Wallet, Rainbow) and may break as wallets drop legacy injection patterns.
+**Finding**: Web3Modal v1 was the biggest compatibility concern at audit time. It has since been replaced by EIP-6963 discovery plus a WalletConnect v2 custom modal, removing the deprecation risk.
 
 ---
 
@@ -220,12 +220,12 @@
 | Direct `window.ethereum` fallback | ✅ | Works without Web3Modal |
 | No wallet installed handling | ✅ | Toast: "Please install MetaMask or Rabby" |
 | User rejection handled silently | ✅ | Error code 4001 → no toast spam |
-| Web3Modal v1 | ❌ | **Deprecated** — should migrate to Reown AppKit (v2) |
-| WalletConnect v2 | ❌ | Not supported |
-| Coinbase Wallet / Rainbow | ❌ | Not supported |
-| EIP-6963 (multi-injection) | ❌ | Not supported — may fail with multiple wallets |
+| Web3Modal v1 | ❌ (Fixed) | **Deprecated** — later replaced by a custom EIP-6963 + WalletConnect v2 modal |
+| WalletConnect v2 | ❌ (Fixed) | Not supported at audit time; later added via `@walletconnect/ethereum-provider` |
+| Coinbase Wallet / Rainbow | ❌ (Fixed) | Not supported at audit time; later supported via EIP-6963 if they emit `eip6963:announceProvider` |
+| EIP-6963 (multi-injection) | ❌ (Fixed) | Not supported at audit time; later implemented in `frontend/src/js/blockchain/wallet-discovery.js` |
 
-**Finding**: Wallet connection works well for MetaMask/Rabby but uses deprecated Web3Modal v1. Modern wallets (Coinbase Smart Wallet, Rainbow, Frame) may not connect reliably. Migrating to Reown AppKit or RainbowKit is recommended.
+**Finding**: At audit time, wallet connection worked well for MetaMask/Rabby but used deprecated Web3Modal v1, and modern wallets (Coinbase Smart Wallet, Rainbow, Frame) could not connect reliably. This was later addressed by replacing Web3Modal with EIP-6963 discovery plus a WalletConnect v2 custom modal.
 
 ---
 
@@ -236,13 +236,13 @@
 | `wallet_switchEthereumChain` | ✅ | Prompts user to switch |
 | `wallet_addEthereumChain` | ✅ | Adds Hardhat if not present |
 | Wrong network detection | ✅ | Dialog prompts to switch |
-| Chain ID badge in headerbar | ✅ | Shows "Hardhat", "Calibration", "Mainnet" |
-| Network switch in wallet popover | ⚠️ | Only "Hardhat Local" option — no production networks |
-| Multi-network config object | ✅ | `NETWORKS` object exists but only has Hardhat |
-| Production network support (Mainnet, Sepolia, Polygon) | ❌ | Not in UI |
+| Chain ID badge in headerbar | ✅ | Shows "Hardhat Local" and "MegaETH Testnet" |
+| Network switch in wallet popover | ⚠️ (Fixed) | Only "Hardhat Local" option at audit time; a headerbar `<select>` with Hardhat Local and MegaETH Testnet was added later |
+| Multi-network config object | ✅ | `NETWORKS` object exists but only had Hardhat at audit time; later expanded to Hardhat Local + MegaETH Testnet in `frontend/src/js/blockchain/network-config.js` |
+| Production/testnet network support | ❌ (Fixed) | Not in UI at audit time; MegaETH Testnet is now the configured public testnet target |
 | Custom RPC endpoint input | ❌ | Not implemented |
 
-**Finding**: Network switching works for the Hardhat local dev environment, but the UI offers no production network options. The backend supports multi-chain, but the frontend doesn't expose it.
+**Finding**: Network switching worked for the Hardhat local dev environment at audit time, but the UI offered no public testnet options. The frontend later gained a headerbar network selector for Hardhat Local and MegaETH Testnet; `NETWORK_CONFIGS` in `frontend/src/js/blockchain/network-config.js` now provides per-chain contract addresses.
 
 ---
 
@@ -288,7 +288,7 @@
 |-------|--------|-------|
 | Private Kubo node | ✅ | Dockerized, loopback-only |
 | Gateway reads | ✅ | `http://127.0.0.1:8080/ipfs/` |
-| Backend API for writes | ✅ | POST `/api/v1/generations`, `/api/v1/manifests` |
+| Backend API for writes | ✅ | POST `/api/v1/generations`; manifests are written client-side directly to IPFS (`/api/v1/manifests` was removed before this audit) |
 | Manifest chain walking | ✅ | `getManifestChain()` up to 50 depth |
 | CID validation | ✅ | `extractCid()` in transforms.js |
 | Browser caching toggle | ✅ | `IPFS_CACHE_ENABLED` flag (disabled for dev) |
@@ -297,7 +297,7 @@
 | IPFS content routing (DHT) | ❌ | Disabled in Kubo config |
 | CAR file import/export | ❌ | Not implemented |
 
-**Finding**: IPFS integration is appropriate for a private-node architecture. All writes go through the backend; reads hit the gateway directly. No browser-native IPFS for peer-to-peer sharing.
+**Finding**: IPFS integration is appropriate for a private-node architecture. Generation writes go through the backend (`POST /api/v1/generations`); manifest writes happen client-side directly to IPFS. Reads hit the gateway directly. No browser-native IPFS for peer-to-peer sharing.
 
 ---
 
@@ -312,11 +312,11 @@
 | Auto-clear on disconnect | ✅ | Event listener clears session |
 | Clock skew grace period | ✅ | 60-second buffer |
 | Address-bound sessions | ✅ | Token tied to wallet address |
-| SIWE (EIP-4361 / Sign-In with Ethereum) | ❌ | Not implemented — uses custom message format |
+| SIWE (EIP-4361 / Sign-In with Ethereum) | ❌ (Fixed) | Not implemented at audit time; standard SIWE verification using the `siwe` package was later added in `src/api/siwe-verify.js` |
 | JWT / structured tokens | ❌ | Opaque UUIDs only |
 | Session revocation API | ✅ | `DELETE /api/v1/sessions` exists |
 
-**Finding**: Session auth is well-implemented for reducing wallet friction. Missing SIWE compliance, which is the modern standard for Ethereum authentication.
+**Finding**: Session auth is well-implemented for reducing wallet friction. SIWE compliance was added after this audit in `src/api/siwe-verify.js` using the official `siwe` package.
 
 ---
 
@@ -324,15 +324,15 @@
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| `KNOWN_RPC_ENDPOINTS` for mainnet/Sepolia | ✅ | `eth.llamarpc.com`, `ethereum-sepolia.publicnode.com` |
+| `NETWORK_CONFIGS` for Hardhat/MegaETH | ✅ (Fixed) | Hardhat Local and MegaETH Testnet (`https://carrot.megaeth.com/rpc`) |
 | External RPC fallback | ✅ | Token resolver creates new Web3 instance for different chains |
 | Hardhat local dev | ✅ | Primary network |
-| Calibration / Filecoin Mainnet | ⚠️ | Chain IDs in event handler (314159, 314) but no RPC configured |
+| Calibration / Filecoin Mainnet | ❌ (Fixed) | No longer in `constants/chains.js` |
 | Polygon / Arbitrum / Base | ❌ | No RPC or UI support |
-| Chain switch UI | ❌ | Only Hardhat in wallet popover select |
+| Chain switch UI | ❌ (Fixed) | Only Hardhat in wallet popover at audit time; later added headerbar `<select>` for Hardhat Local + MegaETH Testnet |
 | Cross-chain asset references | ⚠️ | `child_ref` stores `chainId` but resolution only works for known RPCs |
 
-**Finding**: The architecture supports multi-chain via `child_ref.chainId` and external RPC fallbacks, but the UI is hardcoded to Hardhat local. Adding production networks requires config changes, not code changes.
+**Finding**: The architecture supported multi-chain via `child_ref.chainId` and external RPC fallbacks at audit time, but the UI was hardcoded to Hardhat local. The frontend later gained a network selector and `NETWORK_CONFIGS` for Hardhat Local and MegaETH Testnet. Adding more networks remains primarily a config change.
 
 ---
 
@@ -345,12 +345,12 @@
 | Toast notifications with actions | ✅ | Retry, View on Explorer |
 | User rejection silent handling | ✅ | No spam on cancel |
 | Specific error classification | ✅ | Insufficient funds, wrong network, user denied |
-| Transaction revert reason parsing | ❌ | Raw error message shown, no decoded revert reason |
+| Transaction revert reason parsing | ❌ (Fixed) | Raw error message shown at audit time; `frontend/src/js/blockchain/error-decoder.js` now decodes string reverts and custom error selectors |
 | Automatic retry with backoff | ❌ | Not implemented |
 | Circuit breaker for failed RPC | ❌ | Not implemented |
 | RPC fallback rotation | ❌ | Single RPC per chain |
 
-**Finding**: Error handling is user-friendly at the UI layer. Missing: revert reason decoding, automatic retries, and RPC failover.
+**Finding**: Error handling is user-friendly at the UI layer. Revert reason decoding was added after this audit in `frontend/src/js/blockchain/error-decoder.js`. Missing: automatic retries and RPC failover.
 
 ---
 
@@ -379,7 +379,7 @@
 | `estimateGas` before `send` | ✅ | All mutating calls estimate first |
 | Gas buffer (1.2×) | ✅ | Consistent pattern |
 | USDC approval + payment flow | ✅ | Two-step ERC-20 pattern |
-| Role-based access (Viewer/Editor/Owner) | ✅ | `CollaboratorRole` enum + contract methods |
+| Role-based access (Viewer/Editor + token owner) | ✅ | `CollaboratorRole` enum (`None/Viewer/Editor`) in contract and frontend; token owner bypasses editor checks as contract `owner()` |
 | Burn with IPFS unpin lifecycle | ✅ | Resolves CID before burn, unpins after |
 | Custom events for contract actions | ✅ | `wallet:generationPaid`, `asset:published`, `asset:burned` |
 | Contract read caching | ❌ | No caching for `tokenURI`, `costPerGeneration`, etc. |
@@ -395,13 +395,13 @@
 
 | # | Gap | Risk | Fix |
 |---|-----|------|-----|
-| 1 | **Web3Modal v1 is deprecated** | Wallets may stop supporting legacy injection; users cannot connect with modern wallets | Migrate to Reown AppKit (v2) or RainbowKit |
-| 2 | **Hardcoded dev private key in source** | Accidental mainnet deployment could leak funds | Move to environment variable or dev-only config file |
-| 3 | **No production network config in UI** | App only works on Hardhat local; mainnet users cannot connect | Add Mainnet, Sepolia, Polygon, etc. to `NETWORKS` and wallet popover |
-| 4 | **No transaction revert reason decoding** | Users see raw hex/errors instead of human-readable revert reasons | Parse `error.data` and map to contract error definitions |
-| 5 | **No SIWE (EIP-4361)** | Non-standard auth message; not interoperable with SIWE-verifying backends | Replace custom `arbesk-session:` message with SIWE format |
+| 1 | **Web3Modal v1 is deprecated** (Fixed) | Wallets may stop supporting legacy injection; users cannot connect with modern wallets | Migrated to EIP-6963 discovery + WalletConnect v2 custom modal |
+| 2 | **Hardcoded dev private key in source** (Fixed) | Accidental mainnet deployment could leak funds | Private key removed from source; only dev account address remains |
+| 3 | **No production network config in UI** (Fixed) | App only works on Hardhat local; mainnet users cannot connect | Added MegaETH Testnet to `NETWORK_CONFIGS` and the headerbar network selector |
+| 4 | **No transaction revert reason decoding** (Fixed) | Users see raw hex/errors instead of human-readable revert reasons | `frontend/src/js/blockchain/error-decoder.js` now parses `error.data` against the ABI |
+| 5 | **No SIWE (EIP-4361)** (Fixed) | Non-standard auth message; not interoperable with SIWE-verifying backends | Standard SIWE verification added in `src/api/siwe-verify.js`; frontend uses `frontend/src/js/blockchain/siwe.js` |
 | 6 | **CDN scripts lack SRI** | Supply-chain attack if CDN is compromised | Add `integrity` and `crossorigin="anonymous"` to all CDN `<script>` tags |
-| 7 | **No CSP** | XSS vulnerability if malicious script is injected | Add `Content-Security-Policy` meta tag |
+| 7 | **No CSP** (Fixed) | XSS vulnerability if malicious script is injected | Report-only CSP header added via Helmet in `src/index.js` |
 
 ---
 
@@ -410,7 +410,7 @@
 - **Session auth reduces friction**: Clever session token system cuts MetaMask popups from 3 to 2 after the first generation.
 - **Transaction lifecycle UX**: `showTxToast()` gives clear Notyf-based feedback through pending → confirmed/failed states with explorer links.
 - **Token resolver architecture**: Clean separation with caching, external RPC fallback, and URI normalization for cross-contract compatibility.
-- **Role-based collaboration**: Full Viewer/Editor/Owner role system wired through the contract.
+- **Role-based collaboration**: Viewer/Editor `CollaboratorRole` enum wired through the contract; token owner and contract `owner()` bypass editor checks.
 - **Burn → unpin lifecycle**: Thoughtful cleanup that resolves the manifest CID before burning, then unpins IPFS content afterward.
 - **USDC payment flow**: Proper two-step ERC-20 approval pattern with gas estimation.
 

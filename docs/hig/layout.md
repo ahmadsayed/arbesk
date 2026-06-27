@@ -29,42 +29,41 @@ GNOME apps follow a consistent layout:
 **Root level (top-level world):**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ [✦] Arbesk  │ My World · 3 nodes    [◐][◐][◐]  [Save][Publish] │ HDR
-├──────────┬──────────────────────────────────────────────────────┤
-│          │                                                      │
-│ 🖊 Create │            3D Viewport                               │
-│ 🌳 Outln │            (Babylon.js canvas)                       │
-│ 📚 Lib   │                                                      │
-│ 📋 Ledger│            [Inspector — only on selection]           │
-│          │                                                      │
-│ ──────── │                                                      │
-│          ├──────────────────────────────────────────────────────┤
-│ VIEW     │ [Describe your 3D asset…                       ][✦] │ MSG
-│ CONTENT  │                                                      │
-├──────────┴──────────────────────────────────────────────────────┤
-│ Draft · 3 nodes · 1 child · Provider: Mock   [⏻ Wallet]        │ BAR
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ [✦] Arbesk  [Library][Studio]  My World · 3 nodes  [Save][Besk] [Wallet] │ HDR
+├──────────┬───────────────────────────────────────────────────────┬───────┤
+│          │                                                       │       │
+│ ⚙ Settings│            3D Viewport                                │       │
+│ 💬 Chat  │            (Babylon.js canvas)                        │ Insp  │
+│ 🌳 Outln │                                                       │ (coll)│
+│ 📚 Gallery│                                                       │       │
+│ 📋 Activity│          [Inspector — only on selection]            │       │
+│          │                                                       │       │
+│          ├───────────────────────────────────────────────────────┤       │
+│          │ [Describe your 3D asset…                        ][✦]  │       │
+├──────────┴───────────────────────────────────────────────────────┴───────┤
+│ Draft · 3 nodes · 1 child · Depth 0/5                       [?]          │ BAR
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Nested view (inside a child world):**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ [✦] [←] My World > Living Room   · 2 nodes   [◐][◐]  [Save]   │ HDR
-├──────────┬──────────────────────────────────────────────────────┤
-│          │                                                      │
-│ 🖊 Create │            3D Viewport                               │
-│ 🌳 Outln │            (Living Room's canvas)                    │
-│ 📚 Lib   │                                                      │
-│ 📋 Ledger│            [Inspector — only on selection]           │
-│          │                                                      │
-│ ──────── │                                                      │
-│          ├──────────────────────────────────────────────────────┤
-│          │ [Describe an object for this room…            ][✦]  │ MSG
-├──────────┴──────────────────────────────────────────────────────┤
-│ Depth 1/5 · 2 nodes · Token #42 · Living Room  [⏻ Wallet]     │ BAR
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ [✦] [←] My World ▸ Living Room  · 2 nodes  [Save]                [Wallet]│ HDR
+├──────────┬───────────────────────────────────────────────────────┬───────┤
+│          │                                                       │       │
+│ ⚙ Settings│            3D Viewport                                │       │
+│ 💬 Chat  │            (Living Room's canvas)                     │ Insp  │
+│ 🌳 Outln │                                                       │ (coll)│
+│ 📚 Gallery│                                                       │       │
+│ 📋 Activity│          [Inspector — only on selection]            │       │
+│          │                                                       │       │
+│          ├───────────────────────────────────────────────────────┤       │
+│          │ [Describe an object for this room…             ][✦]  │       │
+├──────────┴───────────────────────────────────────────────────────┴───────┤
+│ Depth 1/5 · 2 nodes · Token #42 · Living Room               [?]          │ BAR
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -73,24 +72,25 @@ GNOME apps follow a consistent layout:
 
 | Zone | What it replaces | Content |
 |---|---|---|
-| **Header Bar** | Current `.arabesque-topbar` | Brand icon, back button (nested), breadcrumb path bar, document title, history timeline pill, Save/Publish buttons |
-| **Left Sidebar** | `.chat-sidebar` + `.asset-library-panel` + `.ledger-panel` | Unified sidebar with View Switcher (4 icons) |
+| **Header Bar** | Current `.arabesque-topbar` | Brand icon, page switcher (Library/Studio), back button (nested), breadcrumb path bar, document title, history timeline pill, Save/Besk it buttons, wallet button |
+| **Left Sidebar** | `.chat-sidebar` + `.asset-library-panel` + `.ledger-panel` | Unified sidebar with View Switcher (5 icons) |
 | **Content Area** | `.main-stage` + `.viewport` | 3D canvas + bottom message bar |
-| **Right Inspector** | Floating `#inspector` | Contextual sidebar. Appears on node selection. Two modes. |
-| **Bottom Bar** | New | Nesting depth, node/child counts, provider, wallet button |
+| **Right Inspector** | Floating `#inspector` | Contextual sidebar. Appears on node selection. Modes: parametric color editor, token child info, asset comments. |
+| **Bottom Bar** | New | Document state, nesting depth, node/child counts, keyboard-shortcuts button |
 
 ---
 
-## View Switcher — 4 Views
+## View Switcher — 5 Views
 
-The sidebar uses a vertical icon stack to switch between four views:
+The sidebar uses a vertical icon stack to switch between five views:
 
-| # | View | Icon | Content |
+| # | View | `data-view` | Content |
 |---|---|---|---|
-| 1 | **Create** | 🖊 | Asset settings (name, provider, tier, team), chat history, version slider |
-| 2 | **Outline** | 🌳 | Scene tree showing nodes and child worlds. Click to select, double-click to dive. |
-| 3 | **Library** | 📚 | "My Assets" + "Shared Assets" with draggable asset cards |
-| 4 | **Ledger** | 📋 | Operation filter + stats + log entries |
+| 1 | **Settings** | `settings` | Asset settings (name, collection, provider, tier, BYOK key, collaborators) |
+| 2 | **Chat** | `chat` | Prompt/chat history and generation status |
+| 3 | **Outline** | `outline` | Scene tree showing nodes and child worlds. Click to select, double-click to dive. |
+| 4 | **Gallery** | `library` | "My Assets" + "Shared Assets" with draggable asset cards |
+| 5 | **Activity** | `ledger` | Operation filter + stats + log entries derived from the manifest chain |
 
 ---
 
@@ -98,25 +98,26 @@ The sidebar uses a vertical icon stack to switch between four views:
 
 **Root level:**
 ```
-[✦ Arbesk]  My World · 3 nodes     [◐][◐][◐]  [Save][Publish]
+[✦ Arbesk]  [Library][Studio]  My World · 3 nodes     [◐][◐][◐]  [Save][Besk] [Wallet]
 ```
 
 **Nested (inside child world):**
 ```
-[✦ Arbesk] [←] My World  ▸  Living Room  · 2 nodes   [◐][◐]   [Save]
-             ^ back  ^────────── path bar ──────────
+[✦ Arbesk]  [Library][Studio]  [←] My World  ▸  Living Room  · 2 nodes   [◐][◐]   [Save] [Wallet]
+                                ^ back  ^────────── path bar ──────────
 ```
 
 | Element | When visible |
 |---|---|
 | Brand icon only (no text) | Always |
+| Page switcher (Library/Studio) | Always |
 | Back button (←) | Nested only |
 | Path bar (clickable breadcrumbs) | Nested only |
 | Document title + counts | Always |
 | History timeline pill | When asset has history |
 | Save button | Always when asset is open |
-| Publish button | Root level only |
-| Wallet button | Moved to bottom bar |
+| Besk it (Publish) button | Hidden only when nested in a non-token world |
+| Wallet button | Always in headerbar actions |
 
 Dive/Ascend: Double-click child world → dive. Back button / `Alt+Left` / `Escape` → ascend. Breadcrumb click → jump to ancestor.
 
@@ -139,10 +140,10 @@ Pinned to bottom of content area. Expands on multi-line input. Generate button i
 ## Bottom Bar
 
 ```
-Draft · 3 nodes · 1 child · Provider: Mock     [⏻ Wallet]
+Draft · 3 nodes · 1 child · Depth 0/5          [?]
 ```
 
-Shows document state, depth, counts, provider. Wallet button lives here.
+Shows document state, depth, node/child counts. Keyboard-shortcuts button lives here.
 
 ---
 
@@ -166,8 +167,8 @@ Shows document state, depth, counts, provider. Wallet button lives here.
 | `#showSidebarBtn` | Replaced by unified sidebar toggle |
 | `#showAssetLibraryBtn` | Replaced by unified sidebar toggle |
 | `#ledgerPanelToggle` | Replaced by unified sidebar toggle |
-| `#assetStatus` block | Replaced by headerbar title + path bar |
-| `#newAssetTopBtn` | Moved to Create view + `Ctrl+N` |
+| `#assetStatus` block | Replaced by `#assetStatusName` / `#assetStatusMeta` in headerbar |
+| `#newAssetTopBtn` | Superseded by `#newAssetBtn` in headerbar (still `Ctrl+N`) |
 | Bootstrap 5 dependency | Replaced by token system |
 | `.chat-editor` wrapper | Replaced by message bar |
 | `.welcome-overlay` | Replaced by inline empty state |

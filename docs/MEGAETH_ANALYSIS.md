@@ -1,6 +1,6 @@
 # Arbesk on MegaETH — Storage Gas Analysis & Optimization Report
 
-**Date:** 2026-06-22 · **Target:** MegaETH (testnet chain 6343 · mainnet chain 4326)
+**Date:** 2026-06-22 · **Target:** MegaETH Testnet (chain ID 6343)
 
 > **Major revision (2026-06-22).** Earlier versions of this report (and an interim "single-bucket" recomputation) were built on a wrong mental model of MegaETH's bucket multiplier. Verified against the [SALT source](https://github.com/megaeth-labs/salt), the MegaETH Gas Model / MegaEVM docs, and live network params:
 >
@@ -136,7 +136,7 @@ The change from `usedPayments` (a new slot per payment, keyed partly on `block.n
 1. **Eliminates O(payments) state growth** — `usedPayments` minted a fresh slot on every payment forever; `paymentNonce` is one slot per user, overwritten thereafter.
 2. **Removes the `block.number` read**, which is volatile data subject to MegaETH's gas-detention rules.
 
-But the documented rationale — *"per-user nonce for payment replay protection"* — does not hold. In the shipped code (`ArbeskAsset.sol:103-127`, USDC path `131-159`):
+But the documented rationale — *"per-user nonce for payment replay protection"* — does not hold. In the shipped code (`ArbeskAsset.sol:112-115`, USDC path `144-147`):
 
 ```solidity
 uint256 nonce = paymentNonce[msg.sender];
@@ -166,7 +166,7 @@ The robust, operation-independent comparison is just `gas_price × token_price`:
 All four sit within ~4× per unit of gas. MegaETH's near-zero gwei × expensive ETH and Monad's high gwei × cheap MON nearly cancel out.
 
 > ⚠️ **Caveats — read before quoting any dollar figure:**
-> - **Token prices are point-in-time (June 2026) and volatile.** Only ETH (~$1,725) was independently re-verified here; MON (~$0.0207) and SEI (~$0.053) are taken from the supplied research and should be re-checked before use. The per-1M-gas column moves with these prices.
+> - **Token prices are point-in-time (June 2026) and volatile.** Only ETH (~$1,727) was independently re-verified here; MON (~$0.0207) and SEI (~$0.053) are taken from the supplied research and should be re-checked before use. The per-1M-gas column moves with these prices.
 > - **Per-*operation* dollar totals require `eth_estimateGas`** against the actual compiled contract on each chain — the gas-*used* figures depend on contract bytecode, calldata, and optimizer settings.
 > - **Chain-specific quirks not captured above:** Optimism adds an **L1 data fee** (the largest swing — cheap today at low Ethereum base fee + blobs, but real); **Monad bills the gas _limit_, not gas _used_** (pad ~1.3×); **Sei reportedly charges 72,000 gas per SSTORE** (would inflate storage-heavy mints — unverified here).
 > - **MegaETH testnet (6343) costs are testnet ETH with no real value;** mainnet is chain 4326 at the same 0.001 gwei base fee.
@@ -210,7 +210,7 @@ curl -s https://carrot.megaeth.com/rpc \
 | `blockchain/contracts/ArbeskAssetBase.sol` | Removed `ERC721Enumerable`; stores only `_tokenURIs`, `editorRoot`, `editorSetVersion`, `editorListURI` (~4 slots/token) |
 | `blockchain/contracts/ArbeskAsset.sol` | `usedPayments` → `paymentNonce` (O(users)), removed `block.number` read; updated for Merkle editor ABI. **Note:** `paymentNonce` is currently inert (never checked/emitted) — see §3 |
 | `blockchain/contracts/ArbeskAssetFree.sol` | Updated for Merkle editor ABI |
-| `blockchain/test/ArbeskAsset.test.js` · `ArbeskAssetFree.test.js` | Updated for per-user nonce, Merkle authorization, non-Enumerable ABI |
+| `blockchain/test/ArbeskAsset.test.js` | Updated for per-user nonce, Merkle authorization, non-Enumerable ABI (covers both paid and free tiers) |
 | `frontend/src/js/ui/asset-library.js` | Replaced `tokenOfOwnerByIndex` with off-chain `Transfer` event scanning |
 | `frontend/src/js/gltf/merkle-editors.js` · `frontend/src/js/services/team.js` | Merkle tree/proof library + editor service |
 | `docs/cost-projection.csv` | Replaced invalid token-count→m projection with per-1M-gas + m=1 per-operation costs across 4 chains |

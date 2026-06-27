@@ -4,6 +4,8 @@
 **Status:** Approved — ready for implementation plan  
 **Scope:** Frontend only (backend requires no changes)
 
+> **Implemented as:** Wallet lifecycle and eager SIWE auth live in `frontend/src/js/blockchain/wallet-core.js` (re-exported through `frontend/src/js/blockchain/wallet.js`). State is kept in `frontend/src/js/state/wallet-state.js`, not on `window.*` globals. Auth events are emitted via the event bus (`EVENTS.USER_AUTHENTICATED` / `EVENTS.USER_AUTH_REQUIRED`) rather than `document.dispatchEvent`. The current generation flow uses the free/mock tier and does not require a USDC payment popup; `create-panel.js` calls `getOrCreateSession()` before `generateAsset({ txHash: null })`.
+
 ---
 
 ## 1. Problem Statement
@@ -59,13 +61,13 @@ User clicks "Connect Wallet"
                               └── dispatch user:authenticated
 
 Later: user clicks Generate
-  └── generateAsset()
+  └── onGenerate()
       ├── getOrCreateSession() → cache hit, no popup
-      └── payWithUSDC() → approve → pay (2 popups)
+      └── generateAsset({ prompt, nodeId, txHash: null })
           └── POST /generations with Authorization: Session <token>
 ```
 
-**Result:** 2 popups at login, 2 popups at every generation.
+**Result:** 1 popup at login (wallet account selection) + 1 SIWE sign popup; no on-chain payment popups in the current free/mock generation flow.
 
 ---
 
@@ -80,22 +82,22 @@ User clicks "Connect Wallet"
                   └── UI shows "Sign In" indicator in topbar
 
 Later: user clicks Generate
-  └── generateAsset()
+  └── onGenerate()
       ├── getOrCreateSession() → cache miss → createSession()
           └── SIWE sign popup FIRST
-      └── payWithUSDC() → approve → pay (2 popups)
+      └── generateAsset({ prompt, nodeId, txHash: null })
           └── POST /generations with Authorization: Session <token>
 ```
 
-**Result:** 3 popups on first generation, but ordered correctly — **auth before money**.
+**Result:** 2 popups on first generation, ordered correctly — **auth before generation**. The current free/mock flow does not add a USDC approve/pay step.
 
 ---
 
 ## 5. The Ordering Rule
 
-Currently, the caller (`create-panel.js`) calls `payForGenerationWithUSDC()` **before** `generateAsset()`. This means the payment popups appear before the auth popup.
+Currently, the caller (`create-panel.js`) may call `generateAsset()` before ensuring a valid session exists. This means the SIWE sign popup can appear after other prompts.
 
-The fix is to ensure auth happens **before** payment in the caller:
+The fix is to ensure auth happens **before** generation in the caller:
 
 ```js
 // In create-panel.js onGenerate()
@@ -103,62 +105,68 @@ The fix is to ensure auth happens **before** payment in the caller:
 // 1. AUTH FIRST
 await getOrCreateSession(); // triggers sign if no valid cache
 
-// 2. THEN PAYMENT
-const txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
-
-// 3. THEN API CALL
-const result = await generateAsset({ prompt, nodeId, txHash, ... });
+// 2. THEN GENERATION
+const result = await generateAsset({ prompt, nodeId, txHash: null, ... });
 ```
 
-`generateAsset()` already calls `getOrCreateSession()` internally for self-contained auth, but by calling it explicitly beforehand, the sign popup (if needed) appears before the USDC approve/pay popups.
+`generateAsset()` already calls `getOrCreateSession()` internally for self-contained auth, but by calling it explicitly beforehand, the sign popup (if needed) appears before any provider or generation request.
+
+> **Implemented as:** The production generation flow is free/mock tier and does not use `payForGenerationWithUSDC()`. `create-panel.js` calls `getOrCreateSession()` and then `generateAsset({ txHash: null })`.
 
 ---
 
 ## 6. Frontend Changes
 
-### 6.1 `frontend/src/js/blockchain/wallet.js`
+### 6.1 `frontend/src/js/blockchain/wallet-core.js`
 
 After `_finishWalletSetup(address)`:
 
-1. Set `window.walletAddress` and `window.chainId` (existing)
+1. Store `walletAddress` and `chainId` in `walletState` (existing)
 2. Initialize contract and check balance (existing)
 3. **NEW:** Call `authenticateUser()` non-blocking
 
 ```js
+import { emit, EVENTS } from "../events/bus.js";
+import { walletState } from "../state/wallet-state.js";
+
 async function authenticateUser() {
   try {
+    const { getOrCreateSession } = await import("../services/api.js");
     const session = await getOrCreateSession();
-    document.dispatchEvent(new CustomEvent('user:authenticated', {
-      detail: { address: window.walletAddress, session }
-    }));
+    emit(EVENTS.USER_AUTHENTICATED, {
+      address: walletState.get().walletAddress,
+      session,
+    });
   } catch (err) {
     // User rejected sign or other error
-    document.dispatchEvent(new CustomEvent('user:auth-required', {
-      detail: { address: window.walletAddress }
-    }));
+    emit(EVENTS.USER_AUTH_REQUIRED, {
+      address: walletState.get().walletAddress,
+    });
   }
 }
 ```
 
+> **Note:** `wallet.js` is now a re-export barrel; add or import `authenticateUser` via `frontend/src/js/blockchain/wallet-core.js`.
+
 ### 6.2 `frontend/src/js/ui/create-panel.js`
 
-**`onGenerate()`** — add auth before payment:
+**`onGenerate()`** — add auth before generation:
 
 ```js
 async function onGenerate() {
   // ...existing validation...
 
-  // NEW: ensure auth before payment so sign popup comes first
+  // NEW: ensure auth before generation so sign popup comes first
   try {
     await getOrCreateSession();
   } catch (err) {
     // User rejected sign — abort generation gracefully
     setGenerating(false);
-    showToast("Sign in to generate assets");
+    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to generate assets." });
     return;
   }
 
-  const txHash = await payForGenerationWithUSDC(nodeId, prompt, tier);
+  const result = await generateAsset({ prompt, nodeId, txHash: null, ... });
   // ...rest of generation flow
 }
 ```
@@ -180,23 +188,26 @@ Add `export` keyword so `wallet.js` and `create-panel.js` can import it directly
 | Connected + Authenticated | Truncated wallet address (e.g., `0xabc…1234`) |
 | Connected + Unauthenticated | Truncated wallet address + "Sign In" badge/indicator |
 
-Update the `wallet:connected` listener to check auth state, and add new listeners for `user:authenticated` and `user:auth-required`:
+Update the `wallet:connected` listener to check auth state, and add new listeners for `user:authenticated` and `user:auth-required`. The current code uses the event bus rather than `document.addEventListener`:
 
 ```js
-document.addEventListener("wallet:connected", (e) => {
+import { on, EVENTS } from "../events/bus.js";
+import { getCachedSession } from "/js/services/api.js";
+
+on(EVENTS.WALLET_CONNECTED, (e) => {
   // ...existing show/hide logic...
   // NEW: check if we have a cached session
   const cached = getCachedSession();
-  const isAuth = cached && cached.address === e.detail?.address?.toLowerCase();
-  updateWalletButtonState(e.detail?.address, isAuth);
+  const isAuth = cached && cached.address === e?.address?.toLowerCase();
+  updateWalletButtonState(e?.address, isAuth);
 });
 
-document.addEventListener("user:authenticated", (e) => {
-  updateWalletButtonState(e.detail?.address, true);
+on(EVENTS.USER_AUTHENTICATED, (e) => {
+  updateWalletButtonState(e?.address, true);
 });
 
-document.addEventListener("user:auth-required", (e) => {
-  updateWalletButtonState(e.detail?.address, false);
+on(EVENTS.USER_AUTH_REQUIRED, (e) => {
+  updateWalletButtonState(e?.address, false);
 });
 ```
 
@@ -252,9 +263,9 @@ async function authenticateUser(provider = 'web3') {
 
 | File | Change |
 |---|---|
-| `frontend/src/js/blockchain/wallet.js` | Add `authenticateUser()`, call it from `_finishWalletSetup()` |
-| `frontend/src/js/ui/create-panel.js` | Call `getOrCreateSession()` before `payForGenerationWithUSDC()` |
-| `frontend/src/js/engine/studio-init.js` | Add `user:authenticated` / `user:auth-required` listeners, update wallet button UI |
+| `frontend/src/js/blockchain/wallet-core.js` | Add `authenticateUser()`, call it from `_finishWalletSetup()`; `wallet.js` re-exports it |
+| `frontend/src/js/ui/create-panel.js` | Call `getOrCreateSession()` before `generateAsset()` |
+| `frontend/src/js/engine/studio-init.js` | Add `EVENTS.USER_AUTHENTICATED` / `EVENTS.USER_AUTH_REQUIRED` listeners, update wallet button UI |
 | `frontend/src/js/ui/wallet-popover.js` | Add "Sign In" action to popover for unauthenticated state |
 
 ---

@@ -15,7 +15,7 @@
 - Backend logs use `[TAG]` prefixes — reuse `[IPFS]`, `[UNPIN]`; add `[STORAGE]` for adapter selection.
 - Secrets (`PINATA_JWT`) are server-side only and never returned to the browser. Gitignore all `.env*`.
 - CIDs are **CIDv1 (`baf…`)** in Pinata mode (e.g. `bafy…` for dag-pb, `bafkrei…` for raw JSON) — no `cidVersion: 0` override. Backward compatibility with existing `Qm…` CIDs is explicitly not a goal.
-- Rate limit on uploads: **max 5 per 60_000 ms**, keyed on the SIWE wallet (`res.locals.userAddress`).
+- Rate limit on uploads: **max 5 per 60_000 ms** (now configurable via `UPLOAD_URL_RATE_LIMIT_MAX`, default 20), keyed on the SIWE wallet (`res.locals.userAddress`).
 - Test commands:
   - Backend/API: `NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest <path> --runInBand`
   - Frontend unit: `NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/frontend/<file>`
@@ -33,9 +33,10 @@
 - `e2e/specs/07-pinata-storage.spec.js` — real-Pinata E2E (opt-in).
 
 **Modify:**
-- `src/api/rate-limiter.js` — prefer `res.locals.userAddress` whenever set.
-- `src/api/index.js` — new `/ipfs/upload-url` route; `/ipfs/unpin` via storage; thumbnail/manifest writes via storage; `/config` exposes `ipfsBackend` + gateway.
-- `src/api/assets/generate-node.js` — source-asset + manifest reads/writes via storage.
+- `src/api/rate-limiter.js` — prefer `res.locals.userAddress` whenever set (now uses `express-rate-limit`).
+- `src/api/routes/ipfs.js` — new `/ipfs/upload-url` route; `/ipfs/unpin` via storage; `/ipfs/gc` admin route.
+- `src/api/index.js` — mounts `/ipfs` routes; `/config` exposes `ipfsBackend` + gateway.
+- `src/api/assets/generate-node.js` — returns raw asset bytes to the browser; browser writes source asset + manifest to IPFS directly.
 - `frontend/src/js/services/api.js` — add `getUploadCredential()`.
 - `frontend/src/js/ipfs/write-to-ipfs.js` — branch pinata/kubo.
 - `frontend/src/js/ipfs/remote-ipfs.js` — gateway from `/config`.
@@ -379,12 +380,14 @@ git commit -m "feat(storage): add Pinata/Kubo storage adapters and factory (#27)
 ## Task 2: Generalize the rate limiter to prefer the session wallet
 
 **Files:**
-- Modify: `src/api/rate-limiter.js:8-14`
+- Modify: `src/api/rate-limiter.js`
 - Test: `test/api/rate-limiter.test.js` (create)
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `rateLimit({ max, windowMs })` middleware that keys on `res.locals.userAddress` when present, else `req.ip`.
+- Produces: rate-limit middleware that keys on `res.locals.userAddress` when present, else `req.ip`.
+
+> **Implemented as:** The rate limiter was rewritten on top of `express-rate-limit` (`src/api/rate-limiter.js`). It already keys every limiter by `res.locals.userAddress || req.ip` via `walletKeyGenerator`, so the legacy `req.body.txHash` branch no longer exists.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -461,12 +464,13 @@ git commit -m "feat(api): rate-limit by session wallet, not just txHash routes (
 ## Task 3: Add `POST /api/v1/ipfs/upload-url` (session-gated, rate-limited)
 
 **Files:**
-- Modify: `src/api/index.js` — import storage + `authenticate` + `rateLimit`; add route near `/ipfs/unpin`.
+- Modify: `src/api/routes/ipfs.js` — import storage + `authenticate` + rate limiter; add `/upload-url` route.
+- Modify: `src/api/index.js` — mount `/ipfs` router.
 - Modify: `test/api.test.js` — new describe block.
 
 **Interfaces:**
-- Consumes: `getStorage()` (Task 1), `authenticate` (`src/api/authentication.js`, default export), `rateLimit` (Task 2).
-- Produces: `POST /api/v1/ipfs/upload-url` → `200 { backend, url?, gateway?, apiUrl? }`; `401` without session; `429` after >5 calls / 60s per wallet.
+- Consumes: `getStorage()` (Task 1), `authenticate` (`src/api/authentication.js`, default export), `uploadUrlRateLimit` (`src/api/rate-limiter.js`).
+- Produces: `POST /api/v1/ipfs/upload-url` → `200 { backend, url?, gateway?, apiUrl? }`; `401` without session; `429` after >limit calls per wallet.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -659,14 +663,16 @@ git commit -m "refactor(api): route /ipfs/unpin through storage adapter (#27)"
 ## Task 5: Route backend writes/reads through storage
 
 **Files:**
-- Modify: `src/api/index.js` — `addAndPin(ipfs, …)` helper call sites (thumbnail ~line 116, manifest ~line 69) → storage.
-- Modify: `src/api/assets/generate-node.js` — `generateAssetNode(ipfs)` → `generateAssetNode(storage)`; source-asset + manifest `ipfs.add`/`pin.add` and `catManifest(ipfs, …)` → storage.
-- Modify: `src/api/index.js` — change `generateAssetNode(ipfs)` mount (line ~187) to `generateAssetNode(getStorage())`.
+- Modify: `src/api/index.js` — mount `/ipfs` routes and expose `/config` storage fields.
+- Modify: `src/api/assets/generate-node.js` — returns raw asset bytes to the browser; no server-side IPFS writes.
+- Modify: `src/api/routes/ipfs.js` — `/ipfs/unpin` routes through `getStorage().cat()` and `getStorage().unpin()`.
 - Test: `test/api.test.js` — existing generation tests must still pass.
 
 **Interfaces:**
-- Consumes: `getStorage()` adapter with `add`, `cat`.
-- Produces: generation response unchanged (`{ assetManifestCid, sourceAssetCid, tier? }`).
+- Consumes: `getStorage()` adapter with `add`, `cat`, `unpin`.
+- Produces: generation response unchanged (`{ assetData, format, path, provider }`); the browser uploads source asset + manifest to IPFS.
+
+> **Implemented as:** Server-side IPFS writes for source assets and manifests were eliminated. `generate-node.js` returns base64-encoded asset bytes; `frontend/src/js/services/api.js::generateAsset` calls `frontend/src/js/ipfs/write-to-ipfs.js` to upload the source asset and manifest. Only `/ipfs/unpin` and `/ipfs/gc` perform server-side storage operations.
 
 - [ ] **Step 1: Confirm the generation tests are the safety net**
 
@@ -1163,6 +1169,8 @@ git commit -m "test(uri): verify CIDv1 normalization round-trips (#27)"
 
 ## Task 11: E2E — Pinata storage spec (opt-in, real Pinata)
 
+**Status:** Not implemented in the current E2E suite.
+
 **Files:**
 - Create: `e2e/specs/07-pinata-storage.spec.js`
 - Modify: `e2e/playwright.config.js` — isolate the Pinata spec (separate project or `@pinata` grep) so the default `chromium` run excludes it.
@@ -1171,6 +1179,8 @@ git commit -m "test(uri): verify CIDv1 normalization round-trips (#27)"
 **Interfaces:**
 - Consumes: existing E2E helpers and flow (wallet connect → generate → save).
 - Produces: a spec that runs only when `IPFS_BACKEND=pinata` + `PINATA_JWT`/`PINATA_GATEWAY` are set; otherwise skips.
+
+> **Implemented as:** The dedicated Pinata E2E spec does not exist. Default specs (`01`–`15`) run with `IPFS_BACKEND=kubo`. Pinata branching is validated by unit tests and manual acceptance.
 
 - [ ] **Step 1: Ensure the default suite stays on Kubo**
 

@@ -6,7 +6,9 @@
 
 **Architecture:** A collection manifest holds a flat `assets` map (`assetID -> CID | {chainId, contractAddress, tokenId}`). Each asset is its own self-contained manifest (glTF nodes + its own `prev_asset_manifest_cid` chain) embedded by CID. `child_ref` nodes generalize to point at `{collection: "self" | {chainId, contractAddress, tokenId}, assetID}`. No Solidity changes — `publishAsset`/`updateAssetURI`/Merkle editorRoot are reused unchanged, now operating on the collection's tokenId.
 
-**Tech Stack:** Node/Express backend (`src/api/index.js`), vanilla ESM frontend (`frontend/src/js/`), Babylon.js scene graph, Jest (native ESM, `transform: {}` — no babel), Playwright E2E.
+**Tech Stack:** Node/Express backend (`src/api/index.js` delegates routes to `src/api/routes/`), vanilla ESM frontend (`frontend/src/js/`), Babylon.js scene graph, Jest (native ESM, `transform: {}` — no babel), Playwright E2E.
+
+> **Implementation note:** This plan was written against an earlier routing/layout. The live code writes manifests client-side to IPFS (no `POST /api/v1/manifests`), splits scene loading into `frontend/src/js/engine/scene-loader.js` (`scene-graph.js` is a barrel), and places collection helpers in `frontend/src/js/utils/collections.js`. See per-task notes below.
 
 ## Global Constraints
 
@@ -22,13 +24,17 @@
 
 ### Task 1: Backend — collection-type manifest persistence
 
+**Status:** Superseded. `POST /api/v1/manifests` was removed; manifests are written client-side directly to IPFS by the browser.
+
 **Files:**
-- Modify: `src/api/index.js:174-243` (`POST /manifests` handler)
+- Modify: `src/api/index.js:174-243` (`POST /manifests` handler) — route no longer exists.
 - Test: `test/api.test.js`
 
 **Interfaces:**
 - Consumes: existing `getSceneNodes(manifest)`, `persistEmbeddedThumbnail(manifest)`, `addAndPin(payload)`, `archiveCommentsForAsset`, `getContractAddress(chainId)` — all already imported in `src/api/index.js`.
 - Produces: `POST /manifests` now accepts `manifest.type === "collection"` bodies with `manifest.assets` (object) instead of forcing `manifest.scene.nodes`. Response shape unchanged: `{ cid, assetId, version }`.
+
+> **Implemented as:** Manifest construction and IPFS writes happen in `frontend/src/js/services/asset-save/manifest-builder.js` and `frontend/src/js/ipfs/write-to-ipfs.js`. The backend `POST /api/v1/generations` endpoint returns raw asset bytes; the browser uploads the source asset and the manifest to IPFS. Collection manifests are merged client-side in `frontend/src/js/utils/collections.js::mergeAssetIntoCollection` and written via `frontend/src/js/ipfs/write-to-ipfs.js::writeJSONToIPFS`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -326,7 +332,7 @@ export async function resolveCollectionChildRef(childRef, activeCollectionAssets
   }
   if (lookup.kind === "collection") {
     // Nested collection: caller is responsible for recursing — surface the
-    // token ref so scene-graph.js can treat it as a nested collection load.
+    // token ref so scene-loader.js can treat it as a nested collection load.
     return {
       manifestCid: null,
       manifest: null,
@@ -362,11 +368,11 @@ git commit -m "feat(token-resolver): add collection-aware asset reference resolu
 
 ---
 
-### Task 3: state.js + scene-graph.js — collection-aware scene loading
+### Task 3: state.js + scene-loader.js — collection-aware scene loading
 
 **Files:**
 - Modify: `frontend/src/js/engine/state.js` (add 2 fields)
-- Modify: `frontend/src/js/engine/scene-graph.js:769-855` (`loadTokenChildNode`), add new `loadCollectionManifest` export
+- Modify: `frontend/src/js/engine/scene-loader.js` (`loadTokenChildNode`), add new `loadCollectionManifest` export
 - Test: `test/scene-graph.test.js`
 
 **Interfaces:**
@@ -374,7 +380,7 @@ git commit -m "feat(token-resolver): add collection-aware asset reference resolu
 - Produces:
   - `state.activeCollectionAssets` (`Object|null`) and `state.activeCollectionRef` (`{chainId, contractAddress, tokenId}|null`) on the shared `state` object.
   - `loadCollectionManifest(collectionCid)` → `Promise<{manifest, assetEntries: Array<{assetID, kind, value}>}>` — loads a collection manifest, populates `state.activeCollectionAssets`/`activeCollectionRef`, returns a flat list of its entries for gallery UI to render (does not render any 3D content itself).
-  - `node.child_ref.collection` is now read by `loadTokenChildNode`: `"self"` resolves against `state.activeCollectionAssets`; an object resolves cross-collection exactly as before.
+  - `node.child_ref.collection` is now read by `loadTokenChildNode` in `frontend/src/js/engine/scene-loader.js`: `"self"` resolves against `state.activeCollectionAssets`; an object resolves cross-collection exactly as before.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -384,7 +390,7 @@ Add to `test/scene-graph.test.js` (after the existing pure-function inline copie
 describe("Scene Graph — buildChildRefResolutionPlan", () => {
   /**
    * Inline copy of buildChildRefResolutionPlan from
-   * frontend/src/js/engine/scene-graph.js. Given a node's child_ref and the
+   * frontend/src/js/engine/scene-loader.js. Given a node's child_ref and the
    * currently-active collection's assets map, decides whether resolution
    * should go through the same-collection lookup or the cross-collection
    * tokenURI path. Pure decision logic only — no I/O.
@@ -491,7 +497,7 @@ Edit `frontend/src/js/engine/state.js`, add to the `state` object (after `pendin
 
 - [ ] **Step 4: Implement buildChildRefResolutionPlan and wire it into loadTokenChildNode**
 
-Edit `frontend/src/js/engine/scene-graph.js`. Add the import (alongside the existing token-resolver imports at lines 13-16):
+Edit `frontend/src/js/engine/scene-loader.js`. Add the import (alongside the existing token-resolver imports):
 
 ```javascript
 import {
@@ -501,7 +507,7 @@ import {
 } from "../blockchain/token-resolver.js";
 ```
 
-Add `buildChildRefResolutionPlan` as a standalone function (place it directly above `loadTokenChildNode`, i.e. before line 769):
+Add `buildChildRefResolutionPlan` as a standalone function (place it directly above `loadTokenChildNode`):
 
 ```javascript
 /**
@@ -741,16 +747,18 @@ Expected: PASS — new `buildChildRefResolutionPlan` tests pass; existing scene-
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/engine/state.js frontend/src/js/engine/scene-graph.js test/scene-graph.test.js
-git commit -m "feat(scene-graph): generalize child_ref resolution for same-collection and cross-collection assets"
+git add frontend/src/js/engine/state.js frontend/src/js/engine/scene-loader.js test/scene-graph.test.js
+git commit -m "feat(scene-loader): generalize child_ref resolution for same-collection and cross-collection assets"
 ```
 
 ---
 
-### Task 4: asset-save.js — collection-aware besk
+### Task 4: asset-save.js + collections.js — collection-aware besk
 
 **Files:**
-- Modify: `frontend/src/js/ui/asset-save.js` (`prepareManifestForWrite` lines 316-519, `onPublishAsset` lines 648-784)
+- Modify: `frontend/src/js/ui/asset-save.js` (orchestrates save/publish)
+- Modify: `frontend/src/js/utils/collections.js` (pure helpers: `mergeAssetIntoCollection`, `deriveDefaultAssetId`, `deriveDefaultCollectionId`)
+- Modify: `frontend/src/js/services/asset-save/collection-publish.js` (collection manifest resolution and on-chain anchoring)
 - Modify: `frontend/src/js/state/asset-state.js` (add 2 fields)
 - Test: `test/asset-save-collection.test.js` (new file, inline-copy pattern)
 
@@ -758,8 +766,10 @@ git commit -m "feat(scene-graph): generalize child_ref resolution for same-colle
 - Consumes: `assetState` fields from this task; no other task's exports.
 - Produces:
   - `assetState` gains `activeCollectionTokenId` (`string|null`) and `activeAssetId` (`string|null`, the current asset's slot within the active collection).
-  - `mergeAssetIntoCollection(collectionManifest, assetID, assetCid)` → new/updated collection manifest object (pure function, exported for testing and reused by `onPublishAsset`).
-  - `deriveDefaultAssetId(existingAssetId, assetManifestSeed)` → `string` (generates a stable per-asset slug the first time an asset is saved into a collection).
+  - `mergeAssetIntoCollection(collectionManifest, assetID, assetCid)` → new/updated collection manifest object (pure function, lives in `frontend/src/js/utils/collections.js`, exported for testing and reused by publish flow).
+  - `deriveDefaultAssetId(existingAssetId, assetManifestSeed)` → `string` (generates a stable per-asset slug the first time an asset is saved into a collection; lives in `frontend/src/js/utils/collections.js`).
+
+> **Implemented as:** The live code split save/publish into `frontend/src/js/services/asset-save/manifest-builder.js` (manifest construction), `frontend/src/js/services/asset-save/collection-publish.js` (collection merge + on-chain anchor), and `frontend/src/js/services/asset-save/editor-publish.js` (Merkle editor proofs). The default collection token ID is derived from the wallet address via `deriveDefaultCollectionId`, not from the manifest CID.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -774,7 +784,7 @@ Create `test/asset-save-collection.test.js`:
  * test/scene-graph.test.js (avoids Jest ESM issues with browser globals).
  */
 
-/** Inline copy of mergeAssetIntoCollection from frontend/src/js/ui/asset-save.js */
+/** Inline copy of mergeAssetIntoCollection from frontend/src/js/utils/collections.js */
 function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
   const base = collectionManifest
     ? { ...collectionManifest }
@@ -793,7 +803,7 @@ function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
   };
 }
 
-/** Inline copy of deriveDefaultAssetId from frontend/src/js/ui/asset-save.js */
+/** Inline copy of deriveDefaultAssetId from frontend/src/js/utils/collections.js */
 function deriveDefaultAssetId(existingAssetId, fallbackSeed) {
   if (existingAssetId) return existingAssetId;
   return `asset_${fallbackSeed}`;
@@ -923,6 +933,8 @@ And the loaded-from-CID branch (line 324) — immediately after `manifest = awai
 
 Now edit `onPublishAsset` (lines 648-784). Replace the entire tokenId/publish branch (lines 708-748, from `const { cid } = result;` through the `else { ... }` block) with:
 
+> **Implemented as:** The live publish branch is much shorter; it calls `publishCollectionForAsset(assetCid, assetID, walletAddr)` in `frontend/src/js/services/asset-save/collection-publish.js`, which resolves the existing/default collection token ID from the wallet address, merges the asset, writes the collection manifest, and anchors it on-chain.
+
 ```javascript
     const { cid: assetCid } = result;
 
@@ -1023,15 +1035,17 @@ git commit -m "feat(asset-save): besk now publishes the collection manifest, laz
 
 ---
 
-### Task 5: asset-library.js — gallery lists collections, browses assets within
+### Task 5: asset-library.js — gallery expands collections into per-asset cards
 
 **Files:**
-- Modify: `frontend/src/js/ui/asset-library.js` (card rendering, `loadAssetMetadata` around lines 367-400)
+- Modify: `frontend/src/js/ui/asset-library.js` (card rendering, `expandTokenToAssets`)
 - Test: `test/library-collection-cards.test.js` (new file, inline-copy pattern)
 
 **Interfaces:**
 - Consumes: collection manifest shape from Task 1 (`{type: "collection", assets: {...}}`).
-- Produces: `buildCollectionCardSummary(manifest, tokenId)` → `{ tokenId, name, assetCount, thumbnailCid }`, used by the existing card-rendering code instead of treating every token as a single asset.
+- Produces: `expandTokenToAssets(tokenId)` → `Array<{tokenId, assetId, manifestCid, collectionCid, name, thumbnail, isCollection}>`; the Studio sidebar Gallery and the standalone Library page render one card per asset inside a collection, falling back to one card for legacy single-asset tokens.
+
+> **Implemented as:** The live `asset-library.js` does not render a single "collection card." Instead, `expandTokenToAssets` fetches the collection manifest and returns one entry per `assets` entry, resolving each asset's name/thumbnail. The standalone Library page (`frontend/src/js/library-init.js` + `library-grid.js`) uses these entries to browse collections and assets. The `buildCollectionCardSummary` helper described below was not retained in the live UI.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1154,14 +1168,14 @@ git commit -m "feat(gallery): render collection cards with asset counts, open co
 
 ---
 
-### Task 6: scene-graph.js drop handler — fork vs. live reference
+### Task 6: scene-loader.js drop handler — fork vs. live reference
 
 **Files:**
-- Modify: `frontend/src/js/engine/scene-graph.js:957-1055` (`handleLinkedAssetDropped`)
+- Modify: `frontend/src/js/engine/scene-loader.js` (`handleLinkedAssetDropped`)
 - Test: `test/scene-graph.test.js`
 
 **Interfaces:**
-- Consumes: `mergeAssetIntoCollection` is NOT reused here (that's an asset-save.js concern at besk time) — this task only decides what *node* gets added to the in-progress scene (`state.pendingChildRefs`).
+- Consumes: `mergeAssetIntoCollection` is NOT reused here (that's a collection-publish concern at besk time) — this task only decides what *node* gets added to the in-progress scene (`state.pendingChildRefs`).
 - Produces: `buildForkOrLiveRefNode(choice, ref, assetID, resolvedManifest)` → a node entry (either a plain `source`-bearing node for `"fork"`, or a `child_ref`-bearing node for `"live-ref"`), pushed onto `state.pendingChildRefs` exactly like today's single-path behavior.
 
 - [ ] **Step 1: Write the failing test**
@@ -1170,7 +1184,7 @@ Add to `test/scene-graph.test.js`:
 
 ```javascript
 describe("Scene Graph — buildForkOrLiveRefNode", () => {
-  /** Inline copy of buildForkOrLiveRefNode from frontend/src/js/engine/scene-graph.js */
+  /** Inline copy of buildForkOrLiveRefNode from frontend/src/js/engine/scene-loader.js */
   function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
     const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
     const baseNode = {
@@ -1224,7 +1238,7 @@ Expected: PASS (3/3) — inline copy.
 
 - [ ] **Step 3: Implement and wire into the drop handler**
 
-Edit `frontend/src/js/engine/scene-graph.js`. Add `buildForkOrLiveRefNode` above `handleLinkedAssetDropped` (before line 957):
+Edit `frontend/src/js/engine/scene-loader.js`. Add `buildForkOrLiveRefNode` above `handleLinkedAssetDropped`:
 
 ```javascript
 /**
@@ -1311,8 +1325,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/scene-graph.js frontend/src/js/ui/dialog.js test/scene-graph.test.js
-git commit -m "feat(scene-graph): support fork vs live-reference when adding another collection's asset to a scene"
+git add frontend/src/js/engine/scene-loader.js frontend/src/js/ui/dialog.js test/scene-graph.test.js
+git commit -m "feat(scene-loader): support fork vs live-reference when adding another collection's asset to a scene"
 ```
 
 ---
@@ -1367,10 +1381,10 @@ git commit -m "test(e2e): add assertCollectionManifest helper for collection-sha
 
 ---
 
-### Task 8: E2E spec — same-collection sibling references, fork vs. live-ref, default collection lazy-mint
+### Task 8: E2E specs — same-collection sibling references, fork vs. live-ref, default collection lazy-mint
 
 **Files:**
-- Create: `e2e/specs/07-collection-assets.spec.js`
+- Create: `e2e/specs/07-collection-assets.spec.js` (split into `07a` and `07b` in the live suite; `08-fork-live-ref.spec.js` covers fork vs. live-ref)
 
 **Interfaces:**
 - Consumes: `assertCollectionManifest` from Task 7, existing `studio-selectors.mjs` helpers, existing free-tier generation flow from spec `02`.
@@ -1439,6 +1453,8 @@ test.describe("Collection/asset model", () => {
 
 Run: `npx playwright test --config=e2e/playwright.config.js --project=chromium e2e/specs/07-collection-assets.spec.js`
 Expected: PASS, once Tasks 1-6 are merged. If `SELECTORS.assetTokenIdLabel` / `SELECTORS.newAssetButton` don't exist yet in `e2e/helpers/studio-selectors.mjs`, add them pointing at the existing `#assetStatusMeta`/`#newAssetBtn` elements (per `AGENTS.md §10`'s "update studio-selectors.mjs when any referenced id changes" rule) before running.
+
+> **Implemented as:** Collection-asset coverage is spread across `e2e/specs/03-save-and-publish.spec.js`, `05-republish.spec.js`, `06-nesting.spec.js`, `07a-library-asset-cards.spec.js`, `07b-material-editor-multi-primitive.spec.js`, `08-fork-live-ref.spec.js`, and `11-library-studio-roundtrip.spec.js`.
 
 - [ ] **Step 3: Commit**
 

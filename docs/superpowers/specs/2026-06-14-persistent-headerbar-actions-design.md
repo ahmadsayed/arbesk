@@ -16,6 +16,8 @@ Save, Besk (publish), and New Asset buttons live inside the **Asset** sidebar ta
 
 Move **New**, **Save**, and **Besk it** into the **headerbar** as a persistent button group. Following GNOME HIG and common web app conventions (Figma, GitHub, Notion), document-level actions belong in the top bar where they are always accessible regardless of sidebar state.
 
+> **Implemented as:** The Studio sidebar uses tabs named **Settings**, **Chat**, **Outline**, **Gallery** (data-view="library"), and **Activity** — there is no "Asset" tab. The headerbar New/Save/Besk group was added between the version controls and the right-side utility cluster, and **Burn** was placed inside the Settings view (inside the Collection Collaborators / team panel area), not in a separate Asset tab.
+
 ---
 
 ## Layout
@@ -23,10 +25,10 @@ Move **New**, **Save**, and **Besk it** into the **headerbar** as a persistent b
 Headerbar element order (left → right):
 
 ```
-[Logo] [Back?] [Title / Path] [History slider?] | [＋ New] [Save] [⬡ Besk it] | [☀] [Network ▾] [Wallet]
+[Logo] [Back?] [Title / Path] [Version slider] | [＋ New] [Save] [⬡ Besk it] | [☀] [Network ▾] [Wallet]
 ```
 
-The `|` marks represent visual dividers (`<span class="headerbar-divider">`). The new button group sits between the history controls and the right-side utility cluster.
+The `|` marks represent visual dividers (`<span class="headerbar-divider">`). The new button group sits between the version controls and the right-side utility cluster.
 
 ---
 
@@ -38,21 +40,18 @@ The `|` marks represent visual dividers (`<span class="headerbar-divider">`). Th
 | Save | Hidden | Visible, enabled |
 | ⬡ Besk it | Hidden | Visible, enabled (primary style) |
 
-The `setSavePublishVisible(visible)` function in `asset-save.js` already controls Save and Besk visibility — it just needs to reference the new headerbar elements. No logic change required, only DOM relocation.
+The `updateButtonState()` function in `asset-save.js` controls Save and Besk visibility — it references the headerbar elements by ID. No logic change required, only DOM relocation.
 
 ---
 
 ## Sidebar changes
 
-**Asset tab header** (`sidebar-view-header` for `data-view="create"`):
-- Remove `#newAssetSidebarBtn` — replaced by the headerbar New button.
-- The header becomes title-only: `<h3>Asset</h3>`.
+**Settings tab header** (`sidebar-view-header` for `data-view="settings"`):
+- The New button was removed from any sidebar location; it now lives in the headerbar.
 
-**Asset tab body** (`sidebar-view-body` for `data-view="create"`):
-- Remove `.sidebar-action-row.asset-lifecycle-row` (Save + Burn row).
-- Remove `.sidebar-action-row.besk-it-row` (Besk it row).
-- **Burn** (`#burnAssetBtn`) is relocated inside the Settings collapsible (`#assetDefinition`) — it is a destructive action and must not be one-click accessible from the headerbar. Place it at the bottom of `.asset-def-body`.
-- The remaining tab body content (Settings section, `#chatHistory`) moves up to fill the space.
+**Settings tab body** (`sidebar-view-body` for `data-view="settings"`):
+- Save and Besk it rows were removed from the sidebar; they now live in the headerbar.
+- **Burn** (`#burnAssetBtn`) is located inside the Settings view (within the team/collaborators section at the bottom of the Settings body) — it is a destructive action and must not be one-click accessible from the headerbar.
 
 ---
 
@@ -96,15 +95,13 @@ Add `#burnAssetBtn` to the bottom of `.asset-def-body`, after the team panel.
 ## JS changes
 
 ### `asset-save.js`
-- Update `getElementById` calls: `saveAssetBtn` and `publishAssetBtn` still reference the same IDs — no change needed as long as the IDs are preserved in the new headerbar location.
-- The `saveBtnText` variable (`getElementById("saveAssetBtnText")`) in `asset-save.js` already resolves to `null` — the span in the current HTML has no ID. This is safe to leave or clean up as desired; no functional change needed.
+- Update `getElementById` calls: `saveAssetBtn` and `publishAssetBtn` still reference the same IDs — no change needed as long as the IDs are preserved in the new headerbar location. `saveBtnText` now resolves to the `#saveAssetBtnText` span in the headerbar.
 
 ### `create-panel.js`
-- Update `getElementById('newAssetSidebarBtn')` → `getElementById('newAssetBtn')` (new headerbar ID).
-- Wire the same click handler to `#newAssetBtn`.
+- The New Asset button is wired in `frontend/src/js/engine/scene-graph.js` (via `document.getElementById("newAssetBtn")`). `create-panel.js` does not need to wire it.
 
-### `sidebar.js` (if it references sidebar action rows)
-- Remove any logic that shows/hides the action rows on tab switch — they no longer exist in the sidebar.
+### `sidebar.js`
+- No action-row show/hide logic is required; the sidebar tabs are Settings, Chat, Outline, Gallery, and Activity.
 
 ---
 
@@ -149,11 +146,11 @@ Verify `.btn-sm` sizing is appropriate for headerbar (target height ~30px to sit
 
 | File | Change |
 |------|--------|
-| `frontend/src/pug/studio.pug` | Add headerbar doc-action group; remove sidebar action rows; move Burn into Settings |
+| `frontend/src/pug/studio.pug` | Add headerbar doc-action group; remove sidebar action rows; place Burn inside Settings view |
 | `frontend/src/scss/components/_headerbar.scss` | Add `.headerbar-divider`, `.headerbar-doc-actions` |
-| `frontend/src/js/ui/create-panel.js` | Update `newAssetSidebarBtn` → `newAssetBtn` |
+| `frontend/src/js/engine/scene-graph.js` | Wire `#newAssetBtn` click handler |
 | `frontend/src/js/ui/asset-save.js` | No logic change; IDs preserved |
-| `frontend/src/js/ui/sidebar.js` | Remove any refs to sidebar action rows |
+| `frontend/src/js/ui/sidebar.js` | No action-row refs needed |
 
 ---
 

@@ -72,7 +72,7 @@ The `test/frontend/deployment-integrity.test.js` suite validates:
 | URI utilities | `frontend/src/js/blockchain/uri-utils.js` |
 | Asset drop zone | `frontend/src/js/ui/asset-drop-zone.js` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` |
-| Asset editors (team) | `frontend/src/js/ui/asset-editors.js` |
+| Asset editors (team) | `frontend/src/js/ui/collaborators-panel.js` |
 | Asset history / timeline | `frontend/src/js/ui/asset-history.js` |
 | Asset save / publish | `frontend/src/js/ui/asset-save.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
@@ -96,6 +96,12 @@ Recommended task order for normal development:
 4. `Build frontend`
 5. `Run backend tests`
 6. `Start backend`
+
+Coverage tasks (not in `.zed/tasks.json`; run from terminal):
+- `npm run test:coverage:js` — Jest unit coverage
+- `npm run test:coverage:contracts` — Hardhat Solidity coverage
+- `npm run test:e2e:coverage` — Playwright E2E coverage
+- `npm run test:coverage:all` — merged Jest + E2E coverage report
 
 ---
 

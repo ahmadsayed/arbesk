@@ -6,39 +6,38 @@
 
 ## 1.1 What's There Now
 
-The current studio (`studio.pug` + `studio.scss` + 7 UI modules) is a single-page 3D workspace with these zones:
+The current studio (`studio.pug` + `styles.scss` + `_studio-legacy.scss` + ~27 UI modules) is a single-page 3D workspace using the GNOME HIG layout:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ [✦ Arbesk] [Asset Status] [History Timeline]    [Btns][Wallet] │ ← Topbar (80px)
-├─────────────────────────────────────────────────────────────────┤
-│ ┌──────────┐ ┌──────────────────────────────┐ ┌──────────────┐ │
-│ │ Settings  │ │                              │ │              │ │
-│ │ (collaps) │ │     3D Viewport              │ │  Asset       │ │
-│ │ ───────── │ │     (Babylon.js canvas)      │ │  Library     │ │
-│ │ Chat      │ │                              │ │  (collaps)   │ │
-│ │ History   │ │ [Inspector floats top-right] │ │              │ │
-│ │ ───────── │ │ [Welcome/Drop/Wait overlays] │ │              │ │
-│ │ Timeline  │ │                              │ │              │ │
-│ └──────────┘ ├───────────────────────────────┤ └──────────────┘ │
-│              │ [Prompt textarea        ][✦] │                   │
-├──────────────┴───────────────────────────────┴──────────────────┤
-│ [Ledger Panel — fixed bottom-left, collapsible, slides up]      │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ [✦] Arbesk  [Library][Studio]  My World · 3 nodes  [Save][Besk] [Wallet] │ ← Header Bar (48px)
+├──────────────────────────────────────────────────────────────────────────┤
+│ ┌──────────┐ ┌──────────────────────────────┐ ┌────────────────────────┐ │
+│ │ Settings │ │                              │ │                        │ │
+│ │ Chat     │ │     3D Viewport              │ │     Inspector          │ │
+│ │ Outline  │ │     (Babylon.js canvas)      │ │     (collapsed)        │ │
+│ │ Gallery  │ │                              │ │                        │ │
+│ │ Activity │ │ [Prompt textarea        ][✦] │ │                        │ │
+│ │          │ ├──────────────────────────────┤ │                        │ │
+│ │          │ │ Message Bar                  │ │                        │ │
+│ └──────────┘ └──────────────────────────────┘ └────────────────────────┘ │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Draft · 3 nodes · 1 child · Depth 0/5                    [?]             │ ← Bottom Bar
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 | Panel / Zone | Toggle Mechanism | Position |
 |---|---|---|
-| Left Sidebar (Create/Settings/Chat/Timeline) | Collapse button + auto-show button on left edge | Left, 300px |
-| Asset Library | Collapse button + auto-show button on right edge | Right, 260px |
-| Inspector | `hidden` attribute, toggled by node selection | Floating top-right |
-| Micro-Ledger | Toggle button in bottom-left corner | Fixed bottom-left, slides up |
-| Topbar | Always visible | Full-width top, 80px |
-| Welcome/Generation/Drop overlays | Programmatic show/hide via CSS classes | Over the viewport |
+| Left Sidebar (Settings/Chat/Outline/Gallery/Activity) | View-switcher tabs + collapse toggle | Left, 340px |
+| Inspector | `collapsed` class, toggled by node selection | Right, 340px |
+| Message Bar | Always visible | Bottom of viewport |
+| Bottom Bar | Always visible | Full-width bottom, 32px |
+| Header Bar | Always visible | Full-width top, 48px |
+| Drop overlay | Programmatic show/hide via CSS classes | Over the viewport |
 
 ---
 
-## 1.2 HIG Violations
+## 1.2 Pre-Unification HIG Violations (Resolved)
 
 | Problem | HIG Principle Violated | Severity |
 |---|---|---|
@@ -56,13 +55,15 @@ The current studio (`studio.pug` + `studio.scss` + 7 UI modules) is a single-pag
 
 ---
 
-## 1.3 CSS Architecture Problems
+## 1.3 Pre-Unification CSS Architecture Problems (Resolved)
 
-- **~2136 lines** in single `studio.scss`
-- Bootstrap 5.1.3 as hard dependency
-- Heavy `!important` and deep nesting
-- Only 10 CSS custom properties (palette only, no spacing/sizing tokens)
-- `rgba()` hardcoded with no opacity scale
-- Dark-only palette. No `prefers-color-scheme` support.
-- Custom scrollbar hiding (`::-webkit-scrollbar { display: none }`) — breaks accessibility
-- Logo image used as background pattern on `#app::before` — decorative, no function
+These issues were identified before the HIG unification and are now resolved:
+
+- **~2136 lines** in single `studio.scss` → split into 29 SCSS partials
+- Bootstrap 5.1.3 as hard dependency → removed; token-based styling
+- Heavy `!important` and deep nesting → limited nesting, almost no `!important`
+- Only 10 CSS custom properties → ~50+ semantic tokens plus spacing/sizing/radii/shadows
+- `rgba()` hardcoded with no opacity scale → `color-mix()` and `rgb()` channels used consistently
+- Dark-only palette. No `prefers-color-scheme` support → light/dark aliases + manual `data-theme` override
+- Custom scrollbar hiding (`::-webkit-scrollbar { display: none }`) → removed
+- Logo image used as background pattern on `#app::before` — decorative, no function → removed

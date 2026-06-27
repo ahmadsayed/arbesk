@@ -1,11 +1,13 @@
 Implement Phase 1 of the Merkle editor architecture for Arbesk as specified in docs/MERKLE_IMPLEMENTATION.md.
 
+> **Historical note:** This was the original Phase 1 prompt. The final implementation applied these Merkle changes directly to the existing contracts (`ArbeskAssetBase.sol`, `ArbeskAsset.sol`, and `ArbeskAssetFree.sol`) rather than creating separate `*Merkle.sol` copies. `editorListURI[tokenId]` is also stored on-chain, and `publishAsset` / `initEditors` accept an `editorListUri` parameter. The legacy on-chain editor functions listed below were removed from the base contract in place.
+
 ## Context
 
-We're replacing ~400 lines of on-chain editor management (mappings, arrays, swap-and-pop) with Merkle roots. The full editor list lives on IPFS; the contract stores only `editorRoot[tokenId]` and `editorSetVersion[tokenId]`. This cuts storage slots per token from 14 to 5, making mint costs 6.4× cheaper at 100K scale and editor operations 9,400× cheaper.
+We're replacing ~400 lines of on-chain editor management (mappings, arrays, swap-and-pop) with Merkle roots. The full editor list lives on IPFS; the contract stores `editorRoot[tokenId]`, `editorSetVersion[tokenId]`, and `editorListURI[tokenId]`. This cuts storage slots per token from ~14 to ~5, making mint costs 6.4× cheaper at 100K scale and editor operations 9,400× cheaper.
 
 The current contracts are at:
-- `blockchain/contracts/ArbeskAssetBase.sol` — abstract base (KEEP as reference, do NOT modify)
+- `blockchain/contracts/ArbeskAssetBase.sol` — abstract base (updated in place with Merkle state)
 - `blockchain/contracts/ArbeskAsset.sol` — paid tier, already has per-user nonce (#2+#3)
 - `blockchain/contracts/ArbeskAssetFree.sol` — free tier with packed quota
 
@@ -105,7 +107,7 @@ Copy `ArbeskAssetFree.sol`. Change:
 ### 4. Compile
 
 ```bash
-cd blockchain && docker compose run --rm hardhat npx hardhat compile
+docker-compose run --rm hardhat npx hardhat compile
 ```
 
 ## Key Design Decisions Made
@@ -117,7 +119,7 @@ cd blockchain && docker compose run --rm hardhat npx hardhat compile
 5. No `maxTokensPerEditor` — no on-chain participant list
 6. Burn just requires Editor role + valid proof; no separate burn permission
 7. Transfer hook (`_update` override) removed — no auto-editor on transfer
-8. Old contract files preserved as-is for archive reference
+8. Old contract files preserved as-is for archive reference (the final implementation updated them in place instead)
 
 ## Files NOT to touch
 - `ArbeskAssetBase.sol` — keep as legacy reference
@@ -128,9 +130,11 @@ cd blockchain && docker compose run --rm hardhat npx hardhat compile
 - Any frontend files
 - Test files (Phase 3)
 
+> In the final implementation these contract files were updated in place; no separate `*Merkle.sol` files were kept.
+
 ## Success Criteria
 
-- [ ] 3 new .sol files compile cleanly with `docker compose run --rm hardhat npx hardhat compile`
+- [ ] 3 new .sol files compile cleanly with `docker-compose run --rm hardhat npx hardhat compile`
 - [ ] No `_editorRoles`, `members`, `tokensIParticipate`, `_canBurn` in any new file
 - [ ] `publishAsset` accepts `editorRoot_` parameter
 - [ ] `updateAssetURI` and `burn` accept `bytes32[] calldata proof`

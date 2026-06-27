@@ -127,7 +127,7 @@ git commit -m "refactor(auth): remove Bearer scheme, accept Session only"
 
 - [ ] **Step 1: Replace the `bearerAuth` security scheme with `sessionAuth`**
 
-Locate `components.securitySchemes.bearerAuth` around line 455 and replace it with:
+Locate `components.securitySchemes.bearerAuth` and replace it with:
 
 ```json
 "securitySchemes": {

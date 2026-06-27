@@ -126,3 +126,5 @@ nestingDepth    — was window._nestingDepth (underscore dropped)
 - Replacing `engine/state.js` (Babylon.js scene objects — separate concern, already clean).
 - Typed event payloads for the new state-change events (can be added incrementally).
 - Automated E2E tests (no E2E framework currently in the project).
+
+> **Implemented as:** The state layer was migrated as specified. Playwright E2E now exists (`e2e/` directory), and `asset-state.js` gained additional collection-related fields (`activeCollectionTokenId`, `activeAssetId`, `selectedCollectionId`) after the collection/asset model work.

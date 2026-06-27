@@ -1,6 +1,6 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-06-25
+> **Generated:** 2026-06-28
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
@@ -143,12 +143,12 @@ frontend/src/js/
 │   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag
 │   ├── asset-drop-zone.js      # Viewport drag/drop overlay
 │   ├── asset-history.js        # Draggable horizontal timeline scrubber
-│   ├── asset-editors.js        # Team panel (add/remove editors, owner badge)
+│   ├── collaborators-panel.js  # Team panel (add/remove editors, owner badge)
 │   ├── comments-panel.js       # Asset-level comment thread UI
 │   ├── ledger-panel.js         # Activity feed derived from manifest chain
 │   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
-│   ├── sidebar.js              # 4-view switcher (Create/Outline/Library/Ledger)
+│   ├── sidebar.js              # 5-view switcher (Settings/Chat/Outline/Gallery/Activity)
 │   ├── library-grid.js         # Library grid/list rendering, selection, keyboard shortcuts, rubber-band select
 │   ├── library-toolbar.js      # Breadcrumb, search, sort, view toggle, New Collection, Upload
 │   ├── library-context-menu.js # Library right-click actions (Open, Rename, Burn, Delete, Send to Collection…)
@@ -209,7 +209,7 @@ frontend/src/js/utils/
 - `frontend/src/pug/library.pug` — Standalone Library page (built to `dist/library.html`)
 - `frontend/src/scss/` — 29 partials including layout, viewport, inspector, timeline, ledger, wallet modals
 
-> **Naming drift from older docs:** `chat-studio.js` → `create-panel.js`, `save-world.js` → `asset-save.js`, `gallery.js` → `asset-library.js`, `history-browser.js` → `asset-history.js`, `team-panel.js` → `asset-editors.js`.
+> **Naming drift from older docs:** `chat-studio.js` → `create-panel.js`, `save-world.js` → `asset-save.js`, `gallery.js` → `asset-library.js`, `history-browser.js` → `asset-history.js`, `team-panel.js` → `collaborators-panel.js`.
 
 ### 3.2 Core Systems — Verified in Code
 
@@ -350,7 +350,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
 | Queries | `tokenURI()`, `getAssetManifest()`, `getTierCost()`, `editorRoot(tokenId)`, `editorSetVersion(tokenId)` |
 | Collaboration | `updateEditors(uint256 tokenId, bytes32 newRoot, string newListUri, uint8 callerRole, bytes32[] callerProof)` |
 | URI update | `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` |
-| Burn | `burn(uint256 tokenId, bytes32[] proof)` — owner or Editor with Merkle proof |
+| Burn | `burn(uint256 tokenId, bytes32[] proof)` — Editor with Merkle proof |
 | Admin | `setCost()`, `setTreasury()`, `setTierCost()`, `setUsdcToken()`, `pause()`, `unpause()`, `withdraw()`, `withdrawUSDC()` |
 
 **State / Limits (paid tier)**
@@ -392,7 +392,7 @@ Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
   - `mapping(uint256 => string) public editorListURI`
 - **Leaf format:** `keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))`
 - **Role enum:** `None = 0`, `Viewer = 1`, `Editor = 2`
-- Owner bypasses all Merkle proof checks.
+- Contract `owner()` bypasses the free-tier daily generation quota in `recordGeneration()`; Merkle editor proof checks still apply.
 
 ### 4.3 MockUSDC
 
@@ -470,9 +470,14 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 |------|-------|----------|
 | `blockchain/test/ArbeskAsset.test.js` | ~918 | Payment (USDC tiered), replay prevention, minting, Merkle editor authorization, burn (both paid + free contracts) |
 
-### 5.4 Test Gaps
+### 5.4 E2E Tests & Coverage
 
-- ✅ E2E tests: 16 Playwright specs (34 tests) covering wallet connect, generation, save/publish, parametric, republish, nesting, collections, material editor, fork, library basics/actions/round-trip/create-upload, editor collaboration, and asset-level comments (see `e2e/README.md`).
+- ✅ E2E tests: 17 Playwright specs (35 tests) covering wallet connect, generation, save/publish, parametric, republish, nesting, collections, material editor, fork, library basics/actions/round-trip/create-upload, editor collaboration, asset-level comments, and viewport resize regression (see `e2e/README.md`).
+- ✅ E2E coverage instrumentation: opt-in Chromium V8 coverage via `E2E_COVERAGE=1`, merged with Jest coverage via `npm run test:coverage:all`.
+- Latest merged coverage (Jest + E2E): **122 files, 74.23% statements, 74.06% branches, 69.38% functions**.
+
+### 5.5 Test Gaps
+
 - ❌ No reentrancy attack tests (though `nonReentrant` is present).
 - ❌ No fuzzing / property-based tests.
 
@@ -535,10 +540,15 @@ MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage 
 | `npm run test:api` | Jest on `test/api.test.js` |
 | `npm run test:frontend` | Jest on `test/frontend/` |
 | `npm run test:contracts` | Hardhat tests inside Docker container |
-| `npm run test:all` | Sequential: frontend → api → contracts |
+| `npm run test:all` | Lint + typecheck + frontend → api → contracts |
 | `npm run test:e2e` | Playwright E2E critical path (`--project=chromium`) |
 | `npm run test:e2e:ui` | Playwright E2E with visible browser for debugging |
+| `npm run test:e2e:coverage` | Run E2E with V8 coverage and merge to `coverage/e2e/` |
 | `npm run test:coverage` | Combined JS + Solidity coverage |
+| `npm run test:coverage:js` | Jest unit-test coverage → `coverage/js/` |
+| `npm run test:coverage:contracts` | Hardhat Solidity coverage → `blockchain/coverage/` |
+| `npm run test:coverage:e2e` | Alias for `test:e2e:coverage` |
+| `npm run test:coverage:all` | Jest + E2E coverage merged into `coverage/merged/` |
 | `npm run worktree:create` | Create an isolated git worktree for testing |
 
 ### 6.5 Environment Files
@@ -596,7 +606,7 @@ Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/uplo
 | File `frontend/src/js/ui/save-world.js` | Actual file is `asset-save.js` |
 | File `frontend/src/js/ui/gallery.js` | Actual file is `asset-library.js` |
 | File `frontend/src/js/ui/history-browser.js` | Actual file is `asset-history.js` |
-| File `frontend/src/js/ui/team-panel.js` | Actual file is `asset-editors.js` |
+| File `frontend/src/js/ui/team-panel.js` | Actual file is `collaborators-panel.js` |
 | File `frontend/src/js/events/registry.js` | Replaced by `frontend/src/js/events/bus.js` (mitt singleton) |
 | Network target Optimism Sepolia/Mainnet | Replaced by MegaETH Testnet |
 | On-chain editor roles (`addEditor`/`removeEditor`) | Replaced by off-chain Merkle editor list + `updateEditors` |

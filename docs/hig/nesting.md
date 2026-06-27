@@ -9,13 +9,13 @@
 
 ### Root Level
 ```
-[✦ Arbesk]  My World · 3 nodes     [◐][◐][◐]  [Save][Publish]
+[✦ Arbesk]  [Library][Studio]  My World · 3 nodes     [◐][◐][◐]  [Save][Besk] [Wallet]
 ```
 
 ### Nested (inside a child world)
 ```
-[✦ Arbesk] [←] My World  ▸  Living Room  · 2 nodes   [◐][◐]   [Save]
-             ^ back  ^────────── path bar ──────────
+[✦ Arbesk]  [Library][Studio]  [←] My World  ▸  Living Room  · 2 nodes   [◐][◐]   [Save] [Wallet]
+                                ^ back  ^────────── path bar ──────────
 ```
 
 Follows the **GNOME Path Bar** pattern (Nautilus/Files). Each breadcrumb segment is clickable. Back button ascends one level.
@@ -28,10 +28,10 @@ Follows the **GNOME Path Bar** pattern (Nautilus/Files). Each breadcrumb segment
 | Back button (←) or `Alt+Left` | **Ascend** one level |
 | Click breadcrumb segment | Jump directly to that ancestor |
 | `Escape` at root of child | Ascend to parent |
-| Depth guard at 5 | Disable dive, show toast "Maximum nesting depth reached" |
+| Depth guard at 5 | Disable dive, show warning "Maximum nesting depth reached" |
 
 ### Publish Visibility
-- Publish button hidden when nested (can only publish the root world)
+- Publish button hidden only when nested inside a non-token world
 - Save button works at any level
 
 ---
@@ -66,61 +66,67 @@ Primary navigation for fractal nesting. Shows what's in the current world withou
 |---|---|
 | **Click** | Select node in viewport (highlight, open inspector) |
 | **Double-click** on 🧩 | Dive into child world |
-| **Right-click** | Context menu: Open World, Remove from Parent, Move Up/Down |
-| **Drag** from Library view onto Outline | Add token as child world at specific position |
-| **Drag** within Outline | Reorder nodes |
-| **[+] button** | Add child from library (token picker popover) |
+| **Drag** from Gallery view onto Outline | Add token as child world at specific position |
+| **[+] button** | Switch to Gallery view so an asset can be dragged into the scene |
 | **[-] button** | Remove selected node |
 
 Matches **GNOME Builder project tree** and **Blender Outliner** pattern.
 
 ---
 
-## Inspector — Dual Mode
+## Inspector — Three Modes
 
 Right sidebar. Appears on node selection, hidden when nothing selected. Pushes viewport (doesn't overlay).
 
-### Mode 1: Regular Mesh Node
+### Mode 1: Regular Mesh Node — Parametric Color Editor
 
 ```
 ┌──────────────────────────┬──────────────────┐
-│                          │ Selection        │
+│                          │ Properties       │
 │  3D Viewport             │ ──────────────── │
-│                          │ Type: Mesh       │
-│                          │ Name: Table_01   │
+│                          │ Color            │
 │                          │ ──────────────── │
-│                          │ Color: [       ] │
-│                          │ Scale X: ═══════ │
-│                          │ Scale Y: ═══════ │
-│                          │ Scale Z: ═══════ │
+│                          │ Component        │
+│                          │ [Mesh_0 swatch]  │
 │                          │                  │
-│                          │ [Save Variant]   │
-│                          │ [Cancel]         │
+│                          │ [    color     ] │
+│                          │                  │
 └──────────────────────────┴──────────────────┘
 ```
+
+Color edits are live-previewed on the selected component. They are baked into the manifest on Save/Besk it. The inspector also supports undo/redo for color changes (`Ctrl+Z` / `Ctrl+Shift+Z`).
 
 ### Mode 2: Token Child World Node
 
 ```
 ┌──────────────────────────┬──────────────────┐
-│                          │ Selection        │
+│                          │ Properties       │
 │  3D Viewport             │ ──────────────── │
-│                          │ Type: Child      │
-│                          │  World           │
-│                          │ Token: #42       │
-│                          │ Name: Living Rm  │
-│                          │ Chain: 314159    │
-│                          │ ──────────────── │
-│                          │ Transform:       │
-│                          │ Position X: [  ] │
-│                          │ Position Y: [  ] │
-│                          │ Position Z: [  ] │
-│                          │ Rotation Y: [  ] │
-│                          │ Scale:      [  ] │
+│                          │ Token Info       │
+│                          │ Linked Token #42 │
+│                          │ Contract 0x…     │
+│                          │ Chain 314159     │
+│                          │ Resolution latest│
+│                          │ Manifest CID …   │
 │                          │ ──────────────── │
 │                          │ [Open This       │
 │                          │  World →]        │
-│                          │ [Remove]         │
+└──────────────────────────┴──────────────────┘
+```
+
+### Mode 3: Asset Comments
+
+```
+┌──────────────────────────┬──────────────────┐
+│                          │ Properties       │
+│  3D Viewport             │ ──────────────── │
+│                          │ Comments · 0     │
+│                          │ ──────────────── │
+│                          │ [No comments…]   │
+│                          │                  │
+│                          │ Add a comment    │
+│                          │ [Textarea      ] │
+│                          │ [Post]           │
 └──────────────────────────┴──────────────────┘
 ```
 
@@ -134,7 +140,7 @@ Right sidebar. Appears on node selection, hidden when nothing selected. Pushes v
 | Click mesh in viewport | Outline highlights it + inspector opens |
 | Click empty space in viewport | Inspector closes |
 
-Width: 260px (`--inspector-width`).
+Width: 340px (`--inspector-width`).
 
 ---
 
@@ -145,8 +151,8 @@ Width: 260px (`--inspector-width`).
 | Welcome Overlay | Inline empty state with "Start New Asset" + "Open From Library" buttons |
 | Waiting/Generation Overlay | Inline spinner on generate button + status text "Generating…" in bottom bar |
 | Asset Drop Overlay | Viewport border highlight + matching highlight on target Outliner row |
-| Settings Accordion | Always-visible in Create view (no toggle) |
-| Dive into child world | Smooth fade transition (200ms, respects `prefers-reduced-motion`) |
+| Settings Accordion | Always-visible in Settings sidebar view (no accordion toggle) |
+| Dive into child world | Immediate scene swap (no transition; `prefers-reduced-motion` respected trivially) |
 
 ---
 
@@ -154,6 +160,6 @@ Width: 260px (`--inspector-width`).
 
 | Module | Purpose |
 |---|---|
-| `ui/sidebar.js` | Unified 4-view sidebar controller, collapse state, responsive behavior |
+| `ui/sidebar.js` | Unified 5-view sidebar controller, collapse state, responsive behavior |
 | `ui/outliner.js` | Scene hierarchy tree, selection sync, dive/ascend triggers |
 | `ui/nesting.js` | Dive/ascend state machine, breadcrumb management, depth gating |

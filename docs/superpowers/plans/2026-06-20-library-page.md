@@ -4,6 +4,8 @@
 
 **Goal:** Build a standalone, Nautilus-style Library page where artists drag in glTF/GLB exports, organize them into folders, and explicitly "Besk it" (publish) selected files — all UI/UX, no backend.
 
+> **Implemented as:** This plan describes a local file-manager Library that was not built. The live Library page (`frontend/src/pug/library.pug`) and the Studio Gallery sidebar view are **on-chain collection/asset browsers**: they list the wallet's ERC-721 collection tokens, expand each collection into per-asset cards, and open assets in Studio. Folder hierarchy, drag-drop upload, local "Work in Progress" state, and the "Besk it" context-menu action were not implemented; publishing still happens via the headerbar "Besk it" button in Studio.
+
 **Architecture:** A new `library.pug` page shares the headerbar chrome (theme, network, wallet) with `studio.pug` via a small additive page-switcher, but does not share Pug includes (no partial system exists yet in this codebase, and introducing one is unjustified for two pages) — headerbar markup is duplicated by hand, matching existing ids so `wallet.js`/`theme.js`/`wallet-popover.js` work unchanged. All Library data (folders, files, selection, view mode, sort, search) lives in a new in-memory `libraryState` store (no persistence — matches spec's "local/staging only" scope). Four new JS modules layer cleanly: `library-items.js` (pure helpers, no DOM) → `library-grid.js` (rendering, selection, drag-drop/upload, keyboard shortcuts) → `library-toolbar.js` + `library-context-menu.js` (both depend on `library-grid.js`'s exports) → `library-init.js` (page bootstrap, wallet gate).
 
 **Tech Stack:** Pug, SCSS, vanilla ES modules, Jest (`@jest-environment jsdom` for DOM-touching tests). Build via `npm run build:frontend`. No new dependencies.
@@ -628,7 +630,7 @@
                 path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
             select#headerbarNetworkSelect.headerbar-network-select(aria-label="Select network" title="Select network")
               option(value="hardhat" selected) Hardhat Local
-              option(value="seiTestnet") SEI Testnet
+              option(value="megaethTestnet") MegaETH Testnet
             button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet")
               svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
