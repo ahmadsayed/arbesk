@@ -22,10 +22,7 @@ import { WebSocketServer } from "ws";
 import { finalizeEvent, getPublicKey, utils } from "nostr-tools";
 import url from "url";
 import { KIND_CHAT, TAG_ASSET, createRelay, safeClose } from "./nostr-relay.js";
-import {
-  authorizeAssetAccess,
-  checkAssetAccess,
-} from "./authorization.js";
+import { authorizeAssetAccess } from "./authorization.js";
 import {
   NOSTR_RELAY_URL,
   NOSTR_SERVICE_PRIVATE_KEY,

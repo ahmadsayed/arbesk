@@ -73,7 +73,7 @@ function clearHighlight() {
       if (m && !m.isDisposed()) {
         try {
           state.highlightLayer.removeMesh(m);
-        } catch (_) {
+        } catch {
           // mesh may not be in the highlight layer
         }
       }

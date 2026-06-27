@@ -77,7 +77,7 @@ export async function deleteAssetFromCollection({
   assetName,
   onAfterDelete,
 }) {
-  const { contract: c, walletAddress } = requireWallet();
+  const { contract: c } = requireWallet();
 
   const confirmed = await showConfirmDialog(
     "Delete Asset",
@@ -182,7 +182,7 @@ export async function deleteAssetFromCollection({
  * @returns {Promise<string|null>} txHash on success, null on failure.
  */
 export async function burnCollection(tokenId) {
-  const { contract: c, walletAddress: walletAddr } = requireWallet();
+  const { walletAddress: walletAddr } = requireWallet();
   let editorList = await loadEditorList(tokenId);
   if (!editorList) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
@@ -281,7 +281,7 @@ export async function sendAssetToCollection({
     c.methods.tokenURI(sourceTokenId).call(),
     c.methods.tokenURI(targetTokenId).call(),
   ]);
-  const [sourceCollection, targetCollection] = await Promise.all([
+  const [sourceCollection] = await Promise.all([
     getFromRemoteIPFS(sourceCid),
     getFromRemoteIPFS(targetCid),
   ]);

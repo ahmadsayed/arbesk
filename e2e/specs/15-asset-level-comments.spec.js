@@ -11,7 +11,6 @@ import {
   postComment,
   expectComment,
   uniqueAssetName,
-  tokenIdHexFromUrl,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";

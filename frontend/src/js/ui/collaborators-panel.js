@@ -103,7 +103,6 @@ export function initCollaboratorPanel(container, tokenId, options = {}) {
     async () => {
       const addr = input.value.trim();
       if (!addr) return;
-      const role = parseInt(roleSelect.value, 10);
       try {
         await addTeamMember(tokenId, addr);
         input.value = "";

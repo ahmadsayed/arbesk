@@ -15,7 +15,7 @@ let READY = false;
 
 process.title = 'pug-watch';
 process.stdout.write('Loading');
-let allPugFiles = {};
+const allPugFiles = {};
 
 watcher.on('add', filePath => _processFile(upath.normalize(filePath), 'add'));
 watcher.on('change', filePath => _processFile(upath.normalize(filePath), 'change'));

@@ -11,7 +11,6 @@ import { web3 } from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import {
   getContractAddress as getNetworkContractAddress,
-  getNetworkConfig,
 } from "../blockchain/network-config.js";
 import { log, warn, error } from "../utils/log.js";
 
@@ -297,7 +296,7 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
 export async function generateAsset({
   prompt,
   nodeId,
-  txHash,
+  txHash: _txHash,
   provider = "mock",
   assetId,
   prevAssetManifestCid,

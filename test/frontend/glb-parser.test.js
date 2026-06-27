@@ -106,7 +106,7 @@ describe("glb-parser", () => {
   test("decomposeGLB uploads buffers and images to mock writer", async () => {
     const buffer = readArrayBuffer(HOWDY_PATH);
     let counter = 0;
-    const writer = async (data, filename) => {
+    const writer = async (_data, _filename) => {
       counter++;
       return `QmMock${counter}`;
     };

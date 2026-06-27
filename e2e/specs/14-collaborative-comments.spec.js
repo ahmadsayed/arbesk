@@ -4,7 +4,6 @@ import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   fetchTokenManifest,
   assertCollectionManifest,
-  findAssetCidByName,
 } from "../helpers/manifest.mjs";
 import {
   connectStudioAs,

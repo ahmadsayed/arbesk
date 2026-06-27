@@ -87,7 +87,7 @@ export function manifestCidFromUrl(url) {
 
 export function assertGenerationManifest(
   manifest,
-  { prompt, provider = "mock" },
+  { prompt, _provider = "mock" },
 ) {
   if (!manifest.asset_id) throw new Error("Missing asset_id");
   if (!manifest.version || manifest.version < 1)

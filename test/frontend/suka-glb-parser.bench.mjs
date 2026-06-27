@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
-import { readFile } from "fs/promises";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { execSync } from "child_process";

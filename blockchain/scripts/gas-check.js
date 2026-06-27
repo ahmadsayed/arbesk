@@ -1,6 +1,9 @@
 const hre = require("hardhat");
 
 async function main() {
+  let tx;
+  let receipt;
+
   const [owner, user] = await hre.ethers.getSigners();
 
   const FreeFactory = await hre.ethers.getContractFactory("ArbeskAssetFree");

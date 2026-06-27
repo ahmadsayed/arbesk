@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals";
 import zlib from "zlib";
 import { maybeDecompress } from "../../src/api/ipfs-utils.js";
 

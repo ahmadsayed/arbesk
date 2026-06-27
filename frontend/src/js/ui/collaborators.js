@@ -8,7 +8,7 @@
  */
 
 import { initCollaboratorPanel } from "./collaborators-panel.js";
-import { emit, on, EVENTS } from "../events/bus.js";
+import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 

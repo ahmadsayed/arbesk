@@ -1,5 +1,4 @@
-import { test, expect } from "@playwright/test";
-import { SELECTORS } from "../helpers/studio-selectors.mjs";
+import { test } from "@playwright/test";
 import {
   fetchManifest,
   assertGenerationManifest,

@@ -14,7 +14,7 @@ export default function (all) {
   return {
     all: all,
     on: function (type, handler) {
-      var list = all.get(type);
+      const list = all.get(type);
       if (list) {
         list.push(handler);
       } else {
@@ -22,7 +22,7 @@ export default function (all) {
       }
     },
     off: function (type, handler) {
-      var list = all.get(type);
+      const list = all.get(type);
       if (!list) return;
       if (handler) {
         list.splice(list.indexOf(handler) >>> 0, 1);
@@ -31,13 +31,13 @@ export default function (all) {
       }
     },
     emit: function (type, data) {
-      var list = all.get(type);
+      const list = all.get(type);
       if (list) {
         list.slice().map(function (handler) {
           handler(data);
         });
       }
-      var wild = all.get("*");
+      const wild = all.get("*");
       if (wild) {
         wild.slice().map(function (handler) {
           handler(type, data);

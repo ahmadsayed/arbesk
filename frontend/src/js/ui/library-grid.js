@@ -77,12 +77,6 @@ export function createItemElement(item, viewMode) {
   return el;
 }
 
-function extractThumbnailCid(thumbnail) {
-  if (!thumbnail) return "";
-  if (typeof thumbnail === "string") return thumbnail;
-  return thumbnail.cid || thumbnail.source?.cid || "";
-}
-
 async function loadItemThumbnail(el, cid, name) {
   if (!cid || !el) return;
   try {

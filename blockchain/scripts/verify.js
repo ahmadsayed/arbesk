@@ -1,8 +1,6 @@
 const hre = require("hardhat");
 
 async function main() {
-  const network = hre.network.name;
-
   // Determine which contract to verify
   const contractName = process.env.VERIFY_CONTRACT || "ArbeskAsset";
   const address =

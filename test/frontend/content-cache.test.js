@@ -6,8 +6,6 @@
  * implementation.
  */
 
-import { jest } from "@jest/globals";
-
 // Force the cache module to see no global IndexedDB so it falls back to
 // the in-memory store. We set this before importing the module under test.
 globalThis.indexedDB = undefined;

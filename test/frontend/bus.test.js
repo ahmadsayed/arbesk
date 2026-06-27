@@ -89,8 +89,8 @@ test("listeners for different events do not cross-fire", () => {
 
 test("off removes a specific handler", () => {
   const calls = [];
-  const handlerA = (p) => calls.push("a");
-  const handlerB = (p) => calls.push("b");
+  const handlerA = (_p) => calls.push("a");
+  const handlerB = (_p) => calls.push("b");
 
   on(EVENTS.THEME_CHANGED, handlerA);
   on(EVENTS.THEME_CHANGED, handlerB);

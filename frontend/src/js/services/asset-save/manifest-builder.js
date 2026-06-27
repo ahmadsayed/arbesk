@@ -293,7 +293,7 @@ export async function prepareManifestForWrite(assetName) {
 
   const fetched = new Map();
   await Promise.all(
-    [...cidToFetch.entries()].map(async ([cid, key]) => {
+    [...cidToFetch.entries()].map(async ([cid, _key]) => {
       try {
         fetched.set(cid, await getFromRemoteIPFS(cid));
       } catch {

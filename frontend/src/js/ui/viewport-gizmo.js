@@ -12,7 +12,6 @@
 import { getCssVar } from "../engine/theme.js";
 
 const GIZMO_SIZE = 84; // CSS pixels
-const GIZMO_MARGIN = 12;
 const AXIS_LENGTH = 26; // pixels from center to tip
 const LABEL_OFFSET = 7; // pixels past the line tip
 
@@ -26,7 +25,6 @@ const AXIS_LABELS = { x: "X", y: "Y", z: "Z" };
 
 let gizmoCanvas = null;
 let gizmoCtx = null;
-let observer = null;
 let dpr = 1;
 
 function initViewportGizmo(scene, camera) {
@@ -54,7 +52,7 @@ function initViewportGizmo(scene, camera) {
   window.addEventListener("resize", resize);
 
   // Redraw every frame so the gizmo tracks the camera.
-  observer = scene.onBeforeRenderObservable.add(() => draw(camera));
+  scene.onBeforeRenderObservable.add(() => draw(camera));
 }
 
 function resize() {

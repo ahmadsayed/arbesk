@@ -12,7 +12,6 @@
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { sanitizeFileName, extractDataURI } from "../utils/uri.js";
-import { base64ToBytes } from "../utils/encoding.js";
 import {
   uploadWithDedup,
   attachDedupMeta,

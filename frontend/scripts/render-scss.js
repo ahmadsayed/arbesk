@@ -1,7 +1,7 @@
 "use strict";
 const autoprefixer = require("autoprefixer");
 const fs = require("fs");
-const packageJSON = require("../package.json");
+
 const upath = require("upath");
 const postcss = require("postcss");
 const sass = require("sass");

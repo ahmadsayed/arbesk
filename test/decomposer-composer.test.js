@@ -1095,7 +1095,7 @@ describe("Composer - composeGlTF", () => {
       for (let i = 0; i < composed.images.length; i++) {
         const img = composed.images[i];
         if (!img.uri) continue;
-        let mimeType = img.mimeType || "image/png";
+        const mimeType = img.mimeType || "image/png";
         composed.images[i] = {
           ...img,
           uri: await mockResolveURI(img.uri, mimeType),
@@ -1332,7 +1332,7 @@ describe("Decompose → Compose round-trip", () => {
       for (let i = 0; i < composed.images.length; i++) {
         const img = composed.images[i];
         if (!img.uri) continue;
-        let mimeType = img.mimeType || "image/png";
+        const mimeType = img.mimeType || "image/png";
         composed.images[i] = {
           ...img,
           uri: await mockResolveURI(img.uri, mimeType),

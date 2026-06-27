@@ -69,7 +69,7 @@ function initNesting() {
 // ─── Dive ────────────────────────────────────────────────────────────
 
 async function onDiveRequested(e) {
-  const { childRef, nodeId } = e;
+  const { childRef, nodeId: _nodeId } = e;
   if (!childRef) return;
 
   if (currentDepth >= MAX_DEPTH) {

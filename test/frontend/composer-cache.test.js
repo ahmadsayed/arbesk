@@ -1,7 +1,6 @@
 /** @jest-environment jsdom */
 import { jest } from "@jest/globals";
 import { TextEncoder, TextDecoder } from "util";
-import { compress } from "../../frontend/src/js/utils/compression.js";
 import { gzip } from "pako";
 
 if (!global.TextEncoder) global.TextEncoder = TextEncoder;

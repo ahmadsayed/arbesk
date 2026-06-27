@@ -79,7 +79,7 @@ async function queryRelayForAsset(assetTag) {
 
   try {
     await relay.connect();
-    const events = await new Promise((resolve, reject) => {
+    const events = await new Promise((resolve, _reject) => {
       /** @type {any[]} */
       const collected = [];
       let finished = false;

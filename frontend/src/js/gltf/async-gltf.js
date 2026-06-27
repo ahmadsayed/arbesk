@@ -11,7 +11,7 @@ import {
   getGlTFWorkerPool,
   isWorkerPoolAvailable,
 } from "../workers/gltf-worker-pool.js";
-import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { getUploadCredential } from "../services/api.js";
 import {
   getArrayBufferFromRemoteIPFS,

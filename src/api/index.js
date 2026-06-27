@@ -6,7 +6,6 @@ const Router = express.Router;
 // api/index.js is loaded via dynamic import() from index.js after dotenv runs.
 const {
   CONTRACT_ADDRESS,
-  ASSETS_IPFS,
   HARDHAT_RPC_URL,
   NETWORK_CONFIGS,
   getContractAddress,

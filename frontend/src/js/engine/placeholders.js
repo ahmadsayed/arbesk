@@ -78,7 +78,7 @@ export function disposePlaceholder(placeholder) {
   if (mat) {
     try {
       mat.dispose();
-    } catch (_) {
+    } catch {
       // ignore
     }
   }

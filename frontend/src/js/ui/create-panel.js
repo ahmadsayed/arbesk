@@ -23,7 +23,6 @@ import { walletState } from "../state/wallet-state.js";
 import { deriveDefaultCollectionId } from "../utils/collections.js";
 
 // ─── DOM References ───
-const chatHistory = document.getElementById("chatHistory");
 const chatHistoryList = document.getElementById("chatHistoryList");
 const promptInput = document.getElementById("promptInput");
 const generateBtn = document.getElementById("generateBtn");
@@ -122,10 +121,6 @@ function syncCollectionSelect() {
   });
 }
 
-function getSelectedCollectionId() {
-  return assetState.get().selectedCollectionId || null;
-}
-
 // ─── Chat Messages ───
 
 function addChatMessage(role, text) {
@@ -220,7 +215,7 @@ async function onGenerate() {
   // Ensure authenticated before payment so sign popup comes first
   try {
     await getOrCreateSession();
-  } catch (err) {
+  } catch {
     showToast({
       type: "warning",
       title: "Sign In Required",

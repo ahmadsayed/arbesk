@@ -10,9 +10,8 @@
  * captured when the inspector opened.
  */
 
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import { applyColor, applyScale } from "./time-travel.js";
+import { applyColor } from "./time-travel.js";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -283,15 +282,8 @@ function selectComponent(meshName) {
   if (parametricEditorDetails) parametricEditorDetails.open = true;
 }
 
-function readScaleInputs() {
-  return {
-    x: nodeScaleX ? parseFloat(nodeScaleX.value) : 1,
-    y: nodeScaleY ? parseFloat(nodeScaleY.value) : 1,
-    z: nodeScaleZ ? parseFloat(nodeScaleZ.value) : 1,
-  };
-}
-
 /**
+ * Live preview: the selected component's color changed.
  * Live preview: the selected component's color changed.
  * Applies the color immediately to the viewport and records it for Save.
  *

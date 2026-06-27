@@ -8,7 +8,7 @@
  * next Save Draft / Publish.
  */
 
-import { emit, on, EVENTS } from "../events/bus.js";
+import { on, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 
 const TOOLBAR_ID = "transformToolbar";
@@ -150,7 +150,7 @@ function wireEvents(gizmoManager) {
   });
 }
 
-function wireKeyboard(gizmoManager) {
+function wireKeyboard(_gizmoManager) {
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const tag = document.activeElement?.tagName?.toLowerCase();

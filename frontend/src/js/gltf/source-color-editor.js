@@ -10,8 +10,6 @@ import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { isGLB, decomposeGLB } from "./glb-parser.js";
 
-const IPFS_URI_PREFIX = "ipfs://";
-
 /**
  * Convert a hex color string to a glTF baseColorFactor RGBA array.
  */

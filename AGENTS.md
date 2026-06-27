@@ -141,7 +141,7 @@ npm run nodemon                               # with auto-rebuild
 
 # ─── Testing ───
 npm test                                      # Jest unit tests (excludes Hardhat & E2E)
-npm run test:all                              # full suite: typecheck → frontend → api → contracts
+npm run test:all                              # full suite: lint → typecheck → frontend → api → contracts
 npm run test:api                              # Jest on test/api.test.js alone
 npm run test:frontend                         # Jest on test/frontend/ + deployment integrity
 npm run test:contracts                        # Hardhat tests inside Docker container
@@ -172,6 +172,7 @@ docker-compose run --rm hardhat sh
 - **Frontend globals**: `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` are CDN-loaded — don't import them
 - **Naming**: camelCase variables/functions, PascalCase classes, UPPER_SNAKE module-level constants
 - **Pure JavaScript source, TypeScript-powered checking**: Source files remain `.js`. TypeScript is used only as a static type-checking layer via `allowJs`/`checkJs` (`npm run typecheck`, `npm run typecheck:frontend`). Both `tsconfig.json` and `frontend/tsconfig.json` run with `strict: true`; new code must type-check under that setting. Add JSDoc when documenting new public functions; cast catch variables to `Error` when logging `.message`; files that are too dynamic to type cleanly can use `// @ts-nocheck` with a TODO. Ambient declarations for runtime/CDN globals live in `src/types/modules.d.ts` and `frontend/src/js/types/globals.d.ts`.
+- **ESLint**: The project uses ESLint with `eslint.config.js`. Run `npm run lint` to check; `npm run lint:fix` to auto-fix. The gate is part of `npm run test:all`. Avoid unused imports/variables, prefer `const`, use `===`, and keep `var` out of new code.
 
 ### CDN Script Tags — No SRI Hashes
 Pug templates must **not** include `integrity="sha384-…"` attributes. CDNs silently rebuild assets, breaking SRI and blocking scripts entirely (symptom: `BABYLON.Engine is not a constructor`). Pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"`.

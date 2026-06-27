@@ -169,7 +169,7 @@ export async function verifySiwe(
     recoveredAddress = (
       await web3.eth.accounts.recover(message, signature)
     ).toLowerCase();
-  } catch (e) {
+  } catch {
     return {
       valid: false,
       address: null,

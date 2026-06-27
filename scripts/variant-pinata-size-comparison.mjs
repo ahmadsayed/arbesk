@@ -51,11 +51,10 @@ process.env.IPFS_BACKEND = "kubo";
 process.env.IPFS_API_URL = "http://127.0.0.1:5001";
 process.env.IPFS_GATEWAY_URL = "http://127.0.0.1:8080/ipfs/";
 
-const { getStorage, _resetStorage } = await import(
+const { _resetStorage } = await import(
   path.join(ROOT, "src/api/storage/index.js")
 );
 _resetStorage();
-const storage = getStorage();
 
 const { decomposeGlTF } = await import(
   path.join(ROOT, "frontend/src/js/gltf/decomposer.js")

@@ -11,7 +11,6 @@ import { assetCardLocator } from "../helpers/flows.mjs";
 const PROMPT_1 = "a wooden chair";
 const PROMPT_2 = "a small round table";
 const ASSET_NAME_1 = "Chair Test";
-const ASSET_NAME_2 = "Table Test";
 
 function tokenIdHexFromUrl(url) {
   return new URL(url).searchParams.get("asset");

@@ -13,7 +13,6 @@
 
 import express from "express";
 import crypto from "crypto";
-import { web3 } from "../config.js";
 import { verifySiwe } from "./siwe-verify.js";
 
 const Router = express.Router;

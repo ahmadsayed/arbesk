@@ -20,15 +20,12 @@ import {
   startDiscovery,
   requestWallets,
   getWalletByRdns,
-  stopDiscovery,
 } from "./wallet-discovery.js";
 import {
   getWalletConnectProvider,
-  connectWalletConnect,
   disconnectWalletConnect,
   onWalletConnectEvent,
   offWalletConnectEvent,
-  isWalletConnectConnected,
 } from "./wallet-connect.js";
 import { showWalletModal } from "../ui/wallet-modal.js";
 import {
@@ -65,7 +62,7 @@ export const NETWORKS = {
 let activeConnectionSource = null;
 
 /** @type {string|null} rdns of the injected wallet (e.g., 'io.metamask') */
-let activeWalletRdns = null;
+let _activeWalletRdns = null;
 
 let web3Provider = null;
 let web3 = null;
@@ -230,7 +227,7 @@ async function autoConnectWallet() {
             web3 = new Web3(wallet.provider);
             window.web3 = web3;
             activeConnectionSource = "injected";
-            activeWalletRdns = wallet.rdns;
+            _activeWalletRdns = wallet.rdns;
             await _finishWalletSetup(accounts[0]);
             return;
           }
@@ -249,7 +246,7 @@ async function autoConnectWallet() {
         web3Provider = window.ethereum;
         web3 = new Web3(window.ethereum);
         activeConnectionSource = "injected";
-        activeWalletRdns = null; // unknown which wallet
+        _activeWalletRdns = null; // unknown which wallet
         await _finishWalletSetup(accounts[0]);
         return;
       }
@@ -294,7 +291,7 @@ async function _finishWalletSetup(address) {
       });
       chainId = Number(await web3.eth.getChainId());
       walletState.set({ chainId });
-    } catch (_) {
+    } catch {
       warn("User did not switch to a supported network");
     }
   }
@@ -413,7 +410,7 @@ async function connectWallet() {
       web3Provider = provider;
       web3 = new Web3(provider);
       activeConnectionSource = "walletconnect";
-      activeWalletRdns = null;
+      _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
 
       const accounts = provider.accounts || [];
@@ -427,7 +424,7 @@ async function connectWallet() {
       web3Provider = provider;
       web3 = new Web3(provider);
       activeConnectionSource = "injected";
-      activeWalletRdns = walletRdns || null;
+      _activeWalletRdns = walletRdns || null;
 
       const accounts = await web3.eth.requestAccounts();
       if (!accounts || accounts.length === 0) {
@@ -474,7 +471,7 @@ async function disconnectWallet() {
   }
 
   activeConnectionSource = null;
-  activeWalletRdns = null;
+  _activeWalletRdns = null;
   web3Provider = null;
   web3 = null;
   contract = null;

@@ -17,15 +17,12 @@
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
-import { base64ToBytes, arrayBufferToBase64 } from "../utils/encoding.js";
 import { extractDataURI } from "../utils/uri.js";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../gltf/cache-aware-fetch.js";
 
 console.log("[WORKER-INIT] gltf-worker module evaluating");
 
 const IPFS_URI_PREFIX = "ipfs://";
-const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
-const BASE64_IMAGE_PREFIX = "data:image/";
 const WORKER_BUFFER_PLACEHOLDER = (i) => `__worker_buffer_${i}__`;
 const WORKER_IMAGE_PLACEHOLDER = (i) => `__worker_image_${i}__`;
 

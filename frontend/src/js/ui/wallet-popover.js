@@ -16,7 +16,6 @@ import { disconnectWallet } from "../blockchain/wallet.js";
 import { getCachedSession } from "../services/api.js";
 import { walletState } from "../state/wallet-state.js";
 
-let popover = null;
 let isOpen = false;
 
 // ─── DOM refs (lazy) ─────────────────────────────────────────────────
@@ -167,7 +166,7 @@ async function onSignIn() {
   try {
     const { getOrCreateSession } = await import("../services/api.js");
     await getOrCreateSession();
-  } catch (err) {
+  } catch {
     // User rejected - state remains auth-required
   }
 }

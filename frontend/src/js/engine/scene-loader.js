@@ -27,8 +27,6 @@ import {
   getManifestNodes,
   applyTransformMatrix,
   applyDefaultMaterial,
-  getRenderableMeshes,
-  getWorldBounds,
   centerImportedAsset,
 } from "./transforms.js";
 import { createPlaceholder, disposePlaceholder } from "./placeholders.js";
@@ -482,8 +480,8 @@ async function handleLinkedAssetDropped(event) {
 
   const {
     token_id: tokenId,
-    standard = "ERC721",
-    resolution: resolutionMode = "latest",
+    _standard = "ERC721",
+    resolution: _resolutionMode = "latest",
     chainId: eventChainId,
     contractAddress: eventContractAddress,
   } = detail;

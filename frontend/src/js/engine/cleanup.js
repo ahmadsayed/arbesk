@@ -92,7 +92,7 @@ export function clearScene() {
   if (state.gizmoManager) {
     try {
       state.gizmoManager.attachToNode(null);
-    } catch (_) {
+    } catch {
       // ignore
     }
   }
@@ -165,7 +165,7 @@ export function clearScene() {
   if (state.defaultWoodMaterial) {
     try {
       state.defaultWoodMaterial.dispose();
-    } catch (_) {
+    } catch {
       // ignore
     }
     state.defaultWoodMaterial = null;

@@ -576,7 +576,7 @@ describe("ArbeskAsset (Merkle)", function () {
   // ════════════════════════════════════════════════════════════════════
 
   describe("updateEditors", function () {
-    let tokenId, editors, root;
+    let tokenId, editors;
 
     beforeEach(async () => {
       tokenId = 500;
@@ -584,7 +584,7 @@ describe("ArbeskAsset (Merkle)", function () {
         { address: user.address, role: CollaboratorRole.Editor },
         { address: editor.address, role: CollaboratorRole.Viewer },
       ];
-      root = await publishWithEditors(user, tokenId, editors);
+      await publishWithEditors(user, tokenId, editors);
     });
 
     it("Editor can change the editor set", async () => {

@@ -8,20 +8,18 @@
  */
 
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import {
   publishAsset,
   CollaboratorRole,
 } from "../blockchain/wallet.js";
-import { computeRoot, getProof } from "../gltf/merkle-editors.js";
+import { computeRoot } from "../gltf/merkle-editors.js";
 import { updateCollectionManifest } from "./asset-delete.js";
 import { walletState } from "../state/wallet-state.js";
 import {
   deriveNamedCollectionId,
-  mergeAssetIntoCollection,
   identityMatrix,
 } from "../utils/collections.js";
-import { log, warn, error } from "../utils/log.js";
+import { log, warn } from "../utils/log.js";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -45,40 +43,6 @@ function saveEditorListLocally(tokenId, editorList, ipfsCid = null) {
     warn("[LIBRARY-OPS] failed to cache editor list:", e.message);
   }
   return ipfsCid || "";
-}
-
-async function loadEditorList(tokenId) {
-  try {
-    const stored = localStorage.getItem(editorListKey(tokenId));
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    if (parsed.cid) {
-      try {
-        const fresh = await getFromRemoteIPFS(parsed.cid);
-        if (Array.isArray(fresh)) {
-          saveEditorListLocally(tokenId, fresh, parsed.cid);
-          return fresh;
-        }
-      } catch {
-        // fall through to cached list
-      }
-    }
-    if (Array.isArray(parsed.list)) return parsed.list;
-  } catch {
-    // localStorage unavailable or corrupted
-  }
-  return null;
-}
-
-async function getEditorSetVersion(tokenId) {
-  try {
-    const c = walletState.get().contract;
-    if (!c) return 1;
-    const version = await c.methods.editorSetVersion(tokenId).call();
-    return Number(version);
-  } catch {
-    return 1;
-  }
 }
 
 function getContract() {
@@ -184,7 +148,7 @@ function validateUploadFile(file) {
 export async function uploadFileToCollection(file, collectionTokenId) {
   if (!collectionTokenId) throw new Error("Open a collection first to upload into it");
 
-  const walletAddr = requireWallet();
+  requireWallet();
   const c = getContract();
   if (!c) throw new Error("Contract not ready");
 

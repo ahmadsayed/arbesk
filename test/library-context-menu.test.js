@@ -5,7 +5,6 @@ import {
   openContextMenu,
   closeContextMenu,
   requestRename,
-  requestDeleteSelected,
   initLibraryContextMenu,
 } from "../frontend/src/js/ui/library-context-menu.js";
 import {

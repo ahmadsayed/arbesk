@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals";
 import { createRequest, createResponse } from "node-mocks-http";
 import createRateLimitMiddleware, {
   _resetRateLimiters,

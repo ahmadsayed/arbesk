@@ -92,7 +92,7 @@ async function discoverLiveTokenIds(contract, deployBlock, batchSize = 10000) {
       if (owner && owner !== ZERO_ADDRESS) {
         live.push(tokenId);
       }
-    } catch (e) {
+    } catch {
       // Token does not exist (burned).
     }
   }
@@ -125,7 +125,7 @@ async function buildReachableSet(tokenIds, contracts) {
         manifestCid = /** @type {string} */ (
           await contract.methods.tokenURI(tokenId).call()
         );
-      } catch (e) {
+      } catch {
         // Token likely does not exist on this contract.
         continue;
       }
@@ -156,7 +156,7 @@ async function buildReachableSet(tokenIds, contracts) {
           const cid = editorListUri.replace(/^ipfs:\/\//, "");
           if (cid) reachable.add(cid);
         }
-      } catch (e) {
+      } catch {
         // Older contracts may not expose editorListURI; ignore.
       }
     }

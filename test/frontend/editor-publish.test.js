@@ -82,21 +82,21 @@ async function loadModule() {
   await jest.unstable_mockModule(
     "../../frontend/src/js/gltf/merkle-editors.js",
     () => ({
-      computeRoot: jest.fn((list, tokenId, version) => {
+      computeRoot: jest.fn((list, _tokenId, _version) => {
         if (!list || list.length === 0) return "0x" + "0".repeat(64);
         if (list.length === 1 && list[0].address.toLowerCase() === OWNER.toLowerCase()) {
           return EDITOR_ROOT;
         }
         return "0xOtherRoot";
       }),
-      getProof: jest.fn((list, target, tokenId, version) => {
+      getProof: jest.fn((list, target, _tokenId, _version) => {
         const entry = list.find(
           (e) => e.address.toLowerCase() === target.toLowerCase()
         );
         if (!entry) return null;
         return { proof: EDITOR_PROOF, role: entry.role };
       }),
-      makeLeaf: jest.fn((address, role, tokenId, version) => {
+      makeLeaf: jest.fn((address, _role, _tokenId, _version) => {
         if (address.toLowerCase() === OWNER.toLowerCase()) return OWNER_LEAF;
         return "0x" + address.slice(2).padStart(64, "0");
       }),
@@ -111,19 +111,19 @@ async function loadModule() {
 function _mockContract() {
   return {
     methods: {
-      ownerOf: (tokenId) => ({
+      ownerOf: (_tokenId) => ({
         call: jest.fn().mockImplementation(() => {
           if (_ownerOfResult) return Promise.resolve(_ownerOfResult);
           return Promise.reject(new Error("ERC721NonexistentToken"));
         }),
       }),
-      editorSetVersion: (tokenId) => ({
+      editorSetVersion: (_tokenId) => ({
         call: jest.fn().mockResolvedValue(String(VERSION)),
       }),
-      editorRoot: (tokenId) => ({
+      editorRoot: (_tokenId) => ({
         call: jest.fn().mockResolvedValue(_editorRootResult),
       }),
-      editorListURI: (tokenId) => ({
+      editorListURI: (_tokenId) => ({
         call: jest.fn().mockResolvedValue("QmEditorList"),
       }),
     },

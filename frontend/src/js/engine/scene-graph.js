@@ -29,9 +29,6 @@ import {
 } from "./scene-camera.js";
 import {
   loadAssetManifest,
-  loadCollectionManifest,
-  loadNode,
-  loadAsset,
   handleLinkedAssetDropped,
 } from "./scene-loader.js";
 
@@ -570,19 +567,6 @@ function dismissCreatePulse() {
  */
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
-}
-
-/**
- * @param {Blob} blob
- * @returns {Promise<string>}
- */
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(/** @type {string} */ (reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 /**

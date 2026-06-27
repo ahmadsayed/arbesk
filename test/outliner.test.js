@@ -170,7 +170,7 @@ describe("outliner node rendering", () => {
     expect(tree.querySelectorAll('[data-node-id="cowboy"]')).toHaveLength(1);
     expect(tree.querySelectorAll('[data-node-id="person"]')).toHaveLength(1);
 
-    let toggle = tree.querySelector('[data-node-id="hello"] .outliner-node-toggle');
+    const toggle = tree.querySelector('[data-node-id="hello"] .outliner-node-toggle');
     toggle.click();
     expect(tree.querySelector('[data-node-id="cowboy"]')).toBeFalsy();
 

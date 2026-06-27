@@ -52,7 +52,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           yield new Uint16Array(chars);
         }
       }),
-      addAll: jest.fn(async function* (source, options) {
+      addAll: jest.fn(async function* (source, _options) {
         // Mirror Kubo's wrapWithDirectory: store each file under a content
         // hash, then yield a root directory node whose path is "".
         const entries = [];
@@ -116,9 +116,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     // Mutable tokenURI return value so tests can override it
     let _tokenURICid = null;
-    const setTokenURICid = (cid) => {
-      _tokenURICid = cid;
-    };
 
     // Mutable state for GC token discovery tests.
     const gcTokens = new Map();
@@ -145,7 +142,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             Promise.resolve(mockWeb3Receipt),
           ),
           abi: {
-            decodeParameters: jest.fn((types, data) => {
+            decodeParameters: jest.fn((_types, _data) => {
               // Simulate decoding USDC event data for tier tests
               // Types: ["string", "uint256", "uint256", "uint8"]
               // Returns decoded values including the tier from mockWeb3Receipt._usdcTier
@@ -158,7 +155,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             }),
           },
           Contract: jest.fn(() => ({
-            getPastEvents: jest.fn(async (event, opts) => {
+            getPastEvents: jest.fn(async (event, _opts) => {
               if (event !== "Transfer") return [];
               // Return mint events for every registered GC token.
               return Array.from(gcTokens.entries()).map(
@@ -269,23 +266,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   ) {
     const token = createSession(address);
     return `Session ${token}`;
-  }
-
-  async function fetchManifestFromIPFS(cid) {
-    const chunks = [];
-    for await (const chunk of mockIPFS.cat(cid)) {
-      chunks.push(chunk);
-    }
-    const data = chunks
-      .map((chunk) => {
-        if (chunk instanceof Uint16Array) {
-          return String.fromCharCode(...chunk);
-        }
-        if (typeof chunk === "string") return chunk;
-        return new TextDecoder().decode(chunk);
-      })
-      .join("");
-    return JSON.parse(data);
   }
 
   /**

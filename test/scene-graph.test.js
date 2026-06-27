@@ -238,7 +238,7 @@ function applyDefaultMaterial(meshes, defaultMaterial) {
   }
 }
 
-function centerImportedAsset(meshes, importedNodes, parentNode, nodeId) {
+function centerImportedAsset(meshes, importedNodes, parentNode, _nodeId) {
   const renderableMeshes = getRenderableMeshes(meshes);
   if (renderableMeshes.length === 0) return;
 

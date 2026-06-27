@@ -22,10 +22,8 @@ const MAX_WORKERS = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2))
 
 let pool = null;
 let available = null;
-let terminating = false;
 
 function createPool() {
-  terminating = false;
   return workerpool.pool(WORKER_SCRIPT, {
     workerType: "web",
     maxWorkers: MAX_WORKERS,
@@ -86,7 +84,6 @@ export async function isWorkerPoolAvailable() {
 
   available = false;
   if (pool) {
-    terminating = true;
     pool.terminate().catch(() => {});
     pool = null;
   }
@@ -95,7 +92,6 @@ export async function isWorkerPoolAvailable() {
 
 export function terminateGlTFWorkerPool() {
   if (pool) {
-    terminating = true;
     pool.terminate().catch(() => {});
     pool = null;
   }

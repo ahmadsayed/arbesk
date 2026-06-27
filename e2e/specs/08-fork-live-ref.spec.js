@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   fetchManifest,

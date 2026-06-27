@@ -386,7 +386,7 @@ export async function requestSendToCollection(assetId) {
 
 function showTargetCollectionDialog(collections) {
   return new Promise((resolve) => {
-    import("./dialog.js").then(({ showDialog }) => {
+    import("./dialog.js").then(() => {
       const options = collections
         .map(
           (c) =>

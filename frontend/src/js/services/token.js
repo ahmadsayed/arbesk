@@ -38,7 +38,7 @@ export async function getOwnerOf(tokenId) {
     if (!c) return null;
     const owner = await c.methods.ownerOf(String(tokenId)).call();
     return owner || null;
-  } catch (err) {
+  } catch {
     // ERC721NonexistentToken is thrown when token doesn't exist
     return null;
   }

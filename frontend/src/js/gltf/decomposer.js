@@ -17,7 +17,6 @@
  */
 
 import { sanitizeFileName, extractDataURI } from "../utils/uri.js";
-import { base64ToBytes } from "../utils/encoding.js";
 import {
   uploadWithDedup,
   attachDedupMeta,
@@ -25,8 +24,6 @@ import {
 } from "./dedup.js";
 
 const IPFS_URI_PREFIX = "ipfs://";
-const BASE64_BUFFER_PREFIX = "data:application/octet-stream;base64,";
-const BASE64_IMAGE_PREFIX = "data:image/";
 
 /**
  * Check if a glTF JSON is already in composite format.
