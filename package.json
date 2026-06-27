@@ -22,8 +22,11 @@
     "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",
     "test:e2e:ui": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js --ui",
     "test:e2e:setup": "node e2e/setup.mjs",
+    "test:e2e:coverage": "node scripts/run-e2e-coverage.mjs",
     "test:coverage": "npm run test:coverage:js && npm run test:coverage:contracts",
     "test:coverage:js": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest --coverage --coverageDirectory=coverage/js",
+    "test:coverage:e2e": "npm run test:e2e:coverage",
+    "test:coverage:all": "npm run test:coverage:js && npm run test:e2e:coverage && node scripts/merge-all-coverage.mjs",
     "test:coverage:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat coverage && docker run --rm -v $(pwd)/blockchain/coverage:/cov alpine sh -c 'chown -R $(stat -c \"%u:%g\" /cov) /cov'",
     "worktree:create": "./scripts/create-worktree.sh",
     "prepare": "husky"

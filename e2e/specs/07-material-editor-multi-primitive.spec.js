@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/coverage.mjs";
 
 /**
  * Regression spec for GitHub issue #25:
