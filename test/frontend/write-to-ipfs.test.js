@@ -45,12 +45,12 @@ describe("writeToIPFS - kubo mode", () => {
   it("POSTs multipart to the kubo /api/v0/add endpoint and returns the hash", async () => {
     const { mod, fetchMock } = await loadModule(
       { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
-      { ok: true, json: async () => ({ Hash: "QmKubo", Size: "5" }) },
+      { ok: true, json: async () => ({ Hash: "bafyKubo", Size: "5" }) },
     );
     // second fetch (pin) also resolves ok
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "QmKubo", Size: "5" }) });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "bafyKubo", Size: "5" }) });
     const cid = await mod.writeToIPFS("hello", "asset.bin");
-    expect(cid).toBe("QmKubo");
+    expect(cid).toBe("bafyKubo");
     expect(fetchMock.mock.calls[0][0]).toMatch(/127\.0\.0\.1:5001\/api\/v0\/add/);
   });
 
@@ -58,11 +58,11 @@ describe("writeToIPFS - kubo mode", () => {
     const explicit = { backend: "kubo", apiUrl: "http://127.0.0.1:5001", reusable: true };
     const { mod, fetchMock, getUploadCredential } = await loadModule(
       { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
-      { ok: true, json: async () => ({ Hash: "QmReuse", Size: "5" }) },
+      { ok: true, json: async () => ({ Hash: "bafyReuse", Size: "5" }) },
     );
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "QmReuse", Size: "5" }) });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "bafyReuse", Size: "5" }) });
     const cid = await mod.writeToIPFS("hello", "asset.bin", explicit);
-    expect(cid).toBe("QmReuse");
+    expect(cid).toBe("bafyReuse");
     expect(getUploadCredential).not.toHaveBeenCalled();
     expect(fetchMock.mock.calls[0][0]).toMatch(/127\.0\.0\.1:5001\/api\/v0\/add/);
   });
@@ -73,11 +73,11 @@ describe("writeJSONToIPFS", () => {
     const explicit = { backend: "kubo", apiUrl: "http://127.0.0.1:5001", reusable: true };
     const { mod, fetchMock, getUploadCredential } = await loadModule(
       { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
-      { ok: true, json: async () => ({ Hash: "QmJson", Size: "10" }) },
+      { ok: true, json: async () => ({ Hash: "bafyJson", Size: "10" }) },
     );
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "QmJson", Size: "10" }) });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "bafyJson", Size: "10" }) });
     const cid = await mod.writeJSONToIPFS({ hello: "world" }, explicit);
-    expect(cid).toBe("QmJson");
+    expect(cid).toBe("bafyJson");
     expect(getUploadCredential).not.toHaveBeenCalled();
     const [url] = fetchMock.mock.calls[0];
     expect(url).toMatch(/127\.0\.0\.1:5001\/api\/v0\/add/);

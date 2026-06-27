@@ -5,10 +5,10 @@ import { jest } from "@jest/globals";
 
 // Mutable mock state so tests can override behavior without re-importing ESM modules.
 let _publishAsset = jest.fn().mockResolvedValue("0xTx");
-let _writeToIPFS = jest.fn().mockResolvedValue("QmSource");
-let _writeJSONToIPFS = jest.fn().mockResolvedValue("QmJson");
+let _writeToIPFS = jest.fn().mockResolvedValue("bafySource");
+let _writeJSONToIPFS = jest.fn().mockResolvedValue("bafyJson");
 let _getFromRemoteIPFS = jest.fn();
-let _updateCollectionManifest = jest.fn().mockResolvedValue("QmCollection");
+let _updateCollectionManifest = jest.fn().mockResolvedValue("bafyCollection");
 let _computeRoot = jest.fn().mockReturnValue("0xRoot");
 let _getProof = jest.fn().mockReturnValue({ proof: ["0xProof"], role: 2 });
 
@@ -49,10 +49,10 @@ beforeEach(() => {
   };
 
   _publishAsset = jest.fn().mockResolvedValue("0xTx");
-  _writeToIPFS = jest.fn().mockResolvedValue("QmSource");
-  _writeJSONToIPFS = jest.fn().mockResolvedValue("QmJson");
+  _writeToIPFS = jest.fn().mockResolvedValue("bafySource");
+  _writeJSONToIPFS = jest.fn().mockResolvedValue("bafyJson");
   _getFromRemoteIPFS = jest.fn();
-  _updateCollectionManifest = jest.fn().mockResolvedValue("QmCollection");
+  _updateCollectionManifest = jest.fn().mockResolvedValue("bafyCollection");
   _computeRoot = jest.fn().mockReturnValue("0xRoot");
   _getProof = jest.fn().mockReturnValue({ proof: ["0xProof"], role: 2 });
   _walletAddress = "0xUser";
@@ -133,7 +133,7 @@ describe("createNamedCollection", () => {
 
   test("returns existing collection instead of re-minting", async () => {
     const ownerOfCall = jest.fn().mockResolvedValue("0xUser");
-    const tokenURICall = jest.fn().mockResolvedValue("QmExisting");
+    const tokenURICall = jest.fn().mockResolvedValue("bafyExisting");
     _contract = {
       methods: {
         ownerOf: () => ({ call: ownerOfCall }),
@@ -145,7 +145,7 @@ describe("createNamedCollection", () => {
     const result = await createNamedCollection("Characters");
 
     expect(result.isNew).toBe(false);
-    expect(result.manifestCid).toBe("QmExisting");
+    expect(result.manifestCid).toBe("bafyExisting");
     expect(_publishAsset).not.toHaveBeenCalled();
   });
 
@@ -164,7 +164,7 @@ describe("createNamedCollection", () => {
 
 describe("uploadFileToCollection", () => {
   test("uploads a GLB file into the current collection", async () => {
-    _writeJSONToIPFS = jest.fn().mockResolvedValue("QmAssetManifest");
+    _writeJSONToIPFS = jest.fn().mockResolvedValue("bafyAssetManifest");
     const { uploadFileToCollection } = await loadModule();
 
     const file = new File(["binary"], "model.glb", { type: "model/gltf-binary" });
@@ -173,7 +173,7 @@ describe("uploadFileToCollection", () => {
     expect(_writeToIPFS).toHaveBeenCalledWith(expect.any(Uint8Array), "model.glb");
     expect(_writeJSONToIPFS).toHaveBeenCalled();
     expect(_updateCollectionManifest).toHaveBeenCalledWith("999", expect.any(Function), { label: "upload asset" });
-    expect(result.assetManifestCid).toBe("QmAssetManifest");
+    expect(result.assetManifestCid).toBe("bafyAssetManifest");
   });
 
   test("rejects unsupported extensions", async () => {

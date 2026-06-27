@@ -117,7 +117,7 @@ describe("CommentThread", () => {
   test("setContext clears events on token/asset change and loads archive", async () => {
     const { CommentThread } = await loadThreadModule(
       {},
-      { activeAssetManifestCid: "QmManifest", currentManifest: null, activeAssetId: "asset_1" }
+      { activeAssetManifestCid: "bafyManifest", currentManifest: null, activeAssetId: "asset_1" }
     );
     const thread = new CommentThread();
 

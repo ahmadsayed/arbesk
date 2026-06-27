@@ -40,7 +40,7 @@ beforeEach(() => {
       assetId: "asset-a",
       name: "a.glb",
       status: "besked",
-      manifestCid: "QmA",
+      manifestCid: "bafyA",
     }],
   });
 });

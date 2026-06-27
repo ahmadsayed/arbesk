@@ -280,7 +280,7 @@ node.post_processor.meshOverrides = {
 ```javascript
 // Full round-trip for decomposed nodes:
 const result = await editCompositeColors(compositeCid, meshOverrides, defaultColor);
-// result = { compositeCid: "QmNewCid...", modified: 3, skipped: 0 }
+// result = { compositeCid: "bafyNewCid...", modified: 3, skipped: 0 }
 ```
 
 Only the composite JSON CID changes. Buffers and images are untouched — IPFS deduplicates automatically.

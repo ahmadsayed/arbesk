@@ -72,8 +72,8 @@ async function loadApi(options = {}) {
   }));
 
   await jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
-    writeToIPFS: jest.fn().mockResolvedValue("QmSourceAsset"),
-    writeJSONToIPFS: jest.fn().mockResolvedValue("QmAssetManifest"),
+    writeToIPFS: jest.fn().mockResolvedValue("bafySourceAsset"),
+    writeJSONToIPFS: jest.fn().mockResolvedValue("bafyAssetManifest"),
   }));
 
   await jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
@@ -326,7 +326,7 @@ describe("getContractArtifact", () => {
 
 describe("snapshotCommentsArchive", () => {
   test("sends the correct headers and body", async () => {
-    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { cid: "QmComments", eventCount: 3 } }));
+    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { cid: "bafyComments", eventCount: 3 } }));
     const { snapshotCommentsArchive } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
@@ -336,7 +336,7 @@ describe("snapshotCommentsArchive", () => {
     const ctx = { tokenId: 1, chainId: 1337, contractAddress: "0xC", assetId: "asset-1" };
     const result = await snapshotCommentsArchive(ctx);
 
-    expect(result).toEqual({ cid: "QmComments", eventCount: 3 });
+    expect(result).toEqual({ cid: "bafyComments", eventCount: 3 });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/assets\/snapshot-comments$/);
     expect(opts.headers.Authorization).toBe(`Session ${TEST_TOKEN}`);
@@ -353,7 +353,7 @@ describe("snapshotCommentsArchive", () => {
         })
       )
       .mockResolvedValueOnce(buildResponse({ body: { token: "fresh-token", expiresAt: Date.now() + 3_600_000 } }))
-      .mockResolvedValueOnce(buildResponse({ body: { cid: "QmComments2", eventCount: 1 } }));
+      .mockResolvedValueOnce(buildResponse({ body: { cid: "bafyComments2", eventCount: 1 } }));
     const { snapshotCommentsArchive } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
@@ -361,7 +361,7 @@ describe("snapshotCommentsArchive", () => {
     );
 
     const result = await snapshotCommentsArchive({ tokenId: 2, assetId: "asset-2" });
-    expect(result.cid).toBe("QmComments2");
+    expect(result.cid).toBe("bafyComments2");
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const [, , [url]] = fetchMock.mock.calls;
     expect(url).toMatch(/\/assets\/snapshot-comments$/);
@@ -442,19 +442,19 @@ describe("getUploadCredential", () => {
 
 describe("unpinAssetCids", () => {
   test("sends the correct headers and body", async () => {
-    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { unpinned: ["QmA"], count: 1 } }));
+    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { unpinned: ["bafyA"], count: 1 } }));
     const { unpinAssetCids } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    const result = await unpinAssetCids("QmManifest", TEST_ADDRESS);
-    expect(result).toEqual({ unpinned: ["QmA"], count: 1 });
+    const result = await unpinAssetCids("bafyManifest", TEST_ADDRESS);
+    expect(result).toEqual({ unpinned: ["bafyA"], count: 1 });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/ipfs\/unpin$/);
     expect(opts.headers.Authorization).toBe(`Session ${TEST_TOKEN}`);
-    expect(JSON.parse(opts.body)).toEqual({ cid: "QmManifest", actorAddress: TEST_ADDRESS });
+    expect(JSON.parse(opts.body)).toEqual({ cid: "bafyManifest", actorAddress: TEST_ADDRESS });
   });
 
   test("retries once on a 401 and then succeeds", async () => {
@@ -467,14 +467,14 @@ describe("unpinAssetCids", () => {
         })
       )
       .mockResolvedValueOnce(buildResponse({ body: { token: "fresh-token", expiresAt: Date.now() + 3_600_000 } }))
-      .mockResolvedValueOnce(buildResponse({ body: { unpinned: ["QmB"], count: 1 } }));
+      .mockResolvedValueOnce(buildResponse({ body: { unpinned: ["bafyB"], count: 1 } }));
     const { unpinAssetCids } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    const result = await unpinAssetCids("QmManifest");
+    const result = await unpinAssetCids("bafyManifest");
     expect(result.count).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -492,8 +492,8 @@ describe("unpinAssetCids", () => {
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    await expect(unpinAssetCids("QmManifest")).rejects.toBeInstanceOf(ApiError);
-    await expect(unpinAssetCids("QmManifest")).rejects.toMatchObject({
+    await expect(unpinAssetCids("bafyManifest")).rejects.toBeInstanceOf(ApiError);
+    await expect(unpinAssetCids("bafyManifest")).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
     });
@@ -527,8 +527,8 @@ describe("generateAsset", () => {
       tier: 2,
     });
 
-    expect(result.assetManifestCid).toBe("QmAssetManifest");
-    expect(result.sourceAssetCid).toBe("QmSourceAsset");
+    expect(result.assetManifestCid).toBe("bafyAssetManifest");
+    expect(result.sourceAssetCid).toBe("bafySourceAsset");
     expect(result.tier).toBe(2);
 
     const [url, opts] = fetchMock.mock.calls[0];
@@ -570,7 +570,7 @@ describe("generateAsset", () => {
     );
 
     const result = await generateAsset({ prompt: "a sphere", nodeId: "sphere-node" });
-    expect(result.assetManifestCid).toBe("QmAssetManifest");
+    expect(result.assetManifestCid).toBe("bafyAssetManifest");
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
     const [, , [url, opts]] = fetchMock.mock.calls;

@@ -46,9 +46,9 @@ test("handler receives payload directly (not via .detail)", () => {
   let received;
   track(EVENTS.SCENE_READY, (payload) => { received = payload; });
 
-  emit(EVENTS.SCENE_READY, { manifest: { name: "test" }, manifestCid: "Qm123" });
+  emit(EVENTS.SCENE_READY, { manifest: { name: "test" }, manifestCid: "bafy123" });
 
-  expect(received).toEqual({ manifest: { name: "test" }, manifestCid: "Qm123" });
+  expect(received).toEqual({ manifest: { name: "test" }, manifestCid: "bafy123" });
   expect(received.detail).toBeUndefined(); // no CustomEvent wrapping
 });
 

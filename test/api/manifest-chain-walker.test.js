@@ -69,7 +69,7 @@ describe("walkManifestChain", () => {
   let _seq = 0;
   function putManifest(manifest, { compress = false } = {}) {
     _seq++;
-    const cid = `QmTest${String(_seq).padStart(4, "0")}`;
+    const cid = `bafyTest${String(_seq).padStart(4, "0")}`;
     const payload = JSON.stringify(manifest);
     ipfsStorage.set(
       cid,
@@ -113,7 +113,7 @@ describe("walkManifestChain", () => {
         nodes: [
           {
             node_id: "n1",
-            source: { cid: "QmSource", bundleCid: "QmBundle" },
+            source: { cid: "bafySource", bundleCid: "bafyBundle" },
           },
         ],
       },
@@ -122,8 +122,8 @@ describe("walkManifestChain", () => {
     const { assetUnique, shared, allReachable } = await walkManifestChain(cid);
 
     expect(Array.from(assetUnique)).toEqual([cid]);
-    expect(Array.from(shared).sort()).toEqual(["QmBundle", "QmSource"]);
-    expect(Array.from(allReachable).sort()).toEqual(["QmBundle", "QmSource", cid]);
+    expect(Array.from(shared).sort()).toEqual(["bafyBundle", "bafySource"]);
+    expect(Array.from(allReachable).sort()).toEqual(["bafyBundle", "bafySource", cid]);
   });
 
   it("marks history src.cid and src.bundleCid as shared", async () => {
@@ -134,7 +134,7 @@ describe("walkManifestChain", () => {
           {
             node_id: "n1",
             history: [
-              { src: { cid: "QmHistSource", bundleCid: "QmHistBundle" } },
+              { src: { cid: "bafyHistSource", bundleCid: "bafyHistBundle" } },
             ],
           },
         ],
@@ -143,21 +143,21 @@ describe("walkManifestChain", () => {
 
     const { shared } = await walkManifestChain(cid);
 
-    expect(Array.from(shared).sort()).toEqual(["QmHistBundle", "QmHistSource"]);
+    expect(Array.from(shared).sort()).toEqual(["bafyHistBundle", "bafyHistSource"]);
   });
 
   it("collects thumbnail.cid and comments_archive_cid as assetUnique", async () => {
     const cid = putManifest({
       version: 1,
-      thumbnail: { cid: "QmThumb" },
-      comments_archive_cid: "QmComments",
+      thumbnail: { cid: "bafyThumb" },
+      comments_archive_cid: "bafyComments",
       scene: { nodes: [] },
     });
 
     const { assetUnique, shared } = await walkManifestChain(cid);
 
     expect(Array.from(assetUnique).sort()).toEqual(
-      [cid, "QmComments", "QmThumb"].sort(),
+      [cid, "bafyComments", "bafyThumb"].sort(),
     );
     expect(Array.from(shared)).toHaveLength(0);
   });
@@ -181,7 +181,7 @@ describe("walkManifestChain", () => {
     const assetCid = putManifest({
       version: 1,
       type: "asset",
-      scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+      scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
     });
     const collectionCid = putManifest({
       version: 1,
@@ -196,21 +196,21 @@ describe("walkManifestChain", () => {
 
     expect(Array.from(visited)).toEqual([collectionCid, assetCid]);
     expect(Array.from(assetUnique)).toEqual([collectionCid, assetCid]);
-    expect(Array.from(shared)).toEqual(["QmSource"]);
+    expect(Array.from(shared)).toEqual(["bafySource"]);
   });
 
   it("recurses into source JSON and collects embedded buffer/image CIDs when recurseIntoSources is true", async () => {
     ipfsStorage.set(
-      "QmSource",
+      "bafySource",
       JSON.stringify({
-        buffers: [{ uri: "ipfs://QmBuffer" }],
-        images: [{ uri: "ipfs://QmImage" }],
+        buffers: [{ uri: "ipfs://bafyBuffer" }],
+        images: [{ uri: "ipfs://bafyImage" }],
       }),
     );
     const cid = putManifest({
       version: 1,
       scene: {
-        nodes: [{ node_id: "n", source: { cid: "QmSource" } }],
+        nodes: [{ node_id: "n", source: { cid: "bafySource" } }],
       },
     });
 
@@ -219,26 +219,26 @@ describe("walkManifestChain", () => {
     });
 
     // Embedded buffer/image CIDs are reachable but not classified as shared.
-    expect(Array.from(shared)).toEqual(["QmSource"]);
-    expect(allReachable.has("QmSource")).toBe(true);
-    expect(allReachable.has("QmBuffer")).toBe(true);
-    expect(allReachable.has("QmImage")).toBe(true);
+    expect(Array.from(shared)).toEqual(["bafySource"]);
+    expect(allReachable.has("bafySource")).toBe(true);
+    expect(allReachable.has("bafyBuffer")).toBe(true);
+    expect(allReachable.has("bafyImage")).toBe(true);
   });
 
   it("stops at shared source CIDs without recursing when recurseIntoSources is false", async () => {
     ipfsStorage.set(
-      "QmSource",
-      JSON.stringify({ buffers: [{ uri: "ipfs://QmBuffer" }] }),
+      "bafySource",
+      JSON.stringify({ buffers: [{ uri: "ipfs://bafyBuffer" }] }),
     );
     const cid = putManifest({
       version: 1,
-      scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+      scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
     });
 
     const { shared, allReachable } = await walkManifestChain(cid);
 
-    expect(Array.from(shared)).toEqual(["QmSource"]);
-    expect(allReachable.has("QmBuffer")).toBe(false);
+    expect(Array.from(shared)).toEqual(["bafySource"]);
+    expect(allReachable.has("bafyBuffer")).toBe(false);
   });
 
   it("handles gzip-compressed manifests", async () => {
@@ -288,32 +288,32 @@ describe("walkManifestChain", () => {
   });
 
   it("records an error and stops when the start CID is missing", async () => {
-    const { visited, assetUnique, errors } = await walkManifestChain("QmMissing");
+    const { visited, assetUnique, errors } = await walkManifestChain("bafyMissing");
 
     // The start CID is added to visited before the read is attempted.
-    expect(Array.from(visited)).toEqual(["QmMissing"]);
+    expect(Array.from(visited)).toEqual(["bafyMissing"]);
     expect(assetUnique.size).toBe(0);
     expect(errors.length).toBeGreaterThanOrEqual(1);
-    expect(errors[0]).toMatch(/QmMissing/);
+    expect(errors[0]).toMatch(/bafyMissing/);
   });
 
   it("records an error when a chain link is missing", async () => {
     const cid = putManifest({
       version: 1,
-      prev_asset_manifest_cid: "QmMissingPrev",
+      prev_asset_manifest_cid: "bafyMissingPrev",
       scene: {},
     });
 
     const { visited, errors } = await walkManifestChain(cid);
 
     // Both the current and the missing prev CID appear in visited.
-    expect(Array.from(visited)).toEqual([cid, "QmMissingPrev"]);
+    expect(Array.from(visited)).toEqual([cid, "bafyMissingPrev"]);
     expect(errors.length).toBeGreaterThanOrEqual(1);
-    expect(errors[0]).toMatch(/QmMissingPrev/);
+    expect(errors[0]).toMatch(/bafyMissingPrev/);
   });
 
   it("records an error for invalid JSON but continues when possible", async () => {
-    const badCid = "QmBadJson";
+    const badCid = "bafyBadJson";
     ipfsStorage.set(badCid, "not json");
     const cid = putManifest({
       version: 1,
@@ -333,8 +333,8 @@ describe("walkManifestChain", () => {
       version: 1,
       scene: {
         nodes: [
-          { node_id: "n1", source: { cid: "QmSource" } },
-          { node_id: "n2", source: { cid: "QmSource" } },
+          { node_id: "n1", source: { cid: "bafySource" } },
+          { node_id: "n2", source: { cid: "bafySource" } },
         ],
       },
     });
@@ -342,8 +342,8 @@ describe("walkManifestChain", () => {
     const { assetUnique, shared, allReachable } = await walkManifestChain(cid);
 
     expect(Array.from(assetUnique)).toEqual([cid]);
-    expect(Array.from(shared)).toEqual(["QmSource"]);
-    expect(Array.from(allReachable).sort()).toEqual(["QmSource", cid]);
+    expect(Array.from(shared)).toEqual(["bafySource"]);
+    expect(Array.from(allReachable).sort()).toEqual(["bafySource", cid]);
   });
 
   it("ignores non-string source/history CIDs gracefully", async () => {

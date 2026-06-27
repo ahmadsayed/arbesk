@@ -245,11 +245,11 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
   "name": "My World",
   "version": 4,
   "timestamp": 1780000000,
-  "prev_asset_manifest_cid": "QmPreviousManifest...",
-  "comments_archive_cid": "QmCommentsArchiveCid...",
+  "prev_asset_manifest_cid": "bafyPreviousManifest...",
+  "comments_archive_cid": "bafyCommentsArchiveCid...",
   "thumbnail": {
     "type": "snapshot",
-    "cid": "QmThumbnailCid...",
+    "cid": "bafyThumbnailCid...",
     "path": "thumbnail.webp",
     "format": "webp",
     "mime": "image/webp",
@@ -258,16 +258,16 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
     "bytes": 12345,
     "timestamp": 1780000000
   },
-  "comments_archive_cid": "QmCommentsArchiveCid...",
+  "comments_archive_cid": "bafyCommentsArchiveCid...",
   "scene": {
     "nodes": [
       {
         "node_id": "node_world_root",
         "source": {
-          "cid": "QmAssetCid...",
+          "cid": "bafyAssetCid...",
           "path": "asset.glb",
           "format": "glb",
-          "bundleCid": "QmBundleRoot..."
+          "bundleCid": "bafyBundleRoot..."
         },
         "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
         "history": [
@@ -279,7 +279,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
             "prompt": "A wooden house",
             "txHash": "0x...",
             "src": {
-              "cid": "QmAssetCid...",
+              "cid": "bafyAssetCid...",
               "path": "asset.glb",
               "format": "glb"
             }
@@ -291,7 +291,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
             "provider": "parametric",
             "prompt": "Scale 1.5x,1.5x,1.5x, Color #FF5733",
             "src": {
-              "cid": "QmAssetCid...",
+              "cid": "bafyAssetCid...",
               "path": "asset.glb",
               "format": "glb"
             },
@@ -336,15 +336,15 @@ Every published token points to a collection manifest. The collection manifest m
   "name": "My Collection",
   "version": 3,
   "timestamp": 1780000000,
-  "prev_asset_manifest_cid": "QmPrevCollection...",
+  "prev_asset_manifest_cid": "bafyPrevCollection...",
   "thumbnail": {
     "type": "snapshot",
-    "cid": "QmThumbnailCid...",
+    "cid": "bafyThumbnailCid...",
     "format": "webp"
   },
   "assets": {
-    "asset_1700000000000": "QmAssetManifestA...",
-    "asset_1700000001234": "QmAssetManifestB..."
+    "asset_1700000000000": "bafyAssetManifestA...",
+    "asset_1700000001234": "bafyAssetManifestB..."
   }
 }
 ```
@@ -361,8 +361,8 @@ Key points:
 Every manifest stored on IPFS is content-addressed — its IPFS CID is a cryptographic hash of its contents. When a new version is saved, the updated manifest includes a `prev_asset_manifest_cid` pointer to the previous version, forming a **manifest chain** (also referred to as the **IPFS version chain** or **manifest history chain**).
 
 ```text
-Manifest v1 (CID: QmA...)  ←──  Manifest v2 (CID: QmB...)  ←──  Manifest v3 (CID: QmC...)
-     prev_asset_manifest_cid: null          prev_asset_manifest_cid: QmA...        prev_asset_manifest_cid: QmB...
+Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  Manifest v3 (CID: bafyC...)
+     prev_asset_manifest_cid: null          prev_asset_manifest_cid: bafyA...        prev_asset_manifest_cid: bafyB...
 ```
 
 **Key properties:**

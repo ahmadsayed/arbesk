@@ -48,12 +48,12 @@ describe("ContentCache (in-memory backend)", () => {
 
     it("returns the stored record when the hash is cached", async () => {
       const payload = bytes("hello world");
-      await cache.putPayload("aabbccdd", "QmTest", false, payload);
+      await cache.putPayload("aabbccdd", "bafyTest", false, payload);
 
       const result = await cache.getPayload("aabbccdd");
       expect(result).not.toBeNull();
       expect(result.hash).toBe("aabbccdd");
-      expect(result.cid).toBe("QmTest");
+      expect(result.cid).toBe("bafyTest");
       expect(result.compressed).toBe(false);
       expectUint8ArrayEqual(result.bytes, payload);
       expect(result.bytesCount).toBe(payload.length);
@@ -62,7 +62,7 @@ describe("ContentCache (in-memory backend)", () => {
 
     it("stores compressed payloads as-is", async () => {
       const gzipped = bytes("fake-gzipped-bytes");
-      await cache.putPayload("11223344", "QmCompressed", true, gzipped);
+      await cache.putPayload("11223344", "bafyCompressed", true, gzipped);
 
       const result = await cache.getPayload("11223344");
       expect(result.compressed).toBe(true);
@@ -73,21 +73,21 @@ describe("ContentCache (in-memory backend)", () => {
   describe("putPayload", () => {
     it("stores a payload and makes it retrievable", async () => {
       const payload = bytes("payload one");
-      await cache.putPayload("11111111", "QmOne", false, payload);
+      await cache.putPayload("11111111", "bafyOne", false, payload);
 
       const result = await cache.getPayload("11111111");
-      expect(result.cid).toBe("QmOne");
+      expect(result.cid).toBe("bafyOne");
       expectUint8ArrayEqual(result.bytes, payload);
     });
 
     it("overwrites an existing entry with the same hash", async () => {
       const first = bytes("first");
       const second = bytes("second-version");
-      await cache.putPayload("22222222", "QmFirst", false, first);
-      await cache.putPayload("22222222", "QmSecond", false, second);
+      await cache.putPayload("22222222", "bafyFirst", false, first);
+      await cache.putPayload("22222222", "bafySecond", false, second);
 
       const result = await cache.getPayload("22222222");
-      expect(result.cid).toBe("QmSecond");
+      expect(result.cid).toBe("bafySecond");
       expectUint8ArrayEqual(result.bytes, second);
     });
 
@@ -102,12 +102,12 @@ describe("ContentCache (in-memory backend)", () => {
       const c = bytes("cccccccccc"); // 10 bytes
       const d = bytes("dddddddddddddddddddd"); // 20 bytes
 
-      await smallCache.putPayload("a", "QmA", false, a);
-      await smallCache.putPayload("b", "QmB", false, b);
-      await smallCache.putPayload("c", "QmC", false, c);
+      await smallCache.putPayload("a", "bafyA", false, a);
+      await smallCache.putPayload("b", "bafyB", false, b);
+      await smallCache.putPayload("c", "bafyC", false, c);
 
       // Adding 20 bytes to a cache already at 30 bytes should evict oldest entries.
-      await smallCache.putPayload("d", "QmD", false, d);
+      await smallCache.putPayload("d", "bafyD", false, d);
 
       expect(await smallCache.getPayload("a")).toBeNull();
       expect(await smallCache.getPayload("b")).toBeNull();
@@ -122,15 +122,15 @@ describe("ContentCache (in-memory backend)", () => {
       });
 
       const huge = bytes("huge-payload");
-      await tinyCache.putPayload("big", "QmBig", false, huge);
+      await tinyCache.putPayload("big", "bafyBig", false, huge);
       expect(await tinyCache.getPayload("big")).toBeNull();
     });
   });
 
   describe("clearCache", () => {
     it("removes all cached payloads", async () => {
-      await cache.putPayload("x", "QmX", false, bytes("x"));
-      await cache.putPayload("y", "QmY", false, bytes("y"));
+      await cache.putPayload("x", "bafyX", false, bytes("x"));
+      await cache.putPayload("y", "bafyY", false, bytes("y"));
 
       await cache.clearCache();
 
@@ -227,17 +227,17 @@ describe("ContentCache (fake IndexedDB backend)", () => {
   it("persists a payload to the fake IndexedDB", async () => {
     const cache = makeCache();
     const payload = bytes("db-bound");
-    await cache.putPayload("hash1", "QmDb", false, payload);
+    await cache.putPayload("hash1", "bafyDb", false, payload);
 
     expect(storeMap.has("hash1")).toBe(true);
-    expect(storeMap.get("hash1").cid).toBe("QmDb");
+    expect(storeMap.get("hash1").cid).toBe("bafyDb");
     expectUint8ArrayEqual(storeMap.get("hash1").bytes, payload);
   });
 
   it("promotes a DB record into memory when it is not in the memory cache", async () => {
     const record = {
       hash: "hash2",
-      cid: "QmFromDb",
+      cid: "bafyFromDb",
       compressed: false,
       bytes: bytes("from-db"),
       bytesCount: 7,
@@ -248,15 +248,15 @@ describe("ContentCache (fake IndexedDB backend)", () => {
     const cache = makeCache();
     const result = await cache.getPayload("hash2");
 
-    expect(result.cid).toBe("QmFromDb");
+    expect(result.cid).toBe("bafyFromDb");
     expectUint8ArrayEqual(result.bytes, record.bytes);
     expect(cache._currentBytes).toBe(7);
   });
 
   it("evicts from the fake DB when the byte cap is exceeded", async () => {
     const cache = makeCache({ maxBytes: 15 });
-    await cache.putPayload("old", "QmOld", false, bytes("0123456789"));
-    await cache.putPayload("new", "QmNew", false, bytes("abcdefghij"));
+    await cache.putPayload("old", "bafyOld", false, bytes("0123456789"));
+    await cache.putPayload("new", "bafyNew", false, bytes("abcdefghij"));
 
     // old should have been evicted from both memory and DB.
     expect(await cache.getPayload("old")).toBeNull();
@@ -266,7 +266,7 @@ describe("ContentCache (fake IndexedDB backend)", () => {
 
   it("clearCache removes payloads from memory and the fake DB", async () => {
     const cache = makeCache();
-    await cache.putPayload("x", "QmX", false, bytes("x"));
+    await cache.putPayload("x", "bafyX", false, bytes("x"));
     await cache.clearCache();
 
     expect(await cache.getPayload("x")).toBeNull();
@@ -306,7 +306,7 @@ describe("ContentCache (fake IndexedDB backend)", () => {
       db: Promise.resolve(failingDb),
     });
 
-    await cache.putPayload("fail", "QmFail", false, bytes("x"));
+    await cache.putPayload("fail", "bafyFail", false, bytes("x"));
     // Wait for the async DB write to settle.
     await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -393,10 +393,10 @@ describe("ContentCache._openDb", () => {
 describe("module-level default cache helpers", () => {
   it("getPayload/putPayload/clearCache use the shared default cache", async () => {
     const payload = bytes("shared");
-    await putPayload("sharedHash", "QmShared", false, payload);
+    await putPayload("sharedHash", "bafyShared", false, payload);
 
     const result = await getPayload("sharedHash");
-    expect(result.cid).toBe("QmShared");
+    expect(result.cid).toBe("bafyShared");
     expectUint8ArrayEqual(result.bytes, payload);
 
     await clearCache();

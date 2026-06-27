@@ -80,7 +80,7 @@ describe("composeGlTF content-cache integration", () => {
   it("uses the cache for a large buffer and skips remote fetch", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0xab);
     const hash = "aabbccdd";
-    const cid = "QmBigBuffer";
+    const cid = "bafyBigBuffer";
 
     const { composeGlTF, cacheGet, cachePut } = await loadComposer({
       cacheHits: new Map([[hash, { hash, cid, compressed: false, bytes: raw, bytesCount: raw.length }]]),
@@ -100,7 +100,7 @@ describe("composeGlTF content-cache integration", () => {
   it("fetches raw bytes and caches them on a large buffer cache miss", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0xcd);
     const hash = "ccddeeff";
-    const cid = "QmMissBuffer";
+    const cid = "bafyMissBuffer";
 
     const { composeGlTF, cacheGet, cachePut } = await loadComposer({
       fetchedRaw: new Map([[cid, raw]]),
@@ -129,7 +129,7 @@ describe("composeGlTF content-cache integration", () => {
     const raw = gzip(original, { level: 1 });
     expect(raw.length).toBeGreaterThanOrEqual(64 * 1024);
     const hash = "11223344";
-    const cid = "QmCompressed";
+    const cid = "bafyCompressed";
 
     const { composeGlTF, cacheGet, cachePut } = await loadComposer({
       cacheHits: new Map([[hash, { hash, cid, compressed: true, bytes: raw, bytesCount: raw.length }]]),
@@ -148,7 +148,7 @@ describe("composeGlTF content-cache integration", () => {
   it("bypasses the cache for small buffers", async () => {
     const raw = new Uint8Array(1024).fill(0xef);
     const hash = "eeeeffff";
-    const cid = "QmSmallBuffer";
+    const cid = "bafySmallBuffer";
 
     const { composeGlTF, cacheGet, cachePut } = await loadComposer({
       fetchedRaw: new Map([[cid, raw]]),
@@ -166,7 +166,7 @@ describe("composeGlTF content-cache integration", () => {
 
   it("uses the existing decompressed fetch path when _arbesk metadata is missing", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0x12);
-    const cid = "QmNoMeta";
+    const cid = "bafyNoMeta";
 
     const { composeGlTF, cacheGet, cachePut } = await loadComposer({
       fetchedRaw: new Map([[cid, raw]]),
@@ -185,7 +185,7 @@ describe("composeGlTF content-cache integration", () => {
   it("uses the cache for large images", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0x34);
     const hash = "44556677";
-    const cid = "QmBigImage";
+    const cid = "bafyBigImage";
 
     const { composeGlTF, cacheGet, cachePut } = await loadComposer({
       cacheHits: new Map([[hash, { hash, cid, compressed: false, bytes: raw, bytesCount: raw.length }]]),

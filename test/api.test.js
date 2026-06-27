@@ -66,7 +66,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           entries.push({ path: entry.path, hash });
           yield { path: entry.path, cid: { toString: () => hash } };
         }
-        const rootHash = "QmDir" + Math.random().toString(36).substring(2, 12);
+        const rootHash = "bafyDir" + Math.random().toString(36).substring(2, 12);
         ipfsStorage.set(rootHash, JSON.stringify(entries));
         yield { path: "", cid: { toString: () => rootHash } };
       }),
@@ -277,7 +277,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let _manifestSeq = 0;
   function saveManifestToStorage(manifest, { compress = false } = {}) {
     _manifestSeq++;
-    const hash = `QmTestManifest${String(_manifestSeq).padStart(4, "0")}`;
+    const hash = `bafyTestManifest${String(_manifestSeq).padStart(4, "0")}`;
     const payload = JSON.stringify(manifest);
     ipfsStorage.set(
       hash,
@@ -542,7 +542,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const startCid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+        scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
       });
 
       const res = await request(app)
@@ -555,7 +555,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const startCid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+        scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
       });
 
       const res = await request(app)
@@ -575,7 +575,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           nodes: [
             {
               node_id: "n",
-              source: { cid: "QmSource", bundleCid: "QmBundleRoot" },
+              source: { cid: "bafySource", bundleCid: "bafyBundleRoot" },
             },
           ],
         },
@@ -589,10 +589,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // The manifest itself is unpinned, but source CIDs are shared via dedup
       // and must survive the delete so other assets can still reference them.
       expect(res.body.unpinned).toContain(startCid);
-      expect(res.body.unpinned).not.toContain("QmSource");
-      expect(res.body.unpinned).not.toContain("QmBundleRoot");
-      expect(res.body.skipped).toContain("QmSource");
-      expect(res.body.skipped).toContain("QmBundleRoot");
+      expect(res.body.unpinned).not.toContain("bafySource");
+      expect(res.body.unpinned).not.toContain("bafyBundleRoot");
+      expect(res.body.skipped).toContain("bafySource");
+      expect(res.body.skipped).toContain("bafyBundleRoot");
     });
 
     it("walks and unpins a gzip-compressed manifest chain but skips shared sources", async () => {
@@ -608,12 +608,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         {
           version: 2,
           prev_asset_manifest_cid: prevCid,
-          scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+          scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
         },
         { compress: true },
       );
       // Source asset must exist and be readable JSON for the ref-walker.
-      ipfsStorage.set("QmSource", '{"buffers":[{"uri":"ipfs://QmBuffer"}]}');
+      ipfsStorage.set("bafySource", '{"buffers":[{"uri":"ipfs://bafyBuffer"}]}');
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
@@ -626,9 +626,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.unpinned).toContain(prevCid);
       // Source glTF and its embedded buffer/image are shared via dedup and
       // must be left pinned so other assets keep working.
-      expect(res.body.unpinned).not.toContain("QmSource");
-      expect(res.body.unpinned).not.toContain("QmBuffer");
-      expect(res.body.skipped).toContain("QmSource");
+      expect(res.body.unpinned).not.toContain("bafySource");
+      expect(res.body.unpinned).not.toContain("bafyBuffer");
+      expect(res.body.skipped).toContain("bafySource");
       // Embedded buffer/image CIDs are not even inspected in conservative mode;
       // they are left pinned and reclaimed later by the reachability GC.
     });
@@ -636,20 +636,20 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     it("does not unpin a shared buffer CID referenced by another asset", async () => {
       // cowboy1 and cowboy2 share the same mesh/texture CID.
       ipfsStorage.set(
-        "QmSharedMesh",
-        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+        "bafySharedMesh",
+        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
       );
 
       const cowboy1Cid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
       });
 
       const cowboy2Cid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
       });
 
       // Deleting cowboy2 must not unpin the shared mesh or its buffer.
@@ -659,9 +659,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({ cid: cowboy2Cid });
       expect(res.status).toBe(200);
       expect(res.body.unpinned).toContain(cowboy2Cid);
-      expect(res.body.unpinned).not.toContain("QmSharedMesh");
-      expect(res.body.unpinned).not.toContain("QmSharedBuffer");
-      expect(res.body.skipped).toContain("QmSharedMesh");
+      expect(res.body.unpinned).not.toContain("bafySharedMesh");
+      expect(res.body.unpinned).not.toContain("bafySharedBuffer");
+      expect(res.body.skipped).toContain("bafySharedMesh");
       // cowboy1's manifest is untouched.
       expect(res.body.unpinned).not.toContain(cowboy1Cid);
     });
@@ -695,8 +695,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       const cid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
-        thumbnail: { cid: "QmThumb" },
-        comments_archive_cid: "QmComments",
+        thumbnail: { cid: "bafyThumb" },
+        comments_archive_cid: "bafyComments",
         scene: { nodes: [] },
       });
 
@@ -707,8 +707,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.unpinned).toContain(cid);
-      expect(res.body.unpinned).toContain("QmThumb");
-      expect(res.body.unpinned).toContain("QmComments");
+      expect(res.body.unpinned).toContain("bafyThumb");
+      expect(res.body.unpinned).toContain("bafyComments");
     });
 
     it("rate-limits unpin requests per wallet", async () => {
@@ -757,15 +757,15 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("dry-run reports orphaned CIDs without unpinning", async () => {
       ipfsStorage.set(
-        "QmSharedMesh",
-        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+        "bafySharedMesh",
+        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
       );
 
       const assetCid = saveManifestToStorage({
         version: 1,
         type: "asset",
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
       });
 
       const collectionCid = saveManifestToStorage({
@@ -776,7 +776,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
 
       // Orphan: pinned but not referenced by any live token.
-      ipfsStorage.set("QmOrphan", "orphan data");
+      ipfsStorage.set("bafyOrphan", "orphan data");
 
       globalThis.__registerGCToken("1", collectionCid);
 
@@ -796,16 +796,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("live run unpins only orphaned CIDs", async () => {
       ipfsStorage.set(
-        "QmSharedMesh",
-        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+        "bafySharedMesh",
+        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
       );
-      ipfsStorage.set("QmSharedBuffer", "buffer bytes");
+      ipfsStorage.set("bafySharedBuffer", "buffer bytes");
 
       const assetCid = saveManifestToStorage({
         version: 1,
         type: "asset",
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
       });
 
       const collectionCid = saveManifestToStorage({
@@ -815,7 +815,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         assets: { cowboy: assetCid },
       });
 
-      ipfsStorage.set("QmOrphan", "orphan data");
+      ipfsStorage.set("bafyOrphan", "orphan data");
 
       globalThis.__registerGCToken("1", collectionCid);
 
@@ -832,21 +832,21 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       // in real life they would remain pinned).
       expect(ipfsStorage.has(collectionCid)).toBe(true);
       expect(ipfsStorage.has(assetCid)).toBe(true);
-      expect(ipfsStorage.has("QmSharedMesh")).toBe(true);
-      expect(ipfsStorage.has("QmSharedBuffer")).toBe(true);
+      expect(ipfsStorage.has("bafySharedMesh")).toBe(true);
+      expect(ipfsStorage.has("bafySharedBuffer")).toBe(true);
     });
 
     it("keeps shared source CID pinned while token lives and unpin it after burn", async () => {
       ipfsStorage.set(
-        "QmSharedMesh",
-        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+        "bafySharedMesh",
+        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
       );
 
       const assetCid = saveManifestToStorage({
         version: 1,
         type: "asset",
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
       });
 
       const collectionCid = saveManifestToStorage({
@@ -895,9 +895,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         assets: { a1: assetCid },
       });
 
-      ipfsStorage.set("QmOrphan1", "orphan 1");
-      ipfsStorage.set("QmOrphan2", "orphan 2");
-      ipfsStorage.set("QmOrphan3", "orphan 3");
+      ipfsStorage.set("bafyOrphan1", "orphan 1");
+      ipfsStorage.set("bafyOrphan2", "orphan 2");
+      ipfsStorage.set("bafyOrphan3", "orphan 3");
 
       globalThis.__registerGCToken("1", collectionCid);
 
@@ -928,13 +928,13 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
 
       // The editor list CID is not referenced by the manifest chain.
-      ipfsStorage.set("QmEditors", '{"editors":["0xEditor"]}');
+      ipfsStorage.set("bafyEditors", '{"editors":["0xEditor"]}');
 
       globalThis.__registerGCToken(
         "1",
         collectionCid,
         "0xOwner",
-        "ipfs://QmEditors",
+        "ipfs://bafyEditors",
       );
 
       const res = await request(app)
@@ -944,9 +944,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({ dryRun: false });
 
       expect(res.status).toBe(200);
-      // QmEditors is protected by the on-chain editorListURI, so it must not
+      // bafyEditors is protected by the on-chain editorListURI, so it must not
       // have been unpinned (mock storage still contains it).
-      expect(ipfsStorage.has("QmEditors")).toBe(true);
+      expect(ipfsStorage.has("bafyEditors")).toBe(true);
     });
 
     it("rate-limits GC requests per wallet", async () => {
@@ -1045,7 +1045,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             {
               node_id: "node_regular_001",
               source: {
-                cid: "QmSomeCid",
+                cid: "bafySomeCid",
                 path: "asset.glb",
                 format: "glb",
               },

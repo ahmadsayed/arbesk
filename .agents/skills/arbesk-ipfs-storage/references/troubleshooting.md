@@ -7,10 +7,10 @@ Manual CLI operations and symptom/cause/fix reference.
 ### Manually unpin a CID
 ```bash
 # From the host (Kubo HTTP API)
-curl -X POST "http://127.0.0.1:5001/api/v0/pin/rm?arg=QmSomeCid..."
+curl -X POST "http://127.0.0.1:5001/api/v0/pin/rm?arg=bafySomeCid..."
 
 # Inside the container
-docker-compose exec ipfs ipfs pin rm QmSomeCid...
+docker-compose exec ipfs ipfs pin rm bafySomeCid...
 ```
 
 ### List all pinned CIDs
@@ -35,7 +35,7 @@ docker-compose exec ipfs ipfs add somefile.gltf
 
 # Via HTTP API
 curl -X POST -F "file=@somefile.gltf" "http://127.0.0.1:5001/api/v0/add"
-curl -X POST "http://127.0.0.1:5001/api/v0/pin/add?arg=QmReturnedCid..."
+curl -X POST "http://127.0.0.1:5001/api/v0/pin/add?arg=bafyReturnedCid..."
 ```
 
 ---

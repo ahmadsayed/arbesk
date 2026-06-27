@@ -30,7 +30,7 @@ describe("Manifest comments archive integration", () => {
     const mockIPFS = {
       add: jest.fn(async (data) => {
         const payload = typeof data === "string" ? data : JSON.stringify(data);
-        const hash = "Qm" + Buffer.from(payload).toString("hex").slice(0, 15);
+        const hash = "bafy" + Buffer.from(payload).toString("hex").slice(0, 15);
         ipfsStorage.set(hash, payload);
         return { cid: { toString: () => hash } };
       }),
@@ -186,7 +186,7 @@ describe("Manifest comments archive integration", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.cid).toMatch(/^Qm/);
+    expect(res.body.cid).toMatch(/^bafy/);
     expect(res.body.eventCount).toBe(1);
 
     // Verify the archive was stored in IPFS with correct content
@@ -209,7 +209,7 @@ describe("Manifest comments archive integration", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.cid).toMatch(/^Qm/);
+    expect(res.body.cid).toMatch(/^bafy/);
     expect(res.body.eventCount).toBe(0);
 
     const archive = JSON.parse(ipfsStorage.get(res.body.cid));

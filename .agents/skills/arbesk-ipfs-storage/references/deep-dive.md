@@ -157,31 +157,31 @@ The frontend cache (`remote-ipfs.js`) uses a **two-tier runtime cache**:
 Every manifest is a standalone JSON document on IPFS. The chain is formed by `prev_asset_manifest_cid` links:
 
 ```
-Manifest v3 (CID: QmZZZ...)
-  ├── prev_asset_manifest_cid: QmYYY...
-  ├── thumbnail: { cid: QmTTT... }
+Manifest v3 (CID: bafyZZZ...)
+  ├── prev_asset_manifest_cid: bafyYYY...
+  ├── thumbnail: { cid: bafyTTT... }
   └── scene.nodes[0]:
-       ├── source: { cid: QmAAA... }          ← current source asset
+       ├── source: { cid: bafyAAA... }          ← current source asset
        └── history:
-            ├── { src: { cid: QmBBB... } }     ← v2 source asset
-            └── { src: { cid: QmCCC... } }     ← v1 source asset
+            ├── { src: { cid: bafyBBB... } }     ← v2 source asset
+            └── { src: { cid: bafyCCC... } }     ← v1 source asset
 
-Manifest v2 (CID: QmYYY...)
-  ├── prev_asset_manifest_cid: QmXXX...
-  ├── thumbnail: { cid: QmUUU... }
+Manifest v2 (CID: bafyYYY...)
+  ├── prev_asset_manifest_cid: bafyXXX...
+  ├── thumbnail: { cid: bafyUUU... }
   └── scene.nodes[0]:
-       ├── source: { cid: QmBBB... }
+       ├── source: { cid: bafyBBB... }
 
-Manifest v1 (CID: QmXXX...)
+Manifest v1 (CID: bafyXXX...)
   ├── prev_asset_manifest_cid: null
   └── scene.nodes[0]:
-       ├── source: { cid: QmCCC... }
+       ├── source: { cid: bafyCCC... }
 ```
 
 **When unpinning a chain starting from v3:**
-- Unpin `QmZZZ`, `QmYYY`, `QmXXX` (manifests)
-- Unpin `QmTTT`, `QmUUU` (thumbnails)
-- Unpin `QmAAA`, `QmBBB`, `QmCCC` (source assets from `source.cid` and `history[].src.cid`)
+- Unpin `bafyZZZ`, `bafyYYY`, `bafyXXX` (manifests)
+- Unpin `bafyTTT`, `bafyUUU` (thumbnails)
+- Unpin `bafyAAA`, `bafyBBB`, `bafyCCC` (source assets from `source.cid` and `history[].src.cid`)
 - Do NOT unpin `child_ref` token CIDs (they belong to other tokens)
 
 ### CID Deduplication

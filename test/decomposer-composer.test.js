@@ -390,13 +390,13 @@ function makeCompositeGlTF(overrides = {}) {
     ],
     buffers: [
       {
-        uri: "ipfs://QmBufferTestCid",
+        uri: "ipfs://bafyBufferTestCid",
         byteLength: 36,
       },
     ],
     images: [
       {
-        uri: "ipfs://QmImageTestCid",
+        uri: "ipfs://bafyImageTestCid",
         mimeType: "image/png",
       },
     ],
@@ -427,7 +427,7 @@ describe("Decomposer - isComposite", () => {
 
   it("returns true when buffers have ipfs:// URIs", () => {
     const gltf = makeTestGlTF({
-      buffers: [{ uri: "ipfs://QmTestCid", byteLength: 100 }],
+      buffers: [{ uri: "ipfs://bafyTestCid", byteLength: 100 }],
     });
     expect(isComposite(gltf)).toBe(true);
   });
@@ -435,7 +435,7 @@ describe("Decomposer - isComposite", () => {
   it("returns true when images have ipfs:// URIs", () => {
     const gltf = makeTestGlTF({
       buffers: [],
-      images: [{ uri: "ipfs://QmImgCid", mimeType: "image/png" }],
+      images: [{ uri: "ipfs://bafyImgCid", mimeType: "image/png" }],
     });
     expect(isComposite(gltf)).toBe(true);
   });
@@ -524,7 +524,7 @@ describe("Decomposer - base64ToBytes", () => {
 
 describe("Decomposer - extractDataURI", () => {
   it("returns null for non-data URI", () => {
-    expect(extractDataURI("ipfs://QmTest")).toBeNull();
+    expect(extractDataURI("ipfs://bafyTest")).toBeNull();
     expect(extractDataURI("http://example.com/file.bin")).toBeNull();
     expect(extractDataURI("/path/to/file.bin")).toBeNull();
   });
@@ -771,10 +771,10 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
       images: [],
     });
 
-    const mockWrite = jest.fn().mockResolvedValue("QmMockBufferCid");
+    const mockWrite = jest.fn().mockResolvedValue("bafyMockBufferCid");
     const result = await decomposeGlTF(gltf, mockWrite);
 
-    expect(result.buffers[0].uri).toBe("ipfs://QmMockBufferCid");
+    expect(result.buffers[0].uri).toBe("ipfs://bafyMockBufferCid");
     expect(result.buffers[0].byteLength).toBe(5);
     expect(mockWrite).toHaveBeenCalledTimes(1);
     expect(mockWrite).toHaveBeenCalledWith(
@@ -794,10 +794,10 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
       ],
     });
 
-    const mockWrite = jest.fn().mockResolvedValue("QmMockImageCid");
+    const mockWrite = jest.fn().mockResolvedValue("bafyMockImageCid");
     const result = await decomposeGlTF(gltf, mockWrite);
 
-    expect(result.images[0].uri).toBe("ipfs://QmMockImageCid");
+    expect(result.images[0].uri).toBe("ipfs://bafyMockImageCid");
     expect(result.images[0].mimeType).toBe("image/png");
     expect(mockWrite).toHaveBeenCalledTimes(1);
     expect(mockWrite).toHaveBeenCalledWith(
@@ -817,13 +817,13 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
 
     const mockWrite = jest
       .fn()
-      .mockResolvedValueOnce("QmBuf0Cid")
-      .mockResolvedValueOnce("QmBuf1Cid");
+      .mockResolvedValueOnce("bafyBuf0Cid")
+      .mockResolvedValueOnce("bafyBuf1Cid");
 
     const result = await decomposeGlTF(gltf, mockWrite);
 
-    expect(result.buffers[0].uri).toBe("ipfs://QmBuf0Cid");
-    expect(result.buffers[1].uri).toBe("ipfs://QmBuf1Cid");
+    expect(result.buffers[0].uri).toBe("ipfs://bafyBuf0Cid");
+    expect(result.buffers[1].uri).toBe("ipfs://bafyBuf1Cid");
     expect(mockWrite).toHaveBeenCalledTimes(2);
   });
 
@@ -831,13 +831,13 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
     const gltf = makeTestGlTF();
     const mockWrite = jest
       .fn()
-      .mockResolvedValueOnce("QmBufCid")
-      .mockResolvedValueOnce("QmImgCid");
+      .mockResolvedValueOnce("bafyBufCid")
+      .mockResolvedValueOnce("bafyImgCid");
 
     const result = await decomposeGlTF(gltf, mockWrite);
 
-    expect(result.buffers[0].uri).toBe("ipfs://QmBufCid");
-    expect(result.images[0].uri).toBe("ipfs://QmImgCid");
+    expect(result.buffers[0].uri).toBe("ipfs://bafyBufCid");
+    expect(result.images[0].uri).toBe("ipfs://bafyImgCid");
     expect(mockWrite).toHaveBeenCalledTimes(2);
   });
 
@@ -884,7 +884,7 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
   it("does not mutate the original glTF object", async () => {
     const gltf = makeTestGlTF();
     const originalUri = gltf.buffers[0].uri;
-    const mockWrite = jest.fn().mockResolvedValue("QmTestCid");
+    const mockWrite = jest.fn().mockResolvedValue("bafyTestCid");
 
     await decomposeGlTF(gltf, mockWrite);
 
@@ -896,8 +896,8 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
     const gltf = makeTestGlTF();
     const mockWrite = jest
       .fn()
-      .mockResolvedValueOnce("QmBufCid")
-      .mockResolvedValueOnce("QmImgCid");
+      .mockResolvedValueOnce("bafyBufCid")
+      .mockResolvedValueOnce("bafyImgCid");
 
     const result = await decomposeGlTF(gltf, mockWrite);
 
@@ -928,7 +928,7 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
       ],
     });
 
-    const mockWrite = jest.fn().mockResolvedValue("QmTestCid");
+    const mockWrite = jest.fn().mockResolvedValue("bafyTestCid");
     const result = await decomposeGlTF(gltf, mockWrite);
 
     expect(result.buffers[0]._arbesk).toMatchObject({
@@ -950,11 +950,11 @@ describe("Decomposer - decomposeGlTF (mocked IPFS)", () => {
       images: [],
     });
 
-    const dedupMap = new Map([["72,101,108,108,111", "QmReused"]]);
+    const dedupMap = new Map([["72,101,108,108,111", "bafyReused"]]);
     const mockWrite = jest.fn();
     const result = await decomposeGlTF(gltf, mockWrite, dedupMap);
 
-    expect(result.buffers[0].uri).toBe("ipfs://QmReused");
+    expect(result.buffers[0].uri).toBe("ipfs://bafyReused");
     expect(result.buffers[0]._arbesk.skipped).toBe(true);
     expect(mockWrite).not.toHaveBeenCalled();
   });
@@ -1025,11 +1025,11 @@ describe("Composer - resolveURI", () => {
     };
     global.fetch.mockResolvedValue(response);
 
-    const result = await resolveURI("ipfs://QmTestCid");
+    const result = await resolveURI("ipfs://bafyTestCid");
 
     expect(result).toBe("data:application/octet-stream;base64,SGVsbG8=");
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8080/ipfs/QmTestCid",
+      "http://127.0.0.1:8080/ipfs/bafyTestCid",
       { cache: "no-store" },
     );
   });
@@ -1042,7 +1042,7 @@ describe("Composer - resolveURI", () => {
     };
     global.fetch.mockResolvedValue(response);
 
-    const result = await resolveURI("ipfs://QmImgCid", "image/png");
+    const result = await resolveURI("ipfs://bafyImgCid", "image/png");
 
     // 4 bytes → 8 base64 chars (4*8/6 = 5.33 → 8 chars including padding)
     expect(result).toBe("data:image/png;base64,iVBORw==");
@@ -1051,7 +1051,7 @@ describe("Composer - resolveURI", () => {
   it("throws on gateway error for ipfs:// URI", async () => {
     global.fetch.mockResolvedValue({ ok: false, status: 404 });
 
-    await expect(resolveURI("ipfs://QmMissing")).rejects.toThrow(
+    await expect(resolveURI("ipfs://bafyMissing")).rejects.toThrow(
       "gateway returned 404",
     );
   });
@@ -1059,7 +1059,7 @@ describe("Composer - resolveURI", () => {
   it("handles network failure (fetch throws)", async () => {
     global.fetch.mockRejectedValue(new Error("Network error"));
 
-    await expect(resolveURI("ipfs://QmNetFail")).rejects.toThrow(
+    await expect(resolveURI("ipfs://bafyNetFail")).rejects.toThrow(
       "Network error",
     );
   });
@@ -1209,14 +1209,14 @@ describe("Composer - composeGlTF", () => {
     const gltf = makeCompositeGlTF({
       buffers: [
         {
-          uri: "ipfs://QmBuf",
+          uri: "ipfs://bafyBuf",
           byteLength: 36,
           _arbesk: { hash: "abc", hashAlgo: "murmur3-32" },
         },
       ],
       images: [
         {
-          uri: "ipfs://QmImg",
+          uri: "ipfs://bafyImg",
           mimeType: "image/png",
           _arbesk: { hash: "def", hashAlgo: "murmur3-32" },
         },
@@ -1228,8 +1228,8 @@ describe("Composer - composeGlTF", () => {
 
     expect(result.buffers[0]._arbesk).toBeUndefined();
     expect(result.images[0]._arbesk).toBeUndefined();
-    expect(result.buffers[0].uri).toBe("ipfs://QmBuf");
-    expect(result.images[0].uri).toBe("ipfs://QmImg");
+    expect(result.buffers[0].uri).toBe("ipfs://bafyBuf");
+    expect(result.images[0].uri).toBe("ipfs://bafyImg");
   });
 });
 
@@ -1253,7 +1253,7 @@ describe("Decompose → Compose round-trip", () => {
     for (let i = 0; i < hashBuffer.length; i++) {
       hash = ((hash << 5) - hash + hashBuffer[i]) | 0;
     }
-    const cid = "QmTest" + Math.abs(hash).toString(16).padStart(40, "0");
+    const cid = "bafyTest" + Math.abs(hash).toString(16).padStart(40, "0");
     ipfsStore.set(cid, bytes);
     return cid;
   }
@@ -1597,7 +1597,7 @@ describe("GLB Parser - decomposeGLB", () => {
     const store = new Map();
     return {
       writer: async (bytes, filename) => {
-        const cid = `QmTest${String(counter++).padStart(44, "0")}${filename}`;
+        const cid = `bafyTest${String(counter++).padStart(44, "0")}${filename}`;
         store.set(cid, bytes);
         return cid;
       },
@@ -1614,7 +1614,7 @@ describe("GLB Parser - decomposeGLB", () => {
     const { composite, compositeCid } = await decomposeGLB(glb, writer);
 
     expect(composite.buffers[0].uri).toMatch(/^ipfs:\/\//);
-    expect(compositeCid).toMatch(/^Qm/);
+    expect(compositeCid).toMatch(/^bafy/);
     expect(composite.buffers[0].byteLength).toBe(meshBytes.length);
   });
 

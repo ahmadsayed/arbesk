@@ -108,7 +108,7 @@ describe("glb-parser", () => {
     let counter = 0;
     const writer = async (_data, _filename) => {
       counter++;
-      return `QmMock${counter}`;
+      return `bafyMock${counter}`;
     };
 
     const { composite, compositeCid } = await decomposeGLB(buffer, writer);
@@ -117,6 +117,6 @@ describe("glb-parser", () => {
     expect(composite.buffers).toBeInstanceOf(Array);
     expect(composite.images).toBeInstanceOf(Array);
     expect(composite.buffers[0].uri).toMatch(/^ipfs:\/\//);
-    expect(compositeCid).toMatch(/^QmMock/);
+    expect(compositeCid).toMatch(/^bafyMock/);
   });
 });

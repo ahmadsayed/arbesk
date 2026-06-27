@@ -194,7 +194,7 @@ Published worlds may include an optional thumbnail reference:
 {
   "thumbnail": {
     "type": "snapshot",
-    "cid": "QmThumbnailCid...",
+    "cid": "bafyThumbnailCid...",
     "path": "thumbnail.webp",
     "format": "webp",
     "mime": "image/webp",
@@ -221,15 +221,15 @@ Every published token points to a collection manifest:
   "name": "My Collection",
   "version": 3,
   "timestamp": 1780000000,
-  "prev_asset_manifest_cid": "QmPrevCollection...",
+  "prev_asset_manifest_cid": "bafyPrevCollection...",
   "thumbnail": {
     "type": "snapshot",
-    "cid": "QmThumbnailCid...",
+    "cid": "bafyThumbnailCid...",
     "format": "webp"
   },
   "assets": {
-    "asset_1700000000000": "QmAssetManifestA...",
-    "asset_1700000001234": "QmAssetManifestB..."
+    "asset_1700000000000": "bafyAssetManifestA...",
+    "asset_1700000001234": "bafyAssetManifestB..."
   }
 }
 ```

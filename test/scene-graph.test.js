@@ -274,13 +274,13 @@ function centerImportedAsset(meshes, importedNodes, parentNode, _nodeId) {
 
 describe("extractCid", () => {
   it("returns cid from a source object", () => {
-    expect(extractCid({ cid: "QmTest123", path: "asset.glb" })).toBe(
-      "QmTest123",
+    expect(extractCid({ cid: "bafyTest123", path: "asset.glb" })).toBe(
+      "bafyTest123",
     );
   });
 
   it("returns plain string as-is", () => {
-    expect(extractCid("QmPlainCid")).toBe("QmPlainCid");
+    expect(extractCid("bafyPlainCid")).toBe("bafyPlainCid");
   });
 
   it("returns null/undefined as-is", () => {
@@ -307,7 +307,7 @@ describe("detectAssetFormat", () => {
   });
 
   it('defaults to "gltf" for source objects without format', () => {
-    expect(detectAssetFormat({ cid: "QmTest" })).toBe("gltf");
+    expect(detectAssetFormat({ cid: "bafyTest" })).toBe("gltf");
   });
 
   it('defaults to "gltf" for non-object inputs', () => {
@@ -946,12 +946,12 @@ describe("getNodeChildRef", () => {
     const anchor = makeNode();
     anchor.metadata = {
       childRef: { type: "token", tokenId: "42" },
-      resolvedCid: "QmCid",
+      resolvedCid: "bafyCid",
     };
     mockNodeAnchors.set("child_token_314159_abc_42", anchor);
     const r = getNodeChildRef("child_token_314159_abc_42");
     expect(r.tokenId).toBe("42");
-    expect(r.resolvedCid).toBe("QmCid");
+    expect(r.resolvedCid).toBe("bafyCid");
   });
 
   it("returns null for regular node", () => {
@@ -962,7 +962,7 @@ describe("getNodeChildRef", () => {
   it("walks ancestor chain for child_ref context", () => {
     const child = makeNode();
     const parent = makeNode();
-    parent.metadata = { childRef: { tokenId: "7" }, resolvedCid: "QmParent" };
+    parent.metadata = { childRef: { tokenId: "7" }, resolvedCid: "bafyParent" };
     child.parent = parent;
     mockNodeAnchors.set("nested", child);
     const r = getNodeChildRef("nested");

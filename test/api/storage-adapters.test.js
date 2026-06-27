@@ -5,13 +5,13 @@ import { createPinataAdapter } from "../../src/api/storage/pinata-adapter.js";
 describe("kubo adapter", () => {
   function fakeIpfs() {
     return {
-      add: jest.fn(async () => ({ cid: { toString: () => "QmFakeCid" } })),
+      add: jest.fn(async () => ({ cid: { toString: () => "bafyFakeCid" } })),
       addAll: jest.fn(async function* () {
         // Simulate wrapWithDirectory: yields per-file results, then a root
         // node whose path is "" (the directory itself).
-        yield { path: "composite.gltf", cid: { toString: () => "QmFile1" } };
-        yield { path: "buffer_0.bin", cid: { toString: () => "QmFile2" } };
-        yield { path: "", cid: { toString: () => "QmDirRoot" } };
+        yield { path: "composite.gltf", cid: { toString: () => "bafyFile1" } };
+        yield { path: "buffer_0.bin", cid: { toString: () => "bafyFile2" } };
+        yield { path: "", cid: { toString: () => "bafyDirRoot" } };
       }),
       pin: {
         add: jest.fn(async () => {}),
@@ -30,8 +30,8 @@ describe("kubo adapter", () => {
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
     const cid = await a.add("payload");
-    expect(cid).toBe("QmFakeCid");
-    expect(ipfs.pin.add).toHaveBeenCalledWith("QmFakeCid");
+    expect(cid).toBe("bafyFakeCid");
+    expect(ipfs.pin.add).toHaveBeenCalledWith("bafyFakeCid");
   });
 
   it("addDirectory() uploads files with wrapWithDirectory, pins and returns the root", async () => {
@@ -45,7 +45,7 @@ describe("kubo adapter", () => {
       { name: "buffer_0.bin", data: new Uint8Array([1, 2, 3]) },
     ];
     const root = await a.addDirectory(files);
-    expect(root).toBe("QmDirRoot");
+    expect(root).toBe("bafyDirRoot");
     // addAll must be called with path+content entries and wrapWithDirectory.
     expect(ipfs.addAll).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -54,7 +54,7 @@ describe("kubo adapter", () => {
       ]),
       expect.objectContaining({ wrapWithDirectory: true }),
     );
-    expect(ipfs.pin.add).toHaveBeenCalledWith("QmDirRoot");
+    expect(ipfs.pin.add).toHaveBeenCalledWith("bafyDirRoot");
   });
 
   it("cat() concatenates the async-iterable chunks into a string", async () => {
@@ -62,7 +62,7 @@ describe("kubo adapter", () => {
       apiUrl: "http://127.0.0.1:5001",
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
-    expect(await a.cat("QmX")).toBe('{"hello":"world"}');
+    expect(await a.cat("bafyX")).toBe('{"hello":"world"}');
   });
 
   it("catBytes() returns raw bytes without text decoding", async () => {
@@ -70,7 +70,7 @@ describe("kubo adapter", () => {
       apiUrl: "http://127.0.0.1:5001",
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
-    const bytes = await a.catBytes("QmX");
+    const bytes = await a.catBytes("bafyX");
     expect(Buffer.isBuffer(bytes)).toBe(true);
     expect(bytes.toString("utf-8")).toBe('{"hello":"world"}');
   });
@@ -84,7 +84,7 @@ describe("kubo adapter", () => {
       apiUrl: "http://127.0.0.1:5001",
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
-    expect(await a.unpin("QmX")).toBe(true);
+    expect(await a.unpin("bafyX")).toBe(true);
   });
 
   it("mintUploadCredential() returns the kubo shape", async () => {

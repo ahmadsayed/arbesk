@@ -7,13 +7,13 @@ import { libraryState, _resetForTesting } from "../frontend/src/js/state/library
 // Mutable mock state so the same ESM import can be driven differently per test.
 let _createNamedCollection = jest.fn().mockResolvedValue({
   tokenId: "12345",
-  manifestCid: "QmCollection",
+  manifestCid: "bafyCollection",
   isNew: true,
 });
 let _uploadFileToCollection = jest.fn().mockResolvedValue({
   assetId: "asset_123",
-  assetManifestCid: "QmAsset",
-  newCollectionCid: "QmCollection",
+  assetManifestCid: "bafyAsset",
+  newCollectionCid: "bafyCollection",
 });
 let _refreshLibraryData = jest.fn();
 
@@ -21,13 +21,13 @@ beforeEach(() => {
   _resetForTesting();
   _createNamedCollection = jest.fn().mockResolvedValue({
     tokenId: "12345",
-    manifestCid: "QmCollection",
+    manifestCid: "bafyCollection",
     isNew: true,
   });
   _uploadFileToCollection = jest.fn().mockResolvedValue({
     assetId: "asset_123",
-    assetManifestCid: "QmAsset",
-    newCollectionCid: "QmCollection",
+    assetManifestCid: "bafyAsset",
+    newCollectionCid: "bafyCollection",
   });
   _refreshLibraryData = jest.fn();
 
@@ -174,7 +174,7 @@ describe("create collection button", () => {
       tokenId: "12345",
       type: "collection",
       name: "My Collection",
-      manifestCid: "QmCollection",
+      manifestCid: "bafyCollection",
       role: "owner",
     });
   });

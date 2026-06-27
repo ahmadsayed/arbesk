@@ -125,7 +125,7 @@ const agentId = await walletClient.writeContract({
   address: IDENTITY_REGISTRY,
   abi: identityRegistryAbi,
   functionName: 'register',
-  args: ['ipfs://QmYourRegistrationFile']
+  args: ['ipfs://bafyYourRegistrationFile']
 })
 
 // Registration with URI + metadata
@@ -134,7 +134,7 @@ const agentId = await walletClient.writeContract({
   abi: identityRegistryAbi,
   functionName: 'register',
   args: [
-    'ipfs://QmYourRegistrationFile',
+    'ipfs://bafyYourRegistrationFile',
     [{ metadataKey: 'version', metadataValue: '0x01' }]
   ]
 })
@@ -147,7 +147,7 @@ await walletClient.writeContract({
   address: IDENTITY_REGISTRY,
   abi: identityRegistryAbi,
   functionName: 'setAgentURI',
-  args: [agentId, 'ipfs://QmNewRegistrationFile']
+  args: [agentId, 'ipfs://bafyNewRegistrationFile']
 })
 ```
 
@@ -253,7 +253,7 @@ await walletClient.writeContract({
     'starred',          // string — tag1 (category)
     '',                 // string — tag2 (optional)
     '',                 // string — endpoint (optional)
-    'ipfs://QmFeedback', // string — feedbackURI (optional)
+    'ipfs://bafyFeedback', // string — feedbackURI (optional)
     '0x0000000000000000000000000000000000000000000000000000000000000000' // bytes32 — feedbackHash (optional, not needed for IPFS)
   ]
 })
@@ -321,7 +321,7 @@ await walletClient.writeContract({
   address: REPUTATION_REGISTRY,
   abi: reputationRegistryAbi,
   functionName: 'appendResponse',
-  args: [agentId, clientAddress, feedbackIndex, 'ipfs://QmResponse', '0x...']
+  args: [agentId, clientAddress, feedbackIndex, 'ipfs://bafyResponse', '0x...']
 })
 ```
 
@@ -342,7 +342,7 @@ await walletClient.writeContract({
   args: [
     validatorContractAddress, // address — the validator
     agentId,                  // uint256
-    'ipfs://QmRequestData',   // string — requestURI (inputs + outputs for verification)
+    'ipfs://bafyRequestData',   // string — requestURI (inputs + outputs for verification)
     requestHash               // bytes32 — keccak256 of request payload
   ]
 })
@@ -359,7 +359,7 @@ await walletClient.writeContract({
   args: [
     requestHash,      // bytes32
     100,              // uint8 — response (0=failed, 100=passed)
-    'ipfs://QmAudit', // string — responseURI (optional)
+    'ipfs://bafyAudit', // string — responseURI (optional)
     '0x...',          // bytes32 — responseHash (optional)
     'final'           // string — tag (optional, e.g., "soft-finality", "final")
   ]

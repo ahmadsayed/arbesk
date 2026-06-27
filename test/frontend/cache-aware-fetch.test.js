@@ -34,7 +34,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
   it("returns cached bytes without calling fetchers when hash is cached", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0xab);
     const hash = "aabbccdd";
-    const cid = "QmCached";
+    const cid = "bafyCached";
     const { fetchCIDAsBase64, cacheGet, cachePut } = await load({
       cacheHits: new Map([[hash, { hash, cid, compressed: false, bytes: raw, bytesCount: raw.length }]]),
     });
@@ -55,7 +55,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
   it("fetches raw bytes and caches them on miss", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0xcd);
     const hash = "ccddeeff";
-    const cid = "QmMiss";
+    const cid = "bafyMiss";
     const { fetchCIDAsBase64, cacheGet, cachePut } = await load();
 
     const fetchRaw = jest.fn(async () => raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
@@ -74,7 +74,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
     for (let i = 0; i < BIG_BYTES; i++) original[i] = Math.floor(Math.random() * 256);
     const raw = gzip(original, { level: 1 });
     const hash = "11223344";
-    const cid = "QmCompressed";
+    const cid = "bafyCompressed";
     const { fetchCIDAsBase64, cachePut } = await load({
       cacheHits: new Map([[hash, { hash, cid, compressed: true, bytes: raw, bytesCount: raw.length }]]),
     });
@@ -88,7 +88,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
 
   it("bypasses the cache for small payloads", async () => {
     const raw = new Uint8Array(1024).fill(0xef);
-    const cid = "QmSmall";
+    const cid = "bafySmall";
     const { fetchCIDAsBase64, cacheGet, cachePut } = await load();
 
     const fetchRaw = jest.fn();
@@ -104,7 +104,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
 
   it("uses the decompressed path when metadata is missing", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0x12);
-    const cid = "QmNoMeta";
+    const cid = "bafyNoMeta";
     const { fetchCIDAsBase64, cacheGet, cachePut } = await load();
 
     const fetchRaw = jest.fn();

@@ -41,32 +41,32 @@ describe("Token Resolver - normalizeTokenURI", () => {
   });
 
   it("returns plain CID unchanged", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(cid)).toBe(cid);
   });
 
   it("strips ipfs:// prefix", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`ipfs://${cid}`)).toBe(cid);
   });
 
   it("strips ipfs:// prefix with path", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`ipfs://${cid}/manifest.json`)).toBe(cid);
   });
 
   it("strips HTTP gateway prefix", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`http://127.0.0.1:8080/ipfs/${cid}`)).toBe(cid);
   });
 
   it("strips HTTPS gateway prefix", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`https://ipfs.io/ipfs/${cid}`)).toBe(cid);
   });
 
   it("handles trailing whitespace", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`  ${cid}  `)).toBe(cid);
   });
 
@@ -76,7 +76,7 @@ describe("Token Resolver - normalizeTokenURI", () => {
   });
 
   it("handles ipfs:// with trailing slash", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`ipfs://${cid}/`)).toBe(cid);
   });
 
@@ -87,7 +87,7 @@ describe("Token Resolver - normalizeTokenURI", () => {
   });
 
   it("handles bare CID with query params", () => {
-    const cid = "QmRg2doWY7aM8sMhuoVr2mktoWWgGFGPKdXhrkvCMJWyNN";
+    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
     expect(normalizeTokenURI(`${cid}?filename=test.glb`)).toBe(cid);
   });
 });

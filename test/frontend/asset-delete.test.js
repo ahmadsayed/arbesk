@@ -8,9 +8,9 @@ const TOKEN_ID = "42";
 const TARGET_TOKEN_ID = "43";
 const VERSION = 1;
 const EDITOR_PROOF = ["0xProof"];
-const ASSET_CID = "QmAssetManifest";
-const COLLECTION_CID = "QmCollection";
-const NEW_COLLECTION_CID = "QmNewCollection";
+const ASSET_CID = "bafyAssetManifest";
+const COLLECTION_CID = "bafyCollection";
+const NEW_COLLECTION_CID = "bafyNewCollection";
 
 let _walletAddress = OWNER;
 let _activeAssetTokenId = null;
@@ -56,7 +56,7 @@ function _mockContract() {
       tokenURI: (tokenId) => ({
         call: jest.fn().mockResolvedValue(
           String(tokenId) === String(TARGET_TOKEN_ID)
-            ? "QmTargetCollection"
+            ? "bafyTargetCollection"
             : COLLECTION_CID
         ),
       }),
@@ -129,7 +129,7 @@ async function loadModule() {
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       getFromRemoteIPFS: jest.fn().mockImplementation((cid) => {
-        if (cid === "QmTargetCollection") return Promise.resolve(_targetCollectionManifest);
+        if (cid === "bafyTargetCollection") return Promise.resolve(_targetCollectionManifest);
         return Promise.resolve(_collectionManifest);
       }),
     })

@@ -12,7 +12,7 @@ import {
 describe("API schemas", () => {
   describe("cidSchema", () => {
     it("accepts a non-empty alphanumeric CID", () => {
-      expect(cidSchema.safeParse("QmTest123").success).toBe(true);
+      expect(cidSchema.safeParse("bafyTest123").success).toBe(true);
     });
 
     it("rejects an empty string", () => {
@@ -20,7 +20,7 @@ describe("API schemas", () => {
     });
 
     it("rejects whitespace", () => {
-      expect(cidSchema.safeParse("Qm Test").success).toBe(false);
+      expect(cidSchema.safeParse("bafy Test").success).toBe(false);
     });
   });
 
@@ -132,7 +132,7 @@ describe("API schemas", () => {
     });
 
     it("accepts a valid CID", () => {
-      expect(unpinSchema.safeParse({ cid: "QmTest" }).success).toBe(true);
+      expect(unpinSchema.safeParse({ cid: "bafyTest" }).success).toBe(true);
     });
   });
 

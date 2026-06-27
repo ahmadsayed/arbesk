@@ -76,7 +76,7 @@ async function uploadToKubo(blob, filename, credential) {
   const apiUrl = credential.apiUrl || "http://127.0.0.1:5001";
   const form = new FormData();
   form.append("file", blob, filename);
-  const res = await fetch(`${apiUrl}/api/v0/add`, {
+  const res = await fetch(`${apiUrl}/api/v0/add?cid-version=1`, {
     method: "POST",
     body: form,
   });

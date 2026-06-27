@@ -17,7 +17,7 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
      * @param {string} [filename]
      */
     async add(payload, filename) {
-      const options = filename ? { filename } : {};
+      const options = { cidVersion: 1, ...(filename ? { filename } : {}) };
       const { cid } = await ipfs.add(payload, options);
       const cidStr = cid.toString();
       try {
@@ -44,6 +44,8 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
       // result is the directory root.
       for await (const result of ipfs.addAll(source, {
         wrapWithDirectory: true,
+        // @ts-ignore ipfs-http-client types omit cidVersion, but Kubo supports it
+        cidVersion: 1,
       })) {
         if (result.path === "" || result.cid) {
           rootCid = result.cid.toString();

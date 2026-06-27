@@ -83,7 +83,7 @@ import { createPinataAdapter } from "../../src/api/storage/pinata-adapter.js";
 describe("kubo adapter", () => {
   function fakeIpfs() {
     return {
-      add: jest.fn(async () => ({ cid: { toString: () => "QmFakeCid" } })),
+      add: jest.fn(async () => ({ cid: { toString: () => "bafyFakeCid" } })),
       pin: {
         add: jest.fn(async () => {}),
         rm: jest.fn(async () => {}),
@@ -101,8 +101,8 @@ describe("kubo adapter", () => {
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
     const cid = await a.add("payload");
-    expect(cid).toBe("QmFakeCid");
-    expect(ipfs.pin.add).toHaveBeenCalledWith("QmFakeCid");
+    expect(cid).toBe("bafyFakeCid");
+    expect(ipfs.pin.add).toHaveBeenCalledWith("bafyFakeCid");
   });
 
   it("cat() concatenates the async-iterable chunks into a string", async () => {
@@ -110,7 +110,7 @@ describe("kubo adapter", () => {
       apiUrl: "http://127.0.0.1:5001",
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
-    expect(await a.cat("QmX")).toBe('{"hello":"world"}');
+    expect(await a.cat("bafyX")).toBe('{"hello":"world"}');
   });
 
   it("unpin() treats 'not pinned' as success", async () => {
@@ -122,7 +122,7 @@ describe("kubo adapter", () => {
       apiUrl: "http://127.0.0.1:5001",
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
-    expect(await a.unpin("QmX")).toBe(true);
+    expect(await a.unpin("bafyX")).toBe(true);
   });
 
   it("mintUploadCredential() returns the kubo shape", async () => {
@@ -597,7 +597,7 @@ Add to `test/api.test.js` inside (or after) the unpin coverage:
       const manifest = {
         version: 1,
         prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "n", source: { cid: "QmSource" } }] },
+        scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
       };
       // Store the manifest so cat() can read it back in kubo test mode.
       const addRes = await request(app)
@@ -923,12 +923,12 @@ describe("writeToIPFS — kubo mode", () => {
   it("POSTs multipart to the kubo /api/v0/add endpoint and returns the hash", async () => {
     const { mod, fetchMock } = await loadModule(
       { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
-      { ok: true, json: async () => ({ Hash: "QmKubo", Size: "5" }) },
+      { ok: true, json: async () => ({ Hash: "bafyKubo", Size: "5" }) },
     );
     // second fetch (pin) also resolves ok
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "QmKubo", Size: "5" }) });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "bafyKubo", Size: "5" }) });
     const cid = await mod.writeToIPFS("hello", "asset.bin");
-    expect(cid).toBe("QmKubo");
+    expect(cid).toBe("bafyKubo");
     expect(fetchMock.mock.calls[0][0]).toMatch(/127\.0\.0\.1:5001\/api\/v0\/add/);
   });
 });

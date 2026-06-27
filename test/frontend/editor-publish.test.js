@@ -74,8 +74,8 @@ async function loadModule() {
   await jest.unstable_mockModule(
     "../../frontend/src/js/ipfs/write-to-ipfs.js",
     () => ({
-      writeToIPFS: jest.fn().mockResolvedValue("QmSource"),
-      writeJSONToIPFS: jest.fn().mockResolvedValue("QmJson"),
+      writeToIPFS: jest.fn().mockResolvedValue("bafySource"),
+      writeJSONToIPFS: jest.fn().mockResolvedValue("bafyJson"),
     })
   );
 
@@ -124,7 +124,7 @@ function _mockContract() {
         call: jest.fn().mockResolvedValue(_editorRootResult),
       }),
       editorListURI: (_tokenId) => ({
-        call: jest.fn().mockResolvedValue("QmEditorList"),
+        call: jest.fn().mockResolvedValue("bafyEditorList"),
       }),
     },
   };
@@ -170,7 +170,7 @@ describe("republishCollection", () => {
     _editorList = [{ address: OWNER, role: 2 }];
     _ownerOfResult = OWNER;
     const { republishCollection } = await loadModule();
-    const tx = await republishCollection(TOKEN_ID, "QmCollection", OWNER);
+    const tx = await republishCollection(TOKEN_ID, "bafyCollection", OWNER);
     expect(tx).toBe("0xTx");
   });
 
@@ -178,7 +178,7 @@ describe("republishCollection", () => {
     _editorList = [];
     _ownerOfResult = OWNER;
     const { republishCollection } = await loadModule();
-    const tx = await republishCollection(TOKEN_ID, "QmCollection", OWNER);
+    const tx = await republishCollection(TOKEN_ID, "bafyCollection", OWNER);
     expect(tx).toBe("0xTx");
   });
 
@@ -188,7 +188,7 @@ describe("republishCollection", () => {
     _editorRootResult = "0xDifferentRoot";
     const { republishCollection } = await loadModule();
     await expect(
-      republishCollection(TOKEN_ID, "QmCollection", OWNER)
+      republishCollection(TOKEN_ID, "bafyCollection", OWNER)
     ).rejects.toThrow("Token owner is not in the current editor list");
   });
 });
@@ -197,7 +197,7 @@ describe("publishNewToken", () => {
   test("mints a new token with owner as the sole editor", async () => {
     _ownerOfResult = OWNER;
     const { publishNewToken } = await loadModule();
-    const tx = await publishNewToken("QmCollection", TOKEN_ID, OWNER);
+    const tx = await publishNewToken("bafyCollection", TOKEN_ID, OWNER);
     expect(tx).toBe("0xTx");
   });
 });

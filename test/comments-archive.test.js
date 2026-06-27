@@ -75,7 +75,7 @@ describe("Comments Archive Service", () => {
 
     mockStorage = {
       add: jest.fn(async (payload) => {
-        const hash = "Qm" + Buffer.from(payload).toString("hex").slice(0, 15);
+        const hash = "bafy" + Buffer.from(payload).toString("hex").slice(0, 15);
         return hash;
       }),
     };
@@ -115,7 +115,7 @@ describe("Comments Archive Service", () => {
 
     const result = await archiveCommentsForAsset(assetTag, mockStorage);
 
-    expect(result.cid).toMatch(/^Qm/);
+    expect(result.cid).toMatch(/^bafy/);
     expect(result.eventCount).toBe(1);
     expect(mockStorage.add).toHaveBeenCalledTimes(1);
 

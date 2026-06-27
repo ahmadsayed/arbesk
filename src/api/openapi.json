@@ -671,7 +671,7 @@
             "type": "string",
             "description": "IPFS CID of the JSON archive of Nostr comments for this asset (set on republish)",
             "nullable": true,
-            "example": "QmCommentsArchiveCid..."
+            "example": "bafyCommentsArchiveCid..."
           },
           "thumbnail": {
             "$ref": "#/components/schemas/Thumbnail"
