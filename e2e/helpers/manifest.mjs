@@ -4,6 +4,13 @@ import Web3 from "web3";
 
 const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
 
+/**
+ * Regex matching a `?manifest=` or `&manifest=` value. Supports both CIDv0
+ * (Qm…) and CIDv1 (bafy… / bafkrei…) CIDs returned by Kubo/Pinata backends.
+ */
+export const MANIFEST_URL_REGEX =
+  /[?&]manifest=(Qm[1-9A-HJ-NP-Za-km-z]+|baf[a-z0-9]+)/;
+
 /** Minimal ERC-721 ABI for tokenURI resolution. */
 const TOKEN_URI_ABI = [
   {

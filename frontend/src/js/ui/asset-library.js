@@ -374,6 +374,15 @@ function buildLinkedAssetPayload(entry) {
   return payload;
 }
 
+function normalizeTokenId(id) {
+  if (id == null) return "";
+  try {
+    return BigInt(id).toString();
+  } catch {
+    return String(id);
+  }
+}
+
 function getActiveCollectionTokenId() {
   return assetState.get().activeCollectionTokenId || null;
 }
@@ -382,13 +391,13 @@ async function renderAssetLibrary(owned, shared) {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
 
-  const activeTokenId = getActiveCollectionTokenId();
-  _lastRenderedCollectionTokenId = activeTokenId;
+  const activeTokenId = normalizeTokenId(getActiveCollectionTokenId());
+  _lastRenderedCollectionTokenId = activeTokenId || null;
   const ownedIds = activeTokenId
-    ? owned.filter((id) => String(id) === String(activeTokenId))
+    ? owned.filter((id) => normalizeTokenId(id) === activeTokenId)
     : owned;
   const sharedIds = activeTokenId
-    ? shared.filter((id) => String(id) === String(activeTokenId))
+    ? shared.filter((id) => normalizeTokenId(id) === activeTokenId)
     : shared;
 
   const [ownedNested, sharedNested] = await Promise.all([
@@ -674,11 +683,12 @@ async function refreshAssetLibrary() {
 function highlightActiveAsset() {
   if (!assetLibraryBody) return;
   const { activeAssetTokenId, activeAssetId } = assetState.get();
-  const tokenIdMatch = activeAssetTokenId ? String(activeAssetTokenId) : null;
+  const tokenIdMatch = normalizeTokenId(activeAssetTokenId);
   const assetIdMatch = activeAssetId ? String(activeAssetId) : null;
 
   assetLibraryBody.querySelectorAll(".asset-card").forEach((el) => {
-    const matchesToken = tokenIdMatch && el.dataset.tokenId === tokenIdMatch;
+    const matchesToken =
+      tokenIdMatch && normalizeTokenId(el.dataset.tokenId) === tokenIdMatch;
     const matchesAsset = assetIdMatch
       ? el.dataset.assetId === assetIdMatch
       : true;

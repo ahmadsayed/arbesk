@@ -2,6 +2,7 @@ import { test, expect } from "../fixtures/coverage.mjs";
 import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
+  MANIFEST_URL_REGEX,
   fetchManifest,
   fetchTokenManifest,
   assertGenerationManifest,
@@ -35,7 +36,7 @@ test.describe("save and publish", () => {
       "Model carved via mock",
     );
 
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    await page.waitForURL(MANIFEST_URL_REGEX);
     const genCid = manifestCidFromUrl(page.url());
     expect(genCid).toBeTruthy();
 

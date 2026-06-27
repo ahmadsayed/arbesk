@@ -2,6 +2,7 @@ import { test, expect } from "../fixtures/coverage.mjs";
 import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
+  MANIFEST_URL_REGEX,
   fetchManifest,
   fetchTokenManifest,
   assertCollectionManifest,
@@ -35,7 +36,7 @@ test.describe.serial("Collection/asset model", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    await page.waitForURL(MANIFEST_URL_REGEX);
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
@@ -73,7 +74,7 @@ test.describe.serial("Collection/asset model", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    await page.waitForURL(MANIFEST_URL_REGEX);
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
@@ -140,7 +141,7 @@ test.describe.serial("Collection/asset model", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    await page.waitForURL(MANIFEST_URL_REGEX);
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
@@ -190,7 +191,7 @@ test.describe.serial("Collection/asset model", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    await page.waitForURL(MANIFEST_URL_REGEX);
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
@@ -251,7 +252,7 @@ test.describe.serial("Collection/asset model", () => {
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
-    await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+    await page.waitForURL(MANIFEST_URL_REGEX);
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();

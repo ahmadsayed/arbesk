@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { HARDHAT_ACCOUNTS } from "../fixtures/multi-wallet.mjs";
 import { SELECTORS } from "./studio-selectors.mjs";
-import { manifestCidFromUrl } from "./manifest.mjs";
+import { MANIFEST_URL_REGEX, manifestCidFromUrl } from "./manifest.mjs";
 
 /**
  * @typedef {import('@playwright/test').Page} Page
@@ -76,7 +76,7 @@ export async function generate(page, prompt = DEFAULT_PROMPT) {
   await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
     "Model carved via mock",
   );
-  await page.waitForURL(/[?&]manifest=Qm[\w]+/);
+  await page.waitForURL(MANIFEST_URL_REGEX);
   return manifestCidFromUrl(page.url()) || "";
 }
 
