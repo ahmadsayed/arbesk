@@ -6,6 +6,8 @@
  * implementation.
  */
 
+import { jest } from "@jest/globals";
+
 // Force the cache module to see no global IndexedDB so it falls back to
 // the in-memory store. We set this before importing the module under test.
 globalThis.indexedDB = undefined;
@@ -14,6 +16,9 @@ globalThis.IDBKeyRange = undefined;
 const {
   ContentCache,
   BIG_CONTENT_THRESHOLD_BYTES,
+  getPayload,
+  putPayload,
+  clearCache,
 } = await import("../../frontend/src/js/utils/content-cache.js");
 
 function bytes(text) {
@@ -138,5 +143,263 @@ describe("ContentCache (in-memory backend)", () => {
     it("exposes the big-content threshold", () => {
       expect(BIG_CONTENT_THRESHOLD_BYTES).toBeGreaterThan(0);
     });
+  });
+});
+
+describe("ContentCache (fake IndexedDB backend)", () => {
+  let storeMap;
+  let fakeDb;
+  let OriginalIDBRequest;
+
+  beforeEach(() => {
+    OriginalIDBRequest = globalThis.IDBRequest;
+    globalThis.IDBRequest = class IDBRequest {};
+    storeMap = new Map();
+    const requests = [];
+
+    function makeRequest(result) {
+      const req = new IDBRequest();
+      req.result = result;
+      req.error = null;
+      req.onsuccess = null;
+      req.onerror = null;
+      requests.push(req);
+      return req;
+    }
+
+    function fireRequests() {
+      // Fire any queued requests on the next microtask so _withStore has
+      // time to attach onsuccess/onerror handlers.
+      Promise.resolve().then(() => {
+        for (const req of requests.splice(0)) {
+          if (req.onsuccess) req.onsuccess();
+        }
+      });
+    }
+
+    const fakeStore = {
+      get: jest.fn((hash) => {
+        const req = makeRequest(storeMap.get(hash));
+        fireRequests();
+        return req;
+      }),
+      put: jest.fn((record) => {
+        storeMap.set(record.hash, record);
+        const req = makeRequest();
+        fireRequests();
+        return req;
+      }),
+      delete: jest.fn((hash) => {
+        storeMap.delete(hash);
+        const req = makeRequest();
+        fireRequests();
+        return req;
+      }),
+      clear: jest.fn(() => {
+        storeMap.clear();
+        const req = makeRequest();
+        fireRequests();
+        return req;
+      }),
+    };
+
+    fakeDb = {
+      transaction: jest.fn(() => ({
+        objectStore: jest.fn(() => fakeStore),
+        oncomplete: null,
+        onerror: null,
+      })),
+    };
+  });
+
+  afterEach(() => {
+    globalThis.IDBRequest = OriginalIDBRequest;
+  });
+
+  function makeCache(options = {}) {
+    return new ContentCache({
+      memory: new Map(),
+      db: Promise.resolve(fakeDb),
+      ...options,
+    });
+  }
+
+  it("persists a payload to the fake IndexedDB", async () => {
+    const cache = makeCache();
+    const payload = bytes("db-bound");
+    await cache.putPayload("hash1", "QmDb", false, payload);
+
+    expect(storeMap.has("hash1")).toBe(true);
+    expect(storeMap.get("hash1").cid).toBe("QmDb");
+    expectUint8ArrayEqual(storeMap.get("hash1").bytes, payload);
+  });
+
+  it("promotes a DB record into memory when it is not in the memory cache", async () => {
+    const record = {
+      hash: "hash2",
+      cid: "QmFromDb",
+      compressed: false,
+      bytes: bytes("from-db"),
+      bytesCount: 7,
+      storedAt: Date.now(),
+    };
+    storeMap.set("hash2", record);
+
+    const cache = makeCache();
+    const result = await cache.getPayload("hash2");
+
+    expect(result.cid).toBe("QmFromDb");
+    expectUint8ArrayEqual(result.bytes, record.bytes);
+    expect(cache._currentBytes).toBe(7);
+  });
+
+  it("evicts from the fake DB when the byte cap is exceeded", async () => {
+    const cache = makeCache({ maxBytes: 15 });
+    await cache.putPayload("old", "QmOld", false, bytes("0123456789"));
+    await cache.putPayload("new", "QmNew", false, bytes("abcdefghij"));
+
+    // old should have been evicted from both memory and DB.
+    expect(await cache.getPayload("old")).toBeNull();
+    expect(storeMap.has("old")).toBe(false);
+    expect(await cache.getPayload("new")).not.toBeNull();
+  });
+
+  it("clearCache removes payloads from memory and the fake DB", async () => {
+    const cache = makeCache();
+    await cache.putPayload("x", "QmX", false, bytes("x"));
+    await cache.clearCache();
+
+    expect(await cache.getPayload("x")).toBeNull();
+    expect(storeMap.has("x")).toBe(false);
+  });
+
+  it("logs a warning when the DB write fails", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    function makeFailingRequest() {
+      const req = new IDBRequest();
+      req.result = undefined;
+      req.error = new Error("disk full");
+      req.onsuccess = null;
+      req.onerror = null;
+      Promise.resolve().then(() => {
+        if (req.onerror) req.onerror();
+      });
+      return req;
+    }
+
+    const failingStore = {
+      get: jest.fn(() => makeFailingRequest()),
+      put: jest.fn(() => makeFailingRequest()),
+      delete: jest.fn(() => makeFailingRequest()),
+      clear: jest.fn(() => makeFailingRequest()),
+    };
+    const failingDb = {
+      transaction: jest.fn(() => ({
+        objectStore: jest.fn(() => failingStore),
+        oncomplete: null,
+        onerror: null,
+      })),
+    };
+    const cache = new ContentCache({
+      memory: new Map(),
+      db: Promise.resolve(failingDb),
+    });
+
+    await cache.putPayload("fail", "QmFail", false, bytes("x"));
+    // Wait for the async DB write to settle.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("IndexedDB write failed"),
+      expect.any(String),
+    );
+    warnSpy.mockRestore();
+  });
+});
+
+describe("ContentCache._openDb", () => {
+  afterEach(() => {
+    globalThis.indexedDB = undefined;
+  });
+
+  it("returns null when indexedDB is not available", async () => {
+    jest.resetModules();
+    globalThis.indexedDB = undefined;
+    const mod = await import("../../frontend/src/js/utils/content-cache.js");
+    const cache = new mod.ContentCache({ memory: new Map() });
+    expect(await cache._dbPromise).toBeNull();
+  });
+
+  it("opens the database and handles onupgradeneeded", async () => {
+    const store = { keyPath: "hash" };
+    const db = {
+      objectStoreNames: { contains: jest.fn(() => false) },
+      createObjectStore: jest.fn(() => store),
+    };
+    const request = {
+      result: db,
+      error: null,
+      onsuccess: null,
+      onerror: null,
+      onupgradeneeded: null,
+    };
+
+    globalThis.indexedDB = {
+      open: jest.fn(() => request),
+    };
+
+    jest.resetModules();
+    const mod = await import("../../frontend/src/js/utils/content-cache.js");
+    const cache = new mod.ContentCache({ memory: new Map() });
+
+    // Defer firing so _openDb can attach handlers.
+    Promise.resolve().then(() => {
+      if (request.onupgradeneeded) {
+        request.onupgradeneeded({ target: { result: db } });
+      }
+      if (request.onsuccess) request.onsuccess();
+    });
+
+    const opened = await cache._dbPromise;
+    expect(opened).toBe(db);
+    expect(db.createObjectStore).toHaveBeenCalledWith("payloads", { keyPath: "hash" });
+  });
+
+  it("returns null when IndexedDB open fails", async () => {
+    const request = {
+      result: null,
+      error: new Error("denied"),
+      onsuccess: null,
+      onerror: null,
+    };
+
+    globalThis.indexedDB = {
+      open: jest.fn(() => request),
+    };
+
+    jest.resetModules();
+    const mod = await import("../../frontend/src/js/utils/content-cache.js");
+    const cache = new mod.ContentCache({ memory: new Map() });
+
+    Promise.resolve().then(() => {
+      if (request.onerror) request.onerror();
+    });
+
+    expect(await cache._dbPromise).toBeNull();
+  });
+});
+
+describe("module-level default cache helpers", () => {
+  it("getPayload/putPayload/clearCache use the shared default cache", async () => {
+    const payload = bytes("shared");
+    await putPayload("sharedHash", "QmShared", false, payload);
+
+    const result = await getPayload("sharedHash");
+    expect(result.cid).toBe("QmShared");
+    expectUint8ArrayEqual(result.bytes, payload);
+
+    await clearCache();
+    expect(await getPayload("sharedHash")).toBeNull();
   });
 });
