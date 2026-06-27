@@ -666,6 +666,51 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.unpinned).not.toContain(cowboy1Cid);
     });
 
+    it("unpins a collection manifest but skips its asset CIDs", async () => {
+      const assetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { a1: assetCid },
+      });
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: collectionCid });
+
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(collectionCid);
+      expect(res.body.unpinned).not.toContain(assetCid);
+      expect(res.body.skipped).toContain(assetCid);
+    });
+
+    it("unpins thumbnail and comments archive as assetUnique", async () => {
+      const cid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        thumbnail: { cid: "QmThumb" },
+        comments_archive_cid: "QmComments",
+        scene: { nodes: [] },
+      });
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid });
+
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(cid);
+      expect(res.body.unpinned).toContain("QmThumb");
+      expect(res.body.unpinned).toContain("QmComments");
+    });
+
     it("rate-limits unpin requests per wallet", async () => {
       process.env.UNPIN_RATE_LIMIT_MAX = "1";
       _resetRateLimiters();
@@ -834,6 +879,74 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(liveRes.status).toBe(200);
       expect(liveRes.body.liveTokens).toBe(0);
       expect(liveRes.body.unpinned).toBeGreaterThanOrEqual(2);
+    });
+
+    it("respects maxUnpin in live GC runs", async () => {
+      const assetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { a1: assetCid },
+      });
+
+      ipfsStorage.set("QmOrphan1", "orphan 1");
+      ipfsStorage.set("QmOrphan2", "orphan 2");
+      ipfsStorage.set("QmOrphan3", "orphan 3");
+
+      globalThis.__registerGCToken("1", collectionCid);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: false, maxUnpin: 2 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.dryRun).toBe(false);
+      expect(res.body.orphans).toBeGreaterThanOrEqual(3);
+      expect(res.body.unpinned).toBe(2);
+    });
+
+    it("keeps editorListURI CID reachable even when not in manifest chain", async () => {
+      const assetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { a1: assetCid },
+      });
+
+      // The editor list CID is not referenced by the manifest chain.
+      ipfsStorage.set("QmEditors", '{"editors":["0xEditor"]}');
+
+      globalThis.__registerGCToken(
+        "1",
+        collectionCid,
+        "0xOwner",
+        "ipfs://QmEditors",
+      );
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: false });
+
+      expect(res.status).toBe(200);
+      // QmEditors is protected by the on-chain editorListURI, so it must not
+      // have been unpinned (mock storage still contains it).
+      expect(ipfsStorage.has("QmEditors")).toBe(true);
     });
 
     it("rate-limits GC requests per wallet", async () => {

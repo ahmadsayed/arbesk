@@ -155,7 +155,8 @@ describe("Manifest comments archive integration", () => {
   });
 
   test("archives comments and returns CID when relay has events", async () => {
-    const assetTag = "31337:0xarbeskcontractaddress:42:asset_42";
+    const contractAddress = "0x1234567890123456789012345678901234567890";
+    const assetTag = `31337:${contractAddress.toLowerCase()}:42:asset_42`;
     relayMessages = [
       [
         "EVENT",
@@ -180,7 +181,7 @@ describe("Manifest comments archive integration", () => {
       .send({
         tokenId: "42",
         chainId: 31337,
-        contractAddress: "0xArbeskContractAddress",
+        contractAddress,
         assetId: "asset_42",
       });
 
@@ -222,7 +223,8 @@ describe("Manifest comments archive integration", () => {
       .send({ chainId: 31337, assetId: "asset_x" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("MISSING_TOKEN_ID");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(JSON.stringify(res.body.error.details.issues)).toMatch(/tokenId/i);
   });
 
   test("returns 400 when assetId is missing", async () => {
@@ -232,7 +234,8 @@ describe("Manifest comments archive integration", () => {
       .send({ tokenId: "99", chainId: 31337 });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("MISSING_ASSET_ID");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(JSON.stringify(res.body.error.details.issues)).toMatch(/assetId/i);
   });
 
   test("returns 500 when relay query fails", async () => {
