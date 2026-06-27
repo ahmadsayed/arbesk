@@ -165,6 +165,45 @@ describe("applyNodeColors", () => {
       0, 0, 1, 1,
     ]);
   });
+
+  it("returns no matches when the gltf has no nodes or meshes", () => {
+    const gltf = { materials: [] };
+    const stats = mod.applyNodeColors(gltf, { Body: "#ff0000" });
+    expect(stats).toEqual({ modified: 0, skipped: 1 });
+  });
+
+  it("skips nodes whose mesh is missing or has no primitives", () => {
+    const gltf = {
+      nodes: [
+        { name: "Body", mesh: 0 },
+        { name: "EmptyMesh", mesh: 1 },
+      ],
+      meshes: [{ name: "missing-primitives" }],
+      materials: [],
+    };
+    const stats = mod.applyNodeColors(gltf, {
+      Body: "#ff0000",
+      EmptyMesh: "#00ff00",
+    });
+    expect(stats).toEqual({ modified: 0, skipped: 2 });
+  });
+
+  it("handles a shared material index that does not exist in the materials array", () => {
+    const gltf = {
+      nodes: [
+        { name: "Body", mesh: 0 },
+        { name: "Other", mesh: 1 },
+      ],
+      meshes: [
+        { primitives: [{ material: 5 }] },
+        { primitives: [{ material: 5 }] },
+      ],
+      materials: [],
+    };
+    const stats = mod.applyNodeColors(gltf, { Body: "#ff0000" });
+    expect(stats).toEqual({ modified: 1, skipped: 0 });
+    expect(gltf.materials).toHaveLength(0);
+  });
 });
 
 describe("editSourceColors", () => {
@@ -261,5 +300,12 @@ describe("editSourceColors", () => {
         filename: "MyAsset_colored.gltf",
       }),
     );
+  });
+
+  it("omits the filename override when neither assetName nor assetId is given", async () => {
+    await ctx.mod.editSourceColors("bafyOld", { Body: "#ff0000" });
+
+    const call = ctx.write.writeJSONToIPFS.mock.calls[0];
+    expect(call[2].filename).toBeUndefined();
   });
 });
