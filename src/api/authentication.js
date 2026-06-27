@@ -10,6 +10,11 @@
 
 import { validateSession } from "./sessions.js";
 
+/**
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
+ * @param {import('express').NextFunction} next
+ */
 export default async function authorize(request, response, next) {
   try {
     const authHeader = request.headers["authorization"];
@@ -53,11 +58,12 @@ export default async function authorize(request, response, next) {
     console.log(`[AUTH] session valid - address=${address}`);
     return next();
   } catch (error) {
-    console.error("[AUTH] error:", error.message);
+    const err = /** @type {Error} */ (error);
+    console.error("[AUTH] error:", err.message);
     return response.status(403).json({
       error: {
         code: "AUTH_FAILED",
-        message: "Authentication failed: " + error.message,
+        message: "Authentication failed: " + err.message,
       },
     });
   }

@@ -48,8 +48,16 @@ export const SELECTORS = {
   collaboratorAddInput: "#collaboratorAddInput",
   collaboratorAddBtn: "#collaboratorAddBtn",
   collaboratorRoleSelect: "#collaboratorRoleSelect",
+  /**
+   * @param {string} address
+   * @returns {string}
+   */
   teamItemByAddress: (address) =>
     `#collaboratorList .team-item[data-address="${address.toLowerCase()}"]`,
+  /**
+   * @param {string} text
+   * @returns {string}
+   */
   contextMenuItemByText: (text) => `.context-menu-item:text-is("${text}")`,
   // Comments section in right inspector
   commentsSection: "#commentsSection",

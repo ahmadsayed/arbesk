@@ -8,9 +8,13 @@
 const VIEWS = ["settings", "chat", "outline", "library", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
 
+/** @type {HTMLElement|null} */
 let sidebar = null;
+/** @type {HTMLElement[]} */
 let switcherBtns = [];
+/** @type {Record<string, HTMLElement|null>} */
 let viewPanes = {};
+/** @type {string|null} */
 let activeView = null;
 let collapsed = false;
 
@@ -19,12 +23,15 @@ let collapsed = false;
 function initSidebar() {
   sidebar = document.querySelector(".sidebar");
   if (!sidebar) return;
+  const sidebarEl = sidebar;
 
   // Cache DOM
-  switcherBtns = Array.from(sidebar.querySelectorAll(".sidebar-switcher-btn"));
+  switcherBtns = Array.from(
+    sidebarEl.querySelectorAll(".sidebar-switcher-btn")
+  ).map((el) => /** @type {HTMLElement} */ (el));
   viewPanes = {};
   VIEWS.forEach((v) => {
-    viewPanes[v] = sidebar.querySelector(`.sidebar-view[data-view="${v}"]`);
+    viewPanes[v] = sidebarEl.querySelector(`.sidebar-view[data-view="${v}"]`);
   });
 
   // Restore last view or default to "chat"
@@ -56,9 +63,14 @@ function initSidebar() {
   }
 
   function isEditing() {
-    const tag = document.activeElement?.tagName?.toLowerCase();
-    return document.activeElement?.isContentEditable ||
-      tag === "input" || tag === "textarea" || tag === "select";
+    const activeEl = /** @type {HTMLElement|null} */ (document.activeElement);
+    const tag = activeEl?.tagName?.toLowerCase();
+    return (
+      activeEl?.isContentEditable ||
+      tag === "input" ||
+      tag === "textarea" ||
+      tag === "select"
+    );
   }
 
   // Keyboard: Ctrl+B to toggle
@@ -83,6 +95,9 @@ function initSidebar() {
 
 // ─── View Switching ──────────────────────────────────────────────────
 
+/**
+ * @param {string} viewName
+ */
 function switchView(viewName) {
   if (!viewPanes[viewName]) return;
 
@@ -152,7 +167,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Only auto-collapse on narrow screens
     if (window.innerWidth <= 900 && !collapsed) {
       // Don't collapse if clicking on a sidebar element
-      if (sidebar && sidebar.contains(e.target)) return;
+      const target = /** @type {Node|null} */ (e.target);
+      if (sidebar && target && sidebar.contains(target)) return;
       collapseSidebar();
     }
   });

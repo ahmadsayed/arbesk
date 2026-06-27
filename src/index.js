@@ -4,6 +4,8 @@ import http from "http";
 import url from "url";
 import * as dotenv from "dotenv";
 import bodyParser from "body-parser";
+import morgan from "morgan";
+import helmet from "helmet";
 
 const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -21,59 +23,88 @@ export const server = http.createServer(app);
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 /* ─── Verbose request logger ─── */
-function logRequest(req, res, next) {
-  const start = Date.now();
-  const client =
-    req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
-  res.on("finish", () => {
-    const ms = Date.now() - start;
-    const tag =
-      res.statusCode >= 400
-        ? "[ERR]"
-        : res.statusCode >= 300
-          ? "[RDR]"
-          : "[OK]";
-    console.log(
-      `${tag} ${req.method} ${req.originalUrl || req.url} → ${res.statusCode} (${ms}ms) | client=${client}`,
-    );
-  });
-  next();
-}
-app.use(logRequest);
+app.use(
+  morgan(
+    /** @type {(tokens: import('morgan').TokenIndexer<import('http').IncomingMessage, import('http').ServerResponse>, req: import('http').IncomingMessage, res: import('http').ServerResponse) => string} */
+    (
+      tokens,
+      req,
+      res,
+    ) => {
+      const status = Number.parseInt(tokens.status(req, res) || "0", 10);
+      const tag =
+        status >= 400 ? "[ERR]" : status >= 300 ? "[RDR]" : "[OK]";
+      const client =
+        req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+      const ms = tokens["response-time"](req, res) || "0";
+      return `${tag} ${tokens.method(req, res)} ${tokens.url(req, res)} → ${status} (${ms}ms) | client=${client}`;
+    },
+    {
+      stream: {
+        /** @param {string} message */
+        write: (message) => {
+          console.log(message.trim());
+        },
+      },
+    },
+  ),
+);
 
 /* ─── Content-Security-Policy (report-only) ───
  * Delivered via HTTP header because <meta> does not support
  * the "Report-Only" suffix. Monitor violations in browser
  * console before promoting to enforcing mode.
  */
-function cspMiddleware(req, res, next) {
-  const pinataGateway = process.env.PINATA_GATEWAY;
-  const pinataConnect = pinataGateway ? ` https://${pinataGateway}` : "";
-  res.setHeader(
-    "Content-Security-Policy-Report-Only",
-    "default-src 'self'; " +
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.babylonjs.com https://cdn.jsdelivr.net https://esm.sh; " +
-      "style-src 'self' 'unsafe-inline'; " +
-      "connect-src 'self' http://127.0.0.1:5001 http://127.0.0.1:8545 http://127.0.0.1:9090 ws://localhost:9090 wss://localhost:9090 https://*.llamarpc.com https://*.publicnode.com" +
-      pinataConnect +
-      "; " +
-      "img-src 'self' blob: data: http://127.0.0.1:8080" +
-      pinataConnect +
-      "; " +
-      "font-src 'self'; " +
-      "media-src 'self'; " +
-      "worker-src 'self' blob:; " +
-      "frame-src 'none'; " +
-      "object-src 'none'; " +
-      "base-uri 'self'; " +
-      "form-action 'self';",
-  );
-  next();
+const pinataGateway = process.env.PINATA_GATEWAY;
+const connectSrc = [
+  "'self'",
+  "http://127.0.0.1:5001",
+  "http://127.0.0.1:8545",
+  "http://127.0.0.1:9090",
+  "ws://localhost:9090",
+  "wss://localhost:9090",
+  "https://*.llamarpc.com",
+  "https://*.publicnode.com",
+];
+const imgSrc = ["'self'", "blob:", "data:", "http://127.0.0.1:8080"];
+if (pinataGateway) {
+  connectSrc.push(`https://${pinataGateway}`);
+  imgSrc.push(`https://${pinataGateway}`);
 }
-app.use(cspMiddleware);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-eval'",
+          "'unsafe-inline'",
+          "https://cdn.babylonjs.com",
+          "https://cdn.jsdelivr.net",
+          "https://esm.sh",
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc,
+        imgSrc,
+        fontSrc: ["'self'"],
+        mediaSrc: ["'self'"],
+        workerSrc: ["'self'", "blob:"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+      reportOnly: true,
+    },
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 
 app.use(
   express.static(__dirname + "/../frontend/dist", {
+    /** @param {import('express').Response} res @param {string} filePath */
     setHeaders: (res, filePath) => {
       // Workers and their pool must never be cached: a stale worker script
       // that predates a method registration (e.g. "ping") causes the pool to

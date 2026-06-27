@@ -143,6 +143,11 @@ function _updateOrthoFrustumOnResize() {
   cam.orthoTop = newHalfH;
 }
 
+/**
+ * @param {string} name
+ * @param {BABYLON.Scene} scene
+ * @returns {BABYLON.TransformNode | BABYLON.Mesh}
+ */
 function createAnchorNode(name, scene) {
   if (
     typeof BABYLON !== "undefined" &&
@@ -248,7 +253,7 @@ function initEngine() {
     grid.material = mat;
     console.log("[SCENE] ground grid created");
   } catch (e) {
-    console.warn("[SCENE] grid failed:", e.message);
+    console.warn("[SCENE] grid failed:", (/** @type {Error} */ (e)).message);
   }
 
   // Blender-style in-scene axes (cross on the ground plane).
@@ -293,7 +298,7 @@ function initEngine() {
 
     console.log("[SCENE] in-scene axes created");
   } catch (e) {
-    console.warn("[SCENE] axes failed:", e.message);
+    console.warn("[SCENE] axes failed:", (/** @type {Error} */ (e)).message);
   }
 
   // Blender-style 2D orientation gizmo (top-right corner overlay).
@@ -343,6 +348,7 @@ function initEngine() {
 
   // Click-to-select
   // Store the callback so it can be removed later
+  /** @param {BABYLON.PointerInfo} pointerInfo */
   state.pointerObservableCallback = (pointerInfo) => {
     const pickResult = pointerInfo.pickInfo;
     if (pickResult.hit && pickResult.pickedMesh) {
@@ -413,9 +419,10 @@ function initEngine() {
   // Keyboard shortcuts — only fire when focus is on the canvas or body
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-    const tag = document.activeElement?.tagName?.toLowerCase();
+    const activeEl = /** @type {HTMLElement|null} */ (document.activeElement);
+    const tag = activeEl?.tagName?.toLowerCase();
     const editable =
-      document.activeElement?.isContentEditable ||
+      activeEl?.isContentEditable ||
       tag === "input" ||
       tag === "textarea" ||
       tag === "select";
@@ -458,10 +465,18 @@ function initEngine() {
 // Node accessors
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * @param {string} nodeId
+ * @returns {BABYLON.TransformNode | null}
+ */
 function getNodeAnchor(nodeId) {
   return state.nodeAnchors.get(nodeId) || null;
 }
 
+/**
+ * @param {string} nodeId
+ * @returns {BABYLON.AbstractMesh[]}
+ */
 function getNodeMeshes(nodeId) {
   return state.nodeMeshes.get(nodeId) || [];
 }
@@ -469,6 +484,9 @@ function getNodeMeshes(nodeId) {
 /**
  * Return distinct sub-mesh names for a node. Only useful when a GLTF
  * import produced multiple named meshes (e.g. "flowercenter", "Sphere").
+ *
+ * @param {string} nodeId
+ * @returns {Array<{name: string, mesh: BABYLON.AbstractMesh}>}
  */
 function getNodeSubMeshes(nodeId) {
   const meshes = state.nodeMeshes.get(nodeId);
@@ -484,6 +502,10 @@ function getNodeSubMeshes(nodeId) {
   return result;
 }
 
+/**
+ * @param {string} nodeId
+ * @returns {any | null}
+ */
 function getNodeChildRef(nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   if (anchor) {
@@ -540,21 +562,37 @@ function dismissCreatePulse() {
 // Thumbnail capture
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * @param {HTMLCanvasElement} canvas
+ * @param {string} type
+ * @param {number} quality
+ * @returns {Promise<Blob|null>}
+ */
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
+/**
+ * @param {Blob} blob
+ * @returns {Promise<string>}
+ */
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
+    reader.onloadend = () => resolve(/** @type {string} */ (reader.result));
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 }
 
+/**
+ * @param {{width?: number, height?: number, quality?: number, format?: string}} [options]
+ * @returns {Promise<object|null>}
+ */
 async function captureAssetThumbnail(options = {}) {
-  const canvas = document.getElementById("renderCanvas");
+  const canvas = /** @type {HTMLCanvasElement|null} */ (
+    document.getElementById("renderCanvas")
+  );
   if (!canvas) return null;
 
   try {
@@ -615,7 +653,7 @@ async function captureAssetThumbnail(options = {}) {
       timestamp: Date.now(),
     };
   } catch (err) {
-    console.warn("[THUMB] capture failed:", err.message);
+    console.warn("[THUMB] capture failed:", (/** @type {Error} */ (err)).message);
     return null;
   }
 }
@@ -624,6 +662,11 @@ async function captureAssetThumbnail(options = {}) {
 // Mock registration
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * @param {string} nodeId
+ * @param {BABYLON.AbstractMesh} mesh
+ * @param {any[]} [_history]
+ */
 function registerMockNode(nodeId, mesh, _history = []) {
   const anchor = createAnchorNode(`anchor_${nodeId}`, state.scene);
   mesh.parent = anchor;
@@ -636,7 +679,7 @@ function registerMockNode(nodeId, mesh, _history = []) {
   state._nonChromeMeshCache = null;
 }
 
-on(EVENTS.OUTLINER_REMOVE_REQUESTED, (payload) => {
+on(EVENTS.OUTLINER_REMOVE_REQUESTED, (/** @type {{nodeId?: string}} */ payload) => {
   // TODO(#18): implement node removal from manifest
   console.warn(
     "[SCENE] outliner:removeRequested not yet implemented for nodeId:",
@@ -646,7 +689,7 @@ on(EVENTS.OUTLINER_REMOVE_REQUESTED, (payload) => {
 
 // Forward outliner clicks to the scene selection system so that
 // state.highlightedNodeId is updated and the transform gizmo attaches.
-on(EVENTS.OUTLINER_NODE_SELECTED, (e) => {
+on(EVENTS.OUTLINER_NODE_SELECTED, (/** @type {{nodeId?: string}} */ e) => {
   const nodeId = e?.nodeId;
   if (nodeId) selectNodeById(nodeId);
 });
@@ -683,7 +726,7 @@ export {
       contract.methods
         .tokenURI(assetTokenId)
         .call()
-        .then((cid) => {
+        .then((/** @type {string|null} */ cid) => {
           if (cid) {
             assetState.set({
               activeAssetTokenId: String(assetTokenId),
@@ -744,10 +787,10 @@ export {
       const metaEl = document.getElementById("assetStatusMeta");
       if (metaEl) metaEl.textContent = "Draft Scene";
       emit(EVENTS.SCENE_EMPTY);
-      import("/js/ui/sidebar.js").then(function (m) {
+      import("../ui/sidebar.js").then(function (m) {
         m.switchView("chat");
       });
-      var promptInput = document.getElementById("promptInput");
+      const promptInput = document.getElementById("promptInput");
       if (promptInput)
         setTimeout(function () {
           promptInput.focus();

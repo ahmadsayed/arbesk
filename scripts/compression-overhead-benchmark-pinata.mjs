@@ -44,10 +44,19 @@ const { parseGLB } = await import(
 
 const ASSET_DIR = path.join(ROOT, "mock-gltf-assets");
 
+/**
+ * @param {number[]} arr
+ * @returns {number}
+ */
 function avg(arr) {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
+/**
+ * @param {string} name
+ * @param {() => Promise<void>} fn
+ * @param {number} [runs]
+ */
 async function bench(name, fn, runs = 3) {
   const times = [];
   for (let i = 0; i < runs; i++) {
@@ -60,10 +69,18 @@ async function bench(name, fn, runs = 3) {
   );
 }
 
+/**
+ * @param {string | Uint8Array} bytes
+ * @returns {Promise<string>}
+ */
 async function pinataAdd(bytes) {
   return storage.add(bytes);
 }
 
+/**
+ * @param {string} cid
+ * @returns {Promise<Uint8Array>}
+ */
 async function pinataFetch(cid) {
   const url = `https://${PINATA_GATEWAY}/ipfs/${cid}`;
   const res = await fetch(url, { cache: "no-store" });
@@ -71,6 +88,10 @@ async function pinataFetch(cid) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/**
+ * @param {string} name
+ * @returns {Promise<{composite: Record<string, any>, bufferBytes: Uint8Array}>}
+ */
 async function loadAsset(name) {
   const filePath = path.join(ASSET_DIR, name);
   if (name.endsWith(".gltf")) {
@@ -94,6 +115,10 @@ async function loadAsset(name) {
   throw new Error(`Unsupported asset: ${name}`);
 }
 
+/**
+ * @param {string} assetName
+ * @returns {Promise<string[]>}
+ */
 async function benchmarkAsset(assetName) {
   console.log(`\n#############################################`);
   console.log(`# Asset: ${assetName}`);
@@ -176,7 +201,8 @@ async function main() {
       await storage.unpin(cid);
       console.log(`deleted ${cid}`);
     } catch (e) {
-      console.warn(`failed to delete ${cid}: ${e.message}`);
+      const err = /** @type {Error} */ (e);
+      console.warn(`failed to delete ${cid}: ${err.message}`);
     }
   }
 }

@@ -35,7 +35,7 @@ export const state = {
   pendingPostProcessorEdits: new Map(),
   /** @type {BABYLON.StandardMaterial|null} */
   defaultWoodMaterial: null,
-  /** @type {Function|null} */
+  /** @type {EventListenerOrEventListenerObject|null} */
   resizeEngineHandler: null,
   /** @type {ResizeObserver|null} */
   resizeObserverInstance: null,

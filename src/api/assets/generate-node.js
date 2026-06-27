@@ -1,10 +1,13 @@
 import express from "express";
 import { mockGenerate } from "../adapters/mock-adapter.js";
 import authenticate from "../authentication.js";
-import rateLimit from "../rate-limiter.js";
+import { generationRateLimit } from "../rate-limiter.js";
 
 const Router = express.Router;
 
+/**
+ * @param {import('../storage/index.js').StorageAdapter} [_storage]
+ */
 export default function generateAssetNode(_storage) {
   const router = Router();
 
@@ -21,13 +24,7 @@ export default function generateAssetNode(_storage) {
   router.post(
     "/",
     authenticate,
-    rateLimit({
-      max: Number(
-        process.env.GENERATION_RATE_LIMIT_MAX ||
-          (process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10),
-      ),
-      windowMs: 60 * 60 * 1000,
-    }),
+    generationRateLimit,
     async (req, res) => {
       try {
         const { prompt, nodeId, provider, providerKey } = req.body;
@@ -75,6 +72,7 @@ export default function generateAssetNode(_storage) {
           );
         }
 
+        /** @type {{ data?: string; buffer?: Buffer; format?: string; provider?: string; path?: string }} */
         let result;
         if (useMockAdapter) {
           console.log(`[GEN] using MOCK adapter for "${prompt}"`);
@@ -99,6 +97,10 @@ export default function generateAssetNode(_storage) {
         const assetFormat = result.format || "gltf";
         const assetPath = result.path || `asset.${assetFormat}`;
 
+        if (assetPayload === undefined) {
+          throw new Error("Generation adapter returned no payload");
+        }
+
         // Always base64-encode so the client gets a consistent wire format
         // regardless of whether the adapter returned a Buffer (.glb) or a
         // UTF-8 string (.gltf).
@@ -120,11 +122,12 @@ export default function generateAssetNode(_storage) {
           provider: result.provider || effectiveProvider,
         });
       } catch (error) {
-        console.error("[GEN] error:", error.message);
+        const err = /** @type {Error} */ (error);
+        console.error("[GEN] error:", err.message);
         res.status(500).json({
           error: {
             code: "GENERATION_FAILED",
-            message: error.message,
+            message: err.message,
           },
         });
       }

@@ -1,12 +1,11 @@
 /**
  * Merkle Editor Tree - Node backend version
  *
- * Builds and verifies Merkle proofs compatible with ArbeskAssetBase._requireEditor.
- *
- * Uses web3 v4 utils.soliditySha3 (the same hash semantics as the browser
- * merkle-editors.js module which uses window.Web3.utils.soliditySha3).
+ * Builds and verifies Merkle proofs compatible with ArbeskAssetBase._requireEditor
+ * using OpenZeppelin's reference Merkle-tree implementation.
  */
 
+import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import { soliditySha3 } from "web3-utils";
 
 /**
@@ -19,31 +18,73 @@ import { soliditySha3 } from "web3-utils";
  * @returns {string} bytes32 hex string
  */
 export function makeLeaf(address, role, tokenId, setVersion) {
-  return soliditySha3(
-    { type: "address", value: address },
-    { type: "uint8", value: role },
-    { type: "uint256", value: tokenId.toString() },
-    { type: "uint256", value: setVersion.toString() },
+  return /** @type {string} */ (
+    soliditySha3(
+      { type: "address", value: address },
+      { type: "uint8", value: role },
+      { type: "uint256", value: tokenId.toString() },
+      { type: "uint256", value: setVersion.toString() },
+    )
   );
 }
 
 /**
- * OZ-compatible pair hash: keccak256(abi.encodePacked(a, b)) with a ≤ b.
+ * Build a SimpleMerkleTree from a list of editor leaves.
+ *
+ * @param {string[]} leaves - Array of bytes32 hex leaf hashes
+ * @returns {SimpleMerkleTree|null}
  */
-function hashPair(a, b) {
-  const [lo, hi] = cmpBytes32(a, b) <= 0 ? [a, b] : [b, a];
-  return soliditySha3(
-    { type: "bytes32", value: lo },
-    { type: "bytes32", value: hi },
-  );
+function buildTree(leaves) {
+  if (!leaves || leaves.length === 0) return null;
+  return SimpleMerkleTree.of(leaves);
 }
 
-function cmpBytes32(a, b) {
-  const bigA = BigInt(a);
-  const bigB = BigInt(b);
-  if (bigA < bigB) return -1;
-  if (bigA > bigB) return 1;
-  return 0;
+/**
+ * Compute the Merkle root for an editor list.
+ *
+ * @param {Array<{address: string, role: number}>} editorList
+ * @param {string|number|BigInt} tokenId
+ * @param {string|number|BigInt} setVersion
+ * @returns {string} bytes32 hex root, or zero bytes for an empty list
+ */
+export function computeRoot(editorList, tokenId, setVersion) {
+  if (!editorList || editorList.length === 0) {
+    return "0x0000000000000000000000000000000000000000000000000000000000000000";
+  }
+  const leaves = editorList.map((e) =>
+    makeLeaf(e.address, e.role, tokenId, setVersion),
+  );
+  const tree = /** @type {import("@openzeppelin/merkle-tree").SimpleMerkleTree} */ (
+    buildTree(leaves)
+  );
+  return tree.root;
+}
+
+/**
+ * Build a Merkle proof for a target editor.
+ *
+ * @param {Array<{address: string, role: number}>} editorList
+ * @param {string} targetAddress
+ * @param {string|number|BigInt} tokenId
+ * @param {string|number|BigInt} setVersion
+ * @returns {{proof: string[], role: number}|null}
+ */
+export function getProof(editorList, targetAddress, tokenId, setVersion) {
+  if (!editorList || editorList.length === 0) return null;
+  const entry = editorList.find(
+    (e) => e.address.toLowerCase() === targetAddress.toLowerCase(),
+  );
+  if (!entry) return null;
+
+  const leaves = editorList.map((e) =>
+    makeLeaf(e.address, e.role, tokenId, setVersion),
+  );
+  const tree = /** @type {import("@openzeppelin/merkle-tree").SimpleMerkleTree} */ (
+    buildTree(leaves)
+  );
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
+  const proof = tree.getProof(leaf);
+  return { proof, role: entry.role };
 }
 
 /**
@@ -55,9 +96,8 @@ function cmpBytes32(a, b) {
  * @returns {boolean}
  */
 export function verifyProof(root, leaf, proof) {
-  let computed = leaf;
-  for (const sibling of proof) {
-    computed = hashPair(computed, sibling);
+  if (!root || root === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+    return false;
   }
-  return computed.toLowerCase() === root.toLowerCase();
+  return SimpleMerkleTree.verify(root, leaf, proof);
 }

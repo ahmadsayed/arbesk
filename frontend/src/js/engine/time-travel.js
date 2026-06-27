@@ -52,6 +52,10 @@ function ensureUniqueMaterial(mesh) {
 
 /**
  * Apply a color to meshes.
+ *
+ * @param {BABYLON.AbstractMesh[]} meshes
+ * @param {string|null} [colorHex]
+ * @param {Record<string, {color: string}>|null} [meshOverrides]
  */
 function applyColor(meshes, colorHex, meshOverrides = null) {
   if (!colorHex && !meshOverrides) return;

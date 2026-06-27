@@ -31,6 +31,9 @@ export function clearPendingPostProcessorEdits() {
   state.pendingPostProcessorEdits.clear();
 }
 
+/**
+ * @param {string} nodeId
+ */
 export function clearPendingPostProcessorEdit(nodeId) {
   state.pendingPostProcessorEdits.delete(nodeId);
 }
@@ -43,12 +46,16 @@ export function clearPendingTransformEdits() {
   state.pendingTransformEdits.clear();
 }
 
+/**
+ * @param {string} nodeId
+ */
 export function clearPendingTransformEdit(nodeId) {
   state.pendingTransformEdits.delete(nodeId);
 }
 
 /**
  * Dispose all meshes and anchors for a single node.
+ * @param {string} nodeId
  */
 export function disposeNode(nodeId) {
   const meshes = state.nodeMeshes.get(nodeId);

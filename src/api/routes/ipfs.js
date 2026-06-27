@@ -1,24 +1,32 @@
 import express from "express";
 import { sendError } from "../errors.js";
 import authenticate from "../authentication.js";
-import rateLimit from "../rate-limiter.js";
+import {
+  uploadUrlRateLimit,
+  unpinRateLimit,
+  gcRateLimit,
+} from "../rate-limiter.js";
 import { getStorage } from "../storage/index.js";
-import { maybeDecompress, extractIpfsCids } from "../ipfs-utils.js";
-import { getSceneNodes } from "../manifest-utils.js";
+import { walkManifestChain } from "../manifest-chain-walker.js";
+import { runIpfsGC } from "../ipfs-gc.js";
 
 const Router = express.Router;
 
-async function collectEmbeddedIpfsCids(cid, cids, errors) {
-  if (!cid || cids.has(`__json_failed_${cid}`)) return;
-  try {
-    const raw = await getStorage().catBytes(cid);
-    const decompressed = await maybeDecompress(raw);
-    const json = JSON.parse(decompressed);
-    extractIpfsCids(json, cids);
-  } catch (e) {
-    // Not a JSON object (e.g., raw buffer/image) - nothing to recurse into.
-    errors.push(`read refs from ${cid}: ${e.message}`);
+/**
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
+function requireAdminToken(req, res, next) {
+  const adminToken = process.env.GC_ADMIN_TOKEN;
+  if (!adminToken) {
+    return sendError(res, 503, "GC_DISABLED", "GC admin token not configured");
   }
+  const provided = req.headers["x-admin-token"];
+  if (!provided || provided !== adminToken) {
+    return sendError(res, 403, "FORBIDDEN", "Invalid or missing admin token");
+  }
+  next();
 }
 
 export default function ipfsRoutes() {
@@ -33,10 +41,7 @@ export default function ipfsRoutes() {
   router.post(
     "/upload-url",
     authenticate,
-    rateLimit({
-      max: Number(process.env.UPLOAD_URL_RATE_LIMIT_MAX || 20),
-      windowMs: 60 * 1000,
-    }),
+    uploadUrlRateLimit,
     async (req, res) => {
       try {
         const credential = await getStorage().mintUploadCredential();
@@ -45,8 +50,8 @@ export default function ipfsRoutes() {
         );
         res.json(credential);
       } catch (error) {
-        console.error("[IPFS] upload-url error:", error.message);
-        sendError(res, 500, "UPLOAD_URL_FAILED", error.message);
+        console.error("[IPFS] upload-url error:", (/** @type {Error} */ (error)).message);
+        sendError(res, 500, "UPLOAD_URL_FAILED", (/** @type {Error} */ (error)).message);
       }
     },
   );
@@ -54,18 +59,24 @@ export default function ipfsRoutes() {
   /**
    * POST /api/v1/ipfs/unpin
    *
-   * Unpin all IPFS CIDs owned by a manifest chain. Called after token burn
-   * or asset removal from a collection.
-   * Walks prev_asset_manifest_cid backward, collecting manifest CIDs,
-   * source asset CIDs (and the buffers/images referenced inside them),
-   * thumbnail CIDs, and comments archive CIDs, then unpins them all so
-   * they become eligible for garbage collection.
+   * Unpin the asset-unique CIDs owned by a manifest chain. Called after token
+   * burn or asset removal from a collection.
+   *
+   * Because source glTFs, bundle directories, and their embedded buffers/images
+   * can be shared across multiple assets via deduplication, this endpoint does
+   * NOT unpin them. It only unpins:
+   *   - the manifest chain CIDs themselves
+   *   - asset manifest thumbnails
+   *   - asset manifest comments archives
+   *
+   * Shared CIDs are reported in `skipped` and reclaimed later by the
+   * reachability garbage collector (`POST /api/v1/ipfs/gc`).
    *
    * Body: { cid: "baf..." }
    *
    * Auth: Session token required.
    */
-  router.post("/unpin", authenticate, async (req, res) => {
+  router.post("/unpin", authenticate, unpinRateLimit, async (req, res) => {
     const startTime = Date.now();
     try {
       const { cid: startCid } = req.body || {};
@@ -76,114 +87,86 @@ export default function ipfsRoutes() {
 
       console.log(`[UNPIN] starting from ${startCid}`);
 
-      const toUnpin = new Set();
-      const visited = new Set();
-      const errors = [];
-      let currentCid = startCid;
-      const MAX_DEPTH = 100;
-
-      // Walk the manifest chain and collect all owned CIDs
-      while (currentCid && visited.size < MAX_DEPTH) {
-        if (visited.has(currentCid)) {
-          console.log(`[UNPIN] circular link at ${currentCid}, stopping`);
-          break;
-        }
-        visited.add(currentCid);
-
-        let manifest;
-        try {
-          const raw = await getStorage().catBytes(currentCid);
-          const decompressed = await maybeDecompress(raw);
-          manifest = JSON.parse(decompressed);
-        } catch (e) {
-          console.warn(`[UNPIN] cannot read ${currentCid}: ${e.message}`);
-          errors.push(`read ${currentCid}: ${e.message}`);
-          break;
-        }
-
-        // Collect this manifest CID
-        toUnpin.add(currentCid);
-
-        // Collect thumbnail CID
-        const thumbnailCid = manifest?.thumbnail?.cid;
-        if (thumbnailCid && typeof thumbnailCid === "string") {
-          toUnpin.add(thumbnailCid);
-        }
-
-        // Collect comments archive CID
-        const commentsArchiveCid = manifest?.comments_archive_cid;
-        if (commentsArchiveCid && typeof commentsArchiveCid === "string") {
-          toUnpin.add(commentsArchiveCid);
-        }
-
-        // Collect source asset CIDs from nodes (current sources + history)
-        const nodes = getSceneNodes(manifest);
-        for (const node of nodes) {
-          // Current source CID + organizational bundle directory root
-          if (node?.source?.cid && typeof node.source.cid === "string") {
-            toUnpin.add(node.source.cid);
-            await collectEmbeddedIpfsCids(node.source.cid, toUnpin, errors);
-          }
-          if (
-            node?.source?.bundleCid &&
-            typeof node.source.bundleCid === "string"
-          ) {
-            toUnpin.add(node.source.bundleCid);
-          }
-          // History entries - each has its own source CID + bundle root
-          if (Array.isArray(node?.history)) {
-            for (const entry of node.history) {
-              if (entry?.src?.cid && typeof entry.src.cid === "string") {
-                toUnpin.add(entry.src.cid);
-                await collectEmbeddedIpfsCids(entry.src.cid, toUnpin, errors);
-              }
-              if (
-                entry?.src?.bundleCid &&
-                typeof entry.src.bundleCid === "string"
-              ) {
-                toUnpin.add(entry.src.bundleCid);
-              }
-            }
-          }
-        }
-
-        // Follow the chain backward
-        currentCid = manifest.prev_asset_manifest_cid || null;
-      }
-
-      console.log(
-        `[UNPIN] collected ${toUnpin.size} CIDs across ${visited.size} manifest(s)`,
+      const { assetUnique, shared, errors } = await walkManifestChain(
+        startCid,
+        {
+          recurseIntoSources: false,
+          recurseIntoCollectionAssets: false,
+        },
       );
 
-      // Unpin each collected CID
+      console.log(
+        `[UNPIN] collected ${assetUnique.size} asset-unique + ${shared.size} shared CIDs`,
+      );
+
+      // Unpin each asset-unique CID
       const unpinned = [];
-      for (const cid of toUnpin) {
+      for (const cid of assetUnique) {
         try {
           // The adapter treats "already unpinned" as success.
           await getStorage().unpin(cid);
           unpinned.push(cid);
           console.log(`[UNPIN] unpinned → ${cid}`);
         } catch (e) {
-          console.warn(`[UNPIN] failed to unpin ${cid}: ${e.message}`);
-          errors.push(`unpin ${cid}: ${e.message}`);
+          console.warn(`[UNPIN] failed to unpin ${cid}: ${(/** @type {Error} */ (e)).message}`);
+          errors.push(`unpin ${cid}: ${(/** @type {Error} */ (e)).message}`);
         }
+      }
+
+      for (const cid of shared) {
+        console.log(`[UNPIN] skipped shared CID → ${cid}`);
       }
 
       const elapsed = Date.now() - startTime;
       console.log(
-        `[UNPIN] done - ${unpinned.length} unpinned, ${errors.length} errors (${elapsed}ms)`,
+        `[UNPIN] done - ${unpinned.length} unpinned, ${shared.size} skipped, ${errors.length} errors (${elapsed}ms)`,
       );
 
       res.json({
         unpinned,
+        skipped: Array.from(shared),
         count: unpinned.length,
         errors: errors.length > 0 ? errors : undefined,
       });
     } catch (error) {
-      console.error("[UNPIN] error:", error.message);
-      sendError(res, 500, "UNPIN_FAILED", error.message);
+      console.error("[UNPIN] error:", (/** @type {Error} */ (error)).message);
+      sendError(res, 500, "UNPIN_FAILED", (/** @type {Error} */ (error)).message);
     }
   });
+
+  /**
+   * POST /api/v1/ipfs/gc
+   *
+   * Run the reachability garbage collector. Requires session auth plus an
+   * admin token in the `X-Admin-Token` header (configured via GC_ADMIN_TOKEN).
+   *
+   * Body (all optional):
+   *   {
+   *     "dryRun": true,           // default true
+   *     "maxUnpin": 1000,         // default Infinity
+   *     "chainId": 31337          // default from env
+   *   }
+   */
+  router.post(
+    "/gc",
+    authenticate,
+    requireAdminToken,
+    gcRateLimit,
+    async (req, res) => {
+      try {
+        const { dryRun, maxUnpin, chainId } = req.body || {};
+        const result = await runIpfsGC({
+          dryRun,
+          maxUnpin,
+          chainId,
+        });
+        res.json(result);
+      } catch (error) {
+        console.error("[GC] route error:", (/** @type {Error} */ (error)).message);
+        sendError(res, 500, "GC_FAILED", (/** @type {Error} */ (error)).message);
+      }
+    },
+  );
 
   return router;
 }

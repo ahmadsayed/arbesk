@@ -8,12 +8,21 @@ import fs from "node:fs";
 
 const DEPLOYMENTS_DIR = "blockchain/deployments/localhost";
 
+/**
+ * @param {string} file
+ * @param {string} field
+ * @returns {string | null}
+ */
 function readField(file, field) {
   const path = `${DEPLOYMENTS_DIR}/${file}`;
   if (!fs.existsSync(path)) return null;
   return JSON.parse(fs.readFileSync(path, "utf8"))[field] ?? null;
 }
 
+/**
+ * @param {string} path
+ * @param {Record<string, string>} values
+ */
 function upsertEnvKeys(path, values) {
   if (!fs.existsSync(path)) return;
   const keys = Object.keys(values);
@@ -27,6 +36,9 @@ function upsertEnvKeys(path, values) {
   fs.writeFileSync(path, `${lines.join("\n")}\n`);
 }
 
+/**
+ * @param {Record<string, string>} values
+ */
 function syncNetworkConfig(values) {
   const files = ["frontend/src/js/blockchain/network-config.js", "src/config.js"];
   const fields = {

@@ -1,10 +1,13 @@
 /**
  * SIWE (EIP-4361) Verification
  *
- * Verifies Sign-In with Ethereum messages without external dependencies.
- * Parses the standard SIWE format and validates all security constraints.
+ * Uses the official `siwe` package for robust message parsing and falls back
+ * to the project's configured Web3 provider for EIP-191 signature recovery.
+ * This preserves the existing domain/chain/issued-at/nonce validation behavior
+ * while removing the hand-rolled ABNF parser.
  */
 
+import { SiweMessage } from "siwe";
 import { web3 } from "../config.js";
 import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
 
@@ -34,52 +37,16 @@ export function parseSiweMessage(message) {
   if (!message || typeof message !== "string") return null;
 
   try {
-    const lines = message.split("\n");
-
-    // First line: "{domain} wants you to sign in with your Ethereum account:"
-    const domainMatch = lines[0]?.match(/^(.+?) wants you to sign in/);
-    const domain = domainMatch ? domainMatch[1] : null;
-
-    // Second line: address
-    const address = lines[1]?.trim() || null;
-
-    // Extract key-value pairs
-    let uri = null;
-    let version = null;
-    let chainId = null;
-    let nonce = null;
-    let issuedAt = null;
-    let statement = null;
-
-    for (const line of lines) {
-      if (line.startsWith("URI: ")) uri = line.slice(5);
-      if (line.startsWith("Version: ")) version = line.slice(9);
-      if (line.startsWith("Chain ID: ")) chainId = parseInt(line.slice(10), 10);
-      if (line.startsWith("Nonce: ")) nonce = line.slice(7);
-      if (line.startsWith("Issued At: ")) issuedAt = line.slice(11);
-    }
-
-    // Statement is the line between the first blank line and the URI line
-    const blankLineIdx = lines.indexOf("");
-    if (blankLineIdx >= 0) {
-      const afterBlank = lines.slice(blankLineIdx + 1);
-      const firstKvIdx = afterBlank.findIndex((l) => l.includes(":"));
-      if (firstKvIdx > 0) {
-        statement = afterBlank.slice(0, firstKvIdx).join("\n").trim();
-      } else if (afterBlank.length > 0 && !afterBlank[0].includes(":")) {
-        statement = afterBlank[0];
-      }
-    }
-
+    const parsed = new SiweMessage(message);
     return {
-      domain,
-      address,
-      statement,
-      uri,
-      version,
-      chainId,
-      nonce,
-      issuedAt,
+      domain: parsed.domain,
+      address: parsed.address,
+      statement: parsed.statement,
+      uri: parsed.uri,
+      version: parsed.version,
+      chainId: parsed.chainId,
+      nonce: parsed.nonce,
+      issuedAt: parsed.issuedAt,
     };
   } catch {
     return null;
@@ -95,10 +62,16 @@ export function parseSiweMessage(message) {
  * @param {string} [options.expectedDomain] - The expected domain (req.headers.host)
  * @returns {Promise<{valid: boolean, address: string|null, error: string|null}>}
  */
-export async function verifySiwe(message, signature, { expectedDomain } = {}) {
-  // 1. Parse message
-  const parsed = parseSiweMessage(message);
-  if (!parsed) {
+export async function verifySiwe(
+  message,
+  signature,
+  { expectedDomain } = {},
+) {
+  // 1. Parse message with the standard SIWE parser
+  let parsed;
+  try {
+    parsed = new SiweMessage(message);
+  } catch {
     return {
       valid: false,
       address: null,

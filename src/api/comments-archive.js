@@ -29,7 +29,7 @@ const RELAY_EVENT_LIMIT = 10000;
  * package them into a deterministic archive object, and return it.
  *
  * @param {string} assetTag - Canonical asset-level tag (chain:contract:tokenId:assetId)
- * @returns {Promise<object>} Archive object
+ * @returns {Promise<{ assetTag: string; generatedAt: number; eventCount: number; events: any[] }>} Archive object
  */
 export async function fetchCommentsArchive(assetTag) {
   const events = await queryRelayForAsset(assetTag);
@@ -80,6 +80,7 @@ async function queryRelayForAsset(assetTag) {
   try {
     await relay.connect();
     const events = await new Promise((resolve, reject) => {
+      /** @type {any[]} */
       const collected = [];
       let finished = false;
       const sub = relay.subscribe([filter], {
@@ -102,7 +103,8 @@ async function queryRelayForAsset(assetTag) {
     });
     return events;
   } catch (err) {
-    const message = err?.message || String(err);
+    const e = /** @type {Error} */ (err);
+    const message = e.message || String(err);
     console.warn(`[ARCHIVE] relay query failed for ${assetTag}:`, message);
     throw new Error(message);
   } finally {

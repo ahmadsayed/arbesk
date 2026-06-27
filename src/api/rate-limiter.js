@@ -1,49 +1,118 @@
-const rateMap = new Map(); // walletAddress → { count, resetTime }
+/**
+ * Arbesk Express Rate Limiters
+ *
+ * Replaces the custom in-memory map with express-rate-limit for proper
+ * fixed/sliding windows, standard RateLimit-* headers, and per-route stores
+ * that can be reset in tests.
+ *
+ * All authenticated routes key the limit by wallet address (res.locals.userAddress);
+ * unauthenticated routes fall back to req.ip.
+ */
 
-// Exposed for test teardown
-export function _resetRateLimiter() {
-  rateMap.clear();
+import rateLimit, { MemoryStore } from "express-rate-limit";
+
+const DEFAULT_WINDOW_MS = 60 * 1000;
+
+/**
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ */
+function walletKeyGenerator(req, res) {
+  return res.locals.userAddress || req.ip || "unknown";
 }
 
-export default function rateLimit({ max, windowMs }) {
-  return (req, res, next) => {
-    // Prefer the authenticated wallet (set by the authenticate middleware,
-    // which runs before this limiter). Fall back to IP for unauthenticated routes.
-    const wallet = res.locals.userAddress || req.ip;
+/**
+ * @param {{
+ *   max: number | ((req: import('express').Request, res: import('express').Response) => number);
+ *   windowMs?: number;
+ *   message?: string;
+ * }} options
+ */
+function createLimiter({ max, windowMs = DEFAULT_WINDOW_MS, message }) {
+  const store = new MemoryStore();
 
-    if (!wallet) return next();
-
-    const now = Date.now();
-    const entry = rateMap.get(wallet) || {
-      count: 0,
-      resetTime: now + windowMs,
-    };
-
-    if (now > entry.resetTime) {
-      entry.count = 0;
-      entry.resetTime = now + windowMs;
-    }
-
-    entry.count += 1;
-    rateMap.set(wallet, entry);
-
-    res.setHeader("X-RateLimit-Limit", max);
-    res.setHeader("X-RateLimit-Remaining", Math.max(0, max - entry.count));
-
-    if (entry.count > max) {
-      const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-      res.setHeader("Retry-After", retryAfter);
-      return res.status(429).json({
+  const middleware = rateLimit({
+    windowMs,
+    max: typeof max === "function" ? max : () => max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: walletKeyGenerator,
+    validate: { keyGeneratorIpFallback: false },
+    handler: (req, res, _next, options) => {
+      const retryAfterSeconds = Math.ceil(options.windowMs / 1000);
+      res.status(429).json({
         error: {
           code: "RATE_LIMITED",
-          message: `Limit: ${max} requests per ${windowMs / 1000}s`,
+          message:
+            message ||
+            `Limit: ${options.max} requests per ${options.windowMs / 1000}s`,
           details: {
-            retryAfterSeconds: retryAfter,
+            retryAfterSeconds,
           },
         },
       });
-    }
+    },
+    store,
+  });
 
-    next();
-  };
+  return { middleware, store };
+}
+
+/**
+ * Factory for creating a one-off rate-limit middleware (used by tests and any
+ * future route that needs a custom limit).
+ *
+ * @param {{
+ *   max: number | ((req: import('express').Request, res: import('express').Response) => number);
+ *   windowMs?: number;
+ *   message?: string;
+ * }} options
+ */
+export default function createRateLimitMiddleware({
+  max,
+  windowMs = DEFAULT_WINDOW_MS,
+  message,
+}) {
+  return createLimiter({ max, windowMs, message }).middleware;
+}
+
+const uploadUrlLimiter = createLimiter({
+  max: () => Number(process.env.UPLOAD_URL_RATE_LIMIT_MAX || 20),
+  message: "Upload credential rate limit exceeded.",
+});
+
+const generationLimiter = createLimiter({
+  max: () =>
+    Number(
+      process.env.GENERATION_RATE_LIMIT_MAX ||
+        (process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10),
+    ),
+  windowMs: 60 * 60 * 1000,
+  message: "Generation rate limit exceeded.",
+});
+
+const unpinLimiter = createLimiter({
+  max: () => Number(process.env.UNPIN_RATE_LIMIT_MAX || 30),
+  message: "Unpin rate limit exceeded.",
+});
+
+const gcLimiter = createLimiter({
+  max: () => Number(process.env.GC_RATE_LIMIT_MAX || 10),
+  windowMs: 60 * 60 * 1000, // 1 hour
+  message: "GC rate limit exceeded.",
+});
+
+export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
+export const generationRateLimit = generationLimiter.middleware;
+export const unpinRateLimit = unpinLimiter.middleware;
+export const gcRateLimit = gcLimiter.middleware;
+
+/**
+ * Reset all in-memory rate-limit stores. Used by test teardown.
+ */
+export function _resetRateLimiters() {
+  uploadUrlLimiter.store.resetAll();
+  generationLimiter.store.resetAll();
+  unpinLimiter.store.resetAll();
+  gcLimiter.store.resetAll();
 }

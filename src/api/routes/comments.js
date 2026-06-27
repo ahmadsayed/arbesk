@@ -20,6 +20,9 @@ const Router = express.Router;
  *
  * Auth: Session token required.
  */
+/**
+ * @param {{ getContractAddress: (chainId: number | null) => string | null }} options
+ */
 export default function commentsRoutes({ getContractAddress }) {
   const router = Router();
 
@@ -62,8 +65,9 @@ export default function commentsRoutes({ getContractAddress }) {
 
       res.json({ cid: archiveCid, eventCount });
     } catch (error) {
-      console.error("[ARCHIVE] snapshot error:", error.message);
-      sendError(res, 500, "ARCHIVE_FAILED", error.message);
+      const err = /** @type {Error} */ (error);
+      console.error("[ARCHIVE] snapshot error:", err.message);
+      sendError(res, 500, "ARCHIVE_FAILED", err.message);
     }
   });
 

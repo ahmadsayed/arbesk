@@ -20,31 +20,15 @@ import ipfsRoutes from "./routes/ipfs.js";
 import contractsRoutes from "./routes/contracts.js";
 import openapiRoutes from "./routes/openapi.js";
 import testUtilsRoutes from "./routes/test-utils.js";
-import { sendError } from "./errors.js";
 import { maybeDecompress } from "./ipfs-utils.js";
-
-// ─── Middleware & Helpers ────────────────────────────────────────────────────
-
-/**
- * Reject requests that are not application/json.
- */
-function requireJson(req, res, next) {
-  if (
-    ["POST", "PUT", "PATCH"].includes(req.method) &&
-    !req.is("application/json")
-  ) {
-    return sendError(res, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
-  }
-  next();
-}
 
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default () => {
   const v1 = Router();
 
-  // Apply JSON validation to all mutating routes
-  v1.use(requireJson);
+  // JSON body parsing and content-type enforcement are handled by the
+  // body-parser.json() middleware applied in src/index.js before /api is mounted.
 
   // ─── Config ───────────────────────────────────────────────────────────────
 
@@ -99,7 +83,7 @@ export default () => {
   // Expose for test helpers
   /** @type {any} */
   const apiAny = api;
-  apiAny._getFromIPFS = async (cid) => {
+  apiAny._getFromIPFS = async (/** @type {string} */ cid) => {
     const raw = await getStorage().catBytes(cid);
     return maybeDecompress(raw);
   };

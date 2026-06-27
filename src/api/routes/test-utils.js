@@ -1,5 +1,5 @@
 import express from "express";
-import { _resetRateLimiter } from "../rate-limiter.js";
+import { _resetRateLimiters } from "../rate-limiter.js";
 
 const Router = express.Router;
 
@@ -10,7 +10,7 @@ export default function testUtilsRoutes() {
   const router = Router();
 
   router.post("/reset-rate-limit", (req, res) => {
-    _resetRateLimiter();
+    _resetRateLimiters();
     console.log("[RATE-LIMIT] reset via test endpoint");
     res.json({ ok: true });
   });

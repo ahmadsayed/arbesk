@@ -11,8 +11,7 @@
     "resolveJsonModule": true,
     "lib": ["ES2022"],
     "types": ["node", "jest"],
-    "strict": false,
-    "noImplicitAny": false
+    "strict": true
   },
   "include": [
     "src/**/*",

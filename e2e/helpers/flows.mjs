@@ -4,12 +4,19 @@ import { HARDHAT_ACCOUNTS } from "../fixtures/multi-wallet.mjs";
 import { SELECTORS } from "./studio-selectors.mjs";
 import { manifestCidFromUrl } from "./manifest.mjs";
 
+/**
+ * @typedef {import('@playwright/test').Page} Page
+ * @typedef {import('@playwright/test').Locator} Locator
+ */
+
 const DEFAULT_PROMPT = "cowboy";
 
 /**
  * Open the studio with the Hardhat dev wallet injected and wait until it has
  * auto-connected + authenticated (the connect button hides; the wallet button
  * stops showing "Sign In").
+ *
+ * @param {Page} page
  */
 export async function connectStudio(page) {
   await injectHardhatProvider(page);
@@ -24,6 +31,9 @@ export async function connectStudio(page) {
  * Connect the Studio as a specific Hardhat dev account (index 0, 1, 2…).
  * Useful for multi-wallet E2E scenarios where each wallet needs its own
  * browser context to keep sessions and localStorage isolated.
+ *
+ * @param {Page} page
+ * @param {number} accountIndex
  */
 export async function connectStudioAs(page, accountIndex) {
   const account = HARDHAT_ACCOUNTS[accountIndex];
@@ -43,6 +53,10 @@ export async function connectStudioAs(page, accountIndex) {
   );
 }
 
+/**
+ * @param {string} address
+ * @returns {string}
+ */
 function truncateAddress(address) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -51,6 +65,10 @@ function truncateAddress(address) {
  * Generate a mock asset and return the resulting generation manifest CID. The
  * `?manifest=` URL is the durable completion signal - the screen-reader status
  * text is transient and gets overwritten.
+ *
+ * @param {Page} page
+ * @param {string} [prompt]
+ * @returns {Promise<string>}
  */
 export async function generate(page, prompt = DEFAULT_PROMPT) {
   await page.fill(SELECTORS.promptInput, prompt);
@@ -59,21 +77,25 @@ export async function generate(page, prompt = DEFAULT_PROMPT) {
     "Model carved via mock",
   );
   await page.waitForURL(/[?&]manifest=Qm[\w]+/);
-  return manifestCidFromUrl(page.url());
+  return manifestCidFromUrl(page.url()) || "";
 }
 
 /**
  * Save the current draft and return the new manifest CID. Save flips the
  * `?manifest=` CID to a fresh value; that change is the durable signal the save
  * landed (no rename dialog - a draft keeps its current name).
+ *
+ * @param {Page} page
+ * @param {string} prevCid
+ * @returns {Promise<string>}
  */
 export async function saveDraft(page, prevCid) {
   await page.click(SELECTORS.saveAssetBtn);
-  await page.waitForURL((url) => {
+  await page.waitForURL(/** @type {(url: URL) => boolean} */ ((url) => {
     const cid = manifestCidFromUrl(url.toString());
     return Boolean(cid) && cid !== prevCid;
-  });
-  return manifestCidFromUrl(page.url());
+  }));
+  return manifestCidFromUrl(page.url()) || "";
 }
 
 /**
@@ -81,6 +103,10 @@ export async function saveDraft(page, prevCid) {
  * anchor. Returns the token id in HEX (publish derives it as a hash of the CID;
  * the gallery lists the same token in DECIMAL - compare numerically, never as
  * strings).
+ *
+ * @param {Page} page
+ * @param {string} name
+ * @returns {Promise<string | null>}
  */
 export async function publishWithName(page, name) {
   await page.click(SELECTORS.publishAssetBtn);
@@ -91,7 +117,14 @@ export async function publishWithName(page, name) {
   return tokenIdHexFromUrl(page.url());
 }
 
-/** Run the proven generate → save → publish path and return the token id (hex). */
+/**
+ * Run the proven generate → save → publish path and return the token id (hex).
+ *
+ * @param {Page} page
+ * @param {string} name
+ * @param {string} [prompt]
+ * @returns {Promise<string | null>}
+ */
 export async function generateSaveAndPublish(
   page,
   name,
@@ -102,7 +135,12 @@ export async function generateSaveAndPublish(
   return publishWithName(page, name);
 }
 
-/** Extract the published token id (hex) the studio writes to `?asset=`. */
+/**
+ * Extract the published token id (hex) the studio writes to `?asset=`.
+ *
+ * @param {string} url
+ * @returns {string | null}
+ */
 export function tokenIdHexFromUrl(url) {
   return new URL(url).searchParams.get("asset");
 }
@@ -112,6 +150,11 @@ export function tokenIdHexFromUrl(url) {
  * name. A single collection token expands to one card per asset, so matching
  * only by `data-token-id` is ambiguous once the shared default collection
  * contains multiple assets.
+ *
+ * @param {Page} page
+ * @param {string} tokenIdDec
+ * @param {string} name
+ * @returns {Locator}
  */
 export function assetCardLocator(page, tokenIdDec, name) {
   return page.locator(
@@ -123,28 +166,42 @@ export function assetCardLocator(page, tokenIdDec, name) {
  * Select the first node in the Outliner - which auto-opens the parametric
  * component editor - and set its colour. A color input can't be `fill`ed, so
  * set the value and dispatch the input/change events the app listens for.
+ *
+ * @param {Page} page
+ * @param {string} color
  */
 export async function editFirstNodeColor(page, color) {
   await page.click(SELECTORS.outlinerSwitcherBtn);
   await page.locator(SELECTORS.outlinerNode).first().click();
   await expect(page.locator(SELECTORS.componentEditor)).toBeVisible();
-  await page.locator(SELECTORS.componentColorInput).evaluate((el, value) => {
-    el.value = value;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  }, color);
+  await page.locator(SELECTORS.componentColorInput).evaluate(
+    /** @type {(el: any, value: string) => void} */ ((el, value) => {
+      const input = /** @type {any} */ (el);
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }),
+    color,
+  );
 }
 
 /**
  * Move the version slider to an index. `input` updates the badge; `change`
  * commits the load of that version.
+ *
+ * @param {Page} page
+ * @param {number} index
  */
 export async function scrubHistorySlider(page, index) {
-  await page.locator(SELECTORS.historySlider).evaluate((el, value) => {
-    el.value = value;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  }, String(index));
+  await page.locator(SELECTORS.historySlider).evaluate(
+    /** @type {(el: any, value: string) => void} */ ((el, value) => {
+      const input = /** @type {any} */ (el);
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }),
+    String(index),
+  );
 }
 
 // ── Library helpers ──────────────────────────────────────────────────────────
@@ -152,6 +209,8 @@ export async function scrubHistorySlider(page, index) {
 /**
  * Open the library with the Hardhat dev wallet injected and wait until it has
  * auto-connected + authenticated. Returns once the main browser UI is visible.
+ *
+ * @param {Page} page
  */
 export async function connectLibrary(page) {
   await injectHardhatProvider(page);
@@ -161,21 +220,38 @@ export async function connectLibrary(page) {
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 }
 
-/** Locate a collection card in the library by its display name. */
+/**
+ * Locate a collection card in the library by its display name.
+ *
+ * @param {Page} page
+ * @param {string} name
+ * @returns {Locator}
+ */
 export function libraryCollectionLocator(page, name) {
   return page.locator(
     `${SELECTORS.libraryCollectionItem}:has(${SELECTORS.libraryItemName}:text-is("${name}"))`,
   );
 }
 
-/** Locate an asset card in the library by its display name. */
+/**
+ * Locate an asset card in the library by its display name.
+ *
+ * @param {Page} page
+ * @param {string} name
+ * @returns {Locator}
+ */
 export function libraryAssetLocator(page, name) {
   return page.locator(
     `${SELECTORS.libraryAssetItem}:has(${SELECTORS.libraryItemName}:text-is("${name}"))`,
   );
 }
 
-/** Double-click a collection to open it and wait for the breadcrumb to update. */
+/**
+ * Double-click a collection to open it and wait for the breadcrumb to update.
+ *
+ * @param {Page} page
+ * @param {string} name
+ */
 export async function openLibraryCollection(page, name) {
   const card = libraryCollectionLocator(page, name);
   await expect(card).toBeVisible();
@@ -183,7 +259,12 @@ export async function openLibraryCollection(page, name) {
   await expect(page.locator(SELECTORS.libraryBreadcrumb)).toContainText(name);
 }
 
-/** Double-click the first matching asset card and wait for navigation to Studio. */
+/**
+ * Double-click the first matching asset card and wait for navigation to Studio.
+ *
+ * @param {Page} page
+ * @param {string} name
+ */
 export async function openLibraryAssetInStudio(page, name) {
   const card = libraryAssetLocator(page, name).first();
   await expect(card).toBeVisible();
@@ -191,7 +272,12 @@ export async function openLibraryAssetInStudio(page, name) {
   await page.waitForURL(/\/studio\.html\?asset=/, { timeout: 10000 });
 }
 
-/** Wait until the library grid contains exactly `count` items. */
+/**
+ * Wait until the library grid contains exactly `count` items.
+ *
+ * @param {Page} page
+ * @param {number} count
+ */
 export async function waitForLibraryItemCount(page, count) {
   await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(count);
 }
@@ -199,12 +285,20 @@ export async function waitForLibraryItemCount(page, count) {
 /**
  * Read the displayed names of every library item in the current view.
  * Returns an array of strings in DOM order.
+ *
+ * @param {Page} page
+ * @returns {Promise<string[]>}
  */
 export async function libraryItemNames(page) {
   return page.locator(`${SELECTORS.libraryItem} ${SELECTORS.libraryItemName}`).allTextContents();
 }
 
-/** Generate a unique asset name to avoid collisions across retries/shared chain. */
+/**
+ * Generate a unique asset name to avoid collisions across retries/shared chain.
+ *
+ * @param {string} base
+ * @returns {string}
+ */
 export function uniqueAssetName(base) {
   return `${base} ${Date.now()}`;
 }
@@ -212,6 +306,9 @@ export function uniqueAssetName(base) {
 /**
  * Create a new named collection from the Library toolbar and wait until the
  * browser navigates into it.
+ *
+ * @param {Page} page
+ * @param {string} name
  */
 export async function createLibraryCollection(page, name) {
   await page.click(SELECTORS.libraryCreateCollectionBtn);
@@ -226,6 +323,10 @@ export async function createLibraryCollection(page, name) {
 /**
  * Upload a file from disk into the currently-open Library collection and wait
  * until the asset card appears.
+ *
+ * @param {Page} page
+ * @param {string} filePath
+ * @param {string} expectedAssetName
  */
 export async function uploadLibraryFile(page, filePath, expectedAssetName) {
   await page.setInputFiles(SELECTORS.libraryUploadInput, filePath);
@@ -240,6 +341,10 @@ export async function uploadLibraryFile(page, filePath, expectedAssetName) {
  * Add an address as a collaborator of a collection from the Library.
  * Defaults to the "Default" collection. Waits until the new collaborator
  * appears in the collaborator list.
+ *
+ * @param {Page} page
+ * @param {string} address
+ * @param {string} [collectionName]
  */
 export async function addCollaborator(
   page,
@@ -272,6 +377,10 @@ export async function addCollaborator(
  * Open a shared asset in Studio via direct URL. Shared assets are not
  * discoverable in the Library sidebar without an off-chain indexer, so the
  * editor wallet must navigate directly using the tokenId + assetId.
+ *
+ * @param {Page} page
+ * @param {string} tokenId
+ * @param {string} [assetId]
  */
 export async function openSharedAsset(page, tokenId, assetId) {
   const url = assetId
@@ -291,16 +400,25 @@ export async function openSharedAsset(page, tokenId, assetId) {
 /**
  * Ensure the right inspector is expanded so its sections (parametric editor,
  * comments, etc.) are interactable.
+ *
+ * @param {Page} page
  */
 export async function openInspector(page) {
-  await page.evaluate(() => {
-    const inspector = document.getElementById("inspector");
-    if (inspector) inspector.classList.remove("collapsed");
-  });
+  await page.evaluate(
+    /** @type {() => void} */ (() => {
+      const inspector = /** @type {any} */ (document).getElementById(
+        "inspector",
+      );
+      if (inspector) inspector.classList.remove("collapsed");
+    }),
+  );
 }
 
 /**
  * Post a comment in the Studio comments panel and wait for it to appear.
+ *
+ * @param {Page} page
+ * @param {string} text
  */
 export async function postComment(page, text) {
   await openInspector(page);
@@ -316,6 +434,9 @@ export async function postComment(page, text) {
 
 /**
  * Wait for a comment with the given text to appear in the comments panel.
+ *
+ * @param {Page} page
+ * @param {string} text
  */
 export async function expectComment(page, text) {
   await openInspector(page);

@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import request from "supertest";
 import zlib from "zlib";
-import { _resetRateLimiter } from "../src/api/rate-limiter.js";
+import { _resetRateLimiters } from "../src/api/rate-limiter.js";
 
 jest.setTimeout(30000);
 
@@ -73,6 +73,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       pin: {
         add: jest.fn(async () => {}),
         rm: jest.fn(async () => {}),
+        ls: jest.fn(async function* () {
+          // Treat everything in ipfsStorage as pinned.
+          for (const cid of ipfsStorage.keys()) {
+            yield { cid: { toString: () => cid, toJSON: () => cid } };
+          }
+        }),
       },
     };
 
@@ -114,6 +120,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       _tokenURICid = cid;
     };
 
+    // Mutable state for GC token discovery tests.
+    const gcTokens = new Map();
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
     jest.unstable_mockModule("web3", () => ({
       default: jest.fn(() => ({
         utils: {
@@ -129,6 +139,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           utf8ToHex: jest.fn((x) => x),
         },
         eth: {
+          getBlockNumber: jest.fn(() => Promise.resolve(1000)),
           accounts: { recover: jest.fn(() => "0xTestAddress") },
           getTransactionReceipt: jest.fn(() =>
             Promise.resolve(mockWeb3Receipt),
@@ -147,6 +158,19 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             }),
           },
           Contract: jest.fn(() => ({
+            getPastEvents: jest.fn(async (event, opts) => {
+              if (event !== "Transfer") return [];
+              // Return mint events for every registered GC token.
+              return Array.from(gcTokens.entries()).map(
+                ([tokenId, t]) => ({
+                  returnValues: {
+                    from: ZERO_ADDRESS,
+                    to: t.owner,
+                    tokenId,
+                  },
+                }),
+              );
+            }),
             methods: {
               costPerGeneration: jest.fn(() => ({
                 call: jest.fn(() => Promise.resolve("10000000000000000")),
@@ -160,8 +184,25 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
                   }),
                 ),
               })),
-              tokenURI: jest.fn(() => ({
-                call: jest.fn(() => Promise.resolve(_tokenURICid)),
+              tokenURI: jest.fn((tokenId) => ({
+                call: jest.fn(() => {
+                  const t = gcTokens.get(String(tokenId));
+                  if (t) return Promise.resolve(t.tokenURI);
+                  return Promise.resolve(_tokenURICid);
+                }),
+              })),
+              ownerOf: jest.fn((tokenId) => ({
+                call: jest.fn(() => {
+                  const t = gcTokens.get(String(tokenId));
+                  if (!t) throw new Error("Token does not exist");
+                  return Promise.resolve(t.owner);
+                }),
+              })),
+              editorListURI: jest.fn((tokenId) => ({
+                call: jest.fn(() => {
+                  const t = gcTokens.get(String(tokenId));
+                  return Promise.resolve(t?.editorListURI || "");
+                }),
               })),
             },
           })),
@@ -173,11 +214,25 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     globalThis.__setTokenURICid = (cid) => {
       _tokenURICid = cid;
     };
+    globalThis.__registerGCToken = (tokenId, tokenURI, owner, editorListURI) => {
+      gcTokens.set(String(tokenId), {
+        tokenURI,
+        owner: owner || "0xOwner",
+        editorListURI: editorListURI || "",
+      });
+    };
+    globalThis.__burnGCToken = (tokenId) => {
+      gcTokens.delete(String(tokenId));
+    };
+    globalThis.__clearGCTokens = () => {
+      gcTokens.clear();
+    };
 
     process.env.MOCK_3D_GENERATION = "true";
     process.env.GENERATION_RATE_LIMIT_MAX = "10";
     process.env.UPLOAD_URL_RATE_LIMIT_MAX = "5";
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
+    process.env.GC_ADMIN_TOKEN = "test-admin-token";
 
     const sessions = await import("../src/api/sessions.js");
     createSession = sessions.createSession;
@@ -195,7 +250,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     // Storage adapter is a singleton selected by IPFS_BACKEND; reset it
     // between tests so Pinata/Kubo backend changes take effect cleanly.
     _resetStorage();
-    _resetRateLimiter();
+    _resetRateLimiters();
+    ipfsStorage.clear();
   });
 
   afterAll(() => {
@@ -204,6 +260,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     delete process.env.CONTRACT_ADDRESS;
     delete process.env.GENERATION_RATE_LIMIT_MAX;
     delete process.env.UPLOAD_URL_RATE_LIMIT_MAX;
+    delete process.env.UNPIN_RATE_LIMIT_MAX;
+    delete process.env.GC_RATE_LIMIT_MAX;
   });
 
   async function makeSessionHeader(
@@ -456,7 +514,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   });
 
   describe("POST /api/v1/ipfs/upload-url", () => {
-    beforeEach(() => _resetRateLimiter());
+    beforeEach(() => _resetRateLimiters());
 
     it("rejects without a session (401)", async () => {
       const res = await request(app).post("/api/v1/ipfs/upload-url").send({});
@@ -523,7 +581,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.unpinned).toContain(startCid);
     });
 
-    it("collects source.bundleCid alongside source.cid", async () => {
+    it("skips shared source.cid and source.bundleCid", async () => {
       const startCid = saveManifestToStorage({
         version: 1,
         prev_asset_manifest_cid: null,
@@ -542,12 +600,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .set("Authorization", await makeSessionHeader())
         .send({ cid: startCid });
       expect(res.status).toBe(200);
-      // Both the loose source CID and the directory root must be unpinned.
-      expect(res.body.unpinned).toContain("QmSource");
-      expect(res.body.unpinned).toContain("QmBundleRoot");
+      // The manifest itself is unpinned, but source CIDs are shared via dedup
+      // and must survive the delete so other assets can still reference them.
+      expect(res.body.unpinned).toContain(startCid);
+      expect(res.body.unpinned).not.toContain("QmSource");
+      expect(res.body.unpinned).not.toContain("QmBundleRoot");
+      expect(res.body.skipped).toContain("QmSource");
+      expect(res.body.skipped).toContain("QmBundleRoot");
     });
 
-    it("walks and unpins a gzip-compressed manifest chain", async () => {
+    it("walks and unpins a gzip-compressed manifest chain but skips shared sources", async () => {
       const prevCid = saveManifestToStorage(
         {
           version: 1,
@@ -573,10 +635,240 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({ cid: startCid });
       expect(res.status).toBe(200);
       expect(res.body.errors).toBeUndefined();
+      // Manifest chain CIDs are asset-unique and get unpinned.
       expect(res.body.unpinned).toContain(startCid);
       expect(res.body.unpinned).toContain(prevCid);
-      expect(res.body.unpinned).toContain("QmSource");
-      expect(res.body.unpinned).toContain("QmBuffer");
+      // Source glTF and its embedded buffer/image are shared via dedup and
+      // must be left pinned so other assets keep working.
+      expect(res.body.unpinned).not.toContain("QmSource");
+      expect(res.body.unpinned).not.toContain("QmBuffer");
+      expect(res.body.skipped).toContain("QmSource");
+      // Embedded buffer/image CIDs are not even inspected in conservative mode;
+      // they are left pinned and reclaimed later by the reachability GC.
+    });
+
+    it("does not unpin a shared buffer CID referenced by another asset", async () => {
+      // cowboy1 and cowboy2 share the same mesh/texture CID.
+      ipfsStorage.set(
+        "QmSharedMesh",
+        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+      );
+
+      const cowboy1Cid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+      });
+
+      const cowboy2Cid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+      });
+
+      // Deleting cowboy2 must not unpin the shared mesh or its buffer.
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: cowboy2Cid });
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(cowboy2Cid);
+      expect(res.body.unpinned).not.toContain("QmSharedMesh");
+      expect(res.body.unpinned).not.toContain("QmSharedBuffer");
+      expect(res.body.skipped).toContain("QmSharedMesh");
+      // cowboy1's manifest is untouched.
+      expect(res.body.unpinned).not.toContain(cowboy1Cid);
+    });
+
+    it("rate-limits unpin requests per wallet", async () => {
+      process.env.UNPIN_RATE_LIMIT_MAX = "1";
+      _resetRateLimiters();
+      const cid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: {},
+      });
+      const auth = await makeSessionHeader();
+
+      const res1 = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", auth)
+        .send({ cid });
+      expect(res1.status).toBe(200);
+
+      const res2 = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", auth)
+        .send({ cid });
+      expect(res2.status).toBe(429);
+      expect(res2.text).toMatch(/Unpin rate limit exceeded/i);
+    });
+  });
+
+  describe("POST /api/v1/ipfs/gc reachability GC", () => {
+    beforeEach(() => {
+      globalThis.__clearGCTokens?.();
+    });
+
+    it("requires session and admin token", async () => {
+      const resNoSession = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: true });
+      expect(resNoSession.status).toBe(401);
+
+      const resNoAdmin = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .send({ dryRun: true });
+      expect(resNoAdmin.status).toBe(403);
+    });
+
+    it("dry-run reports orphaned CIDs without unpinning", async () => {
+      ipfsStorage.set(
+        "QmSharedMesh",
+        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+      );
+
+      const assetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+      });
+
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { cowboy: assetCid },
+      });
+
+      // Orphan: pinned but not referenced by any live token.
+      ipfsStorage.set("QmOrphan", "orphan data");
+
+      globalThis.__registerGCToken("1", collectionCid);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.dryRun).toBe(true);
+      expect(res.body.liveTokens).toBe(1);
+      expect(res.body.pinned).toBeGreaterThanOrEqual(3);
+      expect(res.body.orphans).toBeGreaterThanOrEqual(1);
+      expect(res.body.unpinned).toBe(0);
+    });
+
+    it("live run unpins only orphaned CIDs", async () => {
+      ipfsStorage.set(
+        "QmSharedMesh",
+        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+      );
+      ipfsStorage.set("QmSharedBuffer", "buffer bytes");
+
+      const assetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+      });
+
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { cowboy: assetCid },
+      });
+
+      ipfsStorage.set("QmOrphan", "orphan data");
+
+      globalThis.__registerGCToken("1", collectionCid);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.dryRun).toBe(false);
+      expect(res.body.unpinned).toBeGreaterThanOrEqual(1);
+      // Reachable CIDs must still be pinned (mock storage still contains them;
+      // in real life they would remain pinned).
+      expect(ipfsStorage.has(collectionCid)).toBe(true);
+      expect(ipfsStorage.has(assetCid)).toBe(true);
+      expect(ipfsStorage.has("QmSharedMesh")).toBe(true);
+      expect(ipfsStorage.has("QmSharedBuffer")).toBe(true);
+    });
+
+    it("keeps shared source CID pinned while token lives and unpin it after burn", async () => {
+      ipfsStorage.set(
+        "QmSharedMesh",
+        '{"buffers":[{"uri":"ipfs://QmSharedBuffer"}]}',
+      );
+
+      const assetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [{ node_id: "cowboy", source: { cid: "QmSharedMesh" } }] },
+      });
+
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { cowboy: assetCid },
+      });
+
+      globalThis.__registerGCToken("1", collectionCid);
+
+      // While token #1 is alive, the shared mesh is reachable.
+      const dryRes = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: true });
+      expect(dryRes.status).toBe(200);
+      expect(dryRes.body.orphans).toBe(0);
+
+      // Burn the token.
+      globalThis.__burnGCToken("1");
+
+      // After burn, the shared mesh and its buffer are orphaned.
+      const liveRes = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: false });
+      expect(liveRes.status).toBe(200);
+      expect(liveRes.body.liveTokens).toBe(0);
+      expect(liveRes.body.unpinned).toBeGreaterThanOrEqual(2);
+    });
+
+    it("rate-limits GC requests per wallet", async () => {
+      process.env.GC_RATE_LIMIT_MAX = "1";
+      _resetRateLimiters();
+      const auth = await makeSessionHeader();
+
+      const res1 = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", auth)
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: true });
+      expect(res1.status).toBe(200);
+
+      const res2 = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", auth)
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: true });
+      expect(res2.status).toBe(429);
+      expect(res2.text).toMatch(/GC rate limit exceeded/i);
     });
   });
 

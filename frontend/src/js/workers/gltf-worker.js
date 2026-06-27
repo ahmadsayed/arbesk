@@ -19,6 +19,7 @@ import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
 import { base64ToBytes, arrayBufferToBase64 } from "../utils/encoding.js";
 import { extractDataURI } from "../utils/uri.js";
+import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../gltf/cache-aware-fetch.js";
 
 console.log("[WORKER-INIT] gltf-worker module evaluating");
 
@@ -109,7 +110,7 @@ async function gunzip(bytes) {
   return new Uint8Array(decompressed);
 }
 
-async function fetchCIDAsBase64(cid, gatewayBase) {
+async function fetchRawBytes(cid, gatewayBase) {
   const url = `${gatewayBase.replace(/\/$/, "")}/${cid}`;
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
@@ -117,7 +118,11 @@ async function fetchCIDAsBase64(cid, gatewayBase) {
       `Worker compose: gateway returned ${response.status} for ${cid}`
     );
   }
-  let bytes = new Uint8Array(await response.arrayBuffer());
+  return await response.arrayBuffer();
+}
+
+async function fetchDecompressedBytes(cid, gatewayBase) {
+  let bytes = new Uint8Array(await fetchRawBytes(cid, gatewayBase));
   if (isGzipped(bytes)) {
     const before = bytes.length;
     bytes = await gunzip(bytes);
@@ -125,7 +130,15 @@ async function fetchCIDAsBase64(cid, gatewayBase) {
       `[WORKER-IPFS] gunzipped ${cid} ${before} → ${bytes.length} bytes`
     );
   }
-  return arrayBufferToBase64(bytes.buffer);
+  return bytes.buffer;
+}
+
+async function fetchCIDAsBase64(cid, arbeskMeta, gatewayBase) {
+  return fetchCIDAsBase64Cached(cid, arbeskMeta, {
+    fetchRaw: (c) => fetchRawBytes(c, gatewayBase),
+    fetchDecompressed: (c) => fetchDecompressedBytes(c, gatewayBase),
+    decompress: gunzip,
+  });
 }
 
 function isComposite(gltf) {
@@ -154,7 +167,7 @@ async function compose(payload) {
         const uri = buf.uri;
         if (uri && uri.startsWith(IPFS_URI_PREFIX)) {
           const cid = uri.replace(IPFS_URI_PREFIX, "");
-          const base64 = await fetchCIDAsBase64(cid, gatewayBase);
+          const base64 = await fetchCIDAsBase64(cid, buf._arbesk, gatewayBase);
           composed.buffers[i] = {
             ...buf,
             uri: `data:application/octet-stream;base64,${base64}`,
@@ -172,7 +185,7 @@ async function compose(payload) {
         if (img.uri.startsWith(IPFS_URI_PREFIX)) {
           const cid = img.uri.replace(IPFS_URI_PREFIX, "");
           const mimeType = img.mimeType || "image/png";
-          const base64 = await fetchCIDAsBase64(cid, gatewayBase);
+          const base64 = await fetchCIDAsBase64(cid, img._arbesk, gatewayBase);
           composed.images[i] = {
             ...img,
             uri: `data:${mimeType};base64,${base64}`,

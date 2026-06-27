@@ -38,9 +38,17 @@ export function buildSiweMessage(
   statement = "Sign in to Arbesk Studio"
 ) {
   const issuedAt = new Date().toISOString();
-  const uri = typeof window !== "undefined" ? window.location.host : "";
+  // Use the full origin (scheme + host) as the SIWE URI so strict parsers
+  // accept it even when the host is an IP address like 127.0.0.1:9090.
+  const uri = typeof window !== "undefined" ? window.location.origin : "";
+  // Ensure the address is EIP-55 checksummed so strict SIWE parsers
+  // (e.g., the official `siwe` package) accept the message.
+  const checksumAddress =
+    typeof window !== "undefined" && window.Web3?.utils?.toChecksumAddress
+      ? window.Web3.utils.toChecksumAddress(address)
+      : address;
 
-  return `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+  return `${domain} wants you to sign in with your Ethereum account:\n${checksumAddress}\n\n${statement}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
 }
 
 /**

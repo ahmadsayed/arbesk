@@ -133,17 +133,22 @@ export default function sessionRouter() {
 
       console.log(`[SESSION] verified SIWE - address=${result.address}`);
 
+      if (!result.address) {
+        throw new Error("SIWE verification returned no address");
+      }
+
       // Create session
       const token = createSession(result.address);
       const expiresAt = sessions.get(token).expiresAt;
 
       res.status(201).json({ token, expiresAt });
     } catch (error) {
-      console.error("[SESSION] error:", error.message);
+      const err = /** @type {Error} */ (error);
+      console.error("[SESSION] error:", err.message);
       res.status(500).json({
         error: {
           code: "SESSION_CREATION_FAILED",
-          message: error.message,
+          message: err.message,
         },
       });
     }

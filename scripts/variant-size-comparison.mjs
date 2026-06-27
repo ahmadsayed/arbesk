@@ -13,16 +13,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 // Browser globals the frontend modules expect at import time
-globalThis.window = globalThis;
-globalThis.localStorage = {
+globalThis.window = /** @type {any} */ (globalThis);
+globalThis.localStorage = /** @type {any} */ ({
   _map: new Map(),
+  /** @param {string} k */
   getItem(k) { return this._map.get(k) ?? null; },
+  /** @param {string} k @param {any} v */
   setItem(k, v) { this._map.set(k, String(v)); },
+  /** @param {string} k */
   removeItem(k) { this._map.delete(k); },
   clear() { this._map.clear(); },
-};
-globalThis.document = {};
-globalThis.location = { origin: "http://127.0.0.1:9090" };
+});
+globalThis.document = /** @type {any} */ ({});
+globalThis.location = /** @type {any} */ ({ origin: "http://127.0.0.1:9090" });
 
 const { getStorage, _resetStorage } = await import(
   path.join(ROOT, "src/api/storage/index.js")
@@ -63,6 +66,10 @@ const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK = 0x4e4f534a;
 const GLB_BIN_CHUNK = 0x004e4942;
 
+/**
+ * @param {Record<string, any>} composite
+ * @returns {string[]}
+ */
 function collectCids(composite) {
   const cids = [];
   for (const buf of composite.buffers || []) {
@@ -78,6 +85,9 @@ function collectCids(composite) {
   return cids;
 }
 
+/**
+ * @returns {Promise<void>}
+ */
 async function waitForKubo() {
   for (let i = 0; i < 30; i++) {
     try {
@@ -89,12 +99,21 @@ async function waitForKubo() {
   throw new Error("Kubo did not become ready in time");
 }
 
+/**
+ * @param {string} cid
+ * @returns {Promise<Uint8Array>}
+ */
 async function fetchBytes(cid) {
   const res = await fetch(`${KUBO_CRED.gateway}${cid}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`gateway ${res.status} for ${cid}`);
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/**
+ * @param {Record<string, any>} json
+ * @param {ArrayBuffer | null} [binaryChunk]
+ * @returns {ArrayBuffer}
+ */
 function serializeGLB(json, binaryChunk) {
   const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
   const jsonPadding = (4 - (jsonBytes.length % 4)) % 4;
@@ -131,6 +150,12 @@ function serializeGLB(json, binaryChunk) {
   return buf;
 }
 
+/**
+ * @param {number} h
+ * @param {number} s
+ * @param {number} l
+ * @returns {number[]}
+ */
 function hslToRgb(h, s, l) {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
@@ -145,6 +170,11 @@ function hslToRgb(h, s, l) {
   return [r + m, g + m, b + m];
 }
 
+/**
+ * @param {Record<string, any>} json
+ * @param {number} variantIndex
+ * @returns {Record<string, any>}
+ */
 function applyVariant(json, variantIndex) {
   const clone = JSON.parse(JSON.stringify(json));
   const materials = clone.materials || [];
@@ -158,6 +188,11 @@ function applyVariant(json, variantIndex) {
   return clone;
 }
 
+/**
+ * @param {string} name
+ * @param {string} type
+ * @returns {Promise<{json: Record<string, any>, binaryChunk?: ArrayBuffer}>}
+ */
 async function loadAsset(name, type) {
   const filePath = path.join(ASSET_DIR, name);
   if (type === "gltf") {
@@ -170,6 +205,12 @@ async function loadAsset(name, type) {
   return { json, binaryChunk };
 }
 
+/**
+ * @param {Record<string, any>} variant
+ * @param {string} type
+ * @param {ArrayBuffer | undefined} binaryChunk
+ * @returns {number}
+ */
 function fullFileSize(variant, type, binaryChunk) {
   if (type === "gltf") {
     return new TextEncoder().encode(JSON.stringify(variant)).length;
@@ -241,12 +282,17 @@ async function main() {
       await storage.unpin(cid);
       console.log(`unpinned ${cid}`);
     } catch (e) {
-      console.warn(`failed to unpin ${cid}: ${e.message}`);
+      const err = /** @type {Error} */ (e);
+      console.warn(`failed to unpin ${cid}: ${err.message}`);
     }
   }
   await fetch("http://127.0.0.1:5001/api/v0/repo/gc", { method: "POST" });
 }
 
+/**
+ * @param {number} n
+ * @returns {string}
+ */
 function fmt(n) {
   const mb = n / 1024 / 1024;
   if (mb >= 1) return `${mb.toFixed(2)} MB`;

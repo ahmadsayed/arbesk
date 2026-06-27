@@ -9,6 +9,9 @@
 
 import zlib from "zlib";
 
+/**
+ * @param {Buffer | Uint8Array | ArrayBuffer | string | any} data
+ */
 function toBuffer(data) {
   if (Buffer.isBuffer(data)) return data;
   if (data instanceof Uint8Array) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
@@ -23,7 +26,7 @@ function toBuffer(data) {
  * @returns {Promise<string>} Decompressed string if gzipped, original string otherwise
  */
 export async function maybeDecompress(data) {
-  if (!data) return data;
+  if (!data) return "";
 
   // Legacy string path: only reliable for uncompressed strings. Gzipped binary
   // that has already been UTF-8 decoded to a string cannot be decompressed
@@ -39,7 +42,7 @@ export async function maybeDecompress(data) {
         const decompressed = zlib.gunzipSync(Buffer.from(data, "utf-8"));
         return decompressed.toString("utf-8");
       } catch (e) {
-        console.warn("[DECOMPRESS] failed to decompress string data:", e.message);
+        console.warn("[DECOMPRESS] failed to decompress string data:", (/** @type {Error} */ (e)).message);
       }
     }
     return data;
@@ -51,7 +54,7 @@ export async function maybeDecompress(data) {
       const decompressed = zlib.gunzipSync(buffer);
       return decompressed.toString("utf-8");
     } catch (e) {
-      console.warn("[DECOMPRESS] failed to decompress buffer:", e.message);
+      console.warn("[DECOMPRESS] failed to decompress buffer:", (/** @type {Error} */ (e)).message);
     }
   }
   return buffer.toString("utf-8");
@@ -65,7 +68,7 @@ export async function maybeDecompress(data) {
  *   - Uint8Array / Buffer (real Kubo IPFS node)
  *   - String
  *
- * @param {Object} ipfs - ipfs-http-client instance
+ * @param {import('ipfs-http-client').KuboClient} ipfs - ipfs-http-client instance
  * @param {string} cid - IPFS CID to read
  * @param {number} [timeoutMs=15000] - AbortController timeout in ms
  * @returns {Promise<string>} Decoded manifest text
@@ -85,7 +88,7 @@ export async function catManifest(ipfs, cid, timeoutMs = 15000) {
     const data = chunks
       .map((chunk) => {
         if (chunk instanceof Uint16Array) {
-          return String.fromCharCode(...chunk);
+          return String.fromCharCode(.../** @type {Uint16Array} */ (chunk));
         }
         if (typeof chunk === "string") return chunk;
         return new TextDecoder().decode(chunk);
@@ -104,7 +107,7 @@ export async function catManifest(ipfs, cid, timeoutMs = 15000) {
  * Returns a Buffer so gzip-compressed or binary content can be handled
  * before any text decoding corrupts it.
  *
- * @param {Object} ipfs - ipfs-http-client instance
+ * @param {import('ipfs-http-client').KuboClient} ipfs - ipfs-http-client instance
  * @param {string} cid - IPFS CID to read
  * @param {number} [timeoutMs=15000] - AbortController timeout in ms
  * @returns {Promise<Buffer>} Raw bytes
@@ -120,7 +123,7 @@ export async function catBytes(ipfs, cid, timeoutMs = 15000) {
     for await (const chunk of ipfs.cat(cid, { signal: catController.signal })) {
       if (chunk instanceof Uint16Array) {
         // Test-mock path: char codes that encode a UTF-8 string.
-        chunks.push(Buffer.from(String.fromCharCode(...chunk), "utf-8"));
+        chunks.push(Buffer.from(String.fromCharCode(.../** @type {Uint16Array} */ (chunk)), "utf-8"));
       } else {
         chunks.push(toBuffer(chunk));
       }

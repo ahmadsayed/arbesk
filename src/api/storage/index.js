@@ -3,6 +3,20 @@ import { PinataSDK } from "pinata";
 import { createKuboAdapter } from "./kubo-adapter.js";
 import { createPinataAdapter } from "./pinata-adapter.js";
 
+/**
+ * @typedef {Object} StorageAdapter
+ * @property {string} backend
+ * @property {(payload: string | Uint8Array, filename?: string) => Promise<string>} add
+ * @property {(files: {name: string, data: Uint8Array|string}[]) => Promise<string>} addDirectory
+ * @property {(cid: string) => Promise<string>} cat
+ * @property {(cid: string) => Promise<Buffer>} catBytes
+ * @property {(cid: string) => Promise<boolean>} unpin
+ * @property {() => Promise<string[]>} listPinned
+ * @property {() => Promise<{ backend: string; [key: string]: any }>} mintUploadCredential
+ * @property {() => string} gatewayBase
+ */
+
+/** @type {StorageAdapter | null} */
 let _storage = null;
 
 /**

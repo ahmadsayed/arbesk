@@ -29,16 +29,20 @@ const tokenChildInfo = document.getElementById("tokenChildInfo");
 const tokenChildInfoDetails = tokenChildInfo?.querySelector("details");
 const parametricEditorDetails = parametricEditor?.querySelector("details");
 const nodeColorInput = document.getElementById("nodeColor");
-const nodeScaleX = document.getElementById("nodeScaleX");
-const nodeScaleY = document.getElementById("nodeScaleY");
-const nodeScaleZ = document.getElementById("nodeScaleZ");
+/** @type {HTMLInputElement|null} */
+const nodeScaleX = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleX"));
+/** @type {HTMLInputElement|null} */
+const nodeScaleY = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleY"));
+/** @type {HTMLInputElement|null} */
+const nodeScaleZ = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleZ"));
 const componentEditor = document.getElementById("componentEditor");
 const selectedComponentName = document.getElementById("selectedComponentName");
 const selectedComponentSwatch = document.getElementById(
   "selectedComponentSwatch"
 );
-const selectedComponentColor = document.getElementById(
-  "selectedComponentColor"
+/** @type {HTMLInputElement|null} */
+const selectedComponentColor = /** @type {HTMLInputElement|null} */ (
+  document.getElementById("selectedComponentColor")
 );
 
 // Token child info elements
@@ -48,22 +52,35 @@ const tokenChildChainEl = document.getElementById("tokenChildChain");
 const tokenChildResolutionEl = document.getElementById("tokenChildResolution");
 const tokenChildCidEl = document.getElementById("tokenChildCid");
 
+/**
+ * @typedef {{nodeId: string, meshName: string, oldColor: string, newColor: string}} UndoEntry
+ */
+
 // State
+/** @type {string|null} */
 let activeNodeId = null;
+/** @type {string|null} */
 let activeMeshName = null;
 // Original material colors captured at inspector open, used to revert on close.
+/** @type {Record<string, string>} */
 let originalMaterialColors = {};
 // Pending direct source color edits: Map<nodeId, Map<meshName, hexColor>>
 const pendingSourceColorEdits = new Map();
 
 // ── Undo / Redo ──────────────────────────────────────────────────────────────
 
+/** @type {UndoEntry[]} */
 const undoStack = [];
+/** @type {UndoEntry[]} */
 const redoStack = [];
 const MAX_UNDO = 20;
 
+/** @type {string|null} */
 let _colorBeforeEdit = null;
 
+/**
+ * @param {UndoEntry} entry
+ */
 function _pushUndo(entry) {
   undoStack.push(entry);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -75,6 +92,10 @@ function _clearUndoRedo() {
   redoStack.length = 0;
 }
 
+/**
+ * @param {UndoEntry} entry
+ * @param {string} color
+ */
 function _applyUndoEntry(entry, color) {
   const { nodeId, meshName } = entry;
   const meshes = getNodeMeshes(nodeId);
@@ -112,6 +133,9 @@ export function redoColorEdit() {
 
 /**
  * Read the current solid color from a mesh's material (diffuse or albedo).
+ *
+ * @param {BABYLON.AbstractMesh} mesh
+ * @returns {string|null}
  */
 function getMeshMaterialColor(mesh) {
   if (!mesh?.material) return null;
@@ -129,6 +153,8 @@ function getMeshMaterialColor(mesh) {
 
 /**
  * Show the Token Child Info panel for a child_ref node.
+ *
+ * @param {string} nodeId
  */
 function showTokenChildInfo(nodeId) {
   if (parametricEditor) parametricEditor.hidden = true;
@@ -158,11 +184,13 @@ function showTokenChildInfo(nodeId) {
   if (tokenChildCidEl)
     tokenChildCidEl.textContent = childRef?.resolvedCid || "—";
 
-  inspector.classList.remove("collapsed");
+  if (inspector) inspector.classList.remove("collapsed");
 }
 
 /**
  * Show the parametric editor for a regular node.
+ *
+ * @param {string} nodeId
  */
 async function openInspector(nodeId) {
   activeNodeId = nodeId;
@@ -195,7 +223,7 @@ async function openInspector(nodeId) {
     selectSubMesh(nodeId, first);
   }
 
-  inspector.classList.remove("collapsed");
+  if (inspector) inspector.classList.remove("collapsed");
 }
 
 /**
@@ -205,6 +233,7 @@ function closeInspector() {
   if (activeNodeId) {
     const meshes = getNodeMeshes(activeNodeId);
     if (meshes && Object.keys(originalMaterialColors).length > 0) {
+      /** @type {Record<string, {color: string}>} */
       const revertOverrides = {};
       for (const [name, color] of Object.entries(originalMaterialColors)) {
         revertOverrides[name] = { color };
@@ -218,7 +247,7 @@ function closeInspector() {
   activeMeshName = null;
   originalMaterialColors = {};
   _clearUndoRedo();
-  inspector.classList.add("collapsed");
+  if (inspector) inspector.classList.add("collapsed");
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
   if (componentEditor) componentEditor.hidden = true;
@@ -227,6 +256,8 @@ function closeInspector() {
 
 /**
  * Activate a component in the inspector: show the single color editor for it.
+ *
+ * @param {string} meshName
  */
 function selectComponent(meshName) {
   if (!activeNodeId) return;
@@ -263,13 +294,16 @@ function readScaleInputs() {
 /**
  * Live preview: the selected component's color changed.
  * Applies the color immediately to the viewport and records it for Save.
+ *
+ * @param {Event} e
  */
 function onComponentColorChange(e) {
   if (!activeNodeId) return;
-  const meshName = e.target?.dataset?.meshName || activeMeshName;
+  const target = /** @type {HTMLInputElement|null} */ (e.target);
+  const meshName = target?.dataset?.meshName || activeMeshName;
   if (!meshName) return;
 
-  const color = e.target.value;
+  const color = target?.value || "#ffffff";
 
   // Live preview: only touch this component.
   const meshes = getNodeMeshes(activeNodeId);
@@ -297,11 +331,17 @@ export function clearPendingSourceColorEdits() {
   pendingSourceColorEdits.clear();
 }
 
+/**
+ * @param {string} nodeId
+ */
 export function clearPendingSourceColorEdit(nodeId) {
   pendingSourceColorEdits.delete(nodeId);
 }
 
 // Event bindings
+/**
+ * @param {{nodeId: string}} e
+ */
 function onNodeSelected(e) {
   selectNodeById(e.nodeId);
   openInspector(e.nodeId);
@@ -310,7 +350,7 @@ on(EVENTS.NODE_SELECTED, onNodeSelected);
 on(EVENTS.OUTLINER_NODE_SELECTED, onNodeSelected);
 
 // Sub-mesh selected from the viewport: sync the inspector to that component.
-on(EVENTS.SUBMESH_SELECTED, (e) => {
+on(EVENTS.SUBMESH_SELECTED, (/** @type {{meshName?: string}} */ e) => {
   const meshName = e?.meshName;
   if (!meshName || !activeNodeId) return;
   selectComponent(meshName);
@@ -356,7 +396,8 @@ if (selectedComponentColor) {
   // Push one undo entry when the picker closes (end of gesture)
   selectedComponentColor.addEventListener("change", (e) => {
     if (!activeNodeId || !activeMeshName) return;
-    const newColor = e.target.value;
+    const target = /** @type {HTMLInputElement} */ (e.target);
+    const newColor = target.value;
     if (_colorBeforeEdit && _colorBeforeEdit !== newColor) {
       _pushUndo({
         nodeId: activeNodeId,
@@ -372,10 +413,11 @@ if (selectedComponentColor) {
 // Ctrl+Z / Ctrl+Shift+Z — undo/redo color edits
 document.addEventListener("keydown", (e) => {
   if (!((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z"))) return;
-  const el = document.activeElement;
+  const el = /** @type {HTMLElement|null} */ (document.activeElement);
   const tag = el?.tagName?.toLowerCase();
   // Allow undo when a color input is focused; block for text fields
-  const isColorInput = tag === "input" && el.type === "color";
+  const isColorInput =
+    tag === "input" && /** @type {HTMLInputElement} */ (el).type === "color";
   if (!isColorInput) {
     const editing =
       el?.isContentEditable ||
@@ -390,6 +432,9 @@ document.addEventListener("keydown", (e) => {
 });
 
 // Update token child CID when resolution completes and we're showing the info
+/**
+ * @param {{nodeId?: string, resolvedCid?: string}} e
+ */
 function onTokenChildAdded(e) {
   if (e?.nodeId === activeNodeId && tokenChildCidEl) {
     tokenChildCidEl.textContent = e.resolvedCid || "Resolving…";

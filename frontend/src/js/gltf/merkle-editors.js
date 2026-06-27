@@ -6,8 +6,11 @@
  * MerkleProof.sol (used in ArbeskAssetBase._requireEditor).
  *
  * Uses window.Web3.utils.soliditySha3 (static, available from CDN before
- * wallet connection) - NOT window.web3 (instance, only after connection).
+ * wallet connection) for leaf hashing and @openzeppelin/merkle-tree for
+ * tree construction/proof generation.
  */
+
+import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 
 function _soliditySha3(...args) {
   const W3 = window.Web3;
@@ -36,28 +39,24 @@ export function makeLeaf(address, role, tokenId, setVersion) {
 }
 
 /**
- * OZ-compatible pair hash: keccak256(abi.encodePacked(a, b)) with a ≤ b.
+ * Build a SimpleMerkleTree from a list of editor leaves.
+ *
+ * @param {string[]} leaves - Array of bytes32 hex leaf hashes
+ * @returns {SimpleMerkleTree|null}
  */
-function hashPair(a, b) {
-  const [lo, hi] = cmpBytes32(a, b) <= 0 ? [a, b] : [b, a];
-  return _soliditySha3(
-    { type: "bytes32", value: lo },
-    { type: "bytes32", value: hi }
-  );
+function buildTree(leaves) {
+  if (!leaves || leaves.length === 0) return null;
+  return SimpleMerkleTree.of(leaves);
 }
 
-function cmpBytes32(a, b) {
-  const bigA = BigInt(a);
-  const bigB = BigInt(b);
-  if (bigA < bigB) return -1;
-  if (bigA > bigB) return 1;
-  return 0;
-}
-
-function sortLeaves(leaves) {
-  return [...leaves].sort((a, b) => cmpBytes32(a, b));
-}
-
+/**
+ * Compute the Merkle root for an editor list.
+ *
+ * @param {Array<{address: string, role: number}>} editorList
+ * @param {number|string|BigInt} tokenId
+ * @param {number|string|BigInt} setVersion
+ * @returns {string} bytes32 hex root, or zero bytes for an empty list
+ */
 export function computeRoot(editorList, tokenId, setVersion) {
   if (!editorList || editorList.length === 0) {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -65,28 +64,19 @@ export function computeRoot(editorList, tokenId, setVersion) {
   const leaves = editorList.map((e) =>
     makeLeaf(e.address, e.role, tokenId, setVersion)
   );
-  return buildRoot(leaves);
+  const tree = buildTree(leaves);
+  return tree.root;
 }
 
-function buildRoot(leaves) {
-  if (leaves.length === 0) {
-    return "0x0000000000000000000000000000000000000000000000000000000000000000";
-  }
-  let layer = sortLeaves(leaves);
-  while (layer.length > 1) {
-    const next = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      if (i + 1 < layer.length) {
-        next.push(hashPair(layer[i], layer[i + 1]));
-      } else {
-        next.push(layer[i]);
-      }
-    }
-    layer = next;
-  }
-  return layer[0];
-}
-
+/**
+ * Build a Merkle proof for a target editor.
+ *
+ * @param {Array<{address: string, role: number}>} editorList
+ * @param {string} targetAddress
+ * @param {number|string|BigInt} tokenId
+ * @param {number|string|BigInt} setVersion
+ * @returns {{proof: string[], role: number}|null}
+ */
 export function getProof(editorList, targetAddress, tokenId, setVersion) {
   if (!editorList || editorList.length === 0) return null;
   const entry = editorList.find(
@@ -94,45 +84,26 @@ export function getProof(editorList, targetAddress, tokenId, setVersion) {
   );
   if (!entry) return null;
 
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
-  const allLeaves = editorList.map((e) =>
+  const leaves = editorList.map((e) =>
     makeLeaf(e.address, e.role, tokenId, setVersion)
   );
-
-  const proof = buildProof(allLeaves, leaf);
+  const tree = buildTree(leaves);
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
+  const proof = tree.getProof(leaf);
   return { proof, role: entry.role };
 }
 
-function buildProof(leaves, targetLeaf) {
-  if (leaves.length <= 1) return [];
-  let layer = sortLeaves(leaves);
-  const proof = [];
-
-  while (layer.length > 1) {
-    const idx = layer.findIndex((l) => l === targetLeaf);
-    if (idx === -1) break;
-    const pairIdx = idx % 2 === 0 ? idx + 1 : idx - 1;
-    if (pairIdx >= 0 && pairIdx < layer.length) {
-      proof.push(layer[pairIdx]);
-    }
-    const next = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      if (i + 1 < layer.length) {
-        next.push(hashPair(layer[i], layer[i + 1]));
-      } else {
-        next.push(layer[i]);
-      }
-    }
-    targetLeaf = next[Math.floor(idx / 2)];
-    layer = next;
-  }
-  return proof;
-}
-
+/**
+ * Verify a Merkle proof against a root and leaf.
+ *
+ * @param {string} root   - bytes32 hex root
+ * @param {string} leaf   - bytes32 hex leaf
+ * @param {string[]} proof - array of bytes32 hex sibling hashes
+ * @returns {boolean}
+ */
 export function verifyProof(root, leaf, proof) {
-  let computed = leaf;
-  for (const sibling of proof) {
-    computed = hashPair(computed, sibling);
+  if (!root || root === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+    return false;
   }
-  return computed === root;
+  return SimpleMerkleTree.verify(root, leaf, proof);
 }

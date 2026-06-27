@@ -15,16 +15,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 // Browser globals the frontend modules expect at import time
-globalThis.window = globalThis;
-globalThis.localStorage = {
+globalThis.window = /** @type {any} */ (globalThis);
+globalThis.localStorage = /** @type {any} */ ({
   _map: new Map(),
+  /** @param {string} k */
   getItem(k) { return this._map.get(k) ?? null; },
+  /** @param {string} k @param {any} v */
   setItem(k, v) { this._map.set(k, String(v)); },
+  /** @param {string} k */
   removeItem(k) { this._map.delete(k); },
   clear() { this._map.clear(); },
-};
-globalThis.document = {};
-globalThis.location = { origin: "http://127.0.0.1:9090" };
+});
+globalThis.document = /** @type {any} */ ({});
+globalThis.location = /** @type {any} */ ({ origin: "http://127.0.0.1:9090" });
 
 const { getStorage, _resetStorage } = await import(
   path.join(ROOT, "src/api/storage/index.js")
@@ -52,6 +55,10 @@ const KUBO_CRED = {
   reusable: true,
 };
 
+/**
+ * @param {string} cid
+ * @returns {Promise<Uint8Array>}
+ */
 async function fetchBytes(cid) {
   const res = await fetch(`${KUBO_CRED.gateway}${cid}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`gateway ${res.status} for ${cid}`);
@@ -67,6 +74,10 @@ const ASSETS = [
 
 const IPFS_PREFIX = "ipfs://";
 
+/**
+ * @param {Record<string, any>} composite
+ * @returns {string[]}
+ */
 function collectCids(composite) {
   const cids = [];
   for (const buf of composite.buffers || []) {
@@ -82,6 +93,11 @@ function collectCids(composite) {
   return cids;
 }
 
+/**
+ * @param {string} name
+ * @param {string} type
+ * @returns {Promise<{gltf?: Record<string, any>, arrayBuffer?: ArrayBuffer}>}
+ */
 async function loadAsset(name, type) {
   const filePath = path.join(ASSET_DIR, name);
   if (type === "gltf") {
@@ -200,12 +216,17 @@ async function main() {
       await storage.unpin(cid);
       console.log(`unpinned ${cid}`);
     } catch (e) {
-      console.warn(`failed to unpin ${cid}: ${e.message}`);
+      const err = /** @type {Error} */ (e);
+      console.warn(`failed to unpin ${cid}: ${err.message}`);
     }
   }
   await fetch("http://127.0.0.1:5001/api/v0/repo/gc", { method: "POST" });
 }
 
+/**
+ * @param {number} n
+ * @returns {string}
+ */
 function fmt(n) {
   const mb = n / 1024 / 1024;
   if (mb >= 1) return `${mb.toFixed(2)} MB`;

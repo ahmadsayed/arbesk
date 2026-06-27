@@ -32,23 +32,26 @@ async function gatewayBase() {
   return _gatewayPromise;
 }
 
-async function fetchIpfsBytes(cid) {
+async function fetchIpfsRawBytes(cid) {
   const url = `${await gatewayBase()}${cid}`;
   console.log(`[IPFS] get ${url}`);
   const response = await fetch(url, { cache: "default" });
   if (!response.ok) {
     throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
   }
+  return new Uint8Array(await response.arrayBuffer());
+}
 
-  const buffer = await response.arrayBuffer();
-  if (isGzipped(buffer)) {
-    const decompressed = decompress(buffer);
+async function fetchIpfsBytes(cid) {
+  const bytes = await fetchIpfsRawBytes(cid);
+  if (isGzipped(bytes)) {
+    const decompressed = decompress(bytes);
     console.log(
-      `[IPFS] gunzipped ${buffer.byteLength} → ${decompressed.length} bytes`
+      `[IPFS] gunzipped ${bytes.byteLength} → ${decompressed.length} bytes`
     );
     return decompressed;
   }
-  return new Uint8Array(buffer);
+  return bytes;
 }
 
 function clearRemoteIPFSCache() {
@@ -126,6 +129,14 @@ async function getArrayBufferFromRemoteIPFS(cid) {
   );
 }
 
+async function getRawArrayBufferFromRemoteIPFS(cid) {
+  const bytes = await fetchIpfsRawBytes(cid);
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  );
+}
+
 /**
  * Walk a manifest chain backward via prev_asset_manifest_cid links.
  * Returns an array of { cid, version, name } summaries.
@@ -171,6 +182,7 @@ export {
   getBase64FromRemoteIPFS,
   getBlobFromRemoteIPFS,
   getArrayBufferFromRemoteIPFS,
+  getRawArrayBufferFromRemoteIPFS,
   getManifestChain,
   isIpfsCidReachable,
   clearRemoteIPFSCache,

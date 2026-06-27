@@ -34,6 +34,16 @@ import {
 
 const { hexToBytes } = utils;
 
+/**
+ * @typedef {Object} ChatSession
+ * @property {string} address
+ * @property {import('ws').WebSocket} clientWs
+ * @property {() => boolean} allowMessage
+ * @property {() => void} dispose
+ * @property {ReturnType<typeof setInterval>} [pingInterval]
+ * @property {ReturnType<typeof setTimeout> | null | undefined} [pongTimeout]
+ */
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const WS_PATH = "/api/v1/chat/ws";
@@ -48,6 +58,13 @@ const CLIENT_PONG_TIMEOUT_MS = 10000;
  * Build the canonical asset-level Nostr tag.
  * Each asset inside a collection has its own isolated thread.
  */
+/**
+ * @param {string | number | null} chainId
+ * @param {string | null} contractAddress
+ * @param {string | number} tokenId
+ * @param {string | string[] | null | undefined} [assetId]
+ * @returns {string}
+ */
 function buildAssetTag(chainId, contractAddress, tokenId, assetId) {
   const cid = chainId ? Number(chainId) : 31415822;
   const addr = (contractAddress || getContractAddress(cid) || "unknown").toLowerCase();
@@ -60,7 +77,9 @@ const walletMessageTimestamps = new Map();
 
 // ─── Service Key ────────────────────────────────────────────────────────────
 
+/** @type {string | null} */
 let servicePubkey = null;
+/** @type {Uint8Array | null} */
 let servicePrivkey = null;
 
 function initServiceKey() {
@@ -106,9 +125,13 @@ export function createChatProxy(httpServer) {
 
 // ─── Connection Handler ─────────────────────────────────────────────────────
 
+/**
+ * @param {import('ws').WebSocket} clientWs
+ * @param {import('http').IncomingMessage} req
+ */
 async function handleConnection(clientWs, req) {
   const remote = req.socket.remoteAddress || "unknown";
-  const parsedUrl = url.parse(req.url, true);
+  const parsedUrl = url.parse(req.url || "", true);
   const { token, tokenId, chainId, proof, role, assetId } = parsedUrl.query;
 
   if (!token || !tokenId) {
@@ -139,13 +162,14 @@ async function handleConnection(clientWs, req) {
   const requiredRole = role ? Number(role) : null;
 
   // 1. Validate SIWE session and check asset access in one call
+  const tokenIdStr = String(tokenId);
   const authResult = await authorizeAssetAccess(
     String(token),
-    String(tokenId),
+    tokenIdStr,
     chainId ? Number(chainId) : null,
     {
-      proof: proofArray,
-      requiredRole,
+      proof: proofArray || undefined,
+      requiredRole: requiredRole ?? undefined,
     },
   );
   if (!authResult) {
@@ -165,12 +189,12 @@ async function handleConnection(clientWs, req) {
   const assetTag = buildAssetTag(
     authResult.chainId,
     getContractAddress(authResult.chainId),
-    tokenId,
+    tokenIdStr,
     assetId,
   );
 
   console.log(
-    `[CHAT] connected | tokenId=${tokenId} assetTag=${assetTag} addr=${authResult.address} role=${authResult.role} owner=${authResult.isOwner} client=${remote}`,
+    `[CHAT] connected | tokenId=${tokenIdStr} assetTag=${assetTag} addr=${authResult.address} role=${authResult.role} owner=${authResult.isOwner} client=${remote}`,
   );
 
   // 3. Attach rate limiter and heartbeat
@@ -182,9 +206,10 @@ async function handleConnection(clientWs, req) {
   try {
     relay = await openRelayBridge(assetTag, clientWs, session);
   } catch (err) {
+    const e = /** @type {Error} */ (err);
     console.error(
       `[CHAT] relay bridge failed | client=${remote}:`,
-      err.message,
+      e.message,
     );
     safeClose(clientWs, 4403, "Could not connect to relay");
     return;
@@ -201,7 +226,7 @@ async function handleConnection(clientWs, req) {
   });
 
   // 6. Handle incoming chat messages from browser
-  clientWs.on("message", (raw) => {
+  clientWs.on("message", (/** @type {import('ws').RawData} */ raw) => {
     if (clientWs.readyState !== WebSocket.OPEN) return;
 
     try {
@@ -241,7 +266,7 @@ async function handleConnection(clientWs, req) {
             `[CHAT] published | assetTag=${assetTag} sender=${authResult.address.slice(0, 10)}… len=${content.length}`,
           );
         })
-        .catch((err) => {
+        .catch((/** @type {Error} */ err) => {
           console.warn(
             `[CHAT] publish rejected | assetTag=${assetTag}:`,
             err.message,
@@ -254,13 +279,13 @@ async function handleConnection(clientWs, req) {
     } catch (err) {
       console.warn(
         `[CHAT] bad client message | client=${remote}:`,
-        err.message,
+        /** @type {Error} */ (err).message,
       );
       sendClient(clientWs, { type: "error", message: "Invalid JSON" });
     }
   });
 
-  clientWs.on("close", (code, reason) => {
+  clientWs.on("close", (/** @type {number} */ code, /** @type {Buffer} */ reason) => {
     console.log(
       `[CHAT] client disconnected | tokenId=${tokenId} assetTag=${assetTag} code=${code} reason=${reason}`,
     );
@@ -268,7 +293,7 @@ async function handleConnection(clientWs, req) {
     relay.close();
   });
 
-  clientWs.on("error", (err) => {
+  clientWs.on("error", (/** @type {Error} */ err) => {
     console.error(`[CHAT] client error | client=${remote}:`, err.message);
     session.dispose();
     relay.close();
@@ -277,6 +302,12 @@ async function handleConnection(clientWs, req) {
 
 // ─── Relay Bridge ───────────────────────────────────────────────────────────
 
+/**
+ * @param {string} assetTag
+ * @param {import('ws').WebSocket} clientWs
+ * @param {ChatSession} session
+ * @returns {Promise<import('nostr-tools').Relay>}
+ */
 function openRelayBridge(assetTag, clientWs, session) {
   return new Promise((resolve, reject) => {
     const relay = createRelay(NOSTR_RELAY_URL);
@@ -344,6 +375,12 @@ function openRelayBridge(assetTag, clientWs, session) {
 
 // ─── Nostr Event Building ───────────────────────────────────────────────────
 
+/**
+ * @param {string} content
+ * @param {string} assetTag
+ * @param {string} senderAddress
+ * @returns {import('nostr-tools').SignedNostrEvent}
+ */
 function buildSignedEvent(content, assetTag, senderAddress) {
   const eventTemplate = {
     kind: KIND_CHAT,
@@ -355,12 +392,18 @@ function buildSignedEvent(content, assetTag, senderAddress) {
     ],
   };
 
-  return finalizeEvent(eventTemplate, servicePrivkey);
+  return finalizeEvent(eventTemplate, /** @type {Uint8Array} */ (servicePrivkey));
 }
 
 // ─── Session State ──────────────────────────────────────────────────────────
 
+/**
+ * @param {string} address
+ * @param {import('ws').WebSocket} clientWs
+ * @returns {ChatSession}
+ */
 function createSessionState(address, clientWs) {
+  /** @type {ChatSession} */
   const state = {
     address,
     clientWs,
@@ -369,7 +412,7 @@ function createSessionState(address, clientWs) {
 
       // Sliding window: up to MAX_MSG_PER_MINUTE messages per wallet per minute.
       let timestamps = walletMessageTimestamps.get(address) || [];
-      timestamps = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+      timestamps = timestamps.filter((/** @type {number} */ t) => now - t < RATE_LIMIT_WINDOW_MS);
       if (timestamps.length >= MAX_MSG_PER_MINUTE) return false;
 
       timestamps.push(now);
@@ -384,6 +427,9 @@ function createSessionState(address, clientWs) {
   return state;
 }
 
+/**
+ * @param {ChatSession} session
+ */
 function setupClientHeartbeat(session) {
   const ws = session.clientWs;
 
@@ -410,6 +456,10 @@ function setupClientHeartbeat(session) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * @param {import('ws').WebSocket} ws
+ * @param {object} payload
+ */
 function sendClient(ws, payload) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(payload));

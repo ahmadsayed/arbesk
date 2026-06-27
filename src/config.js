@@ -16,6 +16,7 @@ const Web3Ctor = Web3;
 
 // ─── Per-Network Configuration ───────────────────────────────────────────────
 
+/** @type {Record<number, {name: string; contractAddress: string; paidContractAddress: string | null; usdcToken: string | null; rpcUrl: string}>} */
 export const NETWORK_CONFIGS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {
     name: "Hardhat Local",
@@ -35,10 +36,12 @@ export const NETWORK_CONFIGS = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** @param {any} chainId */
 export function getNetworkConfig(chainId) {
   return NETWORK_CONFIGS[Number(chainId)] || null;
 }
 
+/** @param {any} chainId */
 export function getContractAddress(chainId) {
   if (chainId) {
     const addr = getNetworkConfig(chainId)?.contractAddress;
@@ -51,6 +54,7 @@ export function getContractAddress(chainId) {
   );
 }
 
+/** @param {any} chainId */
 export function getUsdcToken(chainId) {
   if (chainId) {
     const addr = getNetworkConfig(chainId)?.usdcToken;
@@ -59,6 +63,7 @@ export function getUsdcToken(chainId) {
   return process.env.USDC_TOKEN || null;
 }
 
+/** @param {any} chainId */
 export function getRpcUrl(chainId) {
   if (chainId) {
     const url = getNetworkConfig(chainId)?.rpcUrl;
@@ -75,6 +80,7 @@ export function getRpcUrl(chainId) {
 
 const web3Instances = new Map();
 
+/** @param {any} chainId */
 export function getWeb3(chainId) {
   const id = chainId ? Number(chainId) : null;
   if (!id) return web3;
