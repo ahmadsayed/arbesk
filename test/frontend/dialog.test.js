@@ -121,6 +121,26 @@ test("showDialog removes the dialog from DOM after resolution", async () => {
   expect(document.querySelector(".dialog-backdrop")).toBeNull();
 });
 
+test("showDialog appends the backdrop to document.body so it layers above page content", () => {
+  showDialog("Title", "Body");
+  const backdrop = document.querySelector(".dialog-backdrop");
+  expect(backdrop).not.toBeNull();
+  expect(backdrop.parentElement).toBe(document.body);
+  expect(document.body.lastElementChild).toBe(backdrop);
+});
+
+test("a second dialog layers above the first by being appended later", async () => {
+  const p1 = showDialog("First", "Body");
+  const firstBackdrop = document.querySelector(".dialog-backdrop");
+  const p2 = showDialog("Second", "Body");
+  const backdrops = document.querySelectorAll(".dialog-backdrop");
+  expect(backdrops).toHaveLength(2);
+  expect(document.body.lastElementChild).toBe(backdrops[1]);
+  expect(backdrops[1]).not.toBe(firstBackdrop);
+  backdrops.forEach((b) => b.querySelector(".dialog-cancel-btn").click());
+  await Promise.all([p1, p2]);
+});
+
 test("showDialog does not resolve twice if closed twice", async () => {
   let calls = 0;
   const p = showDialog("Title", "Body").then((v) => { calls++; return v; });

@@ -374,13 +374,26 @@ function buildLinkedAssetPayload(entry) {
   return payload;
 }
 
+function getActiveCollectionTokenId() {
+  return assetState.get().activeCollectionTokenId || null;
+}
+
 async function renderAssetLibrary(owned, shared) {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
 
+  const activeTokenId = getActiveCollectionTokenId();
+  _lastRenderedCollectionTokenId = activeTokenId;
+  const ownedIds = activeTokenId
+    ? owned.filter((id) => String(id) === String(activeTokenId))
+    : owned;
+  const sharedIds = activeTokenId
+    ? shared.filter((id) => String(id) === String(activeTokenId))
+    : shared;
+
   const [ownedNested, sharedNested] = await Promise.all([
     Promise.all(
-      owned.map(async (tokenId) => {
+      ownedIds.map(async (tokenId) => {
         const entries = await expandTokenToAssets(tokenId);
         entries.forEach((e) => {
           e.role = "owner";
@@ -389,7 +402,7 @@ async function renderAssetLibrary(owned, shared) {
       })
     ),
     Promise.all(
-      shared.map(async (tokenId) => {
+      sharedIds.map(async (tokenId) => {
         const entries = await expandTokenToAssets(tokenId);
         entries.forEach((e) => {
           e.role = "editor";
@@ -718,12 +731,14 @@ on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
 });
 
 on(EVENTS.WALLET_CONNECTED, async () => {
-  await refreshAssetLibrary();
-
   const params = new URLSearchParams(window.location.search);
   const assetTokenId = params.get("asset");
   const assetId = params.get("assetId");
-  if (assetTokenId && getContract()) await openAssetByTokenId(assetTokenId, assetId);
+  if (assetTokenId && getContract()) {
+    await openAssetByTokenId(assetTokenId, assetId);
+  }
+
+  await refreshAssetLibrary();
 });
 
 // Wallet may already be connected by the time this module loads (e.g. page
@@ -737,7 +752,17 @@ on(EVENTS.WALLET_CONNECTED, async () => {
   if (assetTokenId && getContract()) openAssetByTokenId(assetTokenId, assetId);
 })();
 
+let _lastRenderedCollectionTokenId = null;
+on(EVENTS.ASSET_STATE_CHANGED, (state) => {
+  const tokenId = state?.activeCollectionTokenId ?? null;
+  if (tokenId !== _lastRenderedCollectionTokenId) {
+    _lastRenderedCollectionTokenId = tokenId;
+    refreshAssetLibrary();
+  }
+});
+
 on(EVENTS.WALLET_DISCONNECTED, () => {
+  _lastRenderedCollectionTokenId = null;
   if (assetLibraryBody) {
     assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }
@@ -747,4 +772,5 @@ export {
   initAssetLibrary,
   fetchAssetLibrary,
   refreshAssetLibrary,
+  renderAssetLibrary,
 };

@@ -1,27 +1,30 @@
 /**
  * @jest-environment jsdom
  */
+import { jest, expect, test, beforeEach, afterEach, describe } from "@jest/globals";
 import {
   openContextMenu,
   closeContextMenu,
   requestRename,
   initLibraryContextMenu,
+  showTargetCollectionDialog,
 } from "../frontend/src/js/ui/library-context-menu.js";
 import {
   libraryState,
   _resetForTesting,
 } from "../frontend/src/js/state/library-state.js";
 
+let lastTrapDeactivate;
+
 beforeEach(() => {
   _resetForTesting();
+  lastTrapDeactivate = jest.fn();
   window.focusTrap = {
     createFocusTrap: () => ({
       activate() {
         return this;
       },
-      deactivate() {
-        return this;
-      },
+      deactivate: lastTrapDeactivate,
     }),
   };
   document.body.innerHTML = `
@@ -147,6 +150,44 @@ describe("requestRename", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(document.querySelector(".dialog-title").textContent).toBe("Rename");
     expect(document.querySelector(".dialog-input").value).toBe("a.glb");
+  });
+});
+
+describe("showTargetCollectionDialog", () => {
+  const collections = [
+    { tokenId: "2", name: "Armor" },
+    { tokenId: "3", name: "Potions" },
+  ];
+
+  test("resolves with the selected collection token id and deactivates the focus trap", async () => {
+    const p = showTargetCollectionDialog(collections);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    document.querySelector(".dialog-confirm-btn").click();
+
+    expect(await p).toBe("2");
+    expect(lastTrapDeactivate).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".dialog-backdrop")).toBeNull();
+  });
+
+  test("deactivates the focus trap when cancelled", async () => {
+    const p = showTargetCollectionDialog(collections);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    document.querySelector(".dialog-cancel-btn").click();
+
+    expect(await p).toBeNull();
+    expect(lastTrapDeactivate).toHaveBeenCalledTimes(1);
+  });
+
+  test("deactivates the focus trap when Escape is pressed", async () => {
+    const p = showTargetCollectionDialog(collections);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+    expect(await p).toBeNull();
+    expect(lastTrapDeactivate).toHaveBeenCalledTimes(1);
   });
 });
 

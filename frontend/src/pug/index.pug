@@ -50,6 +50,28 @@ html(lang="en")
         border-bottom: 1px solid color-mix(in srgb, var(--landing-border) 30%, transparent);
       }
 
+      /* Brand: scalable mark + wordmark */
+      .landing-page .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        text-decoration: none;
+        color: var(--landing-gold);
+      }
+
+      .landing-page .brand-mark {
+        height: 2.7rem;
+        width: auto;
+        flex: none;
+      }
+
+      .landing-page .brand-name {
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--landing-fg);
+      }
+
       /* Typography */
       .landing-hero h1 {
         font-size: clamp(3.5rem, 10vw, 7rem);
@@ -80,7 +102,7 @@ html(lang="en")
       .landing-footer {
         width: 100%;
         margin: 0 auto;
-        padding: 5rem 2rem;
+        padding: 7rem 2rem;
       }
 
       .landing-section.band-dark,
@@ -137,6 +159,34 @@ html(lang="en")
         transform: translateX(4px);
       }
 
+      .cta-row {
+        display: flex;
+        gap: 0.9rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .cta-secondary {
+        background: transparent;
+        color: var(--landing-gold);
+        box-shadow: none;
+        border: 1.5px solid color-mix(in srgb, var(--landing-gold) 55%, transparent);
+      }
+
+      .cta-secondary:hover {
+        background: color-mix(in srgb, var(--landing-gold) 12%, transparent);
+        box-shadow: 0 6px 18px rgba(160,120,72,0.18);
+      }
+
+      .cta-secondary.on-dark {
+        color: var(--landing-bg);
+        border-color: color-mix(in srgb, var(--landing-bg) 45%, transparent);
+      }
+
+      .cta-secondary.on-dark:hover {
+        background: color-mix(in srgb, var(--landing-bg) 12%, transparent);
+      }
+
       /* Feature sections */
       .landing-section {
         display: grid;
@@ -159,6 +209,7 @@ html(lang="en")
       }
 
       .feature-card {
+        position: relative;
         background: var(--landing-card);
         border: 1px solid color-mix(in srgb, var(--landing-border) 40%, transparent);
         border-radius: 24px;
@@ -172,31 +223,434 @@ html(lang="en")
         min-height: 240px;
       }
 
-      .landing-section .visual svg {
+      /* Real-render visuals fill their frame */
+      .asset-render {
+        display: block;
         width: 100%;
-        max-width: 340px;
+        height: auto;
+        filter: drop-shadow(0 18px 30px rgba(42, 26, 14, 0.18));
+      }
+
+      /* Live 3D viewer */
+      .viewer-card {
+        position: relative;
+        width: 420px;
+        aspect-ratio: 1 / 1;
+        max-width: 100%;
+        border-radius: 28px;
+        background:
+          radial-gradient(120% 120% at 50% 20%,
+            color-mix(in srgb, var(--landing-gold) 16%, transparent),
+            transparent 60%),
+          var(--landing-card);
+        border: 1px solid color-mix(in srgb, var(--landing-border) 40%, transparent);
+        box-shadow: 0 20px 50px rgba(42, 26, 14, 0.12);
+        overflow: hidden;
+      }
+
+      .viewer-card canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        outline: none;
+        touch-action: pan-y;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+
+      .viewer-card.viewer-ready canvas {
+        opacity: 1;
+      }
+
+      .viewer-card .viewer-hint {
+        position: absolute;
+        left: 50%;
+        bottom: 0.9rem;
+        transform: translateX(-50%);
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--landing-muted);
+        background: color-mix(in srgb, var(--landing-bg) 80%, transparent);
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        opacity: 0;
+        transition: opacity 0.6s ease 0.3s;
+        pointer-events: none;
+      }
+
+      .viewer-card.viewer-ready .viewer-hint {
+        opacity: 1;
+      }
+
+      .viewer-card .viewer-fallback {
+        position: absolute;
+        inset: 0;
+        display: none;
+        place-items: center;
+        padding: 1.5rem;
+      }
+
+      .viewer-card.viewer-failed canvas,
+      .viewer-card.viewer-failed .viewer-hint {
+        display: none;
+      }
+
+      .viewer-card.viewer-failed .viewer-fallback {
+        display: grid;
+      }
+
+      .viewer-card .viewer-fallback img {
+        width: 88%;
         height: auto;
       }
 
-      /* Diagonal separators */
-      .slant-bottom {
-        clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%);
-        padding-bottom: 8rem;
+      /* Interactive colour-memory demo ("Objects have memory") */
+      .text .hint-line {
+        margin-top: 0.75rem;
+        font-size: 0.95rem;
+        color: color-mix(in srgb, var(--landing-gold) 85%, var(--landing-fg));
       }
 
-      .slant-top {
-        clip-path: polygon(0 8%, 100% 0, 100% 100%, 0 100%);
-        padding-top: 8rem;
+      .memory-card {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 360px;
+        max-width: 100%;
+        margin: 0 auto;
       }
 
-      .slant-top.slant-bottom {
-        clip-path: polygon(0 8%, 100% 0, 100% 92%, 0 100%);
+      .memory-stage {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        border-radius: 18px;
+        overflow: hidden;
+        background:
+          radial-gradient(120% 120% at 50% 25%,
+            color-mix(in srgb, var(--landing-gold) 14%, transparent),
+            transparent 60%);
+        cursor: pointer;
       }
 
-      /* Dark bands */
+      .memory-stage canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        outline: none;
+        touch-action: pan-y;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+
+      .memory-card.ready .memory-stage canvas { opacity: 1; }
+
+      .memory-stage .memory-hint {
+        position: absolute;
+        left: 50%;
+        bottom: 0.7rem;
+        transform: translateX(-50%);
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--landing-muted);
+        background: color-mix(in srgb, var(--landing-bg) 80%, transparent);
+        padding: 0.22rem 0.65rem;
+        border-radius: 999px;
+        pointer-events: none;
+        transition: opacity 0.4s ease;
+      }
+
+      .memory-card.touched .memory-stage .memory-hint { opacity: 0; }
+
+      .memory-stage .memory-fallback {
+        display: none;
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        place-content: center;
+        text-align: center;
+        padding: 1.5rem;
+        color: var(--landing-muted);
+        font-size: 0.95rem;
+      }
+
+      .memory-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+
+      .memory-controls input[type="range"] {
+        width: 100%;
+        accent-color: var(--landing-gold);
+        cursor: pointer;
+      }
+
+      .memory-status {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--landing-muted);
+        min-height: 1.3em;
+      }
+
+      .memory-status strong {
+        color: var(--landing-fg);
+      }
+
+      .memory-status .past-flag {
+        color: var(--landing-gold);
+        font-weight: 600;
+      }
+
+      .memory-log {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-height: 5.5rem;
+      }
+
+      .memory-log li.active {
+        color: var(--landing-fg);
+        font-weight: 600;
+      }
+
+      .memory-log li.active .swatch {
+        outline: 2px solid var(--landing-gold);
+        outline-offset: 1px;
+      }
+
+      .memory-log li {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-size: 0.95rem;
+        color: var(--landing-muted);
+      }
+
+      .memory-log li.now {
+        color: var(--landing-fg);
+        font-weight: 600;
+      }
+
+      .memory-log .swatch {
+        width: 1.05rem;
+        height: 1.05rem;
+        border-radius: 5px;
+        flex: none;
+        border: 1px solid color-mix(in srgb, var(--landing-fg) 18%, transparent);
+        box-shadow: 0 2px 6px rgba(42,26,14,0.12);
+      }
+
+      .memory-log li.now .swatch {
+        width: 1.3rem;
+        height: 1.3rem;
+      }
+
+      .memory-log .when {
+        margin-left: auto;
+        font-size: 0.82rem;
+        color: color-mix(in srgb, var(--landing-muted) 80%, transparent);
+      }
+
+      /* Version timeline ("Time is a dimension") */
+      .timeline {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: clamp(1.5rem, 6vw, 3.5rem);
+        width: 100%;
+        padding: 1rem 0.5rem;
+        position: relative;
+      }
+
+      .timeline::before {
+        content: "";
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        bottom: 2.1rem;
+        height: 2px;
+        background: color-mix(in srgb, var(--landing-gold) 55%, transparent);
+      }
+
+      .timeline .stop {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+      }
+
+      .timeline .stop .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--landing-gold);
+        position: relative;
+        z-index: 1;
+      }
+
+      .timeline .stop .label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: color-mix(in srgb, var(--landing-bg) 75%, transparent);
+      }
+
+      .timeline .stop.active .thumb {
+        width: clamp(74px, 16vw, 104px);
+        height: clamp(74px, 16vw, 104px);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--landing-bg) 10%, transparent);
+        border: 2px solid var(--landing-gold);
+        display: grid;
+        place-items: center;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+      }
+
+      .timeline .stop.active .thumb img {
+        width: 86%;
+        height: 86%;
+        object-fit: contain;
+      }
+
+      .timeline .stop.active .dot {
+        width: 18px;
+        height: 18px;
+        background: var(--landing-bg);
+        border: 3px solid var(--landing-gold);
+      }
+
+      /* Manifest chain ("micro-ledger") */
+      .ledger-card .ledger-chain {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        flex-wrap: nowrap;
+      }
+
+      .ledger-chain .manifest {
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.45rem;
+        background: color-mix(in srgb, var(--landing-bg) 60%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--landing-gold) 60%, transparent);
+        border-radius: 14px;
+        padding: 1rem 0.4rem;
+      }
+
+      .ledger-chain .manifest .mtag {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: var(--landing-fg);
+        letter-spacing: -0.01em;
+      }
+
+      .ledger-chain .manifest .cid {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.68rem;
+        color: var(--landing-muted);
+      }
+
+      .ledger-chain .link {
+        flex: none;
+        width: 18px;
+        height: 2px;
+        background: var(--landing-gold);
+        opacity: 0.6;
+      }
+
+      .ledger-card .ledger-caption {
+        margin-top: 1.1rem;
+        text-align: center;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--landing-muted);
+      }
+
+      /* Collaboration ("Built for teams") — three pedestals, one per editor */
+      .team-card .team-scene {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 0.75rem;
+        width: 100%;
+        max-width: 420px;
+        margin: 0 auto;
+        padding-top: 1rem;
+      }
+
+      .team-scene .pedestal {
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      /* Stagger the middle pedestal up so the trio reads like a podium. */
+      .team-scene .pedestal:nth-child(2) { margin-bottom: 1.6rem; }
+
+      .team-scene .pedestal-asset {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        display: grid;
+        place-items: end center;
+      }
+
+      .team-scene .pedestal-asset img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        filter: drop-shadow(0 12px 18px rgba(42,26,14,0.22));
+      }
+
+      .team-scene .pedestal-base {
+        width: 86%;
+        height: 0.85rem;
+        border-radius: 4px 4px 6px 6px;
+        background:
+          linear-gradient(180deg,
+            color-mix(in srgb, var(--landing-gold) 32%, var(--landing-card)) 0%,
+            color-mix(in srgb, var(--landing-gold) 14%, var(--landing-card)) 100%);
+        border: 1px solid color-mix(in srgb, var(--landing-gold) 45%, transparent);
+        box-shadow: 0 8px 16px rgba(42,26,14,0.16);
+        margin-top: -0.2rem;
+      }
+
+      .team-scene .pedestal-label {
+        margin-top: 0.6rem;
+        font-size: 0.78rem;
+        line-height: 1.3;
+        color: var(--landing-muted);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .team-scene .pedestal-label strong {
+        color: var(--landing-fg);
+        font-size: 0.92rem;
+      }
+
+      /* Dark bands — clean straight edges with a gold rule at each boundary */
       .band-dark {
         background: var(--landing-dark);
         color: var(--landing-bg);
+        border-top: 1px solid color-mix(in srgb, var(--landing-gold) 22%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--landing-gold) 22%, transparent);
       }
 
       .band-dark .text h2 {
@@ -261,65 +715,118 @@ html(lang="en")
         color: var(--landing-bg);
       }
 
-      .landing-footer .links {
-        margin-top: 3rem;
-        display: flex;
-        gap: 1.5rem;
-        justify-content: center;
-        font-size: 0.95rem;
-      }
 
-      .landing-footer .links a {
-        color: color-mix(in srgb, var(--landing-bg) 70%, transparent);
-        text-decoration: none;
-        transition: color 0.2s;
-      }
+      /* ── Scroll-driven reveals & parallax ──────────────────────────────
+         Modern path  — CSS animation-timeline: view() (Chrome 115+, FF 110+)
+           · Headings  slide in from their outside edge (left on normal, right on
+             .reverse sections) — distinctly horizontal, not the old "fade up".
+           · Body text fades in cleanly, no vertical jump.
+           · Visual cards lift and scale (0.93→1) as they enter.
+           · Visual column drifts against text via a subtle parallax on cover.
+           · animation-range ends before entry 65%, so nothing is ever stuck
+             half-faded — all elements are fully visible once mostly in view.
+         Fallback path — JS IntersectionObserver toggles .revealed for browsers
+           without scroll-timeline support (unchanged behaviour, IO bails out
+           when @supports passes).
+      */
 
-      .landing-footer .links a:hover {
-        color: var(--landing-gold);
-      }
-
-      /* Reveal animations */
+      /* No-JS / SSR baseline: always readable. */
       .reveal .reveal-child-1,
       .reveal .reveal-child-2,
-      .reveal .reveal-child-3 {
-        opacity: 1;
-        transform: none;
-        transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
-                    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
-      }
+      .reveal .reveal-child-3 { opacity: 1; translate: none; scale: 1; }
 
+      /* Fallback: IO path. */
       .js-animations .reveal .reveal-child-1,
       .js-animations .reveal .reveal-child-2,
       .js-animations .reveal .reveal-child-3 {
         opacity: 0;
-        transform: translateY(40px);
+        translate: 0 28px;
+        transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+                    translate 0.75s cubic-bezier(0.22, 1, 0.36, 1);
       }
+      .js-animations .reveal.revealed .reveal-child-1 { opacity: 1; translate: none; transition-delay: 0s; }
+      .js-animations .reveal.revealed .reveal-child-2 { opacity: 1; translate: none; transition-delay: 0.12s; }
+      .js-animations .reveal.revealed .reveal-child-3 { opacity: 1; translate: none; transition-delay: 0.26s; }
 
-      .js-animations .reveal.revealed .reveal-child-1 { opacity: 1; transform: none; transition-delay: 0s; }
-      .js-animations .reveal.revealed .reveal-child-2 { opacity: 1; transform: none; transition-delay: 0.12s; }
-      .js-animations .reveal.revealed .reveal-child-3 { opacity: 1; transform: none; transition-delay: 0.24s; }
-
-      /* Hero load animation */
-      .hero-animate {
-        opacity: 1;
-        transform: none;
-      }
-
+      /* Hero entrance — time-based, not scroll-driven. */
+      .hero-animate { opacity: 1; transform: none; }
       .js-animations .hero-animate {
         opacity: 0;
-        transform: translateY(40px);
-        animation: hero-in 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        transform: translateY(36px);
+        animation: kHeroIn 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
-
       .js-animations .hero-animate:nth-child(1) { animation-delay: 0.1s; }
       .js-animations .hero-animate:nth-child(2) { animation-delay: 0.25s; }
       .js-animations .hero-animate:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes kHeroIn { to { opacity: 1; transform: none; } }
 
-      @keyframes hero-in {
-        to {
-          opacity: 1;
-          transform: none;
+      /* Keyframes — using individual transform properties (translate, scale) so
+         they compose cleanly with kParallax which uses transform: translateY(). */
+      @keyframes kSlideLeft  {
+        from { opacity: 0; translate: -48px 0; }
+        to   { opacity: 1; translate: 0 0; }
+      }
+      @keyframes kSlideRight {
+        from { opacity: 0; translate: 48px 0; }
+        to   { opacity: 1; translate: 0 0; }
+      }
+      @keyframes kFadeRise {
+        from { opacity: 0; translate: 0 18px; }
+        to   { opacity: 1; translate: 0 0; }
+      }
+      @keyframes kCardLift {
+        from { opacity: 0; scale: 0.92; translate: 0 20px; }
+        to   { opacity: 1; scale: 1;    translate: 0 0; }
+      }
+      @keyframes kParallax {
+        from { transform: translateY(26px); }
+        to   { transform: translateY(-26px); }
+      }
+
+      @supports (animation-timeline: view()) {
+        /*
+         * Generic catch-all: every .reveal-child-* gets scroll-driven kFadeRise.
+         * Ranges end at entry 28–36% — tight enough that even the footer
+         * (which can't be scrolled past) reaches "to" state at max scroll.
+         * More-specific rules below override animation-name for headings/cards.
+         */
+        .js-animations .reveal .reveal-child-1 {
+          opacity: 0; transition: none;
+          animation: kFadeRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation-timeline: view();
+          animation-range: entry 0% entry 28%;
+          will-change: opacity, translate;
+        }
+        .js-animations .reveal .reveal-child-2 {
+          opacity: 0; transition: none;
+          animation: kFadeRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation-timeline: view();
+          animation-range: entry 5% entry 33%;
+          will-change: opacity, translate;
+        }
+        .js-animations .reveal .reveal-child-3 {
+          opacity: 0; transition: none;
+          animation: kFadeRise 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation-timeline: view();
+          animation-range: entry 8% entry 36%;
+          will-change: opacity, translate;
+        }
+
+        /* Section headings: horizontal slide from the outside column edge. */
+        .js-animations .landing-section:not(.pull-quote) h2.reveal-child-1 {
+          animation-name: kSlideLeft;
+        }
+        .js-animations .landing-section.reverse:not(.pull-quote) h2.reveal-child-1 {
+          animation-name: kSlideRight;
+        }
+
+        /* Visual cards: scale lift + simultaneous parallax drift. */
+        .js-animations .landing-section .visual.reveal-child-3 {
+          animation: kCardLift 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
+                     kParallax linear both;
+          animation-timeline: view(), view();
+          animation-range: entry 8% entry 36%, cover 0% cover 100%;
+          will-change: opacity, translate, scale, transform;
         }
       }
 
@@ -345,31 +852,24 @@ html(lang="en")
         .landing-section .visual {
           order: -1;
         }
-
-        .slant-bottom {
-          clip-path: polygon(0 0, 100% 0, 100% 96%, 0 100%);
-          padding-bottom: 6rem;
-        }
-
-        .slant-top {
-          clip-path: polygon(0 4%, 100% 0, 100% 100%, 0 100%);
-          padding-top: 6rem;
-        }
-
-        .slant-top.slant-bottom {
-          clip-path: polygon(0 4%, 100% 0, 100% 96%, 0 100%);
-        }
       }
 
       @media (prefers-reduced-motion: reduce) {
         .reveal .reveal-child-1,
         .reveal .reveal-child-2,
         .reveal .reveal-child-3,
-        .hero-animate {
-          animation: none;
-          opacity: 1;
-          transform: none;
-          transition: opacity 0.2s ease;
+        .js-animations .reveal .reveal-child-1,
+        .js-animations .reveal .reveal-child-2,
+        .js-animations .reveal .reveal-child-3,
+        .js-animations .landing-section .visual.reveal-child-3,
+        .hero-animate,
+        .js-animations .hero-animate {
+          animation: none !important;
+          opacity: 1 !important;
+          translate: none !important;
+          transform: none !important;
+          scale: 1 !important;
+          transition: none !important;
         }
       }
 
@@ -381,23 +881,35 @@ html(lang="en")
         .hero-animate {
           opacity: 1;
           transform: none;
+          translate: none;
+          scale: 1;
           animation: none;
         }
+        /* Without JS the live viewer never boots — show its render instead. */
+        .viewer-card canvas,
+        .viewer-card .viewer-hint { display: none; }
+        .viewer-card .viewer-fallback { display: grid; }
+        /* The colour-memory cube also needs JS — show a static line instead. */
+        .memory-stage canvas,
+        .memory-stage .memory-hint,
+        .memory-log { display: none; }
+        .memory-stage .memory-fallback { display: grid; }
 
   body.landing-page
     #app
       header.headerbar
-        h1.sr-only Arbesk
         .headerbar-brand
-          img.logo-light(src="/logo.webp", alt="Arbesk")
-          img.logo-dark(src="/logo-dark.webp", alt="Arbesk")
+          a.brand(href="/", aria-label="Arbesk home")
+            img.brand-mark(src="/brand-logo.webp", alt="", width="78", height="52")
+            span.brand-name Arbesk
 
         nav.page-switcher(aria-label="Page")
           a.page-switcher-tab(href="/library.html") Library
           a.page-switcher-tab(href="/studio.html") Studio
 
         .headerbar-actions
-          a.btn.btn-primary(href="/library.html") Launch App
+          a.btn(href="/library.html") File Manager
+          a.btn.btn-primary(href="/studio.html") Launch Studio
 
       main
         section.landing-hero
@@ -407,73 +919,61 @@ html(lang="en")
             | In Arbesk, time is a dimension you can travel, but only backward.
             br
             strong Because the future is what you build.
-          a.cta.hero-animate(href="/library.html")
-            | Launch App
-            svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-              line(x1="5" y1="12" x2="19" y2="12")
-              polyline(points="12 5 19 12 12 19")
-
-        section.landing-section.slant-bottom.reveal
-          .text
-            h2.reveal-child-1 We build in 3D.
-            p.reveal-child-2 Move, rotate, and scale in space. That part is familiar. Every 3D tool gives you the three spatial dimensions.
-          .visual.reveal-child-3
-            .feature-card
-              svg(viewBox="0 0 200 200" aria-label="3D axes and cube")
-                // Axes
-                line(x1="30" y1="170" x2="30" y2="40" stroke="#a07848" stroke-width="2")
-                polygon(points="30,35 26,45 34,45" fill="#a07848")
-                text(x="25" y="30" fill="#8c6a4a" font-size="12" font-weight="600") Y
-
-                line(x1="30" y1="170" x2="170" y2="170" stroke="#a07848" stroke-width="2")
-                polygon(points="175,170 165,166 165,174" fill="#a07848")
-                text(x="178" y="175" fill="#8c6a4a" font-size="12" font-weight="600") X
-
-                line(x1="30" y1="170" x2="90" y2="130" stroke="#a07848" stroke-width="2")
-                polygon(points="93,128 85,130 88,136" fill="#a07848")
-                text(x="95" y="125" fill="#8c6a4a" font-size="12" font-weight="600") Z
-
-                // Cube
-                path(d="M70 90 L120 90 L120 140 L70 140 Z" fill="none" stroke="#523a22" stroke-width="2")
-                path(d="M85 75 L135 75 L135 125 L85 125 Z" fill="none" stroke="#523a22" stroke-width="2")
-                line(x1="70" y1="90" x2="85" y2="75" stroke="#523a22" stroke-width="2")
-                line(x1="120" y1="90" x2="135" y2="75" stroke="#523a22" stroke-width="2")
-                line(x1="120" y1="140" x2="135" y2="125" stroke="#523a22" stroke-width="2")
-                line(x1="70" y1="140" x2="85" y2="125" stroke="#523a22" stroke-width="2")
+          .cta-row.hero-animate
+            a.cta(href="/studio.html")
+              | Launch Studio
+              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                line(x1="5" y1="12" x2="19" y2="12")
+                polyline(points="12 5 19 12 12 19")
+            a.cta.cta-secondary(href="/library.html") Launch File Manager
 
         section.landing-section.reverse.reveal
           .text
+            h2.reveal-child-1 We build in 3D.
+            p.reveal-child-2 Move, rotate, and scale in space. That part is familiar — every 3D tool gives you the three spatial dimensions. Grab the model and see.
+          .visual.reveal-child-3
+            .viewer-card
+              canvas#hero-viewer(aria-label="Live 3D model — drag to rotate")
+              .viewer-fallback
+                img(src="/landing/asset-howdy.webp", alt="A 3D character asset rendered in Arbesk")
+              span.viewer-hint Live · drag to rotate
+
+        section.landing-section.reveal
+          .text
             h2.reveal-child-1 Objects have memory.
             p.reveal-child-2 A scratch, a repaint, a redesign — in the real world, every change stays part of the object. Digital assets should work the same way.
+            p.reveal-child-2.hint-line Click the cube to repaint it — then drag the timeline to travel back through every colour it has ever been.
           .visual.reveal-child-3
-            .feature-card
-              svg(viewBox="0 0 240 200" aria-label="Cube with history trail")
-                // Ghost trail
-                rect(x="60" y="110" width="40" height="40" fill="none" stroke="#b89a7a" stroke-width="1.5" opacity="0.25" transform="rotate(-12 80 130)")
-                rect(x="70" y="105" width="40" height="40" fill="none" stroke="#b89a7a" stroke-width="1.5" opacity="0.4" transform="rotate(-6 90 125)")
-                rect(x="80" y="100" width="40" height="40" fill="none" stroke="#b89a7a" stroke-width="1.5" opacity="0.6")
-                // Current cube
-                rect(x="110" y="85" width="50" height="50" fill="#f0e6d8" stroke="#a07848" stroke-width="2.5" rx="4")
-                text(x="135" y="118" fill="#2a1a0e" font-size="11" font-weight="600" text-anchor="middle") NOW
+            .feature-card.memory-card
+              .memory-stage
+                canvas#memory-cube(aria-label="Interactive 3D object — click it to change its color")
+                span.memory-hint Click to repaint
+                p.memory-fallback An object that remembers every colour it has ever been.
+              .memory-controls
+                input#memory-scrub(type="range", min="0", max="2", value="2", step="1", aria-label="Scrub through past versions")
+                p.memory-status(aria-live="polite")
+              ul.memory-log(aria-live="polite")
 
-        section.landing-section.band-dark.slant-top.slant-bottom.reveal
+        section.landing-section.band-dark.reverse.reveal
           .text
             h2.reveal-child-1 Time is a dimension.
             p.reveal-child-2 Arbesk adds history as a first-class axis. Open any past version of any asset, instantly. No copies. No confusion.
           .visual.reveal-child-3
-            svg(viewBox="0 0 300 120" aria-label="Version timeline")
-              line(x1="20" y1="60" x2="280" y2="60" stroke="#a07848" stroke-width="2")
-              circle(cx="60" cy="60" r="6" fill="#a07848")
-              circle(cx="130" cy="60" r="6" fill="#a07848")
-              circle(cx="200" cy="60" r="6" fill="#a07848")
-              circle(cx="270" cy="60" r="8" fill="#faf6f2" stroke="#a07848" stroke-width="2")
-              text(x="60" y="90" fill="#b89a7a" font-size="11" font-weight="600" text-anchor="middle") v1
-              text(x="130" y="90" fill="#b89a7a" font-size="11" font-weight="600" text-anchor="middle") v2
-              text(x="200" y="90" fill="#b89a7a" font-size="11" font-weight="600" text-anchor="middle") v3
-              text(x="270" y="90" fill="#b89a7a" font-size="11" font-weight="600" text-anchor="middle") v4
-              // Scrub handle
-              rect(x="190" y="42" width="20" height="36" rx="4" fill="#a07848" opacity="0.25")
-              line(x1="200" y1="48" x2="200" y2="72" stroke="#a07848" stroke-width="2")
+            .timeline(aria-label="Version timeline, currently at version 4")
+              .stop
+                span.dot
+                span.label v1
+              .stop
+                span.dot
+                span.label v2
+              .stop
+                span.dot
+                span.label v3
+              .stop.active
+                .thumb
+                  img(src="/landing/asset-howdy.webp", alt="", aria-hidden="true")
+                span.dot
+                span.label v4
 
         section.landing-section.pull-quote.band-dark.reveal
           .quote-mark.reveal-child-1 “
@@ -485,60 +985,68 @@ html(lang="en")
             h2.reveal-child-1 Each asset is its own micro-ledger.
             p.reveal-child-2 Every version is a manifest. Every manifest links to the one before. Data + history, content-addressed and immutable.
           .visual.reveal-child-3
-            .feature-card
-              svg(viewBox="0 0 300 160" aria-label="Manifest chain")
-                // Chain blocks
-                rect(x="20" y="60" width="45" height="40" rx="6" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="42" y="85" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") M1
-
-                line(x1="65" y1="80" x2="90" y2="80" stroke="#a07848" stroke-width="2" stroke-dasharray="4 2")
-
-                rect(x="90" y="60" width="45" height="40" rx="6" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="112" y="85" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") M2
-
-                line(x1="135" y1="80" x2="160" y2="80" stroke="#a07848" stroke-width="2" stroke-dasharray="4 2")
-
-                rect(x="160" y="60" width="45" height="40" rx="6" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="182" y="85" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") M3
-
-                line(x1="205" y1="80" x2="230" y2="80" stroke="#a07848" stroke-width="2" stroke-dasharray="4 2")
-
-                rect(x="230" y="60" width="45" height="40" rx="6" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="252" y="85" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") M4
-
-                text(x="150" y="130" fill="#8c6a4a" font-size="12" font-weight="600" text-anchor="middle") prev_manifest_cid
+            .feature-card.ledger-card
+              .ledger-chain
+                .manifest
+                  span.mtag M1
+                  span.cid bafy…q2
+                span.link
+                .manifest
+                  span.mtag M2
+                  span.cid bafy…7h
+                span.link
+                .manifest
+                  span.mtag M3
+                  span.cid bafy…k9
+                span.link
+                .manifest
+                  span.mtag M4
+                  span.cid bafy…x4
+              .ledger-caption prev_manifest_cid
 
         section.landing-section.reverse.reveal
           .text
             h2.reveal-child-1 Built for teams.
             p.reveal-child-2 Comment on assets, invite editors with Merkle proofs, and collaborate on collections — all without reminting or losing history.
           .visual.reveal-child-3
-            .feature-card
-              svg(viewBox="0 0 240 180" aria-label="Collaboration")
-                // Shared folder
-                path(d="M60 60 L110 60 L120 75 L180 75 L180 130 L60 130 Z" fill="none" stroke="#a07848" stroke-width="2")
-                // Avatars
-                circle(cx="90" cy="120" r="14" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="90" y="125" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") A
-                circle(cx="125" cy="120" r="14" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="125" y="125" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") B
-                circle(cx="160" cy="120" r="14" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                text(x="160" y="125" fill="#2a1a0e" font-size="10" font-weight="600" text-anchor="middle") C
-                // Comment bubble
-                rect(x="150" y="40" width="60" height="30" rx="8" fill="#f0e6d8" stroke="#a07848" stroke-width="2")
-                polygon(points="160,70 165,78 170,70" fill="#f0e6d8" stroke="#a07848" stroke-width="1")
-                line(x1="160" y1="55" x2="200" y2="55" stroke="#b89a7a" stroke-width="2")
-                line(x1="160" y1="62" x2="190" y2="62" stroke="#b89a7a" stroke-width="2")
+            .feature-card.team-card
+              .team-scene
+                .pedestal
+                  .pedestal-asset
+                    img(src="/landing/asset-howdy.webp", alt="Howdy asset", aria-hidden="true")
+                  .pedestal-base
+                  span.pedestal-label
+                    strong Alice
+                    span edits Howdy
+                .pedestal
+                  .pedestal-asset
+                    img(src="/landing/asset-reema.webp", alt="Reema asset", aria-hidden="true")
+                  .pedestal-base
+                  span.pedestal-label
+                    strong Bob
+                    span edits Reema
+                .pedestal
+                  .pedestal-asset
+                    img(src="/landing/asset-suka.webp", alt="Suka asset", aria-hidden="true")
+                  .pedestal-base
+                  span.pedestal-label
+                    strong You
+                    span edit Suka
 
-        footer.landing-footer.band-dark.slant-top.reveal
+        footer.landing-footer.band-dark.reveal
           h2.reveal-child-1 Start building the future.
-          a.cta.reveal-child-2(href="/library.html") Launch App
-          .links.reveal-child-3
-            a(href="/library.html") Library
-            a(href="/studio.html") Studio
+          .cta-row.reveal-child-2
+            a.cta(href="/studio.html") Launch Studio
+            a.cta(href="/library.html") Launch File Manager
 
     script.
       (function () {
+        // Modern browsers animate reveals + parallax purely in CSS via
+        // animation-timeline; nothing to do here in that case.
+        if (window.CSS && CSS.supports && CSS.supports('animation-timeline: view()')) {
+          return;
+        }
+
         if (!('IntersectionObserver' in window)) {
           document.querySelectorAll('.reveal').forEach(function (el) {
             el.classList.add('revealed');
@@ -561,4 +1069,281 @@ html(lang="en")
         document.querySelectorAll('.reveal').forEach(function (el) {
           observer.observe(el);
         });
+      })();
+
+    script.
+      // Lazy Babylon viewers — booted only when scrolled into view, sharing a
+      // single CDN load between the Howdy model and the colour-memory cube.
+      (function () {
+        if (!('IntersectionObserver' in window)) return;
+
+        var BJS = 'https://cdn.babylonjs.com/v9.12.0/';
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var coreP = null, loadersP = null;
+
+        function loadScript(src) {
+          return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.crossOrigin = 'anonymous';
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        }
+        function ensureCore() {
+          if (!coreP) coreP = loadScript(BJS + 'babylon.js');
+          return coreP;
+        }
+        function ensureLoaders() {
+          if (!loadersP) loadersP = ensureCore().then(function () {
+            return loadScript(BJS + 'loaders/babylonjs.loaders.min.js');
+          });
+          return loadersP;
+        }
+
+        // Boot `setup(canvas)` the first time `canvas` scrolls into view, then
+        // pause/resume its render loop as it leaves/enters the viewport.
+        function lazyViewer(canvas, setup) {
+          var state = null, booting = false;
+          var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                if (state) { state.start(); }
+                else if (!booting) {
+                  booting = true;
+                  setup(canvas).then(function (s) { state = s; if (s) s.start(); });
+                }
+              } else if (state) {
+                state.stop();
+              }
+            });
+          }, { threshold: 0.2 });
+          io.observe(canvas);
+        }
+
+        function loopController(engine, render) {
+          return {
+            start: function () { engine.stopRenderLoop(); engine.runRenderLoop(render); },
+            stop: function () { engine.stopRenderLoop(); }
+          };
+        }
+
+        // ─── Live Howdy model viewer ───────────────────────────────────────
+        var heroCanvas = document.getElementById('hero-viewer');
+        if (heroCanvas) {
+          lazyViewer(heroCanvas, async function (canvas) {
+            var card = canvas.closest('.viewer-card');
+            try {
+              await ensureLoaders();
+            } catch (e) { card.classList.add('viewer-failed'); return null; }
+
+            var engine = new BABYLON.Engine(canvas, true, { alpha: true, antialias: true });
+            var scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+
+            var result;
+            try {
+              result = await BABYLON.SceneLoader.ImportMeshAsync('', '/models/', 'howdy.glb', scene);
+            } catch (e) { card.classList.add('viewer-failed'); engine.dispose(); return null; }
+
+            var min = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+            var max = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
+            result.meshes.forEach(function (m) {
+              if (!m.getTotalVertices || m.getTotalVertices() === 0) return;
+              var b = m.getBoundingInfo().boundingBox;
+              min = BABYLON.Vector3.Minimize(min, b.minimumWorld);
+              max = BABYLON.Vector3.Maximize(max, b.maximumWorld);
+            });
+            var center = min.add(max).scale(0.5);
+            var radius = max.subtract(min).length() / 2 || 1;
+
+            var camera = new BABYLON.ArcRotateCamera('cam', Math.PI / 4, Math.PI / 2.6, radius * 2.8, center, scene);
+            camera.fov = 0.5;
+            camera.lowerRadiusLimit = radius * 1.7;
+            camera.upperRadiusLimit = radius * 4;
+            camera.lowerBetaLimit = 0.6;
+            camera.upperBetaLimit = Math.PI / 1.9;
+            camera.wheelPrecision = 40;
+            camera.panningSensibility = 0;
+            camera.attachControl(canvas, true);
+
+            var key = new BABYLON.HemisphericLight('key', new BABYLON.Vector3(0.3, 1, 0.2), scene);
+            key.intensity = 0.95;
+            var rim = new BABYLON.DirectionalLight('rim', new BABYLON.Vector3(-0.6, -0.2, 1), scene);
+            rim.intensity = 1.4;
+            rim.diffuse = new BABYLON.Color3(0.63, 0.47, 0.28);
+            var fill = new BABYLON.DirectionalLight('fill', new BABYLON.Vector3(0.5, -0.5, -0.5), scene);
+            fill.intensity = 0.4;
+
+            var spinning = true;
+            canvas.addEventListener('pointerdown', function () { spinning = false; });
+            card.classList.add('viewer-ready');
+
+            return loopController(engine, function () {
+              engine.resize();
+              if (spinning && !reduce) camera.alpha += 0.0035;
+              scene.render();
+            });
+          });
+        }
+
+        // ─── Time-travelling colour-memory cube ───────────────────────────
+        // Click the cube to append a new version; drag the scrubber to travel
+        // back through every colour the object has ever been.
+        var cubeCanvas = document.getElementById('memory-cube');
+        if (cubeCanvas) {
+          var COLORS = [
+            { name: 'blue',   hex: '#3b6ea5' },
+            { name: 'green',  hex: '#4a8c5a' },
+            { name: 'amber',  hex: '#c08a3e' },
+            { name: 'crimson', hex: '#b3432f' },
+            { name: 'violet', hex: '#6a4a8c' },
+            { name: 'teal',   hex: '#2f8c8c' }
+          ];
+          var byName = {};
+          COLORS.forEach(function (c) { byName[c.name] = c; });
+
+          // versions[] runs oldest → newest. Seed a little history so the
+          // timeline is meaningful before the visitor touches anything.
+          var now = Date.now();
+          var versions = [
+            { name: 'amber', at: now - 12 * 60 * 1000 },
+            { name: 'blue',  at: now - 5 * 60 * 1000 },
+            { name: 'green', at: now }
+          ];
+          var selected = versions.length - 1; // index currently displayed
+
+          var logEl = document.querySelector('.memory-log');
+          var statusEl = document.querySelector('.memory-status');
+          var scrub = document.getElementById('memory-scrub');
+          var memCard = cubeCanvas.closest('.memory-card');
+          var view = null; // assigned once the Babylon cube boots: { setColor(hex) }
+
+          function relTime(at) {
+            var s = Math.round((Date.now() - at) / 1000);
+            if (s < 5) return 'just now';
+            if (s < 60) return s + 's ago';
+            var m = Math.round(s / 60);
+            if (m < 60) return m + ' min ago';
+            return Math.round(m / 60) + 'h ago';
+          }
+          function swatch(name) {
+            return '<span class="swatch" style="background:' + byName[name].hex + '"></span>';
+          }
+          function syncSlider() {
+            if (!scrub) return;
+            scrub.max = String(versions.length - 1);
+            scrub.value = String(selected);
+          }
+          function renderStatus() {
+            if (!statusEl) return;
+            var v = versions[selected];
+            var latest = selected === versions.length - 1;
+            if (latest) {
+              statusEl.innerHTML = '<strong>Latest version</strong> — ' +
+                v.name + ' · ' + relTime(v.at);
+            } else {
+              statusEl.innerHTML = '<span class="past-flag">Past version ' +
+                (selected + 1) + ' of ' + versions.length + '</span> — I was <strong>' +
+                v.name + '</strong> · ' + relTime(v.at);
+            }
+          }
+          function renderLog() {
+            if (!logEl) return;
+            var html = '';
+            for (var i = versions.length - 1; i >= 0; i--) {
+              var v = versions[i];
+              var cls = [];
+              if (i === versions.length - 1) cls.push('now');
+              if (i === selected) cls.push('active');
+              var label = (i === versions.length - 1) ? 'Now — ' + v.name : 'I was ' + v.name;
+              html += '<li class="' + cls.join(' ') + '">' + swatch(v.name) +
+                '<span>' + label + '</span>' +
+                '<span class="when">' + relTime(v.at) + '</span></li>';
+            }
+            logEl.innerHTML = html;
+          }
+          function applyColor() {
+            if (view) view.setColor(byName[versions[selected].name].hex);
+          }
+          function selectIndex(i) {
+            selected = Math.max(0, Math.min(versions.length - 1, parseInt(i, 10) || 0));
+            syncSlider();
+            applyColor();
+            renderStatus();
+            renderLog();
+          }
+          function paint() {
+            var last = versions[versions.length - 1].name;
+            var next;
+            do { next = COLORS[Math.floor(Math.random() * COLORS.length)]; }
+            while (next.name === last);
+            versions.push({ name: next.name, at: Date.now() });
+            if (versions.length > 8) versions.shift();
+            memCard.classList.add('touched');
+            selectIndex(versions.length - 1); // jump to the freshly-painted version
+          }
+
+          if (scrub) {
+            scrub.addEventListener('input', function () {
+              memCard.classList.add('touched');
+              selectIndex(scrub.value);
+            });
+          }
+
+          // Initial paint of slider + status + log (works before the cube boots).
+          syncSlider();
+          renderStatus();
+          renderLog();
+
+          lazyViewer(cubeCanvas, async function (canvas) {
+            try { await ensureCore(); } catch (e) { return null; }
+
+            var engine = new BABYLON.Engine(canvas, true, { alpha: true, antialias: true });
+            var scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+
+            var camera = new BABYLON.ArcRotateCamera('cam', Math.PI / 4, Math.PI / 2.7, 4.2, BABYLON.Vector3.Zero(), scene);
+            camera.fov = 0.5;
+            camera.lowerRadiusLimit = 3;
+            camera.upperRadiusLimit = 6;
+            camera.lowerBetaLimit = 0.5;
+            camera.upperBetaLimit = Math.PI / 1.9;
+            camera.wheelPrecision = 60;
+            camera.panningSensibility = 0;
+            camera.attachControl(canvas, true);
+
+            var key = new BABYLON.HemisphericLight('key', new BABYLON.Vector3(0.3, 1, 0.4), scene);
+            key.intensity = 0.9;
+            var rim = new BABYLON.DirectionalLight('rim', new BABYLON.Vector3(-0.6, -0.3, 1), scene);
+            rim.intensity = 1.1;
+            rim.diffuse = new BABYLON.Color3(0.63, 0.47, 0.28);
+
+            var cube = BABYLON.MeshBuilder.CreateBox('cube', { size: 1.7 }, scene);
+            var mat = new BABYLON.StandardMaterial('cubeMat', scene);
+            mat.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
+            cube.material = mat;
+            var target = BABYLON.Color3.FromHexString(byName[versions[selected].name].hex);
+            mat.diffuseColor = target.clone();
+
+            // Expose a colour setter so scrub/paint can drive the live cube.
+            view = { setColor: function (hex) { target = BABYLON.Color3.FromHexString(hex); } };
+
+            var downX = 0, downY = 0, spinning = true;
+            canvas.addEventListener('pointerdown', function (e) { downX = e.clientX; downY = e.clientY; spinning = false; });
+            canvas.addEventListener('pointerup', function (e) {
+              if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) < 8) paint();
+            });
+
+            memCard.classList.add('ready');
+
+            return loopController(engine, function () {
+              engine.resize();
+              if (spinning && !reduce) camera.alpha += 0.0028;
+              mat.diffuseColor = BABYLON.Color3.Lerp(mat.diffuseColor, target, 0.18);
+              scene.render();
+            });
+          });
+        }
       })();

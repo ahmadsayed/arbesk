@@ -12,6 +12,7 @@ import { walletState } from "../state/wallet-state.js";
 import { state } from "./state.js";
 import { getCssVar, hexToColor4 } from "./theme.js";
 import { clearScene } from "./cleanup.js";
+import { getStateForNewAsset } from "../utils/new-asset.js";
 
 import {
   selectNode,
@@ -741,13 +742,7 @@ export {
       }
 
       clearScene();
-      assetState.set({
-        activeAssetManifestCid: null,
-        latestAssetManifestCid: null,
-        activeAssetTokenId: null,
-        activeAssetId: null,
-        activeCollectionTokenId: null,
-      });
+      assetState.set(getStateForNewAsset(assetState.get()));
 
       // Prompt for a name using the GNOME HIG dialog
       let activeAssetName;

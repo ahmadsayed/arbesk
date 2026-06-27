@@ -143,6 +143,14 @@ async function requestCreateCollection() {
     }
 
     await refreshLibraryData();
+
+    // Open the new/existing collection so the user can immediately add assets
+    // to it (consistent with the toolbar create button).
+    libraryState.set({
+      currentCollectionTokenId: String(tokenId),
+      selectedIds: [],
+    });
+
     announce(isNew ? `Created collection ${name}` : `Opened collection ${name}`);
     showToast({
       type: "success",
@@ -352,14 +360,14 @@ export async function requestSendToCollection(assetId) {
   if (!targetTokenId) return;
 
   const mode = await showConfirmDialog(
-    "Send Asset",
-    `How would you like to send "${asset.name || asset.assetId}" to the target collection?`,
+    "Link Asset",
+    `How would you like to include "${asset.name || asset.assetId}" in the target collection?`,
     [
-      { text: "Move", value: "move", className: "btn btn-secondary" },
-      { text: "Copy", value: "copy", className: "btn btn-primary" },
+      { text: "Fork (copy)", value: "fork", className: "btn btn-secondary" },
+      { text: "Live reference", value: "live-ref", className: "btn btn-primary" },
     ]
   );
-  if (!mode || (mode !== "move" && mode !== "copy")) return;
+  if (!mode || (mode !== "fork" && mode !== "live-ref")) return;
 
   try {
     const { sendAssetToCollection } = await assetDeleteOps();
@@ -384,7 +392,7 @@ export async function requestSendToCollection(assetId) {
   }
 }
 
-function showTargetCollectionDialog(collections) {
+export function showTargetCollectionDialog(collections) {
   return new Promise((resolve) => {
     import("./dialog.js").then(() => {
       const options = collections
@@ -422,12 +430,25 @@ function showTargetCollectionDialog(collections) {
       backdrop.appendChild(dialog);
       document.body.appendChild(backdrop);
 
+      let trap = null;
       let resolved = false;
+
       function close(value) {
         if (resolved) return;
         resolved = true;
+        document.removeEventListener("keydown", onKey);
+        try {
+          trap?.deactivate();
+        } catch {}
         backdrop.remove();
         resolve(value);
+      }
+
+      function onKey(e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close(null);
+        }
       }
 
       dialog.querySelector(".dialog-cancel-btn")?.addEventListener("click", () => close(null));
@@ -435,20 +456,14 @@ function showTargetCollectionDialog(collections) {
         const select = dialog.querySelector("#targetCollectionSelect");
         close(select ? select.value : null);
       });
-      document.addEventListener("keydown", function onKey(e) {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          document.removeEventListener("keydown", onKey);
-          close(null);
-        }
-      });
+      document.addEventListener("keydown", onKey);
       backdrop.addEventListener("click", (e) => {
         if (e.target === backdrop) close(null);
       });
 
       if (window.focusTrap) {
         try {
-          const trap = window.focusTrap.createFocusTrap(dialog, {
+          trap = window.focusTrap.createFocusTrap(dialog, {
             initialFocus: dialog.querySelector("#targetCollectionSelect"),
             escapeDeactivates: false,
             allowOutsideClick: true,

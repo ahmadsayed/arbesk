@@ -16,6 +16,7 @@ let _walletAddress = OWNER;
 let _activeAssetTokenId = null;
 let _activeAssetId = null;
 let _dialogResult = "delete";
+let _sourceAssetManifest = null;
 let _collectionManifest = null;
 let _targetCollectionManifest = null;
 let _getProofResult = { proof: EDITOR_PROOF, role: 2 };
@@ -35,6 +36,13 @@ beforeEach(() => {
   _burnResult = "0xBurnTx";
   _unpinResult = { count: 1, errors: [] };
 
+  _sourceAssetManifest = {
+    type: "asset",
+    asset_id: "asset_1",
+    version: 1,
+    thumbnail: "bafyThumbnail",
+    scene: { nodes: [] },
+  };
   _collectionManifest = {
     type: "collection",
     asset_id: "col_1",
@@ -129,6 +137,7 @@ async function loadModule() {
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       getFromRemoteIPFS: jest.fn().mockImplementation((cid) => {
+        if (cid === ASSET_CID) return Promise.resolve(_sourceAssetManifest);
         if (cid === "bafyTargetCollection") return Promise.resolve(_targetCollectionManifest);
         return Promise.resolve(_collectionManifest);
       }),
@@ -321,7 +330,7 @@ describe("updateCollectionManifest", () => {
 });
 
 describe("sendAssetToCollection", () => {
-  test("move deletes from source and adds to target", async () => {
+  test("fork leaves source intact and adds the asset CID to target", async () => {
     const { sendAssetToCollection } = await loadModule();
     const { updateAssetURI } = await import(
       "../../frontend/src/js/blockchain/wallet.js"
@@ -332,31 +341,55 @@ describe("sendAssetToCollection", () => {
       targetTokenId: TARGET_TOKEN_ID,
       assetId: "asset_1",
       assetName: "My Asset",
-      mode: "move",
-    });
-
-    expect(updateAssetURI).toHaveBeenCalledTimes(2);
-    const calls = updateAssetURI.mock.calls;
-    expect(calls[0][0]).toBe(TOKEN_ID);
-    expect(calls[1][0]).toBe(TARGET_TOKEN_ID);
-  });
-
-  test("copy leaves source intact", async () => {
-    const { sendAssetToCollection } = await loadModule();
-    const { updateAssetURI } = await import(
-      "../../frontend/src/js/blockchain/wallet.js"
-    );
-
-    await sendAssetToCollection({
-      sourceTokenId: TOKEN_ID,
-      targetTokenId: TARGET_TOKEN_ID,
-      assetId: "asset_1",
-      assetName: "My Asset",
-      mode: "copy",
+      mode: "fork",
     });
 
     expect(updateAssetURI).toHaveBeenCalledTimes(1);
     expect(updateAssetURI.mock.calls[0][0]).toBe(TARGET_TOKEN_ID);
+  });
+
+  test("live-ref writes a child_ref manifest and adds it to target", async () => {
+    const { sendAssetToCollection } = await loadModule();
+    const { updateAssetURI } = await import(
+      "../../frontend/src/js/blockchain/wallet.js"
+    );
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+
+    await sendAssetToCollection({
+      sourceTokenId: TOKEN_ID,
+      targetTokenId: TARGET_TOKEN_ID,
+      assetId: "asset_1",
+      assetName: "My Asset",
+      mode: "live-ref",
+    });
+
+    expect(writeJSONToIPFS).toHaveBeenCalledTimes(2);
+    const written = writeJSONToIPFS.mock.calls.find(([json]) => json.type === "asset")?.[0];
+    expect(written).toBeDefined();
+    expect(written.thumbnail).toBe(_sourceAssetManifest.thumbnail);
+    expect(written.scene.nodes[0].child_ref).toMatchObject({
+      collection: expect.objectContaining({ tokenId: String(TOKEN_ID) }),
+      assetID: "asset_1",
+    });
+    expect(updateAssetURI).toHaveBeenCalledTimes(1);
+    expect(updateAssetURI.mock.calls[0][0]).toBe(TARGET_TOKEN_ID);
+    expect(_wroteCollection.json.assets).toHaveProperty(written.asset_id);
+  });
+
+  test("unsupported mode throws", async () => {
+    const { sendAssetToCollection } = await loadModule();
+
+    await expect(
+      sendAssetToCollection({
+        sourceTokenId: TOKEN_ID,
+        targetTokenId: TARGET_TOKEN_ID,
+        assetId: "asset_1",
+        assetName: "My Asset",
+        mode: "copy",
+      })
+    ).rejects.toThrow("Unsupported link mode: copy");
   });
 
   test("same source/target throws", async () => {
@@ -368,7 +401,7 @@ describe("sendAssetToCollection", () => {
         targetTokenId: TOKEN_ID,
         assetId: "asset_1",
         assetName: "My Asset",
-        mode: "move",
+        mode: "fork",
       })
     ).rejects.toThrow("Source and target collection must be different");
   });
@@ -382,7 +415,7 @@ describe("sendAssetToCollection", () => {
         targetTokenId: TARGET_TOKEN_ID,
         assetId: "missing_asset",
         assetName: "Missing Asset",
-        mode: "move",
+        mode: "fork",
       })
     ).rejects.toThrow("Asset missing_asset not found in source collection");
   });

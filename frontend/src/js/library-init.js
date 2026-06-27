@@ -132,7 +132,7 @@ async function buildCollectionEntries(tokenIds, role, walletAddr) {
     });
 }
 
-async function loadCurrentAssets() {
+export async function loadCurrentAssets() {
   const state = libraryState.get();
   const tokenId = state.currentCollectionTokenId;
   if (!tokenId) {
@@ -140,13 +140,20 @@ async function loadCurrentAssets() {
     return;
   }
 
-  libraryState.set({ isLoading: true });
+  libraryState.set({ assets: [], isLoading: true });
   try {
     const collection = state.collections.find(
       (c) => String(c.tokenId) === String(tokenId)
     );
     const role = collection?.role || "owner";
     const entries = await expandTokenToAssets(tokenId);
+
+    // Guard against stale async loads: if the user navigated to a different
+    // collection while this request was in flight, discard the result.
+    if (String(libraryState.get().currentCollectionTokenId) !== String(tokenId)) {
+      return;
+    }
+
     const assets = entries.map((entry) => ({
       id: `asset-${entry.tokenId}-${entry.assetId}`,
       type: "asset",
@@ -161,7 +168,9 @@ async function loadCurrentAssets() {
     libraryState.set({ assets, isLoading: false });
   } catch (err) {
     console.error("[LIBRARY] Failed to load collection assets", err);
-    libraryState.set({ assets: [], isLoading: false });
+    if (String(libraryState.get().currentCollectionTokenId) === String(tokenId)) {
+      libraryState.set({ assets: [], isLoading: false });
+    }
   }
 }
 
@@ -232,6 +241,15 @@ document.getElementById("connectWalletBtn")?.addEventListener("click", connectWa
 document.getElementById("libraryConnectBtn")?.addEventListener("click", connectWallet);
 initWalletPopover();
 
+let _lastLoadedCollectionTokenId = null;
+on(EVENTS.LIBRARY_STATE_CHANGED, (state) => {
+  const tokenId = state?.currentCollectionTokenId ?? null;
+  if (tokenId !== _lastLoadedCollectionTokenId) {
+    _lastLoadedCollectionTokenId = tokenId;
+    loadCurrentAssets();
+  }
+});
+
 initLibraryGrid();
 initLibraryToolbar();
 initLibraryContextMenu();
@@ -294,15 +312,6 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 
 on(EVENTS.USER_AUTHENTICATED, (e) => updateWalletButtonState(e?.address, true));
 on(EVENTS.USER_AUTH_REQUIRED, (e) => updateWalletButtonState(e?.address, false));
-
-let _lastLoadedCollectionTokenId = null;
-on(EVENTS.LIBRARY_STATE_CHANGED, (state) => {
-  const tokenId = state?.currentCollectionTokenId ?? null;
-  if (tokenId !== _lastLoadedCollectionTokenId) {
-    _lastLoadedCollectionTokenId = tokenId;
-    loadCurrentAssets();
-  }
-});
 
 on(EVENTS.ASSET_PUBLISHED, async () => {
   await refreshLibraryData();
