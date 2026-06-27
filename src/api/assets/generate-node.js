@@ -2,6 +2,8 @@ import express from "express";
 import { mockGenerate } from "../adapters/mock-adapter.js";
 import authenticate from "../authentication.js";
 import { generationRateLimit } from "../rate-limiter.js";
+import { validateBody } from "../validation.js";
+import { generateAssetSchema } from "../schemas.js";
 
 const Router = express.Router;
 
@@ -25,6 +27,7 @@ export default function generateAssetNode(_storage) {
     "/",
     authenticate,
     generationRateLimit,
+    validateBody(generateAssetSchema),
     async (req, res) => {
       try {
         const { prompt, nodeId, provider, providerKey } = req.body;

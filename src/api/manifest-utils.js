@@ -31,3 +31,6 @@ export function bumpManifestVersion(manifest, prevCid = null) {
     manifest.prev_asset_manifest_cid = prevCid;
   }
 }
+
+// Re-export runtime manifest validation from schemas.
+export { validateManifest } from "./schemas.js";

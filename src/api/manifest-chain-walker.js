@@ -20,7 +20,7 @@
 
 import { getStorage } from "./storage/index.js";
 import { maybeDecompress, extractIpfsCids } from "./ipfs-utils.js";
-import { getSceneNodes } from "./manifest-utils.js";
+import { getSceneNodes, validateManifest } from "./manifest-utils.js";
 
 /**
  * @param {string} cid
@@ -121,6 +121,13 @@ async function walkSingleChain(startCid, ctx) {
       console.warn(`[WALK] cannot read ${currentCid}: ${(/** @type {Error} */ (e)).message}`);
       ctx.errors.push(`read ${currentCid}: ${(/** @type {Error} */ (e)).message}`);
       break;
+    }
+
+    const validation = validateManifest(manifest);
+    if (!validation.valid) {
+      console.warn(
+        `[WALK] ${currentCid} manifest validation warnings: ${validation.errors.join("; ")}`,
+      );
     }
 
     const isCollection = manifest.type === "collection";

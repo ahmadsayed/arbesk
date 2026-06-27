@@ -9,6 +9,8 @@ import {
 import { getStorage } from "../storage/index.js";
 import { walkManifestChain } from "../manifest-chain-walker.js";
 import { runIpfsGC } from "../ipfs-gc.js";
+import { validateBody } from "../validation.js";
+import { unpinSchema, gcSchema } from "../schemas.js";
 
 const Router = express.Router;
 
@@ -76,14 +78,10 @@ export default function ipfsRoutes() {
    *
    * Auth: Session token required.
    */
-  router.post("/unpin", authenticate, unpinRateLimit, async (req, res) => {
+  router.post("/unpin", authenticate, unpinRateLimit, validateBody(unpinSchema), async (req, res) => {
     const startTime = Date.now();
     try {
-      const { cid: startCid } = req.body || {};
-      if (!startCid || typeof startCid !== "string") {
-        console.log(`[UNPIN] rejected - cid required`);
-        return sendError(res, 400, "MISSING_CID", "CID is required in body");
-      }
+      const { cid: startCid } = req.body;
 
       console.log(`[UNPIN] starting from ${startCid}`);
 
@@ -152,9 +150,10 @@ export default function ipfsRoutes() {
     authenticate,
     requireAdminToken,
     gcRateLimit,
+    validateBody(gcSchema),
     async (req, res) => {
       try {
-        const { dryRun, maxUnpin, chainId } = req.body || {};
+        const { dryRun, maxUnpin, chainId } = req.body;
         const result = await runIpfsGC({
           dryRun,
           maxUnpin,

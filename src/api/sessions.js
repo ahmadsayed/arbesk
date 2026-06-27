@@ -14,6 +14,8 @@
 import express from "express";
 import crypto from "crypto";
 import { verifySiwe } from "./siwe-verify.js";
+import { validateBody } from "./validation.js";
+import { createSessionSchema } from "./schemas.js";
 
 const Router = express.Router;
 
@@ -101,19 +103,9 @@ export default function sessionRouter() {
    *
    * Returns: { token: string, expiresAt: number }
    */
-  router.post("/", async (req, res) => {
+  router.post("/", validateBody(createSessionSchema), async (req, res) => {
     try {
       const { message, signature } = req.body;
-
-      if (!message || !signature) {
-        console.log("[SESSION] rejected - missing message or signature");
-        return res.status(400).json({
-          error: {
-            code: "MISSING_PARAMS",
-            message: "message and signature are required",
-          },
-        });
-      }
 
       // Verify SIWE message
       const result = await verifySiwe(message, signature, {

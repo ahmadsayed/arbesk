@@ -458,7 +458,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({ chainId: 31415822, assetId: "asset_42" });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("MISSING_TOKEN_ID");
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(res.body.error.details.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ["tokenId"] })]),
+      );
     });
 
     it("returns 400 when assetId is missing", async () => {
@@ -468,7 +471,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({ tokenId: "42", chainId: 31415822 });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("MISSING_ASSET_ID");
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(res.body.error.details.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ["assetId"] })]),
+      );
     });
   });
 

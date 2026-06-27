@@ -3,6 +3,8 @@ import { sendError } from "../errors.js";
 import authenticate from "../authentication.js";
 import { archiveCommentsForAsset } from "../comments-archive.js";
 import { getStorage } from "../storage/index.js";
+import { validateBody } from "../validation.js";
+import { snapshotCommentsSchema } from "../schemas.js";
 
 const Router = express.Router;
 
@@ -26,23 +28,21 @@ const Router = express.Router;
 export default function commentsRoutes({ getContractAddress }) {
   const router = Router();
 
-  router.post("/snapshot-comments", authenticate, async (req, res) => {
-    try {
-      const {
-        tokenId,
-        chainId,
-        contractAddress: reqContract,
-        assetId,
-      } = req.body || {};
-      if (!tokenId) {
-        return sendError(res, 400, "MISSING_TOKEN_ID", "tokenId is required");
-      }
-      if (!assetId) {
-        return sendError(res, 400, "MISSING_ASSET_ID", "assetId is required");
-      }
+  router.post(
+    "/snapshot-comments",
+    authenticate,
+    validateBody(snapshotCommentsSchema),
+    async (req, res) => {
+      try {
+        const {
+          tokenId,
+          chainId,
+          contractAddress: reqContract,
+          assetId,
+        } = req.body;
 
-      const chainIdNum = chainId ? Number(chainId) : null;
-      const contractAddr = reqContract || getContractAddress(chainIdNum);
+        const chainIdNum = chainId ?? null;
+        const contractAddr = reqContract || getContractAddress(chainIdNum);
       if (!contractAddr) {
         return sendError(
           res,
