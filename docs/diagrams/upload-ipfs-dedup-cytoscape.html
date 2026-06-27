@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload → Decomposition → IPFS Dedup (Cytoscape)</title>
+  <style>
+    :root {
+      --choco-1: #faf6f2;
+      --choco-2: #f0e6d8;
+      --choco-3: #e0d0bc;
+      --choco-4: #cdb89a;
+      --choco-5: #b89a7a;
+      --choco-6: #a28060;
+      --choco-7: #8c6a4a;
+      --choco-8: #7a5c3e;
+      --choco-9: #664a30;
+      --choco-10: #523a22;
+      --choco-11: #3d2a18;
+      --choco-12: #2a1a0e;
+      --gold: #a07848;
+
+      --window-bg: var(--choco-12);
+      --window-fg: var(--choco-2);
+      --card-bg: var(--choco-10);
+      --card-fg: var(--choco-3);
+      --border-color: var(--choco-9);
+      --accent-bg: var(--gold);
+      --dim-fg: var(--choco-6);
+
+      --branch-tex: #f59e0b;
+      --branch-mesh: #38bdf8;
+      --branch-anim: #a78bfa;
+      --status-new: #10b981;
+      --status-dupe: #ec4899;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --window-bg: var(--choco-1);
+        --window-fg: var(--choco-12);
+        --card-bg: var(--choco-1);
+        --card-fg: var(--choco-11);
+        --border-color: #b89a7a;
+        --accent-bg: var(--gold);
+        --dim-fg: var(--choco-7);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--window-bg);
+      color: var(--window-fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .slide {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    p.subtitle {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--dim-fg);
+    }
+
+    #cy {
+      position: relative;
+      width: 100%;
+      max-width: 1150px;
+      height: 320px;
+      border-radius: 14px;
+      background: transparent;
+    }
+
+    .particle-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    .cy-particle {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent-bg);
+      box-shadow: 0 0 8px var(--accent-bg);
+      opacity: 0;
+      animation: cy-particle-move 2.4s linear infinite;
+    }
+
+    @keyframes cy-particle-move {
+      0% { offset-distance: 0%; opacity: 0; }
+      8% { opacity: 1; }
+      92% { opacity: 1; }
+      100% { offset-distance: 100%; opacity: 0; }
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--dim-fg);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.tex { background: var(--branch-tex); }
+    .dot.mesh { background: var(--branch-mesh); }
+    .dot.anim { background: var(--branch-anim); }
+    .dot.new { background: var(--status-new); }
+    .dot.dupe { background: var(--status-dupe); }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <header>
+      <h1>Upload → Decomposition → IPFS Dedup</h1>
+      <p class="subtitle">One asset splits into textures, mesh, and animation; each branch is hashed and uploaded independently.</p>
+    </header>
+
+    <div id="cy"></div>
+
+    <div class="legend">
+      <span><span class="dot tex"></span> Textures</span>
+      <span><span class="dot mesh"></span> Mesh</span>
+      <span><span class="dot anim"></span> Animation</span>
+      <span><span class="dot new"></span> Stored</span>
+      <span><span class="dot dupe"></span> Reused CID</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+  <script>
+    const colors = {
+      tex: '#f59e0b',
+      mesh: '#38bdf8',
+      anim: '#a78bfa',
+      main: '#a07848',
+      dim: '#8b9bb4',
+      card: '#523a22',
+      border: '#664a30',
+      text: '#f0e6d8'
+    };
+
+    const nodes = [
+      { data: { id: 'upload', label: '📁 Upload', step: 0 }, position: { x: 60, y: 160 } },
+      { data: { id: 'decompose', label: '🧩 Decompose', step: 1 }, position: { x: 220, y: 160 } },
+
+      { data: { id: 'tex', label: '🖼️ Textures', branch: 'tex', step: 2 }, position: { x: 420, y: 60 } },
+      { data: { id: 'mesh', label: '🔷 Mesh', branch: 'mesh', step: 2 }, position: { x: 420, y: 160 } },
+      { data: { id: 'anim', label: '🏃 Animation', branch: 'anim', step: 2 }, position: { x: 420, y: 260 } },
+
+      { data: { id: 'hash-tex', label: '#️⃣ Hash', branch: 'tex', step: 3 }, position: { x: 600, y: 60 } },
+      { data: { id: 'hash-mesh', label: '#️⃣ Hash', branch: 'mesh', step: 3 }, position: { x: 600, y: 160 } },
+      { data: { id: 'hash-anim', label: '#️⃣ Hash', branch: 'anim', step: 3 }, position: { x: 600, y: 260 } },
+
+      { data: { id: 'ipfs-tex', label: '🌐 IPFS', branch: 'tex', step: 4 }, position: { x: 780, y: 60 } },
+      { data: { id: 'ipfs-mesh', label: '🌐 IPFS', branch: 'mesh', step: 4 }, position: { x: 780, y: 160 } },
+      { data: { id: 'ipfs-anim', label: '🌐 IPFS', branch: 'anim', step: 4 }, position: { x: 780, y: 260 } },
+
+      { data: { id: 'dedup', label: '♻️ Dedup', step: 5 }, position: { x: 980, y: 160 } }
+    ];
+
+    const edges = [
+      { data: { id: 'e1', source: 'upload', target: 'decompose' } },
+
+      { data: { id: 'e2-tex', source: 'decompose', target: 'tex', branch: 'tex' } },
+      { data: { id: 'e2-mesh', source: 'decompose', target: 'mesh', branch: 'mesh' } },
+      { data: { id: 'e2-anim', source: 'decompose', target: 'anim', branch: 'anim' } },
+
+      { data: { id: 'e3-tex', source: 'tex', target: 'hash-tex', branch: 'tex' } },
+      { data: { id: 'e3-mesh', source: 'mesh', target: 'hash-mesh', branch: 'mesh' } },
+      { data: { id: 'e3-anim', source: 'anim', target: 'hash-anim', branch: 'anim' } },
+
+      { data: { id: 'e4-tex', source: 'hash-tex', target: 'ipfs-tex', branch: 'tex' } },
+      { data: { id: 'e4-mesh', source: 'hash-mesh', target: 'ipfs-mesh', branch: 'mesh' } },
+      { data: { id: 'e4-anim', source: 'hash-anim', target: 'ipfs-anim', branch: 'anim' } },
+
+      { data: { id: 'e5-tex', source: 'ipfs-tex', target: 'dedup', branch: 'tex' } },
+      { data: { id: 'e5-mesh', source: 'ipfs-mesh', target: 'dedup', branch: 'mesh' } },
+      { data: { id: 'e5-anim', source: 'ipfs-anim', target: 'dedup', branch: 'anim' } }
+    ];
+
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements: { nodes, edges },
+      layout: { name: 'preset' },
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': colors.card,
+            'border-width': 1.5,
+            'border-color': colors.border,
+            'label': 'data(label)',
+            'color': colors.text,
+            'font-size': '13px',
+            'font-weight': '600',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'width': 'label',
+            'height': 42,
+            'padding': '12px',
+            'shape': 'roundrectangle',
+            'transition-property': 'border-color, background-color, border-width',
+            'transition-duration': '0.25s'
+          }
+        },
+        {
+          selector: 'node[branch="tex"]',
+          style: { 'border-color': `rgba(245,158,11,0.6)` }
+        },
+        {
+          selector: 'node[branch="mesh"]',
+          style: { 'border-color': `rgba(56,189,248,0.6)` }
+        },
+        {
+          selector: 'node[branch="anim"]',
+          style: { 'border-color': `rgba(139,92,246,0.6)` }
+        },
+        {
+          selector: 'node.active',
+          style: {
+            'border-color': colors.main,
+            'border-width': 2.5,
+            'background-color': `color-mix(in srgb, ${colors.card} 90%, ${colors.main})`
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'curve-style': 'bezier',
+            'target-arrow-shape': 'triangle',
+            'arrow-scale': 1.2,
+            'line-color': colors.border,
+            'target-arrow-color': colors.border,
+            'transition-property': 'line-color, target-arrow-color, width',
+            'transition-duration': '0.25s'
+          }
+        },
+        {
+          selector: 'edge[branch="tex"]',
+          style: { 'line-color': colors.tex, 'target-arrow-color': colors.tex }
+        },
+        {
+          selector: 'edge[branch="mesh"]',
+          style: { 'line-color': colors.mesh, 'target-arrow-color': colors.mesh }
+        },
+        {
+          selector: 'edge[branch="anim"]',
+          style: { 'line-color': colors.anim, 'target-arrow-color': colors.anim }
+        },
+        {
+          selector: 'edge.active',
+          style: {
+            'width': 3,
+            'line-color': colors.main,
+            'target-arrow-color': colors.main,
+            'shadow-blur': 8,
+            'shadow-color': colors.main
+          }
+        }
+      ],
+      minZoom: 0.5,
+      maxZoom: 2,
+      userZoomingEnabled: false,
+      userPanningEnabled: false
+    });
+
+    // Lock the viewport so rendered positions stay in sync with the overlay.
+    cy.zoom(1);
+    cy.pan({ x: 0, y: 0 });
+    cy.panningEnabled(false);
+    cy.zoomingEnabled(false);
+
+    // Animated particle overlay
+    const container = document.getElementById('cy');
+    const particleLayer = document.createElement('div');
+    particleLayer.className = 'particle-layer';
+    container.appendChild(particleLayer);
+
+    function buildEdgePath(edge) {
+      const src = edge.renderedSourceEndpoint();
+      const tgt = edge.renderedTargetEndpoint();
+      const cps = edge.renderedControlPoints() || [];
+
+      if (cps.length === 0) {
+        return `M ${src.x} ${src.y} L ${tgt.x} ${tgt.y}`;
+      }
+      if (cps.length === 1) {
+        return `M ${src.x} ${src.y} Q ${cps[0].x} ${cps[0].y}, ${tgt.x} ${tgt.y}`;
+      }
+      return `M ${src.x} ${src.y} C ${cps[0].x} ${cps[0].y}, ${cps[1].x} ${cps[1].y}, ${tgt.x} ${tgt.y}`;
+    }
+
+    function createParticles() {
+      particleLayer.innerHTML = '';
+      cy.edges().forEach(edge => {
+        const branch = edge.data('branch');
+        const color = branch ? colors[branch] : colors.main;
+        const d = buildEdgePath(edge);
+        const particle = document.createElement('div');
+        particle.className = 'cy-particle';
+        particle.style.background = color;
+        particle.style.boxShadow = `0 0 8px ${color}`;
+        particle.style.offsetPath = `path('${d.replace(/'/g, "\\'")}')`;
+        particle.style.animationDelay = `${Math.random() * 2000}ms`;
+        particle.style.animationDuration = `${2200 + Math.random() * 600}ms`;
+        particleLayer.appendChild(particle);
+      });
+    }
+
+    cy.ready(createParticles);
+
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      cy.resize();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(createParticles, 120);
+    });
+
+    const stepGroups = [
+      ['upload'],
+      ['decompose'],
+      ['tex', 'mesh', 'anim'],
+      ['hash-tex', 'hash-mesh', 'hash-anim'],
+      ['ipfs-tex', 'ipfs-mesh', 'ipfs-anim'],
+      ['dedup']
+    ];
+
+    let stepIndex = 0;
+    function highlightStep() {
+      cy.nodes().removeClass('active');
+      cy.edges().removeClass('active');
+
+      const ids = stepGroups[stepIndex];
+      cy.nodes(`#${ids.join(', #')}`).addClass('active');
+
+      ids.forEach(id => {
+        cy.edges(`[source = "${id}"]`).addClass('active');
+      });
+
+      stepIndex = (stepIndex + 1) % stepGroups.length;
+    }
+
+    setTimeout(() => {
+      highlightStep();
+      setInterval(highlightStep, 1400);
+    }, 200);
+  </script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download ← IPFS Recomposition Flow (D3.js)</title>
+  <style>
+    :root {
+      --choco-1: #faf6f2;
+      --choco-2: #f0e6d8;
+      --choco-3: #e0d0bc;
+      --choco-4: #cdb89a;
+      --choco-5: #b89a7a;
+      --choco-6: #a28060;
+      --choco-7: #8c6a4a;
+      --choco-8: #7a5c3e;
+      --choco-9: #664a30;
+      --choco-10: #523a22;
+      --choco-11: #3d2a18;
+      --choco-12: #2a1a0e;
+      --gold: #a07848;
+
+      --window-bg: var(--choco-12);
+      --window-fg: var(--choco-2);
+      --card-bg: var(--choco-10);
+      --card-fg: var(--choco-3);
+      --border-color: var(--choco-9);
+      --accent-bg: var(--gold);
+      --dim-fg: var(--choco-6);
+
+      --branch-tex: #f59e0b;
+      --branch-mesh: #38bdf8;
+      --branch-anim: #a78bfa;
+      --status-new: #10b981;
+      --status-dupe: #ec4899;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --window-bg: var(--choco-1);
+        --window-fg: var(--choco-12);
+        --card-bg: var(--choco-1);
+        --card-fg: var(--choco-11);
+        --border-color: #b89a7a;
+        --accent-bg: var(--gold);
+        --dim-fg: var(--choco-7);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--window-bg);
+      color: var(--window-fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .slide {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    p.subtitle {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--dim-fg);
+    }
+
+    #diagram {
+      width: 100%;
+      max-width: 1150px;
+      height: 320px;
+    }
+
+    #diagram svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .node rect {
+      fill: var(--card-bg);
+      stroke-width: 1.5;
+      stroke: var(--border-color);
+      rx: 10;
+      ry: 10;
+      transition: stroke 0.25s, stroke-width 0.25s, filter 0.25s;
+    }
+
+    .node.active rect {
+      stroke: var(--accent-bg);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent-bg) 40%, transparent));
+    }
+
+    .node.branch-tex rect { stroke: rgba(245,158,11,0.6); }
+    .node.branch-mesh rect { stroke: rgba(56,189,248,0.6); }
+    .node.branch-anim rect { stroke: rgba(139,92,246,0.6); }
+
+    .node text {
+      fill: var(--card-fg);
+      font-size: 13px;
+      font-weight: 600;
+      dominant-baseline: middle;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .edge path {
+      fill: none;
+      stroke-width: 2;
+      stroke: var(--border-color);
+      transition: stroke 0.25s, stroke-width 0.25s;
+    }
+
+    .edge.active path {
+      stroke: var(--accent-bg);
+      stroke-width: 3;
+    }
+
+    .edge.branch-tex path { stroke: var(--branch-tex); }
+    .edge.branch-mesh path { stroke: var(--branch-mesh); }
+    .edge.branch-anim path { stroke: var(--branch-anim); }
+
+    .particle {
+      pointer-events: none;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--dim-fg);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.tex { background: var(--branch-tex); }
+    .dot.mesh { background: var(--branch-mesh); }
+    .dot.anim { background: var(--branch-anim); }
+    .dot.new { background: var(--status-new); }
+    .dot.dupe { background: var(--status-dupe); }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <header>
+      <h1>Download ← IPFS Recomposition Flow</h1>
+      <p class="subtitle">Request blocks by CID, resolve duplicates, verify hashes, and recompose into the final asset.</p>
+    </header>
+
+    <div id="diagram"></div>
+
+    <div class="legend">
+      <span><span class="dot tex"></span> Textures</span>
+      <span><span class="dot mesh"></span> Mesh</span>
+      <span><span class="dot anim"></span> Animation</span>
+      <span><span class="dot new"></span> Fetched block</span>
+      <span><span class="dot dupe"></span> Reused CID</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  <script>
+    const width = 1100;
+    const height = 320;
+    const nodeWidth = 120;
+    const nodeHeight = 42;
+    const gap = 10;
+
+    const nodes = [
+      { id: 'request', label: '📥 Request', x: 70, y: 160, step: 0 },
+      { id: 'ipfs', label: '🌐 IPFS', x: 210, y: 160, step: 1 },
+      { id: 'dedup', label: '♻️ Dedup', x: 350, y: 160, step: 2 },
+
+      { id: 'fetch-tex', label: '🖼️ Fetch Textures', x: 530, y: 60, branch: 'tex', step: 3 },
+      { id: 'fetch-mesh', label: '🔷 Fetch Mesh', x: 530, y: 160, branch: 'mesh', step: 3 },
+      { id: 'fetch-anim', label: '🏃 Fetch Anim', x: 530, y: 260, branch: 'anim', step: 3 },
+
+      { id: 'verify-tex', label: '#️⃣ Verify Hash', x: 710, y: 60, branch: 'tex', step: 4 },
+      { id: 'verify-mesh', label: '#️⃣ Verify Hash', x: 710, y: 160, branch: 'mesh', step: 4 },
+      { id: 'verify-anim', label: '#️⃣ Verify Hash', x: 710, y: 260, branch: 'anim', step: 4 },
+
+      { id: 'recompose', label: '🧩 Recompose', x: 870, y: 160, step: 5 },
+      { id: 'download', label: '📦 Download', x: 1020, y: 160, step: 6 }
+    ];
+
+    const edges = [
+      { id: 'e1', source: 'request', target: 'ipfs' },
+      { id: 'e2', source: 'ipfs', target: 'dedup' },
+
+      { id: 'e3-tex', source: 'dedup', target: 'fetch-tex', branch: 'tex' },
+      { id: 'e3-mesh', source: 'dedup', target: 'fetch-mesh', branch: 'mesh' },
+      { id: 'e3-anim', source: 'dedup', target: 'fetch-anim', branch: 'anim' },
+
+      { id: 'e4-tex', source: 'fetch-tex', target: 'verify-tex', branch: 'tex' },
+      { id: 'e4-mesh', source: 'fetch-mesh', target: 'verify-mesh', branch: 'mesh' },
+      { id: 'e4-anim', source: 'fetch-anim', target: 'verify-anim', branch: 'anim' },
+
+      { id: 'e5-tex', source: 'verify-tex', target: 'recompose', branch: 'tex' },
+      { id: 'e5-mesh', source: 'verify-mesh', target: 'recompose', branch: 'mesh' },
+      { id: 'e5-anim', source: 'verify-anim', target: 'recompose', branch: 'anim' },
+
+      { id: 'e6', source: 'recompose', target: 'download' }
+    ];
+
+    const svg = d3.select('#diagram')
+      .append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    function sourcePoint(edge) {
+      const s = nodes.find(n => n.id === edge.source);
+      const t = nodes.find(n => n.id === edge.target);
+      const sx = s.x + nodeWidth / 2;
+      const sy = s.y + offsetToward(s.y, t.y, nodeHeight / 2 * 0.55);
+      return { x: sx, y: sy };
+    }
+
+    function targetPoint(edge) {
+      const s = nodes.find(n => n.id === edge.source);
+      const t = nodes.find(n => n.id === edge.target);
+      const tx = t.x - nodeWidth / 2 - gap;
+      const ty = t.y + offsetToward(t.y, s.y, nodeHeight / 2 * 0.55);
+      return { x: tx, y: ty };
+    }
+
+    function offsetToward(from, to, max) {
+      const d = to - from;
+      return Math.sign(d) * Math.min(Math.abs(d), max);
+    }
+
+    function edgePath(edge) {
+      const s = sourcePoint(edge);
+      const t = targetPoint(edge);
+      const midX = (s.x + t.x) / 2;
+      if (Math.abs(t.y - s.y) < 2) {
+        return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+      }
+      return `M ${s.x} ${s.y} C ${midX} ${s.y}, ${midX} ${t.y}, ${t.x} ${t.y}`;
+    }
+
+    const edgeGroups = svg.selectAll('.edge')
+      .data(edges)
+      .enter()
+      .append('g')
+      .attr('class', d => `edge ${d.branch ? 'branch-' + d.branch : ''}`)
+      .attr('data-from', d => d.source)
+      .attr('data-to', d => d.target);
+
+    const edgePaths = edgeGroups.append('path')
+      .attr('d', edgePath);
+
+    const nodeGroups = svg.selectAll('.node')
+      .data(nodes)
+      .enter()
+      .append('g')
+      .attr('class', d => `node ${d.branch ? 'branch-' + d.branch : ''}`)
+      .attr('transform', d => `translate(${d.x - nodeWidth / 2}, ${d.y - nodeHeight / 2})`)
+      .attr('data-id', d => d.id);
+
+    nodeGroups.append('rect')
+      .attr('width', nodeWidth)
+      .attr('height', nodeHeight);
+
+    nodeGroups.append('text')
+      .attr('x', nodeWidth / 2)
+      .attr('y', nodeHeight / 2)
+      .text(d => d.label);
+
+    edgeGroups.each(function(d) {
+      const path = d3.select(this).select('path').node();
+      const len = path.getTotalLength();
+      const color = d.branch ? (d.branch === 'tex' ? '#f59e0b' : d.branch === 'mesh' ? '#38bdf8' : '#a78bfa') : '#a07848';
+
+      const particle = d3.select(this).append('circle')
+        .attr('class', 'particle')
+        .attr('r', 4)
+        .attr('fill', color)
+        .attr('filter', `drop-shadow(0 0 4px ${color})`)
+        .attr('opacity', 0);
+
+      function animate() {
+        particle
+          .attr('opacity', 0)
+          .transition()
+          .duration(2200 + Math.random() * 600)
+          .ease(d3.easeLinear)
+          .attrTween('transform', function() {
+            return function(t) {
+              const p = path.getPointAtLength(t * len);
+              return `translate(${p.x}, ${p.y})`;
+            };
+          })
+          .attrTween('opacity', function() {
+            return function(t) {
+              return t < 0.08 || t > 0.92 ? 0 : 1;
+            };
+          })
+          .on('end', animate);
+      }
+
+      setTimeout(animate, Math.random() * 2000);
+    });
+
+    const stepGroups = [
+      ['request'],
+      ['ipfs'],
+      ['dedup'],
+      ['fetch-tex', 'fetch-mesh', 'fetch-anim'],
+      ['verify-tex', 'verify-mesh', 'verify-anim'],
+      ['recompose'],
+      ['download']
+    ];
+
+    let stepIndex = 0;
+    function highlightStep() {
+      d3.selectAll('.node').classed('active', false);
+      d3.selectAll('.edge').classed('active', false);
+
+      const ids = stepGroups[stepIndex];
+      ids.forEach(id => {
+        d3.select(`.node[data-id="${id}"]`).classed('active', true);
+      });
+
+      ids.forEach(id => {
+        d3.selectAll(`.edge[data-from="${id}"]`).classed('active', true);
+      });
+
+      stepIndex = (stepIndex + 1) % stepGroups.length;
+    }
+
+    setTimeout(() => {
+      highlightStep();
+      setInterval(highlightStep, 1400);
+    }, 200);
+  </script>
+</body>
+</html>

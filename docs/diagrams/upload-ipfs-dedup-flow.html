@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload → Decomposition → IPFS Dedup</title>
+  <style>
+/* ═══════════════════════════════════════════════════════════════════
+   Arbesk Diagram Theme
+   Shared styles for flow diagrams in docs/diagrams/.
+   Mirrors frontend/src/scss/base/_tokens.scss.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  --choco-1: #faf6f2;
+  --choco-2: #f0e6d8;
+  --choco-3: #e0d0bc;
+  --choco-4: #cdb89a;
+  --choco-5: #b89a7a;
+  --choco-6: #a28060;
+  --choco-7: #8c6a4a;
+  --choco-8: #7a5c3e;
+  --choco-9: #664a30;
+  --choco-10: #523a22;
+  --choco-11: #3d2a18;
+  --choco-12: #2a1a0e;
+  --gold: #a07848;
+
+  --window-bg: var(--choco-12);
+  --window-fg: var(--choco-2);
+  --card-bg: var(--choco-10);
+  --card-fg: var(--choco-3);
+  --border-color: var(--choco-9);
+  --accent-bg: var(--gold);
+  --dim-fg: var(--choco-6);
+
+  --branch-tex: #f59e0b;
+  --branch-mesh: #38bdf8;
+  --branch-anim: #a78bfa;
+  --status-new: #10b981;
+  --status-dupe: #ec4899;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --window-bg: var(--choco-1);
+    --window-fg: var(--choco-12);
+    --card-bg: var(--choco-1);
+    --card-fg: var(--choco-11);
+    --border-color: #b89a7a;
+    --accent-bg: var(--gold);
+    --dim-fg: var(--choco-7);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--window-bg);
+  color: var(--window-fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.slide {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+h1 {
+  margin: 0 0 0.4rem;
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--window-fg);
+}
+
+p.subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--dim-fg);
+}
+
+.diagram {
+  position: relative;
+  width: 100%;
+  max-width: 1150px;
+  height: 260px;
+}
+
+svg.arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+svg.arrows path {
+  fill: none;
+  stroke: var(--border-color);
+  stroke-width: 2;
+  transition: stroke 0.3s;
+}
+
+svg.arrows path.active {
+  stroke: var(--accent-bg);
+}
+
+svg.arrows marker polygon {
+  fill: var(--border-color);
+  transition: fill 0.3s;
+}
+
+svg.arrows.active-marker marker polygon {
+  fill: var(--accent-bg);
+}
+
+.node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  min-width: 110px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  z-index: 2;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+}
+
+.node.active {
+  border-color: var(--accent-bg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-bg) 30%, transparent), 0 6px 20px rgba(0,0,0,0.25);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.node .icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.node .label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--card-fg);
+  white-space: nowrap;
+}
+
+.node.branch-tex { border-color: rgba(245,158,11,0.45); }
+.node.branch-mesh { border-color: rgba(56,189,248,0.45); }
+.node.branch-anim { border-color: rgba(139,92,246,0.45); }
+
+.particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  box-shadow: 0 0 8px var(--accent-bg);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+}
+
+.legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 2.5rem;
+  font-size: 0.78rem;
+  color: var(--dim-fg);
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dot { width: 9px; height: 9px; border-radius: 50%; }
+.dot.tex { background: var(--branch-tex); }
+.dot.mesh { background: var(--branch-mesh); }
+.dot.anim { background: var(--branch-anim); }
+.dot.new { background: var(--status-new); }
+.dot.dupe { background: var(--status-dupe); }
+
+.dedup-mini {
+  display: flex;
+  gap: 3px;
+  margin-left: 0.4rem;
+}
+
+.dedup-mini .cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  font-size: 0.55rem;
+  display: grid;
+  place-items: center;
+}
+
+.dedup-mini .cell.new {
+  background: rgba(16,185,129,0.2);
+  color: var(--status-new);
+}
+
+.dedup-mini .cell.dupe {
+  background: rgba(236,72,153,0.12);
+  color: var(--status-dupe);
+}
+
+@media (max-width: 950px) {
+  .diagram { transform: scale(0.82); }
+}
+
+</style>
+  <style>
+    /* Per-diagram node positions */
+    .node.upload    { left: 6%;  top: 50%; }
+    .node.decompose { left: 22%; top: 50%; }
+
+    .node.tex  { left: 42%; top: 18%; }
+    .node.mesh { left: 42%; top: 50%; }
+    .node.anim { left: 42%; top: 82%; }
+
+    .node.hash-tex  { left: 58%; top: 18%; }
+    .node.hash-mesh { left: 58%; top: 50%; }
+    .node.hash-anim { left: 58%; top: 82%; }
+
+    .node.ipfs-tex  { left: 74%; top: 18%; }
+    .node.ipfs-mesh { left: 74%; top: 50%; }
+    .node.ipfs-anim { left: 74%; top: 82%; }
+
+    .node.dedup { left: 92%; top: 50%; }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <header>
+      <h1>Upload → Decomposition → IPFS Dedup</h1>
+      <p class="subtitle">One asset splits into textures, mesh, and animation; each branch is hashed and uploaded independently.</p>
+    </header>
+
+    <div class="diagram" id="diagram">
+      <svg class="arrows" id="svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" />
+          </marker>
+          <marker id="arrowhead-tex" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+          </marker>
+          <marker id="arrowhead-mesh" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8" />
+          </marker>
+          <marker id="arrowhead-anim" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
+          </marker>
+        </defs>
+      </svg>
+
+      <div class="node upload" data-step="0"><span class="icon">📁</span><span class="label">Upload</span></div>
+      <div class="node decompose" data-step="1"><span class="icon">🧩</span><span class="label">Decompose</span></div>
+
+      <div class="node tex branch-tex" data-step="2"><span class="icon">🖼️</span><span class="label">Textures</span></div>
+      <div class="node mesh branch-mesh" data-step="2"><span class="icon">🔷</span><span class="label">Mesh</span></div>
+      <div class="node anim branch-anim" data-step="2"><span class="icon">🏃</span><span class="label">Animation</span></div>
+
+      <div class="node hash-tex" data-step="3"><span class="icon">#️⃣</span><span class="label">Hash</span></div>
+      <div class="node hash-mesh" data-step="3"><span class="icon">#️⃣</span><span class="label">Hash</span></div>
+      <div class="node hash-anim" data-step="3"><span class="icon">#️⃣</span><span class="label">Hash</span></div>
+
+      <div class="node ipfs-tex" data-step="4"><span class="icon">🌐</span><span class="label">IPFS</span></div>
+      <div class="node ipfs-mesh" data-step="4"><span class="icon">🌐</span><span class="label">IPFS</span></div>
+      <div class="node ipfs-anim" data-step="4"><span class="icon">🌐</span><span class="label">IPFS</span></div>
+
+      <div class="node dedup" data-step="5">
+        <span class="icon">♻️</span>
+        <span class="label">Dedup</span>
+        <span class="dedup-mini">
+          <span class="cell new">✓</span>
+          <span class="cell dupe">✕</span>
+          <span class="cell new">✓</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot tex"></span> Textures</span>
+      <span><span class="dot mesh"></span> Mesh</span>
+      <span><span class="dot anim"></span> Animation</span>
+      <span><span class="dot new"></span> Stored</span>
+      <span><span class="dot dupe"></span> Reused CID</span>
+    </div>
+  </div>
+
+  <script>
+/**
+ * Arbesk Diagram Engine
+ * Shared SVG connection + particle + highlight logic for docs/diagrams/.
+ */
+
+window.DiagramEngine = (function () {
+  'use strict';
+
+  const defaults = {
+    diagramId: 'diagram',
+    svgId: 'svg',
+    stepInterval: 1400,
+    particleDuration: 2200,
+    particleJitter: 500,
+    arrowGap: 7
+  };
+
+  function injectKeyframes() {
+    if (document.getElementById('diagram-engine-keyframes')) return;
+    const style = document.createElement('style');
+    style.id = 'diagram-engine-keyframes';
+    style.textContent = `
+      @keyframes diagram-particle-move {
+        0% { offset-distance: 0%; opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { offset-distance: 100%; opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function buildPath(r1, r2, containerRect, gap) {
+    const sourceCenterY = r1.top + r1.height / 2 - containerRect.top;
+    const targetCenterY = r2.top + r2.height / 2 - containerRect.top;
+    const startX = r1.right - containerRect.left;
+    const endX = r2.left - containerRect.left;
+
+    // Offset connection points toward the connected node so forks and merges
+    // fan out instead of overlapping at a single source/target point.
+    const deltaY = targetCenterY - sourceCenterY;
+    const sourceOffset = Math.sign(deltaY) * Math.min(Math.abs(deltaY) * 0.5, r1.height * 0.35);
+    const targetOffset = -Math.sign(deltaY) * Math.min(Math.abs(deltaY) * 0.5, r2.height * 0.35);
+
+    const y1 = sourceCenterY + sourceOffset;
+    const y2 = targetCenterY + targetOffset;
+
+    if (Math.abs(y2 - y1) < 2) {
+      return `M ${startX} ${y1} L ${endX - gap} ${y2}`;
+    }
+
+    const midX = (startX + endX) / 2;
+    return `M ${startX} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${endX - gap} ${y2}`;
+  }
+
+  function connect(svg, diagram, fromSelector, toSelector, color, markerId, options) {
+    const from = document.querySelector(fromSelector);
+    const to = document.querySelector(toSelector);
+    if (!from || !to) return;
+
+    const containerRect = diagram.getBoundingClientRect();
+    const d = buildPath(
+      from.getBoundingClientRect(),
+      to.getBoundingClientRect(),
+      containerRect,
+      options.arrowGap
+    );
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('marker-end', `url(#${markerId})`);
+    if (color) path.style.stroke = color;
+    path.dataset.from = fromSelector;
+    path.dataset.to = toSelector;
+    svg.appendChild(path);
+
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    const particleColor = color || 'var(--accent-bg)';
+    particle.style.background = particleColor;
+    particle.style.boxShadow = `0 0 8px ${particleColor}`;
+    particle.style.offsetPath = `path('${d.replace(/'/g, "\\'")}')`;
+    const duration = options.particleDuration + Math.random() * options.particleJitter;
+    particle.style.animation = `diagram-particle-move ${duration}ms linear infinite`;
+    particle.style.animationDelay = `${Math.random() * 1500}ms`;
+    diagram.appendChild(particle);
+  }
+
+  function draw(svg, diagram, connections, options) {
+    svg.querySelectorAll('path').forEach(p => p.remove());
+    diagram.querySelectorAll('.particle').forEach(p => p.remove());
+
+    connections.forEach(({ from, to, color, marker }) => {
+      connect(svg, diagram, from, to, color, marker || 'arrowhead', options);
+    });
+  }
+
+  function highlightStep(svg, nodes, stepGroups, stepIndex) {
+    nodes.forEach(n => n.classList.remove('active'));
+    svg.querySelectorAll('path').forEach(p => p.classList.remove('active'));
+    svg.classList.remove('active-marker');
+
+    const selectors = stepGroups[stepIndex];
+    selectors.forEach(sel => {
+      const el = document.querySelector(sel);
+      if (el) el.classList.add('active');
+    });
+
+    selectors.forEach(sel => {
+      svg.querySelectorAll(`path[data-from="${sel}"]`).forEach(p => p.classList.add('active'));
+    });
+
+    if (selectors.length > 0) svg.classList.add('active-marker');
+  }
+
+  function init(config) {
+    const options = { ...defaults, ...config };
+    const diagram = document.getElementById(options.diagramId);
+    const svg = document.getElementById(options.svgId);
+    const nodes = Array.from(document.querySelectorAll('.node'));
+
+    if (!diagram || !svg) {
+      console.error('[DiagramEngine] diagram or svg element not found');
+      return;
+    }
+
+    injectKeyframes();
+
+    function render() {
+      draw(svg, diagram, options.connections, options);
+    }
+
+    let stepIndex = 0;
+    function step() {
+      highlightStep(svg, nodes, options.steps, stepIndex);
+      stepIndex = (stepIndex + 1) % options.steps.length;
+    }
+
+    window.addEventListener('load', render);
+    window.addEventListener('resize', render);
+
+    setTimeout(() => {
+      step();
+      setInterval(step, options.stepInterval);
+    }, 200);
+  }
+
+  return { init };
+})();
+
+</script>
+  <script>
+    DiagramEngine.init({
+      connections: [
+        { from: '.node.upload', to: '.node.decompose' },
+
+        { from: '.node.decompose', to: '.node.tex', color: '#f59e0b', marker: 'arrowhead-tex' },
+        { from: '.node.decompose', to: '.node.mesh', color: '#38bdf8', marker: 'arrowhead-mesh' },
+        { from: '.node.decompose', to: '.node.anim', color: '#a78bfa', marker: 'arrowhead-anim' },
+
+        { from: '.node.tex', to: '.node.hash-tex', color: '#f59e0b', marker: 'arrowhead-tex' },
+        { from: '.node.mesh', to: '.node.hash-mesh', color: '#38bdf8', marker: 'arrowhead-mesh' },
+        { from: '.node.anim', to: '.node.hash-anim', color: '#a78bfa', marker: 'arrowhead-anim' },
+
+        { from: '.node.hash-tex', to: '.node.ipfs-tex', color: '#f59e0b', marker: 'arrowhead-tex' },
+        { from: '.node.hash-mesh', to: '.node.ipfs-mesh', color: '#38bdf8', marker: 'arrowhead-mesh' },
+        { from: '.node.hash-anim', to: '.node.ipfs-anim', color: '#a78bfa', marker: 'arrowhead-anim' },
+
+        { from: '.node.ipfs-tex', to: '.node.dedup', color: '#f59e0b', marker: 'arrowhead-tex' },
+        { from: '.node.ipfs-mesh', to: '.node.dedup', color: '#38bdf8', marker: 'arrowhead-mesh' },
+        { from: '.node.ipfs-anim', to: '.node.dedup', color: '#a78bfa', marker: 'arrowhead-anim' }
+      ],
+      steps: [
+        ['.node.upload'],
+        ['.node.decompose'],
+        ['.node.tex', '.node.mesh', '.node.anim'],
+        ['.node.hash-tex', '.node.hash-mesh', '.node.hash-anim'],
+        ['.node.ipfs-tex', '.node.ipfs-mesh', '.node.ipfs-anim'],
+        ['.node.dedup']
+      ]
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arbesk Protocol Story</title>
+  <style>
+    :root {
+      --choco-1: #faf6f2;
+      --choco-2: #f0e6d8;
+      --choco-3: #e0d0bc;
+      --choco-4: #cdb89a;
+      --choco-5: #b89a7a;
+      --choco-6: #a28060;
+      --choco-7: #8c6a4a;
+      --choco-8: #7a5c3e;
+      --choco-9: #664a30;
+      --choco-10: #523a22;
+      --choco-11: #3d2a18;
+      --choco-12: #2a1a0e;
+      --gold: #a07848;
+
+      --window-bg: var(--choco-12);
+      --window-fg: var(--choco-2);
+      --card-bg: var(--choco-10);
+      --card-fg: var(--choco-3);
+      --border-color: var(--choco-9);
+      --accent-bg: var(--gold);
+      --dim-fg: var(--choco-6);
+
+      --branch-tex: #f59e0b;
+      --branch-mesh: #38bdf8;
+      --branch-anim: #a78bfa;
+      --status-new: #10b981;
+      --status-dupe: #ec4899;
+      --manifest: #a07848;
+      --shared: #8b9bb4;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --window-bg: var(--choco-1);
+        --window-fg: var(--choco-12);
+        --card-bg: var(--choco-1);
+        --card-fg: var(--choco-11);
+        --border-color: #b89a7a;
+        --accent-bg: var(--gold);
+        --dim-fg: var(--choco-7);
+        --shared: #64748b;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--window-bg);
+      color: var(--window-fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      scroll-behavior: smooth;
+    }
+
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 3rem 2rem;
+    }
+
+    .hero h1 {
+      margin: 0 0 1rem;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 0 auto 2rem;
+      font-size: 1.1rem;
+      color: var(--dim-fg);
+      max-width: 720px;
+      line-height: 1.6;
+    }
+
+    .scroll-hint {
+      color: var(--dim-fg);
+      font-size: 0.85rem;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(8px); }
+    }
+
+    section {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    section header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      max-width: 800px;
+    }
+
+    section h2 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 600;
+    }
+
+    section p {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--dim-fg);
+      line-height: 1.5;
+    }
+
+    .diagram {
+      width: 100%;
+      max-width: 1150px;
+      height: 320px;
+      margin: 1rem 0;
+    }
+
+    .diagram.wide {
+      max-width: 1050px;
+      height: 420px;
+    }
+
+    .diagram svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .node rect {
+      fill: var(--card-bg);
+      stroke-width: 1.5;
+      stroke: var(--border-color);
+      rx: 10;
+      ry: 10;
+      transition: stroke 0.25s, stroke-width 0.25s, filter 0.25s;
+    }
+
+    .node.active rect {
+      stroke: var(--accent-bg);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent-bg) 40%, transparent));
+    }
+
+    .node.branch-tex rect { stroke: rgba(245,158,11,0.6); }
+    .node.branch-mesh rect { stroke: rgba(56,189,248,0.6); }
+    .node.branch-anim rect { stroke: rgba(139,92,246,0.6); }
+    .node.manifest rect { stroke: var(--manifest); }
+    .node.new rect { stroke: var(--status-new); filter: drop-shadow(0 0 6px rgba(16,185,129,0.35)); }
+    .node.shared rect { stroke: var(--shared); stroke-dasharray: 4 3; }
+
+    .node text {
+      fill: var(--card-fg);
+      font-size: 13px;
+      font-weight: 600;
+      dominant-baseline: middle;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .edge path {
+      fill: none;
+      stroke-width: 2;
+      stroke: var(--border-color);
+      transition: stroke 0.25s, stroke-width 0.25s, opacity 0.25s;
+    }
+
+    .edge.active path {
+      stroke: var(--accent-bg);
+      stroke-width: 3;
+    }
+
+    .edge.branch-tex path { stroke: var(--branch-tex); }
+    .edge.branch-mesh path { stroke: var(--branch-mesh); }
+    .edge.branch-anim path { stroke: var(--branch-anim); }
+    .edge.manifest path { stroke: var(--manifest); opacity: 0; }
+    .edge.manifest.visible path { opacity: 1; }
+
+    .particle { pointer-events: none; }
+
+    .time-arrow path { fill: none; stroke: var(--dim-fg); stroke-width: 1.5; }
+    .time-arrow polygon { fill: var(--dim-fg); }
+    .time-label { fill: var(--dim-fg); font-size: 11px; font-weight: 600; text-anchor: middle; }
+    .storage-label { fill: var(--dim-fg); font-size: 12px; font-weight: 600; text-anchor: start; }
+
+    .storage-block { opacity: 0; transition: opacity 0.4s; }
+    .storage-block.visible { opacity: 1; }
+    .storage-block rect { fill: var(--card-bg); stroke-width: 1.5; rx: 6; ry: 6; }
+    .storage-block.new rect { stroke: var(--status-new); }
+    .storage-block.shared rect { stroke: var(--shared); stroke-dasharray: 3 2; }
+    .storage-block.manifest rect { stroke: var(--manifest); }
+    .storage-block text { fill: var(--card-fg); font-size: 10px; font-weight: 600; dominant-baseline: middle; text-anchor: middle; }
+
+    .legend {
+      display: flex;
+      gap: 1.25rem;
+      margin-top: 1rem;
+      font-size: 0.78rem;
+      color: var(--dim-fg);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.tex { background: var(--branch-tex); }
+    .dot.mesh { background: var(--branch-mesh); }
+    .dot.anim { background: var(--branch-anim); }
+    .dot.new { background: var(--status-new); }
+    .dot.dupe { background: var(--status-dupe); }
+    .dot.manifest { background: var(--manifest); }
+    .dot.shared { background: var(--shared); }
+
+    .takeaway {
+      margin-top: 1.5rem;
+      padding: 1rem 1.5rem;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--card-bg);
+      color: var(--card-fg);
+      max-width: 720px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    footer {
+      padding: 3rem 2rem;
+      text-align: center;
+      color: var(--dim-fg);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border-color);
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>The Arbesk Protocol Story</h1>
+    <p>A content-addressed pipeline for 3D assets: upload, decompose, deduplicate, version, and download — where unchanged bytes are never stored twice.</p>
+    <div class="scroll-hint">Scroll ↓</div>
+  </div>
+
+  <!-- 1. Upload -->
+  <section>
+    <header>
+      <h2>1. Upload & Decompose</h2>
+      <p>An uploaded asset is split into textures, mesh, and animation. Each part is hashed and pushed to IPFS independently.</p>
+    </header>
+    <div class="diagram" id="upload-diagram"></div>
+    <div class="legend">
+      <span><span class="dot tex"></span> Textures</span>
+      <span><span class="dot mesh"></span> Mesh</span>
+      <span><span class="dot anim"></span> Animation</span>
+      <span><span class="dot new"></span> Stored</span>
+      <span><span class="dot dupe"></span> Reused CID</span>
+    </div>
+    <div class="takeaway">Content addressing means identical blocks across branches collapse into a single CID.</div>
+  </section>
+
+  <!-- 2. Download -->
+  <section>
+    <header>
+      <h2>2. Download & Recompose</h2>
+      <p>A request fetches blocks by CID, resolves duplicates, verifies hashes, and reassembles the asset.</p>
+    </header>
+    <div class="diagram" id="download-diagram"></div>
+    <div class="legend">
+      <span><span class="dot tex"></span> Textures</span>
+      <span><span class="dot mesh"></span> Mesh</span>
+      <span><span class="dot anim"></span> Animation</span>
+      <span><span class="dot new"></span> Fetched block</span>
+      <span><span class="dot dupe"></span> Reused CID</span>
+    </div>
+    <div class="takeaway">Download is the mirror of upload: blocks are verified by hash, then composed back into the original asset.</div>
+  </section>
+
+  <!-- 3. Cross-asset dedup -->
+  <section>
+    <header>
+      <h2>3. Cross-Asset Deduplication</h2>
+      <p>Multiple assets share common building blocks. IPFS stores each unique block only once, no matter how many assets reference it.</p>
+    </header>
+    <div class="diagram" id="cross-diagram"></div>
+    <div class="legend">
+      <span><span class="dot tex"></span> Texture block</span>
+      <span><span class="dot mesh"></span> Mesh block</span>
+      <span><span class="dot new"></span> Shared / reused block</span>
+    </div>
+    <div class="takeaway">Asset 1 and Asset 2 share one texture; Asset 2 and Asset 3 share one mesh. Storage grows with uniqueness, not with copies.</div>
+  </section>
+
+  <!-- 4. Micro-ledger -->
+  <section>
+    <header>
+      <h2>4. Micro-Ledger: Version Chain</h2>
+      <p>Every new version is a manifest that references the previous one. Only changed content blocks are stored; the rest are reused by CID.</p>
+    </header>
+    <div class="diagram wide" id="ledger-diagram"></div>
+    <div class="legend">
+      <span><span class="dot manifest"></span> Manifest</span>
+      <span><span class="dot new"></span> New / changed block</span>
+      <span><span class="dot shared"></span> Shared block (same CID)</span>
+    </div>
+    <div class="takeaway">The manifest chain is an immutable micro-ledger. Versions are cheap because unchanged blocks never move.</div>
+  </section>
+
+  <footer>
+    Arbesk — content-addressed 3D asset infrastructure.
+  </footer>
+
+  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  <script>
+    // ═══════════════════════════════════════════════════════════════════
+    // Common helpers
+    // ═══════════════════════════════════════════════════════════════════
+    function offsetToward(from, to, max) {
+      const d = to - from;
+      return Math.sign(d) * Math.min(Math.abs(d), max);
+    }
+
+    function makeParticles(edgeGroups, colorFn) {
+      edgeGroups.each(function(d) {
+        const path = d3.select(this).select('path').node();
+        const len = path.getTotalLength();
+        const color = colorFn(d);
+        const particle = d3.select(this).append('circle')
+          .attr('class', 'particle')
+          .attr('r', 4)
+          .attr('fill', color)
+          .attr('filter', `drop-shadow(0 0 4px ${color})`)
+          .attr('opacity', 0);
+
+        function animate() {
+          particle
+            .attr('opacity', 0)
+            .transition()
+            .duration(2200 + Math.random() * 600)
+            .ease(d3.easeLinear)
+            .attrTween('transform', () => t => {
+              const p = path.getPointAtLength(t * len);
+              return `translate(${p.x}, ${p.y})`;
+            })
+            .attrTween('opacity', () => t => (t < 0.08 || t > 0.92 ? 0 : 1))
+            .on('end', animate);
+        }
+        setTimeout(animate, Math.random() * 2000);
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 1. Upload diagram
+    // ═══════════════════════════════════════════════════════════════════
+    (function() {
+      const width = 1100;
+      const height = 320;
+      const nodeWidth = 110;
+      const nodeHeight = 42;
+      const gap = 10;
+
+      const nodes = [
+        { id: 'upload', label: '📁 Upload', x: 60, y: 160, step: 0 },
+        { id: 'decompose', label: '🧩 Decompose', x: 220, y: 160, step: 1 },
+        { id: 'tex', label: '🖼️ Textures', x: 420, y: 60, branch: 'tex', step: 2 },
+        { id: 'mesh', label: '🔷 Mesh', x: 420, y: 160, branch: 'mesh', step: 2 },
+        { id: 'anim', label: '🏃 Animation', x: 420, y: 260, branch: 'anim', step: 2 },
+        { id: 'hash-tex', label: '#️⃣ Hash', x: 600, y: 60, branch: 'tex', step: 3 },
+        { id: 'hash-mesh', label: '#️⃣ Hash', x: 600, y: 160, branch: 'mesh', step: 3 },
+        { id: 'hash-anim', label: '#️⃣ Hash', x: 600, y: 260, branch: 'anim', step: 3 },
+        { id: 'ipfs-tex', label: '🌐 IPFS', x: 780, y: 60, branch: 'tex', step: 4 },
+        { id: 'ipfs-mesh', label: '🌐 IPFS', x: 780, y: 160, branch: 'mesh', step: 4 },
+        { id: 'ipfs-anim', label: '🌐 IPFS', x: 780, y: 260, branch: 'anim', step: 4 },
+        { id: 'dedup', label: '♻️ Dedup', x: 980, y: 160, step: 5 }
+      ];
+
+      const edges = [
+        { source: 'upload', target: 'decompose' },
+        { source: 'decompose', target: 'tex', branch: 'tex' },
+        { source: 'decompose', target: 'mesh', branch: 'mesh' },
+        { source: 'decompose', target: 'anim', branch: 'anim' },
+        { source: 'tex', target: 'hash-tex', branch: 'tex' },
+        { source: 'mesh', target: 'hash-mesh', branch: 'mesh' },
+        { source: 'anim', target: 'hash-anim', branch: 'anim' },
+        { source: 'hash-tex', target: 'ipfs-tex', branch: 'tex' },
+        { source: 'hash-mesh', target: 'ipfs-mesh', branch: 'mesh' },
+        { source: 'hash-anim', target: 'ipfs-anim', branch: 'anim' },
+        { source: 'ipfs-tex', target: 'dedup', branch: 'tex' },
+        { source: 'ipfs-mesh', target: 'dedup', branch: 'mesh' },
+        { source: 'ipfs-anim', target: 'dedup', branch: 'anim' }
+      ];
+
+      drawFork('#upload-diagram', width, height, nodeWidth, nodeHeight, gap, nodes, edges, [
+        ['upload'], ['decompose'], ['tex', 'mesh', 'anim'],
+        ['hash-tex', 'hash-mesh', 'hash-anim'],
+        ['ipfs-tex', 'ipfs-mesh', 'ipfs-anim'], ['dedup']
+      ]);
+    })();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 2. Download diagram
+    // ═══════════════════════════════════════════════════════════════════
+    (function() {
+      const width = 1100;
+      const height = 320;
+      const nodeWidth = 120;
+      const nodeHeight = 42;
+      const gap = 10;
+
+      const nodes = [
+        { id: 'request', label: '📥 Request', x: 70, y: 160, step: 0 },
+        { id: 'ipfs', label: '🌐 IPFS', x: 210, y: 160, step: 1 },
+        { id: 'dedup', label: '♻️ Dedup', x: 350, y: 160, step: 2 },
+        { id: 'fetch-tex', label: '🖼️ Fetch Textures', x: 530, y: 60, branch: 'tex', step: 3 },
+        { id: 'fetch-mesh', label: '🔷 Fetch Mesh', x: 530, y: 160, branch: 'mesh', step: 3 },
+        { id: 'fetch-anim', label: '🏃 Fetch Anim', x: 530, y: 260, branch: 'anim', step: 3 },
+        { id: 'verify-tex', label: '#️⃣ Verify Hash', x: 710, y: 60, branch: 'tex', step: 4 },
+        { id: 'verify-mesh', label: '#️⃣ Verify Hash', x: 710, y: 160, branch: 'mesh', step: 4 },
+        { id: 'verify-anim', label: '#️⃣ Verify Hash', x: 710, y: 260, branch: 'anim', step: 4 },
+        { id: 'recompose', label: '🧩 Recompose', x: 870, y: 160, step: 5 },
+        { id: 'download', label: '📦 Download', x: 1020, y: 160, step: 6 }
+      ];
+
+      const edges = [
+        { source: 'request', target: 'ipfs' },
+        { source: 'ipfs', target: 'dedup' },
+        { source: 'dedup', target: 'fetch-tex', branch: 'tex' },
+        { source: 'dedup', target: 'fetch-mesh', branch: 'mesh' },
+        { source: 'dedup', target: 'fetch-anim', branch: 'anim' },
+        { source: 'fetch-tex', target: 'verify-tex', branch: 'tex' },
+        { source: 'fetch-mesh', target: 'verify-mesh', branch: 'mesh' },
+        { source: 'fetch-anim', target: 'verify-anim', branch: 'anim' },
+        { source: 'verify-tex', target: 'recompose', branch: 'tex' },
+        { source: 'verify-mesh', target: 'recompose', branch: 'mesh' },
+        { source: 'verify-anim', target: 'recompose', branch: 'anim' },
+        { source: 'recompose', target: 'download' }
+      ];
+
+      drawFork('#download-diagram', width, height, nodeWidth, nodeHeight, gap, nodes, edges, [
+        ['request'], ['ipfs'], ['dedup'],
+        ['fetch-tex', 'fetch-mesh', 'fetch-anim'],
+        ['verify-tex', 'verify-mesh', 'verify-anim'],
+        ['recompose'], ['download']
+      ]);
+    })();
+
+    function drawFork(selector, width, height, nodeWidth, nodeHeight, gap, nodes, edges, stepGroups) {
+      const svg = d3.select(selector)
+        .append('svg')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+      function sourcePoint(e) {
+        const s = nodes.find(n => n.id === e.source);
+        const t = nodes.find(n => n.id === e.target);
+        return {
+          x: s.x + nodeWidth / 2,
+          y: s.y + offsetToward(s.y, t.y, nodeHeight / 2 * 0.55)
+        };
+      }
+
+      function targetPoint(e) {
+        const s = nodes.find(n => n.id === e.source);
+        const t = nodes.find(n => n.id === e.target);
+        return {
+          x: t.x - nodeWidth / 2 - gap,
+          y: t.y + offsetToward(t.y, s.y, nodeHeight / 2 * 0.55)
+        };
+      }
+
+      function edgePath(e) {
+        const s = sourcePoint(e);
+        const t = targetPoint(e);
+        const midX = (s.x + t.x) / 2;
+        if (Math.abs(t.y - s.y) < 2) return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+        return `M ${s.x} ${s.y} C ${midX} ${s.y}, ${midX} ${t.y}, ${t.x} ${t.y}`;
+      }
+
+      const edgeGroups = svg.selectAll('.edge')
+        .data(edges)
+        .enter()
+        .append('g')
+        .attr('class', d => `edge ${d.branch ? 'branch-' + d.branch : ''}`)
+        .attr('data-from', d => d.source)
+        .attr('data-to', d => d.target);
+
+      edgeGroups.append('path').attr('d', edgePath);
+
+      makeParticles(edgeGroups, d => {
+        if (d.branch === 'tex') return '#f59e0b';
+        if (d.branch === 'mesh') return '#38bdf8';
+        if (d.branch === 'anim') return '#a78bfa';
+        return '#a07848';
+      });
+
+      const nodeGroups = svg.selectAll('.node')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .attr('class', d => `node ${d.branch ? 'branch-' + d.branch : ''}`)
+        .attr('transform', d => `translate(${d.x - nodeWidth / 2}, ${d.y - nodeHeight / 2})`)
+        .attr('data-id', d => d.id);
+
+      nodeGroups.append('rect').attr('width', nodeWidth).attr('height', nodeHeight);
+      nodeGroups.append('text').attr('x', nodeWidth / 2).attr('y', nodeHeight / 2).text(d => d.label);
+
+      let stepIndex = 0;
+      function highlight() {
+        d3.selectAll('.node').classed('active', false);
+        d3.selectAll('.edge').classed('active', false);
+        const ids = stepGroups[stepIndex];
+        ids.forEach(id => d3.select(`.node[data-id="${id}"]`).classed('active', true));
+        ids.forEach(id => d3.selectAll(`.edge[data-from="${id}"]`).classed('active', true));
+        stepIndex = (stepIndex + 1) % stepGroups.length;
+      }
+      setTimeout(() => { highlight(); setInterval(highlight, 1400); }, 200);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 3. Cross-asset dedup
+    // ═══════════════════════════════════════════════════════════════════
+    (function() {
+      const width = 900;
+      const height = 360;
+      const assetNodeWidth = 110;
+      const blockNodeWidth = 150;
+      const dedupNodeWidth = 130;
+      const nodeHeight = 42;
+      const gap = 10;
+
+      const nodes = [
+        { id: 'asset1', label: '📁 Asset 1', x: 80, y: 80 },
+        { id: 'asset2', label: '📁 Asset 2', x: 80, y: 180 },
+        { id: 'asset3', label: '📁 Asset 3', x: 80, y: 280 },
+        { id: 'tex-shared', label: '🖼️ Texture (shared)', x: 360, y: 80, branch: 'tex', shared: true },
+        { id: 'mesh-a', label: '🔷 Mesh A', x: 360, y: 160, branch: 'mesh' },
+        { id: 'mesh-shared', label: '🔷 Mesh (shared)', x: 360, y: 240, branch: 'mesh', shared: true },
+        { id: 'tex-b', label: '🖼️ Texture B', x: 360, y: 320, branch: 'tex' },
+        { id: 'dedup', label: '♻️ IPFS Dedup', x: 640, y: 180 }
+      ];
+
+      const edges = [
+        { source: 'asset1', target: 'tex-shared', branch: 'tex' },
+        { source: 'asset1', target: 'mesh-a', branch: 'mesh' },
+        { source: 'asset2', target: 'tex-shared', branch: 'tex' },
+        { source: 'asset2', target: 'mesh-shared', branch: 'mesh' },
+        { source: 'asset3', target: 'tex-b', branch: 'tex' },
+        { source: 'asset3', target: 'mesh-shared', branch: 'mesh' },
+        { source: 'tex-shared', target: 'dedup', branch: 'tex' },
+        { source: 'mesh-a', target: 'dedup', branch: 'mesh' },
+        { source: 'mesh-shared', target: 'dedup', branch: 'mesh' },
+        { source: 'tex-b', target: 'dedup', branch: 'tex' }
+      ];
+
+      const svg = d3.select('#cross-diagram')
+        .append('svg')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+      function nodeWidthById(id) {
+        if (id.startsWith('asset')) return assetNodeWidth;
+        if (id === 'dedup') return dedupNodeWidth;
+        return blockNodeWidth;
+      }
+
+      function sourcePoint(e) {
+        const s = nodes.find(n => n.id === e.source);
+        const t = nodes.find(n => n.id === e.target);
+        const w = nodeWidthById(s.id);
+        return { x: s.x + w / 2, y: s.y + offsetToward(s.y, t.y, nodeHeight / 2 * 0.55) };
+      }
+
+      function targetPoint(e) {
+        const s = nodes.find(n => n.id === e.source);
+        const t = nodes.find(n => n.id === e.target);
+        const w = nodeWidthById(t.id);
+        return { x: t.x - w / 2 - gap, y: t.y + offsetToward(t.y, s.y, nodeHeight / 2 * 0.55) };
+      }
+
+      function edgePath(e) {
+        const s = sourcePoint(e);
+        const t = targetPoint(e);
+        const midX = (s.x + t.x) / 2;
+        if (Math.abs(t.y - s.y) < 2) return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+        return `M ${s.x} ${s.y} C ${midX} ${s.y}, ${midX} ${t.y}, ${t.x} ${t.y}`;
+      }
+
+      const edgeGroups = svg.selectAll('.edge')
+        .data(edges)
+        .enter()
+        .append('g')
+        .attr('class', d => `edge ${d.branch ? 'branch-' + d.branch : ''}`)
+        .attr('data-from', d => d.source)
+        .attr('data-to', d => d.target);
+
+      edgeGroups.append('path').attr('d', edgePath);
+      makeParticles(edgeGroups, d => d.branch === 'tex' ? '#f59e0b' : '#38bdf8');
+
+      const nodeGroups = svg.selectAll('.node')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .attr('class', d => `node ${d.branch ? 'branch-' + d.branch : ''}`)
+        .attr('transform', d => {
+          const w = nodeWidthById(d.id);
+          return `translate(${d.x - w / 2}, ${d.y - nodeHeight / 2})`;
+        })
+        .attr('data-id', d => d.id);
+
+      nodeGroups.append('rect').attr('width', d => nodeWidthById(d.id)).attr('height', nodeHeight);
+      nodeGroups.append('text').attr('x', d => nodeWidthById(d.id) / 2).attr('y', nodeHeight / 2).text(d => d.label);
+
+      const stepGroups = [
+        ['asset1', 'asset2', 'asset3'],
+        ['tex-shared', 'mesh-a', 'mesh-shared', 'tex-b'],
+        ['dedup']
+      ];
+      let stepIndex = 0;
+      function highlight() {
+        d3.selectAll('.node').classed('active', false);
+        d3.selectAll('.edge').classed('active', false);
+        const ids = stepGroups[stepIndex];
+        ids.forEach(id => d3.select(`.node[data-id="${id}"]`).classed('active', true));
+        ids.forEach(id => d3.selectAll(`.edge[data-from="${id}"]`).classed('active', true));
+        stepIndex = (stepIndex + 1) % stepGroups.length;
+      }
+      setTimeout(() => { highlight(); setInterval(highlight, 1600); }, 200);
+    })();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 4. Micro-ledger
+    // ═══════════════════════════════════════════════════════════════════
+    (function() {
+      const width = 1050;
+      const height = 420;
+      const manifestWidth = 120;
+      const blockWidth = 120;
+      const manifestHeight = 38;
+      const blockHeight = 34;
+      const colGap = 180;
+      const startX = 130;
+      const manifestY = 70;
+      const blocksStartY = 125;
+      const blockGap = 6;
+      const storageY = 310;
+      const stBlockWidth = 90;
+      const stBlockHeight = 28;
+      const stGap = 8;
+      const stStartX = 100;
+      const stBlocksPerRow = 7;
+
+      const versions = [
+        {
+          id: 'v1', label: 'v1 Manifest', x: startX,
+          blocks: [
+            { type: 'new', label: 'Texture A' },
+            { type: 'new', label: 'Mesh A' },
+            { type: 'new', label: 'Animation A' },
+            { type: 'new', label: 'Metadata A' }
+          ]
+        },
+        {
+          id: 'v2', label: 'v2 Manifest', x: startX + colGap, prev: 'v1',
+          blocks: [
+            { type: 'new', label: 'Texture B' },
+            { type: 'shared', label: 'Mesh A' },
+            { type: 'shared', label: 'Animation A' },
+            { type: 'shared', label: 'Metadata A' }
+          ]
+        },
+        {
+          id: 'v3', label: 'v3 Manifest', x: startX + colGap * 2, prev: 'v2',
+          blocks: [
+            { type: 'shared', label: 'Texture B' },
+            { type: 'new', label: 'Mesh B' },
+            { type: 'shared', label: 'Animation A' },
+            { type: 'shared', label: 'Metadata A' }
+          ]
+        },
+        {
+          id: 'v4', label: 'v4 Manifest', x: startX + colGap * 3, prev: 'v3',
+          blocks: [
+            { type: 'shared', label: 'Texture B' },
+            { type: 'shared', label: 'Mesh B' },
+            { type: 'shared', label: 'Animation A' },
+            { type: 'new', label: 'Metadata B' }
+          ]
+        }
+      ];
+
+      const svg = d3.select('#ledger-diagram')
+        .append('svg')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+      const timeG = svg.append('g').attr('class', 'time-arrow');
+      timeG.append('path').attr('d', `M 80 32 L 920 32`);
+      timeG.append('polygon').attr('points', '920 32, 912 27, 912 37');
+      timeG.append('text').attr('class', 'time-label').attr('x', 500).attr('y', 24).text('Version history');
+
+      svg.append('text')
+        .attr('class', 'storage-label')
+        .attr('x', 40)
+        .attr('y', storageY + stBlockHeight + stGap / 2)
+        .text('Storage');
+
+      const nodes = [];
+      versions.forEach(v => {
+        nodes.push({ id: v.id, label: v.label, x: v.x, y: manifestY, width: manifestWidth, height: manifestHeight, kind: 'manifest', version: v.id });
+        v.blocks.forEach((b, i) => {
+          const blockId = `${v.id}-${b.label.replace(/\s+/g, '-').toLowerCase()}`;
+          nodes.push({
+            id: blockId, label: b.label, x: v.x,
+            y: blocksStartY + i * (blockHeight + blockGap),
+            width: blockWidth, height: blockHeight,
+            kind: b.type, version: v.id
+          });
+        });
+      });
+
+      const edges = versions.slice(1).map(v => ({
+        id: `link-${v.id}`, source: v.id, target: v.prev,
+        sx: v.x - manifestWidth / 2, sy: manifestY,
+        tx: versions.find(pv => pv.id === v.prev).x + manifestWidth / 2, ty: manifestY
+      }));
+
+      function linkPath(e) {
+        const midX = (e.sx + e.tx) / 2;
+        return `M ${e.sx} ${e.sy} C ${midX} ${e.sy}, ${midX} ${e.ty}, ${e.tx} ${e.ty}`;
+      }
+
+      const edgeGroups = svg.selectAll('.edge')
+        .data(edges)
+        .enter()
+        .append('g')
+        .attr('class', 'edge manifest')
+        .attr('id', d => d.id);
+
+      edgeGroups.append('path').attr('d', linkPath);
+
+      const storageBlocks = [
+        { id: 'st-v1', label: 'M1', kind: 'manifest' },
+        { id: 'st-tex-a', label: 'Texture A', kind: 'new' },
+        { id: 'st-mesh-a', label: 'Mesh A', kind: 'new' },
+        { id: 'st-anim-a', label: 'Animation A', kind: 'new' },
+        { id: 'st-meta-a', label: 'Metadata A', kind: 'new' },
+        { id: 'st-v2', label: 'M2', kind: 'manifest' },
+        { id: 'st-tex-b', label: 'Texture B', kind: 'new' },
+        { id: 'st-v3', label: 'M3', kind: 'manifest' },
+        { id: 'st-mesh-b', label: 'Mesh B', kind: 'new' },
+        { id: 'st-v4', label: 'M4', kind: 'manifest' },
+        { id: 'st-meta-b', label: 'Metadata B', kind: 'new' }
+      ];
+
+      const storageGroups = svg.selectAll('.storage-block')
+        .data(storageBlocks)
+        .enter()
+        .append('g')
+        .attr('class', d => `storage-block ${d.kind}`)
+        .attr('id', d => d.id)
+        .attr('transform', (d, i) => {
+          const col = i % stBlocksPerRow;
+          const row = Math.floor(i / stBlocksPerRow);
+          return `translate(${stStartX + col * (stBlockWidth + stGap)}, ${storageY + row * (stBlockHeight + stGap)})`;
+        });
+
+      storageGroups.append('rect').attr('width', stBlockWidth).attr('height', stBlockHeight);
+      storageGroups.append('text').attr('x', stBlockWidth / 2).attr('y', stBlockHeight / 2).text(d => d.label);
+
+      const nodeGroups = svg.selectAll('.node')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .attr('class', d => `node ${d.kind}`)
+        .attr('id', d => d.id)
+        .attr('transform', d => `translate(${d.x - d.width / 2}, ${d.y - d.height / 2})`)
+        .style('opacity', 0);
+
+      nodeGroups.append('rect').attr('width', d => d.width).attr('height', d => d.height);
+      nodeGroups.append('text').attr('x', d => d.width / 2).attr('y', d => d.height / 2).text(d => d.label);
+
+      const states = [
+        { versions: ['v1'], storage: ['st-v1', 'st-tex-a', 'st-mesh-a', 'st-anim-a', 'st-meta-a'], active: 'v1' },
+        { versions: ['v1', 'v2'], storage: ['st-v1', 'st-tex-a', 'st-mesh-a', 'st-anim-a', 'st-meta-a', 'st-v2', 'st-tex-b'], active: 'v2' },
+        { versions: ['v1', 'v2', 'v3'], storage: ['st-v1', 'st-tex-a', 'st-mesh-a', 'st-anim-a', 'st-meta-a', 'st-v2', 'st-tex-b', 'st-v3', 'st-mesh-b'], active: 'v3' },
+        { versions: ['v1', 'v2', 'v3', 'v4'], storage: storageBlocks.map(b => b.id), active: 'v4' }
+      ];
+
+      let stateIndex = 0;
+      function applyState() {
+        const state = states[stateIndex];
+
+        d3.selectAll('#ledger-diagram .node')
+          .transition().duration(400)
+          .style('opacity', d => state.versions.includes(d.version) ? 1 : 0);
+
+        d3.selectAll('#ledger-diagram .node').classed('new', false).classed('shared', false);
+        nodeGroups.filter(d => d.version === state.active)
+          .classed('new', d => d.kind === 'new')
+          .classed('shared', d => d.kind === 'shared');
+
+        d3.selectAll('#ledger-diagram .edge').classed('visible', d => state.versions.includes(d.source));
+        d3.selectAll('#ledger-diagram .edge').classed('active', false);
+        d3.select(`#link-${state.active}`).classed('active', true);
+
+        d3.selectAll('.storage-block').classed('visible', d => state.storage.includes(d.id));
+
+        const prevStorage = stateIndex > 0 ? states[stateIndex - 1].storage : [];
+        d3.selectAll('.storage-block')
+          .classed('new', d => state.storage.includes(d.id) && !prevStorage.includes(d.id) && d.kind === 'new')
+          .classed('manifest', d => d.kind === 'manifest');
+
+        stateIndex = (stateIndex + 1) % states.length;
+      }
+
+      setTimeout(() => { applyState(); setInterval(applyState, 2200); }, 300);
+    })();
+  </script>
+</body>
+</html>

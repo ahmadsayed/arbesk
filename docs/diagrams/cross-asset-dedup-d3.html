@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cross-Asset IPFS Dedup (D3.js)</title>
+  <style>
+    :root {
+      --choco-1: #faf6f2;
+      --choco-2: #f0e6d8;
+      --choco-3: #e0d0bc;
+      --choco-4: #cdb89a;
+      --choco-5: #b89a7a;
+      --choco-6: #a28060;
+      --choco-7: #8c6a4a;
+      --choco-8: #7a5c3e;
+      --choco-9: #664a30;
+      --choco-10: #523a22;
+      --choco-11: #3d2a18;
+      --choco-12: #2a1a0e;
+      --gold: #a07848;
+
+      --window-bg: var(--choco-12);
+      --window-fg: var(--choco-2);
+      --card-bg: var(--choco-10);
+      --card-fg: var(--choco-3);
+      --border-color: var(--choco-9);
+      --accent-bg: var(--gold);
+      --dim-fg: var(--choco-6);
+
+      --branch-tex: #f59e0b;
+      --branch-mesh: #38bdf8;
+      --status-new: #10b981;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --window-bg: var(--choco-1);
+        --window-fg: var(--choco-12);
+        --card-bg: var(--choco-1);
+        --card-fg: var(--choco-11);
+        --border-color: #b89a7a;
+        --accent-bg: var(--gold);
+        --dim-fg: var(--choco-7);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--window-bg);
+      color: var(--window-fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .slide {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    p.subtitle {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--dim-fg);
+    }
+
+    #diagram {
+      width: 100%;
+      max-width: 900px;
+      height: 360px;
+    }
+
+    #diagram svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .node rect {
+      fill: var(--card-bg);
+      stroke-width: 1.5;
+      stroke: var(--border-color);
+      rx: 10;
+      ry: 10;
+      transition: stroke 0.25s, stroke-width 0.25s, filter 0.25s;
+    }
+
+    .node.active rect {
+      stroke: var(--accent-bg);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent-bg) 40%, transparent));
+    }
+
+    .node.branch-tex rect { stroke: rgba(245,158,11,0.6); }
+    .node.branch-mesh rect { stroke: rgba(56,189,248,0.6); }
+
+    .node text {
+      fill: var(--card-fg);
+      font-size: 13px;
+      font-weight: 600;
+      dominant-baseline: middle;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .edge path {
+      fill: none;
+      stroke-width: 2;
+      stroke: var(--border-color);
+      transition: stroke 0.25s, stroke-width 0.25s;
+    }
+
+    .edge.active path {
+      stroke: var(--accent-bg);
+      stroke-width: 3;
+    }
+
+    .edge.branch-tex path { stroke: var(--branch-tex); }
+    .edge.branch-mesh path { stroke: var(--branch-mesh); }
+
+    .particle {
+      pointer-events: none;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--dim-fg);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.tex { background: var(--branch-tex); }
+    .dot.mesh { background: var(--branch-mesh); }
+    .dot.shared { background: var(--status-new); }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <header>
+      <h1>Cross-Asset IPFS Dedup</h1>
+      <p class="subtitle">Three uploads decompose into blocks. Identical texture and mesh blocks are stored only once.</p>
+    </header>
+
+    <div id="diagram"></div>
+
+    <div class="legend">
+      <span><span class="dot tex"></span> Texture block</span>
+      <span><span class="dot mesh"></span> Mesh block</span>
+      <span><span class="dot shared"></span> Shared / reused block</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  <script>
+    const width = 900;
+    const height = 360;
+    const assetNodeWidth = 110;
+    const blockNodeWidth = 150;
+    const dedupNodeWidth = 130;
+    const nodeHeight = 42;
+    const gap = 10;
+
+    const nodes = [
+      { id: 'asset1', label: '📁 Asset 1', x: 80, y: 80 },
+      { id: 'asset2', label: '📁 Asset 2', x: 80, y: 180 },
+      { id: 'asset3', label: '📁 Asset 3', x: 80, y: 280 },
+
+      { id: 'tex-shared', label: '🖼️ Texture (shared)', x: 360, y: 80, branch: 'tex', shared: true },
+      { id: 'mesh-a', label: '🔷 Mesh A', x: 360, y: 160, branch: 'mesh' },
+      { id: 'mesh-shared', label: '🔷 Mesh (shared)', x: 360, y: 240, branch: 'mesh', shared: true },
+      { id: 'tex-b', label: '🖼️ Texture B', x: 360, y: 320, branch: 'tex' },
+
+      { id: 'dedup', label: '♻️ IPFS Dedup', x: 640, y: 180 }
+    ];
+
+    const edges = [
+      { id: 'a1-t', source: 'asset1', target: 'tex-shared', branch: 'tex' },
+      { id: 'a1-m', source: 'asset1', target: 'mesh-a', branch: 'mesh' },
+      { id: 'a2-t', source: 'asset2', target: 'tex-shared', branch: 'tex' },
+      { id: 'a2-m', source: 'asset2', target: 'mesh-shared', branch: 'mesh' },
+      { id: 'a3-t', source: 'asset3', target: 'tex-b', branch: 'tex' },
+      { id: 'a3-m', source: 'asset3', target: 'mesh-shared', branch: 'mesh' },
+
+      { id: 't-shared-d', source: 'tex-shared', target: 'dedup', branch: 'tex' },
+      { id: 'm-a-d', source: 'mesh-a', target: 'dedup', branch: 'mesh' },
+      { id: 'm-shared-d', source: 'mesh-shared', target: 'dedup', branch: 'mesh' },
+      { id: 't-b-d', source: 'tex-b', target: 'dedup', branch: 'tex' }
+    ];
+
+    const svg = d3.select('#diagram')
+      .append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    function nodeWidthById(id) {
+      if (id.startsWith('asset')) return assetNodeWidth;
+      if (id === 'dedup') return dedupNodeWidth;
+      return blockNodeWidth;
+    }
+
+    function sourcePoint(edge) {
+      const s = nodes.find(n => n.id === edge.source);
+      const t = nodes.find(n => n.id === edge.target);
+      const w = nodeWidthById(s.id);
+      const sx = s.x + w / 2;
+      const sy = s.y + offsetToward(s.y, t.y, nodeHeight / 2 * 0.55);
+      return { x: sx, y: sy };
+    }
+
+    function targetPoint(edge) {
+      const s = nodes.find(n => n.id === edge.source);
+      const t = nodes.find(n => n.id === edge.target);
+      const w = nodeWidthById(t.id);
+      const tx = t.x - w / 2 - gap;
+      const ty = t.y + offsetToward(t.y, s.y, nodeHeight / 2 * 0.55);
+      return { x: tx, y: ty };
+    }
+
+    function offsetToward(from, to, max) {
+      const d = to - from;
+      return Math.sign(d) * Math.min(Math.abs(d), max);
+    }
+
+    function edgePath(edge) {
+      const s = sourcePoint(edge);
+      const t = targetPoint(edge);
+      const midX = (s.x + t.x) / 2;
+      if (Math.abs(t.y - s.y) < 2) {
+        return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+      }
+      return `M ${s.x} ${s.y} C ${midX} ${s.y}, ${midX} ${t.y}, ${t.x} ${t.y}`;
+    }
+
+    const edgeGroups = svg.selectAll('.edge')
+      .data(edges)
+      .enter()
+      .append('g')
+      .attr('class', d => `edge ${d.branch ? 'branch-' + d.branch : ''}`)
+      .attr('data-from', d => d.source)
+      .attr('data-to', d => d.target);
+
+    edgeGroups.append('path')
+      .attr('d', edgePath);
+
+    const nodeGroups = svg.selectAll('.node')
+      .data(nodes)
+      .enter()
+      .append('g')
+      .attr('class', d => `node ${d.branch ? 'branch-' + d.branch : ''}`)
+      .attr('transform', d => {
+        const w = nodeWidthById(d.id);
+        return `translate(${d.x - w / 2}, ${d.y - nodeHeight / 2})`;
+      })
+      .attr('data-id', d => d.id);
+
+    nodeGroups.append('rect')
+      .attr('width', d => nodeWidthById(d.id))
+      .attr('height', nodeHeight);
+
+    nodeGroups.append('text')
+      .attr('x', d => nodeWidthById(d.id) / 2)
+      .attr('y', nodeHeight / 2)
+      .text(d => d.label);
+
+    edgeGroups.each(function(d) {
+      const path = d3.select(this).select('path').node();
+      const len = path.getTotalLength();
+      const color = d.branch === 'tex' ? '#f59e0b' : '#38bdf8';
+
+      const particle = d3.select(this).append('circle')
+        .attr('class', 'particle')
+        .attr('r', 4)
+        .attr('fill', color)
+        .attr('filter', `drop-shadow(0 0 4px ${color})`)
+        .attr('opacity', 0);
+
+      function animate() {
+        particle
+          .attr('opacity', 0)
+          .transition()
+          .duration(2200 + Math.random() * 600)
+          .ease(d3.easeLinear)
+          .attrTween('transform', function() {
+            return function(t) {
+              const p = path.getPointAtLength(t * len);
+              return `translate(${p.x}, ${p.y})`;
+            };
+          })
+          .attrTween('opacity', function() {
+            return function(t) {
+              return t < 0.08 || t > 0.92 ? 0 : 1;
+            };
+          })
+          .on('end', animate);
+      }
+
+      setTimeout(animate, Math.random() * 2000);
+    });
+
+    const stepGroups = [
+      ['asset1', 'asset2', 'asset3'],
+      ['tex-shared', 'mesh-a', 'mesh-shared', 'tex-b'],
+      ['dedup']
+    ];
+
+    let stepIndex = 0;
+    function highlightStep() {
+      d3.selectAll('.node').classed('active', false);
+      d3.selectAll('.edge').classed('active', false);
+
+      const ids = stepGroups[stepIndex];
+      ids.forEach(id => {
+        d3.select(`.node[data-id="${id}"]`).classed('active', true);
+      });
+
+      ids.forEach(id => {
+        d3.selectAll(`.edge[data-from="${id}"]`).classed('active', true);
+      });
+
+      stepIndex = (stepIndex + 1) % stepGroups.length;
+    }
+
+    setTimeout(() => {
+      highlightStep();
+      setInterval(highlightStep, 1600);
+    }, 200);
+  </script>
+</body>
+</html>

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Micro-Ledger: Version Chain + Shared Storage (D3.js)</title>
+  <style>
+    :root {
+      --choco-1: #faf6f2;
+      --choco-2: #f0e6d8;
+      --choco-3: #e0d0bc;
+      --choco-4: #cdb89a;
+      --choco-5: #b89a7a;
+      --choco-6: #a28060;
+      --choco-7: #8c6a4a;
+      --choco-8: #7a5c3e;
+      --choco-9: #664a30;
+      --choco-10: #523a22;
+      --choco-11: #3d2a18;
+      --choco-12: #2a1a0e;
+      --gold: #a07848;
+
+      --window-bg: var(--choco-12);
+      --window-fg: var(--choco-2);
+      --card-bg: var(--choco-10);
+      --card-fg: var(--choco-3);
+      --border-color: var(--choco-9);
+      --accent-bg: var(--gold);
+      --dim-fg: var(--choco-6);
+
+      --new: #10b981;
+      --shared: #8b9bb4;
+      --manifest: #a07848;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --window-bg: var(--choco-1);
+        --window-fg: var(--choco-12);
+        --card-bg: var(--choco-1);
+        --card-fg: var(--choco-11);
+        --border-color: #b89a7a;
+        --accent-bg: var(--gold);
+        --dim-fg: var(--choco-7);
+        --shared: #64748b;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--window-bg);
+      color: var(--window-fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .slide {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    p.subtitle {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--dim-fg);
+    }
+
+    #diagram {
+      width: 100%;
+      max-width: 1050px;
+      height: 480px;
+    }
+
+    #diagram svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .node rect {
+      fill: var(--card-bg);
+      stroke-width: 1.5;
+      stroke: var(--border-color);
+      rx: 10;
+      ry: 10;
+      transition: stroke 0.25s, stroke-width 0.25s, filter 0.25s;
+    }
+
+    .node.manifest rect {
+      stroke: var(--manifest);
+    }
+
+    .node.new rect {
+      stroke: var(--new);
+      filter: drop-shadow(0 0 6px rgba(16,185,129,0.35));
+    }
+
+    .node.shared rect {
+      stroke: var(--shared);
+      stroke-dasharray: 4 3;
+    }
+
+    .node text {
+      fill: var(--card-fg);
+      font-size: 12px;
+      font-weight: 600;
+      dominant-baseline: middle;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .edge path {
+      fill: none;
+      stroke-width: 2;
+      stroke: var(--manifest);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+
+    .edge.visible path {
+      opacity: 1;
+    }
+
+    .edge.active path {
+      stroke-width: 3;
+      filter: drop-shadow(0 0 4px var(--manifest));
+    }
+
+    .time-arrow path {
+      fill: none;
+      stroke: var(--dim-fg);
+      stroke-width: 1.5;
+    }
+
+    .time-arrow polygon {
+      fill: var(--dim-fg);
+    }
+
+    .time-label {
+      fill: var(--dim-fg);
+      font-size: 11px;
+      font-weight: 600;
+      text-anchor: middle;
+    }
+
+    .storage-label {
+      fill: var(--dim-fg);
+      font-size: 12px;
+      font-weight: 600;
+      text-anchor: start;
+    }
+
+    .storage-block {
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+
+    .storage-block.visible {
+      opacity: 1;
+    }
+
+    .storage-block rect {
+      fill: var(--card-bg);
+      stroke-width: 1.5;
+      rx: 6;
+      ry: 6;
+    }
+
+    .storage-block.new rect {
+      stroke: var(--new);
+    }
+
+    .storage-block.shared rect {
+      stroke: var(--shared);
+      stroke-dasharray: 3 2;
+    }
+
+    .storage-block.manifest rect {
+      stroke: var(--manifest);
+    }
+
+    .storage-block text {
+      fill: var(--card-fg);
+      font-size: 10px;
+      font-weight: 600;
+      dominant-baseline: middle;
+      text-anchor: middle;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--dim-fg);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.manifest { background: var(--manifest); }
+    .dot.new { background: var(--new); }
+    .dot.shared { background: var(--shared); }
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <header>
+      <h1>Micro-Ledger: Version Chain + Shared Storage</h1>
+      <p class="subtitle">Each manifest references the previous version. Unchanged content blocks are reused; only changes add new storage.</p>
+    </header>
+
+    <div id="diagram"></div>
+
+    <div class="legend">
+      <span><span class="dot manifest"></span> Manifest</span>
+      <span><span class="dot new"></span> New / changed block</span>
+      <span><span class="dot shared"></span> Shared block (same CID)</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  <script>
+    const width = 1050;
+    const height = 480;
+    const manifestWidth = 120;
+    const blockWidth = 120;
+    const manifestHeight = 38;
+    const blockHeight = 34;
+    const colGap = 180;
+    const startX = 130;
+    const manifestY = 70;
+    const blocksStartY = 125;
+    const blockGap = 6;
+    const storageY = 365;
+
+    const stBlockWidth = 90;
+    const stBlockHeight = 28;
+    const stGap = 8;
+    const stStartX = 100;
+    const stBlocksPerRow = 7;
+
+    const versions = [
+      {
+        id: 'v1',
+        label: 'v1 Manifest',
+        x: startX,
+        blocks: [
+          { type: 'new', label: 'Texture A' },
+          { type: 'new', label: 'Mesh A' },
+          { type: 'new', label: 'Animation A' },
+          { type: 'new', label: 'Metadata A' }
+        ]
+      },
+      {
+        id: 'v2',
+        label: 'v2 Manifest',
+        x: startX + colGap,
+        prev: 'v1',
+        blocks: [
+          { type: 'new', label: 'Texture B' },
+          { type: 'shared', label: 'Mesh A' },
+          { type: 'shared', label: 'Animation A' },
+          { type: 'shared', label: 'Metadata A' }
+        ]
+      },
+      {
+        id: 'v3',
+        label: 'v3 Manifest',
+        x: startX + colGap * 2,
+        prev: 'v2',
+        blocks: [
+          { type: 'shared', label: 'Texture B' },
+          { type: 'new', label: 'Mesh B' },
+          { type: 'shared', label: 'Animation A' },
+          { type: 'shared', label: 'Metadata A' }
+        ]
+      },
+      {
+        id: 'v4',
+        label: 'v4 Manifest',
+        x: startX + colGap * 3,
+        prev: 'v3',
+        blocks: [
+          { type: 'shared', label: 'Texture B' },
+          { type: 'shared', label: 'Mesh B' },
+          { type: 'shared', label: 'Animation A' },
+          { type: 'new', label: 'Metadata B' }
+        ]
+      }
+    ];
+
+    const svg = d3.select('#diagram')
+      .append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    // Time arrow
+    const timeG = svg.append('g').attr('class', 'time-arrow');
+    timeG.append('path')
+      .attr('d', `M 80 32 L 920 32`);
+    timeG.append('polygon')
+      .attr('points', '920 32, 912 27, 912 37');
+    timeG.append('text')
+      .attr('class', 'time-label')
+      .attr('x', 500)
+      .attr('y', 24)
+      .text('Version history');
+
+    // Storage label
+    svg.append('text')
+      .attr('class', 'storage-label')
+      .attr('x', 40)
+      .attr('y', storageY + stBlockHeight + stGap / 2)
+      .text('Storage');
+
+    // Build node data
+    const nodes = [];
+    versions.forEach(v => {
+      nodes.push({ id: v.id, label: v.label, x: v.x, y: manifestY, width: manifestWidth, height: manifestHeight, kind: 'manifest', version: v.id });
+      v.blocks.forEach((b, i) => {
+        const blockId = `${v.id}-${b.label.replace(/\s+/g, '-').toLowerCase()}`;
+        const globalId = b.label;
+        nodes.push({
+          id: blockId,
+          label: b.label,
+          x: v.x,
+          y: blocksStartY + i * (blockHeight + blockGap),
+          width: blockWidth,
+          height: blockHeight,
+          kind: b.type,
+          version: v.id,
+          globalId: globalId
+        });
+      });
+    });
+
+    // Build edges (prev links)
+    const edges = versions.slice(1).map(v => ({
+      id: `link-${v.id}`,
+      source: v.id,
+      target: v.prev,
+      sx: v.x - manifestWidth / 2,
+      sy: manifestY,
+      tx: versions.find(pv => pv.id === v.prev).x + manifestWidth / 2,
+      ty: manifestY
+    }));
+
+    function linkPath(e) {
+      const midX = (e.sx + e.tx) / 2;
+      return `M ${e.sx} ${e.sy} C ${midX} ${e.sy}, ${midX} ${e.ty}, ${e.tx} ${e.ty}`;
+    }
+
+    const edgeGroups = svg.selectAll('.edge')
+      .data(edges)
+      .enter()
+      .append('g')
+      .attr('class', 'edge')
+      .attr('id', d => d.id);
+
+    edgeGroups.append('path')
+      .attr('d', linkPath);
+
+    // Storage blocks: unique blocks in order of appearance
+    const storageBlocks = [
+      { id: 'st-v1', label: 'M1', kind: 'manifest' },
+      { id: 'st-tex-a', label: 'Texture A', kind: 'new' },
+      { id: 'st-mesh-a', label: 'Mesh A', kind: 'new' },
+      { id: 'st-anim-a', label: 'Animation A', kind: 'new' },
+      { id: 'st-meta-a', label: 'Metadata A', kind: 'new' },
+      { id: 'st-v2', label: 'M2', kind: 'manifest' },
+      { id: 'st-tex-b', label: 'Texture B', kind: 'new' },
+      { id: 'st-v3', label: 'M3', kind: 'manifest' },
+      { id: 'st-mesh-b', label: 'Mesh B', kind: 'new' },
+      { id: 'st-v4', label: 'M4', kind: 'manifest' },
+      { id: 'st-meta-b', label: 'Metadata B', kind: 'new' }
+    ];
+
+    const storageGroups = svg.selectAll('.storage-block')
+      .data(storageBlocks)
+      .enter()
+      .append('g')
+      .attr('class', d => `storage-block ${d.kind}`)
+      .attr('id', d => d.id)
+      .attr('transform', (d, i) => {
+        const col = i % stBlocksPerRow;
+        const row = Math.floor(i / stBlocksPerRow);
+        const x = stStartX + col * (stBlockWidth + stGap);
+        const y = storageY + row * (stBlockHeight + stGap);
+        return `translate(${x}, ${y})`;
+      });
+
+    storageGroups.append('rect')
+      .attr('width', stBlockWidth)
+      .attr('height', stBlockHeight);
+
+    storageGroups.append('text')
+      .attr('x', stBlockWidth / 2)
+      .attr('y', stBlockHeight / 2)
+      .text(d => d.label);
+
+    // Version nodes
+    const nodeGroups = svg.selectAll('.node')
+      .data(nodes)
+      .enter()
+      .append('g')
+      .attr('class', d => `node ${d.kind}`)
+      .attr('id', d => d.id)
+      .attr('transform', d => `translate(${d.x - d.width / 2}, ${d.y - d.height / 2})`)
+      .style('opacity', 0);
+
+    nodeGroups.append('rect')
+      .attr('width', d => d.width)
+      .attr('height', d => d.height);
+
+    nodeGroups.append('text')
+      .attr('x', d => d.width / 2)
+      .attr('y', d => d.height / 2)
+      .text(d => d.label);
+
+    // Progressive animation states
+    const states = [
+      { versions: ['v1'], storage: ['st-v1', 'st-tex-a', 'st-mesh-a', 'st-anim-a', 'st-meta-a'], active: 'v1' },
+      { versions: ['v1', 'v2'], storage: ['st-v1', 'st-tex-a', 'st-mesh-a', 'st-anim-a', 'st-meta-a', 'st-v2', 'st-tex-b'], active: 'v2' },
+      { versions: ['v1', 'v2', 'v3'], storage: ['st-v1', 'st-tex-a', 'st-mesh-a', 'st-anim-a', 'st-meta-a', 'st-v2', 'st-tex-b', 'st-v3', 'st-mesh-b'], active: 'v3' },
+      { versions: ['v1', 'v2', 'v3', 'v4'], storage: storageBlocks.map(b => b.id), active: 'v4' }
+    ];
+
+    let stateIndex = 0;
+
+    function applyState() {
+      const state = states[stateIndex];
+
+      // Show versions and their blocks
+      d3.selectAll('.node')
+        .transition()
+        .duration(400)
+        .style('opacity', d => state.versions.includes(d.version) ? 1 : 0);
+
+      // Highlight new blocks in active version
+      d3.selectAll('.node').classed('new', false).classed('shared', false);
+      nodeGroups.filter(d => d.version === state.active)
+        .classed('new', d => d.kind === 'new')
+        .classed('shared', d => d.kind === 'shared');
+
+      // Show backward links for visible versions
+      d3.selectAll('.edge')
+        .classed('visible', d => state.versions.includes(d.source));
+
+      d3.selectAll('.edge').classed('active', false);
+      d3.select(`#link-${state.active}`).classed('active', true);
+
+      // Show storage blocks
+      d3.selectAll('.storage-block')
+        .classed('visible', d => state.storage.includes(d.id));
+
+      // Pulse newly revealed storage blocks
+      const prevStorage = stateIndex > 0 ? states[stateIndex - 1].storage : [];
+      d3.selectAll('.storage-block')
+        .classed('new', d => state.storage.includes(d.id) && !prevStorage.includes(d.id) && d.kind === 'new')
+        .classed('manifest', d => d.kind === 'manifest');
+
+      stateIndex = (stateIndex + 1) % states.length;
+    }
+
+    setTimeout(() => {
+      applyState();
+      setInterval(applyState, 2200);
+    }, 300);
+  </script>
+</body>
+</html>
