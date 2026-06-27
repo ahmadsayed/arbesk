@@ -140,6 +140,9 @@ export async function loadCurrentAssets() {
     return;
   }
 
+  const isStale = () =>
+    String(libraryState.get().currentCollectionTokenId) !== String(tokenId);
+
   libraryState.set({ assets: [], isLoading: true });
   try {
     const collection = state.collections.find(
@@ -148,11 +151,7 @@ export async function loadCurrentAssets() {
     const role = collection?.role || "owner";
     const entries = await expandTokenToAssets(tokenId);
 
-    // Guard against stale async loads: if the user navigated to a different
-    // collection while this request was in flight, discard the result.
-    if (String(libraryState.get().currentCollectionTokenId) !== String(tokenId)) {
-      return;
-    }
+    if (isStale()) return;
 
     const assets = entries.map((entry) => ({
       id: `asset-${entry.tokenId}-${entry.assetId}`,
@@ -168,9 +167,7 @@ export async function loadCurrentAssets() {
     libraryState.set({ assets, isLoading: false });
   } catch (err) {
     console.error("[LIBRARY] Failed to load collection assets", err);
-    if (String(libraryState.get().currentCollectionTokenId) === String(tokenId)) {
-      libraryState.set({ assets: [], isLoading: false });
-    }
+    if (!isStale()) libraryState.set({ assets: [], isLoading: false });
   }
 }
 

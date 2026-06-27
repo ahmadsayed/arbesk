@@ -178,15 +178,6 @@ html(lang="en")
         box-shadow: 0 6px 18px rgba(160,120,72,0.18);
       }
 
-      .cta-secondary.on-dark {
-        color: var(--landing-bg);
-        border-color: color-mix(in srgb, var(--landing-bg) 45%, transparent);
-      }
-
-      .cta-secondary.on-dark:hover {
-        background: color-mix(in srgb, var(--landing-bg) 12%, transparent);
-      }
-
       /* Feature sections */
       .landing-section {
         display: grid;
@@ -784,12 +775,25 @@ html(lang="en")
       }
 
       @supports (animation-timeline: view()) {
-        /*
-         * Generic catch-all: every .reveal-child-* gets scroll-driven kFadeRise.
-         * Ranges end at entry 28–36% — tight enough that even the footer
-         * (which can't be scrolled past) reaches "to" state at max scroll.
-         * More-specific rules below override animation-name for headings/cards.
-         */
+        /* All ranges end by entry 36% so even footer elements (which can't be
+           scrolled past) are fully visible at the page's maximum scroll position. */
+
+        /* Child-1: section headings slide in from the outside column edge. */
+        .js-animations .landing-section:not(.pull-quote) h2.reveal-child-1 {
+          opacity: 0; transition: none;
+          animation: kSlideLeft 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation-timeline: view();
+          animation-range: entry 0% entry 28%;
+          will-change: opacity, translate;
+        }
+        .js-animations .landing-section.reverse:not(.pull-quote) h2.reveal-child-1 {
+          opacity: 0; transition: none;
+          animation: kSlideRight 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation-timeline: view();
+          animation-range: entry 0% entry 28%;
+          will-change: opacity, translate;
+        }
+        /* Child-1 for all other contexts (pull-quote mark, footer h2): fade-rise. */
         .js-animations .reveal .reveal-child-1 {
           opacity: 0; transition: none;
           animation: kFadeRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -797,6 +801,8 @@ html(lang="en")
           animation-range: entry 0% entry 28%;
           will-change: opacity, translate;
         }
+
+        /* Child-2: body text, staggered slightly after child-1. */
         .js-animations .reveal .reveal-child-2 {
           opacity: 0; transition: none;
           animation: kFadeRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -804,6 +810,8 @@ html(lang="en")
           animation-range: entry 5% entry 33%;
           will-change: opacity, translate;
         }
+
+        /* Child-3 default: fade-rise (pull-quote body text, footer links). */
         .js-animations .reveal .reveal-child-3 {
           opacity: 0; transition: none;
           animation: kFadeRise 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -811,17 +819,9 @@ html(lang="en")
           animation-range: entry 8% entry 36%;
           will-change: opacity, translate;
         }
-
-        /* Section headings: horizontal slide from the outside column edge. */
-        .js-animations .landing-section:not(.pull-quote) h2.reveal-child-1 {
-          animation-name: kSlideLeft;
-        }
-        .js-animations .landing-section.reverse:not(.pull-quote) h2.reveal-child-1 {
-          animation-name: kSlideRight;
-        }
-
-        /* Visual cards: scale lift + simultaneous parallax drift. */
+        /* Child-3 for visual cards: scale lift + simultaneous parallax drift. */
         .js-animations .landing-section .visual.reveal-child-3 {
+          opacity: 0; transition: none;
           animation: kCardLift 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
                      kParallax linear both;
           animation-timeline: view(), view();
