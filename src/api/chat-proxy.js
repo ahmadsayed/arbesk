@@ -18,7 +18,7 @@
  * remains a stock nostr-rs-relay instance; scoping is enforced by the proxy.
  */
 
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { finalizeEvent, getPublicKey, utils } from "nostr-tools";
 import url from "url";
 import { KIND_CHAT, TAG_ASSET, createRelay, safeClose } from "./nostr-relay.js";
@@ -110,7 +110,7 @@ export function createChatProxy(httpServer) {
   });
 
   wss.on("connection", (ws, req) => {
-    handleConnection(ws, req).catch((err) => {
+    return handleConnection(ws, req).catch((err) => {
       console.error("[CHAT] unhandled connection error:", err.message);
       safeClose(ws, 1011, "Internal error");
     });
@@ -208,6 +208,7 @@ async function handleConnection(clientWs, req) {
       `[CHAT] relay bridge failed | client=${remote}:`,
       e.message,
     );
+    session.dispose();
     safeClose(clientWs, 4403, "Could not connect to relay");
     return;
   }
@@ -316,9 +317,19 @@ function openRelayBridge(assetTag, clientWs, session) {
       safeClose(clientWs, 1011, "Relay connection closed");
     };
 
+    // Timeout if connect() does not resolve quickly.
+    const connectTimeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        relay.close();
+        reject(new Error("Relay connection timeout"));
+      }
+    }, 10000);
+
     relay
       .connect()
       .then(() => {
+        clearTimeout(connectTimeout);
         relay.subscribe(
           [{ kinds: [KIND_CHAT], [`#${TAG_ASSET}`]: [assetTag], limit: 100 }],
           {
@@ -351,6 +362,7 @@ function openRelayBridge(assetTag, clientWs, session) {
         }
       })
       .catch((err) => {
+        clearTimeout(connectTimeout);
         console.error("[CHAT] relay error:", err.message || err);
         if (!resolved) {
           resolved = true;
@@ -358,15 +370,6 @@ function openRelayBridge(assetTag, clientWs, session) {
         }
         safeClose(clientWs, 1011, "Relay error");
       });
-
-    // Timeout if connect() does not resolve quickly.
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        relay.close();
-        reject(new Error("Relay connection timeout"));
-      }
-    }, 10000);
   });
 }
 
