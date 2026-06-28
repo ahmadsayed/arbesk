@@ -286,6 +286,17 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     return hash;
   }
 
+  describe("Security headers", () => {
+    it("allows Thirdweb embedded wallet iframe in report-only CSP", async () => {
+      const res = await request(app).get("/studio.html");
+      const csp = res.headers["content-security-policy-report-only"];
+      expect(csp).toBeDefined();
+      expect(csp).toMatch(
+        /frame-src[^;]*https:\/\/embedded-wallet\.thirdweb\.com/,
+      );
+    });
+  });
+
   describe("POST /api/v1/generations", () => {
     it("returns asset bytes for a prompt", async () => {
       const res = await request(app)

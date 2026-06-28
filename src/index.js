@@ -94,7 +94,7 @@ app.use(
         fontSrc: ["'self'"],
         mediaSrc: ["'self'"],
         workerSrc: ["'self'", "blob:"],
-        frameSrc: ["'none'"],
+        frameSrc: ["'self'", "https://embedded-wallet.thirdweb.com", "https://*.thirdweb.com"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
