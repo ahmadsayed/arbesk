@@ -68,17 +68,44 @@ export async function connectGoogleWallet() {
     throw new Error("Thirdweb client not initialized. Call initThirdwebClient first.");
   }
 
+  // Diagnostic: log any postMessage arriving from thirdweb.com domains
+  const _diagHandler = (ev) => {
+    if (ev.origin && ev.origin.includes("thirdweb.com")) {
+      log("[THIRDWEB-MSG] from:", ev.origin, "data:", JSON.stringify(ev.data));
+    }
+  };
+  window.addEventListener("message", _diagHandler);
+
+  // Diagnostic: log hidden iframes injected by the SDK
+  const _observer = new MutationObserver((muts) => {
+    for (const m of muts) {
+      for (const n of m.addedNodes) {
+        if (n.tagName === "IFRAME") log("[THIRDWEB-IFRAME] added:", n.src);
+      }
+    }
+  });
+  _observer.observe(document.body, { childList: true, subtree: true });
+
+  const _cleanup = () => {
+    window.removeEventListener("message", _diagHandler);
+    _observer.disconnect();
+  };
+
   try {
     // 1. Connect embedded EOA via Google OAuth.
     log("[THIRDWEB] opening Google OAuth popup");
     eoaWallet = inAppWallet({
-      auth: { mode: "popup" },
+      auth: {
+        mode: "popup",
+        redirectUrl: window.location.origin,
+      },
     });
     eoaAccount = await eoaWallet.connect({
       client: thirdwebClient,
       chain: megaethTestnet,
       strategy: "google",
     });
+    _cleanup();
     log("[THIRDWEB] Google EOA connected:", eoaAccount.address);
 
     // 2. Wrap the EOA in a sponsored smart account on MegaETH Testnet.
@@ -100,6 +127,7 @@ export async function connectGoogleWallet() {
       provider,
     };
   } catch (err) {
+    _cleanup();
     error("[THIRDWEB] connectGoogleWallet failed:", err);
     throw err;
   }
