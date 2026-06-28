@@ -9,12 +9,8 @@
 
 import { SiweMessage } from "siwe";
 import { verifyMessage } from "viem/actions";
-import { decodeAbiParameters } from "viem";
 import { getViemPublicClient, web3 } from "../config.js";
 import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
-
-const ERC6492_MAGIC_BYTES =
-  "6492649264926492649264926492649264926492649264926492649264926492";
 
 // Nonce store: Map<nonce, expiresAt> - auto-cleans on verification
 const usedNonces = new Map();
@@ -181,45 +177,6 @@ export async function verifySiwe(
     };
   }
 
-  // Diagnostic logging: understand what kind of signature the wallet produced.
-  const sigLower = signature.toLowerCase();
-  const isErc6492 = sigLower.endsWith(ERC6492_MAGIC_BYTES);
-  console.log(
-    `[SIWE] signature diagnostics for ${address}: length=${signature.length}, erc6492=${isErc6492}`,
-  );
-  if (isErc6492) {
-    try {
-      const encoded = signature.slice(2, -64);
-      const [factory, factoryData, innerSignature] = decodeAbiParameters(
-        [
-          { type: "address", name: "factory" },
-          { type: "bytes", name: "factoryData" },
-          { type: "bytes", name: "signature" },
-        ],
-        `0x${encoded}`,
-      );
-      console.log(
-        `[SIWE] ERC-6492 decode for ${address}: factory=${factory}, factoryDataLength=${factoryData.length}, innerSignatureLength=${innerSignature.length}`,
-      );
-    } catch (decodeErr) {
-      const decodeError = /** @type {Error} */ (decodeErr);
-      console.log(
-        `[SIWE] ERC-6492 decode error for ${address}:`,
-        decodeError.message,
-      );
-    }
-  }
-  try {
-    const recovered = await web3.eth.accounts.recover(message, signature);
-    console.log(`[SIWE] EOA recovery for ${address} yielded: ${recovered}`);
-  } catch (recoverErr) {
-    const recoverError = /** @type {Error} */ (recoverErr);
-    console.log(
-      `[SIWE] EOA recovery for ${address} threw:`,
-      recoverError.message,
-    );
-  }
-
   let signatureValid = false;
   try {
     console.log(`[SIWE] verifying signature for ${address} via viem (chainId=${chainId})`);
@@ -267,8 +224,6 @@ export async function verifySiwe(
   }
 
   if (!signatureValid) {
-    console.log(`[SIWE] message for ${address}: ${message}`);
-    console.log(`[SIWE] signature for ${address}: ${signature}`);
     return {
       valid: false,
       address: null,

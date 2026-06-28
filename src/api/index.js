@@ -21,17 +21,9 @@ import indexerRoutes from "./routes/indexer.js";
 import openapiRoutes from "./routes/openapi.js";
 import testUtilsRoutes from "./routes/test-utils.js";
 import { maybeDecompress } from "./ipfs-utils.js";
-import { initIndexers } from "./token-indexer.js";
-
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default () => {
-  // Start the off-chain token ownership indexer in the background.
-  // It catches up to the chain tip and polls for new blocks.
-  initIndexers().catch((err) => {
-    console.error("[API] failed to initialize token indexers:", err);
-  });
-
   const v1 = Router();
 
   // JSON body parsing and content-type enforcement are handled by the

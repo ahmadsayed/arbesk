@@ -84,6 +84,27 @@ export function isThirdwebConnected() {
 }
 
 /**
+ * Wrap an EOA account in a sponsored smart account and build the EIP-1193 adapter.
+ * @param {import("thirdweb/wallets").Account} resolvedEoaAccount
+ * @param {import("thirdweb/chains").Chain} chain
+ * @returns {Promise<{ eoaAddress: string, smartAccountAddress: string, provider: Object }>}
+ */
+async function wrapInSmartAccount(resolvedEoaAccount, chain) {
+  smartWalletInstance = smartWallet({ chain, sponsorGas: true });
+  smartAccount = await smartWalletInstance.connect({
+    client: thirdwebClient,
+    personalAccount: resolvedEoaAccount,
+  });
+  log("[THIRDWEB] smart account connected:", smartAccount.address);
+  const provider = createEip1193Adapter(smartAccount, resolvedEoaAccount, chain);
+  return {
+    eoaAddress: resolvedEoaAccount.address,
+    smartAccountAddress: smartAccount.address,
+    provider,
+  };
+}
+
+/**
  * Connect a Google In-App Wallet and wrap it in a sponsored smart account.
  * @returns {Promise<{ eoaAddress: string, smartAccountAddress: string, provider: Object }>}
  */
@@ -121,23 +142,7 @@ export async function connectGoogleWallet() {
     log("[THIRDWEB] Google EOA connected:", eoaAccount.address);
 
     // 2. Wrap the EOA in a sponsored smart account on the selected chain.
-    smartWalletInstance = smartWallet({
-      chain,
-      sponsorGas: true,
-    });
-    smartAccount = await smartWalletInstance.connect({
-      client: thirdwebClient,
-      personalAccount: eoaAccount,
-    });
-    log("[THIRDWEB] smart account connected:", smartAccount.address);
-
-    const provider = createEip1193Adapter(smartAccount, eoaAccount, chain);
-
-    return {
-      eoaAddress: eoaAccount.address,
-      smartAccountAddress: smartAccount.address,
-      provider,
-    };
+    return await wrapInSmartAccount(eoaAccount, chain);
   } catch (err) {
     error("[THIRDWEB] connectGoogleWallet failed:", err);
     throw err;
@@ -181,22 +186,7 @@ export async function autoConnectThirdwebWallet() {
 
     log("[THIRDWEB] Google EOA auto-restored:", eoaAccount.address);
 
-    smartWalletInstance = smartWallet({
-      chain,
-      sponsorGas: true,
-    });
-    smartAccount = await smartWalletInstance.connect({
-      client: thirdwebClient,
-      personalAccount: eoaAccount,
-    });
-    log("[THIRDWEB] smart account auto-restored:", smartAccount.address);
-
-    const provider = createEip1193Adapter(smartAccount, eoaAccount, chain);
-    return {
-      eoaAddress: eoaAccount.address,
-      smartAccountAddress: smartAccount.address,
-      provider,
-    };
+    return await wrapInSmartAccount(eoaAccount, chain);
   } catch (err) {
     log("[THIRDWEB] auto-connect failed:", err.message);
     eoaWallet = null;

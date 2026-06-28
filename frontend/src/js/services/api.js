@@ -309,6 +309,29 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
   }
 }
 
+/**
+ * GET /api/v1/indexer/owned?address=0x...&chainId=...
+ * Returns token IDs owned by the address on the given chain, or null on failure.
+ *
+ * @param {string} address
+ * @param {number} chainId
+ * @returns {Promise<string[]|null>}
+ */
+export async function getOwnedTokens(address, chainId) {
+  try {
+    const res = await fetch(`${API_BASE}/indexer/owned?address=${encodeURIComponent(address)}&chainId=${chainId}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`indexer returned ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data.owned)) throw new Error("invalid indexer response");
+    return data.owned.map(String);
+  } catch (err) {
+    warn("[SESSION] indexer query failed, falling back to scan:", err.message);
+    return null;
+  }
+}
+
 // ─── Generations ─────────────────────────────────────────────────────────────
 
 /**

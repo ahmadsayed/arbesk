@@ -60,6 +60,11 @@ export const unpinSchema = z.object({
   cid: cidSchema,
 });
 
+export const ownedQuerySchema = z.object({
+  address: ethereumAddressSchema,
+  chainId: chainIdSchema,
+});
+
 export const gcSchema = z.object({
   dryRun: z.boolean().optional().default(true),
   maxUnpin: z.number().int().positive().optional(),

@@ -21,9 +21,19 @@ const DEFAULT_PROMPT = "cowboy";
 export async function connectStudio(page) {
   await injectHardhatProvider(page);
   await page.goto("/studio.html");
-  await page.locator(SELECTORS.connectWalletBtn).click();
-  await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
-  await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+
+  // The Studio auto-connects a previously authorized / injected wallet on page
+  // load. Wait briefly for the connect button to disappear; if it does not,
+  // fall back to the manual Login / Signup flow.
+  const connectBtn = page.locator(SELECTORS.connectWalletBtn);
+  try {
+    await expect(connectBtn).toBeHidden({ timeout: 8000 });
+  } catch {
+    await connectBtn.click();
+    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
+    await expect(connectBtn).toBeHidden();
+  }
+
   await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
     "Sign In",
   );
@@ -44,9 +54,18 @@ export async function connectStudioAs(page, accountIndex) {
   }
   await injectHardhatProvider(page, { accountIndex });
   await page.goto("/studio.html");
-  await page.locator(SELECTORS.connectWalletBtn).click();
-  await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
-  await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+
+  // Auto-connect on page load: wait for the connect button to hide; if it
+  // stays visible, use the manual Login / Signup fallback.
+  const connectBtn = page.locator(SELECTORS.connectWalletBtn);
+  try {
+    await expect(connectBtn).toBeHidden({ timeout: 8000 });
+  } catch {
+    await connectBtn.click();
+    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
+    await expect(connectBtn).toBeHidden();
+  }
+
   // Wait for SIWE auth to complete (button no longer shows "Sign In")…
   await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
     "Sign In",
@@ -220,9 +239,20 @@ export async function scrubHistorySlider(page, index) {
 export async function connectLibrary(page) {
   await injectHardhatProvider(page);
   await page.goto("/library.html");
-  await page.locator(SELECTORS.libraryConnectBtn).click();
-  await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
-  await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
+
+  // The library page auto-connects on page load just like the Studio. Wait for
+  // the wallet gate to disappear; if it does not, use the manual Login / Signup
+  // fallback.
+  const libraryGate = page.locator(SELECTORS.libraryGate);
+  try {
+    await expect(libraryGate).toBeHidden({ timeout: 8000 });
+  } catch {
+    const libraryConnectBtn = page.locator(SELECTORS.libraryConnectBtn);
+    await libraryConnectBtn.click();
+    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
+    await expect(libraryGate).toBeHidden();
+  }
+
   await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 }

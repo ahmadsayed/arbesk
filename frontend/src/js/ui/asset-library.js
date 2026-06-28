@@ -25,6 +25,7 @@ import { CHAIN_IDS, DEPLOYMENT_BLOCKS } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import { getOwnedTokens } from "../services/api.js";
 
 let assetLibraryBody = null;
 let libraryRenderInFlight = false;
@@ -76,13 +77,13 @@ function _writeOwnedTokensCache(chainId, address, lastScannedBlock, owned) {
 /**
  * Fetch Transfer events for a specific address in small block chunks.
  * Public RPCs like Monad Testnet reject wide eth_getLogs ranges with 413.
+ * @param {number} latest - pre-fetched current block number
  */
-async function fetchTransferEvents(contract, address, direction, startBlock) {
+async function fetchTransferEvents(contract, address, direction, startBlock, latest) {
   const allEvents = [];
   const filter = direction === "to" ? { to: address } : { from: address };
 
   try {
-    const latest = Number(await web3.eth.getBlockNumber());
     const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
     const fromBlock = Math.max(
       startBlock ?? DEPLOYMENT_BLOCKS[chainId] ?? 0,
@@ -113,49 +114,25 @@ async function fetchTransferEvents(contract, address, direction, startBlock) {
   return allEvents;
 }
 
-async function fetchOwnedTokensFromIndexer(address, chainId) {
-  if (typeof fetch !== "function" || typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const url = new URL("/api/v1/indexer/owned", window.location.origin);
-    url.searchParams.set("address", address);
-    url.searchParams.set("chainId", String(chainId));
-    const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) {
-      throw new Error(`indexer returned ${res.status}`);
-    }
-    const data = await res.json();
-    if (!Array.isArray(data.owned)) {
-      throw new Error("invalid indexer response");
-    }
-    console.log(
-      `[ASSET-LIBRARY] indexer returned ${data.owned.length} token(s) ` +
-        `for ${address} on chain ${chainId}`
-    );
-    return data.owned.map(String);
-  } catch (err) {
-    console.warn(
-      "[ASSET-LIBRARY] indexer query failed, falling back to scan:",
-      String(/** @type {Error} */ (err).message)
-    );
-    return null;
-  }
-}
 
 export async function fetchOwnedTokenIds(contract, address) {
   const lowerAddress = address.toLowerCase();
   const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
 
-  const indexerResult = await fetchOwnedTokensFromIndexer(address, chainId);
-  if (indexerResult) {
-    _writeOwnedTokensCache(chainId, address, Number.MAX_SAFE_INTEGER, indexerResult);
-    return indexerResult;
+  // Only use the backend indexer for chains that have a configured deployment
+  // block. For local/dev chains without one, fall back to an on-chain scan.
+  const deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
+  if (deploymentBlock > 0) {
+    const indexerResult = await getOwnedTokens(address, chainId);
+    if (indexerResult) {
+      console.log(
+        `[ASSET-LIBRARY] indexer returned ${indexerResult.length} token(s) ` +
+          `for ${address} on chain ${chainId}`
+      );
+      return indexerResult;
+    }
   }
 
-  const deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
   const cache = _readOwnedTokensCache(chainId, address);
   const ownership = new Map();
   let startBlock = deploymentBlock;
@@ -167,9 +144,10 @@ export async function fetchOwnedTokenIds(contract, address) {
     }
   }
 
+  const latest = Number(await web3.eth.getBlockNumber());
   const [transfersTo, transfersFrom] = await Promise.all([
-    fetchTransferEvents(contract, address, "to", startBlock),
-    fetchTransferEvents(contract, address, "from", startBlock),
+    fetchTransferEvents(contract, address, "to", startBlock, latest),
+    fetchTransferEvents(contract, address, "from", startBlock, latest),
   ]);
 
   // Apply events in block order so the latest transfer for each tokenId wins.

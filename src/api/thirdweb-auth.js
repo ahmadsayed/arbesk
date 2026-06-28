@@ -14,11 +14,23 @@
  */
 
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
+import { ethereumAddressSchema } from "./schemas.js";
 
 const THIRDWEB_JWKS_URL = "https://login.thirdweb.com/api/jwks";
 
 /** Remote JWKS resolver cached at module load. */
 const thirdwebJwks = createRemoteJWKSet(new URL(THIRDWEB_JWKS_URL));
+
+/**
+ * @param {Record<string, unknown>} payload
+ * @returns {{ valid: boolean, address: string|null, error: string|null }}
+ */
+function buildResult(payload) {
+  const address = extractAddressFromPayload(payload);
+  return address
+    ? { valid: true, address, error: null }
+    : { valid: false, address: null, error: "JWT does not contain a valid wallet address" };
+}
 
 /**
  * Extract a wallet address from decoded JWT payload claims.
@@ -37,7 +49,7 @@ function extractAddressFromPayload(payload) {
           ? payload.sub
           : null;
 
-  if (!rawAddress || !/^0x[a-fA-F0-9]{40}$/i.test(rawAddress)) {
+  if (!rawAddress || !ethereumAddressSchema.safeParse(rawAddress).success) {
     return null;
   }
   return rawAddress.toLowerCase();
@@ -77,15 +89,7 @@ export async function verifyThirdwebAuthToken(token) {
         "[THIRDWB-AUTH] decoded JWT claim keys:",
         Object.keys(payload).join(","),
       );
-      const address = extractAddressFromPayload(payload);
-      if (!address) {
-        return {
-          valid: false,
-          address: null,
-          error: "JWT does not contain a valid wallet address",
-        };
-      }
-      return { valid: true, address, error: null };
+      return buildResult(payload);
     } catch (err) {
       const error = /** @type {Error} */ (err);
       return { valid: false, address: null, error: error.message };
@@ -106,16 +110,7 @@ export async function verifyThirdwebAuthToken(token) {
       Object.keys(payload).join(","),
     );
 
-    const address = extractAddressFromPayload(payload);
-    if (!address) {
-      return {
-        valid: false,
-        address: null,
-        error: "JWT does not contain a valid wallet address",
-      };
-    }
-
-    return { valid: true, address, error: null };
+    return buildResult(payload);
   } catch (err) {
     const error = /** @type {Error} */ (err);
     console.log("[THIRDWB-AUTH] JWT verification error:", error.message);

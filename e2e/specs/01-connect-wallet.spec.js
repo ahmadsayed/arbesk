@@ -6,18 +6,18 @@ import { TEST_WALLET } from "../fixtures/test-wallet.mjs";
 const TRUNCATED_ADDRESS = `${TEST_WALLET.address.slice(0, 6)}…${TEST_WALLET.address.slice(-4)}`;
 
 test.describe("wallet connection", () => {
-  test("connects the Hardhat dev wallet via Login / Signup and authenticates via SIWE", async ({ page }) => {
+  test("auto-connects the Hardhat dev wallet on page load and authenticates via SIWE", async ({ page }) => {
     await injectHardhatProvider(page);
     await page.goto("/studio.html");
 
-    // The wallet no longer auto-connects; user must click Login / Signup.
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeVisible();
-    await page.locator(SELECTORS.connectWalletBtn).click();
-    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
-
+    // With an injected EIP-1193 provider the Studio now connects automatically
+    // on page load, so the Login / Signup button should hide without a click.
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await expect(page.locator(SELECTORS.disconnectWalletBtn)).toContainText(TRUNCATED_ADDRESS);
+
+    // Wait for SIWE authentication to finish (the wallet menu stops showing
+    // "Sign In" once the session is established).
     await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText("Sign In");
+    await expect(page.locator(SELECTORS.disconnectWalletBtn)).toContainText(TRUNCATED_ADDRESS);
 
     const providerFlag = await page.evaluate(() => window.ethereum?.isArbeskTestProvider);
     expect(providerFlag).toBe(true);

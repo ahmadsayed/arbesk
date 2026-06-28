@@ -1,5 +1,7 @@
 import express from "express";
 import { getIndexer } from "../token-indexer.js";
+import { validateQuery } from "../validation.js";
+import { ownedQuerySchema } from "../schemas.js";
 
 const Router = express.Router;
 
@@ -12,26 +14,14 @@ const Router = express.Router;
 export default function indexerRoutes() {
   const router = Router();
 
-  router.get("/owned", async (req, res) => {
-    const { address, chainId } = req.query;
-
-    if (!address || typeof address !== "string") {
-      return res.status(400).json({ error: "address is required" });
-    }
-    if (!chainId || typeof chainId !== "string") {
-      return res.status(400).json({ error: "chainId is required" });
-    }
-
-    const id = Number(chainId);
-    if (!Number.isFinite(id) || id <= 0) {
-      return res.status(400).json({ error: "chainId must be a positive integer" });
-    }
+  router.get("/owned", validateQuery(ownedQuerySchema), async (req, res) => {
+    const { address, chainId } = /** @type {{ address: string, chainId: number }} */ (/** @type {unknown} */ (req.query));
 
     try {
-      const indexer = getIndexer(id);
+      const indexer = getIndexer(chainId);
       const owned = indexer.getOwnedTokens(address);
       res.json({
-        chainId: id,
+        chainId,
         address: address.toLowerCase(),
         owned,
         lastScannedBlock: indexer.lastScannedBlock,

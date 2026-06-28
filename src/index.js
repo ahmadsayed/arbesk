@@ -16,6 +16,7 @@ dotenv.config({ path: path.resolve(__dirnameRoot, "../blockchain/.env") });
 // Now safe to import - config.js reads from process.env which is populated
 const { default: api } = await import("./api/index.js");
 const { createChatProxy } = await import("./api/chat-proxy.js");
+const { initIndexers } = await import("./api/token-indexer.js");
 
 export const app = express();
 const port = process.env.PORT || 9090;
@@ -142,6 +143,9 @@ createChatProxy(server);
 
 if (process.env.NODE_ENV !== "test") {
   server.listen(port);
+  initIndexers().catch((err) => {
+    console.error("[API] failed to initialize token indexers:", err);
+  });
   console.log("[BOOT] Server started at http://localhost:" + port);
   console.log(
     "[BOOT] IPFS_API_URL=" +

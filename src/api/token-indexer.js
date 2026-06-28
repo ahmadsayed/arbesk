@@ -54,10 +54,6 @@ class TokenIndexer {
     this.initialized = false;
   }
 
-  _statePath() {
-    return this.stateFile;
-  }
-
   _loadState() {
     try {
       if (!fs.existsSync(this.stateFile)) return;
