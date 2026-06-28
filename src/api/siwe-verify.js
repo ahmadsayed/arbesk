@@ -8,13 +8,29 @@
  */
 
 import { SiweMessage } from "siwe";
-import { web3 } from "../config.js";
-import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
+import { web3, getWeb3 } from "../config.js";
+import { CHAIN_IDS, SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
 
 // Nonce store: Map<nonce, expiresAt> - auto-cleans on verification
 const usedNonces = new Map();
 const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MESSAGE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
+const EIP1271_MAGIC_VALUE = "0x1626ba7e";
+
+/** @type {import("web3").ContractAbi} */
+const EIP1271_ABI = [
+  {
+    inputs: [
+      { internalType: "bytes32", name: "_hash", type: "bytes32" },
+      { internalType: "bytes", name: "_signature", type: "bytes" },
+    ],
+    name: "isValidSignature",
+    outputs: [{ internalType: "bytes4", name: "magicValue", type: "bytes4" }],
+    stateMutability: "view",
+    type: "function",
+  },
+];
 
 /**
  * Clean expired nonces from the store.
@@ -163,7 +179,7 @@ export async function verifySiwe(
     };
   }
 
-  // 9. Recover address from signature
+  // 9. Verify signature (EOA or EIP-1271 smart account)
   let recoveredAddress;
   try {
     recoveredAddress = (
@@ -178,6 +194,24 @@ export async function verifySiwe(
   }
 
   if (recoveredAddress !== address.toLowerCase()) {
+    // EOA recovery failed — try EIP-1271 if the claimed address is a smart contract.
+    // Smart-account sessions are only expected on MegaETH Testnet; skip on Hardhat.
+    if (chainId !== CHAIN_IDS.HARDHAT_LOCAL) {
+      const isContract = await checkIsContractAddress(address, chainId);
+      if (isContract) {
+        const valid1271 = await verifyEip1271Signature(
+          address,
+          message,
+          signature,
+          chainId,
+        );
+        if (valid1271) {
+          usedNonces.set(nonce, Date.now() + NONCE_TTL_MS);
+          return { valid: true, address: address.toLowerCase(), error: null };
+        }
+      }
+    }
+
     return {
       valid: false,
       address: null,
@@ -189,4 +223,45 @@ export async function verifySiwe(
   usedNonces.set(nonce, Date.now() + NONCE_TTL_MS);
 
   return { valid: true, address: recoveredAddress, error: null };
+}
+
+/**
+ * Check whether an address has deployed code on the given chain.
+ * @param {string} address
+ * @param {number} chainId
+ * @returns {Promise<boolean>}
+ */
+async function checkIsContractAddress(address, chainId) {
+  try {
+    const w3 = getWeb3(chainId);
+    const code = await w3.eth.getCode(address);
+    return !!code && code !== "0x" && code !== "0x0";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verify a signature via EIP-1271 on a smart contract account.
+ * @param {string} address
+ * @param {string} message
+ * @param {string} signature
+ * @param {number} chainId
+ * @returns {Promise<boolean>}
+ */
+async function verifyEip1271Signature(address, message, signature, chainId) {
+  try {
+    const w3 = getWeb3(chainId);
+    const contract = new w3.eth.Contract(EIP1271_ABI, address);
+    const hash = w3.eth.accounts.hashMessage(message);
+    const result = await contract.methods.isValidSignature(hash, signature).call();
+    if (!result) return false;
+    const normalized = String(result).toLowerCase();
+    return (
+      normalized === EIP1271_MAGIC_VALUE.toLowerCase() ||
+      normalized.startsWith(EIP1271_MAGIC_VALUE.toLowerCase().slice(2))
+    );
+  } catch {
+    return false;
+  }
 }

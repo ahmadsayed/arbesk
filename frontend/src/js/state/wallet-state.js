@@ -4,6 +4,7 @@ import { EVENTS } from "../events/bus.js";
 
 const _defaults = {
   walletAddress: null,
+  eoaAddress: null,
   chainId: null,
   contract: null,
   contractAddress: null,

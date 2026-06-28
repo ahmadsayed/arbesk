@@ -210,6 +210,25 @@ async function autoConnectWallet() {
           return;
         }
       }
+    } else if (lastWallet === "thirdweb") {
+      // Try Thirdweb silent restore
+      const { isThirdwebConnected, connectGoogleWallet, initThirdwebClient } =
+        await import("./wallet-thirdweb.js");
+      if (isThirdwebConnected()) {
+        const { getConfig } = await import("../services/api.js");
+        const config = await getConfig();
+        if (config?.thirdwebClientId) {
+          initThirdwebClient(config.thirdwebClientId);
+          const { eoaAddress, smartAccountAddress, provider } =
+            await connectGoogleWallet();
+          web3Provider = provider;
+          web3 = new Web3(provider);
+          window.web3 = web3;
+          activeConnectionSource = "thirdweb";
+          await _finishWalletSetup(smartAccountAddress, eoaAddress);
+          return;
+        }
+      }
     } else if (lastWallet) {
       // Try to reconnect injected wallet by rdns
       requestWallets();
@@ -263,8 +282,8 @@ async function autoConnectWallet() {
 /**
  * Shared setup after provider is established (accounts, chain, contract, listeners).
  */
-async function _finishWalletSetup(address) {
-  walletState.set({ walletAddress: address });
+async function _finishWalletSetup(address, eoaAddress = null) {
+  walletState.set({ walletAddress: address, eoaAddress: eoaAddress || address });
 
   let chainId = Number(await web3.eth.getChainId());
   walletState.set({ chainId });
@@ -403,9 +422,17 @@ async function connectWallet() {
       return;
     }
 
-    const { provider, source, walletName, walletRdns } = result;
+    const { provider, source, walletName, walletRdns, walletAddress, eoaAddress } = result;
 
-    if (source === "walletconnect") {
+    if (source === "thirdweb") {
+      web3Provider = provider;
+      web3 = new Web3(provider);
+      window.web3 = web3;
+      activeConnectionSource = "thirdweb";
+      _activeWalletRdns = null;
+      localStorage.setItem(LAST_WALLET_KEY, "thirdweb");
+      await _finishWalletSetup(walletAddress, eoaAddress);
+    } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
       web3Provider = provider;
       web3 = new Web3(provider);
@@ -463,6 +490,9 @@ async function disconnectWallet() {
       offWalletConnectEvent("chainChanged", () => {});
       offWalletConnectEvent("disconnect", () => {});
       await disconnectWalletConnect();
+    } else if (activeConnectionSource === "thirdweb") {
+      const { disconnectThirdwebWallet } = await import("./wallet-thirdweb.js");
+      disconnectThirdwebWallet();
     } else if (web3Provider.removeListener) {
       web3Provider.removeListener("accountsChanged", () => {});
       web3Provider.removeListener("chainChanged", () => {});

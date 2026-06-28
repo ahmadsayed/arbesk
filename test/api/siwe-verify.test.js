@@ -1,6 +1,7 @@
 import { jest } from "@jest/globals";
 
 const recoverMock = jest.fn();
+const isValidSignatureMock = jest.fn();
 
 jest.unstable_mockModule("../../src/config.js", () => ({
   web3: {
@@ -8,6 +9,19 @@ jest.unstable_mockModule("../../src/config.js", () => ({
       accounts: { recover: recoverMock },
     },
   },
+  getWeb3: jest.fn(() => ({
+    eth: {
+      getCode: jest.fn(() => Promise.resolve("0x6000")),
+      accounts: { hashMessage: jest.fn(() => "0xHash") },
+      Contract: class {
+        constructor() {
+          this.methods = {
+            isValidSignature: () => ({ call: isValidSignatureMock }),
+          };
+        }
+      },
+    },
+  })),
 }));
 
 let verifySiwe;
@@ -35,6 +49,7 @@ describe("siwe-verify", () => {
     recoverMock.mockResolvedValue(
       "0x1234567890123456789012345678901234567890",
     );
+    isValidSignatureMock.mockReset();
   });
 
   it("verifies a valid message and signature", async () => {
@@ -102,6 +117,30 @@ describe("siwe-verify", () => {
   it("rejects signature mismatch", async () => {
     recoverMock.mockResolvedValue("0x0000000000000000000000000000000000000000");
     const message = buildSiweMessage({ nonce: "nonceMismatch1" });
+    const result = await verifySiwe(message, "0xSignature");
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/Signature does not match/i);
+  });
+
+  it("accepts EIP-1271 smart account signatures on MegaETH Testnet", async () => {
+    recoverMock.mockResolvedValue("0x0000000000000000000000000000000000000000");
+    isValidSignatureMock.mockResolvedValue("0x1626ba7e");
+    const message = buildSiweMessage({
+      nonce: "nonceEip1271Ok",
+      chainId: 6343,
+    });
+    const result = await verifySiwe(message, "0xSignature");
+    expect(result.valid).toBe(true);
+    expect(result.address).toBe("0x1234567890123456789012345678901234567890");
+  });
+
+  it("rejects EIP-1271 signatures that return non-magic value", async () => {
+    recoverMock.mockResolvedValue("0x0000000000000000000000000000000000000000");
+    isValidSignatureMock.mockResolvedValue("0x00000000");
+    const message = buildSiweMessage({
+      nonce: "nonceEip1271Bad",
+      chainId: 6343,
+    });
     const result = await verifySiwe(message, "0xSignature");
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/Signature does not match/i);

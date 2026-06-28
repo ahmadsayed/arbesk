@@ -111,6 +111,40 @@
 
 }
 
+// Divider between injected wallets and social login
+.wallet-modal-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin: var(--size-1) 0;
+  color: var(--dim-fg);
+  font-size: var(--font-size-0);
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+  }
+}
+
+// Google sign-in option
+.wallet-option-google {
+  justify-content: center;
+  border: var(--border-size-1) solid var(--border-color);
+  background: var(--surface-overlay);
+
+  &:hover {
+    background-color: var(--surface-overlay-hover);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 // Empty state when no wallets detected
 .wallet-modal-empty {
   text-align: center;

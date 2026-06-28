@@ -65,6 +65,9 @@ const connectSrc = [
   "wss://localhost:9090",
   "https://*.llamarpc.com",
   "https://*.publicnode.com",
+  "https://*.thirdweb.com",
+  "https://*.bundler.thirdweb.com",
+  "https://esm.sh",
 ];
 const imgSrc = ["'self'", "blob:", "data:", "http://127.0.0.1:8080"];
 if (pinataGateway) {

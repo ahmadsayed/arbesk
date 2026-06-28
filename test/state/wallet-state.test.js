@@ -10,6 +10,7 @@ describe("walletState.get()", () => {
   test("returns null defaults", () => {
     expect(walletState.get()).toEqual({
       walletAddress: null,
+      eoaAddress: null,
       chainId: null,
       contract: null,
       contractAddress: null,
@@ -49,6 +50,7 @@ describe("walletState.reset()", () => {
     walletState.reset();
     expect(walletState.get()).toEqual({
       walletAddress: null,
+      eoaAddress: null,
       chainId: null,
       contract: null,
       contractAddress: null,
