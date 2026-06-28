@@ -97,7 +97,7 @@ export async function connectGoogleWallet() {
     eoaWallet = inAppWallet({
       auth: {
         mode: "popup",
-        redirectUrl: window.location.href,
+        redirectUrl: window.location.origin + window.location.pathname,
       },
     });
     eoaAccount = await eoaWallet.connect({
