@@ -328,8 +328,13 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   }
 
   // Extract images to IPFS and record buffer ranges that can be pruned.
+  // Image extraction is synchronous; the actual uploads run in parallel so
+  // GLBs with many textures don't pay a serial upload penalty.
   const imageRemovalsByBuffer = new Map();
   const images = composite.images || [];
+  /** @type {Array<{index: number, img: object, bytes: Uint8Array, mimeType: string|null, removal: {oldBvIndex: number, start: number, end: number}|null}>} */
+  const imageUploadTasks = [];
+
   for (let i = 0; i < images.length; i++) {
     const img = images[i];
 
@@ -385,50 +390,67 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
       continue;
     }
 
-    const ext = extFromMimeType(mimeType);
-    const filename = `${baseName}_texture_${i}.${ext}`;
-    const { cid, meta, skipped } = await writeBytes(
-      writer,
-      bytes,
-      filename,
-      credential,
-      { compress },
-      dedupMap
-    );
-    let newImg = { ...img, uri: ipfsUriFromCid(cid) };
-    if (meta) newImg = attachDedupMeta(newImg, meta);
-    delete newImg.bufferView;
-    if (mimeType && !newImg.mimeType) {
-      newImg.mimeType = mimeType;
-    }
-    images[i] = newImg;
-    stats.images++;
-    stats.bytesTotal += bytes.length;
-    if (skipped) stats.skipped++;
-    console.log(
-      `[GLB-DECOMPOSE] image[${i}] → ipfs://${cid} (${bytes.length} bytes)${
-        skipped ? " [dedup]" : ""
-      }`
-    );
-
+    /** @type {{bufferIndex: number, oldBvIndex: number, start: number, end: number}|null} */
+    let removal = null;
     if (img.bufferView !== undefined) {
       const bv = composite.bufferViews[img.bufferView];
-      const list = imageRemovalsByBuffer.get(bv.buffer) || [];
-      list.push({
+      removal = {
+        bufferIndex: bv.buffer,
         oldBvIndex: img.bufferView,
         start: bv.byteOffset || 0,
         end: (bv.byteOffset || 0) + bv.byteLength,
-      });
-      imageRemovalsByBuffer.set(bv.buffer, list);
+      };
     }
+
+    imageUploadTasks.push({ index: i, img, bytes, mimeType, removal });
   }
+
+  await Promise.all(
+    imageUploadTasks.map(async ({ index, img, bytes, mimeType, removal }) => {
+      const ext = extFromMimeType(mimeType);
+      const filename = `${baseName}_texture_${index}.${ext}`;
+      const { cid, meta, skipped } = await writeBytes(
+        writer,
+        bytes,
+        filename,
+        credential,
+        { compress },
+        dedupMap
+      );
+      let newImg = { ...img, uri: ipfsUriFromCid(cid) };
+      if (meta) newImg = attachDedupMeta(newImg, meta);
+      delete newImg.bufferView;
+      if (mimeType && !newImg.mimeType) {
+        newImg.mimeType = mimeType;
+      }
+      images[index] = newImg;
+      stats.images++;
+      stats.bytesTotal += bytes.length;
+      if (skipped) stats.skipped++;
+      console.log(
+        `[GLB-DECOMPOSE] image[${index}] → ipfs://${cid} (${bytes.length} bytes)${
+          skipped ? " [dedup]" : ""
+        }`
+      );
+
+      if (removal) {
+        const list = imageRemovalsByBuffer.get(removal.bufferIndex) || [];
+        list.push(removal);
+        imageRemovalsByBuffer.set(removal.bufferIndex, list);
+      }
+    })
+  );
 
   // Remove extracted image bytes from the buffer(s) so we don't store them twice.
   if (imageRemovalsByBuffer.size > 0) {
     pruneBufferImageData(composite, bufferBytesByIndex, imageRemovalsByBuffer);
   }
 
-  // Upload the (possibly pruned) buffers to IPFS.
+  // Collect buffer upload tasks. Pruning must finish before these run so the
+  // geometry payloads are consistent, but the uploads themselves can overlap.
+  /** @type {Array<{index: number, buf: object, bytes: Uint8Array}>} */
+  const bufferUploadTasks = [];
+
   for (let i = 0; i < buffers.length; i++) {
     const buf = buffers[i];
 
@@ -452,27 +474,33 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
       continue;
     }
 
-    const filename = `${baseName}_buffer_${i}.bin`;
-    const { cid, meta, skipped } = await writeBytes(
-      writer,
-      bytes,
-      filename,
-      credential,
-      { compress },
-      dedupMap
-    );
-    let updatedBuf = { ...buf, uri: ipfsUriFromCid(cid) };
-    if (meta) updatedBuf = attachDedupMeta(updatedBuf, meta);
-    buffers[i] = updatedBuf;
-    stats.buffers++;
-    stats.bytesTotal += bytes.length;
-    if (skipped) stats.skipped++;
-    console.log(
-      `[GLB-DECOMPOSE] buffer[${i}] → ipfs://${cid} (${bytes.length} bytes)${
-        skipped ? " [dedup]" : ""
-      }`
-    );
+    bufferUploadTasks.push({ index: i, buf, bytes });
   }
+
+  await Promise.all(
+    bufferUploadTasks.map(async ({ index, buf, bytes }) => {
+      const filename = `${baseName}_buffer_${index}.bin`;
+      const { cid, meta, skipped } = await writeBytes(
+        writer,
+        bytes,
+        filename,
+        credential,
+        { compress },
+        dedupMap
+      );
+      let updatedBuf = { ...buf, uri: ipfsUriFromCid(cid) };
+      if (meta) updatedBuf = attachDedupMeta(updatedBuf, meta);
+      buffers[index] = updatedBuf;
+      stats.buffers++;
+      stats.bytesTotal += bytes.length;
+      if (skipped) stats.skipped++;
+      console.log(
+        `[GLB-DECOMPOSE] buffer[${index}] → ipfs://${cid} (${bytes.length} bytes)${
+          skipped ? " [dedup]" : ""
+        }`
+      );
+    })
+  );
 
   console.log(
     `[GLB-DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} skipped=${stats.skipped} totalBytes=${stats.bytesTotal}`

@@ -3,13 +3,22 @@
  * Arbesk Browser-Side IPFS Writer
  *
  * Fetches a short-lived upload credential from the backend, then uploads
- * directly to the chosen storage backend:
- *   - pinata: POST the file to a presigned URL (CIDv1 returned)
- *   - kubo:   POST multipart to the local Kubo node (E2E/dev fallback)
+ * directly to the chosen storage backend using the worker-safe primitives in
+ * upload-with-credential.js.
  */
+
 import { getUploadCredential } from "../services/api.js";
 import { compress } from "../utils/compression.js";
 import { sanitizeFileName } from "../utils/uri.js";
+import { uploadToIPFSWithCredential } from "./upload-with-credential.js";
+
+async function bytesFromData(data) {
+  if (data instanceof Uint8Array) return data;
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (data instanceof Blob) return new Uint8Array(await data.arrayBuffer());
+  if (typeof data === "string") return new TextEncoder().encode(data);
+  throw new Error("writeToIPFS: unsupported data type");
+}
 
 // write-to-ipfs.js is imported by both the main thread and the glTF Web Worker.
 // Use a distinct tag in worker context so uploads originating off-thread are
@@ -20,82 +29,9 @@ const IS_WORKER =
   self instanceof WorkerGlobalScope;
 const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "[IPFS-WRITE]";
 
-// Caches are intentionally disabled. Validation must depend on the manifest
-// itself always being unique (timestamp + version), not on memoization.
-
-async function blobToBytes(blob) {
-  return new Uint8Array(await blob.arrayBuffer());
-}
-
-function toBlob(data) {
-  if (data instanceof Blob) return data;
-  if (data instanceof ArrayBuffer || data instanceof Uint8Array)
-    return new Blob([data]);
-  if (typeof data === "string")
-    return new Blob([data], { type: "application/octet-stream" });
-  throw new Error("writeToIPFS: unsupported data type");
-}
-
 function compressedFilename(filename) {
   if (!filename) return "asset.bin.gz";
   return filename.endsWith(".gz") ? filename : `${filename}.gz`;
-}
-
-async function uploadToPinata(blob, filename, credential, attempt = 1) {
-  const form = new FormData();
-  form.append("file", blob, filename);
-  form.append("network", "public");
-
-  try {
-    const res = await fetch(credential.url, {
-      method: "POST",
-      mode: "cors",
-      credentials: "omit",
-      body: form,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Pinata upload failed: ${res.status} - ${text}`);
-    }
-    const json = await res.json();
-    const cid = json?.data?.cid || json?.cid;
-    if (!cid) throw new Error("Pinata upload returned no CID");
-    console.log(`${TAG} pinata stored → ${cid}`);
-    return cid;
-  } catch (err) {
-    // Retry once on transient network / HTTP2 protocol errors.
-    if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(err.message)) {
-      console.warn(`${TAG} Pinata upload error, retrying once: ${err.message}`);
-      return uploadToPinata(blob, filename, credential, attempt + 1);
-    }
-    throw err;
-  }
-}
-
-async function uploadToKubo(blob, filename, credential) {
-  const apiUrl = credential.apiUrl || "http://127.0.0.1:5001";
-  const form = new FormData();
-  form.append("file", blob, filename);
-  const res = await fetch(`${apiUrl}/api/v0/add?cid-version=1`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`IPFS add failed: ${res.status} - ${text}`);
-  }
-  const result = await res.json();
-  console.log(`${TAG} kubo stored → ${result.Hash} (${result.Size} bytes)`);
-  try {
-    await fetch(
-      `${apiUrl}/api/v0/pin/add?arg=${encodeURIComponent(result.Hash)}`,
-      { method: "POST" }
-    );
-    console.log(`${TAG} pinned → ${result.Hash}`);
-  } catch (e) {
-    console.warn(`${TAG} pin failed (non-fatal): ${e.message}`);
-  }
-  return result.Hash;
 }
 
 /**
@@ -115,30 +51,35 @@ export async function writeToIPFS(
   credential = null,
   options = {}
 ) {
+  const cred = credential || (await getUploadCredential());
+
   let payload = data;
+  let finalFilename = filename;
   if (options.compress) {
-    payload = compress(data);
+    const raw = await bytesFromData(data);
+    payload = compress(raw);
+    finalFilename = compressedFilename(filename);
     console.log(
-      `${TAG} gzip ${
-        typeof data === "string" ? data.length : data.byteLength ?? data.length
-      } bytes → ${payload.length} bytes`
+      `${TAG} gzip ${raw.length} bytes → ${payload.length} bytes`
     );
   }
-  const finalFilename = options.compress
-    ? compressedFilename(filename)
-    : filename;
-  const blob = toBlob(payload);
-  const bytes = await blobToBytes(blob);
 
-  const cred = credential || (await getUploadCredential());
+  const byteLength =
+    payload instanceof Blob
+      ? payload.size
+      : payload?.byteLength ?? payload?.length ?? 0;
+
   console.log(
-    `${TAG} uploading ${bytes.length} bytes via ${cred.backend} as ${finalFilename}`
+    `${TAG} uploading ${byteLength} bytes via ${cred.backend} as ${finalFilename}`
   );
-  const cid =
-    cred.backend === "pinata"
-      ? await uploadToPinata(blob, finalFilename, cred)
-      : await uploadToKubo(blob, finalFilename, cred);
 
+  const cid = await uploadToIPFSWithCredential(
+    payload,
+    finalFilename,
+    cred
+  );
+
+  console.log(`${TAG} ${cred.backend} stored → ${cid}`);
   return cid;
 }
 

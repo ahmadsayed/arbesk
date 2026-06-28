@@ -207,4 +207,30 @@ describe("gateway error paths", () => {
     const chain = await mod.getManifestChain("bafyStart", 3);
     expect(chain).toHaveLength(3);
   });
+
+  it("coalesces concurrent downloads of the same CID", async () => {
+    let fetchCount = 0;
+    let active = 0;
+    let maxActive = 0;
+    const gateway = "http://127.0.0.1:8080/ipfs/";
+
+    const fetchMock = jest.fn(async () => {
+      fetchCount++;
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 30));
+      active--;
+      return jsonResponse({ hello: "world" });
+    });
+
+    const mod = await loadWithFetch(fetchMock, gateway);
+    const [a, b] = await Promise.all([
+      mod.getFromRemoteIPFS("bafyShared"),
+      mod.getFromRemoteIPFS("bafyShared"),
+    ]);
+
+    expect(a).toEqual(b);
+    expect(fetchCount).toBe(1);
+    expect(maxActive).toBe(1);
+  });
 });

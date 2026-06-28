@@ -13,6 +13,16 @@
 import { getConfig } from "../services/api.js";
 import { isGzipped, decompress } from "../utils/compression.js";
 import { arrayBufferToBase64 } from "../utils/encoding.js";
+import { createConcurrencyLimiter } from "../utils/concurrency.js";
+
+// Cap concurrent gateway reads to avoid head-of-line blocking when a composite
+// has many buffers/images or when many library thumbnails load at once.
+const DOWNLOAD_CONCURRENCY = 6;
+const downloadLimiter = createConcurrencyLimiter(DOWNLOAD_CONCURRENCY);
+
+// Coalesce concurrent downloads of the same CID so parallel compose/manifest
+// loads don't fetch the same buffer/image/manifest multiple times.
+const _inflightRawDownloads = new Map();
 
 const IPFS_CACHE_ENABLED = false; // disabled: validation must not depend on cached reads
 const MAX_CACHE_BYTES = 50 * 1024 * 1024; // 50 MB cap for raw gateway bytes
@@ -33,13 +43,31 @@ async function gatewayBase() {
 }
 
 async function fetchIpfsRawBytes(cid) {
-  const url = `${await gatewayBase()}${cid}`;
-  console.log(`[IPFS] get ${url}`);
-  const response = await fetch(url, { cache: "default" });
-  if (!response.ok) {
-    throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
+  const existing = _inflightRawDownloads.get(cid);
+  if (existing) {
+    return existing;
   }
-  return new Uint8Array(await response.arrayBuffer());
+
+  const downloadPromise = (async () => {
+    const url = `${await gatewayBase()}${cid}`;
+    console.log(`[IPFS] get ${url}`);
+    const response = await downloadLimiter.run(() =>
+      fetch(url, { cache: "default" })
+    );
+    if (!response.ok) {
+      throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  })();
+
+  _inflightRawDownloads.set(cid, downloadPromise);
+  downloadPromise
+    .catch(() => {})
+    .finally(() => {
+      _inflightRawDownloads.delete(cid);
+    });
+
+  return downloadPromise;
 }
 
 async function fetchIpfsBytes(cid) {
@@ -169,7 +197,9 @@ async function isIpfsCidReachable(cid) {
   if (!cid) return false;
   try {
     const url = `${await gatewayBase()}${cid}`;
-    const response = await fetch(url, { method: "HEAD", cache: "default" });
+    const response = await downloadLimiter.run(() =>
+      fetch(url, { method: "HEAD", cache: "default" })
+    );
     return response.ok;
   } catch {
     return false;

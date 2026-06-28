@@ -46,10 +46,19 @@ export async function resolveCollectionTokenId(walletAddr) {
   // existing token and hit `TokenAlreadyMinted`. Probe the chain for the
   // derived default collection ID and, if it exists, route to republish.
   const defaultTokenId = deriveDefaultCollectionId(walletAddr);
-  const owner = await getOwnerOf(defaultTokenId);
-  if (owner) {
-    const manifest = await getCollectionManifest(defaultTokenId);
-    return { tokenId: defaultTokenId, manifest };
+
+  // ownerOf and the manifest resolution are independent; run them in parallel.
+  const [ownerResult, manifestResult] = await Promise.allSettled([
+    getOwnerOf(defaultTokenId),
+    getCollectionManifest(defaultTokenId),
+  ]);
+
+  if (ownerResult.status === "fulfilled" && ownerResult.value) {
+    return {
+      tokenId: defaultTokenId,
+      manifest:
+        manifestResult.status === "fulfilled" ? manifestResult.value : null,
+    };
   }
 
   return { tokenId: null, manifest: null };

@@ -8,12 +8,21 @@
  * value, the existing CID is reused and the upload is skipped.
  */
 
-import { hashBytes } from "../utils/hash.js";
+import {
+  hashBytes,
+  DEFAULT_HASH_ALGORITHM,
+  SUPPORTED_HASH_ALGORITHMS,
+} from "../utils/hash.js";
 import { compress } from "../utils/compression.js";
 import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
 
-const HASH_ALGORITHM = "murmur3-32";
+const HASH_ALGORITHM = DEFAULT_HASH_ALGORITHM;
 const IPFS_URI_PREFIX = "ipfs://";
+
+// Coalesce concurrent uploads of identical payloads so two parallel callers
+// that hash to the same value share one in-flight writeToIPFS promise instead
+// of uploading the same bytes twice.
+const _inflightUploads = new Map();
 
 /**
  * Build a hash → CID map from one or more composite glTF JSONs.
@@ -31,7 +40,14 @@ export function buildDedupMap(composites) {
       ...(composite.images || []),
     ]) {
       const meta = item?._arbesk;
-      if (!meta?.hash || meta.hashAlgo !== HASH_ALGORITHM || !item.uri) continue;
+      // Accept any supported algorithm so composites written with the older
+      // murmur3-32 key still contribute to the dedup map after the migration.
+      if (
+        !meta?.hash ||
+        !SUPPORTED_HASH_ALGORITHMS.has(meta.hashAlgo) ||
+        !item.uri
+      )
+        continue;
       if (!item.uri.startsWith(IPFS_URI_PREFIX)) continue;
       const cid = item.uri.slice(IPFS_URI_PREFIX.length);
       if (cid && !map.has(meta.hash)) {
@@ -68,12 +84,17 @@ export async function uploadWithDedup(
   const shouldCompress = !!options.compress;
   const payload = shouldCompress ? compress(bytes) : bytes;
   const finalFilename = shouldCompress ? `${filename}.gz` : filename;
-  const hash = hashBytes(payload);
+  // Hash over the RAW (uncompressed) content, not the stored payload. The
+  // worker path compresses with the native CompressionStream while this
+  // main-thread path uses pako; the two emit slightly different gzip bytes for
+  // the same input. Keying dedup and the content cache on the raw content lets
+  // their hash maps interoperate (see test/frontend/dedup-hash-parity.test.js).
+  const hash = hashBytes(bytes);
   const meta = {
     hash,
     hashAlgo: HASH_ALGORITHM,
     compressed: shouldCompress,
-    bytes: payload.length,
+    bytes: bytes.length,
   };
 
   if (dedupMap?.has(hash)) {
@@ -81,10 +102,28 @@ export async function uploadWithDedup(
     return { cid, meta, skipped: true };
   }
 
-  const cid = await writeToIPFS(payload, finalFilename, credential, {
-    compress: false,
-  });
-  return { cid, meta, skipped: false };
+  // Coalesce concurrent identical uploads. Key on hash + compression so two
+  // callers that disagree on the stored encoding don't share a result carrying
+  // the wrong `compressed` flag.
+  const inflightKey = `${hash}:${shouldCompress ? 1 : 0}`;
+  const existing = _inflightUploads.get(inflightKey);
+  if (existing) {
+    return existing;
+  }
+
+  const uploadPromise = (async () => {
+    try {
+      const cid = await writeToIPFS(payload, finalFilename, credential, {
+        compress: false,
+      });
+      return { cid, meta, skipped: false };
+    } finally {
+      _inflightUploads.delete(inflightKey);
+    }
+  })();
+
+  _inflightUploads.set(inflightKey, uploadPromise);
+  return uploadPromise;
 }
 
 /**

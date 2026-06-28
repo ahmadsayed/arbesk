@@ -119,4 +119,25 @@ describe("glb-parser", () => {
     expect(composite.buffers[0].uri).toMatch(/^ipfs:\/\//);
     expect(compositeCid).toMatch(/^bafyMock/);
   });
+
+  test("decomposeGLB uploads images and buffers in parallel", async () => {
+    const buffer = readArrayBuffer(HOWDY_PATH);
+    let active = 0;
+    let maxActive = 0;
+    let counter = 0;
+
+    const writer = async (_data, _filename) => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 20));
+      active--;
+      counter++;
+      return `bafyMock${counter}`;
+    };
+
+    const { composite } = await decomposeGLB(buffer, writer);
+
+    expect(composite.images.length).toBeGreaterThan(0);
+    expect(maxActive).toBeGreaterThan(1);
+  });
 });

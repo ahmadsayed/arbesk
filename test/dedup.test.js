@@ -120,7 +120,7 @@ describe("dedup helpers", () => {
       expect(cid).toBe("bafyNew");
       expect(skipped).toBe(false);
       expect(meta.hash).toBe(hashBytes(bytes));
-      expect(meta.hashAlgo).toBe("murmur3-32");
+      expect(meta.hashAlgo).toBe("murmur3-128");
       expect(meta.compressed).toBe(false);
       expect(writeToIPFS).toHaveBeenCalledTimes(1);
     });

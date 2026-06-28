@@ -25,14 +25,6 @@ import {
 } from "./decomposer.js";
 import { decomposeGLB as decomposeGLBMain, isGLB } from "./glb-parser.js";
 import { editSourceColors as editSourceColorsMain } from "./source-color-editor.js";
-import {
-  uploadWithDedup,
-  attachDedupMeta,
-  ipfsUriFromCid,
-} from "./dedup.js";
-
-const WORKER_BUFFER_PREFIX = "__worker_buffer_";
-const WORKER_IMAGE_PREFIX = "__worker_image_";
 
 function sanitizeAsyncName(name) {
   return (
@@ -50,75 +42,6 @@ async function checkWorkerAvailable() {
     workerAvailable = await isWorkerPoolAvailable();
   }
   return workerAvailable;
-}
-
-/**
- * Upload extracted bytes and rewrite their placeholder URIs in `targets`.
- * @param {Array} items - extracted {bytes, name, skip} entries
- * @param {string} prefix - placeholder prefix (WORKER_BUFFER_PREFIX / WORKER_IMAGE_PREFIX)
- * @param {Array} targets - composite.buffers or composite.images
- * @param {object} [credential] - Optional reusable upload credential.
- * @returns {Promise[]} upload promises
- */
-function uploadAndRewrite(
-  items,
-  prefix,
-  targets,
-  credential,
-  options = {}
-) {
-  const { compress = true, dedupMap = null } = options;
-  const uploads = [];
-  items.forEach((item, idx) => {
-    if (item.skip || !item.bytes) return;
-    uploads.push(
-      uploadWithDedup(
-        item.bytes,
-        item.name,
-        credential,
-        { compress },
-        dedupMap
-      ).then(({ cid, meta }) => {
-        const placeholder = `${prefix}${idx}__`;
-        for (const t of targets || []) {
-          if (t.uri === placeholder) {
-            let updated = { ...t, uri: ipfsUriFromCid(cid) };
-            if (meta) updated = attachDedupMeta(updated, meta);
-            Object.assign(t, updated);
-          }
-        }
-      })
-    );
-  });
-  return uploads;
-}
-
-async function uploadExtractedAssets(
-  composite,
-  buffers,
-  images,
-  credential = null,
-  options = {}
-) {
-  const { compress = true, dedupMap = null } = options;
-  const reusableCredential = credential?.reusable ? credential : null;
-  await Promise.all([
-    ...uploadAndRewrite(
-      buffers,
-      WORKER_BUFFER_PREFIX,
-      composite.buffers,
-      reusableCredential,
-      { compress, dedupMap }
-    ),
-    ...uploadAndRewrite(
-      images,
-      WORKER_IMAGE_PREFIX,
-      composite.images,
-      reusableCredential,
-      { compress, dedupMap }
-    ),
-  ]);
-  return composite;
 }
 
 /**
@@ -196,16 +119,14 @@ export async function decomposeAndStoreAsync(gltfJson, options = {}) {
   const credential = await getUploadCredential();
   const reusableCredential = credential?.reusable ? credential : null;
 
-  if (await checkWorkerAvailable()) {
+  if (reusableCredential && (await checkWorkerAvailable())) {
     try {
-      const { composite, buffers, images } = await getGlTFWorkerPool().exec(
-        "decomposeGltf",
-        [{ gltfJson }]
+      // Worker path: extraction + batched IPFS upload happen off the main thread.
+      // Components are stored uncompressed because the worker cannot import pako.
+      const { composite } = await getGlTFWorkerPool().exec(
+        "decomposeAndUploadGltf",
+        [{ gltfJson, credential: reusableCredential, options: { dedupMap } }]
       );
-      await uploadExtractedAssets(composite, buffers, images, reusableCredential, {
-        compress: true,
-        dedupMap,
-      });
       const compositeCid = await writeJSONToIPFS(
         composite,
         reusableCredential,
@@ -221,7 +142,7 @@ export async function decomposeAndStoreAsync(gltfJson, options = {}) {
       return { composite, compositeCid };
     } catch (error) {
       console.warn(
-        "[ASYNC-GLTF] decomposeAndStore worker failed, falling back:",
+        "[ASYNC-GLTF] decomposeAndUploadGltf worker failed, falling back:",
         error.message
       );
     }
@@ -256,36 +177,26 @@ export async function decomposeGLBAsync(
   const credential = await getUploadCredential();
   const reusableCredential = credential?.reusable ? credential : null;
 
-  if (await checkWorkerAvailable()) {
+  if (reusableCredential && (await checkWorkerAvailable())) {
     try {
-      // Do not transfer the input ArrayBuffer: the worker receives a copy so
-      // the original stays intact for the main-thread fallback if the worker
-      // fails, and so its underlying buffer cannot collide with extracted
-      // buffer transferables returned by the worker.
-      const { composite, buffers, images } = await getGlTFWorkerPool().exec(
-        "decomposeGlb",
-        [{ arrayBuffer }]
+      // Worker path: extraction + batched IPFS upload happen off the main thread.
+      const { composite, compositeCid } = await getGlTFWorkerPool().exec(
+        "decomposeAndUploadGlb",
+        [{
+          arrayBuffer,
+          credential: reusableCredential,
+          options: {
+            storeComposite,
+            assetName,
+            assetId,
+            dedupMap,
+          },
+        }]
       );
-      await uploadExtractedAssets(composite, buffers, images, reusableCredential, {
-        compress: true,
-        dedupMap,
-      });
-
-      let compositeCid = null;
-      if (storeComposite) {
-        compositeCid = await writeJSONToIPFS(composite, reusableCredential, {
-          compress: true,
-          assetId,
-          filename:
-            assetName || assetId
-              ? `${sanitizeAsyncName(assetName || assetId)}_composite.gltf`
-              : undefined,
-        });
-      }
       return { composite, compositeCid };
     } catch (error) {
       console.warn(
-        "[ASYNC-GLTF] decomposeGlb worker failed, falling back:",
+        "[ASYNC-GLTF] decomposeAndUploadGlb worker failed, falling back:",
         error.message
       );
     }

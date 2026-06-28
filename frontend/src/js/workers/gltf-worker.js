@@ -19,12 +19,31 @@ import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
 import { extractDataURI } from "../utils/uri.js";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../gltf/cache-aware-fetch.js";
+import { createConcurrencyLimiter } from "../utils/concurrency.js";
+import { hashBytes, DEFAULT_HASH_ALGORITHM } from "../utils/hash.js";
+import {
+  uploadBatchToIPFSWithCredential,
+  uploadToIPFSWithCredential,
+} from "../ipfs/upload-with-credential.js";
+
+const downloadLimiter = createConcurrencyLimiter(6);
+
+const _inflightRawDownloads = new Map();
 
 console.log("[WORKER-INIT] gltf-worker module evaluating");
 
 const IPFS_URI_PREFIX = "ipfs://";
+const HASH_ALGORITHM = DEFAULT_HASH_ALGORITHM;
 const WORKER_BUFFER_PLACEHOLDER = (i) => `__worker_buffer_${i}__`;
 const WORKER_IMAGE_PLACEHOLDER = (i) => `__worker_image_${i}__`;
+
+function ipfsUriFromCid(cid) {
+  return IPFS_URI_PREFIX + cid;
+}
+
+function attachDedupMeta(item, meta) {
+  return { ...item, _arbesk: meta };
+}
 
 let io = null;
 function getIO() {
@@ -107,15 +126,47 @@ async function gunzip(bytes) {
   return new Uint8Array(decompressed);
 }
 
+/**
+ * Gzip-compress bytes using the native CompressionStream. The worker can't
+ * import pako (no page import map), but CompressionStream is a module-worker
+ * global in all evergreen browsers - the symmetric counterpart to gunzip().
+ * Compressing here keeps IPFS uploads small (fewer bytes to the pinning
+ * service); reads sniff the gzip magic bytes so the encoding is transparent.
+ */
+async function gzip(bytes) {
+  const cs = new CompressionStream("gzip");
+  const readable = new Response(bytes).body.pipeThrough(cs);
+  const compressed = await new Response(readable).arrayBuffer();
+  return new Uint8Array(compressed);
+}
+
 async function fetchRawBytes(cid, gatewayBase) {
-  const url = `${gatewayBase.replace(/\/$/, "")}/${cid}`;
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(
-      `Worker compose: gateway returned ${response.status} for ${cid}`
-    );
+  const existing = _inflightRawDownloads.get(cid);
+  if (existing) {
+    return existing;
   }
-  return await response.arrayBuffer();
+
+  const url = `${gatewayBase.replace(/\/$/, "")}/${cid}`;
+  const downloadPromise = (async () => {
+    const response = await downloadLimiter.run(() =>
+      fetch(url, { cache: "no-store" })
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Worker compose: gateway returned ${response.status} for ${cid}`
+      );
+    }
+    return await response.arrayBuffer();
+  })();
+
+  _inflightRawDownloads.set(cid, downloadPromise);
+  downloadPromise
+    .catch(() => {})
+    .finally(() => {
+      _inflightRawDownloads.delete(cid);
+    });
+
+  return downloadPromise;
 }
 
 async function fetchDecompressedBytes(cid, gatewayBase) {
@@ -532,6 +583,173 @@ function bakeSourceColors(payload) {
   return { bakedJson: gltf, modified, skipped };
 }
 
+function sanitizeAsyncName(name) {
+  return (
+    String(name || "asset")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "_")
+      .slice(0, 40) || "asset"
+  );
+}
+
+function rewritePlaceholderTargets(targets, placeholder, cid, meta) {
+  for (const t of targets || []) {
+    if (t.uri === placeholder) {
+      const updated = { ...t, uri: ipfsUriFromCid(cid) };
+      Object.assign(t, attachDedupMeta(updated, meta));
+    }
+  }
+}
+
+/**
+ * Upload a list of extracted { name, bytes, placeholder, meta? } items using a
+ * single batch call when possible, and rewrite the matching placeholder URIs
+ * in the composite target arrays.
+ */
+async function uploadExtractedItems(
+  items,
+  targets,
+  credential,
+  dedupMap,
+  makePlaceholder
+) {
+  /** @type {Array<{name: string, bytes: Uint8Array, placeholder: string, meta: object}>} */
+  const uploads = [];
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    if (item.skip || !item.bytes) continue;
+
+    // Hash over the RAW bytes so the dedup/content-cache key matches the
+    // main-thread path regardless of which compressor produced the stored
+    // bytes (see frontend/src/js/gltf/dedup.js).
+    const meta = {
+      hash: hashBytes(item.bytes),
+      hashAlgo: HASH_ALGORITHM,
+      compressed: true,
+      bytes: item.bytes.length,
+    };
+    const placeholder = makePlaceholder(idx);
+
+    if (dedupMap?.has(meta.hash)) {
+      const cid = dedupMap.get(meta.hash);
+      rewritePlaceholderTargets(targets, placeholder, cid, meta);
+      continue;
+    }
+
+    uploads.push({
+      name: item.name,
+      bytes: item.bytes,
+      placeholder,
+      meta,
+    });
+  }
+
+  if (uploads.length === 0) return;
+
+  // Gzip each component before upload. Keyed by the compressed filename so the
+  // batch response lines map back to the right placeholder.
+  const files = await Promise.all(
+    uploads.map(async (u) => ({
+      name: `${u.name}.gz`,
+      data: await gzip(u.bytes),
+    }))
+  );
+  const cidMap = await uploadBatchToIPFSWithCredential(files, credential);
+
+  for (const u of uploads) {
+    const cid = cidMap.get(`${u.name}.gz`);
+    if (!cid) {
+      throw new Error(`Worker upload missing CID for ${u.name}`);
+    }
+    rewritePlaceholderTargets(targets, u.placeholder, cid, u.meta);
+  }
+}
+
+/**
+ * Decompose a standard glTF and upload its buffers/images from the worker.
+ * Returns the composite with ipfs:// URIs already in place.
+ */
+async function decomposeAndUploadGltf(payload) {
+  const { gltfJson, credential, options = {} } = payload || {};
+  if (!gltfJson) throw new Error("decomposeAndUploadGltf: gltfJson is required");
+  if (!credential) {
+    throw new Error("decomposeAndUploadGltf: credential is required");
+  }
+
+  const { composite, buffers, images } = decomposeGltf({ gltfJson });
+  await Promise.all([
+    uploadExtractedItems(
+      buffers,
+      composite.buffers,
+      credential,
+      options.dedupMap || null,
+      WORKER_BUFFER_PLACEHOLDER
+    ),
+    uploadExtractedItems(
+      images,
+      composite.images,
+      credential,
+      options.dedupMap || null,
+      WORKER_IMAGE_PLACEHOLDER
+    ),
+  ]);
+
+  // No raw buffers/images are returned; they were uploaded in the worker.
+  return { composite, buffers: [], images: [] };
+}
+
+/**
+ * Decompose a GLB and upload its buffers/images from the worker. When
+ * storeComposite is true, also uploads the composite JSON and returns its CID.
+ */
+async function decomposeAndUploadGlb(payload) {
+  const { arrayBuffer, credential, options = {} } = payload || {};
+  if (!arrayBuffer) throw new Error("decomposeAndUploadGlb: arrayBuffer is required");
+  if (!credential) {
+    throw new Error("decomposeAndUploadGlb: credential is required");
+  }
+
+  const storeComposite = options.storeComposite !== false;
+  const { composite, buffers, images } = await decomposeGlb({ arrayBuffer });
+
+  await Promise.all([
+    uploadExtractedItems(
+      buffers,
+      composite.buffers,
+      credential,
+      options.dedupMap || null,
+      WORKER_BUFFER_PLACEHOLDER
+    ),
+    uploadExtractedItems(
+      images,
+      composite.images,
+      credential,
+      options.dedupMap || null,
+      WORKER_IMAGE_PLACEHOLDER
+    ),
+  ]);
+
+  let compositeCid = null;
+  if (storeComposite) {
+    const baseName = sanitizeAsyncName(options.assetName || options.assetId);
+    const compositeName = baseName ? `${baseName}_composite.gltf` : "composite.gltf";
+    // Gzip the composite JSON to match the glTF path (which compresses via
+    // writeJSONToIPFS). Reads sniff the gzip magic bytes, so the `.gz` is
+    // transparent to the loader.
+    const compositeBytes = await gzip(
+      new TextEncoder().encode(JSON.stringify(composite))
+    );
+    compositeCid = await uploadToIPFSWithCredential(
+      compositeBytes,
+      `${compositeName}.gz`,
+      credential
+    );
+  }
+
+  return { composite, compositeCid, buffers: [], images: [] };
+}
+
 // ─── Worker Registration ────────────────────────────────────────────────────
 
 function collectTransferables(result) {
@@ -563,6 +781,8 @@ try {
     compose: wrapWithTransfer(compose),
     decomposeGltf: wrapWithTransfer(decomposeGltf),
     decomposeGlb: wrapWithTransfer(decomposeGlb),
+    decomposeAndUploadGltf: wrapWithTransfer(decomposeAndUploadGltf),
+    decomposeAndUploadGlb: wrapWithTransfer(decomposeAndUploadGlb),
     bakeSourceColors: wrapWithTransfer(bakeSourceColors),
     ping: () => "pong",
   });

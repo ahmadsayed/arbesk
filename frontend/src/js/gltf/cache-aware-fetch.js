@@ -15,6 +15,7 @@
  */
 
 import { arrayBufferToBase64 } from "../utils/encoding.js";
+import { SUPPORTED_HASH_ALGORITHMS } from "../utils/hash.js";
 import {
   getPayload,
   putPayload,
@@ -39,7 +40,7 @@ function bytesFromBuffer(buffer) {
 export async function fetchCIDAsBase64(cid, arbeskMeta, { fetchRaw, fetchDecompressed, decompress }) {
   const useCache =
     arbeskMeta &&
-    arbeskMeta.hashAlgo === "murmur3-32" &&
+    SUPPORTED_HASH_ALGORITHMS.has(arbeskMeta.hashAlgo) &&
     (arbeskMeta.bytes || 0) >= BIG_CONTENT_THRESHOLD_BYTES;
 
   if (useCache) {

@@ -39,8 +39,16 @@ async function getEditorRoot(tokenId) {
  * without changing the smart contract.
  */
 async function buildWalletProof(tokenId, walletAddr) {
-  const currentVersion = await getEditorSetVersion(tokenId);
-  const editorList = await fetchEditorsFromTeam(tokenId);
+  // Version and editor list are independent; resolve them in parallel.
+  const [versionResult, editorListResult] = await Promise.allSettled([
+    getEditorSetVersion(tokenId),
+    fetchEditorsFromTeam(tokenId),
+  ]);
+
+  const currentVersion =
+    versionResult.status === "fulfilled" ? versionResult.value : 1;
+  const editorList =
+    editorListResult.status === "fulfilled" ? editorListResult.value : [];
 
   // Normal path: wallet is in the fetched editor list.
   const proofFromList = getProof(editorList, walletAddr, tokenId, currentVersion);
@@ -50,9 +58,13 @@ async function buildWalletProof(tokenId, walletAddr) {
   // matches a tree containing only the owner as Editor. This is the default
   // tree created by prepareInitialEditors, so it resolves cases where the
   // editor list CID is unreachable or localStorage has been cleared.
-  const owner = await isOwner(tokenId);
-  if (owner) {
-    const root = await getEditorRoot(tokenId);
+  const [ownerResult, rootResult] = await Promise.allSettled([
+    isOwner(tokenId),
+    getEditorRoot(tokenId),
+  ]);
+
+  if (ownerResult.status === "fulfilled" && ownerResult.value) {
+    const root = rootResult.status === "fulfilled" ? rootResult.value : null;
     const ownerLeaf = makeLeaf(
       walletAddr,
       CollaboratorRole.Editor,
