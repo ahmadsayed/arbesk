@@ -13,6 +13,7 @@ import { inAppWallet } from "thirdweb/wallets/in-app";
 import { smartWallet } from "thirdweb/wallets";
 import { defineChain } from "thirdweb/chains";
 import { sendTransaction } from "thirdweb/transaction";
+import { log, error } from "../utils/log.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 
 const MEGAETH_RPC = "https://carrot.megaeth.com/rpc";
@@ -67,30 +68,41 @@ export async function connectGoogleWallet() {
     throw new Error("Thirdweb client not initialized. Call initThirdwebClient first.");
   }
 
-  // 1. Connect embedded EOA via Google OAuth.
-  eoaWallet = inAppWallet();
-  eoaAccount = await eoaWallet.connect({
-    client: thirdwebClient,
-    strategy: "google",
-  });
+  try {
+    // 1. Connect embedded EOA via Google OAuth.
+    log("[THIRDWEB] opening Google OAuth popup");
+    eoaWallet = inAppWallet({
+      auth: { mode: "popup" },
+    });
+    eoaAccount = await eoaWallet.connect({
+      client: thirdwebClient,
+      chain: megaethTestnet,
+      strategy: "google",
+    });
+    log("[THIRDWEB] Google EOA connected:", eoaAccount.address);
 
-  // 2. Wrap the EOA in a sponsored smart account on MegaETH Testnet.
-  smartWalletInstance = smartWallet({
-    chain: megaethTestnet,
-    sponsorGas: true,
-  });
-  smartAccount = await smartWalletInstance.connect({
-    client: thirdwebClient,
-    personalAccount: eoaAccount,
-  });
+    // 2. Wrap the EOA in a sponsored smart account on MegaETH Testnet.
+    smartWalletInstance = smartWallet({
+      chain: megaethTestnet,
+      sponsorGas: true,
+    });
+    smartAccount = await smartWalletInstance.connect({
+      client: thirdwebClient,
+      personalAccount: eoaAccount,
+    });
+    log("[THIRDWEB] smart account connected:", smartAccount.address);
 
-  const provider = createEip1193Adapter(smartAccount, eoaAccount, megaethTestnet);
+    const provider = createEip1193Adapter(smartAccount, eoaAccount, megaethTestnet);
 
-  return {
-    eoaAddress: eoaAccount.address,
-    smartAccountAddress: smartAccount.address,
-    provider,
-  };
+    return {
+      eoaAddress: eoaAccount.address,
+      smartAccountAddress: smartAccount.address,
+      provider,
+    };
+  } catch (err) {
+    error("[THIRDWEB] connectGoogleWallet failed:", err);
+    throw err;
+  }
 }
 
 /**

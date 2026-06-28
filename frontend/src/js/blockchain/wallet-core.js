@@ -272,8 +272,8 @@ async function autoConnectWallet() {
     }
 
     // No previous connection - stay disconnected
-  } catch (error) {
-    error("Auto-connect failed:", error);
+  } catch (err) {
+    error("Auto-connect failed:", err);
   }
 }
 
@@ -465,15 +465,15 @@ async function connectWallet() {
       }
       await _finishWalletSetup(accounts[0]);
     }
-  } catch (error) {
-    error("Wallet connection failed:", error);
-    if (error.message?.includes("User cancelled")) {
+  } catch (err) {
+    error("Wallet connection failed:", err);
+    if (err.message?.includes("User cancelled")) {
       log("User rejected connection");
     } else {
       showToast({
         type: "error",
         title: "Connection Failed",
-        message: error.message || "Could not connect wallet.",
+        message: err.message || "Could not connect wallet.",
       });
     }
   }
