@@ -127,7 +127,7 @@ function buildEmptyState(searchQuery) {
       <p class="empty-state-sub">${
         inCollection
           ? "Assets you publish to this collection will appear here."
-          : "Connect your wallet and publish your first asset to see collections."
+          : "Sign in and publish your first asset to see collections."
       }</p>
     `;
   }

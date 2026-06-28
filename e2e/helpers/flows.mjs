@@ -12,15 +12,17 @@ import { MANIFEST_URL_REGEX, manifestCidFromUrl } from "./manifest.mjs";
 const DEFAULT_PROMPT = "cowboy";
 
 /**
- * Open the studio with the Hardhat dev wallet injected and wait until it has
- * auto-connected + authenticated (the connect button hides; the wallet button
- * stops showing "Sign In").
+ * Open the studio with the Hardhat dev wallet injected, click Login / Signup,
+ * select the injected wallet, and wait until authenticated (the connect button
+ * hides; the wallet button stops showing "Sign In").
  *
  * @param {Page} page
  */
 export async function connectStudio(page) {
   await injectHardhatProvider(page);
   await page.goto("/studio.html");
+  await page.locator(SELECTORS.connectWalletBtn).click();
+  await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
   await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
     "Sign In",
@@ -42,6 +44,8 @@ export async function connectStudioAs(page, accountIndex) {
   }
   await injectHardhatProvider(page, { accountIndex });
   await page.goto("/studio.html");
+  await page.locator(SELECTORS.connectWalletBtn).click();
+  await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
   // Wait for SIWE auth to complete (button no longer shows "Sign In")…
   await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
@@ -207,14 +211,17 @@ export async function scrubHistorySlider(page, index) {
 // ── Library helpers ──────────────────────────────────────────────────────────
 
 /**
- * Open the library with the Hardhat dev wallet injected and wait until it has
- * auto-connected + authenticated. Returns once the main browser UI is visible.
+ * Open the library with the Hardhat dev wallet injected, click Login / Signup,
+ * select the injected wallet, and wait until authenticated. Returns once the
+ * main browser UI is visible.
  *
  * @param {Page} page
  */
 export async function connectLibrary(page) {
   await injectHardhatProvider(page);
   await page.goto("/library.html");
+  await page.locator(SELECTORS.libraryConnectBtn).click();
+  await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
   await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
   await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();

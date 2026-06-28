@@ -111,6 +111,14 @@
 
 }
 
+// Section label above wallet list
+.wallet-modal-section-label {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+  margin: 0 0 var(--size-1);
+}
+
 // Divider between injected wallets and social login
 .wallet-modal-divider {
   display: flex;

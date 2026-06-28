@@ -47,6 +47,13 @@ export const NETWORKS = {
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: [],
   },
+  monadTestnet: {
+    chainId: `0x${CHAIN_IDS.MONAD_TESTNET.toString(16)}`,
+    chainName: "Monad Testnet",
+    rpcUrls: ["https://testnet-rpc.monad.xyz/"],
+    nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+    blockExplorerUrls: ["https://testnet.monadexplorer.com"],
+  },
   megaethTestnet: {
     chainId: `0x${CHAIN_IDS.MEGAETH_TESTNET.toString(16)}`,
     chainName: "MegaETH Testnet",
@@ -84,6 +91,10 @@ const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
 function initWallet() {
   startDiscovery();
   log("[WALLET] EIP-6963 discovery started");
+  // Attempt silent reconnect on page load.
+  autoConnectWallet().catch((err) => {
+    warn("[WALLET] auto-connect failed:", err);
+  });
 }
 
 /**
@@ -180,6 +191,17 @@ async function _checkBalance() {
         message: `Your wallet has very low ETH on MegaETH Testnet. You need ETH for gas. Get testnet ETH from a faucet.`,
         duration: 0,
       });
+    } else if (
+      chainId === CHAIN_IDS.MONAD_TESTNET &&
+      parseFloat(balanceEth) < 0.001
+    ) {
+      warn("Low balance detected on Monad Testnet");
+      lowBalanceToastId = showToast({
+        type: "warning",
+        title: "Low Balance",
+        message: `Your wallet has very low MON on Monad Testnet. You need MON for gas. Get testnet MON from https://testnet.monad.xyz/.`,
+        duration: 0,
+      });
     }
   } catch (e) {
     warn("Balance check failed:", e);
@@ -189,7 +211,7 @@ async function _checkBalance() {
 // ─── Auto-connect ───
 
 /**
- * Auto-connect wallet on page load if previously authorized.
+ * Auto-sign-in on page load if previously authorized.
  * Uses silent methods (no popup) to restore connection.
  */
 async function autoConnectWallet() {
@@ -212,20 +234,24 @@ async function autoConnectWallet() {
       }
     } else if (lastWallet === "thirdweb") {
       // Try Thirdweb silent restore
-      const { isThirdwebConnected, connectGoogleWallet, initThirdwebClient } =
-        await import("./wallet-thirdweb.js");
-      if (isThirdwebConnected()) {
-        const { getConfig } = await import("../services/api.js");
-        const config = await getConfig();
-        if (config?.thirdwebClientId) {
-          initThirdwebClient(config.thirdwebClientId);
-          const { eoaAddress, smartAccountAddress, provider } =
-            await connectGoogleWallet();
-          web3Provider = provider;
-          web3 = new Web3(provider);
+      const {
+        autoConnectThirdwebWallet,
+        initThirdwebClient,
+      } = await import("./wallet-thirdweb.js");
+      const { getConfig } = await import("../services/api.js");
+      const config = await getConfig();
+      if (config?.thirdwebClientId) {
+        initThirdwebClient(config.thirdwebClientId);
+        const restored = await autoConnectThirdwebWallet();
+        if (restored) {
+          web3Provider = restored.provider;
+          web3 = new Web3(restored.provider);
           window.web3 = web3;
           activeConnectionSource = "thirdweb";
-          await _finishWalletSetup(smartAccountAddress, eoaAddress);
+          await _finishWalletSetup(
+            restored.smartAccountAddress,
+            restored.eoaAddress
+          );
           return;
         }
       }
@@ -292,15 +318,15 @@ async function _finishWalletSetup(address, eoaAddress = null) {
   // Prompt network switch if not on a supported chain
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
     let preferred =
-      localStorage.getItem("arbesk-preferred-network") || "megaethTestnet";
+      localStorage.getItem("arbesk-preferred-network") || "monadTestnet";
     // Guard against stale/unknown network keys (e.g. old "seiTestnet" entry)
     if (!NETWORKS[preferred]) {
       warn(
         `[WALLET] Ignoring unknown preferred network "${preferred}". ` +
-          `Falling back to megaethTestnet.`
+          `Falling back to monadTestnet.`
       );
       localStorage.removeItem("arbesk-preferred-network");
-      preferred = "megaethTestnet";
+      preferred = "monadTestnet";
     }
     try {
       const net = NETWORKS[preferred];
@@ -412,7 +438,7 @@ async function authenticateUser() {
 // ─── Connect / Disconnect ───
 
 /**
- * Connect wallet. Shows the wallet picker modal.
+ * Sign in. Shows the Login / Signup picker modal.
  */
 async function connectWallet() {
   try {
@@ -472,15 +498,23 @@ async function connectWallet() {
     } else {
       showToast({
         type: "error",
-        title: "Connection Failed",
-        message: err.message || "Could not connect wallet.",
+        title: "Sign In Failed",
+        message: err.message || "Could not sign in.",
       });
     }
   }
 }
 
 /**
- * Disconnect wallet.
+ * Return the currently active connection source.
+ * @returns {string|null} 'injected' | 'walletconnect' | 'thirdweb' | null
+ */
+function getActiveConnectionSource() {
+  return activeConnectionSource;
+}
+
+/**
+ * Sign out and disconnect wallet.
  */
 async function disconnectWallet() {
   // Detach listeners
@@ -526,6 +560,7 @@ export {
   disconnectWallet,
   autoConnectWallet,
   authenticateUser,
+  getActiveConnectionSource,
 };
 
 export { web3 as walletWeb3 };

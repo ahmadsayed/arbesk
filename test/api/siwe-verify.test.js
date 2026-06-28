@@ -1,27 +1,21 @@
 import { jest } from "@jest/globals";
 
+const verifyMessageMock = jest.fn();
 const recoverMock = jest.fn();
-const isValidSignatureMock = jest.fn();
+
+jest.unstable_mockModule("viem/actions", () => ({
+  verifyMessage: verifyMessageMock,
+}));
 
 jest.unstable_mockModule("../../src/config.js", () => ({
+  getViemPublicClient: jest.fn((chainId) =>
+    chainId ? { chainId: Number(chainId) } : null,
+  ),
   web3: {
     eth: {
       accounts: { recover: recoverMock },
     },
   },
-  getWeb3: jest.fn(() => ({
-    eth: {
-      getCode: jest.fn(() => Promise.resolve("0x6000")),
-      accounts: { hashMessage: jest.fn(() => "0xHash") },
-      Contract: class {
-        constructor() {
-          this.methods = {
-            isValidSignature: () => ({ call: isValidSignatureMock }),
-          };
-        }
-      },
-    },
-  })),
 }));
 
 let verifySiwe;
@@ -45,11 +39,12 @@ function buildSiweMessage({
 
 describe("siwe-verify", () => {
   beforeEach(() => {
+    verifyMessageMock.mockReset();
+    verifyMessageMock.mockResolvedValue(true);
     recoverMock.mockReset();
     recoverMock.mockResolvedValue(
-      "0x1234567890123456789012345678901234567890",
+      "0x0000000000000000000000000000000000000000",
     );
-    isValidSignatureMock.mockReset();
   });
 
   it("verifies a valid message and signature", async () => {
@@ -115,7 +110,7 @@ describe("siwe-verify", () => {
   });
 
   it("rejects signature mismatch", async () => {
-    recoverMock.mockResolvedValue("0x0000000000000000000000000000000000000000");
+    verifyMessageMock.mockResolvedValue(false);
     const message = buildSiweMessage({ nonce: "nonceMismatch1" });
     const result = await verifySiwe(message, "0xSignature");
     expect(result.valid).toBe(false);
@@ -123,8 +118,6 @@ describe("siwe-verify", () => {
   });
 
   it("accepts EIP-1271 smart account signatures on MegaETH Testnet", async () => {
-    recoverMock.mockResolvedValue("0x0000000000000000000000000000000000000000");
-    isValidSignatureMock.mockResolvedValue("0x1626ba7e");
     const message = buildSiweMessage({
       nonce: "nonceEip1271Ok",
       chainId: 6343,
@@ -132,16 +125,55 @@ describe("siwe-verify", () => {
     const result = await verifySiwe(message, "0xSignature");
     expect(result.valid).toBe(true);
     expect(result.address).toBe("0x1234567890123456789012345678901234567890");
+    expect(verifyMessageMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        address: "0x1234567890123456789012345678901234567890",
+        message,
+        signature: "0xSignature",
+      }),
+    );
   });
 
-  it("rejects EIP-1271 signatures that return non-magic value", async () => {
-    recoverMock.mockResolvedValue("0x0000000000000000000000000000000000000000");
-    isValidSignatureMock.mockResolvedValue("0x00000000");
+  it("rejects when viem verification throws", async () => {
+    verifyMessageMock.mockRejectedValue(new Error("RPC unreachable"));
     const message = buildSiweMessage({
-      nonce: "nonceEip1271Bad",
+      nonce: "nonceViemErr",
       chainId: 6343,
     });
     const result = await verifySiwe(message, "0xSignature");
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/Signature verification failed/i);
+  });
+
+  it("accepts EOA fallback for smart-account wallets", async () => {
+    verifyMessageMock.mockResolvedValue(false);
+    recoverMock.mockResolvedValue(
+      "0xABCDEF00112233445566778899aabbccddeeff00",
+    );
+    const message = buildSiweMessage({
+      nonce: "nonceEoaFallback",
+      chainId: 6343,
+    });
+    const result = await verifySiwe(message, "0xSignature", {
+      eoaAddress: "0xABCDEF00112233445566778899aabbccddeeff00",
+    });
+    expect(result.valid).toBe(true);
+    expect(result.address).toBe("0x1234567890123456789012345678901234567890");
+  });
+
+  it("rejects EOA fallback when recovered address does not match", async () => {
+    verifyMessageMock.mockResolvedValue(false);
+    recoverMock.mockResolvedValue(
+      "0x0000000000000000000000000000000000000001",
+    );
+    const message = buildSiweMessage({
+      nonce: "nonceEoaBad",
+      chainId: 6343,
+    });
+    const result = await verifySiwe(message, "0xSignature", {
+      eoaAddress: "0xABCDEF00112233445566778899aabbccddeeff00",
+    });
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/Signature does not match/i);
   });

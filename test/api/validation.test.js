@@ -54,21 +54,26 @@ describe("API schemas", () => {
   });
 
   describe("createSessionSchema", () => {
-    it("requires message and signature", () => {
-      const result = createSessionSchema.safeParse({ message: "x" });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues[0].path).toEqual(["signature"]);
-      }
-    });
-
-    it("accepts a valid payload", () => {
+    it("accepts a SIWE payload", () => {
       expect(
         createSessionSchema.safeParse({
           message: "siwe message",
           signature: "0xabc",
         }).success,
       ).toBe(true);
+    });
+
+    it("accepts a Thirdweb auth token payload", () => {
+      expect(
+        createSessionSchema.safeParse({
+          thirdwebAuthToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token",
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects a payload with neither SIWE fields nor auth token", () => {
+      const result = createSessionSchema.safeParse({ message: "x" });
+      expect(result.success).toBe(false);
     });
   });
 

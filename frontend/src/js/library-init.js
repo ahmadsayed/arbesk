@@ -8,7 +8,6 @@
 import { on, EVENTS } from "./events/bus.js";
 import {
   initWallet,
-  autoConnectWallet,
   connectWallet,
   contract as walletContract,
 } from "./blockchain/wallet.js";
@@ -233,7 +232,6 @@ initTheme();
 document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
 
 initWallet();
-autoConnectWallet();
 document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
 document.getElementById("libraryConnectBtn")?.addEventListener("click", connectWallet);
 initWalletPopover();
@@ -274,6 +272,7 @@ on(EVENTS.WALLET_CONNECTED, async (e) => {
     const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
+      [CHAIN_IDS.MONAD_TESTNET]: "monadTestnet",
       [CHAIN_IDS.MEGAETH_TESTNET]: "megaethTestnet",
     };
     const key = keyMap[chainId];

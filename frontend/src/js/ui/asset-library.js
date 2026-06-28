@@ -12,7 +12,7 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import { contract as walletContract } from "../blockchain/wallet.js";
+import { contract as walletContract, web3 } from "../blockchain/wallet.js";
 import {
   getBlobFromRemoteIPFS,
   getFromRemoteIPFS,
@@ -21,7 +21,7 @@ import { deleteAssetFromCollection } from "../services/asset-delete.js";
 import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
-import { CHAIN_IDS } from "../../../../constants/chains.js";
+import { CHAIN_IDS, DEPLOYMENT_BLOCKS } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
@@ -39,45 +39,161 @@ function getContract() {
  * ERC-721 Transfer events. This replaces the ERC721Enumerable
  * `tokenOfOwnerByIndex` function that was removed to save storage slots.
  */
-export async function fetchOwnedTokenIds(contract, address) {
-  const lowerAddress = address.toLowerCase();
-  const ownership = new Map();
+const EVENT_CHUNK_SIZE = 100;
+
+function _ownedTokensCacheKey(chainId, address) {
+  return `arbesk-owned-tokens-${chainId}-${address.toLowerCase()}`;
+}
+
+function _readOwnedTokensCache(chainId, address) {
+  try {
+    const raw = localStorage.getItem(_ownedTokensCacheKey(chainId, address));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed.lastScannedBlock === "number" &&
+      Array.isArray(parsed.owned)
+    ) {
+      return parsed;
+    }
+  } catch {
+    // ignore corrupt cache
+  }
+  return null;
+}
+
+function _writeOwnedTokensCache(chainId, address, lastScannedBlock, owned) {
+  try {
+    localStorage.setItem(
+      _ownedTokensCacheKey(chainId, address),
+      JSON.stringify({ lastScannedBlock, owned })
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
+/**
+ * Fetch Transfer events for a specific address in small block chunks.
+ * Public RPCs like Monad Testnet reject wide eth_getLogs ranges with 413.
+ */
+async function fetchTransferEvents(contract, address, direction, startBlock) {
+  const allEvents = [];
+  const filter = direction === "to" ? { to: address } : { from: address };
 
   try {
-    const [transfersTo, transfersFrom] = await Promise.all([
-      contract.getPastEvents("Transfer", {
-        filter: { to: address },
-        fromBlock: 0,
-        toBlock: "latest",
-      }),
-      contract.getPastEvents("Transfer", {
-        filter: { from: address },
-        fromBlock: 0,
-        toBlock: "latest",
-      }),
-    ]);
-
-    // Apply events in block order so the latest transfer for each tokenId wins.
-    const allTransfers = [...transfersTo, ...transfersFrom].sort(
-      (a, b) =>
-        Number(a.blockNumber) - Number(b.blockNumber) ||
-        Number(a.logIndex) - Number(b.logIndex)
+    const latest = Number(await web3.eth.getBlockNumber());
+    const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
+    const fromBlock = Math.max(
+      startBlock ?? DEPLOYMENT_BLOCKS[chainId] ?? 0,
+      0
     );
 
-    for (const event of allTransfers) {
-      const tokenId = String(event.returnValues.tokenId);
-      ownership.set(tokenId, event.returnValues.to.toLowerCase());
+    console.log(
+      `[ASSET-LIBRARY] scanning Transfer ${direction} events ` +
+        `from block ${fromBlock} to ${latest} (chain ${chainId})`
+    );
+
+    for (let from = fromBlock; from <= latest; from += EVENT_CHUNK_SIZE) {
+      const to = Math.min(from + EVENT_CHUNK_SIZE - 1, latest);
+      const chunk = await contract.getPastEvents("Transfer", {
+        filter,
+        fromBlock: from,
+        toBlock: to,
+      });
+      allEvents.push(...chunk);
     }
   } catch (err) {
     console.warn(
-      "[ASSET-LIBRARY] Failed to fetch Transfer events:",
+      `[ASSET-LIBRARY] Failed to fetch Transfer ${direction} events:`,
       err.message
     );
   }
 
-  return Array.from(ownership.entries())
+  return allEvents;
+}
+
+async function fetchOwnedTokensFromIndexer(address, chainId) {
+  if (typeof fetch !== "function" || typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const url = new URL("/api/v1/indexer/owned", window.location.origin);
+    url.searchParams.set("address", address);
+    url.searchParams.set("chainId", String(chainId));
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      throw new Error(`indexer returned ${res.status}`);
+    }
+    const data = await res.json();
+    if (!Array.isArray(data.owned)) {
+      throw new Error("invalid indexer response");
+    }
+    console.log(
+      `[ASSET-LIBRARY] indexer returned ${data.owned.length} token(s) ` +
+        `for ${address} on chain ${chainId}`
+    );
+    return data.owned.map(String);
+  } catch (err) {
+    console.warn(
+      "[ASSET-LIBRARY] indexer query failed, falling back to scan:",
+      String(/** @type {Error} */ (err).message)
+    );
+    return null;
+  }
+}
+
+export async function fetchOwnedTokenIds(contract, address) {
+  const lowerAddress = address.toLowerCase();
+  const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
+
+  const indexerResult = await fetchOwnedTokensFromIndexer(address, chainId);
+  if (indexerResult) {
+    _writeOwnedTokensCache(chainId, address, Number.MAX_SAFE_INTEGER, indexerResult);
+    return indexerResult;
+  }
+
+  const deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
+  const cache = _readOwnedTokensCache(chainId, address);
+  const ownership = new Map();
+  let startBlock = deploymentBlock;
+
+  if (cache) {
+    startBlock = Math.max(cache.lastScannedBlock, deploymentBlock);
+    for (const tokenId of cache.owned) {
+      ownership.set(String(tokenId), lowerAddress);
+    }
+  }
+
+  const [transfersTo, transfersFrom] = await Promise.all([
+    fetchTransferEvents(contract, address, "to", startBlock),
+    fetchTransferEvents(contract, address, "from", startBlock),
+  ]);
+
+  // Apply events in block order so the latest transfer for each tokenId wins.
+  const allTransfers = [...transfersTo, ...transfersFrom].sort(
+    (a, b) =>
+      Number(a.blockNumber) - Number(b.blockNumber) ||
+      Number(a.logIndex) - Number(b.logIndex)
+  );
+
+  let maxBlock = startBlock;
+  for (const event of allTransfers) {
+    const tokenId = String(event.returnValues.tokenId);
+    ownership.set(tokenId, event.returnValues.to.toLowerCase());
+    if (Number(event.blockNumber) > maxBlock) {
+      maxBlock = Number(event.blockNumber);
+    }
+  }
+
+  const owned = Array.from(ownership.entries())
     .filter(([, currentOwner]) => currentOwner === lowerAddress)
     .map(([tokenId]) => tokenId);
+
+  _writeOwnedTokensCache(chainId, address, maxBlock, owned);
+  return owned;
 }
 
 async function fetchAssetLibrary(address) {
@@ -696,6 +812,13 @@ function highlightActiveAsset() {
   });
 }
 
+// Loading state shown while scanning Transfer events after wallet connect.
+const LOADING_GALLERY_HTML = `
+  <div class="library-loading">
+    <div class="library-spinner" aria-hidden="true"></div>
+    <p>Scanning the chain for your tokens…</p>
+  </div>`;
+
 // Rich disconnected empty-state, mirrors the static markup in studio.pug so
 // the Connect affordance reappears after a disconnect.
 const DISCONNECTED_GALLERY_HTML = `
@@ -708,8 +831,8 @@ const DISCONNECTED_GALLERY_HTML = `
       </svg>
     </div>
     <h2 class="empty-state-title">No assets yet</h2>
-    <p class="empty-state-sub">Connect your wallet to browse and open the asset tokens you own.</p>
-    <button id="galleryConnectBtn" class="empty-state-action btn btn-primary btn-sm" type="button">Connect Wallet</button>
+    <p class="empty-state-sub">Sign in to browse and open the asset tokens you own.</p>
+    <button id="galleryConnectBtn" class="empty-state-action btn btn-primary btn-sm" type="button">Login / Signup</button>
   </div>`;
 
 function initAssetLibrary() {
@@ -748,6 +871,9 @@ on(EVENTS.WALLET_CONNECTED, async () => {
     await openAssetByTokenId(assetTokenId, assetId);
   }
 
+  if (assetLibraryBody) {
+    assetLibraryBody.innerHTML = LOADING_GALLERY_HTML;
+  }
   await refreshAssetLibrary();
 });
 

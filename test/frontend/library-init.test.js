@@ -19,7 +19,8 @@ describe("library-init.js", () => {
 
   test("wires the wallet lifecycle", () => {
     expect(src()).toMatch(/initWallet\(\)/);
-    expect(src()).toMatch(/autoConnectWallet\(\)/);
+    expect(src()).not.toMatch(/autoConnectWallet\(\)/);
+    expect(src()).toMatch(/connectWallet\)/);
     expect(src()).toMatch(/EVENTS\.WALLET_CONNECTED/);
     expect(src()).toMatch(/EVENTS\.WALLET_DISCONNECTED/);
     expect(src()).toMatch(/initLibraryGrid\(\)/);

@@ -5,7 +5,8 @@
  * Provides an EIP-1193 provider shim so the rest of the app can keep using
  * Web3.js unchanged. Google OAuth creates an embedded EOA (address X), which
  * is then wrapped in an ERC-4337 smart account (address Y). Transactions are
- * sent as sponsored UserOperations on MegaETH Testnet.
+ * sent as sponsored UserOperations. Smart wallets are supported on Monad
+ * Testnet by default; MegaETH Testnet requires an EOA wallet.
  */
 
 import { createThirdwebClient, prepareTransaction } from "thirdweb";
@@ -13,15 +14,38 @@ import { inAppWallet } from "thirdweb/wallets/in-app";
 import { smartWallet } from "thirdweb/wallets";
 import { defineChain } from "thirdweb/chains";
 import { sendTransaction } from "thirdweb/transaction";
-import { log, error } from "../utils/log.js";
+import { log, error, warn } from "../utils/log.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
+import {
+  isSmartWalletSupported,
+  SMART_WALLET_SUPPORTED_CHAIN_IDS,
+} from "./smart-wallet-support.js";
 
-const MEGAETH_RPC = "https://carrot.megaeth.com/rpc";
+export { isSmartWalletSupported, SMART_WALLET_SUPPORTED_CHAIN_IDS };
 
-const megaethTestnet = defineChain({
-  id: CHAIN_IDS.MEGAETH_TESTNET,
-  rpc: MEGAETH_RPC,
-});
+const RPC_URLS = {
+  [CHAIN_IDS.MEGAETH_TESTNET]: "https://carrot.megaeth.com/rpc",
+  [CHAIN_IDS.MONAD_TESTNET]: "https://testnet-rpc.monad.xyz/",
+};
+
+/**
+ * Get the Thirdweb chain definition for the active or preferred network.
+ * Defaults to Monad Testnet (the smart-wallet-friendly default).
+ * @returns {import("thirdweb/chains").Chain}
+ */
+function getThirdwebChain() {
+  const preferred = localStorage.getItem("arbesk-preferred-network") || "monadTestnet";
+  const keyMap = {
+    hardhat: CHAIN_IDS.HARDHAT_LOCAL,
+    megaethTestnet: CHAIN_IDS.MEGAETH_TESTNET,
+    monadTestnet: CHAIN_IDS.MONAD_TESTNET,
+  };
+  const chainId = keyMap[preferred] || CHAIN_IDS.MONAD_TESTNET;
+  return defineChain({
+    id: chainId,
+    rpc: RPC_URLS[chainId] || RPC_URLS[CHAIN_IDS.MONAD_TESTNET],
+  });
+}
 
 /** @type {ReturnType<createThirdwebClient> | null} */
 let thirdwebClient = null;
@@ -68,49 +92,37 @@ export async function connectGoogleWallet() {
     throw new Error("Thirdweb client not initialized. Call initThirdwebClient first.");
   }
 
-  // Diagnostic: log any postMessage arriving from thirdweb.com domains
-  const _diagHandler = (ev) => {
-    if (ev.origin && ev.origin.includes("thirdweb.com")) {
-      log("[THIRDWEB-MSG] from:", ev.origin, "data:", JSON.stringify(ev.data));
-    }
-  };
-  window.addEventListener("message", _diagHandler);
-
-  // Diagnostic: log hidden iframes injected by the SDK
-  const _observer = new MutationObserver((muts) => {
-    for (const m of muts) {
-      for (const n of m.addedNodes) {
-        if (n.tagName === "IFRAME") log("[THIRDWEB-IFRAME] added:", n.src);
-      }
-    }
-  });
-  _observer.observe(document.body, { childList: true, subtree: true });
-
-  const _cleanup = () => {
-    window.removeEventListener("message", _diagHandler);
-    _observer.disconnect();
-  };
+  const chain = getThirdwebChain();
+  if (!isSmartWalletSupported(chain.id)) {
+    warn(`[THIRDWEB] Smart wallets are not supported on chain ${chain.id}`);
+    throw new Error(
+      `Google smart wallets are only supported on Monad Testnet. Please select Monad Testnet in the network dropdown and try again.`
+    );
+  }
 
   try {
-    // 1. Connect embedded EOA via Google OAuth.
-    log("[THIRDWEB] opening Google OAuth popup");
+    // 1. Connect embedded EOA via Google OAuth (popup mode).
+    // We use popup mode because Thirdweb's redirect-mode resume is unreliable
+    // and produced an infinite Google <-> localhost redirect loop. The backend
+    // now sets Cross-Origin-Opener-Policy: same-origin-allow-popups so the
+    // OAuth popup can communicate back to the opener.
+    log(`[THIRDWEB] Google OAuth connecting via popup on chain ${chain.id}`);
     eoaWallet = inAppWallet({
       auth: {
         mode: "popup",
-        redirectUrl: window.location.origin + window.location.pathname,
       },
     });
+
     eoaAccount = await eoaWallet.connect({
       client: thirdwebClient,
-      chain: megaethTestnet,
+      chain,
       strategy: "google",
     });
-    _cleanup();
     log("[THIRDWEB] Google EOA connected:", eoaAccount.address);
 
-    // 2. Wrap the EOA in a sponsored smart account on MegaETH Testnet.
+    // 2. Wrap the EOA in a sponsored smart account on the selected chain.
     smartWalletInstance = smartWallet({
-      chain: megaethTestnet,
+      chain,
       sponsorGas: true,
     });
     smartAccount = await smartWalletInstance.connect({
@@ -119,7 +131,7 @@ export async function connectGoogleWallet() {
     });
     log("[THIRDWEB] smart account connected:", smartAccount.address);
 
-    const provider = createEip1193Adapter(smartAccount, eoaAccount, megaethTestnet);
+    const provider = createEip1193Adapter(smartAccount, eoaAccount, chain);
 
     return {
       eoaAddress: eoaAccount.address,
@@ -127,9 +139,96 @@ export async function connectGoogleWallet() {
       provider,
     };
   } catch (err) {
-    _cleanup();
     error("[THIRDWEB] connectGoogleWallet failed:", err);
     throw err;
+  }
+}
+
+/**
+ * Attempt to silently restore a previous Thirdweb in-app wallet session.
+ * Returns null if no session is available (user must sign in again).
+ * @returns {Promise<{ eoaAddress: string, smartAccountAddress: string, provider: Object }|null>}
+ */
+export async function autoConnectThirdwebWallet() {
+  if (!thirdwebClient) {
+    throw new Error("Thirdweb client not initialized. Call initThirdwebClient first.");
+  }
+
+  const chain = getThirdwebChain();
+  if (!isSmartWalletSupported(chain.id)) {
+    return null;
+  }
+
+  try {
+    eoaWallet = inAppWallet({
+      auth: {
+        mode: "popup",
+      },
+    });
+
+    if (!eoaWallet.autoConnect) {
+      return null;
+    }
+
+    eoaAccount = await eoaWallet.autoConnect({
+      client: thirdwebClient,
+      chain,
+    });
+
+    if (!eoaAccount) {
+      return null;
+    }
+
+    log("[THIRDWEB] Google EOA auto-restored:", eoaAccount.address);
+
+    smartWalletInstance = smartWallet({
+      chain,
+      sponsorGas: true,
+    });
+    smartAccount = await smartWalletInstance.connect({
+      client: thirdwebClient,
+      personalAccount: eoaAccount,
+    });
+    log("[THIRDWEB] smart account auto-restored:", smartAccount.address);
+
+    const provider = createEip1193Adapter(smartAccount, eoaAccount, chain);
+    return {
+      eoaAddress: eoaAccount.address,
+      smartAccountAddress: smartAccount.address,
+      provider,
+    };
+  } catch (err) {
+    log("[THIRDWEB] auto-connect failed:", err.message);
+    eoaWallet = null;
+    eoaAccount = null;
+    smartAccount = null;
+    smartWalletInstance = null;
+    return null;
+  }
+}
+
+/**
+ * Get the Thirdweb in-app wallet auth token (JWT).
+ * This is the canonical way to authenticate Thirdweb social/email wallets
+ * on a backend, because the wallet address is decoupled from the signer.
+ * @returns {Promise<string|null>}
+ */
+export async function getThirdwebAuthToken() {
+  if (!eoaWallet) {
+    error("[THIRDWEB] cannot get auth token - wallet not connected");
+    return null;
+  }
+  try {
+    const token = await eoaWallet.getAuthToken();
+    if (!token) {
+      error("[THIRDWEB] getAuthToken returned empty");
+      return null;
+    }
+    log("[THIRDWEB] auth token retrieved");
+    return token;
+  } catch (err) {
+    error("[THIRDWEB] getAuthToken failed:", err);
+    return null;
   }
 }
 
@@ -164,6 +263,7 @@ export function disconnectThirdwebWallet() {
  */
 function createEip1193Adapter(account, personalAccount, chain) {
   const smartAccountAddress = account.address;
+  const personalAddress = personalAccount.address;
 
   return {
     request: async ({ method, params = [] }) => {
@@ -193,7 +293,19 @@ function createEip1193Adapter(account, personalAccount, chain) {
 
         case "personal_sign": {
           const message = Array.isArray(params) ? params[0] : params;
-          const signature = await personalAccount.signMessage({
+          const from = Array.isArray(params) ? params[1] : undefined;
+          // If the caller asks to sign with the personal/EOA address, use the
+          // embedded EOA wallet instead of the smart account. This is required
+          // for SIWE session creation because Thirdweb smart accounts restrict
+          // isValidSignature to approved targets, making ERC-6492 off-chain
+          // verification fail.
+          if (from && from.toLowerCase() === personalAddress.toLowerCase()) {
+            const signature = await personalAccount.signMessage({
+              message: normalizeMessage(message),
+            });
+            return signature;
+          }
+          const signature = await account.signMessage({
             message: normalizeMessage(message),
           });
           return signature;
@@ -202,7 +314,7 @@ function createEip1193Adapter(account, personalAccount, chain) {
         case "eth_signTypedData_v4":
         case "eth_signTypedData": {
           const typedData = Array.isArray(params) ? params[1] : params;
-          const signature = await personalAccount.signTypedData(
+          const signature = await account.signTypedData(
             typeof typedData === "string" ? JSON.parse(typedData) : typedData
           );
           return signature;
@@ -216,8 +328,8 @@ function createEip1193Adapter(account, personalAccount, chain) {
           return null;
 
         default:
-          // Forward read calls to the public MegaETH RPC.
-          return fetchRpc(method, params);
+          // Forward read calls to the chain's public RPC.
+          return fetchRpc(chain.rpc, method, params);
       }
     },
 
@@ -258,14 +370,15 @@ function normalizeMessage(message) {
 }
 
 /**
- * Forward a JSON-RPC request to the MegaETH RPC.
+ * Forward a JSON-RPC request to the chain's public RPC.
+ * @param {string} rpcUrl
  * @param {string} method
  * @param {any[]} params
  * @returns {Promise<any>}
  */
-async function fetchRpc(method, params) {
+async function fetchRpc(rpcUrl, method, params) {
   const id = Math.floor(Math.random() * 1e9);
-  const res = await fetch(MEGAETH_RPC, {
+  const res = await fetch(rpcUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),

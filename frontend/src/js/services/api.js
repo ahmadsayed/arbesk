@@ -7,7 +7,7 @@
  */
 
 import { on, EVENTS } from "../events/bus.js";
-import { web3 } from "../blockchain/wallet.js";
+import { web3, getActiveConnectionSource } from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import {
   getContractAddress as getNetworkContractAddress,
@@ -119,43 +119,79 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 });
 
 /**
- * Create a new session by signing a session-creation message.
- * This triggers ONE MetaMask pop-up to prove wallet ownership.
+ * Create a new session by proving wallet ownership.
+ *
+ * For standard wallets this signs a SIWE (EIP-4361) message.
+ * For Thirdweb in-app wallets (Google, email, etc.) the wallet address is
+ * decoupled from the signer, so we send Thirdweb's JWT auth token instead.
  *
  * @returns {Promise<{ token: string, expiresAt: number }>}
  */
 export async function createSession() {
-  const { walletAddress, chainId: walletChainId } = walletState.get();
+  const { walletAddress, eoaAddress, chainId: walletChainId } = walletState.get();
   if (!web3 || !walletAddress) {
-    throw new ApiError("Wallet not connected", 401, "WALLET_NOT_CONNECTED");
+    throw new ApiError("Not signed in", 401, "WALLET_NOT_CONNECTED");
   }
 
-  // Build SIWE (EIP-4361) message
-  const { buildSiweMessage, generateNonce } = await import(
-    "../blockchain/siwe.js"
-  );
-  const nonce = generateNonce();
-  const chainId = Number(walletChainId || 1);
+  const connectionSource = getActiveConnectionSource();
+  let body;
 
-  const domain = window.location.origin;
-  const message = buildSiweMessage(domain, walletAddress, nonce, chainId);
-
-  let signature;
-  try {
-    signature = await web3.eth.personal.sign(message, walletAddress, "");
-  } catch (err) {
-    error("Session sign failed:", err);
-    throw new ApiError(
-      "Failed to sign session creation message",
-      401,
-      "SIGN_FAILED"
+  if (connectionSource === "thirdweb") {
+    // Thirdweb social/email wallets authenticate via JWT because the wallet
+    // address is not the key that signs messages.
+    const { getThirdwebAuthToken } = await import(
+      "../blockchain/wallet-thirdweb.js"
     );
+    const thirdwebAuthToken = await getThirdwebAuthToken();
+    if (!thirdwebAuthToken) {
+      throw new ApiError(
+        "Failed to retrieve Thirdweb auth token",
+        401,
+        "THIRDWB_AUTH_TOKEN_MISSING"
+      );
+    }
+    body = { thirdwebAuthToken };
+    log("[SESSION] using Thirdweb auth token for authentication");
+  } else {
+    // Build SIWE (EIP-4361) message
+    const { buildSiweMessage, generateNonce } = await import(
+      "../blockchain/siwe.js"
+    );
+    const nonce = generateNonce();
+    const chainId = Number(walletChainId || 1);
+
+    const domain = window.location.origin;
+    const message = buildSiweMessage(domain, walletAddress, nonce, chainId);
+
+    // Smart accounts (e.g. Thirdweb ERC-4337) cannot verify off-chain via
+    // ERC-6492 because they restrict isValidSignature to approved targets.
+    // Sign the SIWE message with the owner EOA instead; the backend will
+    // verify the EOA signature and keep the smart account as the session
+    // address.
+    const signerAddress = eoaAddress || walletAddress;
+    let signature;
+    try {
+      signature = await web3.eth.personal.sign(message, signerAddress, "");
+    } catch (err) {
+      error("Session sign failed:", err);
+      throw new ApiError(
+        "Failed to sign session creation message",
+        401,
+        "SIGN_FAILED"
+      );
+    }
+
+    body = {
+      message,
+      signature,
+      eoaAddress: eoaAddress || undefined,
+    };
   }
 
   const response = await fetch(`${API_BASE}/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, signature }),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json().catch(() => ({}));

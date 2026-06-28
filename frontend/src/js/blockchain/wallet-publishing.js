@@ -13,7 +13,8 @@ import { walletState } from "../state/wallet-state.js";
 import { getContractArtifact } from "../services/api.js";
 import { showToast } from "../ui/toasts.js";
 import { isIpfsCidReachable } from "../ipfs/remote-ipfs.js";
-import { web3, contract } from "./wallet-core.js";
+import { web3, contract, getActiveConnectionSource } from "./wallet-core.js";
+import { isSmartWalletSupported } from "./smart-wallet-support.js";
 
 // ── Helpers ──
 
@@ -25,6 +26,28 @@ function _getContract() {
   return contract || walletState.get().contract || null;
 }
 
+/**
+ * Check whether the current wallet/chain combination can publish.
+ * Smart wallets (Thirdweb Google) are only supported on chains with a
+ * compatible ERC-4337 bundler (Monad Testnet). EOA wallets work everywhere.
+ * @returns {boolean}
+ */
+function _canPublishWithCurrentWallet() {
+  const source = getActiveConnectionSource();
+  const chainId = walletState.get().chainId;
+  if (source === "thirdweb" && !isSmartWalletSupported(chainId)) {
+    showToast({
+      type: "warning",
+      title: "Smart Wallet Not Supported",
+      message:
+        "Google smart wallets are only supported on Monad Testnet. Please switch to Monad Testnet in the network dropdown, or connect with an EOA wallet (MetaMask/Rabby) to publish on MegaETH Testnet.",
+      duration: 0,
+    });
+    return false;
+  }
+  return true;
+}
+
 // ── Asset Publishing ──
 
 async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
@@ -34,6 +57,7 @@ async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
     console.error("Wallet or contract not ready");
     return null;
   }
+  if (!_canPublishWithCurrentWallet()) return null;
 
   try {
     const tx = c.methods["publishAsset(string,uint256,bytes32,string)"](
@@ -77,6 +101,7 @@ async function updateAssetURI(tokenId, newTokenURI, proof) {
     console.error("Wallet or contract not ready");
     return null;
   }
+  if (!_canPublishWithCurrentWallet()) return null;
 
   try {
     const tx = c.methods["updateAssetURI(uint256,string,bytes32[])"](
@@ -143,6 +168,7 @@ async function updateEditors(
     console.error("Wallet or contract not ready");
     return null;
   }
+  if (!_canPublishWithCurrentWallet()) return null;
 
   try {
     const tx = c.methods[
@@ -169,6 +195,7 @@ async function burn(tokenId, proof) {
     console.error("Wallet or contract not ready");
     return null;
   }
+  if (!_canPublishWithCurrentWallet()) return null;
 
   // Resolve manifest CID before burning (after burn, tokenURI may revert)
   let manifestCid = null;

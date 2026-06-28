@@ -23,6 +23,7 @@ export {
   autoConnectWallet,
   authenticateUser,
   walletWeb3,
+  getActiveConnectionSource,
   NETWORKS,
 } from "./wallet-core.js";
 

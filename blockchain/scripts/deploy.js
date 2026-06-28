@@ -21,11 +21,11 @@ async function main() {
   console.log("Network:", network);
 
   const isLocal = network === "hardhat" || network === "localhost";
-  const isTestnet = network === "megaethTestnet";
+  const isTestnet = network === "megaethTestnet" || network === "monadTestnet";
 
   if (!isLocal && !isTestnet) {
     console.error(
-      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, megaethTestnet`
+      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, megaethTestnet, monadTestnet`
     );
     process.exit(1);
   }
@@ -73,7 +73,7 @@ async function main() {
   } else {
     // ── Testnet: free tier only ──
     console.log(
-      "Skipping ArbeskAsset (paid) and USDC - not deployed on testnet"
+      `Skipping ArbeskAsset (paid) and USDC - not deployed on ${network}`
     );
   }
 
@@ -115,8 +115,8 @@ async function main() {
 
   console.log("Deployment artifacts saved to deployments/" + network);
 
-  // ── Update .env for local networks ──
-  if (isLocal) {
+  // ── Update .env for local and testnet networks ──
+  if (isLocal || isTestnet) {
     const envPath = path.join(__dirname, "..", ".env");
     let env = "";
     if (fs.existsSync(envPath)) {
@@ -129,34 +129,40 @@ async function main() {
       } else {
         env += `\nCONTRACT_ADDRESS=${freeAddress}\n`;
       }
-      if (env.includes("PAID_CONTRACT_ADDRESS=")) {
-        env = env.replace(
-          /PAID_CONTRACT_ADDRESS=.*/g,
-          `PAID_CONTRACT_ADDRESS=${paidAddress}`
-        );
-      } else {
-        env += `\nPAID_CONTRACT_ADDRESS=${paidAddress}\n`;
-      }
-      if (!env.includes("USDC_TOKEN=")) {
-        env += `\nUSDC_TOKEN=${usdcAddress}\n`;
-      } else {
-        env = env.replace(/USDC_TOKEN=.*/g, `USDC_TOKEN=${usdcAddress}`);
+      if (isLocal && paidAddress) {
+        if (env.includes("PAID_CONTRACT_ADDRESS=")) {
+          env = env.replace(
+            /PAID_CONTRACT_ADDRESS=.*/g,
+            `PAID_CONTRACT_ADDRESS=${paidAddress}`
+          );
+        } else {
+          env += `\nPAID_CONTRACT_ADDRESS=${paidAddress}\n`;
+        }
+        if (!env.includes("USDC_TOKEN=")) {
+          env += `\nUSDC_TOKEN=${usdcAddress}\n`;
+        } else {
+          env = env.replace(/USDC_TOKEN=.*/g, `USDC_TOKEN=${usdcAddress}`);
+        }
       }
     } else {
-      env = `CONTRACT_ADDRESS=${freeAddress}\nPAID_CONTRACT_ADDRESS=${paidAddress}\nUSDC_TOKEN=${usdcAddress}\n`;
+      env = `CONTRACT_ADDRESS=${freeAddress}\n`;
+      if (isLocal && paidAddress) {
+        env += `PAID_CONTRACT_ADDRESS=${paidAddress}\nUSDC_TOKEN=${usdcAddress}\n`;
+      }
     }
     fs.writeFileSync(envPath, env);
     console.log(
-      "Updated blockchain/.env with CONTRACT_ADDRESS (free) + PAID_CONTRACT_ADDRESS + USDC_TOKEN"
+      `Updated blockchain/.env with CONTRACT_ADDRESS for ${network}`
     );
   }
 
   if (isTestnet) {
-    console.log("\n=== Next steps for MegaETH Testnet ===");
-    console.log("1. Copy CONTRACT_ADDRESS to blockchain/.env and root .env:");
+    console.log(`\n=== Next steps for ${network} ===`);
+    console.log("1. CONTRACT_ADDRESS has been written to blockchain/.env");
     console.log(`   CONTRACT_ADDRESS=${freeAddress}`);
+    console.log("2. Copy CONTRACT_ADDRESS to root .env as well.");
     console.log(
-      "2. Update frontend/src/js/blockchain/network-config.js with the new address"
+      "3. Update frontend/src/js/blockchain/network-config.js and src/config.js with the new address"
     );
   }
 }

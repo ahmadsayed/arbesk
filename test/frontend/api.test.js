@@ -48,6 +48,13 @@ async function loadApi(options = {}) {
         personal: { sign: jest.fn().mockResolvedValue(_signResult) },
       },
     },
+    getActiveConnectionSource: jest.fn(() => options.connectionSource || "injected"),
+  }));
+
+  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-thirdweb.js", () => ({
+    getThirdwebAuthToken: jest.fn(async () =>
+      options.thirdwebAuthToken !== undefined ? options.thirdwebAuthToken : "thirdweb-jwt"
+    ),
   }));
 
   await jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
@@ -197,6 +204,46 @@ describe("createSession", () => {
     await expect(createSession()).rejects.toMatchObject({
       status: 400,
       code: "BAD_REQUEST",
+    });
+  });
+
+  test("uses Thirdweb auth token when connected via Thirdweb", async () => {
+    const freshToken = "fresh-token";
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        buildResponse({ body: { token: freshToken, expiresAt: Date.now() + 3_600_000 } })
+      );
+    const { createSession } = await loadApi({
+      fetchMock,
+      connectionSource: "thirdweb",
+      thirdwebAuthToken: "thirdweb-jwt-abc",
+    });
+
+    await createSession();
+
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/sessions$/);
+    expect(opts.method).toBe("POST");
+    const body = JSON.parse(opts.body);
+    expect(body.thirdwebAuthToken).toBe("thirdweb-jwt-abc");
+    expect(body.message).toBeUndefined();
+    expect(body.signature).toBeUndefined();
+
+    const cached = JSON.parse(localStorage.getItem("arbesk_session"));
+    expect(cached.token).toBe(freshToken);
+  });
+
+  test("throws ApiError when Thirdweb auth token is missing", async () => {
+    const { createSession, ApiError } = await loadApi({
+      connectionSource: "thirdweb",
+      thirdwebAuthToken: null,
+    });
+
+    await expect(createSession()).rejects.toBeInstanceOf(ApiError);
+    await expect(createSession()).rejects.toMatchObject({
+      status: 401,
+      code: "THIRDWB_AUTH_TOKEN_MISSING",
     });
   });
 });

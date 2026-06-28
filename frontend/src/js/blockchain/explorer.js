@@ -14,11 +14,14 @@ const EXPLORER_URLS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: null,
   // MegaETH Testnet
   [CHAIN_IDS.MEGAETH_TESTNET]: "https://megaexplorer.xyz",
+  // Monad Testnet
+  [CHAIN_IDS.MONAD_TESTNET]: "https://testnet.monadexplorer.com",
 };
 
 const NETWORK_NAMES = {
   [CHAIN_IDS.HARDHAT_LOCAL]: "Hardhat Local",
   [CHAIN_IDS.MEGAETH_TESTNET]: "MegaETH Testnet",
+  [CHAIN_IDS.MONAD_TESTNET]: "Monad Testnet",
 };
 
 /**

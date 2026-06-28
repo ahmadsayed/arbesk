@@ -28,6 +28,12 @@ module.exports = {
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
       chainId: 6343,
     },
+    // ── Monad Testnet ──
+    monadTestnet: {
+      url: "https://testnet-rpc.monad.xyz/",
+      accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
+      chainId: 10143,
+    },
   },
   etherscan: {
     // A single-string apiKey enables Etherscan API v2 (unified endpoint,
@@ -44,6 +50,19 @@ module.exports = {
           browserURL: "https://testnet-mega.etherscan.io",
         },
       },
+      {
+        network: "monadTestnet",
+        chainId: 10143,
+        urls: {
+          apiURL: "https://api.monadexplorer.com/api",
+          browserURL: "https://testnet.monadexplorer.com",
+        },
+      },
     ],
+  },
+  sourcify: {
+    enabled: true,
+    apiUrl: "https://sourcify-api-monad.blockvision.org",
+    browserUrl: "https://testnet.monadvision.com",
   },
 };

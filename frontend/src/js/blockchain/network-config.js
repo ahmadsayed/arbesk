@@ -31,6 +31,15 @@ export const NETWORK_CONFIGS = {
     rpcUrl: "https://carrot.megaeth.com/rpc",
     blockExplorer: "https://megaexplorer.xyz",
   },
+  [CHAIN_IDS.MONAD_TESTNET]: {
+    name: "Monad Testnet",
+    chainId: CHAIN_IDS.MONAD_TESTNET,
+    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
+    paidContractAddress: null, // Paid tier not deployed on testnet
+    usdcToken: null, // USDC not deployed on testnet
+    rpcUrl: "https://testnet-rpc.monad.xyz/",
+    blockExplorer: "https://testnet.monadexplorer.com",
+  },
 };
 
 /**

@@ -4,10 +4,13 @@ import request from "supertest";
 
 const VALID_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
 
-async function loadModule(verifySiweResult) {
+async function loadModule(verifySiweResult, verifyThirdwebResult = null) {
   jest.resetModules();
   jest.unstable_mockModule("../../src/api/siwe-verify.js", () => ({
     verifySiwe: jest.fn(async () => verifySiweResult),
+  }));
+  jest.unstable_mockModule("../../src/api/thirdweb-auth.js", () => ({
+    verifyThirdwebAuthToken: jest.fn(async () => verifyThirdwebResult),
   }));
   jest.unstable_mockModule("../../src/api/validation.js", () => ({
     validateBody: jest.fn(() => (req, res, next) => next()),
@@ -125,6 +128,12 @@ describe("session routes", () => {
         throw new Error("verify exploded");
       }),
     }));
+    jest.unstable_mockModule("../../src/api/thirdweb-auth.js", () => ({
+      verifyThirdwebAuthToken: jest.fn(async () => ({
+        valid: false,
+        error: "not used",
+      })),
+    }));
     jest.unstable_mockModule("../../src/api/validation.js", () => ({
       validateBody: jest.fn(() => (req, res, next) => next()),
     }));
@@ -136,6 +145,37 @@ describe("session routes", () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe("SESSION_CREATION_FAILED");
+  });
+
+  it("POST /sessions creates a session for a valid Thirdweb auth token", async () => {
+    mod = await loadModule(
+      { valid: true, address: VALID_ADDRESS },
+      { valid: true, address: VALID_ADDRESS },
+    );
+    const app = createApp(mod.default);
+    const res = await request(app)
+      .post("/sessions")
+      .send({ thirdwebAuthToken: "thirdweb-jwt" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.token).toBeDefined();
+    expect(res.body.expiresAt).toBeGreaterThan(Date.now());
+    expect(mod.sessions.has(res.body.token)).toBe(true);
+  });
+
+  it("POST /sessions returns 400 for an invalid Thirdweb auth token", async () => {
+    mod = await loadModule(
+      { valid: true, address: VALID_ADDRESS },
+      { valid: false, address: null, error: "bad jwt" },
+    );
+    const app = createApp(mod.default);
+    const res = await request(app)
+      .post("/sessions")
+      .send({ thirdwebAuthToken: "thirdweb-jwt" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("INVALID_THIRDWB_AUTH");
+    expect(res.body.error.message).toBe("bad jwt");
   });
 
   it("DELETE /sessions invalidates the provided session", async () => {

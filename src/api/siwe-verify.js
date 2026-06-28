@@ -8,29 +8,18 @@
  */
 
 import { SiweMessage } from "siwe";
-import { web3, getWeb3 } from "../config.js";
-import { CHAIN_IDS, SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
+import { verifyMessage } from "viem/actions";
+import { decodeAbiParameters } from "viem";
+import { getViemPublicClient, web3 } from "../config.js";
+import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
+
+const ERC6492_MAGIC_BYTES =
+  "6492649264926492649264926492649264926492649264926492649264926492";
 
 // Nonce store: Map<nonce, expiresAt> - auto-cleans on verification
 const usedNonces = new Map();
 const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MESSAGE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
-
-const EIP1271_MAGIC_VALUE = "0x1626ba7e";
-
-/** @type {import("web3").ContractAbi} */
-const EIP1271_ABI = [
-  {
-    inputs: [
-      { internalType: "bytes32", name: "_hash", type: "bytes32" },
-      { internalType: "bytes", name: "_signature", type: "bytes" },
-    ],
-    name: "isValidSignature",
-    outputs: [{ internalType: "bytes4", name: "magicValue", type: "bytes4" }],
-    stateMutability: "view",
-    type: "function",
-  },
-];
 
 /**
  * Clean expired nonces from the store.
@@ -76,12 +65,13 @@ export function parseSiweMessage(message) {
  * @param {string} signature - The Ethereum signature
  * @param {Object} [options]
  * @param {string} [options.expectedDomain] - The expected domain (req.headers.host)
+ * @param {string} [options.eoaAddress] - Owner EOA for smart-account wallets
  * @returns {Promise<{valid: boolean, address: string|null, error: string|null}>}
  */
 export async function verifySiwe(
   message,
   signature,
-  { expectedDomain } = {},
+  { expectedDomain, eoaAddress } = {},
 ) {
   // 1. Parse message with the standard SIWE parser
   let parsed;
@@ -179,39 +169,106 @@ export async function verifySiwe(
     };
   }
 
-  // 9. Verify signature (EOA or EIP-1271 smart account)
-  let recoveredAddress;
-  try {
-    recoveredAddress = (
-      await web3.eth.accounts.recover(message, signature)
-    ).toLowerCase();
-  } catch {
+  // 9. Verify signature (EOA, EIP-1271, or ERC-6492 counterfactual smart account)
+  // viem's verifyMessage handles all three cases in one call, including
+  // Thirdweb ERC-4337 smart accounts that have not been deployed yet.
+  const viemClient = getViemPublicClient(chainId);
+  if (!viemClient) {
     return {
       valid: false,
       address: null,
-      error: "Failed to recover address from signature",
+      error: `No RPC configured for chain ID: ${chainId}`,
     };
   }
 
-  if (recoveredAddress !== address.toLowerCase()) {
-    // EOA recovery failed — try EIP-1271 if the claimed address is a smart contract.
-    // Smart-account sessions are only expected on MegaETH Testnet; skip on Hardhat.
-    if (chainId !== CHAIN_IDS.HARDHAT_LOCAL) {
-      const isContract = await checkIsContractAddress(address, chainId);
-      if (isContract) {
-        const valid1271 = await verifyEip1271Signature(
-          address,
-          message,
-          signature,
-          chainId,
-        );
-        if (valid1271) {
-          usedNonces.set(nonce, Date.now() + NONCE_TTL_MS);
-          return { valid: true, address: address.toLowerCase(), error: null };
-        }
-      }
+  // Diagnostic logging: understand what kind of signature the wallet produced.
+  const sigLower = signature.toLowerCase();
+  const isErc6492 = sigLower.endsWith(ERC6492_MAGIC_BYTES);
+  console.log(
+    `[SIWE] signature diagnostics for ${address}: length=${signature.length}, erc6492=${isErc6492}`,
+  );
+  if (isErc6492) {
+    try {
+      const encoded = signature.slice(2, -64);
+      const [factory, factoryData, innerSignature] = decodeAbiParameters(
+        [
+          { type: "address", name: "factory" },
+          { type: "bytes", name: "factoryData" },
+          { type: "bytes", name: "signature" },
+        ],
+        `0x${encoded}`,
+      );
+      console.log(
+        `[SIWE] ERC-6492 decode for ${address}: factory=${factory}, factoryDataLength=${factoryData.length}, innerSignatureLength=${innerSignature.length}`,
+      );
+    } catch (decodeErr) {
+      const decodeError = /** @type {Error} */ (decodeErr);
+      console.log(
+        `[SIWE] ERC-6492 decode error for ${address}:`,
+        decodeError.message,
+      );
     }
+  }
+  try {
+    const recovered = await web3.eth.accounts.recover(message, signature);
+    console.log(`[SIWE] EOA recovery for ${address} yielded: ${recovered}`);
+  } catch (recoverErr) {
+    const recoverError = /** @type {Error} */ (recoverErr);
+    console.log(
+      `[SIWE] EOA recovery for ${address} threw:`,
+      recoverError.message,
+    );
+  }
 
+  let signatureValid = false;
+  try {
+    console.log(`[SIWE] verifying signature for ${address} via viem (chainId=${chainId})`);
+    signatureValid = await verifyMessage(viemClient, {
+      // viem expects branded hex types; the address has already been validated.
+      address: /** @type {`0x${string}`} */ (address),
+      message,
+      signature: /** @type {`0x${string}`} */ (signature),
+    });
+    console.log(`[SIWE] viem verifyMessage result for ${address}: ${signatureValid}`);
+  } catch (err) {
+    const error = /** @type {Error} */ (err);
+    console.log(`[SIWE] viem verification error for ${address}:`, error.message);
+    console.log(`[SIWE] viem verification error stack for ${address}:`, error.stack);
+    return {
+      valid: false,
+      address: null,
+      error: "Signature verification failed",
+    };
+  }
+
+  if (!signatureValid && eoaAddress) {
+    // Fallback: smart accounts (e.g. Thirdweb ERC-4337) restrict
+    // isValidSignature to approved targets, so ERC-6492 off-chain
+    // verification fails. Allow the owner EOA to sign on behalf of the
+    // smart account address claimed in the SIWE message.
+    console.log(
+      `[SIWE] viem verification failed for ${address}, trying EOA fallback with ${eoaAddress}`,
+    );
+    try {
+      const recovered = (
+        await web3.eth.accounts.recover(message, signature)
+      ).toLowerCase();
+      console.log(`[SIWE] EOA fallback recovered: ${recovered}`);
+      if (recovered === eoaAddress.toLowerCase()) {
+        console.log(
+          `[SIWE] EOA fallback accepted for ${address} via ${eoaAddress}`,
+        );
+        signatureValid = true;
+      }
+    } catch (eoaErr) {
+      const eoaError = /** @type {Error} */ (eoaErr);
+      console.log(`[SIWE] EOA fallback error:`, eoaError.message);
+    }
+  }
+
+  if (!signatureValid) {
+    console.log(`[SIWE] message for ${address}: ${message}`);
+    console.log(`[SIWE] signature for ${address}: ${signature}`);
     return {
       valid: false,
       address: null,
@@ -222,46 +279,5 @@ export async function verifySiwe(
   // 10. Store nonce to prevent replay
   usedNonces.set(nonce, Date.now() + NONCE_TTL_MS);
 
-  return { valid: true, address: recoveredAddress, error: null };
-}
-
-/**
- * Check whether an address has deployed code on the given chain.
- * @param {string} address
- * @param {number} chainId
- * @returns {Promise<boolean>}
- */
-async function checkIsContractAddress(address, chainId) {
-  try {
-    const w3 = getWeb3(chainId);
-    const code = await w3.eth.getCode(address);
-    return !!code && code !== "0x" && code !== "0x0";
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Verify a signature via EIP-1271 on a smart contract account.
- * @param {string} address
- * @param {string} message
- * @param {string} signature
- * @param {number} chainId
- * @returns {Promise<boolean>}
- */
-async function verifyEip1271Signature(address, message, signature, chainId) {
-  try {
-    const w3 = getWeb3(chainId);
-    const contract = new w3.eth.Contract(EIP1271_ABI, address);
-    const hash = w3.eth.accounts.hashMessage(message);
-    const result = await contract.methods.isValidSignature(hash, signature).call();
-    if (!result) return false;
-    const normalized = String(result).toLowerCase();
-    return (
-      normalized === EIP1271_MAGIC_VALUE.toLowerCase() ||
-      normalized.startsWith(EIP1271_MAGIC_VALUE.toLowerCase().slice(2))
-    );
-  } catch {
-    return false;
-  }
+  return { valid: true, address: address.toLowerCase(), error: null };
 }

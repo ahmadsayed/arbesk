@@ -94,14 +94,15 @@ html(lang="en")
             svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
           select#headerbarNetworkSelect.headerbar-network-select(aria-label="Select network" title="Select network")
-            option(value="megaethTestnet" selected) MegaETH Testnet
+            option(value="monadTestnet" selected) Monad Testnet
+            option(value="megaethTestnet") MegaETH Testnet
             option(value="hardhat") Hardhat Local
-          button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Connect wallet")
+          button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Login or sign up")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
-              path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
-              path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
-            span Connect Wallet
+              path(d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4")
+              path(d="M10 17l5-5-5-5")
+              path(d="M15 12H3")
+            span Login / Signup
           button#disconnectWalletBtn.headerbar-wallet.hidden(aria-label="Wallet menu")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
@@ -227,8 +228,8 @@ html(lang="en")
                         path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
                         path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
                     h2.empty-state-title No assets yet
-                    p.empty-state-sub Connect your wallet to browse and open the asset tokens you own.
-                    button#galleryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Connect Wallet
+                    p.empty-state-sub Sign in to browse and open the asset tokens you own.
+                    button#galleryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Login / Signup
 
             //- View: Ledger
             .sidebar-view(data-view="ledger" hidden)
@@ -281,7 +282,7 @@ html(lang="en")
               svg.messagebar-hint-icon(width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                 rect(x="3" y="11" width="18" height="11" rx="2" ry="2")
                 path(d="M7 11V7a5 5 0 0 1 10 0v4")
-              span Connect your wallet to start generating assets.
+              span Sign in to start generating assets.
 
         //- Inspector — right sidebar
         aside#inspector.inspector.collapsed
@@ -365,7 +366,7 @@ html(lang="en")
             line(x1="10" y1="14" x2="21" y2="3")
         .wallet-popover-actions
           button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button") Sign In
-          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Disconnect Wallet
+          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Log Out
 
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")

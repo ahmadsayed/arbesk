@@ -38,8 +38,8 @@ function requireWallet() {
   if (walletState.get().walletAddress) return true;
   showToast({
     type: "error",
-    title: "Wallet Not Connected",
-    message: "Please connect your wallet first.",
+    title: "Not Signed In",
+    message: "Please log in or sign up first.",
   });
   return false;
 }

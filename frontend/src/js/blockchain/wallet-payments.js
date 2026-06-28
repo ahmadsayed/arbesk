@@ -92,8 +92,8 @@ async function recordGeneration(nodeId, prompt) {
   if (!w3 || !walletState.get().walletAddress) {
     showToast({
       type: "error",
-      title: "Wallet Not Connected",
-      message: "Please connect your wallet first.",
+      title: "Not Signed In",
+      message: "Please log in or sign up first.",
     });
     return null;
   }
@@ -177,8 +177,8 @@ async function payWithUSDC(nodeId, prompt, tier) {
   if (!w3 || !walletState.get().walletAddress) {
     showToast({
       type: "error",
-      title: "Wallet Not Connected",
-      message: "Please connect your wallet first.",
+      title: "Not Signed In",
+      message: "Please log in or sign up first.",
     });
     return null;
   }

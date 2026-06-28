@@ -7,6 +7,7 @@
  */
 
 import Web3 from "web3";
+import { createPublicClient, http } from "viem";
 import { CHAIN_IDS } from "../constants/chains.js";
 
 // TypeScript sees the default import as the module namespace under NodeNext,
@@ -31,6 +32,15 @@ export const NETWORK_CONFIGS = {
     paidContractAddress: null, // Paid tier not deployed on testnet
     usdcToken: null, // USDC not deployed on testnet
     rpcUrl: "https://carrot.megaeth.com/rpc",
+  },
+  [CHAIN_IDS.MONAD_TESTNET]: {
+    name: "Monad Testnet",
+    contractAddress:
+      process.env.MONAD_CONTRACT_ADDRESS ||
+      "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
+    paidContractAddress: null, // Paid tier not deployed on testnet
+    usdcToken: null, // USDC not deployed on testnet
+    rpcUrl: "https://testnet-rpc.monad.xyz/",
   },
 };
 
@@ -79,6 +89,7 @@ export function getRpcUrl(chainId) {
 // ─── Web3 Instances ──────────────────────────────────────────────────────────
 
 const web3Instances = new Map();
+const viemClients = new Map();
 
 /** @param {any} chainId */
 export function getWeb3(chainId) {
@@ -88,6 +99,27 @@ export function getWeb3(chainId) {
     web3Instances.set(id, new Web3Ctor(getRpcUrl(id)));
   }
   return web3Instances.get(id);
+}
+
+/**
+ * Get a viem public client for the given chain.
+ * Used for ERC-6492 / EIP-1271 universal signature verification.
+ * @param {any} chainId
+ * @returns {import("viem").PublicClient | null}
+ */
+export function getViemPublicClient(chainId) {
+  const id = chainId ? Number(chainId) : null;
+  if (!id) return null;
+  if (!viemClients.has(id)) {
+    const rpcUrl = getRpcUrl(id);
+    viemClients.set(
+      id,
+      createPublicClient({
+        transport: http(rpcUrl),
+      }),
+    );
+  }
+  return viemClients.get(id);
 }
 
 // ─── Legacy Exports (backward compatible) ────────────────────────────────────

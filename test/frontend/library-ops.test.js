@@ -158,7 +158,7 @@ describe("createNamedCollection", () => {
     _walletAddress = null;
     _contract = null;
     const { createNamedCollection } = await loadModule();
-    await expect(createNamedCollection("Characters")).rejects.toThrow("Wallet not connected");
+    await expect(createNamedCollection("Characters")).rejects.toThrow("Not signed in");
   });
 });
 

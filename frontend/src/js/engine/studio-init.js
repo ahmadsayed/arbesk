@@ -41,7 +41,6 @@ import { initWalletPopover } from "/js/ui/wallet-popover.js";
 import { on, EVENTS } from "../events/bus.js";
 import {
   initWallet,
-  autoConnectWallet,
   connectWallet,
   switchNetwork,
 } from "/js/blockchain/wallet.js";
@@ -57,7 +56,7 @@ if (networkSelect) {
     const key = e.target.value;
     if (!key) return;
     // Only store/select keys the wallet layer actually knows about
-    const validKeys = ["hardhat", "megaethTestnet"];
+    const validKeys = ["hardhat", "monadTestnet", "megaethTestnet"];
     if (!validKeys.includes(key)) {
       console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
       return;
@@ -77,11 +76,9 @@ if (networkSelect) {
   });
 }
 
-// Start EIP-6963 wallet discovery (so MetaMask etc. are detected)
+// Start EIP-6963 wallet discovery (so MetaMask etc. are detected),
+// but do not auto-connect. The user must click Login / Signup.
 initWallet();
-
-// Try to reconnect a previously authorized wallet (silent, no popup)
-autoConnectWallet();
 
 document
   .getElementById("connectWalletBtn")
@@ -131,6 +128,7 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
     const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
+      [CHAIN_IDS.MONAD_TESTNET]: "monadTestnet",
       [CHAIN_IDS.MEGAETH_TESTNET]: "megaethTestnet",
     };
     const key = keyMap[chainId];

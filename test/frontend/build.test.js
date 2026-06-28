@@ -267,8 +267,8 @@ describe("Frontend Build", () => {
   // started because initWallet() was not called. The wallet modal showed
   // "No injected wallets detected" even when MetaMask was installed.
   //
-  // Fix: studio-init.js calls initWallet() to register the eip6963 event
-  // listener and autoConnectWallet() to restore previous sessions.
+  // studio-init.js starts EIP-6963 discovery but no longer auto-connects;
+  // the user must click Login / Signup.
 
   describe("studio-init.js wallet lifecycle", () => {
     const init = readBuilt("engine/studio-init.js");
@@ -277,8 +277,9 @@ describe("Frontend Build", () => {
       expect(init).toMatch(/initWallet\(\)/);
     });
 
-    test("calls autoConnectWallet() to restore previous session", () => {
-      expect(init).toMatch(/autoConnectWallet\(\)/);
+    test("does not auto-connect; wires Login / Signup click", () => {
+      expect(init).not.toMatch(/autoConnectWallet\(\)/);
+      expect(init).toMatch(/connectWallet\)/);
     });
   });
 });

@@ -18,7 +18,7 @@ import { walletState } from "../state/wallet-state.js";
 export function requireWallet() {
   const { contract, walletAddress } = walletState.get();
   if (!contract || !walletAddress) {
-    throw new Error("Wallet not connected");
+    throw new Error("Not signed in");
   }
   return { contract, walletAddress };
 }

@@ -23,6 +23,9 @@ out/
 npm-debug.log*
 logs/
 
+# Runtime indexer state
+.data/
+
 # OS
 .DS_Store
 Thumbs.db

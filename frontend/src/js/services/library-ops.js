@@ -51,7 +51,7 @@ function getContract() {
 
 function requireWallet() {
   const { walletAddress } = walletState.get();
-  if (!walletAddress) throw new Error("Wallet not connected");
+  if (!walletAddress) throw new Error("Not signed in");
   return walletAddress;
 }
 

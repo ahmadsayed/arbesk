@@ -208,7 +208,7 @@ async function onGenerate() {
   if (!prompt) return;
 
   if (!walletState.get().walletAddress) {
-    alert("Please connect your wallet first.");
+    alert("Please log in or sign up first.");
     return;
   }
 

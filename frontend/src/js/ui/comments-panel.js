@@ -208,7 +208,7 @@ function updateUI() {
 
   // Empty / status state
   if (!isConnected) {
-    setEmptyState("Connect wallet", "Connect your wallet to view comments.");
+    setEmptyState("Sign in", "Sign in to view comments.");
   } else if (!hasSession) {
     setEmptyState("Sign in", "Sign in with your wallet to view comments.");
   } else if (thread.events.length === 0) {

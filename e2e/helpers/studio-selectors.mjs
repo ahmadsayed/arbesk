@@ -2,6 +2,8 @@ export const SELECTORS = {
   connectWalletBtn: "#connectWalletBtn",
   disconnectWalletBtn: "#disconnectWalletBtn",
   walletOptionsList: "#walletOptionsList",
+  walletGoogleBtn: "#walletGoogleBtn",
+  walletModalTitle: "#wallet-modal-title",
   promptInput: "#promptInput",
   generateBtn: "#generateBtn",
   generateHint: "#generateHint",
