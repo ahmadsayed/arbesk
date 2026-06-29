@@ -16,6 +16,7 @@ Supported networks (from `constants/chains.js` / `frontend/src/js/blockchain/net
 |----------|------|-----|
 | 31415822 | Hardhat local | `http://127.0.0.1:8545` |
 | 6343 | MegaETH Testnet | `https://carrot.megaeth.com/rpc` |
+| 10143 | Monad Testnet | `https://testnet-rpc.monad.xyz/` |
 
 ## Key Files
 

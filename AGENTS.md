@@ -15,7 +15,8 @@ Conventions, key file references, and practical guidance for AI agents and devel
 
 **Key Constraints**
 
-- **Blockchain**: EVM-compatible — Hardhat local dev, MegaETH testnet
+- **Blockchain**: EVM-compatible — Hardhat local dev (`31415822`), MegaETH Testnet (`6343`), Monad Testnet (`10143`). Chain IDs live in `constants/chains.js`.
+- **Wallets**: EOA (MetaMask/Rabby) on all three chains via SIWE; social login (Google) via Thirdweb ERC-4337 smart accounts — **Monad Testnet only** (`smart-wallet-support.js`)
 - **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`)
@@ -23,8 +24,9 @@ Conventions, key file references, and practical guidance for AI agents and devel
 - **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
 - **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
 - **Editor Authorization**: Off-chain Merkle editor lists; the contract stores only a Merkle root and version
+- **Token Discovery**: The asset library loads owned/shared tokens from the backend token indexer (`GET /api/v1/indexer/owned`), a chunked `eth_getLogs` backfill — not a genesis-walk in the browser
 
-**Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). Asset-level Nostr comments are also implemented. See `docs/CURRENT_STATUS.md` for the definitive snapshot.
+**Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). Asset-level Nostr comments, social-login smart accounts (Thirdweb AA on Monad), and the token indexer are also implemented. See `docs/CURRENT_STATUS.md` for the definitive snapshot.
 
 ---
 
@@ -60,7 +62,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
 - `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet-payments.js`, re-exported through `wallet.js`) — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `6343`).
+- Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `6343`, `10143`). Per-chain `DEPLOYMENT_BLOCKS` and `LOG_CHUNK_SIZES` also live there for the token indexer.
 - Contract `owner()` bypasses the free-tier daily generation quota in `recordGeneration()`; Merkle editor proof checks still apply (owner is not automatically an editor)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
 
@@ -77,26 +79,33 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Auth middleware | `src/api/authentication.js` |
 | Session store | `src/api/sessions.js` |
 | SIWE verification | `src/api/siwe-verify.js` |
+| Thirdweb JWT verification | `src/api/thirdweb-auth.js` (JWKS from `login.thirdweb.com`) |
+| Token indexer | `src/api/token-indexer.js` (chunked `eth_getLogs` ownership backfill) |
 | Rate limiter | `src/api/rate-limiter.js` |
 | ABI serving | `src/api/abi-router.js` |
 | Asset access checks | `src/api/authorization.js` |
 | Comments archive | `src/api/comments-archive.js` |
 | Chat proxy (WebSocket) | `src/api/chat-proxy.js` |
 | Nostr relay primitives | `src/api/nostr-relay.js` |
-| Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `openapi.js`, `test-utils.js`) |
+| Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `openapi.js`, `test-utils.js`) |
 | Manifest utilities | `src/api/manifest-utils.js` |
 | IPFS utilities | `src/api/ipfs-utils.js` |
 | OpenAPI spec | `src/api/openapi.json` |
 | 3D engine | `frontend/src/js/engine/` |
 | Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
 | Wallet / chain | `frontend/src/js/blockchain/` |
+| Wallet core (connect/auto-connect/state) | `frontend/src/js/blockchain/wallet-core.js` |
+| Social login (Thirdweb AA) | `frontend/src/js/blockchain/wallet-thirdweb.js` |
+| Smart-wallet chain gating | `frontend/src/js/blockchain/smart-wallet-support.js` |
+| Per-network config | `frontend/src/js/blockchain/network-config.js` |
 | Token resolver | `frontend/src/js/blockchain/token-resolver.js` |
 | IPFS read/write | `frontend/src/js/ipfs/` |
 | glTF pipeline | `frontend/src/js/gltf/` |
-| Asset library (gallery) | `frontend/src/js/ui/asset-library.js` |
+| Asset library (gallery) | `frontend/src/js/ui/asset-library.js` (owned + shared tokens, collection expansion, inaccessible-token cards with Burn) |
 | Standalone Library page | `frontend/src/pug/library.pug` → `frontend/dist/library.html` |
 | Library page bootstrap | `frontend/src/js/library-init.js` |
 | Library grid / toolbar / context menu | `frontend/src/js/ui/library-grid.js`, `library-toolbar.js`, `library-context-menu.js` |
+| Optimistic collection-create flow | `frontend/src/js/ui/library-create.js` (shared by EOA + social login) |
 | Library operations | `frontend/src/js/services/library-ops.js` (create collection, upload file) |
 | Library state / item helpers | `frontend/src/js/state/library-state.js`, `frontend/src/js/utils/library-items.js` |
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
@@ -158,6 +167,7 @@ npm run test:frontend                         # always verify last
 
 # ─── Deploy to testnet ───
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network megaethTestnet
+docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network monadTestnet
 
 # ─── Hardhat shell ───
 docker-compose run --rm hardhat sh
@@ -207,6 +217,8 @@ All logs use `[TAG]` prefixes. Log start + outcome of every async operation; inc
 | `[ABI]` | ABI serving |
 | `[TOKEN]` | Token child ref resolution |
 | `[SESSION]` | Session auth |
+| `[THIRDWB-AUTH]` | Thirdweb JWT verification |
+| `[INDEXER]` / `[INDEXER-API]` | Token indexer backfill / `/indexer/owned` route |
 | `[UNPIN]` | IPFS unpin |
 | `[BURN]` | Token burn |
 
@@ -297,7 +309,10 @@ The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't
 - Header: `Authorization: Session <token>` (not Bearer)
 - `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, and `POST /api/v1/assets/snapshot-comments` all require a valid session
 - The WebSocket chat proxy (`/api/v1/chat/ws`) receives the session token in the query string
-- Wallet connect triggers one SIWE signature → session token (24 h TTL, bound to wallet address)
+- **Two ways to create a session**, both issuing the same opaque token (24 h TTL, bound to wallet address):
+  - **EOA (MetaMask/Rabby):** one SIWE signature → `POST /api/v1/sessions { message, signature }` (`siwe-verify.js`)
+  - **Social login (Google):** `POST /api/v1/sessions { thirdwebAuthToken }` → verified against Thirdweb JWKS in `thirdweb-auth.js`; dev bypass `THIRDWEB_AUTH_DEV_MODE=true`
+- `authentication.js` validates the issued token regardless of how it was created
 - Auto-cleared on wallet disconnect; entry point: `getOrCreateSession()` in `frontend/src/js/services/api.js`
 
 Full auth flow: `docs/API_SPEC.md § Authentication`.
@@ -355,7 +370,7 @@ E2E is isolated per git worktree: each checkout gets its own Docker Compose proj
 **Run the E2E suite before merging any change that touches:**
 
 - Studio UI/UX (headerbar, chat, prompt input, dialogs, wallet controls, settings)
-- Wallet integration (`wallet.js`, `wallet-connect.js`, `wallet-discovery.js`, `siwe.js`, session auth)
+- Wallet integration (`wallet.js`, `wallet-core.js`, `wallet-connect.js`, `wallet-discovery.js`, `wallet-thirdweb.js`, `smart-wallet-support.js`, `network-config.js`, `siwe.js`, session auth)
 - Generation flow (`create-panel.js`, generation API, transaction validation, mock adapter, provider/tier selection)
 - Save/publish/republish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture, `updateAssetURI`)
 - Parametric editing + version history (`parametric-preview.js`, `asset-history.js`, the outliner selection path, the version slider)
@@ -399,7 +414,8 @@ Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, no bootstrap, loopback swarm |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container, `./blockchain` volume-mounted |
 | Local Nostr relay | — | `ws://127.0.0.1:7777` | `scsibug/nostr-rs-relay`, SQLite-backed, dev-only |
-| MegaETH Testnet | — | `https://carrot.megaeth.com/rpc` | Testnet |
+| MegaETH Testnet | — | `https://carrot.megaeth.com/rpc` | Testnet (EOA wallets) |
+| Monad Testnet | — | `https://testnet-rpc.monad.xyz/` | Testnet (EOA + social-login smart accounts) |
 
 Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`, `docker/nostr-relay.toml`.
 
@@ -421,12 +437,13 @@ Full variable reference: `docs/CURRENT_STATUS.md §6.5`.
 
 ## 13. EVM Deployment Targets
 
-| Environment | Network | RPC |
-|-------------|---------|-----|
-| Local dev | Hardhat (Docker) | `http://127.0.0.1:8545` |
-| Testnet | MegaETH Testnet | `https://carrot.megaeth.com/rpc` |
+| Environment | Network | RPC | Hardhat network name |
+|-------------|---------|-----|----------------------|
+| Local dev | Hardhat (Docker) | `http://127.0.0.1:8545` | `hardhat` |
+| Testnet (EOA) | MegaETH Testnet | `https://carrot.megaeth.com/rpc` | `megaethTestnet` |
+| Testnet (EOA + social login) | Monad Testnet | `https://testnet-rpc.monad.xyz/` | `monadTestnet` |
 
-MegaETH uses ETH for gas; block time ~0.5 s.
+MegaETH uses ETH for gas; block time ~0.5 s. Monad Testnet is the only chain where Thirdweb ERC-4337 smart accounts (social login) work, with gas sponsored by the Thirdweb paymaster.
 
 ---
 

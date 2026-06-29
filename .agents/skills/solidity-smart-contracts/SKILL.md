@@ -75,16 +75,20 @@ AssetBurned(uint256,address)
 AssetURIUpdated(uint256,string)
 ```
 
-## MegaETH / MegaEVM Deployment Context
+## Deployment Targets
 
-Arbesk targets MegaETH testnet (`chainId 6343`) and eventually mainnet (`chainId 4326`). The Solidity skill now aligns with the `megaeth-developer` skill for deployment and runtime correctness on MegaEVM.
+Arbesk deploys to three EVM networks (chain IDs centralized in `constants/chains.js`). MegaETH eventually targets mainnet (`chainId 4326`). The Solidity skill aligns with the `megaeth-developer` skill for deployment and runtime correctness on MegaEVM.
 
-| Network | Chain ID | RPC | EVM Target |
-|---------|----------|-----|------------|
-| MegaETH Mainnet | 4326 | `https://mainnet.megaeth.com/rpc` | MegaEVM |
-| MegaETH Testnet | 6343 | `https://carrot.megaeth.com/rpc` | MegaEVM |
+| Network | Chain ID | RPC | Hardhat name | EVM Target | Wallets |
+|---------|----------|-----|--------------|------------|---------|
+| Hardhat Local | 31415822 | `http://127.0.0.1:8545` | `hardhat` | EVM | EOA |
+| MegaETH Testnet | 6343 | `https://carrot.megaeth.com/rpc` | `megaethTestnet` | MegaEVM | EOA |
+| Monad Testnet | 10143 | `https://testnet-rpc.monad.xyz/` | `monadTestnet` | EVM | EOA + social-login smart accounts (Thirdweb AA) |
+| MegaETH Mainnet | 4326 | `https://mainnet.megaeth.com/rpc` | — | MegaEVM | (future) |
 
-### MegaEVM-Specific Considerations
+**Social login (Thirdweb ERC-4337 smart accounts) only works on Monad Testnet.** The bundler/paymaster support is chain-specific; MegaETH is not yet supported. Deploy `ArbeskAssetFree` to each target and sync `CONTRACT_ADDRESS` (per-network) accordingly.
+
+### MegaEVM-Specific Considerations (MegaETH only — do not apply to Monad/Hardhat)
 
 - **Dual gas model:** compute gas and storage gas are tracked separately. Both come from the gas limit.
 - **Base fee:** fixed at `0.001 gwei` (1,000,000 wei). No EIP-1559 buffer needed; ignore `maxPriorityFeePerGas`.

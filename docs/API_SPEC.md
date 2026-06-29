@@ -20,7 +20,7 @@
 
 ## Authentication
 
-The following routes require a valid SIWE (EIP-4361) session token:
+The following routes require a valid session token:
 
 - `POST /api/v1/generations`
 - `POST /api/v1/ipfs/upload-url`
@@ -37,7 +37,11 @@ Protected routes use this header:
 Authorization: Session <opaque-token>
 ```
 
-### Creating a session
+`POST /api/v1/sessions` accepts **two** kinds of proof and issues the same opaque session token (24-hour TTL) for both. `authentication.js` validates the issued token regardless of how it was created.
+
+### Creating a session — SIWE (EOA wallets)
+
+Used by EOA wallets (MetaMask, Rabby) on all supported chains.
 
 1. Build a SIWE message (EIP-4361) containing the wallet address, domain, chain ID, nonce, and issued-at timestamp.
 2. Sign the message with the wallet (e.g., `personal.sign`).
@@ -51,7 +55,22 @@ POST /api/v1/sessions
 }
 ```
 
-The backend verifies the SIWE signature and returns an opaque session token valid for 24 hours:
+### Creating a session — Thirdweb JWT (social-login smart accounts)
+
+Used by social-login (Google) ERC-4337 smart accounts on Monad Testnet. The smart account's signer is decoupled from the on-chain account, so SIWE is not used; instead the client posts the Thirdweb in-app wallet auth token:
+
+```json
+POST /api/v1/sessions
+{
+  "thirdwebAuthToken": "<jwt>"
+}
+```
+
+The backend (`thirdweb-auth.js`) verifies the JWT against Thirdweb's JWKS endpoint (`login.thirdweb.com/api/jwks`) and extracts the wallet address from the `sub` claim. A dev bypass is available via `THIRDWEB_AUTH_DEV_MODE=true`.
+
+### Session response
+
+Both paths return an opaque session token valid for 24 hours:
 
 ```json
 {
@@ -60,7 +79,7 @@ The backend verifies the SIWE signature and returns an opaque session token vali
 }
 ```
 
-4. Include the token in subsequent protected requests:
+Include the token in subsequent protected requests:
 
 ```text
 Authorization: Session <uuid>
@@ -78,7 +97,7 @@ Parametric edits, manifest saves, manifest chain reads, ABI reads, and token man
 
 ### `GET /api/v1/config`
 
-Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, and WalletConnect project ID.
+Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, WalletConnect project ID, and the Thirdweb client ID used by the browser to initialise social login.
 
 **Response**
 
@@ -99,13 +118,21 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
       "paidContractAddress": null,
       "usdcToken": null,
       "rpcUrl": "https://carrot.megaeth.com/rpc"
+    },
+    "10143": {
+      "name": "Monad Testnet",
+      "contractAddress": "0x...",
+      "paidContractAddress": null,
+      "usdcToken": null,
+      "rpcUrl": "https://testnet-rpc.monad.xyz/"
     }
   },
   "ipfsBackend": "kubo",
   "ipfsGatewayUrl": "http://127.0.0.1:8080/ipfs/",
   "hardhatRpcUrl": "http://127.0.0.1:8545",
   "mockGeneration": true,
-  "walletConnectProjectId": null
+  "walletConnectProjectId": null,
+  "thirdwebClientId": null
 }
 ```
 
@@ -342,6 +369,40 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
   }
 }
 ```
+
+---
+
+### `GET /api/v1/indexer/owned`
+
+Returns the token IDs owned by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, MegaETH 5000, Monad 100 — Monad rejects wide ranges with 413), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
+
+A background poll catches up every ~15s. The route also runs an inline catch-up before responding if the last one was more than 30s ago, or always when `force=true` is passed — letting the frontend request an immediate refresh right after publishing.
+
+**Query Parameters**
+
+| Param | Required | Description |
+|---|---|---|
+| `address` | Yes | Wallet address to look up |
+| `chainId` | Yes | One of the supported chain IDs (`31415822`, `6343`, `10143`) |
+| `force` | No | `true` bypasses the 30s catch-up throttle for an immediate rescan |
+
+**Response `200`**
+
+```json
+{
+  "chainId": 10143,
+  "address": "0x...",
+  "owned": ["1", "2", "42"],
+  "lastScannedBlock": 41167500
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 400 | Invalid/missing `address` or `chainId` (`VALIDATION_ERROR`) |
+| 500 | Failed to read indexer state |
 
 ---
 
