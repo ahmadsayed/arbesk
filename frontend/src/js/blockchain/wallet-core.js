@@ -193,8 +193,10 @@ async function _checkBalance() {
       });
     } else if (
       chainId === CHAIN_IDS.MONAD_TESTNET &&
-      parseFloat(balanceEth) < 0.001
+      parseFloat(balanceEth) < 0.001 &&
+      activeConnectionSource !== "thirdweb"
     ) {
+      // Skip gas warning for thirdweb smart accounts — gas is sponsored by the paymaster.
       warn("Low balance detected on Monad Testnet");
       lowBalanceToastId = showToast({
         type: "warning",
