@@ -148,7 +148,9 @@ export async function loadCurrentAssets() {
       (c) => String(c.tokenId) === String(tokenId)
     );
     const role = collection?.role || "owner";
-    const entries = await expandTokenToAssets(tokenId);
+    const entries = (await expandTokenToAssets(tokenId)).filter(
+      (e) => e.type !== "inaccessible"
+    );
 
     if (isStale()) return;
 
