@@ -120,20 +120,13 @@ async function handleCreateCollection() {
 
     await refreshLibraryData();
 
-    // Open the new/existing collection so the user can immediately add assets
-    // to it (the create button is disabled while inside a collection).
-    libraryState.set({
-      currentCollectionTokenId: String(tokenId),
-      selectedIds: [],
-    });
-
-    announce(isNew ? `Created collection ${name}` : `Opened existing collection ${name}`);
+    announce(isNew ? `Created collection ${name}` : `Collection ${name} already exists`);
     showToast({
       type: "success",
       title: isNew ? "Collection Created" : "Collection Already Exists",
       message: isNew
         ? `"${name}" has been minted on-chain.`
-        : `"${name}" already exists and was opened.`,
+        : `"${name}" already exists in your library.`,
     });
   } catch (err) {
     console.error("[LIBRARY-TOOLBAR] create collection failed:", err);
