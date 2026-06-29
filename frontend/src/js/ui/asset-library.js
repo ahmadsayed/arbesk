@@ -18,6 +18,7 @@ import {
   getFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
 import { deleteAssetFromCollection } from "../services/asset-delete.js";
+import { trimTokenId } from "../utils/library-items.js";
 import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView } from "./sidebar.js";
@@ -271,7 +272,13 @@ export async function expandTokenToAssets(tokenId) {
     ];
   } catch (err) {
     console.warn("[ASSET-LIBRARY] Failed to expand token", tokenId, err);
-    return [];
+    return [
+      {
+        type: "inaccessible",
+        tokenId: String(tokenId),
+        errorReason: err.message || "Unknown error",
+      },
+    ];
   }
 }
 
@@ -577,9 +584,77 @@ function createSection(title, entries) {
 
   const list = document.createElement("div");
   list.className = "asset-library-list";
-  for (const entry of entries) list.appendChild(createAssetCard(entry));
+  for (const entry of entries) {
+    list.appendChild(
+      entry.type === "inaccessible"
+        ? createInaccessibleCard(entry)
+        : createAssetCard(entry)
+    );
+  }
   section.appendChild(list);
   return section;
+}
+
+function createInaccessibleCard(entry) {
+  const item = document.createElement("div");
+  item.className = "asset-card asset-card--inaccessible";
+  item.dataset.tokenId = entry.tokenId;
+  item.title = entry.errorReason || "Unknown error";
+  item.setAttribute("role", "group");
+  item.setAttribute("aria-label", `Inaccessible token ${trimTokenId(entry.tokenId)}`);
+
+  const thumbnailEl = document.createElement("div");
+  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
+  thumbnailEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>`;
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "asset-card-name";
+  nameEl.textContent = trimTokenId(entry.tokenId);
+
+  const badge = document.createElement("span");
+  badge.className = `asset-card-badge ${
+    entry.role === "owner" ? "badge-owner" : "badge-editor"
+  }`;
+  badge.textContent = entry.role === "owner" ? "Owner" : "Editor";
+
+  const meta = document.createElement("div");
+  meta.className = "asset-card-meta";
+  meta.appendChild(badge);
+
+  const burnBtn = document.createElement("button");
+  burnBtn.className = "btn btn-outline btn-danger btn-sm";
+  burnBtn.textContent = "Burn Token";
+  burnBtn.title = "Burn this token to remove it from your wallet";
+  burnBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      const { showBurnCollectionDialog } = await import("./dialog.js");
+      const { burnCollection } = await import("../services/asset-delete.js");
+      const label = trimTokenId(entry.tokenId);
+      const confirmed = await showBurnCollectionDialog(label);
+      if (confirmed !== "burn") return;
+      await burnCollection(entry.tokenId);
+      showToast({ type: "success", title: "Token burned", message: `Token ${label} removed.` });
+      item.remove();
+    } catch (err) {
+      showToast({ type: "error", title: "Burn failed", message: err.message || "Could not burn token." });
+    }
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "asset-card-actions";
+  actions.appendChild(burnBtn);
+
+  item.appendChild(thumbnailEl);
+  item.appendChild(nameEl);
+  item.appendChild(meta);
+  item.appendChild(actions);
+
+  return item;
 }
 
 function createAssetCard(entry) {

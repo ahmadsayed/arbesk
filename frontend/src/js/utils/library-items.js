@@ -81,3 +81,9 @@ export function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+export function trimTokenId(tokenId) {
+  const s = String(tokenId);
+  if (s.length <= 8) return `#${s}`;
+  return `#${s.slice(0, 4)}…${s.slice(-4)}`;
+}

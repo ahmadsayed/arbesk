@@ -197,3 +197,12 @@
     height: 28px;
   }
 }
+
+.asset-card--inaccessible {
+  opacity: 0.55;
+
+  .asset-card-thumbnail {
+    background: color-mix(in srgb, var(--bs-warning, #ffc107) 8%, var(--card-bg));
+    color: var(--bs-warning, #ffc107);
+  }
+}
