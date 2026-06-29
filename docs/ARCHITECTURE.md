@@ -459,29 +459,219 @@ Publish
 
 The collection token's `tokenURI` always points to the latest collection manifest CID. Updating an existing asset republishes the collection, not a new token. All manifest and thumbnail writes are direct browser→IPFS; only the comments archive snapshot touches the server (needs Nostr private key).
 
-### 5.4 Library Page Flow
+### 5.4 Library Page (`/library.html`)
 
-`frontend/dist/library.html` is a standalone page linked from the headerbar page-switcher. It shares the wallet/theme chrome with Studio but keeps its own state.
+`frontend/dist/library.html` is a standalone single-page application linked from the headerbar "Library" tab. It shares the wallet/theme chrome with Studio but has its own state, layout, and JS entry point (`library-init.js`).
 
-```text
-Wallet connected
-  → fetch owned + shared collections via Transfer events
-  → display collections (grid/list) with thumbnails and role badges
-  → double-click / Enter opens a collection
-  → inside a collection: expand assets from collection manifest assets map
-  → double-click asset opens /studio.html?asset=<tokenId>&assetId=<assetId>
+---
 
-Toolbar actions:
-  New Collection → mint named collection token (deterministic token id from address+name)
-  Upload → choose .glb/.gltf file → write source + asset manifest to IPFS → update collection manifest
+#### 5.4.1 Page structure (what the browser renders)
 
-Context-menu actions:
-  Collection: Open, Open in Studio, Rename, Manage Collaborators, Burn Collection
-  Asset: Open in Studio, Send to Collection (move/copy), Rename, Delete
-
-Keyboard shortcuts:
-  Ctrl/Cmd+A select all, Delete delete selected assets, F2 rename, Enter open, Esc clear/back
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│  HEADERBAR                                                      │
+│  [Logo]  [Library ●] [Studio]      [☀/☾] [Network ▾] [Login]  │
+├─────────────────────────────────────────────────────────────────┤
+│  TOOLBAR                                                        │
+│  [↑ Up]  Home › Collection Name    [Search…] [Sort ▾]          │
+│                             [+ New Collection]  [↑ Upload]      │
+├─────────────────────────────────────────────────────────────────┤
+│  CONTENT AREA  (scrollable)                                     │
+│                                                                 │
+│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐                       │
+│  │  📁  │  │  📁  │  │  📁  │  │  📁⏳│   ← minting…         │
+│  │  ✓   │  │  ✓   │  │  ✓   │  │  ◌   │                       │
+│  └──────┘  └──────┘  └──────┘  └──────┘                       │
+│  Characters  Weapons    Props    New Coll.                      │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  STATUS BAR                          [⊞ Grid]  [☰ List]        │
+│  4 items                                                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### 5.4.2 Authentication gate
+
+The page has two mutually exclusive sections:
+
+- **`#libraryGate`** — shown when no wallet is connected. Displays a wallet icon, "Sign in to continue", and a "Login / Signup" button that opens the wallet modal.
+- **`#libraryMain`** — shown after wallet connect. Contains the toolbar, content area, and status bar.
+
+The gate is toggled by `applyWalletGate()` in `library-init.js` in response to `WALLET_STATE_CHANGED` events.
+
+---
+
+#### 5.4.3 Two-level navigation (Collections → Assets)
+
+The Library operates as a two-level browser. State is held in `library-state.js` (`currentCollectionTokenId`).
+
+**Level 1 — Collections list** (`currentCollectionTokenId === null`):
+
+- Loaded at wallet connect via the token indexer (`GET /api/v1/indexer/owned`) — chunked `eth_getLogs` backfill discovers all `Transfer` events to the wallet.
+- Shared collections (where the wallet is a Merkle editor) are discovered alongside owned ones.
+- Each collection is shown as a folder card with a thumbnail (if available), name, and a role badge (owner/editor).
+- Inaccessible tokens (owned on-chain but manifest unresolvable) appear as greyed-out skeleton cards with a Burn action.
+
+**Level 2 — Assets inside a collection** (`currentCollectionTokenId !== null`):
+
+- Entered by double-clicking / pressing Enter on a collection card.
+- The collection manifest (`tokenURI → IPFS`) is read and expanded: each entry in `manifest.assets` becomes one asset card.
+- Assets show their thumbnail (lazy-loaded from IPFS), name, and status badge.
+- The ↑ Up button and breadcrumb "Home" segment navigate back to the collections list.
+
+---
+
+#### 5.4.4 Collection cards — status badges
+
+Each collection card shows a small badge in the bottom-right corner of the thumbnail:
+
+| Badge | Meaning | Visual |
+|-------|---------|--------|
+| `besked` | Confirmed on-chain | Green circle with ✓ (`accent-bg`) |
+| `minting` | Optimistic — mint tx in flight | Animated spinner ring (`accent-bg`) |
+| `wip` | Work-in-progress (not yet published) | Dim flag icon |
+
+The `minting` badge appears immediately when the user creates a new collection, before the blockchain transaction confirms. When the mint settles, the card flips to `besked` in place. If the transaction fails or the user rejects the wallet popup, the card is removed automatically.
+
+---
+
+#### 5.4.5 Toolbar controls
+
+| Control | Behaviour |
+|---------|-----------|
+| **↑ Up** | Navigates back to the collections list. Hidden at Level 1. |
+| **Breadcrumb** | Shows `Home › <Collection Name>`. Clicking `Home` returns to Level 1. |
+| **Search** | Live-filters the current level by name (case-insensitive substring). |
+| **Sort** | Name (A–Z), Date (newest first), Status (minting → wip → confirmed). |
+| **+ New Collection** | Disabled while inside a collection. Opens a dialog for a name, inserts an optimistic card, and kicks off the mint in the background. Enabled only at Level 1. |
+| **↑ Upload** | Opens a `.glb`/`.gltf` file picker. Writes the file to IPFS, creates an asset manifest, and updates the collection manifest. Available only when a collection is open (Level 2). |
+
+---
+
+#### 5.4.6 Grid vs List view
+
+Toggled by the ⊞/☰ buttons in the status bar. Persisted in `library-state.js`.
+
+- **Grid** — thumbnail cards (`library-item` divs) with the folder/file icon, name, and corner status badge.
+- **List** — `<table>` with columns: Name, Status (text badge), Date modified, Size.
+
+Rubber-band selection works in grid view (drag to box-select multiple cards).
+
+---
+
+#### 5.4.7 Selection and keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| Click | Select single item |
+| Shift+Click | Extend selection to range |
+| Ctrl/Cmd+Click | Toggle individual item in selection |
+| Ctrl/Cmd+A | Select all visible items |
+| Enter | Open selected item (navigate into collection, or open asset in Studio) |
+| Backspace / Alt+← | Go up to collections list (when inside a collection) |
+| Delete | Delete selected assets (with confirmation) |
+| F2 | Rename selected item |
+| Escape | Clear selection |
+| Double-click | Open item |
+
+An `aria-live` region (`#libraryLiveRegion`) announces selection changes and navigation events for screen readers.
+
+---
+
+#### 5.4.8 Right-click context menu
+
+Context menu opens on right-click. Content varies by target:
+
+**Empty space (no item selected):**
+- New Collection
+- Upload File…
+- Refresh
+
+**Single collection selected:**
+- Open
+- Open in Studio
+- Rename
+- Manage Collaborators
+- Burn Collection _(destructive)_
+
+**Single asset selected:**
+- Open in Studio
+- Send to Collection… _(move or live-reference copy)_
+- Rename
+- Delete _(destructive)_
+
+**Multiple assets selected:**
+- Open first in Studio
+- Delete _(destructive)_
+
+---
+
+#### 5.4.9 New Collection — optimistic flow
+
+1. User clicks **+ New Collection** or "New Collection" from the context menu.
+2. A dialog prompts for a name.
+3. As soon as the user confirms, `createCollectionFlow()` (`ui/library-create.js`) fires:
+   - The collection manifest is written to IPFS (`writeJSONToIPFS`).
+   - `onPending` is called immediately — a folder card with the `minting` spinner appears at the top of the list. The user can see the card in under a second.
+   - The mint transaction is sent in the background (`publishAsset`).
+4. On success: the spinner badge flips to the green ✓ (`besked`). A success toast appears.
+5. On failure (network error, wallet rejection): the optimistic card disappears. An error toast appears.
+
+For EOA wallets (MetaMask/Rabby), the spinner card appears just before the wallet approval popup. Rejecting the popup removes the card. For social-login (Google) smart accounts, the card appears before the sponsored UserOperation is submitted.
+
+---
+
+#### 5.4.10 Upload flow
+
+1. User opens a collection (Level 2), then clicks **↑ Upload** (or right-click → Upload File…).
+2. The OS file picker filters to `.glb` / `.gltf`, max 50 MB.
+3. The file bytes are written to IPFS (`writeToIPFS`), creating a `sourceCid`.
+4. An asset manifest JSON is written to IPFS, creating an `assetManifestCid`.
+5. The collection manifest is updated via `updateCollectionManifest`: `assets[assetId] = assetManifestCid`.
+6. A new collection manifest CID is written; `updateAssetURI` publishes it on-chain.
+7. `refreshLibraryData` is called; the new asset card appears.
+
+---
+
+#### 5.4.11 Opening an asset in Studio
+
+Double-clicking an asset card (or "Open in Studio" from the context menu) navigates to:
+
+```
+/studio.html?asset=<collectionTokenId>&assetId=<assetId>
+```
+
+Studio loads the collection into the Gallery sidebar and opens the specific asset in the 3D viewport.
+
+---
+
+#### 5.4.12 Wallet popover
+
+Clicking the wallet address button in the headerbar opens a floating popover:
+
+- Truncated address
+- Copy to clipboard
+- "View on Explorer" link (when on a chain with a known block explorer)
+- "Sign In" button (if wallet is connected but SIWE/Thirdweb session has not been established)
+- "Log Out" button
+
+---
+
+#### 5.4.13 Source files
+
+| File | Role |
+|------|------|
+| `frontend/src/pug/library.pug` | HTML template → compiled to `frontend/dist/library.html` |
+| `frontend/src/js/library-init.js` | Page bootstrap: wallet gate, data loading, event wiring |
+| `frontend/src/js/ui/library-grid.js` | Grid/list rendering, selection, keyboard handling, rubber-band |
+| `frontend/src/js/ui/library-toolbar.js` | Toolbar rendering and event handlers |
+| `frontend/src/js/ui/library-context-menu.js` | Right-click menu construction and actions |
+| `frontend/src/js/ui/library-create.js` | Optimistic collection-create flow (shared by toolbar + context menu) |
+| `frontend/src/js/services/library-ops.js` | `createNamedCollection(name, { onPending })`, `uploadFileToCollection` |
+| `frontend/src/js/state/library-state.js` | Reactive store: collections, assets, currentCollectionTokenId, selection, view, sort, search |
+| `frontend/src/js/utils/library-items.js` | Filter, sort, range selection, bytes formatter |
 
 ### 5.5 Gallery Flow
 
