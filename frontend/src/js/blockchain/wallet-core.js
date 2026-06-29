@@ -82,6 +82,27 @@ let lowBalanceToastId = null;
 const LAST_WALLET_KEY = "arbesk-last-wallet";
 const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
 
+// web3@1.x polls eth_getTransactionReceipt every 1000ms by default, adding up
+// to a second of dead time after a tx (or sponsored UserOperation) is mined.
+// 250ms detects the receipt sooner — most noticeable for ERC-4337 smart
+// accounts, where the bundler returns the hash only after inclusion.
+const TX_POLLING_INTERVAL_MS = 250;
+
+/**
+ * Build a Web3 instance with a tightened receipt polling interval.
+ * @param {*} provider EIP-1193 provider
+ * @returns {*} configured Web3 instance
+ */
+function newWeb3(provider) {
+  const w = new Web3(provider);
+  try {
+    w.eth.transactionPollingInterval = TX_POLLING_INTERVAL_MS;
+  } catch {
+    // Older/newer web3 builds may not expose this setter — safe to ignore.
+  }
+  return w;
+}
+
 // ─── Initialization ───
 
 /**
@@ -225,7 +246,7 @@ async function autoConnectWallet() {
       const wcProvider = await getWalletConnectProvider();
       if (wcProvider && wcProvider.connected) {
         web3Provider = wcProvider;
-        web3 = new Web3(wcProvider);
+        web3 = newWeb3(wcProvider);
         window.web3 = web3;
         const accounts = wcProvider.accounts || [];
         if (accounts.length > 0) {
@@ -247,7 +268,7 @@ async function autoConnectWallet() {
         const restored = await autoConnectThirdwebWallet();
         if (restored) {
           web3Provider = restored.provider;
-          web3 = new Web3(restored.provider);
+          web3 = newWeb3(restored.provider);
           window.web3 = web3;
           activeConnectionSource = "thirdweb";
           await _finishWalletSetup(
@@ -271,7 +292,7 @@ async function autoConnectWallet() {
           });
           if (accounts && accounts.length > 0) {
             web3Provider = wallet.provider;
-            web3 = new Web3(wallet.provider);
+            web3 = newWeb3(wallet.provider);
             window.web3 = web3;
             activeConnectionSource = "injected";
             _activeWalletRdns = wallet.rdns;
@@ -291,7 +312,7 @@ async function autoConnectWallet() {
       });
       if (accounts && accounts.length > 0) {
         web3Provider = window.ethereum;
-        web3 = new Web3(window.ethereum);
+        web3 = newWeb3(window.ethereum);
         activeConnectionSource = "injected";
         _activeWalletRdns = null; // unknown which wallet
         await _finishWalletSetup(accounts[0]);
@@ -454,7 +475,7 @@ async function connectWallet() {
 
     if (source === "thirdweb") {
       web3Provider = provider;
-      web3 = new Web3(provider);
+      web3 = newWeb3(provider);
       window.web3 = web3;
       activeConnectionSource = "thirdweb";
       _activeWalletRdns = null;
@@ -463,7 +484,7 @@ async function connectWallet() {
     } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
       web3Provider = provider;
-      web3 = new Web3(provider);
+      web3 = newWeb3(provider);
       activeConnectionSource = "walletconnect";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
@@ -477,7 +498,7 @@ async function connectWallet() {
     } else {
       // Injected wallet - request accounts to trigger popup
       web3Provider = provider;
-      web3 = new Web3(provider);
+      web3 = newWeb3(provider);
       activeConnectionSource = "injected";
       _activeWalletRdns = walletRdns || null;
 

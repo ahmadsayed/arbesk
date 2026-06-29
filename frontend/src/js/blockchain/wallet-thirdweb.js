@@ -9,11 +9,10 @@
  * Testnet by default; MegaETH Testnet requires an EOA wallet.
  */
 
-import { createThirdwebClient, prepareTransaction } from "thirdweb";
+import { createThirdwebClient } from "thirdweb";
 import { inAppWallet } from "thirdweb/wallets/in-app";
-import { smartWallet } from "thirdweb/wallets";
+import { smartWallet, EIP1193 } from "thirdweb/wallets";
 import { defineChain } from "thirdweb/chains";
-import { sendTransaction } from "thirdweb/transaction";
 import { log, error, warn } from "../utils/log.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import {
@@ -62,8 +61,12 @@ let eoaAccount = null;
 /** @type {import("thirdweb/wallets").Account | null} */
 let smartAccount = null;
 
-/** @type {Set<{ event: string, handler: Function }>} */
-const listeners = new Set();
+/**
+ * The wrapped EIP-1193 provider for the active smart account, retained so the
+ * background pre-warm can issue JSON-RPC calls (eth_getCode, eth_sendTransaction).
+ * @type {{ request: (args: object) => Promise<unknown> } | null}
+ */
+let currentProvider = null;
 
 /**
  * Initialize the shared Thirdweb client.
@@ -84,7 +87,8 @@ export function isThirdwebConnected() {
 }
 
 /**
- * Wrap an EOA account in a sponsored smart account and build the EIP-1193 adapter.
+ * Wrap an EOA account in a sponsored smart account and expose it through
+ * Thirdweb's built-in EIP-1193 adapter.
  * @param {import("thirdweb/wallets").Account} resolvedEoaAccount
  * @param {import("thirdweb/chains").Chain} chain
  * @returns {Promise<{ eoaAddress: string, smartAccountAddress: string, provider: Object }>}
@@ -96,12 +100,88 @@ async function wrapInSmartAccount(resolvedEoaAccount, chain) {
     personalAccount: resolvedEoaAccount,
   });
   log("[THIRDWEB] smart account connected:", smartAccount.address);
-  const provider = createEip1193Adapter(smartAccount, resolvedEoaAccount, chain);
+  // Thirdweb's EIP-1193 adapter lets Web3.js drive the smart wallet unchanged:
+  // transactions route through the smart account as sponsored UserOperations,
+  // and reads fall through to the chain's RPC. We don't need the old EOA-vs-
+  // smart-account signing split because Thirdweb wallets authenticate to the
+  // backend via a JWT (getThirdwebAuthToken), not SIWE personal_sign.
+  //
+  // Thirdweb's internal RPC client returns BigInt for numeric JSON-RPC fields
+  // (e.g. eth_estimateGas → 83856n). Web3.js expects hex strings. Wrap the
+  // provider's request method to recursively convert any BigInt to "0x…".
+  const rawProvider = EIP1193.toProvider({
+    wallet: smartWalletInstance,
+    chain,
+    client: thirdwebClient,
+  });
+  const provider = {
+    ...rawProvider,
+    request: async (args) => bigIntToHex(await rawProvider.request(args)),
+  };
+  currentProvider = provider;
+
+  // Kick off background deployment so the first sponsored UserOperation the user
+  // triggers (e.g. creating a collection) doesn't also pay the account-creation
+  // cost. Fire-and-forget: never block connect on it, and never await it on the
+  // critical path (awaiting could serialize two UserOperations and regress a
+  // fast user). When the deploy lands during idle time, the first real action is
+  // a single, cheaper UserOperation with no initCode.
+  void prewarmSmartAccount();
+
   return {
     eoaAddress: resolvedEoaAccount.address,
     smartAccountAddress: smartAccount.address,
     provider,
   };
+}
+
+/**
+ * Deploy the smart account in the background if it isn't already on-chain.
+ * No-op (and no UserOperation) when the account is already deployed, so
+ * returning users never pay for a redundant sponsored transaction.
+ * @returns {Promise<void>}
+ */
+async function prewarmSmartAccount() {
+  if (!smartAccount || !currentProvider) return;
+  const address = smartAccount.address;
+  try {
+    const code = await currentProvider.request({
+      method: "eth_getCode",
+      params: [address, "latest"],
+    });
+    if (code && code !== "0x" && code !== "0x0") {
+      log("[THIRDWEB] smart account already deployed; skipping pre-warm");
+      return;
+    }
+    log("[THIRDWEB] pre-warming: deploying smart account in background");
+    // A no-op self-call with empty data; the bundler includes the factory
+    // initCode automatically because the account isn't deployed yet.
+    await currentProvider.request({
+      method: "eth_sendTransaction",
+      params: [{ from: address, to: address, value: "0x0", data: "0x" }],
+    });
+    log("[THIRDWEB] smart account deployment pre-warmed");
+  } catch (err) {
+    warn("[THIRDWEB] pre-warm failed (non-fatal):", err.message);
+  }
+}
+
+/**
+ * Recursively convert any BigInt value to a "0x…" hex string so Web3.js can
+ * process JSON-RPC responses from Thirdweb's internal RPC client.
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function bigIntToHex(value) {
+  if (typeof value === "bigint") return "0x" + value.toString(16);
+  if (Array.isArray(value)) return value.map(bigIntToHex);
+  if (value !== null && typeof value === "object") {
+    /** @type {Record<string, unknown>} */
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = bigIntToHex(v);
+    return out;
+  }
+  return value;
 }
 
 /**
@@ -226,7 +306,6 @@ export async function getThirdwebAuthToken() {
  * Disconnect and clear Thirdweb state.
  */
 export function disconnectThirdwebWallet() {
-  listeners.clear();
   try {
     eoaWallet?.disconnect?.();
   } catch {
@@ -241,143 +320,5 @@ export function disconnectThirdwebWallet() {
   smartWalletInstance = null;
   eoaAccount = null;
   smartAccount = null;
-}
-
-/**
- * Create an EIP-1193 compatible provider from a Thirdweb smart account.
- *
- * @param {import("thirdweb/wallets").Account} account
- * @param {import("thirdweb/wallets").Account} personalAccount
- * @param {import("thirdweb/chains").Chain} chain
- * @returns {import("thirdweb/wallets").EIP1193Provider}
- */
-function createEip1193Adapter(account, personalAccount, chain) {
-  const smartAccountAddress = account.address;
-  const personalAddress = personalAccount.address;
-
-  return {
-    request: async ({ method, params = [] }) => {
-      switch (method) {
-        case "eth_accounts":
-        case "eth_requestAccounts":
-          return [smartAccountAddress];
-
-        case "eth_chainId":
-          return `0x${chain.id.toString(16)}`;
-
-        case "eth_sendTransaction": {
-          const tx = Array.isArray(params) ? params[0] : params;
-          const transaction = prepareTransaction({
-            to: tx.to,
-            data: tx.data,
-            value: tx.value ? BigInt(tx.value) : undefined,
-            chain,
-            client: thirdwebClient,
-          });
-          const result = await sendTransaction({
-            transaction,
-            account,
-          });
-          return result.transactionHash;
-        }
-
-        case "personal_sign": {
-          const message = Array.isArray(params) ? params[0] : params;
-          const from = Array.isArray(params) ? params[1] : undefined;
-          // If the caller asks to sign with the personal/EOA address, use the
-          // embedded EOA wallet instead of the smart account. This is required
-          // for SIWE session creation because Thirdweb smart accounts restrict
-          // isValidSignature to approved targets, making ERC-6492 off-chain
-          // verification fail.
-          if (from && from.toLowerCase() === personalAddress.toLowerCase()) {
-            const signature = await personalAccount.signMessage({
-              message: normalizeMessage(message),
-            });
-            return signature;
-          }
-          const signature = await account.signMessage({
-            message: normalizeMessage(message),
-          });
-          return signature;
-        }
-
-        case "eth_signTypedData_v4":
-        case "eth_signTypedData": {
-          const typedData = Array.isArray(params) ? params[1] : params;
-          const signature = await account.signTypedData(
-            typeof typedData === "string" ? JSON.parse(typedData) : typedData
-          );
-          return signature;
-        }
-
-        case "wallet_switchEthereumChain":
-          // AA flows are pinned to MegaETH Testnet; ignore switch requests.
-          return null;
-
-        case "wallet_addEthereumChain":
-          return null;
-
-        default:
-          // Forward read calls to the chain's public RPC.
-          return fetchRpc(chain.rpc, method, params);
-      }
-    },
-
-    on: (event, handler) => {
-      listeners.add({ event, handler });
-    },
-
-    removeListener: (event, handler) => {
-      for (const entry of listeners) {
-        if (entry.event === event && entry.handler === handler) {
-          listeners.delete(entry);
-          break;
-        }
-      }
-    },
-
-    // Some consumers check for these directly.
-    isMetaMask: false,
-    isWalletConnect: false,
-    isThirdweb: true,
-  };
-}
-
-/**
- * Normalize a sign-message payload to a string.
- * @param {string | Uint8Array | object} message
- * @returns {string}
- */
-function normalizeMessage(message) {
-  if (typeof message === "string") return message;
-  if (message instanceof Uint8Array) {
-    return new TextDecoder().decode(message);
-  }
-  if (message && typeof message === "object" && "toString" in message) {
-    return message.toString();
-  }
-  return String(message);
-}
-
-/**
- * Forward a JSON-RPC request to the chain's public RPC.
- * @param {string} rpcUrl
- * @param {string} method
- * @param {any[]} params
- * @returns {Promise<any>}
- */
-async function fetchRpc(rpcUrl, method, params) {
-  const id = Math.floor(Math.random() * 1e9);
-  const res = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
-  });
-  const json = await res.json();
-  if (json.error) {
-    const err = new Error(json.error.message || "RPC error");
-    err.code = json.error.code;
-    throw err;
-  }
-  return json.result;
+  currentProvider = null;
 }

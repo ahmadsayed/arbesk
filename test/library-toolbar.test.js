@@ -4,12 +4,17 @@
 import { jest } from "@jest/globals";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
 
+// The optimistic flow renders the card from the onPending callback, then
+// resolves with the mint result, so the mock invokes onPending before resolving.
+function makeCreateNamedCollection() {
+  return jest.fn(async (_name, opts) => {
+    opts?.onPending?.({ tokenId: "12345", manifestCid: "bafyCollection" });
+    return { tokenId: "12345", manifestCid: "bafyCollection", isNew: true };
+  });
+}
+
 // Mutable mock state so the same ESM import can be driven differently per test.
-let _createNamedCollection = jest.fn().mockResolvedValue({
-  tokenId: "12345",
-  manifestCid: "bafyCollection",
-  isNew: true,
-});
+let _createNamedCollection = makeCreateNamedCollection();
 let _uploadFileToCollection = jest.fn().mockResolvedValue({
   assetId: "asset_123",
   assetManifestCid: "bafyAsset",
@@ -19,11 +24,7 @@ let _refreshLibraryData = jest.fn();
 
 beforeEach(() => {
   _resetForTesting();
-  _createNamedCollection = jest.fn().mockResolvedValue({
-    tokenId: "12345",
-    manifestCid: "bafyCollection",
-    isNew: true,
-  });
+  _createNamedCollection = makeCreateNamedCollection();
   _uploadFileToCollection = jest.fn().mockResolvedValue({
     assetId: "asset_123",
     assetManifestCid: "bafyAsset",
@@ -163,7 +164,10 @@ describe("create collection button", () => {
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(_createNamedCollection).toHaveBeenCalledWith("My Collection");
+    expect(_createNamedCollection).toHaveBeenCalledWith(
+      "My Collection",
+      expect.objectContaining({ onPending: expect.any(Function) })
+    );
 
     // The new collection should appear immediately, but the UI stays at the
     // collections list level rather than navigating into the new collection.

@@ -16,6 +16,11 @@ export function announce(text) {
 
 function renderStatus(item, viewMode = "grid") {
   const isGrid = viewMode === "grid";
+  if (item.status === "minting") {
+    return isGrid
+      ? `<span class="status-minting" role="status" title="Minting…" aria-label="Minting"><span class="status-minting-ring" aria-hidden="true"></span></span>`
+      : `<span class="status-badge status-pending">Minting…</span>`;
+  }
   if (item.status === "besked") {
     return isGrid
       ? `<span class="status-check" title="Besked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>`
@@ -167,7 +172,7 @@ function sortItems(items, sortBy) {
   } else if (sortBy === "date") {
     sorted.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
   } else if (sortBy === "status") {
-    const rank = { uploading: 0, wip: 1, besked: 2 };
+    const rank = { uploading: 0, minting: 1, wip: 2, besked: 3 };
     sorted.sort((a, b) => (rank[a.status] ?? -1) - (rank[b.status] ?? -1));
   }
   const collections = sorted.filter((i) => i.type === "collection");

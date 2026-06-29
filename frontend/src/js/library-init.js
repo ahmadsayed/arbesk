@@ -10,6 +10,7 @@ import {
   initWallet,
   connectWallet,
   contract as walletContract,
+  switchNetwork,
 } from "./blockchain/wallet.js";
 import { CHAIN_IDS } from "../../../constants/chains.js";
 import { initWalletPopover } from "./ui/wallet-popover.js";
@@ -27,6 +28,15 @@ import {
 import { initLibraryGrid } from "./ui/library-grid.js";
 import { initLibraryToolbar } from "./ui/library-toolbar.js";
 import { initLibraryContextMenu } from "./ui/library-context-menu.js";
+
+// Optimistic collections created within this window are kept even if ownerOf
+// temporarily fails or the indexer has not caught up yet (e.g. smart-wallet
+// state propagation delays on public testnets).
+const OPTIMISTIC_COLLECTION_GRACE_MS = 2 * 60 * 1000;
+
+function ts() {
+  return new Date().toLocaleTimeString();
+}
 
 function applyWalletGate(connected) {
   const gate = document.getElementById("libraryGate");
@@ -73,12 +83,25 @@ function isNonexistentTokenError(err) {
 }
 
 async function fetchCollectionMetadata(tokenId) {
+  const start = performance.now();
   const c = walletContract || walletState.get().contract;
   if (!c) return null;
   try {
+    const uriStart = performance.now();
     const cid = await c.methods.tokenURI(tokenId).call();
+    console.log(
+      `[${ts()}] [LIBRARY] tokenURI ${tokenId} → ${cid ? cid.slice(0, 20) + "…" : null} ` +
+        `(${Math.round(performance.now() - uriStart)}ms)`
+    );
     if (!cid) return null;
+
+    const ipfsStart = performance.now();
     const manifest = await getFromRemoteIPFS(cid);
+    console.log(
+      `[${ts()}] [LIBRARY] getFromRemoteIPFS ${cid.slice(0, 20)}… ` +
+        `(${Math.round(performance.now() - ipfsStart)}ms)`
+    );
+
     return {
       tokenId: String(tokenId),
       manifestCid: cid,
@@ -91,6 +114,11 @@ async function fetchCollectionMetadata(tokenId) {
       console.warn(`[LIBRARY] Failed to load collection metadata for ${tokenId}`, err);
     }
     return null;
+  } finally {
+    console.log(
+      `[${ts()}] [LIBRARY] fetchCollectionMetadata ${tokenId} total ` +
+        `${Math.round(performance.now() - start)}ms`
+    );
   }
 }
 
@@ -172,25 +200,87 @@ export async function loadCurrentAssets() {
   }
 }
 
-export async function refreshLibraryData() {
+/** @type {Promise<void>|null} */
+let _refreshInFlight = null;
+
+export async function refreshLibraryData(forceIndexer = false) {
+  if (_refreshInFlight) {
+    return _refreshInFlight;
+  }
+
+  const run = async () => {
+  const start = performance.now();
   const { walletAddress } = walletState.get();
   if (!walletAddress) return;
 
   libraryState.set({ isLoading: true });
   try {
-    const { owned, shared } = await fetchAssetLibrary(walletAddress);
-    const [ownedEntries, sharedEntries] = await Promise.all([
-      buildCollectionEntries(owned, "owner", walletAddress),
-      buildCollectionEntries(shared, "editor", walletAddress),
-    ]);
-    const fetchedCollections = [...ownedEntries, ...sharedEntries];
+    const fetchStart = performance.now();
+    const { owned, shared } = await fetchAssetLibrary(walletAddress, forceIndexer);
+    console.log(
+      `[${ts()}] [LIBRARY] fetchAssetLibrary returned ${owned.length} owned in ` +
+        `${Math.round(performance.now() - fetchStart)}ms`
+    );
 
     const currentState = libraryState.get();
     const currentTokenId = currentState.currentCollectionTokenId;
+    const now = Date.now();
+
+    // Reuse optimistic collection metadata for freshly created collections.
+    // This avoids waiting for Pinata to propagate the new manifest before the
+    // card can render.
+    const optimisticByTokenId = new Map(
+      currentState.collections
+        .filter(
+          (c) =>
+            c.createdAt && now - c.createdAt < OPTIMISTIC_COLLECTION_GRACE_MS
+        )
+        .map((c) => [String(c.tokenId), c])
+    );
+
+    const ownedFromOptimistic = [];
+    const ownedToFetch = [];
+    for (const tokenId of owned) {
+      const optimistic = optimisticByTokenId.get(String(tokenId));
+      if (optimistic) {
+        console.log(
+          `[${ts()}] [LIBRARY] reusing optimistic metadata for ${tokenId}`
+        );
+        ownedFromOptimistic.push({
+          id: optimistic.id,
+          type: "collection",
+          tokenId: optimistic.tokenId,
+          manifestCid: optimistic.manifestCid,
+          name: optimistic.name,
+          thumbnailCid: optimistic.thumbnailCid || "",
+          status: "besked",
+          role: "owner",
+          createdAt: optimistic.createdAt,
+        });
+      } else {
+        ownedToFetch.push(tokenId);
+      }
+    }
+
+    const metaStart = performance.now();
+    const [fetchedOwnedEntries, sharedEntries] = await Promise.all([
+      buildCollectionEntries(ownedToFetch, "owner", walletAddress),
+      buildCollectionEntries(shared, "editor", walletAddress),
+    ]);
+    const ownedEntries = [...ownedFromOptimistic, ...fetchedOwnedEntries];
+    console.log(
+      `[${ts()}] [LIBRARY] buildCollectionEntries done in ` +
+        `${Math.round(performance.now() - metaStart)}ms ` +
+        `(${ownedFromOptimistic.length} optimistic, ${ownedToFetch.length} fetched)`
+    );
+
+    const fetchedCollections = [...ownedEntries, ...sharedEntries];
 
     // getPastEvents scans can lag behind a freshly mined mint on local nodes,
     // causing optimistic collections to disappear on refresh. Verify ownership
-    // of any missing collections via ownerOf before dropping them.
+    // of any missing collections via ownerOf before dropping them. Keep recently
+    // created optimistic collections for a grace period even when ownerOf
+    // temporarily fails (e.g. smart-wallet state propagation delays).
     const missing = currentState.collections.filter(
       (current) =>
         !fetchedCollections.some(
@@ -200,11 +290,28 @@ export async function refreshLibraryData() {
     const keptMissing = (
       await Promise.all(
         missing.map(async (current) => {
+          const ageMs = current.createdAt ? now - current.createdAt : Infinity;
+          const inGracePeriod = ageMs < OPTIMISTIC_COLLECTION_GRACE_MS;
+          const ownStart = performance.now();
           const stillOwned = await isTokenOwnedBy(
             current.tokenId,
             walletAddress
           );
-          return stillOwned ? current : null;
+          console.log(
+            `[${ts()}] [LIBRARY] ownerOf ${current.tokenId} → ${stillOwned} ` +
+              `(${Math.round(performance.now() - ownStart)}ms)`
+          );
+          if (stillOwned) {
+            return current;
+          }
+          if (inGracePeriod) {
+            console.log(
+              `[${ts()}] [LIBRARY] keeping optimistic collection ${current.tokenId} ` +
+                `within grace period (${Math.round(ageMs / 1000)}s)`
+            );
+            return current;
+          }
+          return null;
         })
       )
     ).filter(Boolean);
@@ -224,9 +331,22 @@ export async function refreshLibraryData() {
     if (currentTokenId) {
       await loadCurrentAssets();
     }
+
+    console.log(
+      `[${ts()}] [LIBRARY] refreshLibraryData done in ` +
+        `${Math.round(performance.now() - start)}ms`
+    );
   } catch (err) {
     console.error("[LIBRARY] Failed to refresh library data", err);
     libraryState.set({ isLoading: false });
+  }
+  };
+
+  _refreshInFlight = run();
+  try {
+    await _refreshInFlight;
+  } finally {
+    _refreshInFlight = null;
   }
 }
 
@@ -251,6 +371,26 @@ initLibraryGrid();
 initLibraryToolbar();
 initLibraryContextMenu();
 applyWalletGate(Boolean(walletState.get().walletAddress));
+
+// Headerbar network selector (shared with studio-init.js)
+document.getElementById("headerbarNetworkSelect")?.addEventListener("change", async (e) => {
+  const key = e.target.value;
+  if (!key) return;
+  const validKeys = ["hardhat", "monadTestnet", "megaethTestnet"];
+  if (!validKeys.includes(key)) {
+    console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
+    return;
+  }
+  localStorage.setItem("arbesk-preferred-network", key);
+  console.log("[NETWORK] Preferred network set to:", key);
+  if (walletState.get().walletAddress) {
+    try {
+      await switchNetwork(key);
+    } catch (err) {
+      console.error("Network switch failed:", err);
+    }
+  }
+});
 
 on(EVENTS.WALLET_CONNECTED, async (e) => {
   const c = document.getElementById("connectWalletBtn");
@@ -312,5 +452,7 @@ on(EVENTS.USER_AUTHENTICATED, (e) => updateWalletButtonState(e?.address, true));
 on(EVENTS.USER_AUTH_REQUIRED, (e) => updateWalletButtonState(e?.address, false));
 
 on(EVENTS.ASSET_PUBLISHED, async () => {
-  await refreshLibraryData();
+  // Force an immediate indexer catch-up so the newly published collection
+  // shows up right away instead of waiting for the next background poll.
+  await refreshLibraryData(true);
 });

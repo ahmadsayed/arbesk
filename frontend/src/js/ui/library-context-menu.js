@@ -8,7 +8,7 @@ import {
 } from "./dialog.js";
 import { escapeHtml } from "../utils/html.js";
 import { showToast } from "./toasts.js";
-import { createNamedCollection } from "../services/library-ops.js";
+import { createCollectionFlow } from "./library-create.js";
 
 // Blockchain/IPFS operations are loaded lazily so that unit tests for this
 // module can run in jsdom without pulling in the full Studio dependency tree.
@@ -107,59 +107,7 @@ async function refreshLibrary() {
 }
 
 async function requestCreateCollection() {
-  const name = await showDialog(
-    "New Collection",
-    "Choose a name for the new collection.",
-    ""
-  );
-  if (!name) return;
-
-  try {
-    const { tokenId, manifestCid, isNew } = await createNamedCollection(name);
-    const { refreshLibraryData } = await libraryInitOps();
-
-    // Optimistically show the new collection immediately. getPastEvents scans
-    // can lag one block behind the mint transaction on local nodes, so the card
-    // would otherwise only appear after the next page load. Stay at the top
-    // level (collections list) rather than opening the new collection.
-    const existing = libraryState.get().collections;
-    if (!existing.some((c) => String(c.tokenId) === String(tokenId))) {
-      libraryState.set({
-        collections: [
-          {
-            id: `collection-${tokenId}`,
-            type: "collection",
-            tokenId: String(tokenId),
-            manifestCid,
-            name,
-            thumbnailCid: "",
-            status: "besked",
-            role: "owner",
-          },
-          ...existing,
-        ],
-        selectedIds: [],
-      });
-    }
-
-    await refreshLibraryData();
-
-    announce(isNew ? `Created collection ${name}` : `Collection ${name} already exists`);
-    showToast({
-      type: "success",
-      title: isNew ? "Collection Created" : "Collection Already Exists",
-      message: isNew
-        ? `"${name}" has been minted on-chain.`
-        : `"${name}" already exists and was opened.`,
-    });
-  } catch (err) {
-    console.error("[LIBRARY-CONTEXT-MENU] create collection failed:", err);
-    showToast({
-      type: "error",
-      title: "Create Collection Failed",
-      message: err.message || "Could not create the collection.",
-    });
-  }
+  await createCollectionFlow();
 }
 
 function requestUploadFile() {

@@ -116,7 +116,7 @@ async function fetchTransferEvents(contract, address, direction, startBlock, lat
 }
 
 
-export async function fetchOwnedTokenIds(contract, address) {
+export async function fetchOwnedTokenIds(contract, address, forceIndexer = false) {
   const lowerAddress = address.toLowerCase();
   const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
 
@@ -124,11 +124,12 @@ export async function fetchOwnedTokenIds(contract, address) {
   // block. For local/dev chains without one, fall back to an on-chain scan.
   const deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
   if (deploymentBlock > 0) {
-    const indexerResult = await getOwnedTokens(address, chainId);
+    const indexerResult = await getOwnedTokens(address, chainId, forceIndexer);
     if (indexerResult) {
       console.log(
         `[ASSET-LIBRARY] indexer returned ${indexerResult.length} token(s) ` +
-          `for ${address} on chain ${chainId}`
+          `for ${address} on chain ${chainId}` +
+          (forceIndexer ? " (forced)" : "")
       );
       return indexerResult;
     }
@@ -175,7 +176,7 @@ export async function fetchOwnedTokenIds(contract, address) {
   return owned;
 }
 
-async function fetchAssetLibrary(address) {
+async function fetchAssetLibrary(address, forceIndexer = false) {
   const contract = getContract();
   if (!contract || !address) {
     console.warn(
@@ -189,7 +190,7 @@ async function fetchAssetLibrary(address) {
   const shared = [];
 
   try {
-    owned = await fetchOwnedTokenIds(contract, address);
+    owned = await fetchOwnedTokenIds(contract, address, forceIndexer);
 
     // Shared tokens (editor but not owner) are not discoverable on-chain
     // without an indexer because editor state is a Merkle root. A future

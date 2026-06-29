@@ -29,6 +29,10 @@ const IS_WORKER =
   self instanceof WorkerGlobalScope;
 const TAG = IS_WORKER ? "[WORKER-IPFS-WRITE]" : "[IPFS-WRITE]";
 
+function ts() {
+  return new Date().toLocaleTimeString();
+}
+
 function compressedFilename(filename) {
   if (!filename) return "asset.bin.gz";
   return filename.endsWith(".gz") ? filename : `${filename}.gz`;
@@ -60,7 +64,7 @@ export async function writeToIPFS(
     payload = compress(raw);
     finalFilename = compressedFilename(filename);
     console.log(
-      `${TAG} gzip ${raw.length} bytes → ${payload.length} bytes`
+      `[${ts()}] ${TAG} gzip ${raw.length} bytes → ${payload.length} bytes`
     );
   }
 
@@ -70,7 +74,7 @@ export async function writeToIPFS(
       : payload?.byteLength ?? payload?.length ?? 0;
 
   console.log(
-    `${TAG} uploading ${byteLength} bytes via ${cred.backend} as ${finalFilename}`
+    `[${ts()}] ${TAG} uploading ${byteLength} bytes via ${cred.backend} as ${finalFilename}`
   );
 
   const cid = await uploadToIPFSWithCredential(
@@ -79,7 +83,7 @@ export async function writeToIPFS(
     cred
   );
 
-  console.log(`${TAG} ${cred.backend} stored → ${cid}`);
+  console.log(`[${ts()}] ${TAG} ${cred.backend} stored → ${cid}`);
   return cid;
 }
 

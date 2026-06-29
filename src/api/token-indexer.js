@@ -1,11 +1,15 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { DEPLOYMENT_BLOCKS } from "../../constants/chains.js";
+import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
 import { getWeb3, getContractAddress, NETWORK_CONFIGS } from "../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, "../../.data");
+
+function ts() {
+  return new Date().toLocaleTimeString();
+}
 
 const TRANSFER_TOPIC0 =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -52,6 +56,10 @@ class TokenIndexer {
     /** @type {NodeJS.Timeout|null} */
     this.pollTimer = null;
     this.initialized = false;
+    /** @type {number} */
+    this.lastCatchUpAt = 0;
+    /** @type {Promise<void>|null} */
+    this._catchUpPromise = null;
   }
 
   _loadState() {
@@ -68,12 +76,12 @@ class TokenIndexer {
         this.lastScannedBlock = Math.max(parsed.lastScannedBlock, this.deploymentBlock);
         this.ownership = new Map(Object.entries(parsed.ownership));
         console.log(
-          `[INDEXER] loaded state for chain ${this.chainId}: ` +
+          `[${ts()}] [INDEXER] loaded state for chain ${this.chainId}: ` +
             `${this.ownership.size} tokens, lastScannedBlock=${this.lastScannedBlock}`
         );
       }
     } catch (err) {
-      console.warn(`[INDEXER] failed to load state for chain ${this.chainId}:`, String(/** @type {Error} */ (err).message));
+      console.warn(`[${ts()}] [INDEXER] failed to load state for chain ${this.chainId}:`, String(/** @type {Error} */ (err).message));
     }
   }
 
@@ -89,30 +97,29 @@ class TokenIndexer {
       };
       fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));
     } catch (err) {
-      console.warn(`[INDEXER] failed to save state for chain ${this.chainId}:`, String(/** @type {Error} */ (err).message));
+      console.warn(`[${ts()}] [INDEXER] failed to save state for chain ${this.chainId}:`, String(/** @type {Error} */ (err).message));
     }
   }
 
   /**
-   * Fetch Transfer logs in small chunks to respect RPC limits.
+   * Fetch Transfer logs for a single block range.
    * @param {number} fromBlock
    * @param {number} toBlock
    * @returns {Promise<any[]>}
    */
   async _fetchTransferLogs(fromBlock, toBlock) {
-    const chunkSize = 100;
-    const allLogs = [];
-    for (let from = fromBlock; from <= toBlock; from += chunkSize) {
-      const to = Math.min(from + chunkSize - 1, toBlock);
-      const logs = await this.web3.eth.getPastLogs({
-        address: this.contractAddress,
-        topics: [TRANSFER_TOPIC0],
-        fromBlock: from,
-        toBlock: to,
-      });
-      allLogs.push(...logs);
-    }
-    return allLogs;
+    const start = Date.now();
+    const logs = await this.web3.eth.getPastLogs({
+      address: this.contractAddress,
+      topics: [TRANSFER_TOPIC0],
+      fromBlock: fromBlock,
+      toBlock: toBlock,
+    });
+    console.log(
+      `[${ts()}] [INDEXER] getPastLogs ${fromBlock}..${toBlock} returned ${logs.length} logs ` +
+        `in ${Date.now() - start}ms`
+    );
+    return logs;
   }
 
   /**
@@ -133,32 +140,70 @@ class TokenIndexer {
 
   /**
    * Index a range of blocks. Safe to call repeatedly.
+   * Processes logs in chain-specific chunks and saves state after each chunk
+   * so a restart can resume from the last completed chunk instead of starting
+   * the whole backfill over.
    * @param {number} fromBlock
    * @param {number} toBlock
    */
   async _indexRange(fromBlock, toBlock) {
     if (fromBlock > toBlock) return;
-    const logs = await this._fetchTransferLogs(fromBlock, toBlock);
-    const maxBlock = this._applyLogs(logs);
-    this.lastScannedBlock = Math.max(maxBlock, toBlock);
-    this._saveState();
+    const start = Date.now();
+    const chunkSize = LOG_CHUNK_SIZES[this.chainId] || 100;
+    let totalLogs = 0;
+
+    for (let from = fromBlock; from <= toBlock; from += chunkSize) {
+      const to = Math.min(from + chunkSize - 1, toBlock);
+      const logs = await this._fetchTransferLogs(from, to);
+      const maxBlock = this._applyLogs(logs);
+      this.lastScannedBlock = Math.max(maxBlock, to);
+      this._saveState();
+      totalLogs += logs.length;
+    }
+
+    console.log(
+      `[${ts()}] [INDEXER] _indexRange ${fromBlock}..${toBlock} total ` +
+        `${totalLogs} logs in ${Date.now() - start}ms`
+    );
   }
 
   /**
    * Catch up to the current chain tip.
+   * Concurrent callers share the same in-flight catch-up promise so forced
+   * API requests don't race with the background poll.
    */
   async catchUp() {
-    const latest = Number(await this.web3.eth.getBlockNumber());
-    if (this.lastScannedBlock >= latest) return;
-    console.log(
-      `[INDEXER] catching up chain ${this.chainId} ` +
-        `from block ${this.lastScannedBlock} to ${latest}`
-    );
-    await this._indexRange(this.lastScannedBlock, latest);
-    console.log(
-      `[INDEXER] chain ${this.chainId} caught up ` +
-        `to ${this.lastScannedBlock} (${this.ownership.size} tokens)`
-    );
+    if (this._catchUpPromise) {
+      return this._catchUpPromise;
+    }
+
+    const run = async () => {
+      const start = Date.now();
+      this.lastCatchUpAt = start;
+      const latest = Number(await this.web3.eth.getBlockNumber());
+      if (this.lastScannedBlock >= latest) {
+        console.log(
+          `[${ts()}] [INDEXER] catchUp chain ${this.chainId} already at tip ` +
+            `${this.lastScannedBlock} in ${Date.now() - start}ms`
+        );
+        return;
+      }
+      console.log(
+        `[${ts()}] [INDEXER] catching up chain ${this.chainId} ` +
+          `from block ${this.lastScannedBlock} to ${latest}`
+      );
+      await this._indexRange(this.lastScannedBlock, latest);
+      console.log(
+        `[${ts()}] [INDEXER] chain ${this.chainId} caught up ` +
+          `to ${this.lastScannedBlock} (${this.ownership.size} tokens) ` +
+          `in ${Date.now() - start}ms`
+      );
+    };
+
+    this._catchUpPromise = run().finally(() => {
+      this._catchUpPromise = null;
+    });
+    return this._catchUpPromise;
   }
 
   /**
@@ -170,7 +215,7 @@ class TokenIndexer {
       try {
         await this.catchUp();
       } catch (err) {
-        console.error(`[INDEXER] poll failed for chain ${this.chainId}:`, String(/** @type {Error} */ (err).message));
+        console.error(`[${ts()}] [INDEXER] poll failed for chain ${this.chainId}:`, String(/** @type {Error} */ (err).message));
       }
     }, this.pollIntervalMs);
   }
@@ -237,7 +282,7 @@ export async function initIndexers() {
       const deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
       if (deploymentBlock <= 0) {
         console.log(
-          `[INDEXER] skipping chain ${chainId}: no deployment block configured`
+          `[${ts()}] [INDEXER] skipping chain ${chainId}: no deployment block configured`
         );
         return;
       }
@@ -245,7 +290,7 @@ export async function initIndexers() {
         await getIndexer(chainId).init();
       } catch (err) {
         console.error(
-          `[INDEXER] failed to initialize chain ${chainId}:`,
+          `[${ts()}] [INDEXER] failed to initialize chain ${chainId}:`,
           String(/** @type {Error} */ (err).message)
         );
       }

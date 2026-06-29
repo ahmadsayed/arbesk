@@ -4,20 +4,21 @@
 import { jest, expect, test, beforeEach, afterEach } from "@jest/globals";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
 
-let _createNamedCollection = jest.fn().mockResolvedValue({
-  tokenId: "12345",
-  manifestCid: "bafyCollection",
-  isNew: true,
-});
+// The optimistic flow renders the card from the onPending callback, then
+// resolves with the mint result, so the mock invokes onPending before resolving.
+function makeCreateNamedCollection() {
+  return jest.fn(async (_name, opts) => {
+    opts?.onPending?.({ tokenId: "12345", manifestCid: "bafyCollection" });
+    return { tokenId: "12345", manifestCid: "bafyCollection", isNew: true };
+  });
+}
+
+let _createNamedCollection = makeCreateNamedCollection();
 let _refreshLibraryData = jest.fn();
 
 beforeEach(() => {
   _resetForTesting();
-  _createNamedCollection = jest.fn().mockResolvedValue({
-    tokenId: "12345",
-    manifestCid: "bafyCollection",
-    isNew: true,
-  });
+  _createNamedCollection = makeCreateNamedCollection();
   _refreshLibraryData = jest.fn();
 
   window.focusTrap = {
@@ -80,11 +81,15 @@ test("context-menu New Collection stays at the collections list level", async ()
   await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
 
-  expect(_createNamedCollection).toHaveBeenCalledWith("My Collection");
-  expect(_refreshLibraryData).toHaveBeenCalled();
+  expect(_createNamedCollection).toHaveBeenCalledWith(
+    "My Collection",
+    expect.objectContaining({ onPending: expect.any(Function) })
+  );
 
-  // The new collection should appear immediately, but the UI stays at the
-  // collections list level rather than navigating into the new collection.
+  // The new collection should appear immediately (optimistically), but the UI
+  // stays at the collections list level rather than navigating into the new
+  // collection. The actual refresh is triggered by ASSET_PUBLISHED from
+  // publishAsset, not by an explicit call here.
   expect(libraryState.get().currentCollectionTokenId).toBeNull();
   const collections = libraryState.get().collections;
   expect(collections).toHaveLength(1);

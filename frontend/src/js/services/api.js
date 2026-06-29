@@ -317,9 +317,10 @@ export async function getContractArtifact(contractName = "ArbeskAsset") {
  * @param {number} chainId
  * @returns {Promise<string[]|null>}
  */
-export async function getOwnedTokens(address, chainId) {
+export async function getOwnedTokens(address, chainId, force = false) {
   try {
-    const res = await fetch(`${API_BASE}/indexer/owned?address=${encodeURIComponent(address)}&chainId=${chainId}`, {
+    const forceParam = force ? "&force=true" : "";
+    const res = await fetch(`${API_BASE}/indexer/owned?address=${encodeURIComponent(address)}&chainId=${chainId}${forceParam}`, {
       headers: { Accept: "application/json" },
     });
     if (!res.ok) throw new Error(`indexer returned ${res.status}`);

@@ -2,12 +2,9 @@
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
 import { escapeHtml } from "../utils/html.js";
-import { showDialog } from "./dialog.js";
 import { showToast } from "./toasts.js";
-import {
-  createNamedCollection,
-  uploadFileToCollection,
-} from "../services/library-ops.js";
+import { uploadFileToCollection } from "../services/library-ops.js";
+import { createCollectionFlow } from "./library-create.js";
 
 async function refreshLibraryData() {
   const { refreshLibraryData: doRefresh } = await import("../library-init.js");
@@ -78,13 +75,6 @@ async function handleCreateCollection() {
     return;
   }
 
-  const name = await showDialog(
-    "New Collection",
-    "Choose a name for the new collection.",
-    ""
-  );
-  if (!name) return;
-
   const btn = document.getElementById("libraryCreateCollectionBtn");
   if (btn) {
     btn.disabled = true;
@@ -92,49 +82,9 @@ async function handleCreateCollection() {
   }
 
   try {
-    const { tokenId, manifestCid, isNew } = await createNamedCollection(name);
-
-    // Optimistically show the new collection immediately. getPastEvents scans
-    // can lag one block behind the mint transaction on local nodes, so the card
-    // would otherwise only appear after the next page load. Stay at the top
-    // level (collections list) rather than opening the new collection.
-    const existing = libraryState.get().collections;
-    if (!existing.some((c) => String(c.tokenId) === String(tokenId))) {
-      libraryState.set({
-        collections: [
-          {
-            id: `collection-${tokenId}`,
-            type: "collection",
-            tokenId: String(tokenId),
-            manifestCid,
-            name,
-            thumbnailCid: "",
-            status: "besked",
-            role: "owner",
-          },
-          ...existing,
-        ],
-        selectedIds: [],
-      });
-    }
-
-    await refreshLibraryData();
-
-    announce(isNew ? `Created collection ${name}` : `Collection ${name} already exists`);
-    showToast({
-      type: "success",
-      title: isNew ? "Collection Created" : "Collection Already Exists",
-      message: isNew
-        ? `"${name}" has been minted on-chain.`
-        : `"${name}" already exists in your library.`,
-    });
-  } catch (err) {
-    console.error("[LIBRARY-TOOLBAR] create collection failed:", err);
-    showToast({
-      type: "error",
-      title: "Create Collection Failed",
-      message: err.message || "Could not create the collection.",
-    });
+    // Optimistic: shows the card and kicks off the mint in the background.
+    // Returns once the dialog is handled, not when the transaction settles.
+    await createCollectionFlow();
   } finally {
     if (btn) {
       btn.disabled = false;

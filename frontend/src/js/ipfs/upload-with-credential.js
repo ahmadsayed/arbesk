@@ -15,6 +15,10 @@ import { createConcurrencyLimiter } from "../utils/concurrency.js";
 const UPLOAD_CONCURRENCY = 6;
 const uploadLimiter = createConcurrencyLimiter(UPLOAD_CONCURRENCY);
 
+function ts() {
+  return new Date().toLocaleTimeString();
+}
+
 function toBlob(data) {
   if (data instanceof Blob) return data;
   if (data instanceof ArrayBuffer || data instanceof Uint8Array)
@@ -28,6 +32,7 @@ async function uploadToPinata(blob, filename, credential, attempt = 1) {
   const form = new FormData();
   form.append("file", blob, filename);
   form.append("network", "public");
+  const start = performance.now();
 
   try {
     const res = await fetch(credential.url, {
@@ -43,12 +48,16 @@ async function uploadToPinata(blob, filename, credential, attempt = 1) {
     const json = await res.json();
     const cid = json?.data?.cid || json?.cid;
     if (!cid) throw new Error("Pinata upload returned no CID");
-    console.log(`[UPLOAD] pinata stored → ${cid}`);
+    console.log(
+      `[${ts()}] [UPLOAD] pinata stored → ${cid} ` +
+        `(${Math.round(performance.now() - start)}ms)`
+    );
     return cid;
   } catch (err) {
     if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(err.message)) {
       console.warn(
-        `[UPLOAD] Pinata upload error, retrying once: ${err.message}`
+        `[${ts()}] [UPLOAD] Pinata upload error after ` +
+          `${Math.round(performance.now() - start)}ms, retrying once: ${err.message}`
       );
       return uploadToPinata(blob, filename, credential, attempt + 1);
     }
@@ -70,13 +79,13 @@ async function uploadToKubo(blob, filename, credential) {
   }
   const result = await res.json();
   const cidStr = result.Hash;
-  console.log(`[UPLOAD] kubo stored → ${cidStr} (${result.Size} bytes)`);
+  console.log(`[${ts()}] [UPLOAD] kubo stored → ${cidStr} (${result.Size} bytes)`);
   try {
     await fetch(
       `${apiUrl}/api/v0/pin/add?arg=${encodeURIComponent(cidStr)}`,
       { method: "POST" }
     );
-    console.log(`[UPLOAD] pinned → ${cidStr}`);
+    console.log(`[${ts()}] [UPLOAD] pinned → ${cidStr}`);
   } catch {
     // Pin failures are non-fatal; the CID is still stored.
   }

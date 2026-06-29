@@ -61,6 +61,10 @@ if (networkSelect) {
       console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
       return;
     }
+    // Always store the user's explicit preference so auto-connect and
+    // wrong-chain fallback use the network they actually selected.
+    localStorage.setItem("arbesk-preferred-network", key);
+    console.log("[NETWORK] Preferred network set to:", key);
     // If wallet is connected, trigger the network switch in the wallet
     if (walletState.get().walletAddress) {
       try {
@@ -68,10 +72,6 @@ if (networkSelect) {
       } catch (err) {
         console.error("Network switch failed:", err);
       }
-    } else {
-      // Not connected yet - just store preference for when we connect
-      localStorage.setItem("arbesk-preferred-network", key);
-      console.log("[NETWORK] Preferred network set to:", key);
     }
   });
 }

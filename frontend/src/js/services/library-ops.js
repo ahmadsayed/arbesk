@@ -21,6 +21,10 @@ import {
 } from "../utils/collections.js";
 import { log, warn } from "../utils/log.js";
 
+function ts() {
+  return new Date().toLocaleTimeString();
+}
+
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(["glb", "gltf"]);
@@ -59,9 +63,15 @@ function requireWallet() {
  * Create a new named collection for the current wallet.
  *
  * @param {string} name
+ * @param {{ onPending?: (info: { tokenId: string, manifestCid: string }) => void }} [options]
+ *   `onPending` is invoked once the collection manifest has been written to IPFS
+ *   but before the (potentially several-second) mint transaction is sent, so the
+ *   caller can render an optimistic card. It is not called when the collection
+ *   already exists on-chain.
  * @returns {Promise<{tokenId: string, manifestCid: string, isNew: boolean}>}
  */
-export async function createNamedCollection(name) {
+export async function createNamedCollection(name, { onPending } = {}) {
+  const start = performance.now();
   const trimmed = (name || "").trim();
   if (!trimmed) throw new Error("Collection name is required");
 
@@ -74,10 +84,13 @@ export async function createNamedCollection(name) {
   const tokenId = BigInt(tokenIdHex).toString();
 
   // If this wallet+name collection was already minted, return the existing one
-  // instead of failing with TokenAlreadyMinted.
+  // instead of failing with TokenAlreadyMinted. Both calls revert for a
+  // non-existent token, so run them together to save an RPC round trip.
   try {
-    await c.methods.ownerOf(tokenId).call();
-    const existingCid = await c.methods.tokenURI(tokenId).call();
+    const [, existingCid] = await Promise.all([
+      c.methods.ownerOf(tokenId).call(),
+      c.methods.tokenURI(tokenId).call(),
+    ]);
     return { tokenId, manifestCid: existingCid, isNew: false };
   } catch {
     // Token does not exist - proceed to mint.
@@ -103,6 +116,16 @@ export async function createNamedCollection(name) {
   const editorRoot = computeRoot(editorList, tokenId, 1);
   const editorListUri = saveEditorListLocally(tokenId, editorList, null);
 
+  // Surface the (deterministic) token id + manifest CID before the mint so the
+  // UI can show an optimistic "minting" card while the transaction settles.
+  if (typeof onPending === "function") {
+    try {
+      onPending({ tokenId, manifestCid: collectionCid });
+    } catch (e) {
+      warn("[LIBRARY-OPS] onPending callback threw:", e.message);
+    }
+  }
+
   const txHash = await publishAsset(
     collectionCid,
     tokenId,
@@ -111,7 +134,7 @@ export async function createNamedCollection(name) {
   );
   if (!txHash) throw new Error("Publish collection transaction failed");
 
-  log(`[LIBRARY-OPS] minted collection token ${tokenId} (hex ${tokenIdHex}) → ${txHash}`);
+  log(`[${ts()}] [LIBRARY-OPS] minted collection token ${tokenId} (hex ${tokenIdHex}) → ${txHash} (${Math.round(performance.now() - start)}ms total)`);
   return { tokenId, manifestCid: collectionCid, isNew: true };
 }
 

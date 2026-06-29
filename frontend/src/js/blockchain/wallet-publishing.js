@@ -32,6 +32,34 @@ function _getContract() {
  * compatible ERC-4337 bundler (Monad Testnet). EOA wallets work everywhere.
  * @returns {boolean}
  */
+/**
+ * Whether the active wallet is a thirdweb ERC-4337 smart account.
+ * @returns {boolean}
+ */
+function _isSmartAccount() {
+  return getActiveConnectionSource() === "thirdweb";
+}
+
+// Generous gas ceiling for sponsored UserOperations. Supplying an explicit gas
+// value lets web3 skip its own eth_estimateGas round trip; the ERC-4337 bundler
+// re-estimates during UserOperation construction and the paymaster sponsors the
+// cost, so an overestimate is free. Removing the redundant estimate trims a full
+// RPC round trip from the social-login publish path.
+const SMART_ACCOUNT_GAS_LIMIT = 2_000_000;
+
+/**
+ * Resolve the gas option for a contract method send.
+ * EOA wallets estimate and pad by 20%; smart accounts skip estimation entirely.
+ * @param {*} tx web3 contract method
+ * @param {string} from sender address
+ * @returns {Promise<number>}
+ */
+async function _resolveGas(tx, from) {
+  if (_isSmartAccount()) return SMART_ACCOUNT_GAS_LIMIT;
+  const gas = await tx.estimateGas({ from });
+  return Math.floor(Number(gas) * 1.2);
+}
+
 function _canPublishWithCurrentWallet() {
   const source = getActiveConnectionSource();
   const chainId = walletState.get().chainId;
@@ -66,10 +94,10 @@ async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
       editorRoot,
       editorListUri
     );
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
+    const gas = await _resolveGas(tx, walletState.get().walletAddress);
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
+      gas,
     });
 
     emit(EVENTS.ASSET_PUBLISHED, {
@@ -109,10 +137,10 @@ async function updateAssetURI(tokenId, newTokenURI, proof) {
       newTokenURI,
       proof
     );
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
+    const gas = await _resolveGas(tx, walletState.get().walletAddress);
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
+      gas,
     });
     return receipt.transactionHash;
   } catch (error) {
@@ -174,10 +202,10 @@ async function updateEditors(
     const tx = c.methods[
       "updateEditors(uint256,bytes32,string,uint8,bytes32[])"
     ](tokenId, newRoot, newListUri, callerRole, callerProof);
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
+    const gas = await _resolveGas(tx, walletState.get().walletAddress);
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
+      gas,
     });
     return receipt.transactionHash;
   } catch (error) {
@@ -214,10 +242,10 @@ async function burn(tokenId, proof) {
 
   try {
     const tx = c.methods["burn(uint256,bytes32[])"](tokenId, proof);
-    const gas = await tx.estimateGas({ from: walletState.get().walletAddress });
+    const gas = await _resolveGas(tx, walletState.get().walletAddress);
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
+      gas,
     });
 
     emit(EVENTS.ASSET_BURNED, {
