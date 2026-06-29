@@ -220,11 +220,12 @@ Validates the publish-in-Studio / browse-in-Library / open-in-Studio loop:
 Validates the new Library toolbar flows for collection creation and desktop file upload:
 
 1. Clicks **New Collection**, names it, and confirms.
-2. Asserts the new collection is minted and the browser navigates into it.
-3. Uses the **Upload** button to select `mock-gltf-assets/howdy.glb` from disk.
-4. Asserts the uploaded file appears as an asset named `howdy` inside the collection.
-5. Opens the uploaded asset in Studio and asserts it loads.
-6. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
+2. Asserts the new collection is minted and appears in the collections list.
+3. Opens the new collection.
+4. Uses the **Upload** button to select `mock-gltf-assets/howdy.glb` from disk.
+5. Asserts the uploaded file appears as an asset named `howdy` inside the collection.
+6. Opens the uploaded asset in Studio and asserts it loads.
+7. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
 
 **Why it matters:** These flows exercise `library-toolbar.js`, `library-ops.js`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads.
 

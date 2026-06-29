@@ -66,6 +66,8 @@ const connectSrc = [
   "wss://localhost:9090",
   "https://*.llamarpc.com",
   "https://*.publicnode.com",
+  "https://testnet-rpc.monad.xyz/",
+  "https://carrot.megaeth.com/rpc",
   "https://*.thirdweb.com",
   "https://*.bundler.thirdweb.com",
   "https://esm.sh",

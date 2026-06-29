@@ -26,7 +26,11 @@ test.describe.serial("Library create collection and upload", () => {
     await expect(page.locator(SELECTORS.libraryUploadBtn)).toBeVisible();
 
     await createLibraryCollection(page, collectionName);
-    // Newly created collection is empty.
+    // Newly created collection appears at the collections list level.
+    await expect(page.locator(SELECTORS.libraryCollectionItem)).toHaveCount(1);
+
+    await openLibraryCollection(page, collectionName);
+    // Opened collection is empty.
     await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(0);
 
     await uploadLibraryFile(page, GLB_FIXTURE, UPLOADED_ASSET_NAME);

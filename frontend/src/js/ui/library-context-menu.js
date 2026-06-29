@@ -144,14 +144,7 @@ async function requestCreateCollection() {
 
     await refreshLibraryData();
 
-    // Open the new/existing collection so the user can immediately add assets
-    // to it (consistent with the toolbar create button).
-    libraryState.set({
-      currentCollectionTokenId: String(tokenId),
-      selectedIds: [],
-    });
-
-    announce(isNew ? `Created collection ${name}` : `Opened collection ${name}`);
+    announce(isNew ? `Created collection ${name}` : `Collection ${name} already exists`);
     showToast({
       type: "success",
       title: isNew ? "Collection Created" : "Collection Already Exists",

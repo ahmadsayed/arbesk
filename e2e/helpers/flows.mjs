@@ -342,7 +342,7 @@ export function uniqueAssetName(base) {
 
 /**
  * Create a new named collection from the Library toolbar and wait until the
- * browser navigates into it.
+ * collection card appears at the collections list level.
  *
  * @param {Page} page
  * @param {string} name
@@ -352,7 +352,7 @@ export async function createLibraryCollection(page, name) {
   await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
   await page.fill(SELECTORS.dialogInput, name);
   await page.click(SELECTORS.dialogConfirmBtn);
-  await expect(page.locator(SELECTORS.libraryBreadcrumb)).toContainText(name, {
+  await expect(libraryCollectionLocator(page, name)).toBeVisible({
     timeout: 30000,
   });
 }

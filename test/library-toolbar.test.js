@@ -165,8 +165,9 @@ describe("create collection button", () => {
 
     expect(_createNamedCollection).toHaveBeenCalledWith("My Collection");
 
-    // The new collection should appear immediately and the UI navigates into it.
-    expect(libraryState.get().currentCollectionTokenId).toBe("12345");
+    // The new collection should appear immediately, but the UI stays at the
+    // collections list level rather than navigating into the new collection.
+    expect(libraryState.get().currentCollectionTokenId).toBeNull();
     const collections = libraryState.get().collections;
     expect(collections).toHaveLength(1);
     expect(collections[0]).toMatchObject({
