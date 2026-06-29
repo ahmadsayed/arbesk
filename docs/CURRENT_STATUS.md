@@ -1,10 +1,10 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-06-28
+> **Generated:** 2026-06-30
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
-> **Network targets:** Hardhat local for development; MegaETH Testnet (chain ID 6343) for public testnet.
+> **Network targets:** Hardhat local for development; MegaETH Testnet (chain ID 6343) for EOA wallets; Monad Testnet (chain ID 10143) for social-login smart accounts.
 
 ---
 
@@ -23,6 +23,10 @@
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
 | Standalone Library Page | ✅ Complete | `library.pug`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
+| Social Login (Google / Thirdweb AA) | ✅ Complete | `wallet-thirdweb.js`, `thirdweb-auth.js`, ERC-4337 smart accounts on Monad Testnet |
+| Monad Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` at block 41167307 |
+| Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
+| Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, auto-rollback on cancel |
 | Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
@@ -46,7 +50,7 @@ src/
     │   ├── kubo-adapter.js     # Local Kubo add/cat/pin/directory/unpin
     │   └── pinata-adapter.js   # Pinata v3 SDK + presigned upload URLs
     ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
-    ├── authentication.js       # Session token validation middleware
+    ├── authentication.js       # Session token validation middleware (SIWE + Thirdweb JWT)
     ├── authorization.js        # On-chain asset access checks for chat proxy
     ├── chat-proxy.js           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
     ├── comments-archive.js     # Asset-level Nostr comment thread → IPFS archive
@@ -55,9 +59,12 @@ src/
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
     ├── nostr-relay.js          # Shared relay primitives (used by chat-proxy + comments-archive)
     ├── rate-limiter.js         # In-memory per-wallet rate limiter
+    ├── thirdweb-auth.js        # Thirdweb JWT verification (JWKS from login.thirdweb.com)
+    ├── token-indexer.js        # Chunked eth_getLogs backfill for owned/shared token discovery
     ├── routes/                 # Per-domain route modules
     │   ├── comments.js         # POST /assets/snapshot-comments
     │   ├── contracts.js        # GET /contracts/:name/abi
+    │   ├── indexer.js          # GET /indexer/owned — token ownership lookup
     │   ├── ipfs.js             # POST /ipfs/upload-url + /ipfs/unpin
     │   ├── openapi.js          # GET /openapi.json + /docs
     │   └── test-utils.js       # Test-only reset helpers
@@ -66,49 +73,47 @@ src/
     └── openapi.json            # Static OpenAPI spec
 ```
 
-> **Note:** `src/api/parametric-version.js` does **not exist**. Parametric edits, manifest writes, thumbnail uploads, history walks, and token resolution all happen client-side. The browser writes directly to IPFS via `writeToIPFS()` / `writeJSONToIPFS()`.
->
-> **Generation endpoint:** `POST /api/v1/generations` validates session auth + rate limit, calls the mock adapter, and returns raw asset bytes (base64). The browser uploads the asset to IPFS, constructs the manifest, and writes it to IPFS — no server-side IPFS writes.
-
 ### 2.2 Implemented Routes (`/api/v1`)
 
 | Method | Path | Auth | What it does |
 |--------|------|------|--------------|
-| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag |
-| POST | `/sessions` | None | Creates SIWE session (EIP-4361) |
+| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag, thirdwebClientId |
+| POST | `/sessions` | None | Creates SIWE session (EIP-4361) or Thirdweb JWT session |
 | DELETE | `/sessions` | Session | Invalidates session token |
-| POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes (no IPFS writes) |
+| POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes |
 | POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId` |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
 | POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
+| GET | `/indexer/owned` | None | Returns owned token IDs for an address+chainId via chunked eth_getLogs backfill; supports `force=true` to bypass cache |
 | GET | `/openapi.json` | None | Static OpenAPI spec |
 | GET | `/docs` | None | Swagger UI HTML bundle |
 | WS | `/v1/chat/ws` | Session (query) | WebSocket bridge to Nostr relay for live comments, rate-limited (10 msg/min) |
 
 ### 2.3 Auth Details
 
-**Session auth** (`Authorization: Session <token>`):
-- SIWE-based (EIP-4361). Domain-bound, 5-minute message age, nonce replay protection.
-- 24-hour TTL, in-memory Map with hourly cleanup.
-- Used for `POST /generations`, `POST /ipfs/upload-url`, `POST /ipfs/unpin`, and `POST /assets/snapshot-comments` after wallet connect creates the session.
-- The WebSocket chat proxy (`/api/v1/chat/ws`) receives the same token in the query string.
+**Two session types now exist:**
+
+1. **SIWE-based** (`Authorization: Session <token>`) — for EOA wallets (MetaMask/Rabby/WalletConnect). EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
+2. **Thirdweb JWT** (`Authorization: Session <thirdwebJwt>`) — for social-login smart accounts. JWT verified against Thirdweb's JWKS endpoint (`login.thirdweb.com/api/jwks`); wallet address extracted from the `sub` claim. Dev bypass via `THIRDWEB_AUTH_DEV_MODE=true`.
+
+Both session types share the same `Authorization: Session <token>` header format. `authentication.js` tries SIWE first, then Thirdweb JWT. 24-hour TTL.
 
 ### 2.4 What Works
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
-- ✅ Thumbnail capture + direct IPFS upload from browser (`captureAssetThumbnail()` → `writeToIPFS()`)
-- ✅ Manifest save/publish entirely client-side (`writeJSONToIPFS()` — no server round-trip)
+- ✅ Thumbnail capture + direct IPFS upload from browser
+- ✅ Manifest save/publish entirely client-side
 - ✅ Collection manifest merge + direct IPFS upload from browser
-- ✅ Manifest chain walking — client-side via `walkManifestChain()` (IPFS gateway reads)
-- ✅ Token resolution — client-side via `resolveChildRef()` (Web3 + IPFS gateway, cross-chain)
-- ✅ IPFS unpin on burn (walks chain, collects CIDs, calls `pin.rm`)
-- ✅ Multi-network config (Hardhat local `31415822`, MegaETH Testnet `6343`)
+- ✅ IPFS unpin on burn
+- ✅ Multi-network config (Hardhat `31415822`, MegaETH `6343`, Monad `10143`)
 - ✅ Multi-storage backend (`kubo` local, `pinata` testnet)
-- ✅ Presigned upload URLs for browser uploads (Pinata/Kubo)
-- ✅ Nostr comments archive snapshot on republish (`POST /api/v1/assets/snapshot-comments`)
-- ✅ Standalone Library page with collections, uploads, grid/list, search/sort, context actions, and Studio round-trip
+- ✅ Presigned upload URLs for browser uploads
+- ✅ Nostr comments archive snapshot on republish
+- ✅ Standalone Library page (collections, uploads, grid/list, search/sort, context actions)
+- ✅ Thirdweb JWT authentication (Google social login)
+- ✅ Chunked token indexer with per-chain `LOG_CHUNK_SIZES` and force-refresh
 
 ### 2.5 What Does NOT Work / Is Missing
 
@@ -122,7 +127,7 @@ src/
 
 ### 3.1 Actual File Layout
 
-**JavaScript (46+ files)**
+**JavaScript (48+ files)**
 
 ```
 frontend/src/js/
@@ -136,11 +141,11 @@ frontend/src/js/
 │   ├── placeholders.js         # Loading/error meshes
 │   ├── studio-init.js          # Studio bootstrap
 │   ├── theme.js / theme-init.js# CSS → Babylon color mapping
-│   └── viewport-gizmo.js   # Corner orientation gizmo
+│   └── viewport-gizmo.js       # Corner orientation gizmo
 ├── ui/
 │   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
 │   ├── asset-save.js           # Save Draft / Publish UI; delegates building to services/asset-save/
-│   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag
+│   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag; inaccessible token cards with Burn action
 │   ├── asset-drop-zone.js      # Viewport drag/drop overlay
 │   ├── asset-history.js        # Draggable horizontal timeline scrubber
 │   ├── collaborators-panel.js  # Team panel (add/remove editors, owner badge)
@@ -149,32 +154,35 @@ frontend/src/js/
 │   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
 │   ├── sidebar.js              # 5-view switcher (Settings/Chat/Outline/Gallery/Activity)
-│   ├── library-grid.js         # Library grid/list rendering, selection, keyboard shortcuts, rubber-band select
+│   ├── library-grid.js         # Library grid/list rendering, selection, keyboard, rubber-band; minting/besked/wip status badges
 │   ├── library-toolbar.js      # Breadcrumb, search, sort, view toggle, New Collection, Upload
 │   ├── library-context-menu.js # Library right-click actions (Open, Rename, Burn, Delete, Send to Collection…)
+│   ├── library-create.js       # Shared optimistic collection-create flow (both EOA + social)
 │   ├── collaborators.js        # Burn button visibility helper
 │   ├── dialog.js / toasts.js / wallet-modal.js / wallet-popover.js
 │   └── ...
 ├── blockchain/
 │   ├── wallet.js               # Backward-compat barrel; re-exports the split wallet modules
-│   ├── wallet-core.js          # Web3 init, connect/disconnect, auto-connect, account state
+│   ├── wallet-core.js          # Web3 init, connect/disconnect, auto-connect, account state; 250ms polling
 │   ├── wallet-network.js       # Network switching
 │   ├── wallet-payments.js      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
-│   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn()
+│   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
 │   ├── wallet-guard.js         # Guards / helpers for publishing auth
+│   ├── wallet-thirdweb.js      # Google OAuth → embedded EOA → ERC-4337 smart account; background pre-warm
+│   ├── smart-wallet-support.js # SMART_WALLET_SUPPORTED_CHAIN_IDS (Monad Testnet only)
 │   ├── token-resolver.js       # Resolve child_ref tokens to manifest CIDs
 │   ├── uri-utils.js            # Normalize tokenURIs to plain CIDs
 │   ├── siwe.js                 # EIP-4361 message builder
 │   ├── wallet-discovery.js     # EIP-6963 multi-wallet
 │   ├── wallet-connect.js       # WalletConnect v2
-│   ├── network-config.js       # Per-network contract/USDC/RPC addresses
+│   ├── network-config.js       # Per-network contract/USDC/RPC addresses (Hardhat/MegaETH/Monad)
 │   ├── error-decoder.js        # Revert reason decoding
-│   ├── explorer.js             # Block explorer links
+│   └── explorer.js             # Block explorer links
 ├── ipfs/
 │   ├── remote-ipfs.js          # Gateway reads (cache currently disabled)
 │   └── write-to-ipfs.js        # Direct Kubo/Pinata writes + pin
 ├── gltf/
-│   ├── decomposer.js           # Break buffers/images into separate IPFS CIDs
+│   ├── decomposer.js           # Break buffers/images into separate IPFS CIDs (web-worker backed)
 │   ├── async-gltf.js           # Async decompose helpers
 │   ├── composer.js             # Resolve ipfs:// URIs back to base64 for Babylon
 │   ├── material-editor.js      # PBR material color edits, multi-primitive aware, bake to composite
@@ -182,485 +190,179 @@ frontend/src/js/
 │   ├── source-color-editor.js  # Per-mesh color editor integration
 │   └── glb-parser.js           # Binary glTF container parsing
 ├── state/
-│   ├── asset-state.js          # Replaces window.* asset globals
-│   ├── wallet-state.js         # Replaces window.* wallet globals
-│   ├── ui-state.js             # Replaces window.* UI globals
+│   ├── asset-state.js / wallet-state.js / ui-state.js / library-state.js
 │   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
-│   ├── create-store.js         # Generic createStore factory
-│   └── library-state.js        # Library page state (collections, assets, selection, view mode, sort, search)
+│   └── create-store.js         # Generic createStore factory
 └── services/
-    ├── api.js                  # API client: sessions, generate, comments archive, unpin, upload-url
-    ├── asset-save/             # Save/publish helpers
-    │   ├── manifest-builder.js # Manifest assembly, version bumping, comment archive embedding
-    │   ├── collection-publish.js # Collection mint / URI update
-    │   └── editor-publish.js   # Editor republish authorization (Merkle proof)
-    ├── library-ops.js          # Create named collection, upload glTF/GLB file into collection
-    ├── team.js                 # Merkle-based editor add/remove
-    ├── asset-delete.js         # Remove an asset from a collection
-    └── url-utils.js            # URL param helpers
-
-frontend/src/js/utils/
-├── library-items.js          # Library filter, sort, range selection, bytes formatter
-└── ...
+    ├── api.js                  # API client: sessions (SIWE + Thirdweb), generate, comments archive, unpin, upload-url
+    ├── asset-save/             # manifest-builder.js, collection-publish.js, editor-publish.js
+    ├── library-ops.js          # Create named collection (with onPending hook), upload glTF/GLB
+    ├── team.js / asset-delete.js / url-utils.js
+    └── ...
 ```
-
-**Templates & Styles**
-- `frontend/src/pug/studio.pug` — Single consolidated studio page
-- `frontend/src/pug/library.pug` — Standalone Library page (built to `dist/library.html`)
-- `frontend/src/scss/` — 29 partials including layout, viewport, inspector, timeline, ledger, wallet modals
-
-> **Naming drift from older docs:** `chat-studio.js` → `create-panel.js`, `save-world.js` → `asset-save.js`, `gallery.js` → `asset-library.js`, `history-browser.js` → `asset-history.js`, `team-panel.js` → `collaborators-panel.js`.
 
 ### 3.2 Core Systems — Verified in Code
 
-**3D Engine (`scene-graph.js`)**
-- Babylon.js init with `ArcRotateCamera`, hemispheric + directional lights, ground grid
-- Orthographic presets (1=Front, 3=Right, 7=Top) with custom wheel zoom scaling
-- Click-to-select with amber highlight layer; sub-mesh toggle on re-click
-- GLB loading via blob + `URL.createObjectURL`
-- glTF loading via JSON → `composeGlTF` resolves `ipfs://` CIDs → `ImportMeshAsync`
-- Asset centering (bounding box → shift root nodes)
-- Thumbnail capture: offscreen canvas crop → WebP blob
-- Keyboard: Escape (deselect), Home (frame all), F (frame selected), 1/3/7 (views), Ctrl+N (new), Ctrl+B (sidebar), Ctrl+1-4 (switch views)
+**Social Login (Thirdweb Account Abstraction)**
+- Google OAuth → Thirdweb embedded EOA → ERC-4337 smart account on Monad Testnet.
+- Provider exposed as an EIP-1193 shim so all existing Web3.js code is unchanged.
+- BigInt → hex normalisation layer handles Thirdweb's internal RPC responses.
+- Gas is sponsored by the Thirdweb paymaster (`sponsorGas: true`); low-balance toast is suppressed for smart accounts.
+- Smart account pre-warms in the background at login (deploys ERC-4337 account during idle time so the user's first tx skips account-creation overhead).
+- Auth: Thirdweb JWT verified server-side against JWKS; same session token format as SIWE.
+- **Chain constraint:** Smart wallets only work on Monad Testnet. EOA wallets (MetaMask/Rabby) work on all three chains.
 
-**Collection Manifests (Phase 5.4)**
-- `services/asset-save/manifest-builder.js` merges each published asset CID into a collection manifest's `assets` map.
-- Default collection token ID derived deterministically from wallet address via `soliditySha3(address)`.
-- Named collections derive token ID from `soliditySha3(address, name)`.
-- `asset-library.js` expands collection tokens into one card per asset.
-- `scene-graph.js` can load a collection manifest without immediately opening an asset.
-- Studio URL semantics:
-  - `/studio.html?asset=<collectionTokenId>` loads the collection into the Gallery sidebar but leaves the viewport empty (no first-asset auto-load, no `assetId` appended to the URL).
-  - `/studio.html?asset=<collectionTokenId>&assetId=<assetID>` loads the collection and opens the specified asset.
-  - Standalone asset tokens load normally with `?asset=<tokenId>`.
+**Token Indexer (`src/api/token-indexer.js`)**
+- Chunked `eth_getLogs` backfill scans for `Transfer` and editor-change events per chain.
+- Per-chain chunk sizes in `constants/chains.js`: Hardhat=10000, MegaETH=5000, Monad=100 (Monad testnet rejects wide ranges with 413).
+- `force=true` query param bypasses cache for on-demand refresh.
+- MegaETH deployment block pinned at `22359678` to avoid scanning from genesis.
 
-**Token Child Worlds (Phase 5.1)**
-- `loadTokenChildNode()` fully implemented with placeholder → async resolution
-- `MAX_CHILD_WORLD_DEPTH = 5`, circular reference detection via `Set`
-- Transform matrix applied to anchor before child loading
-- Duplicate drop prevention via `refKey`
+**Optimistic Collection Create UI (`ui/library-create.js`)**
+- Shared `createCollectionFlow()` used by both toolbar button and right-click context menu.
+- Card appears with a spinner badge immediately after the manifest write (before the mint tx); `onPending` hook in `createNamedCollection` fires the callback at that moment.
+- On success: card flips to checkmark (`besked`) instantly; `ASSET_PUBLISHED` also triggers a background refresh that promotes it.
+- On failure/wallet-reject: optimistic card is removed automatically (toast). Works identically for EOA (card shows just before the wallet popup; rejecting removes it) and social login.
 
-**Parametric Editing (`parametric-preview.js`, `time-travel.js`)**
-- Live color/scale preview applies immediately to Babylon meshes
-- `state.pendingPostProcessorEdits` tracks uncommitted changes
-- Inspector close reverts to last committed state
-- Component colors: per-sub-mesh overrides stored in `meshOverrides`
-- Timeline slider binds to manifest chain; scrubs are view-only
+**Performance (smart-account publish path)**
+- `_resolveGas()` in `wallet-publishing.js` skips `eth_estimateGas` entirely for thirdweb accounts (bundler re-estimates, paymaster sponsors) — saves one RPC round trip on every publish/updateURI/updateEditors/burn.
+- `ownerOf` + `tokenURI` pre-mint existence check now runs via `Promise.all` (parallel).
+- `newWeb3()` sets `transactionPollingInterval = 250ms` (down from 1000ms default) across all 7 Web3 instance sites.
+- Background smart-account pre-warm via no-op sponsored UserOperation at connect time.
 
-**glTF Pipeline**
-- `decomposer.js` / `async-gltf.js`: base64 buffers/images → `writeToIPFS` → `ipfs://<CID>` URIs
-- `composer.js`: fetches `ipfs://` binaries from gateway → base64 data URIs
-- `material-editor.js`: `fetchComposite` → edit PBR factors → `commitCompositeChanges`; `findMaterialByMeshName()` returns all materials for meshes with multiple primitives
-- Round-trip tested: decompose → compose yields identical bytes
+**Inaccessible Token Cards**
+- Studio gallery (`asset-library.js`) and library page now show tokens the user owns on-chain but can't read (e.g. wrong network, IPFS unavailable) as card skeletons with a **Burn** action, rather than silently dropping them.
 
-**Events Layer**
-- `frontend/src/js/events/bus.js` exports a singleton `mitt()` instance plus `EVENTS` constants
-- Handlers receive the payload directly (not wrapped in `CustomEvent`)
-- Replaces the previous `events/registry.js` implementation (removed)
-
-**State Layer**
-- `frontend/src/js/state/{asset-state,wallet-state,ui-state}.js` replace the ~12 mutable `window.*` app-state globals
-- Each store exposes `get() / set() / reset()` and emits `ASSET_STATE_CHANGED` / `WALLET_STATE_CHANGED` / `UI_STATE_CHANGED` via the mitt bus
-
-**IPFS Layer**
-- Reads: `http://127.0.0.1:8080/ipfs/<cid>` with `cache: "no-store"`
-- Writes: Browser uses presigned upload URLs from `POST /api/v1/ipfs/upload-url`, then pins via backend
-- **Browser caching is hardcoded disabled** (`IPFS_CACHE_ENABLED = false`); no IndexedDB/memory cache active
-
-**Blockchain / Wallet (`wallet.js`)**
-- Multi-wallet: EIP-6963 discovery + WalletConnect v2 + legacy injected
-- Auto-connect from `localStorage` via silent `eth_accounts`
-- Networks: Hardhat local (`31415822`), MegaETH Testnet (`6343`)
-- Contract init with bytecode verification at address
-- USDC PayGo: approval → allowance reset → verification (5 retries) → `payForGenerationWithUSDC` with gas defaults
-- Publishing: `publishAsset(tokenURI, tokenId, editorRoot, editorListUri)` (mint), `updateAssetURI(tokenId, newTokenURI, proof)` (republish)
-- Collaboration: `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)` — full editor list stored on IPFS
-- Burn: resolves manifest CID before burn, calls `burn(tokenId, proof)`, `unpinAssetCids` non-blocking after on-chain success
-
-**Asset-Level Comments (`state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`)**
-- Each asset has its own isolated Nostr thread, tagged `<chainId>:<contractAddress>:<tokenId>:<assetId>`.
-- The tag is derived from the manifest `asset_id`; no manifest schema change is required.
-- Republish snapshots the thread to IPFS via `POST /api/v1/assets/snapshot-comments` and stores `comments_archive_cid` in the asset manifest.
-- The frontend loads the archive first, then subscribes to live relay events through `/api/v1/chat/ws` and deduplicates by `event.id`.
-- Chat proxy authorization: valid SIWE session + (owner of token OR valid Merkle editor proof for the current editor root/version).
-
-**Standalone Library Page (`library.pug`, `library-init.js`, `ui/library-*.js`, `services/library-ops.js`)**
-- Page switcher in headerbar links between `/library.html` and `/studio.html`.
-- Loads owned collections (via owner Transfer events) and shared collections (via editor events).
-- Displays collections and, when opened, their assets using the same collection manifest expansion as the Studio gallery.
-- Supports grid/list views, search by name, sort by name/date/status, and keyboard navigation (Ctrl+A, Enter, Delete, F2, Esc/Backspace).
-- **New Collection**: mints a deterministic token id from `keccak256(address, name)`; handles already-minted names by opening the existing collection.
-- **Upload**: accepts `.glb` / `.gltf` files up to 50 MB, writes the source asset and asset manifest to IPFS, then updates the collection manifest.
-- **Context-menu actions**: Open, Open in Studio, Rename, Manage Collaborators, Burn Collection (collections); Open in Studio, Send to Collection (move/copy), Rename, Delete (assets).
-
-**API Service (`services/api.js`)**
-- Session auth with auto-retry on `INVALID_SESSION`
-- Generation requires a valid session; no fallback auth scheme
-- Backend endpoints actually used: `POST /sessions`, `POST /generations`, `POST /assets/snapshot-comments`, `POST /ipfs/unpin`, `POST /ipfs/upload-url`, `GET /config`, `GET /contracts/:name/abi`
-- Manifest writes, chain walks, token resolution, and publish metadata are all client-side (no `POST /manifests` routes exist)
-
-**UI Systems**
-- Sidebar: 4 views persisted to `localStorage`, collapsible, responsive auto-collapse
-- Create panel: chat bubbles, prompt input, provider/tier dropdowns, generation flow
-- Asset library: owned (`Transfer` event scan) + shared (Merkle editor list), collection expansion, lazy thumbnails, drag with `application/x-arbesk-linked-asset`
-- Outliner: tree with 📦/🧩 icons, click select, double-click dive, library drag
-- Nesting: breadcrumb path bar, Alt+Left ascend, depth status in bottom bar
-- History: draggable horizontal track, active vs published states
-- Comments: asset-level Nostr thread in the sidebar; archives loaded from `comments_archive_cid`, live events via `/api/v1/chat/ws`
-- Ledger: derives activity from manifest chain via client-side `walkManifestChain()` — **no localStorage ledger**
-- Dialogs: GNOME HIG-styled modals using `focus-trap@7.6.2` (CDN) for robust Tab cycling and MetaMask overlay coexistence
-- Toasts: Notyf@3.10.0 (CDN) wrapper preserving `showToast` / `showTxToast` / `showErrorToast` call sites with GNOME-styled glass accents
+**3D Engine, Parametric, glTF Pipeline, Comments, Library** — unchanged from previous status; all fully implemented. See sections 3.2/3.3 of the 2026-06-28 snapshot for detail.
 
 ### 3.3 What Does NOT Work / Is Missing
 
-- ❌ **IPFS browser cache disabled** — every read hits the gateway directly.
+- ❌ **IPFS browser cache hardcoded disabled** — every read hits the gateway directly.
 - ❌ `anchorManifest()` stubbed in `ledger-panel.js` — "not available in current contract".
-- ✅ Low-balance toast in `_checkBalance()` is now dismissed when the wallet account changes or disconnects (fixed stale warning + undefined `devAddress`).
+- ❌ Social login (smart accounts) only supported on Monad Testnet — not on MegaETH Testnet.
 - ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
 
 ---
 
 ## 4. Smart Contracts (`blockchain/`)
 
-### 4.1 Contracts
-
-**Not `ArbeskWorld.sol`** — older docs reference that name.
-
-There are now **two** contracts:
-
-| Contract | Purpose | Symbol | Default? |
-|----------|---------|--------|----------|
-| `ArbeskAssetFree.sol` | Free tier — NFT + Merkle editor auth + free `recordGeneration()` with 10/day quota | `ARBF` | ✅ Yes (local testing + frontend default) |
-| `ArbeskAsset.sol` | Paid tier — adds USDC PayGo generation payments | `ARBA` | Optional paid tier |
-
-Both inherit shared NFT/collaboration/burn logic from `ArbeskAssetBase.sol`.
-
-#### `ArbeskAsset.sol` (Paid Tier)
-
-- **Standard:** ERC-721 (plain, non-enumerable)
-- **Symbol:** `ARBA`
-- **Inheritance:** `ArbeskAssetBase`, `ReentrancyGuard`
-
-**Key Functions**
-
-| Category | Functions |
-|----------|-----------|
-| Payment (USDC) | `payForGenerationWithUSDC(bytes32 nodeId, string prompt, Tier tier)` — tiered pricing, `safeTransferFrom` |
-| Minting | `publishAsset(string uri, uint256 tokenId, bytes32 editorRoot, string editorListUri)` |
-| Queries | `tokenURI()`, `getAssetManifest()`, `getTierCost()`, `editorRoot(tokenId)`, `editorSetVersion(tokenId)` |
-| Collaboration | `updateEditors(uint256 tokenId, bytes32 newRoot, string newListUri, uint8 callerRole, bytes32[] callerProof)` |
-| URI update | `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` |
-| Burn | `burn(uint256 tokenId, bytes32[] proof)` — Editor with Merkle proof |
-| Admin | `setCost()`, `setTreasury()`, `setTierCost()`, `setUsdcToken()`, `pause()`, `unpause()`, `withdraw()`, `withdrawUSDC()` |
-
-**State / Limits (paid tier)**
-- `costPerGeneration` = `0.01 ether` (native, currently unused)
-- Tier costs: Basic=$0.75, Standard=$1.25, Premium=$1.75, Pro=$2.50 (6-decimal USDC)
-- `maxEditorsPerToken()` = 5000
-
-**Events**
-`AssetGenerationPaid`, `AssetGenerationPaidUSDC`, `AssetPublished`, `EditorSetChanged`, `AssetBurned`, `AssetURIUpdated`, `TreasuryUpdated`, `CostUpdated`, `TierCostUpdated`, `UsdcTokenUpdated`
-
-**Custom Errors (paid tier adds)** `IncorrectPaymentAmount`, `InvalidPromptLength`, `PaymentAlreadyUsed`, `TreasuryTransferFailed`, `UsdcPaymentsDisabled`, `TierCostNotSet`, `InvalidCost`, `NoBalanceToWithdraw`, `WithdrawFailed`, `UsdcTokenNotSet`, `DirectTransferNotAllowed`.
-
-#### `ArbeskAssetFree.sol` (Free Tier)
-
-- **Symbol:** `ARBF`
-- **Inheritance:** `ArbeskAssetBase`
-- **Functions:** `recordGeneration(bytes32 nodeId, string prompt)` (10/day per wallet), plus all shared NFT/collaboration functions
-- **No payment functions, no treasury, no USDC, no ReentrancyGuard, no withdraw**
-- **Events:** `AssetGenerationRecorded(address indexed userWallet, bytes32 indexed nodeId, string prompt, uint256 timestamp, uint256 countToday)`
-
-**State / Limits (free tier)**
-- `DAILY_GENERATION_LIMIT` = 10 per wallet
-- `maxEditorsPerToken()` = 5000
-- Quota state (`lastGenerationDay` + `generationCountToday`) is packed into a single 256-bit storage slot to minimize gas
-
-**Gas profile (local Hardhat)**
-- `recordGeneration()` first call per day: ~50,650 gas
-- `recordGeneration()` warm call same day: ~33,430 gas
-- Packing the quota slot saves ~22,000 gas on the first call compared to two separate storage slots
-
-### 4.2 `ArbeskAssetBase.sol` (Abstract Base)
-
-- **Inheritance:** `ERC721`, `Ownable`, `Pausable`
-- **Shared logic:** minting, URI storage, Merkle-root editor authorization, burn, pause/unpause
-- **Key state:**
-  - `mapping(uint256 => string) private _tokenURIs`
-  - `mapping(uint256 => bytes32) public editorRoot`
-  - `mapping(uint256 => uint256) public editorSetVersion`
-  - `mapping(uint256 => string) public editorListURI`
-- **Leaf format:** `keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))`
-- **Role enum:** `None = 0`, `Viewer = 1`, `Editor = 2`
-- Contract `owner()` bypasses the free-tier daily generation quota in `recordGeneration()`; Merkle editor proof checks still apply.
-
-### 4.3 MockUSDC
-
-- `blockchain/contracts/mock/MockUSDC.sol` — OpenZeppelin ERC20, 6 decimals, unrestricted `mint()`
-- Auto-deployed by `deploy.js` for local networks when no USDC address is configured
-
-### 4.4 Deployment Artifacts
+### 4.1 Deployment Artifacts
 
 | Network | Contract | Address | Notes |
 |---------|----------|---------|-------|
-| `hardhat` (chain 31415822) | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
-| `hardhat` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
-| `localhost` | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
-| `localhost` | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
-| `megaethTestnet` (chain 6343) | ArbeskAssetFree | `0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673` | **Current testnet target** |
+| `hardhat` / `localhost` (chain 31415822) | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
+| `hardhat` / `localhost` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
+| `megaethTestnet` (chain 6343) | ArbeskAssetFree | `0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673` | **Current testnet target (EOA)** |
 | `megaethTestnet` (chain 6343) | ArbeskAsset (paid) | — | **Not deployed on testnet** |
+| `monadTestnet` (chain 10143) | ArbeskAssetFree | `0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B` | **Social-login (smart account) target**, block 41167307 |
+| `monadTestnet` (chain 10143) | ArbeskAsset (paid) | — | Not deployed |
 
-> `CONTRACT_ADDRESS` in `.env` now points to the **free** contract. The paid contract is stored in `PAID_CONTRACT_ADDRESS`.
-> Contract addresses are also hardcoded in `src/config.js` and `frontend/src/js/blockchain/network-config.js`. Chain IDs are consolidated in `constants/chains.js`.
+### 4.2 Known Contract Issues
 
-### 4.4 Hardhat Config
-
-- Solidity `0.8.24`, EVM `cancun`, optimizer `runs: 1000`
-- Networks: `hardhat` (31415822), `localhost` (8545), `megaethTestnet` (6343)
-- Etherscan verification configured for MegaETH explorer
-
-### 4.5 Estimated On-Chain Costs on MegaETH Testnet
-
-MegaETH uses a bucket-multiplier gas model; costs scale as a contract's storage bucket fills. See `docs/MEGAETH_ANALYSIS.md` for the full model. Approximate costs at 0.01 gwei:
-
-| Operation | Gas | Cost @ ETH $1,727 | Notes |
-|---|---:|---:|---|
-| `recordGeneration()` first call/day | ~50,650 | ~$0.0009 | Quota day rollover writes one packed slot |
-| `recordGeneration()` warm call | ~33,430 | ~$0.0006 | Same-day generation |
-| `publishAsset()` mint (m=1) | ~165,000 | ~$0.0029 | Plain ERC721 + 4 storage slots; varies by URI length |
-| `updateAssetURI()` | ~35,000 | ~$0.0006 | Republish existing token |
-| `updateEditors()` | ~35,000 | ~$0.0006 | Replace editor Merkle root |
-
-> MegaETH Testnet uses ETH for gas. Testnet ETH has no dollar value.
-
-### 4.6 Known Contract Issues
-
-- 🐛 **`scripts/verify.js` bug**: Passes `[treasury]` as sole constructor arg, but constructor is `constructor(address _treasury, address _usdcToken)`. Etherscan verification will fail on live networks.
+| Issue | Severity |
+|-------|----------|
+| `verify.js` passes `[treasury]` as sole constructor arg but constructor is `(address _treasury, address _usdcToken)` — Etherscan verification will fail | High |
+| No reentrancy attack tests | Low |
 
 ---
 
 ## 5. Tests
 
-### 5.1 Backend / Unit Tests (`test/`)
+| Suite | Count | Status |
+|-------|-------|--------|
+| Jest unit (all) | 1011 | ✅ All passing |
+| E2E Playwright specs | 17 specs / 35 tests | ✅ Chromium (manual run against local stack) |
+| Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
-| File | Lines | Coverage |
-|------|-------|----------|
-| `test/api.test.js` | ~1,048 | All v1 routes: generation, save, publish, history chain, token resolution, auth, rate limit, thumbnails, child_ref manifests, collection manifests |
-| `test/decomposer-composer.test.js` | ~1,167 | glTF pure logic: composite detection, base64 round-trip, decompose, compose, URI resolution |
-| `test/scene-graph.test.js` | ~924 | Scene graph helpers: CID extraction, format detection, bounds, transform matrices, disposal, child_ref anchor walking |
-| `test/token-resolver.test.js` | ~150 | `normalizeTokenURI`, child_ref validation, `MAX_CHILD_WORLD_DEPTH` |
+**New test files since 2026-06-28:**
+- `test/api/sessions.test.js` — both SIWE and Thirdweb JWT session creation
+- `test/api/thirdweb-auth.test.js` — JWT verification, JWKS mock, dev-mode bypass
+- `test/api/siwe-verify.test.js` — EIP-4361 validation edge cases
+- `test/api/validation.test.js` — Zod schema coverage for new routes
+- `test/frontend/api.test.js` — frontend API service (session auth with Thirdweb)
+- `test/frontend/asset-library.test.js` — inaccessible token card rendering
+- `test/frontend/library-init.test.js` — token indexer integration, optimistic grace window
+- `test/frontend/library-ops.test.js` — `onPending` hook, `createNamedCollection` options
 
-### 5.2 Frontend Regression Tests (`test/frontend/`)
+### Test Gaps
 
-| File | Lines | Coverage |
-|------|-------|----------|
-| `test/frontend/build.test.js` | ~286 | Syntax-checks built JS, verifies `window.*` exports, CDN version pinning (web3@1.10.0), wallet lifecycle |
-| `test/frontend/deployment-integrity.test.js` | ~486 | ABI exists, required function signatures, `.env` address sync, Docker volume mounts, on-chain bytecode verification |
-| `test/frontend/wallet-exports.test.js` | ~152 | Static parse of `wallet.js` export block, consumer import contracts |
-| `test/frontend/bus.test.js` | ~120 | mitt singleton contract: direct payloads, on/off, no cross-fire |
-| `test/frontend/dialog.test.js` | ~191 | `showDialog` / `showConfirmDialog` / `showInfoDialog` behaviour, focus-trap API contract |
-| `test/frontend/toasts.test.js` | ~209 | Notyf wrapper: types, durations, actions, eviction, dismiss |
-| `test/state/asset-state.test.js` | ~80 | Store get/set/reset + `ASSET_STATE_CHANGED` emissions |
-| `test/state/wallet-state.test.js` | ~60 | Store get/set/reset + `WALLET_STATE_CHANGED` emissions |
-| `test/state/ui-state.test.js` | ~50 | Store get/set/reset + `UI_STATE_CHANGED` emissions |
-
-### 5.3 Contract Tests (`blockchain/test/`)
-
-| File | Lines | Coverage |
-|------|-------|----------|
-| `blockchain/test/ArbeskAsset.test.js` | ~918 | Payment (USDC tiered), replay prevention, minting, Merkle editor authorization, burn (both paid + free contracts) |
-
-### 5.4 E2E Tests & Coverage
-
-- ✅ E2E tests: 17 Playwright specs (35 tests) covering wallet connect, generation, save/publish, parametric, republish, nesting, collections, material editor, fork, library basics/actions/round-trip/create-upload, editor collaboration, asset-level comments, and viewport resize regression (see `e2e/README.md`).
-- ✅ E2E coverage instrumentation: opt-in Chromium V8 coverage via `E2E_COVERAGE=1`, merged with Jest coverage via `npm run test:coverage:all`.
-- Latest merged coverage (Jest + E2E): **122 files, 74.23% statements, 74.06% branches, 69.38% functions**.
-
-### 5.5 Test Gaps
-
-- ❌ No reentrancy attack tests (though `nonReentrant` is present).
+- ❌ No reentrancy attack tests.
 - ❌ No fuzzing / property-based tests.
+- ❌ E2E does not cover the social-login Google OAuth path (can't automate OAuth popups).
 
 ---
 
-## 6. Build System & Infrastructure
+## 6. Beta Readiness Assessment
 
-### 6.1 Build Pipeline
+### What is working end-to-end right now
 
-**Frontend dependencies**
-- Runtime: `bootstrap@5.1.3`, `mitt@^3.0.1`
-- CDN-loaded: `babylon.js`, `web3@1.10.0`, `web3modal@1.9.12`, `notyf@3.10.0`, `focus-trap@7.6.2`
+| Capability | EOA (MetaMask/Rabby) | Social (Google) |
+|------------|---------------------|-----------------|
+| Wallet connect | ✅ MegaETH + Monad + Hardhat | ✅ Monad Testnet only |
+| Auto-reconnect on page load | ✅ | ✅ |
+| Session auth (no per-tx popups) | ✅ SIWE | ✅ Thirdweb JWT |
+| Mock asset generation | ✅ | ✅ |
+| Save draft + publish (mint NFT) | ✅ | ✅ (gas sponsored) |
+| Republish / update URI | ✅ | ✅ |
+| Parametric color/scale edit | ✅ | ✅ |
+| Time-travel version slider | ✅ | ✅ |
+| Nested child world composition | ✅ | ✅ |
+| Collection create (optimistic) | ✅ instant card, auto-rollback | ✅ instant card, sponsored |
+| Upload GLB/glTF to collection | ✅ | ✅ |
+| Library page (grid/list/search) | ✅ | ✅ |
+| Asset-level Nostr comments | ✅ | ✅ |
+| Merkle editor collaboration | ✅ | ✅ |
+| Token burn | ✅ | ✅ |
+| Real 3D generation | ❌ 501 | ❌ 501 |
 
-**Frontend build** (`frontend/scripts/` — custom Node.js, no Webpack/Vite):
-1. `clean` — `rm -rf frontend/dist`
-2. `build:pug` — Prettier-formatted `.pug` → `dist/*.html`
-3. `build:scss` — Sass + PostCSS/Autoprefixer → `dist/css/styles.css`
-4. `build:scripts` — `cp -R src/js dist/js` (verbatim copy, no transpilation)
-5. `build:assets` — `cp -R public/* dist/`
-6. `start` — Full build + BrowserSync + chokidar watcher (`sb-watch.js`)
+### Beta blockers
 
-> Browser globals (`BABYLON`, `Web3`, `IpfsHttpClient`, `Notyf`, `focusTrap`) come from CDN `<script>` tags in `studio.pug`.
+| Blocker | Impact | Notes |
+|---------|--------|-------|
+| **No real 3D generation** | Critical for core feature | Mock adapter works; cloud adapter returns 501. MVP feature gap. |
+| **Social login locked to Monad Testnet** | Medium — limits social users | Thirdweb bundler support is chain-specific; MegaETH not yet supported by the ERC-4337 bundler. |
+| **ArbeskAsset (paid tier) not deployed on any testnet** | Low for beta | Free tier is fully deployed on both testnets. |
+| **`verify.js` bug** | Low for beta | Affects Etherscan verification only, not runtime. |
+| **IPFS cache disabled** | Low — UX degradation | Every read hits the gateway; slow on IPFS cold reads but not a blocker. |
 
-### 6.2 Docker Services (`docker-compose.yml`)
+### Verdict
 
-| Service | Image | Ports | Config |
-|---------|-------|-------|--------|
-| `ipfs` | `ipfs/kubo:latest` | `127.0.0.1:5001`, `127.0.0.1:8080` | No DHT, no bootstrap, no NAT/relay, loopback-only swarm, 100GB cap, CORS enabled |
-| `hardhat` | `node:20-slim` | `127.0.0.1:8545` | Live-mounted `blockchain/` volume, default `npx hardhat node --hostname 0.0.0.0` |
-| `nostr` | `scsibug/nostr-rs-relay:latest` | `127.0.0.1:7777` | Local-only WebSocket relay, SQLite storage, open auth for dev |
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and social-login wallets, with gas sponsorship for social users. 1011 unit tests green, 17 E2E specs cover the critical path.
 
-### 6.3 Dev Orchestration
-
-| Script | Stack | Behavior |
-|--------|-------|----------|
-| `scripts/start-dev.sh` (default) | Local IPFS + Hardhat + Nostr | Always starts clean, deploys fresh `ArbeskAsset` + `MockUSDC`, syncs addresses to `.env` and JS network configs, builds frontend, starts backend. Used by E2E with `--setup-only`. |
-| `scripts/start-dev.sh --testnet` | MegaETH Testnet + Pinata + local Nostr | Starts only the local Nostr relay, validates testnet/Pinata env vars, builds frontend, starts backend with `IPFS_BACKEND=pinata`. |
-
-`start-dev.sh` (local mode) flow:
-1. Ensures `blockchain/.env` exists
-2. Stops/removes any existing worktree containers for a clean start
-3. Resets the Hardhat chain and starts Docker Compose (IPFS + Hardhat + Nostr)
-4. Installs `node_modules` if missing
-5. **Auto-deploys** `ArbeskAsset` + `MockUSDC`
-6. Syncs `CONTRACT_ADDRESS` / `PAID_CONTRACT_ADDRESS` / `USDC_TOKEN` to root `.env`, `src/config.js`, and `frontend/src/js/blockchain/network-config.js`
-7. Builds frontend
-8. Starts backend server
-9. Prints URLs + MetaMask setup info
-
-### 6.4 npm Scripts
-
-| Script | What it runs |
-|--------|--------------|
-| `npm start` | `node src/index.js` |
-| `npm run dev` | `./scripts/start-dev.sh` (local stack, E2E-ready) |
-| `npm run dev:testnet` | `./scripts/start-dev.sh --testnet` (testnet + Pinata) |
-| `npm run nodemon` | Build frontend + nodemon backend |
-| `npm run build:frontend` | Delegates to `frontend/package.json` build |
-| `npm test` | Jest on `test/` (excludes `blockchain/`) |
-| `npm run test:api` | Jest on `test/api.test.js` |
-| `npm run test:frontend` | Jest on `test/frontend/` |
-| `npm run test:contracts` | Hardhat tests inside Docker container |
-| `npm run test:all` | Lint + typecheck + frontend → api → contracts |
-| `npm run test:e2e` | Playwright E2E critical path (`--project=chromium`) |
-| `npm run test:e2e:ui` | Playwright E2E with visible browser for debugging |
-| `npm run test:e2e:coverage` | Run E2E with V8 coverage and merge to `coverage/e2e/` |
-| `npm run test:coverage` | Combined JS + Solidity coverage |
-| `npm run test:coverage:js` | Jest unit-test coverage → `coverage/js/` |
-| `npm run test:coverage:contracts` | Hardhat Solidity coverage → `blockchain/coverage/` |
-| `npm run test:coverage:e2e` | Alias for `test:e2e:coverage` |
-| `npm run test:coverage:all` | Jest + E2E coverage merged into `coverage/merged/` |
-| `npm run worktree:create` | Create an isolated git worktree for testing |
-
-### 6.5 Environment Files
-
-| File | Status |
-|------|--------|
-| Root `.env` | ✅ Exists |
-| `blockchain/.env` | ✅ Exists |
-| `frontend/.env` | ❌ Not present (mentioned in AGENTS.md as optional; no file or example exists) |
-
-#### Storage backend variables
-
-IPFS storage is selected by `IPFS_BACKEND` and implemented through the `src/api/storage/` abstraction.
-
-| Variable | Scope | Meaning |
-|----------|-------|---------|
-| `IPFS_BACKEND` | backend | `pinata` (dev/prod) or `kubo` (E2E). Default `kubo`. |
-| `PINATA_JWT` | backend secret | Master JWT for the Pinata v3 SDK — server-only, never sent to the browser. |
-| `PINATA_GATEWAY` | backend | Dedicated gateway host, e.g. `your-gw.mypinata.cloud`. |
-| `PINATA_UPLOAD_TTL` | backend | Presigned upload URL lifetime in seconds (default 60). |
-
-Browser uploads use short-lived presigned URLs minted by `POST /api/v1/ipfs/upload-url` (session-gated, rate-limited per wallet); the master JWT stays server-side. The automated E2E suite runs against Kubo via `IPFS_BACKEND=kubo`.
+**Not ready for open beta** until real 3D generation is wired (501 is the first thing a new user hits). Everything else is beta-quality.
 
 ---
 
 ## 7. Known Gaps & TODOs
 
-### 7.1 Unimplemented Features
-
-| Gap | Where it's felt | Notes |
-|-----|-----------------|-------|
-| Cloud 3D generation | `src/api/assets/generate-node.js` | Returns `501`. Only mock adapter works. |
-| Micro-ledger | `frontend/src/js/ui/ledger-panel.js` | Stubbed `anchorManifest()`. No append-only store. |
-| OpenSCAD WASM | Not present | Explicitly deferred post-MVP. |
-| Health check endpoint | Not present | `GET /api/health` planned, not implemented. |
-| Direct manifest fetch by ID | Not present | `GET /api/manifest/:id` planned, not implemented. |
-| Backend token resolver fallback | Not present | `GET /api/resolve-token` planned for Phase 5.1, not implemented (browser resolver is the current path). |
-
-### 7.2 Bugs / Issues
-
-| Issue | Location | Severity |
-|-------|----------|----------|
-| `verify.js` passes wrong constructor args | `blockchain/scripts/verify.js` | High — Etherscan verification will fail |
-| ~`devAddress` undefined in `_checkBalance()`~ | `frontend/src/js/blockchain/wallet.js` | Fixed — stale low-balance toast is now cleared on account/network change |
-| IPFS browser cache hardcoded disabled | `frontend/src/js/ipfs/remote-ipfs.js` | Low — intentional but no toggle UI |
-
-### 7.3 Documentation Drift
-
-| Drift | Reality |
-|-------|---------|
-| Contract name `ArbeskWorld` | Actual contract is `ArbeskAsset` |
-| File `src/api/generate-asset-node.js` | Actual path is `src/api/assets/generate-node.js` |
-| File `src/api/parametric-version.js` | Does not exist — parametric is client-side |
-| File `frontend/src/js/ui/chat-studio.js` | Actual file is `create-panel.js` |
-| File `frontend/src/js/ui/save-world.js` | Actual file is `asset-save.js` |
-| File `frontend/src/js/ui/gallery.js` | Actual file is `asset-library.js` |
-| File `frontend/src/js/ui/history-browser.js` | Actual file is `asset-history.js` |
-| File `frontend/src/js/ui/team-panel.js` | Actual file is `collaborators-panel.js` |
-| File `frontend/src/js/events/registry.js` | Replaced by `frontend/src/js/events/bus.js` (mitt singleton) |
-| Network target Optimism Sepolia/Mainnet | Replaced by MegaETH Testnet |
-| On-chain editor roles (`addEditor`/`removeEditor`) | Replaced by off-chain Merkle editor list + `updateEditors` |
-| Comments scoped to collection/token | Comments are asset-level; Nostr tag includes `assetId` |
-| Chain ID constants in `src/constants/chains.js` + `frontend/src/js/constants/chains.js` | Consolidated into single `constants/chains.js` |
+| Gap | Where | Priority |
+|-----|-------|----------|
+| Cloud 3D generation adapter | `src/api/assets/generate-node.js` | 🔴 Critical for MVP |
+| Social login on MegaETH | `smart-wallet-support.js` | 🟡 Waiting on Thirdweb bundler support |
+| Micro-ledger (`anchorManifest`) | `ledger-panel.js` | 🟡 Post-beta |
+| `verify.js` constructor args fix | `blockchain/scripts/verify.js` | 🟡 Before mainnet |
+| IPFS browser cache re-enable | `remote-ipfs.js` | 🟢 Performance improvement |
+| Health check endpoint | — | 🟢 Ops convenience |
+| OpenSCAD WASM | — | ⚪ Explicitly deferred |
 
 ---
 
-## 8. How to Verify Current State
+## 8. Infrastructure & Environment
 
-```bash
-# Start infrastructure
-docker compose up -d
+### Ports
 
-# Full dev stack (deploys contracts if needed, builds frontend, starts backend)
-npm run dev
+| Service | API | Gateway / RPC | Notes |
+|---------|-----|---------------|-------|
+| Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, loopback-only |
+| Hardhat local EVM | — | `127.0.0.1:8545` | Docker container |
+| Local Nostr relay | — | `ws://127.0.0.1:7777` | Dev-only |
+| MegaETH Testnet | — | `https://carrot.megaeth.com/rpc` | EOA wallets |
+| Monad Testnet | — | `https://testnet-rpc.monad.xyz/` | Social-login smart accounts |
 
-# Run all verification tests
-npm run test:all
+### Environment Files
 
-# Or individually:
-npm run test:frontend   # Requires built dist/ + .env files
-npm run test:api        # Requires backend mocks only
-npm run test:contracts  # Requires running Hardhat container
-```
-
-After any `.sol` change:
-```bash
-docker-compose run --rm hardhat npx hardhat compile
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-# Sync CONTRACT_ADDRESS (free) and PAID_CONTRACT_ADDRESS from blockchain/.env → root .env
-npm run test:frontend
-```
-
----
-
-## 9. Summary
-
-Arbesk is a **functionally complete thick-client 3D world studio** through Phase 5.4. The browser owns rendering, parametric editing, glTF decomposition, IPFS reads/writes, wallet interactions (including on-chain tx submission), token resolution, collection management, and Merkle editor proof generation. The Express backend is a thin gatekeeper handling auth, rate limiting, manifest persistence, storage abstraction, comments archiving, and IPFS unpin lifecycle.
-
-**What is production-ready:**
-- Mock-backed generative pipeline with session auth + rate limiting
-- Full parametric editing with live Babylon.js preview
-- Token-based child world composition with depth/cycle protection
-- Free-tier `recordGeneration()` with packed daily quota and owner bypass
-- USDC PayGo with tiered pricing (paid tier)
-- SIWE session auth reducing per-generation pop-ups
-- ERC-721 minting, URI updates, Merkle-proof editor authorization, burn
-- Collection manifests — every token is a collection of asset CIDs
-- glTF decompose/composer/material-edit pipeline
-- Private Dockerized IPFS + Hardhat local dev stack
-- MegaETH Testnet target with per-chain network configs
-
-**What is explicitly not implemented:**
-- Production cloud 3D adapters (returns 501)
-- Micro-ledger / append-only audit trail
-- OpenSCAD WASM
+| File | Status |
+|------|--------|
+| Root `.env` | ✅ Exists |
+| `blockchain/.env` | ✅ Exists |
+| `frontend/.env` | ❌ Not present (optional, not currently used) |
