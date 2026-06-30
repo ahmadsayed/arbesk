@@ -100,11 +100,16 @@ function newWeb3(provider) {
 
 /**
  * Initialize wallet system. Starts EIP-6963 discovery.
- * Does NOT auto-connect — the user must click Login / Signup.
+ * Auto-restores CDP email sessions only; EOA wallets require explicit Login / Signup.
  */
 function initWallet() {
   startDiscovery();
   log("[WALLET] EIP-6963 discovery started");
+  // Only attempt silent CDP restore. EOA auto-connect was disabled because it
+  // feels too busy for Web2 users arriving at the page.
+  autoConnectCdpOnly().catch((err) => {
+    warn("[WALLET] CDP auto-connect failed:", err);
+  });
 }
 
 /**
@@ -297,6 +302,38 @@ async function autoConnectWallet() {
     // No previous connection - stay disconnected
   } catch (err) {
     error("Auto-connect failed:", err);
+  }
+}
+
+/**
+ * Silent restore for CDP email sessions only.
+ * EOA and WalletConnect wallets are intentionally skipped so the page shows
+ * Login / Signup until the user explicitly connects.
+ */
+async function autoConnectCdpOnly() {
+  try {
+    const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
+    if (lastWallet !== "cdp") return;
+
+    const config = await (await import("../services/api.js")).getConfig();
+    if (!config?.cdpProjectId) return;
+
+    const { initCdpClient, autoConnectCdpWallet } = await import("./wallet-cdp.js");
+    await initCdpClient(config.cdpProjectId);
+    const cdpResult = await autoConnectCdpWallet();
+    if (!cdpResult) {
+      localStorage.removeItem(LAST_WALLET_KEY);
+      return;
+    }
+
+    web3Provider = cdpResult.provider;
+    web3 = newWeb3(cdpResult.provider);
+    window.web3 = web3;
+    activeConnectionSource = "cdp";
+    await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, cdpResult.email || null);
+  } catch (err) {
+    warn("[WALLET] CDP auto-connect failed:", err.message);
+    localStorage.removeItem(LAST_WALLET_KEY);
   }
 }
 

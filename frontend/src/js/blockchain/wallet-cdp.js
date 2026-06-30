@@ -209,6 +209,7 @@ export async function autoConnectCdpWallet() {
       eoaAddress: eoaAccount.address,
       smartAccountAddress: smartAccountAddress ?? eoaAccount.address,
       provider: _provider,
+      email: user.email || null,
     };
   } catch (err) {
     // getCurrentUser() throws when no session exists — that's expected, not an error

@@ -294,6 +294,10 @@ async function selectEmailWallet() {
 
     const { initCdpClient, requestEmailOtp, verifyEmailOtp, autoConnectCdpWallet, disconnectCdpWallet } = await import("../blockchain/wallet-cdp.js");
 
+    // Initialize the SDK first so that signOut (and any other session calls)
+    // actually reach CDP's servers.
+    await initCdpClient(config.cdpProjectId);
+
     // Clear any stale CDP browser state before starting a fresh login flow.
     // The SDK stores session data under coinbase/cdp keys across localStorage,
     // IndexedDB, and cookies; stale state causes "User is already authenticated"
@@ -316,8 +320,6 @@ async function selectEmailWallet() {
     } catch {
       // Best-effort cleanup; ignore failures here.
     }
-
-    await initCdpClient(config.cdpProjectId);
 
     const { flowId } = await requestEmailOtp(email);
 
