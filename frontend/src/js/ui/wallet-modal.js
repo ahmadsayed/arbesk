@@ -63,7 +63,8 @@ export function showWalletModal() {
       </div>
       <div class="wallet-modal-body">
         <p class="wallet-modal-subtitle">Choose how you want to sign in or create an account.</p>
-        <div id="walletEmailSection">
+
+        <div class="wallet-section">
           <p class="wallet-modal-section-label">Email (gasless, Base Sepolia)</p>
           <div id="walletEmailStep" class="wallet-email-step">
             <div class="wallet-email-row">
@@ -75,7 +76,7 @@ export function showWalletModal() {
                 autocomplete="email"
                 aria-label="Email address"
               />
-              <button id="walletEmailSendBtn" class="btn btn-primary btn-sm" type="button">
+              <button id="walletEmailSendBtn" class="btn btn-primary" type="button">
                 Send code
               </button>
             </div>
@@ -93,22 +94,26 @@ export function showWalletModal() {
                 maxlength="6"
                 aria-label="One-time code"
               />
-              <button id="walletOtpVerifyBtn" class="btn btn-primary btn-sm" type="button">
+              <button id="walletOtpVerifyBtn" class="btn btn-primary" type="button">
                 Verify
               </button>
             </div>
             <div id="walletOtpError" class="wallet-email-error" role="alert" aria-live="polite"></div>
             <button id="walletOtpBackBtn" class="btn btn-link btn-sm wallet-otp-back" type="button">
-              &larr; Use a different email
+              Use a different email
             </button>
           </div>
-          <div class="wallet-modal-divider" aria-hidden="true">
-            <span>or</span>
-          </div>
         </div>
-        <p class="wallet-modal-section-label">Web3 wallet</p>
-        <div class="wallet-options-list" id="walletOptionsList">
-          <div class="wallet-modal-empty">Detecting wallets…</div>
+
+        <div class="wallet-modal-divider" aria-hidden="true">
+          <span>or</span>
+        </div>
+
+        <div class="wallet-section">
+          <p class="wallet-modal-section-label">Web3 wallet</p>
+          <div class="wallet-options-list" id="walletOptionsList">
+            <div class="wallet-modal-empty">Detecting wallets…</div>
+          </div>
         </div>
       </div>
     `;
@@ -287,7 +292,31 @@ async function selectEmailWallet() {
       return;
     }
 
-    const { initCdpClient, requestEmailOtp, verifyEmailOtp, autoConnectCdpWallet } = await import("../blockchain/wallet-cdp.js");
+    const { initCdpClient, requestEmailOtp, verifyEmailOtp, autoConnectCdpWallet, disconnectCdpWallet } = await import("../blockchain/wallet-cdp.js");
+
+    // Clear any stale CDP browser state before starting a fresh login flow.
+    // The SDK stores session data under coinbase/cdp keys across localStorage,
+    // IndexedDB, and cookies; stale state causes "User is already authenticated"
+    // or "EVM account not found" errors.
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.toLowerCase().startsWith("cdp") || key.toLowerCase().startsWith("coinbase")) {
+          localStorage.removeItem(key);
+        }
+      }
+      if (window.indexedDB) {
+        const dbs = await window.indexedDB.databases?.();
+        for (const db of dbs ?? []) {
+          if (db.name?.toLowerCase().includes("cdp") || db.name?.toLowerCase().includes("coinbase")) {
+            window.indexedDB.deleteDatabase(db.name);
+          }
+        }
+      }
+      await disconnectCdpWallet();
+    } catch {
+      // Best-effort cleanup; ignore failures here.
+    }
+
     await initCdpClient(config.cdpProjectId);
 
     const { flowId } = await requestEmailOtp(email);
@@ -340,6 +369,7 @@ async function selectEmailWallet() {
           source: "cdp",
           walletAddress: cdpResult.smartAccountAddress,
           eoaAddress: cdpResult.eoaAddress,
+          email,
         });
         hideWalletModal();
       } catch (err) {

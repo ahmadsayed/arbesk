@@ -37,15 +37,25 @@ Protected routes use this header:
 Authorization: Session <opaque-token>
 ```
 
-`POST /api/v1/sessions` accepts **two** kinds of proof and issues the same opaque session token (24-hour TTL) for both. `authentication.js` validates the issued token regardless of how it was created.
+`POST /api/v1/sessions` accepts a SIWE proof from any wallet type and issues an opaque session token (24-hour TTL). `authentication.js` validates the issued token.
 
-### Creating a session — SIWE (EOA wallets)
+### Creating a session
 
-Used by EOA wallets (MetaMask, Rabby) on all supported chains.
+A single session creation path is used for all wallet types.
 
-1. Build a SIWE message (EIP-4361) containing the wallet address, domain, chain ID, nonce, and issued-at timestamp.
+```
+POST /api/v1/sessions
+Body: { message: string, signature: string, eoaAddress?: string }
+```
+
+- `message` / `signature`: a SIWE message (EIP-4361) and its signature.
+- `eoaAddress` *(optional)*: for CDP email-login smart accounts — the embedded EOA address that actually signed the message. The `message.address` field contains the smart account address; `eoaAddress` triggers fallback signature verification in `siwe-verify.js`.
+
+**EOA wallets (MetaMask/Rabby):**
+
+1. Build a SIWE message containing the wallet address, domain, chain ID, nonce, and issued-at timestamp.
 2. Sign the message with the wallet (e.g., `personal.sign`).
-3. POST the message and signature to `/api/v1/sessions`:
+3. POST the message and signature:
 
 ```json
 POST /api/v1/sessions
@@ -55,22 +65,22 @@ POST /api/v1/sessions
 }
 ```
 
-### Creating a session — Thirdweb JWT (social-login smart accounts)
+**CDP email-login smart accounts:**
 
-Used by social-login (Google) ERC-4337 smart accounts on Monad Testnet. The smart account's signer is decoupled from the on-chain account, so SIWE is not used; instead the client posts the Thirdweb in-app wallet auth token:
+The embedded EOA signer signs the SIWE message, but the `address` in the message is the ERC-4337 smart account. The `eoaAddress` field provides the actual signer for server-side verification:
 
 ```json
 POST /api/v1/sessions
 {
-  "thirdwebAuthToken": "<jwt>"
+  "message": "example.com wants you to sign in...",
+  "signature": "0x...",
+  "eoaAddress": "0x<embedded-eoa-address>"
 }
 ```
 
-The backend (`thirdweb-auth.js`) verifies the JWT against Thirdweb's JWKS endpoint (`login.thirdweb.com/api/jwks`) and extracts the wallet address from the `sub` claim. A dev bypass is available via `THIRDWEB_AUTH_DEV_MODE=true`.
-
 ### Session response
 
-Both paths return an opaque session token valid for 24 hours:
+All paths return an opaque session token valid for 24 hours:
 
 ```json
 {
@@ -97,7 +107,7 @@ Parametric edits, manifest saves, manifest chain reads, ABI reads, and token man
 
 ### `GET /api/v1/config`
 
-Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, WalletConnect project ID, and the Thirdweb client ID used by the browser to initialise social login.
+Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, WalletConnect project ID, and the CDP Project ID used by the browser to initialise email-login wallets.
 
 **Response**
 
@@ -112,19 +122,12 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
       "usdcToken": "0x...",
       "rpcUrl": "http://127.0.0.1:8545"
     },
-    "6343": {
-      "name": "MegaETH Testnet",
+    "84532": {
+      "name": "Base Sepolia Testnet",
       "contractAddress": "0x...",
       "paidContractAddress": null,
       "usdcToken": null,
-      "rpcUrl": "https://carrot.megaeth.com/rpc"
-    },
-    "10143": {
-      "name": "Monad Testnet",
-      "contractAddress": "0x...",
-      "paidContractAddress": null,
-      "usdcToken": null,
-      "rpcUrl": "https://testnet-rpc.monad.xyz/"
+      "rpcUrl": "https://sepolia.base.org"
     }
   },
   "ipfsBackend": "kubo",
@@ -132,7 +135,7 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
   "hardhatRpcUrl": "http://127.0.0.1:8545",
   "mockGeneration": true,
   "walletConnectProjectId": null,
-  "thirdwebClientId": null
+  "cdpProjectId": null
 }
 ```
 
@@ -244,6 +247,38 @@ Comments are scoped per asset using the canonical tag `<chainId>:<contractAddres
 | 401 | Missing or invalid session |
 | 503 | Contract address not configured |
 | 500 | Archive creation failed |
+
+---
+
+### `POST /api/v1/paymaster`
+
+Backend proxy for the CDP Paymaster JSON-RPC endpoint. Forwards UserOperation sponsorship requests to the CDP Paymaster without exposing `CDP_PAYMASTER_URL` to the browser. Used by `wallet-cdp.js` to sponsor gas for CDP email-login smart accounts on Base Sepolia.
+
+**Auth:** None required.
+
+**Request Body**
+
+A standard JSON-RPC request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "pm_sponsorUserOperation",
+  "params": [...],
+  "id": 1
+}
+```
+
+**Response `200`**
+
+The raw JSON-RPC response from the CDP Paymaster.
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 503 | `CDP_PAYMASTER_URL` is not configured |
+| 502 | Upstream CDP Paymaster returned an error |
 
 ---
 
@@ -374,7 +409,7 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 
 ### `GET /api/v1/indexer/owned`
 
-Returns the token IDs owned by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, MegaETH 5000, Monad 100 — Monad rejects wide ranges with 413), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
+Returns the token IDs owned by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 2000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
 
 A background poll catches up every ~15s. The route also runs an inline catch-up before responding if the last one was more than 30s ago, or always when `force=true` is passed — letting the frontend request an immediate refresh right after publishing.
 
@@ -383,17 +418,17 @@ A background poll catches up every ~15s. The route also runs an inline catch-up 
 | Param | Required | Description |
 |---|---|---|
 | `address` | Yes | Wallet address to look up |
-| `chainId` | Yes | One of the supported chain IDs (`31415822`, `6343`, `10143`) |
+| `chainId` | Yes | One of the supported chain IDs (`31415822`, `84532`) |
 | `force` | No | `true` bypasses the 30s catch-up throttle for an immediate rescan |
 
 **Response `200`**
 
 ```json
 {
-  "chainId": 10143,
+  "chainId": 84532,
   "address": "0x...",
   "owned": ["1", "2", "42"],
-  "lastScannedBlock": 41167500
+  "lastScannedBlock": 7000000
 }
 ```
 

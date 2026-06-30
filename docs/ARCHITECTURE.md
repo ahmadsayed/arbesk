@@ -1,6 +1,6 @@
 # Arbesk System Architecture
 
-> Status: Current v0.8 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). Asset-level Nostr comments implemented. Phase 5 micro-ledger planned.
+> Status: Current v0.9 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). Asset-level Nostr comments and CDP email-login smart accounts implemented. Phase 5 micro-ledger planned.
 > Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child worlds, collection manifests, and studio publishing
 
 ---
@@ -20,7 +20,7 @@ The system currently combines:
 - **Off-chain Merkle editor proofs** — the contract stores only a Merkle root; the full editor list lives on IPFS and is proved at call time
 - **Private Dockerized Kubo/IPFS** for local content-addressed storage; Pinata-backed storage for public testnet
 - **Dockerized Hardhat** for reproducible local EVM development
-- **MegaETH Testnet** as the public testnet target (Hardhat local for dev)
+- **Base Sepolia Testnet** as the public testnet target (Hardhat local for dev)
 - **Optional WebP publish thumbnails** stored as separate IPFS assets and referenced by manifest metadata
 - **On-demand browser IPFS cache** using memory + IndexedDB
 
@@ -87,6 +87,8 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  /api/v1/ipfs/unpin                                                  │
 │  └─ Burn cleanup — walks chain, collects CIDs, unpins                │
 │                                                                      │
+│  /api/v1/paymaster (CDP Paymaster JSON-RPC proxy)                     │
+│                                                                      │
 │  /api/v1/config, /api/v1/contracts/:name/abi, /api/v1/openapi.json   │
 │  /api/v1/sessions (SIWE), /api/v1/chat/ws (Nostr proxy)              │
 │                                                                      │
@@ -96,7 +98,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
                 │                               │
                 ▼                               ▼
 ┌──────────────────────────────┐   ┌──────────────────────────────────┐
-│ Private Kubo / Pinata IPFS   │   │ EVM (Hardhat / MegaETH Testnet)  │
+│ Private Kubo / Pinata IPFS   │   │ EVM (Hardhat / Base Sepolia)     │
 │ 127.0.0.1:5001 API           │   │ ArbeskAssetFree.sol (free tier)  │
 │ 127.0.0.1:8080 gateway       │   │ ArbeskAsset.sol (paid tier)      │
 │ No DHT / no bootstrap peers  │   │ ├─ recordGeneration              │
@@ -106,7 +108,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │ or Pinata presigned URLs     │   │ ├─ updateEditors + Merkle proof  │
 │                              │   │ └─ burn + Merkle proof           │
 │                              │   │ Local RPC: 127.0.0.1:8545        │
-│                              │   │ MegaETH RPC: carrot.megaeth.com  │
+│                              │   │ Base Sepolia RPC: sepolia.base.org│
 └──────────────────────────────┘   └──────────────────────────────────┘
 ```
 
@@ -129,7 +131,8 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, manifest-chain walks, token resolution — all browser-side |
 | `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
 | `src/api/sessions.js` | SIWE session create/delete (24h TTL) |
-| `src/api/siwe-verify.js` | EIP-4361 message verification |
+| `src/api/siwe-verify.js` | EIP-4361 message verification (supports `eoaAddress` for CDP smart accounts) |
+| `src/api/routes/paymaster.js` | CDP Paymaster JSON-RPC proxy (keeps `CDP_PAYMASTER_URL` server-side) |
 | `src/api/rate-limiter.js` | In-memory route rate limiter |
 | `src/api/abi-router.js` | Serves compiled contract artifacts by name |
 | `src/api/adapters/mock-adapter.js` | Deterministic local asset generation for development/tests |
@@ -138,7 +141,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | `src/api/nostr-relay.js` | Shared relay primitives (used by chat-proxy + comments-archive) |
 | `src/api/manifest-utils.js` | getSceneNodes (used by unpin route) |
 | `src/api/ipfs-utils.js` | catManifest() with timeout/abort |
-| `src/config.js` | Multi-network Web3 config (Hardhat local, MegaETH Testnet) |
+| `src/config.js` | Multi-network Web3 config (Hardhat local, Base Sepolia Testnet) |
 
 ### 3.2 Frontend (`frontend/src/js/`)
 
@@ -158,6 +161,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | Blockchain | `blockchain/wallet-network.js` | Network switching |
 | Blockchain | `blockchain/wallet-payments.js` | Free-tier `recordGeneration()`, USDC PayGo `payForGenerationWithUSDC()` |
 | Blockchain | `blockchain/wallet-publishing.js` | Mint, `updateAssetURI()`, `updateEditors()`, `burn()` |
+| Blockchain | `blockchain/wallet-cdp.js` | CDP email-OTP login, ERC-4337 smart account, EIP-1193 shim for Web3.js |
 | Blockchain | `blockchain/network-config.js` | Per-network contract/USDC/RPC configuration |
 | Blockchain | `blockchain/token-resolver.js` | Resolve `child_ref` tokens to manifest CIDs (client-side, no server) |
 | UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
@@ -223,11 +227,11 @@ The contract never stores per-address roles. Instead:
 | `ipfs` | Private Kubo node (local dev / E2E) | `127.0.0.1:5001`, `127.0.0.1:8080` |
 | `hardhat` | Local EVM and contract tooling | `127.0.0.1:8545` |
 | `nostr` | Local Nostr relay (dev only) | `127.0.0.1:7777` |
-| `megaethTestnet` | Public testnet target | RPC `https://carrot.megaeth.com/rpc` |
+| `baseSepolia` | Public testnet target | RPC `https://sepolia.base.org` |
 
 The local Kubo container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm. The Nostr relay is likewise local-only: bound to loopback, SQLite-backed, with no federation or public peering.
 
-Public network strategy: **Hardhat local for development, MegaETH Testnet for testnet**. Optimism Sepolia / Mainnet are no longer current targets.
+Public network strategy: **Hardhat local for development, Base Sepolia Testnet for testnet**. Base Sepolia supports both EOA wallets (MetaMask/Rabby) and CDP email-login smart accounts (ERC-4337, gas sponsored by CDP Paymaster).
 
 ---
 
@@ -619,7 +623,7 @@ Context menu opens on right-click. Content varies by target:
 4. On success: the spinner badge flips to the green ✓ (`besked`). A success toast appears.
 5. On failure (network error, wallet rejection): the optimistic card disappears. An error toast appears.
 
-For EOA wallets (MetaMask/Rabby), the spinner card appears just before the wallet approval popup. Rejecting the popup removes the card. For social-login (Google) smart accounts, the card appears before the sponsored UserOperation is submitted.
+For EOA wallets (MetaMask/Rabby), the spinner card appears just before the wallet approval popup. Rejecting the popup removes the card. For CDP email-login smart accounts, the card appears before the sponsored UserOperation is submitted.
 
 ---
 
@@ -654,7 +658,7 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 - Truncated address
 - Copy to clipboard
 - "View on Explorer" link (when on a chain with a known block explorer)
-- "Sign In" button (if wallet is connected but SIWE/Thirdweb session has not been established)
+- "Sign In" button (if wallet is connected but a SIWE session has not been established)
 - "Log Out" button
 
 ---

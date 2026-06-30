@@ -45,9 +45,11 @@ import {
   switchNetwork,
 } from "/js/blockchain/wallet.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
-import { getCachedSession } from "/js/services/api.js";
-import { truncateAddress } from "/js/utils/format.js";
 import { walletState } from "/js/state/wallet-state.js";
+import {
+  updateHeaderWalletButton,
+  isWalletAuthenticated,
+} from "/js/ui/header-wallet-button.js";
 
 // ── Headerbar network selector ──
 const networkSelect = document.getElementById("headerbarNetworkSelect");
@@ -85,46 +87,14 @@ document
   ?.addEventListener("click", connectWallet);
 initWalletPopover();
 
-function updateWalletButtonState(address, isAuthenticated) {
-  const d = document.getElementById("disconnectWalletBtn");
-  if (!d) return;
-
-  const text = d.querySelector("span") || d;
-  if (!address) {
-    if (text) text.textContent = "Disconnect";
-    return;
-  }
-
-  const truncated = truncateAddress(address);
-  if (text) {
-    text.textContent = isAuthenticated ? truncated : `${truncated} • Sign In`;
-  }
-
-  if (isAuthenticated) {
-    d.classList.remove("auth-required");
-  } else {
-    d.classList.add("auth-required");
-  }
-}
-
 on(EVENTS.WALLET_CONNECTED, (e) => {
-  const c = document.getElementById("connectWalletBtn");
-  const d = document.getElementById("disconnectWalletBtn");
-  const netSel = document.getElementById("headerbarNetworkSelect");
-  if (c) {
-    c.classList.add("hidden");
-    c.classList.remove("disconnected");
-  }
-  if (d) d.classList.remove("hidden");
-
   const address = e?.address || "";
-  const cached = getCachedSession();
-  const isAuth = cached && cached.address === address.toLowerCase();
-  updateWalletButtonState(address, isAuth);
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(address, isWalletAuthenticated(address), walletSource, email);
 
-  // Green dot + sync network selector to current chain
+  // Sync network selector to current chain
+  const netSel = document.getElementById("headerbarNetworkSelect");
   if (netSel) {
-    netSel.classList.add("connected");
     const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
@@ -136,26 +106,15 @@ on(EVENTS.WALLET_CONNECTED, (e) => {
 });
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
-  const c = document.getElementById("connectWalletBtn");
-  const d = document.getElementById("disconnectWalletBtn");
-  const netSel = document.getElementById("headerbarNetworkSelect");
-  if (c) {
-    c.classList.remove("hidden");
-    c.classList.add("disconnected");
-  }
-  if (d) {
-    d.classList.add("hidden");
-    d.classList.remove("auth-required");
-  }
-  updateWalletButtonState(null, false);
-  // Gray dot when disconnected
-  if (netSel) netSel.classList.remove("connected");
+  updateHeaderWalletButton(null, false, null, null);
 });
 
 on(EVENTS.USER_AUTHENTICATED, (e) => {
-  updateWalletButtonState(e?.address, true);
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(e?.address, true, walletSource, email);
 });
 
 on(EVENTS.USER_AUTH_REQUIRED, (e) => {
-  updateWalletButtonState(e?.address, false);
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(e?.address, false, walletSource, email);
 });

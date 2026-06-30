@@ -100,15 +100,11 @@ function newWeb3(provider) {
 
 /**
  * Initialize wallet system. Starts EIP-6963 discovery.
- * Does NOT auto-connect.
+ * Does NOT auto-connect — the user must click Login / Signup.
  */
 function initWallet() {
   startDiscovery();
   log("[WALLET] EIP-6963 discovery started");
-  // Attempt silent reconnect on page load.
-  autoConnectWallet().catch((err) => {
-    warn("[WALLET] auto-connect failed:", err);
-  });
 }
 
 /**
@@ -309,8 +305,13 @@ async function autoConnectWallet() {
 /**
  * Shared setup after provider is established (accounts, chain, contract, listeners).
  */
-async function _finishWalletSetup(address, eoaAddress = null) {
-  walletState.set({ walletAddress: address, eoaAddress: eoaAddress || address });
+async function _finishWalletSetup(address, eoaAddress = null, email = null) {
+  walletState.set({
+    walletAddress: address,
+    eoaAddress: eoaAddress || address,
+    walletSource: activeConnectionSource,
+    email,
+  });
 
   let chainId = Number(await web3.eth.getChainId());
   walletState.set({ chainId });
@@ -462,7 +463,7 @@ async function connectWallet() {
       activeConnectionSource = "cdp";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "cdp");
-      await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress);
+      await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress, result.email || null);
     } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
       web3Provider = provider;

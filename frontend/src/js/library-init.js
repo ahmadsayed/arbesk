@@ -17,8 +17,10 @@ import { initWalletPopover } from "./ui/wallet-popover.js";
 import { initTheme, toggleTheme } from "./engine/theme.js";
 import { walletState } from "./state/wallet-state.js";
 import { libraryState } from "./state/library-state.js";
-import { truncateAddress } from "./utils/format.js";
-import { getCachedSession } from "./services/api.js";
+import {
+  updateHeaderWalletButton,
+  isWalletAuthenticated,
+} from "./ui/header-wallet-button.js";
 import { getFromRemoteIPFS } from "./ipfs/remote-ipfs.js";
 import { deriveDefaultCollectionId } from "./utils/collections.js";
 import {
@@ -49,21 +51,6 @@ function applyWalletGate(connected) {
   const uploadBtn = document.getElementById("libraryUploadBtn");
   if (createBtn) createBtn.hidden = !connected;
   if (uploadBtn) uploadBtn.hidden = !connected;
-}
-
-function updateWalletButtonState(address, isAuthenticated) {
-  const d = document.getElementById("disconnectWalletBtn");
-  if (!d) return;
-  const text = d.querySelector("span") || d;
-  if (!address) {
-    if (text) text.textContent = "Disconnect";
-    return;
-  }
-  const truncated = truncateAddress(address);
-  if (text) {
-    text.textContent = isAuthenticated ? truncated : `${truncated} • Sign In`;
-  }
-  d.classList.toggle("auth-required", !isAuthenticated);
 }
 
 function extractThumbnailCid(thumbnail) {
@@ -393,24 +380,14 @@ document.getElementById("headerbarNetworkSelect")?.addEventListener("change", as
 });
 
 on(EVENTS.WALLET_CONNECTED, async (e) => {
-  const c = document.getElementById("connectWalletBtn");
-  const d = document.getElementById("disconnectWalletBtn");
-  const netSel = document.getElementById("headerbarNetworkSelect");
-  if (c) {
-    c.classList.add("hidden");
-    c.classList.remove("disconnected");
-  }
-  if (d) d.classList.remove("hidden");
-
   const address = e?.address || "";
-  const cached = getCachedSession();
-  const isAuth = cached && cached.address === address.toLowerCase();
-  updateWalletButtonState(address, isAuth);
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(address, isWalletAuthenticated(address), walletSource, email);
   applyWalletGate(true);
 
-  // Green dot + sync network selector to current chain (matches studio-init.js)
+  // Sync network selector to current chain
+  const netSel = document.getElementById("headerbarNetworkSelect");
   if (netSel) {
-    netSel.classList.add("connected");
     const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
@@ -424,20 +401,7 @@ on(EVENTS.WALLET_CONNECTED, async (e) => {
 });
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
-  const c = document.getElementById("connectWalletBtn");
-  const d = document.getElementById("disconnectWalletBtn");
-  const netSel = document.getElementById("headerbarNetworkSelect");
-  if (c) {
-    c.classList.remove("hidden");
-    c.classList.add("disconnected");
-  }
-  if (d) {
-    d.classList.add("hidden");
-    d.classList.remove("auth-required");
-  }
-  updateWalletButtonState(null, false);
-  // Gray dot when disconnected (matches studio-init.js)
-  if (netSel) netSel.classList.remove("connected");
+  updateHeaderWalletButton(null, false, null, null);
   applyWalletGate(false);
   libraryState.set({
     collections: [],
@@ -447,8 +411,14 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
   });
 });
 
-on(EVENTS.USER_AUTHENTICATED, (e) => updateWalletButtonState(e?.address, true));
-on(EVENTS.USER_AUTH_REQUIRED, (e) => updateWalletButtonState(e?.address, false));
+on(EVENTS.USER_AUTHENTICATED, (e) => {
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(e?.address, true, walletSource, email);
+});
+on(EVENTS.USER_AUTH_REQUIRED, (e) => {
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(e?.address, false, walletSource, email);
+});
 
 on(EVENTS.ASSET_PUBLISHED, async () => {
   // Force an immediate indexer catch-up so the newly published collection

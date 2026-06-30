@@ -11,7 +11,7 @@
  * Follows the same structural pattern as the removed wallet-thirdweb.js.
  */
 
-import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, signEvmMessage, sendUserOperation, signOut } from "@coinbase/cdp-core";
+import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut } from "@coinbase/cdp-core";
 import { log, error, warn } from "../utils/log.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import {
@@ -43,7 +43,7 @@ const BASE_SEPOLIA_CHAIN_ID_HEX = "0x" + CHAIN_IDS.BASE_TESTNET.toString(16); //
 const CDP_NETWORK_BASE_SEPOLIA = "base-sepolia";
 
 /** Public Base Sepolia RPC endpoint (for read-only passthrough calls) */
-const BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
+const BASE_SEPOLIA_RPC_URL = "https://base-sepolia-rpc.publicnode.com";
 
 // ─── Initialization ──────────────────────────────────────────────────────────
 
@@ -59,7 +59,13 @@ export async function initCdpClient(projectId) {
     return;
   }
   try {
-    await initialize({ projectId });
+    await initialize({
+      projectId,
+      ethereum: {
+        createOnLogin: "smart", // Creates an EOA + ERC-4337 Smart Account on login
+      },
+      disableAnalytics: true, // Avoids extra CSP/connectivity overhead
+    });
     _cdpInitialized = true;
     log("CDP", "initialized with project ID:", projectId.slice(0, 8) + "…");
   } catch (err) {
@@ -113,12 +119,38 @@ export async function verifyEmailOtp(flowId, otp) {
     const { user, isNewUser } = await verifyEmailOTP({ flowId, otp });
     log("CDP", isNewUser ? "new user created" : "existing user signed in");
 
-    const eoaAccount = user.evmAccountObjects?.[0];
+    let eoaAccount = user.evmAccountObjects?.[0];
+    let smartAccountAddress = user.evmSmartAccountObjects?.[0]?.address ?? null;
+
+    log("CDP", "post-OTP user keys:", Object.keys(user ?? {}).join(","));
+    log("CDP", "post-OTP evmAccountObjects:", JSON.stringify(user?.evmAccountObjects?.map((a) => a?.address)));
+    log("CDP", "post-OTP evmAccounts:", JSON.stringify(user?.evmAccounts));
+    log("CDP", "post-OTP evmSmartAccountObjects:", JSON.stringify(user?.evmSmartAccountObjects?.map((a) => a?.address)));
+    log("CDP", "post-OTP evmSmartAccounts:", JSON.stringify(user?.evmSmartAccounts));
+
+    if (!eoaAccount || !smartAccountAddress) {
+      log("CDP", "no EVM accounts after OTP; creating smart account manually");
+      try {
+        smartAccountAddress = await createEvmSmartAccount();
+        log("CDP", "createEvmSmartAccount returned:", smartAccountAddress);
+      } catch (createErr) {
+        error("CDP", "createEvmSmartAccount failed:", createErr);
+        throw createErr;
+      }
+      const updatedUser = await getCurrentUser();
+      log("CDP", "post-create user keys:", Object.keys(updatedUser ?? {}).join(","));
+      log("CDP", "post-create evmAccountObjects:", JSON.stringify(updatedUser?.evmAccountObjects?.map((a) => a?.address)));
+      log("CDP", "post-create evmAccounts:", JSON.stringify(updatedUser?.evmAccounts));
+      log("CDP", "post-create evmSmartAccountObjects:", JSON.stringify(updatedUser?.evmSmartAccountObjects?.map((a) => a?.address)));
+      log("CDP", "post-create evmSmartAccounts:", JSON.stringify(updatedUser?.evmSmartAccounts));
+      eoaAccount = updatedUser.evmAccountObjects?.[0] ?? eoaAccount;
+      smartAccountAddress = updatedUser.evmSmartAccountObjects?.[0]?.address ?? smartAccountAddress;
+    }
+
     if (!eoaAccount) {
       throw new Error("CDP user has no EVM account after OTP verification");
     }
 
-    const smartAccountAddress = user.evmSmartAccountObjects?.[0]?.address ?? null;
     if (!smartAccountAddress) {
       warn("CDP", "user has no smart account — will use EOA address as wallet address");
     }
@@ -160,7 +192,8 @@ export async function autoConnectCdpWallet() {
 
     const eoaAccount = user.evmAccountObjects?.[0];
     if (!eoaAccount) {
-      log("CDP", "autoConnect: user has no EVM account");
+      log("CDP", "autoConnect: user has no EVM account — clearing stale session");
+      await disconnectCdpWallet();
       return null;
     }
 
@@ -211,6 +244,52 @@ export function isCdpConnected() {
   return _currentEoaAccount !== null;
 }
 
+// ─── UserOperation Helpers ───────────────────────────────────────────────────
+
+/**
+ * Poll CDP until a UserOperation is mined and return its on-chain txHash.
+ * Web3.js expects eth_sendTransaction to return an EVM transaction hash, not a
+ * UserOperation hash, so we block here until CDP reports the real txHash.
+ *
+ * @param {string} userOpHash
+ * @param {string} smartAccountAddress
+ * @returns {Promise<string>}
+ */
+async function _waitForUserOperationTransaction(userOpHash, smartAccountAddress) {
+  const maxAttempts = 60;
+  const delayMs = 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    try {
+      const op = await getUserOperation({
+        evmSmartAccount: smartAccountAddress,
+        userOperationHash: userOpHash,
+        network: CDP_NETWORK_BASE_SEPOLIA,
+      });
+
+      log("CDP:EIP1193", `UserOperation status (attempt ${attempt}):`, op.status);
+
+      if (op.status === "complete" && op.transactionHash) {
+        return op.transactionHash;
+      }
+
+      if (op.status === "failed") {
+        const revertMsg = op.receipts?.[0]?.revert?.message || "unknown";
+        throw new Error(`UserOperation failed: ${revertMsg}`);
+      }
+    } catch (err) {
+      // On the last attempt, surface the error. Otherwise keep polling.
+      if (attempt === maxAttempts) {
+        throw new Error(`Timed out waiting for UserOperation ${userOpHash}: ${err.message}`);
+      }
+    }
+  }
+
+  throw new Error(`Timed out waiting for UserOperation ${userOpHash}`);
+}
+
 // ─── EIP-1193 Provider Shim ──────────────────────────────────────────────────
 
 /**
@@ -242,8 +321,8 @@ function hexToUtf8OrKeepHex(hexOrPlain) {
  * Routing:
  *  - eth_accounts / eth_requestAccounts → [smartAccountAddress]
  *  - eth_chainId                        → "0x14a34" (Base Sepolia, 84532)
- *  - personal_sign(message, account)    → signEvmMessage(eoaAccount, message)
- *  - eth_sign(account, message)         → signEvmMessage(eoaAccount, message)
+ *  - personal_sign(message, account)    → signEvmMessage(eoaAccount.address, message)
+ *  - eth_sign(account, message)         → signEvmMessage(eoaAccount.address, message)
  *  - eth_sendTransaction({ to, value, data }) → sendUserOperation → userOpHash
  *  - all other methods                  → forwarded to Base Sepolia public RPC
  *
@@ -309,7 +388,7 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
           const [rawMessage] = params ?? [];
           const message = hexToUtf8OrKeepHex(rawMessage);
           log("CDP:EIP1193", "personal_sign message (decoded):", message.slice(0, 80));
-          const personalSignResult = await signEvmMessage({ evmAccount: eoaAccount, message });
+          const personalSignResult = await signEvmMessage({ evmAccount: eoaAccount.address, message });
           return personalSignResult.signature;
         }
 
@@ -317,7 +396,7 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
           // Legacy eth_sign passes (address, message) — note reversed order
           const [, rawMessage] = params ?? [];
           const message = hexToUtf8OrKeepHex(rawMessage);
-          const ethSignResult = await signEvmMessage({ evmAccount: eoaAccount, message });
+          const ethSignResult = await signEvmMessage({ evmAccount: eoaAccount.address, message });
           return ethSignResult.signature;
         }
 
@@ -349,14 +428,21 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
                 data: data ?? "0x",
               },
             ],
-            // Route through backend proxy to keep CDP_PAYMASTER_URL secret
-            paymasterUrl: "/api/v1/paymaster",
+            // Use CDP's project-scoped paymaster. For production deployments that
+            // need to hide a custom paymaster API key, switch to paymasterUrl
+            // pointing at a public HTTPS backend proxy.
+            useCdpPaymaster: true,
           });
 
-          log("CDP:EIP1193", "UserOperation submitted, hash:", result.userOperationHash);
-          // Return the userOperationHash as the transaction hash — Web3.js polls
-          // eth_getTransactionReceipt with this hash until it's mined.
-          return result.userOperationHash;
+          const userOpHash = result.userOperationHash;
+          log("CDP:EIP1193", "UserOperation submitted, hash:", userOpHash);
+
+          // CDP returns a UserOperation hash, but Web3.js expects an EVM transaction
+          // hash so it can poll eth_getTransactionReceipt. Poll CDP until the
+          // UserOperation is mined and we have the on-chain txHash, then return it.
+          const txHash = await _waitForUserOperationTransaction(userOpHash, smartAccountAddress);
+          log("CDP:EIP1193", "UserOperation mined, txHash:", txHash);
+          return txHash;
         }
 
         // ── Everything else → public RPC passthrough ──────────────
@@ -364,6 +450,12 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
           return forwardToRpc(method, params ?? []);
       }
     },
+
+    // EIP-1193 event emitter shims. CDP smart accounts are fixed to Base Sepolia
+    // and a single address, so there are no account/chain changes to broadcast.
+    // Wallet-core attaches these listeners unconditionally for EIP-1193 providers.
+    on() {},
+    removeListener() {},
   };
 }
 
@@ -387,7 +479,7 @@ export async function signSiweMessageWithCdp(message) {
   }
   try {
     log("CDP", "signing SIWE message with EOA:", _currentEoaAccount.address);
-    const result = await signEvmMessage({ evmAccount: _currentEoaAccount, message });
+    const result = await signEvmMessage({ evmAccount: _currentEoaAccount.address, message });
     log("CDP", "SIWE message signed");
     return result.signature;
   } catch (err) {

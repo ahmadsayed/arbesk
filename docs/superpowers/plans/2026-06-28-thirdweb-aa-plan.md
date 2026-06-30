@@ -1,9 +1,15 @@
 # Thirdweb Account Abstraction (AA) Integration — Implementation Plan
 
+> **DEPRECATED — Historical Reference Only**
+>
+> This document describes the Thirdweb + Google OAuth + MegaETH/Monad account-abstraction path that was explored and then replaced by **CDP email-login smart accounts on Base Sepolia**. The implementation details below are no longer current and the files/modules they reference (`wallet-thirdweb.js`, `thirdweb-auth.js`, MegaETH/Monad chain configs) have been removed from the codebase.
+>
+> For the active plan, see `docs/superpowers/plans/2026-06-30-cdp-email-login-base-plan.md`.
+
 **Date:** 2026-06-28  
 **Author:** Claude Code / Arbesk Agent  
-**Status:** Ready for implementation  
-**Design spec:** `docs/superpowers/specs/2026-06-28-thirdweb-aa-design.md`
+**Status:** Deprecated — superseded by CDP/Base email-login  
+**Design spec:** `docs/superpowers/specs/2026-06-28-thirdweb-aa-design.md` (also deprecated)
 
 ---
 

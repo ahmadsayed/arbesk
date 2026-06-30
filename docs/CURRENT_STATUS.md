@@ -1,10 +1,10 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-06-30
+> **Generated:** 2026-07-01
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
-> **Network targets:** Hardhat local for development; MegaETH Testnet (chain ID 6343) for EOA wallets; Monad Testnet (chain ID 10143) for social-login smart accounts.
+> **Network targets:** Hardhat local for development; Base Sepolia Testnet (chain ID 84532) for EOA wallets and CDP email-login smart accounts.
 
 ---
 
@@ -23,8 +23,8 @@
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
 | Standalone Library Page | ✅ Complete | `library.pug`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
-| Social Login (Google / Thirdweb AA) | ✅ Complete | `wallet-thirdweb.js`, `thirdweb-auth.js`, ERC-4337 smart accounts on Monad Testnet |
-| Monad Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` at block 41167307 |
+| CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.js`, SIWE with `eoaAddress` fallback in `siwe-verify.js`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
+| Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, auto-rollback on cancel |
 | Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
@@ -38,7 +38,7 @@
 ```
 src/
 ├── index.js                    # Express bootstrap, CSP, request logging
-├── config.js                   # Multi-network Web3 config (Hardhat local, MegaETH Testnet)
+├── config.js                   # Multi-network Web3 config (Hardhat local, Base Sepolia Testnet)
 └── api/
     ├── index.js                # Main router — all v1 routes
     ├── assets/
@@ -50,7 +50,7 @@ src/
     │   ├── kubo-adapter.js     # Local Kubo add/cat/pin/directory/unpin
     │   └── pinata-adapter.js   # Pinata v3 SDK + presigned upload URLs
     ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
-    ├── authentication.js       # Session token validation middleware (SIWE + Thirdweb JWT)
+    ├── authentication.js       # Session token validation middleware (SIWE)
     ├── authorization.js        # On-chain asset access checks for chat proxy
     ├── chat-proxy.js           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
     ├── comments-archive.js     # Asset-level Nostr comment thread → IPFS archive
@@ -59,7 +59,6 @@ src/
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
     ├── nostr-relay.js          # Shared relay primitives (used by chat-proxy + comments-archive)
     ├── rate-limiter.js         # In-memory per-wallet rate limiter
-    ├── thirdweb-auth.js        # Thirdweb JWT verification (JWKS from login.thirdweb.com)
     ├── token-indexer.js        # Chunked eth_getLogs backfill for owned/shared token discovery
     ├── routes/                 # Per-domain route modules
     │   ├── comments.js         # POST /assets/snapshot-comments
@@ -67,6 +66,7 @@ src/
     │   ├── indexer.js          # GET /indexer/owned — token ownership lookup
     │   ├── ipfs.js             # POST /ipfs/upload-url + /ipfs/unpin
     │   ├── openapi.js          # GET /openapi.json + /docs
+    │   ├── paymaster.js        # POST /paymaster — CDP Paymaster JSON-RPC proxy
     │   └── test-utils.js       # Test-only reset helpers
     ├── sessions.js             # SIWE session create/delete (24h TTL)
     ├── siwe-verify.js          # EIP-4361 message verification
@@ -77,8 +77,9 @@ src/
 
 | Method | Path | Auth | What it does |
 |--------|------|------|--------------|
-| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag, thirdwebClientId |
-| POST | `/sessions` | None | Creates SIWE session (EIP-4361) or Thirdweb JWT session |
+| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag, cdpProjectId |
+| POST | `/sessions` | None | Creates SIWE session (EIP-4361); `eoaAddress` body field enables CDP smart-account fallback |
+| POST | `/paymaster` | None | CDP Paymaster JSON-RPC proxy — forwards sponsorship requests, keeps `CDP_PAYMASTER_URL` secret |
 | DELETE | `/sessions` | Session | Invalidates session token |
 | POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes |
 | POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId` |
@@ -92,12 +93,12 @@ src/
 
 ### 2.3 Auth Details
 
-**Two session types now exist:**
+**Single session type — SIWE for all wallet kinds:**
 
-1. **SIWE-based** (`Authorization: Session <token>`) — for EOA wallets (MetaMask/Rabby/WalletConnect). EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
-2. **Thirdweb JWT** (`Authorization: Session <thirdwebJwt>`) — for social-login smart accounts. JWT verified against Thirdweb's JWKS endpoint (`login.thirdweb.com/api/jwks`); wallet address extracted from the `sub` claim. Dev bypass via `THIRDWEB_AUTH_DEV_MODE=true`.
+- **EOA wallets** (MetaMask/Rabby/WalletConnect): standard EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
+- **CDP email-login smart accounts**: the embedded EOA signer signs the SIWE message; the SIWE `address` field contains the smart account address; `eoaAddress` in the POST body provides the actual signer for fallback verification in `siwe-verify.js`.
 
-Both session types share the same `Authorization: Session <token>` header format. `authentication.js` tries SIWE first, then Thirdweb JWT. 24-hour TTL.
+Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL. `authentication.js` validates the SIWE-issued token for all request types.
 
 ### 2.4 What Works
 
@@ -107,12 +108,12 @@ Both session types share the same `Authorization: Session <token>` header format
 - ✅ Manifest save/publish entirely client-side
 - ✅ Collection manifest merge + direct IPFS upload from browser
 - ✅ IPFS unpin on burn
-- ✅ Multi-network config (Hardhat `31415822`, MegaETH `6343`, Monad `10143`)
+- ✅ Multi-network config (Hardhat `31415822`, Base Sepolia `84532`)
 - ✅ Multi-storage backend (`kubo` local, `pinata` testnet)
 - ✅ Presigned upload URLs for browser uploads
 - ✅ Nostr comments archive snapshot on republish
 - ✅ Standalone Library page (collections, uploads, grid/list, search/sort, context actions)
-- ✅ Thirdweb JWT authentication (Google social login)
+- ✅ CDP email-login (OTP → embedded EOA → ERC-4337 smart account on Base Sepolia)
 - ✅ Chunked token indexer with per-chain `LOG_CHUNK_SIZES` and force-refresh
 
 ### 2.5 What Does NOT Work / Is Missing
@@ -168,14 +169,14 @@ frontend/src/js/
 │   ├── wallet-payments.js      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
 │   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
 │   ├── wallet-guard.js         # Guards / helpers for publishing auth
-│   ├── wallet-thirdweb.js      # Google OAuth → embedded EOA → ERC-4337 smart account; background pre-warm
-│   ├── smart-wallet-support.js # SMART_WALLET_SUPPORTED_CHAIN_IDS (Monad Testnet only)
+│   ├── wallet-cdp.js           # CDP email OTP → embedded EOA → ERC-4337 smart account; EIP-1193 shim
+│   ├── smart-wallet-support.js # SMART_WALLET_SUPPORTED_CHAIN_IDS (Base Sepolia only)
 │   ├── token-resolver.js       # Resolve child_ref tokens to manifest CIDs
 │   ├── uri-utils.js            # Normalize tokenURIs to plain CIDs
 │   ├── siwe.js                 # EIP-4361 message builder
 │   ├── wallet-discovery.js     # EIP-6963 multi-wallet
 │   ├── wallet-connect.js       # WalletConnect v2
-│   ├── network-config.js       # Per-network contract/USDC/RPC addresses (Hardhat/MegaETH/Monad)
+│   ├── network-config.js       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
 │   ├── error-decoder.js        # Revert reason decoding
 │   └── explorer.js             # Block explorer links
 ├── ipfs/
@@ -194,7 +195,7 @@ frontend/src/js/
 │   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
 │   └── create-store.js         # Generic createStore factory
 └── services/
-    ├── api.js                  # API client: sessions (SIWE + Thirdweb), generate, comments archive, unpin, upload-url
+    ├── api.js                  # API client: sessions (SIWE), generate, comments archive, unpin, upload-url, paymaster
     ├── asset-save/             # manifest-builder.js, collection-publish.js, editor-publish.js
     ├── library-ops.js          # Create named collection (with onPending hook), upload glTF/GLB
     ├── team.js / asset-delete.js / url-utils.js
@@ -203,29 +204,33 @@ frontend/src/js/
 
 ### 3.2 Core Systems — Verified in Code
 
-**Social Login (Thirdweb Account Abstraction)**
-- Google OAuth → Thirdweb embedded EOA → ERC-4337 smart account on Monad Testnet.
-- Provider exposed as an EIP-1193 shim so all existing Web3.js code is unchanged.
-- BigInt → hex normalisation layer handles Thirdweb's internal RPC responses.
-- Gas is sponsored by the Thirdweb paymaster (`sponsorGas: true`); low-balance toast is suppressed for smart accounts.
-- Smart account pre-warms in the background at login (deploys ERC-4337 account during idle time so the user's first tx skips account-creation overhead).
-- Auth: Thirdweb JWT verified server-side against JWKS; same session token format as SIWE.
-- **Chain constraint:** Smart wallets only work on Monad Testnet. EOA wallets (MetaMask/Rabby) work on all three chains.
+**CDP Email Login (Account Abstraction)**
+- Email OTP → CDP Embedded Wallet (`@coinbase/cdp-core`) → ERC-4337 smart account on Base Sepolia.
+- Provider exposed as an EIP-1193 shim (`wallet-cdp.js`) so all existing Web3.js code is unchanged.
+- Gas is sponsored by the CDP Paymaster (`useCdpPaymaster: true`); low-balance toast is suppressed for smart accounts.
+- Auth: embedded EOA signs the SIWE message; `eoaAddress` in the POST body enables fallback verification in `siwe-verify.js`. Same SIWE session token format as EOA wallets.
+- **Chain constraint:** Smart wallets only work on Base Sepolia (`SMART_WALLET_SUPPORTED_CHAIN_IDS`). EOA wallets (MetaMask/Rabby) work on all supported chains.
+- **Verified end-to-end 2026-07-01:** OTP sign-in → SIWE session → collection mint via sponsored UserOperation on Base Sepolia.
+- **Implementation notes / gotchas fixed:**
+  - `signEvmMessage` expects the EOA **address string**, not the account object.
+  - `eth_sendTransaction` returns a UserOperation hash; the provider polls `getUserOperation()` until the on-chain `transactionHash` is available, then returns the real EVM txHash to Web3.js.
+  - `sepolia.base.org` blocks browser-origin RPC requests; use `https://base-sepolia-rpc.publicnode.com` for RPC passthrough.
+  - CDP rejects relative `paymasterUrl`; local dev uses `useCdpPaymaster: true`. The backend proxy at `/api/v1/paymaster` is reserved for production deployments with a public HTTPS custom paymaster.
 
 **Token Indexer (`src/api/token-indexer.js`)**
 - Chunked `eth_getLogs` backfill scans for `Transfer` and editor-change events per chain.
-- Per-chain chunk sizes in `constants/chains.js`: Hardhat=10000, MegaETH=5000, Monad=100 (Monad testnet rejects wide ranges with 413).
+- Per-chain chunk sizes in `constants/chains.js`: Hardhat=10000, Base Sepolia=5000.
 - `force=true` query param bypasses cache for on-demand refresh.
-- MegaETH deployment block pinned at `22359678` to avoid scanning from genesis.
+- Base Sepolia deployment block pinned in `constants/chains.js` to avoid scanning from genesis.
 
 **Optimistic Collection Create UI (`ui/library-create.js`)**
 - Shared `createCollectionFlow()` used by both toolbar button and right-click context menu.
 - Card appears with a spinner badge immediately after the manifest write (before the mint tx); `onPending` hook in `createNamedCollection` fires the callback at that moment.
 - On success: card flips to checkmark (`besked`) instantly; `ASSET_PUBLISHED` also triggers a background refresh that promotes it.
-- On failure/wallet-reject: optimistic card is removed automatically (toast). Works identically for EOA (card shows just before the wallet popup; rejecting removes it) and social login.
+- On failure/wallet-reject: optimistic card is removed automatically (toast). Works identically for EOA (card shows just before the wallet popup; rejecting removes it) and CDP email login.
 
 **Performance (smart-account publish path)**
-- `_resolveGas()` in `wallet-publishing.js` skips `eth_estimateGas` entirely for thirdweb accounts (bundler re-estimates, paymaster sponsors) — saves one RPC round trip on every publish/updateURI/updateEditors/burn.
+- `_resolveGas()` in `wallet-publishing.js` skips `eth_estimateGas` entirely for CDP smart accounts (bundler re-estimates, paymaster sponsors) — saves one RPC round trip on every publish/updateURI/updateEditors/burn.
 - `ownerOf` + `tokenURI` pre-mint existence check now runs via `Promise.all` (parallel).
 - `newWeb3()` sets `transactionPollingInterval = 250ms` (down from 1000ms default) across all 7 Web3 instance sites.
 - Background smart-account pre-warm via no-op sponsored UserOperation at connect time.
@@ -239,7 +244,7 @@ frontend/src/js/
 
 - ❌ **IPFS browser cache hardcoded disabled** — every read hits the gateway directly.
 - ❌ `anchorManifest()` stubbed in `ledger-panel.js` — "not available in current contract".
-- ❌ Social login (smart accounts) only supported on Monad Testnet — not on MegaETH Testnet.
+- ❌ CDP email login (smart accounts) only supported on Base Sepolia — not on Hardhat local.
 - ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
 
 ---
@@ -252,10 +257,8 @@ frontend/src/js/
 |---------|----------|---------|-------|
 | `hardhat` / `localhost` (chain 31415822) | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
 | `hardhat` / `localhost` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
-| `megaethTestnet` (chain 6343) | ArbeskAssetFree | `0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673` | **Current testnet target (EOA)** |
-| `megaethTestnet` (chain 6343) | ArbeskAsset (paid) | — | **Not deployed on testnet** |
-| `monadTestnet` (chain 10143) | ArbeskAssetFree | `0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B` | **Social-login (smart account) target**, block 41167307 |
-| `monadTestnet` (chain 10143) | ArbeskAsset (paid) | — | Not deployed |
+| `baseSepolia` (chain 84532) | ArbeskAssetFree | *(deploy address in `blockchain/.env`)* | **Current testnet target (EOA + CDP email login)** |
+| `baseSepolia` (chain 84532) | ArbeskAsset (paid) | — | Not deployed on testnet |
 
 ### 4.2 Known Contract Issues
 
@@ -275,11 +278,10 @@ frontend/src/js/
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**
-- `test/api/sessions.test.js` — both SIWE and Thirdweb JWT session creation
-- `test/api/thirdweb-auth.test.js` — JWT verification, JWKS mock, dev-mode bypass
-- `test/api/siwe-verify.test.js` — EIP-4361 validation edge cases
+- `test/api/sessions.test.js` — SIWE session creation, including `eoaAddress` fallback for CDP smart accounts
+- `test/api/siwe-verify.test.js` — EIP-4361 validation edge cases and `eoaAddress` fallback
 - `test/api/validation.test.js` — Zod schema coverage for new routes
-- `test/frontend/api.test.js` — frontend API service (session auth with Thirdweb)
+- `test/frontend/api.test.js` — frontend API service (session auth and CDP config)
 - `test/frontend/asset-library.test.js` — inaccessible token card rendering
 - `test/frontend/library-init.test.js` — token indexer integration, optimistic grace window
 - `test/frontend/library-ops.test.js` — `onPending` hook, `createNamedCollection` options
@@ -288,7 +290,7 @@ frontend/src/js/
 
 - ❌ No reentrancy attack tests.
 - ❌ No fuzzing / property-based tests.
-- ❌ E2E does not cover the social-login Google OAuth path (can't automate OAuth popups).
+- ❌ E2E does not cover the CDP email-login path (requires real email / OTP; mock bypass not implemented).
 
 ---
 
@@ -296,11 +298,11 @@ frontend/src/js/
 
 ### What is working end-to-end right now
 
-| Capability | EOA (MetaMask/Rabby) | Social (Google) |
+| Capability | EOA (MetaMask/Rabby) | CDP Email Login |
 |------------|---------------------|-----------------|
-| Wallet connect | ✅ MegaETH + Monad + Hardhat | ✅ Monad Testnet only |
+| Wallet connect | ✅ Base Sepolia + Hardhat | ✅ Base Sepolia only |
 | Auto-reconnect on page load | ✅ | ✅ |
-| Session auth (no per-tx popups) | ✅ SIWE | ✅ Thirdweb JWT |
+| Session auth (no per-tx popups) | ✅ SIWE | ✅ SIWE (embedded EOA signs for smart account) |
 | Mock asset generation | ✅ | ✅ |
 | Save draft + publish (mint NFT) | ✅ | ✅ (gas sponsored) |
 | Republish / update URI | ✅ | ✅ |
@@ -320,14 +322,14 @@ frontend/src/js/
 | Blocker | Impact | Notes |
 |---------|--------|-------|
 | **No real 3D generation** | Critical for core feature | Mock adapter works; cloud adapter returns 501. MVP feature gap. |
-| **Social login locked to Monad Testnet** | Medium — limits social users | Thirdweb bundler support is chain-specific; MegaETH not yet supported by the ERC-4337 bundler. |
+| **CDP email login limited to Base Sepolia** | Medium — limits non-EOA users | CDP smart-wallet support is intentionally Base Sepolia only in this branch. |
 | **ArbeskAsset (paid tier) not deployed on any testnet** | Low for beta | Free tier is fully deployed on both testnets. |
 | **`verify.js` bug** | Low for beta | Affects Etherscan verification only, not runtime. |
 | **IPFS cache disabled** | Low — UX degradation | Every read hits the gateway; slow on IPFS cold reads but not a blocker. |
 
 ### Verdict
 
-**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and social-login wallets, with gas sponsorship for social users. 1011 unit tests green, 17 E2E specs cover the critical path.
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1011 unit tests green, 17 E2E specs cover the critical path.
 
 **Not ready for open beta** until real 3D generation is wired (501 is the first thing a new user hits). Everything else is beta-quality.
 
@@ -338,7 +340,7 @@ frontend/src/js/
 | Gap | Where | Priority |
 |-----|-------|----------|
 | Cloud 3D generation adapter | `src/api/assets/generate-node.js` | 🔴 Critical for MVP |
-| Social login on MegaETH | `smart-wallet-support.js` | 🟡 Waiting on Thirdweb bundler support |
+| CDP email login on Hardhat | `smart-wallet-support.js` | 🟡 Smart wallets only supported on Base Sepolia |
 | Micro-ledger (`anchorManifest`) | `ledger-panel.js` | 🟡 Post-beta |
 | `verify.js` constructor args fix | `blockchain/scripts/verify.js` | 🟡 Before mainnet |
 | IPFS browser cache re-enable | `remote-ipfs.js` | 🟢 Performance improvement |
@@ -356,8 +358,7 @@ frontend/src/js/
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, loopback-only |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container |
 | Local Nostr relay | — | `ws://127.0.0.1:7777` | Dev-only |
-| MegaETH Testnet | — | `https://carrot.megaeth.com/rpc` | EOA wallets |
-| Monad Testnet | — | `https://testnet-rpc.monad.xyz/` | Social-login smart accounts |
+| Base Sepolia Testnet | — | `https://sepolia.base.org` | EOA + CDP email-login smart accounts |
 
 ### Environment Files
 

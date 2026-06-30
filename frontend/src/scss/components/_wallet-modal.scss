@@ -52,9 +52,86 @@
 }
 
 .wallet-modal-subtitle {
+  font-size: var(--font-size-1);
+  color: var(--dim-fg);
+  margin: 0;
+  line-height: var(--font-lineheight-3);
+}
+
+// ── Email / OTP section ─────────────────────────────────────────────────────
+
+.wallet-email-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+}
+
+.wallet-email-row {
+  display: flex;
+  gap: var(--size-2);
+  align-items: stretch;
+
+  .wallet-email-input {
+    flex: 1;
+    min-width: 0;
+    padding: var(--size-2) var(--size-3);
+    font-size: var(--font-size-1);
+    line-height: var(--font-lineheight-3);
+    color: var(--popover-fg);
+    background: var(--window-bg);
+    border: var(--border-size-1) solid var(--border-color);
+    border-radius: var(--radius-2);
+    transition: border-color var(--duration-quick) var(--ease-out-3),
+                box-shadow var(--duration-quick) var(--ease-out-3);
+
+    &::placeholder {
+      color: var(--dim-fg);
+      opacity: 0.8;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent-bg);
+      box-shadow: var(--focus-ring);
+    }
+  }
+
+  .btn {
+    white-space: nowrap;
+    padding: var(--size-2) var(--size-3);
+    font-weight: var(--font-weight-6);
+    border-radius: var(--radius-2);
+  }
+}
+
+.wallet-email-error {
+  font-size: var(--font-size-0);
+  color: var(--destructive-bg);
+  line-height: var(--font-lineheight-3);
+  min-height: 0;
+}
+
+.wallet-otp-back {
+  align-self: flex-start;
+  padding: 0;
   font-size: var(--font-size-0);
   color: var(--dim-fg);
-  margin: 0 0 var(--size-2);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--popover-fg);
+    text-decoration: underline;
+  }
+}
+
+// Section label above wallet list
+.wallet-modal-section-label {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+  margin: 0;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
 // Individual wallet option row
@@ -64,20 +141,25 @@
   gap: var(--size-3);
   padding: var(--size-3);
   border-radius: var(--radius-2);
-  border: var(--border-size-1) solid transparent;
-  background: transparent;
+  border: var(--border-size-1) solid var(--border-hairline);
+  background: var(--surface-overlay-hover);
   color: var(--popover-fg);
   cursor: pointer;
   transition: background-color var(--duration-quick) var(--ease-out-3),
-              border-color var(--duration-quick) var(--ease-out-3);
+              border-color var(--duration-quick) var(--ease-out-3),
+              transform var(--duration-quick) var(--ease-out-3);
   text-align: left;
   width: 100%;
   font-size: var(--font-size-1);
   font-weight: var(--font-weight-6);
 
   &:hover {
-    background-color: var(--surface-overlay-hover);
+    background-color: var(--surface-overlay-active);
     border-color: var(--border-color);
+  }
+
+  &:active {
+    transform: translateY(1px);
   }
 
   &:focus-visible {
@@ -87,8 +169,8 @@
 
   img,
   svg {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--radius-2);
     flex-shrink: 0;
     object-fit: contain;
@@ -96,8 +178,8 @@
 
   // Placeholder icon when no wallet icon available
   .wallet-option-icon-placeholder {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--radius-2);
     background: var(--accent-bg);
     color: var(--accent-fg);
@@ -126,21 +208,22 @@
   margin: 0 0 var(--size-2);
 }
 
-// Divider between injected wallets and social login
+// Divider between sign-in methods
 .wallet-modal-divider {
   display: flex;
   align-items: center;
-  gap: var(--size-2);
-  margin: var(--size-1) 0;
+  gap: var(--size-3);
+  margin: 0;
   color: var(--dim-fg);
   font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
 
   &::before,
   &::after {
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--border-color);
+    background: var(--border-hairline);
   }
 }
 

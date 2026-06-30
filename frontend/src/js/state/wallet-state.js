@@ -8,6 +8,8 @@ const _defaults = {
   chainId: null,
   contract: null,
   contractAddress: null,
+  walletSource: null, // 'cdp' | 'walletconnect' | 'injected' | null
+  email: null, // CDP email login address (displayed in header)
 };
 
 const { store: walletState, _resetForTesting } = createStore(_defaults, EVENTS.WALLET_STATE_CHANGED);
