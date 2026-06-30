@@ -167,7 +167,7 @@ export async function verifySiwe(
 
   // 9. Verify signature (EOA, EIP-1271, or ERC-6492 counterfactual smart account)
   // viem's verifyMessage handles all three cases in one call, including
-  // Thirdweb ERC-4337 smart accounts that have not been deployed yet.
+  // CDP ERC-4337 smart accounts that have not been deployed yet.
   const viemClient = getViemPublicClient(chainId);
   if (!viemClient) {
     return {
@@ -199,7 +199,7 @@ export async function verifySiwe(
   }
 
   if (!signatureValid && eoaAddress) {
-    // Fallback: smart accounts (e.g. Thirdweb ERC-4337) restrict
+    // Fallback: CDP smart accounts (ERC-4337) may restrict
     // isValidSignature to approved targets, so ERC-6492 off-chain
     // verification fails. Allow the owner EOA to sign on behalf of the
     // smart account address claimed in the SIWE message.

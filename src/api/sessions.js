@@ -14,7 +14,6 @@
 import express from "express";
 import crypto from "crypto";
 import { verifySiwe } from "./siwe-verify.js";
-import { verifyThirdwebAuthToken } from "./thirdweb-auth.js";
 import { validateBody } from "./validation.js";
 import { createSessionSchema } from "./schemas.js";
 
@@ -97,59 +96,32 @@ export default function sessionRouter() {
 
   /**
    * POST /api/v1/sessions
-   * Create a session by proving wallet ownership.
+   * Create a session by proving wallet ownership via SIWE (EIP-4361).
    *
-   * Two authentication methods are supported:
-   *   1. SIWE (EIP-4361): { message: string, signature: string }
-   *      Used by standard EOAs and most wallet extensions.
-   *   2. Thirdweb in-app wallet auth token: { thirdwebAuthToken: string }
-   *      Used by Thirdweb social/email wallets whose signer is decoupled
-   *      from the wallet address.
-   *
+   * Body: { message: string, signature: string, eoaAddress?: string }
    * Returns: { token: string, expiresAt: number }
    */
   router.post("/", validateBody(createSessionSchema), async (req, res) => {
     try {
-      let result;
+      const { message, signature, eoaAddress } = req.body;
 
-      if ("thirdwebAuthToken" in req.body) {
-        const { thirdwebAuthToken } = req.body;
-        result = await verifyThirdwebAuthToken(thirdwebAuthToken);
+      // Verify SIWE message
+      const result = await verifySiwe(message, signature, {
+        expectedDomain: req.headers.host,
+        eoaAddress,
+      });
 
-        if (!result.valid) {
-          console.log(`[SESSION] rejected Thirdweb auth - ${result.error}`);
-          return res.status(400).json({
-            error: {
-              code: "INVALID_THIRDWB_AUTH",
-              message: result.error,
-            },
-          });
-        }
-
-        console.log(
-          `[SESSION] verified Thirdweb auth - address=${result.address}`,
-        );
-      } else {
-        const { message, signature, eoaAddress } = req.body;
-
-        // Verify SIWE message
-        result = await verifySiwe(message, signature, {
-          expectedDomain: req.headers.host,
-          eoaAddress,
+      if (!result.valid) {
+        console.log(`[SESSION] rejected SIWE - ${result.error}`);
+        return res.status(400).json({
+          error: {
+            code: "INVALID_SIWE",
+            message: result.error,
+          },
         });
-
-        if (!result.valid) {
-          console.log(`[SESSION] rejected SIWE - ${result.error}`);
-          return res.status(400).json({
-            error: {
-              code: "INVALID_SIWE",
-              message: result.error,
-            },
-          });
-        }
-
-        console.log(`[SESSION] verified SIWE - address=${result.address}`);
       }
+
+      console.log(`[SESSION] verified SIWE - address=${result.address}`);
 
       if (!result.address) {
         throw new Error("Authentication verification returned no address");

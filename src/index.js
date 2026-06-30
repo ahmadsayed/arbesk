@@ -66,10 +66,6 @@ const connectSrc = [
   "wss://localhost:9090",
   "https://*.llamarpc.com",
   "https://*.publicnode.com",
-  "https://testnet-rpc.monad.xyz/",
-  "https://carrot.megaeth.com/rpc",
-  "https://*.thirdweb.com",
-  "https://*.bundler.thirdweb.com",
   "https://esm.sh",
 ];
 const imgSrc = ["'self'", "blob:", "data:", "http://127.0.0.1:8080"];
@@ -97,7 +93,7 @@ app.use(
         fontSrc: ["'self'"],
         mediaSrc: ["'self'"],
         workerSrc: ["'self'", "blob:"],
-        frameSrc: ["'self'", "https://embedded-wallet.thirdweb.com", "https://*.thirdweb.com"],
+        frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],

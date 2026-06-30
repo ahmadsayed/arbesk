@@ -28,19 +28,14 @@ export const chainIdSchema = z
 
 // ─── Route Body Schemas ─────────────────────────────────────────────────────
 
-export const createSessionSchema = z.union([
-  z.object({
-    message: z.string().min(1, "message is required"),
-    signature: z.string().min(1, "signature is required"),
-    eoaAddress: z
-      .string()
-      .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid EOA address")
-      .optional(),
-  }),
-  z.object({
-    thirdwebAuthToken: z.string().min(1, "Thirdweb auth token is required"),
-  }),
-]);
+export const createSessionSchema = z.object({
+  message: z.string().min(1, "message is required"),
+  signature: z.string().min(1, "signature is required"),
+  eoaAddress: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid EOA address")
+    .optional(),
+});
 
 export const generateAssetSchema = z.object({
   prompt: z.string().min(1, "prompt is required"),

@@ -87,18 +87,11 @@ export function showWalletModal() {
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
 
-    // Hide Google sign-in on EOA-only chains (e.g. Base Sepolia).
-    const preferred = localStorage.getItem("arbesk-preferred-network") || "monadTestnet";
-    if (preferred === "baseSepolia") {
-      const googleSection = modal.querySelector("#walletGoogleSection");
-      if (googleSection) {
-        googleSection.style.display = "none";
-      }
-      const note = document.createElement("p");
-      note.className = "wallet-modal-note";
-      note.textContent = "Google sign-in is only available on Monad Testnet.";
-      const sectionLabel = modal.querySelector(".wallet-modal-section-label");
-      sectionLabel?.parentNode?.insertBefore(note, sectionLabel);
+    // TODO (Task 3/4): Wire CDP email login here. For now, hide the Google
+    // sign-in section until the CDP wallet-cdp.js module is available.
+    const googleSection = modal.querySelector("#walletGoogleSection");
+    if (googleSection) {
+      googleSection.style.display = "none";
     }
 
     // Focus trap
@@ -230,43 +223,14 @@ function selectInjectedWallet(wallet) {
 }
 
 /**
- * User selected Google sign-in.
+ * User selected email/social sign-in.
+ * TODO (Task 3/4): Implement CDP email login here. This stub is left as a
+ * placeholder until wallet-cdp.js is available.
  */
 async function selectGoogleWallet() {
   if (!resolvePromise) return;
-
-  try {
-    const [{ getConfig }, { initThirdwebClient, connectGoogleWallet }] =
-      await Promise.all([
-        import("../services/api.js"),
-        import("../blockchain/wallet-thirdweb.js"),
-      ]);
-
-    const config = await getConfig();
-    if (!config?.thirdwebClientId) {
-      throw new Error("Thirdweb Client ID is not configured.");
-    }
-
-    initThirdwebClient(config.thirdwebClientId);
-    const { eoaAddress, smartAccountAddress, provider } =
-      await connectGoogleWallet();
-
-    resolvePromise({
-      provider,
-      source: "thirdweb",
-      walletAddress: smartAccountAddress,
-      eoaAddress,
-    });
-    hideWalletModal();
-  } catch (err) {
-    console.error("[WALLET-MODAL] Google sign-in failed:", err);
-    const list = modal?.querySelector("#walletOptionsList");
-    if (list) {
-      list.innerHTML = `<div class="wallet-modal-empty">Google sign-in failed: ${escapeHtml(
-        err.message || "Unknown error"
-      )}</div>`;
-    }
-  }
+  // CDP sign-in not yet implemented — this button is hidden in the modal.
+  console.warn("[WALLET-MODAL] Social sign-in not yet implemented.");
 }
 
 /**

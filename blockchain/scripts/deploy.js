@@ -7,7 +7,7 @@ const path = require("path");
  *
  * Network gating:
  *   hardhat / localhost → deploy ArbeskAssetFree + ArbeskAsset (paid) + MockUSDC
- *   megaethTestnet     → deploy ArbeskAssetFree only (no paid, no USDC)
+ *   baseSepolia        → deploy ArbeskAssetFree only (no paid, no USDC)
  *   any other          → error
  *
  * ArbeskAssetFree() - no constructor args
@@ -21,14 +21,11 @@ async function main() {
   console.log("Network:", network);
 
   const isLocal = network === "hardhat" || network === "localhost";
-  const isTestnet =
-    network === "megaethTestnet" ||
-    network === "monadTestnet" ||
-    network === "baseSepolia";
+  const isTestnet = network === "baseSepolia";
 
   if (!isLocal && !isTestnet) {
     console.error(
-      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, megaethTestnet, monadTestnet, baseSepolia`
+      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, baseSepolia`
     );
     process.exit(1);
   }

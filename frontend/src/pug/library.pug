@@ -17,11 +17,7 @@ html(lang="en")
         "imports": {
           "@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js",
           "pako": "https://cdn.jsdelivr.net/npm/pako@2.2.0/dist/pako.esm.mjs",
-          "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
-          "thirdweb": "https://esm.sh/thirdweb@5",
-          "thirdweb/wallets": "https://esm.sh/thirdweb@5/wallets",
-          "thirdweb/wallets/in-app": "https://esm.sh/thirdweb@5/wallets/in-app",
-          "thirdweb/chains": "https://esm.sh/thirdweb@5/chains"
+          "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8"
         }
       }
   body
@@ -51,9 +47,7 @@ html(lang="en")
             svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
               path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
           select#headerbarNetworkSelect.headerbar-network-select(aria-label="Select network" title="Select network")
-            option(value="monadTestnet" selected) Monad Testnet
-            option(value="megaethTestnet") MegaETH Testnet
-            option(value="baseSepolia") Base Sepolia Testnet
+            option(value="baseSepolia" selected) Base Sepolia Testnet
             option(value="hardhat") Hardhat Local
           button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Login or sign up")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")

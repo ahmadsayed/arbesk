@@ -22,24 +22,6 @@ export const NETWORK_CONFIGS = {
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,
   },
-  [CHAIN_IDS.MEGAETH_TESTNET]: {
-    name: "MegaETH Testnet",
-    chainId: CHAIN_IDS.MEGAETH_TESTNET,
-    contractAddress: "0x3Fc0f8CBe88D8aB0918EAe5457dd6E5dD9A23673",
-    paidContractAddress: null, // Paid tier not deployed on testnet
-    usdcToken: null, // USDC not deployed on testnet
-    rpcUrl: "https://carrot.megaeth.com/rpc",
-    blockExplorer: "https://megaexplorer.xyz",
-  },
-  [CHAIN_IDS.MONAD_TESTNET]: {
-    name: "Monad Testnet",
-    chainId: CHAIN_IDS.MONAD_TESTNET,
-    contractAddress: "0xFdf0DC8c7Fd363de8522cDE9628688A87F2Fd73B",
-    paidContractAddress: null, // Paid tier not deployed on testnet
-    usdcToken: null, // USDC not deployed on testnet
-    rpcUrl: "https://testnet-rpc.monad.xyz/",
-    blockExplorer: "https://testnet.monadexplorer.com",
-  },
   [CHAIN_IDS.BASE_TESTNET]: {
     name: "Base Sepolia Testnet",
     chainId: CHAIN_IDS.BASE_TESTNET,

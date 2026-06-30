@@ -41,7 +41,6 @@ export default () => {
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
       walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,
-      thirdwebClientId: process.env.THIRDWEB_CLIENT_ID || null,
     });
   });
 

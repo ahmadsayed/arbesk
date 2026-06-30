@@ -376,7 +376,7 @@ applyWalletGate(Boolean(walletState.get().walletAddress));
 document.getElementById("headerbarNetworkSelect")?.addEventListener("change", async (e) => {
   const key = e.target.value;
   if (!key) return;
-  const validKeys = ["hardhat", "monadTestnet", "megaethTestnet", "baseSepolia"];
+  const validKeys = ["hardhat", "baseSepolia"];
   if (!validKeys.includes(key)) {
     console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
     return;
@@ -414,8 +414,6 @@ on(EVENTS.WALLET_CONNECTED, async (e) => {
     const chainId = e?.chainId;
     const keyMap = {
       [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
-      [CHAIN_IDS.MONAD_TESTNET]: "monadTestnet",
-      [CHAIN_IDS.MEGAETH_TESTNET]: "megaethTestnet",
       [CHAIN_IDS.BASE_TESTNET]: "baseSepolia",
     };
     const key = keyMap[chainId];

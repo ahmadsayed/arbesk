@@ -47,20 +47,6 @@ export const NETWORKS = {
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: [],
   },
-  monadTestnet: {
-    chainId: `0x${CHAIN_IDS.MONAD_TESTNET.toString(16)}`,
-    chainName: "Monad Testnet",
-    rpcUrls: ["https://testnet-rpc.monad.xyz/"],
-    nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
-    blockExplorerUrls: ["https://testnet.monadexplorer.com"],
-  },
-  megaethTestnet: {
-    chainId: `0x${CHAIN_IDS.MEGAETH_TESTNET.toString(16)}`,
-    chainName: "MegaETH Testnet",
-    rpcUrls: ["https://carrot.megaeth.com/rpc"],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://megaexplorer.xyz"],
-  },
   baseSepolia: {
     chainId: `0x${CHAIN_IDS.BASE_TESTNET.toString(16)}`,
     chainName: "Base Sepolia Testnet",
@@ -72,7 +58,7 @@ export const NETWORKS = {
 
 // ─── Module-level state ───
 
-/** @type {string|null} 'injected' | 'walletconnect' | null */
+/** @type {string|null} 'injected' | 'walletconnect' | 'cdp' | null */
 let activeConnectionSource = null;
 
 /** @type {string|null} rdns of the injected wallet (e.g., 'io.metamask') */
@@ -209,30 +195,6 @@ async function _checkBalance() {
         });
       }
     } else if (
-      chainId === CHAIN_IDS.MEGAETH_TESTNET &&
-      parseFloat(balanceEth) < 0.001
-    ) {
-      warn("Low balance detected on MegaETH Testnet");
-      lowBalanceToastId = showToast({
-        type: "warning",
-        title: "Low Balance",
-        message: `Your wallet has very low ETH on MegaETH Testnet. You need ETH for gas. Get testnet ETH from a faucet.`,
-        duration: 0,
-      });
-    } else if (
-      chainId === CHAIN_IDS.MONAD_TESTNET &&
-      parseFloat(balanceEth) < 0.001 &&
-      activeConnectionSource !== "thirdweb"
-    ) {
-      // Skip gas warning for thirdweb smart accounts — gas is sponsored by the paymaster.
-      warn("Low balance detected on Monad Testnet");
-      lowBalanceToastId = showToast({
-        type: "warning",
-        title: "Low Balance",
-        message: `Your wallet has very low MON on Monad Testnet. You need MON for gas. Get testnet MON from https://testnet.monad.xyz/.`,
-        duration: 0,
-      });
-    } else if (
       chainId === CHAIN_IDS.BASE_TESTNET &&
       parseFloat(balanceEth) < 0.001
     ) {
@@ -270,29 +232,6 @@ async function autoConnectWallet() {
         if (accounts.length > 0) {
           activeConnectionSource = "walletconnect";
           await _finishWalletSetup(accounts[0]);
-          return;
-        }
-      }
-    } else if (lastWallet === "thirdweb") {
-      // Try Thirdweb silent restore
-      const {
-        autoConnectThirdwebWallet,
-        initThirdwebClient,
-      } = await import("./wallet-thirdweb.js");
-      const { getConfig } = await import("../services/api.js");
-      const config = await getConfig();
-      if (config?.thirdwebClientId) {
-        initThirdwebClient(config.thirdwebClientId);
-        const restored = await autoConnectThirdwebWallet();
-        if (restored) {
-          web3Provider = restored.provider;
-          web3 = newWeb3(restored.provider);
-          window.web3 = web3;
-          activeConnectionSource = "thirdweb";
-          await _finishWalletSetup(
-            restored.smartAccountAddress,
-            restored.eoaAddress
-          );
           return;
         }
       }
@@ -359,15 +298,15 @@ async function _finishWalletSetup(address, eoaAddress = null) {
   // Prompt network switch if not on a supported chain
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
     let preferred =
-      localStorage.getItem("arbesk-preferred-network") || "monadTestnet";
-    // Guard against stale/unknown network keys (e.g. old "seiTestnet" entry)
+      localStorage.getItem("arbesk-preferred-network") || "baseSepolia";
+    // Guard against stale/unknown network keys stored in localStorage
     if (!NETWORKS[preferred]) {
       warn(
         `[WALLET] Ignoring unknown preferred network "${preferred}". ` +
-          `Falling back to monadTestnet.`
+          `Falling back to baseSepolia.`
       );
       localStorage.removeItem("arbesk-preferred-network");
-      preferred = "monadTestnet";
+      preferred = "baseSepolia";
     }
     try {
       const net = NETWORKS[preferred];
@@ -489,17 +428,9 @@ async function connectWallet() {
       return;
     }
 
-    const { provider, source, walletName, walletRdns, walletAddress, eoaAddress } = result;
+    const { provider, source, walletName, walletRdns } = result;
 
-    if (source === "thirdweb") {
-      web3Provider = provider;
-      web3 = newWeb3(provider);
-      window.web3 = web3;
-      activeConnectionSource = "thirdweb";
-      _activeWalletRdns = null;
-      localStorage.setItem(LAST_WALLET_KEY, "thirdweb");
-      await _finishWalletSetup(walletAddress, eoaAddress);
-    } else if (source === "walletconnect") {
+    if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
       web3Provider = provider;
       web3 = newWeb3(provider);
@@ -548,7 +479,7 @@ async function connectWallet() {
 
 /**
  * Return the currently active connection source.
- * @returns {string|null} 'injected' | 'walletconnect' | 'thirdweb' | null
+ * @returns {string|null} 'injected' | 'walletconnect' | 'cdp' | null
  */
 function getActiveConnectionSource() {
   return activeConnectionSource;
@@ -565,9 +496,6 @@ async function disconnectWallet() {
       offWalletConnectEvent("chainChanged", () => {});
       offWalletConnectEvent("disconnect", () => {});
       await disconnectWalletConnect();
-    } else if (activeConnectionSource === "thirdweb") {
-      const { disconnectThirdwebWallet } = await import("./wallet-thirdweb.js");
-      disconnectThirdwebWallet();
     } else if (web3Provider.removeListener) {
       web3Provider.removeListener("accountsChanged", () => {});
       web3Provider.removeListener("chainChanged", () => {});

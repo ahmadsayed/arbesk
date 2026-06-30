@@ -12,18 +12,12 @@ import { CHAIN_IDS } from "../../../../constants/chains.js";
 const EXPLORER_URLS = {
   // Hardhat local - no explorer
   [CHAIN_IDS.HARDHAT_LOCAL]: null,
-  // MegaETH Testnet
-  [CHAIN_IDS.MEGAETH_TESTNET]: "https://megaexplorer.xyz",
-  // Monad Testnet
-  [CHAIN_IDS.MONAD_TESTNET]: "https://testnet.monadexplorer.com",
   // Base Sepolia Testnet
   [CHAIN_IDS.BASE_TESTNET]: "https://sepolia.basescan.org",
 };
 
 const NETWORK_NAMES = {
   [CHAIN_IDS.HARDHAT_LOCAL]: "Hardhat Local",
-  [CHAIN_IDS.MEGAETH_TESTNET]: "MegaETH Testnet",
-  [CHAIN_IDS.MONAD_TESTNET]: "Monad Testnet",
   [CHAIN_IDS.BASE_TESTNET]: "Base Sepolia Testnet",
 };
 
