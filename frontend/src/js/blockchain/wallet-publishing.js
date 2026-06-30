@@ -33,11 +33,11 @@ function _getContract() {
  * @returns {boolean}
  */
 /**
- * Whether the active wallet is a thirdweb ERC-4337 smart account.
+ * Whether the active wallet is a CDP ERC-4337 smart account.
  * @returns {boolean}
  */
 function _isSmartAccount() {
-  return getActiveConnectionSource() === "thirdweb";
+  return getActiveConnectionSource() === "cdp";
 }
 
 // Generous gas ceiling for sponsored UserOperations. Supplying an explicit gas
@@ -63,12 +63,12 @@ async function _resolveGas(tx, from) {
 function _canPublishWithCurrentWallet() {
   const source = getActiveConnectionSource();
   const chainId = walletState.get().chainId;
-  if (source === "thirdweb" && !isSmartWalletSupported(chainId)) {
+  if (source === "cdp" && !isSmartWalletSupported(chainId)) {
     showToast({
       type: "warning",
       title: "Smart Wallet Not Supported",
       message:
-        "Google smart wallets are only supported on Monad Testnet. Please switch to Monad Testnet in the network dropdown, or connect with an EOA wallet (MetaMask/Rabby) to publish on MegaETH Testnet.",
+        "CDP email smart wallets are only supported on Base Sepolia. Please switch to Base Sepolia in the network dropdown, or connect with an EOA wallet (MetaMask/Rabby) to publish on other networks.",
       duration: 0,
     });
     return false;

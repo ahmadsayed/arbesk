@@ -63,16 +63,45 @@ export function showWalletModal() {
       </div>
       <div class="wallet-modal-body">
         <p class="wallet-modal-subtitle">Choose how you want to sign in or create an account.</p>
-        <div id="walletGoogleSection">
-          <button class="wallet-option wallet-option-google" id="walletGoogleBtn" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            <span>Continue with Google</span>
-          </button>
+        <div id="walletEmailSection">
+          <p class="wallet-modal-section-label">Email (gasless, Base Sepolia)</p>
+          <div id="walletEmailStep" class="wallet-email-step">
+            <div class="wallet-email-row">
+              <input
+                id="walletEmailInput"
+                type="email"
+                class="wallet-email-input"
+                placeholder="you@example.com"
+                autocomplete="email"
+                aria-label="Email address"
+              />
+              <button id="walletEmailSendBtn" class="btn btn-primary btn-sm" type="button">
+                Send code
+              </button>
+            </div>
+            <div id="walletEmailError" class="wallet-email-error" role="alert" aria-live="polite"></div>
+          </div>
+          <div id="walletOtpStep" class="wallet-email-step" style="display:none">
+            <div class="wallet-email-row">
+              <input
+                id="walletOtpInput"
+                type="text"
+                class="wallet-email-input"
+                placeholder="6-digit code"
+                autocomplete="one-time-code"
+                inputmode="numeric"
+                maxlength="6"
+                aria-label="One-time code"
+              />
+              <button id="walletOtpVerifyBtn" class="btn btn-primary btn-sm" type="button">
+                Verify
+              </button>
+            </div>
+            <div id="walletOtpError" class="wallet-email-error" role="alert" aria-live="polite"></div>
+            <button id="walletOtpBackBtn" class="btn btn-link btn-sm wallet-otp-back" type="button">
+              &larr; Use a different email
+            </button>
+          </div>
           <div class="wallet-modal-divider" aria-hidden="true">
             <span>or</span>
           </div>
@@ -87,13 +116,6 @@ export function showWalletModal() {
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
 
-    // TODO (Task 3/4): Wire CDP email login here. For now, hide the Google
-    // sign-in section until the CDP wallet-cdp.js module is available.
-    const googleSection = modal.querySelector("#walletGoogleSection");
-    if (googleSection) {
-      googleSection.style.display = "none";
-    }
-
     // Focus trap
     focusTrapCleanup = setupFocusTrap(modal);
 
@@ -104,10 +126,16 @@ export function showWalletModal() {
       if (e.target === backdrop) cancelModal();
     });
 
-    // Wire Google sign-in
-    const googleBtn = modal.querySelector("#walletGoogleBtn");
-    if (googleBtn) {
-      googleBtn.addEventListener("click", () => selectGoogleWallet());
+    // Wire email OTP flow
+    const emailSendBtn = modal.querySelector("#walletEmailSendBtn");
+    if (emailSendBtn) {
+      emailSendBtn.addEventListener("click", () => selectEmailWallet());
+    }
+    const emailInput = modal.querySelector("#walletEmailInput");
+    if (emailInput) {
+      emailInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") selectEmailWallet();
+      });
     }
 
     // Wire Escape key
@@ -223,14 +251,118 @@ function selectInjectedWallet(wallet) {
 }
 
 /**
- * User selected email/social sign-in.
- * TODO (Task 3/4): Implement CDP email login here. This stub is left as a
- * placeholder until wallet-cdp.js is available.
+ * User clicked "Send code" — start the CDP email OTP flow.
+ * Shows the OTP input step and wires the Verify button.
  */
-async function selectGoogleWallet() {
+async function selectEmailWallet() {
   if (!resolvePromise) return;
-  // CDP sign-in not yet implemented — this button is hidden in the modal.
-  console.warn("[WALLET-MODAL] Social sign-in not yet implemented.");
+
+  const emailInput = modal.querySelector("#walletEmailInput");
+  const emailError = modal.querySelector("#walletEmailError");
+  const sendBtn = modal.querySelector("#walletEmailSendBtn");
+  const emailStep = modal.querySelector("#walletEmailStep");
+  const otpStep = modal.querySelector("#walletOtpStep");
+
+  const email = emailInput ? emailInput.value.trim() : "";
+  if (!email || !email.includes("@")) {
+    if (emailError) emailError.textContent = "Please enter a valid email address.";
+    if (emailInput) emailInput.focus();
+    return;
+  }
+  if (emailError) emailError.textContent = "";
+
+  // Disable button and show loading state
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Sending…";
+  }
+
+  try {
+    // Init CDP client (lazy — get project ID from cached config)
+    const { getConfig } = await import("../services/api.js");
+    const config = await getConfig();
+    if (!config?.cdpProjectId) {
+      if (emailError) emailError.textContent = "Email sign-in is not configured. Contact support.";
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
+      return;
+    }
+
+    const { initCdpClient, requestEmailOtp, verifyEmailOtp, autoConnectCdpWallet } = await import("../blockchain/wallet-cdp.js");
+    await initCdpClient(config.cdpProjectId);
+
+    const { flowId } = await requestEmailOtp(email);
+
+    // Transition to OTP step
+    if (emailStep) emailStep.style.display = "none";
+    if (otpStep) otpStep.style.display = "";
+
+    // Wire OTP verify button
+    const otpVerifyBtn = modal.querySelector("#walletOtpVerifyBtn");
+    const otpInput = modal.querySelector("#walletOtpInput");
+    const otpError = modal.querySelector("#walletOtpError");
+    const otpBackBtn = modal.querySelector("#walletOtpBackBtn");
+
+    if (otpInput) {
+      requestAnimationFrame(() => otpInput.focus());
+    }
+
+    // Back button — return to email step
+    if (otpBackBtn) {
+      otpBackBtn.addEventListener("click", () => {
+        if (otpStep) otpStep.style.display = "none";
+        if (emailStep) emailStep.style.display = "";
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
+        if (emailInput) emailInput.focus();
+      });
+    }
+
+    async function handleVerify() {
+      const otp = otpInput ? otpInput.value.trim() : "";
+      if (!otp) {
+        if (otpError) otpError.textContent = "Please enter the code from your email.";
+        return;
+      }
+      if (otpError) otpError.textContent = "";
+      if (otpVerifyBtn) { otpVerifyBtn.disabled = true; otpVerifyBtn.textContent = "Verifying…"; }
+
+      try {
+        await verifyEmailOtp(flowId, otp);
+        // verifyEmailOtp sets module-level state; autoConnectCdpWallet reads it
+        // and returns the provider without a network round-trip.
+        const cdpResult = await autoConnectCdpWallet();
+        if (!cdpResult) {
+          throw new Error("Could not restore CDP session after OTP verification.");
+        }
+
+        if (!resolvePromise) return;
+        resolvePromise({
+          provider: cdpResult.provider,
+          source: "cdp",
+          walletAddress: cdpResult.smartAccountAddress,
+          eoaAddress: cdpResult.eoaAddress,
+        });
+        hideWalletModal();
+      } catch (err) {
+        const msg = err.message || "Verification failed. Check your code and try again.";
+        if (otpError) otpError.textContent = msg;
+        if (otpVerifyBtn) { otpVerifyBtn.disabled = false; otpVerifyBtn.textContent = "Verify"; }
+      }
+    }
+
+    if (otpVerifyBtn) {
+      otpVerifyBtn.addEventListener("click", handleVerify);
+    }
+    if (otpInput) {
+      otpInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleVerify();
+      });
+    }
+
+  } catch (err) {
+    const msg = err.message || "Failed to send code. Please try again.";
+    if (emailError) emailError.textContent = msg;
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
+  }
 }
 
 /**

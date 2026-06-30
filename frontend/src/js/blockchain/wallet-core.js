@@ -221,7 +221,28 @@ async function autoConnectWallet() {
   try {
     const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
 
-    if (lastWallet === "walletconnect") {
+    if (lastWallet === "cdp") {
+      // Try CDP silent restore
+      try {
+        const config = await (await import("../services/api.js")).getConfig();
+        if (config?.cdpProjectId) {
+          const { initCdpClient, autoConnectCdpWallet } = await import("./wallet-cdp.js");
+          await initCdpClient(config.cdpProjectId);
+          const cdpResult = await autoConnectCdpWallet();
+          if (cdpResult) {
+            web3Provider = cdpResult.provider;
+            web3 = newWeb3(cdpResult.provider);
+            window.web3 = web3;
+            activeConnectionSource = "cdp";
+            await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress);
+            return;
+          }
+        }
+      } catch (cdpErr) {
+        warn("[WALLET] CDP auto-connect failed:", cdpErr.message);
+        localStorage.removeItem(LAST_WALLET_KEY);
+      }
+    } else if (lastWallet === "walletconnect") {
       // Try WalletConnect silent restore
       const wcProvider = await getWalletConnectProvider();
       if (wcProvider && wcProvider.connected) {
@@ -322,7 +343,10 @@ async function _finishWalletSetup(address, eoaAddress = null) {
   }
 
   await _initContract();
-  await _checkBalance();
+  // CDP smart accounts are gasless (sponsored UserOps) — skip the low-ETH warning.
+  if (activeConnectionSource !== "cdp") {
+    await _checkBalance();
+  }
 
   emit(EVENTS.WALLET_CONNECTED, {
     address,
@@ -428,9 +452,18 @@ async function connectWallet() {
       return;
     }
 
-    const { provider, source, walletName, walletRdns } = result;
+    const { provider, source, walletName, walletRdns, walletAddress: cdpWalletAddress, eoaAddress: cdpEoaAddress } = result;
 
-    if (source === "walletconnect") {
+    if (source === "cdp") {
+      // CDP smart account — provider, addresses are already resolved by the modal
+      web3Provider = provider;
+      web3 = newWeb3(provider);
+      window.web3 = web3;
+      activeConnectionSource = "cdp";
+      _activeWalletRdns = null;
+      localStorage.setItem(LAST_WALLET_KEY, "cdp");
+      await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress);
+    } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
       web3Provider = provider;
       web3 = newWeb3(provider);
@@ -496,6 +529,14 @@ async function disconnectWallet() {
       offWalletConnectEvent("chainChanged", () => {});
       offWalletConnectEvent("disconnect", () => {});
       await disconnectWalletConnect();
+    } else if (activeConnectionSource === "cdp") {
+      // CDP cleanup — sign out from CDP session
+      try {
+        const { disconnectCdpWallet } = await import("./wallet-cdp.js");
+        await disconnectCdpWallet();
+      } catch (cdpErr) {
+        warn("[WALLET] CDP disconnect failed (non-fatal):", cdpErr.message);
+      }
     } else if (web3Provider.removeListener) {
       web3Provider.removeListener("accountsChanged", () => {});
       web3Provider.removeListener("chainChanged", () => {});
