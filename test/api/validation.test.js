@@ -63,14 +63,6 @@ describe("API schemas", () => {
       ).toBe(true);
     });
 
-    it("accepts a Thirdweb auth token payload", () => {
-      expect(
-        createSessionSchema.safeParse({
-          thirdwebAuthToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token",
-        }).success,
-      ).toBe(true);
-    });
-
     it("rejects a payload with neither SIWE fields nor auth token", () => {
       const result = createSessionSchema.safeParse({ message: "x" });
       expect(result.success).toBe(false);

@@ -51,15 +51,13 @@ async function loadApi(options = {}) {
     getActiveConnectionSource: jest.fn(() => options.connectionSource || "injected"),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-thirdweb.js", () => ({
-    getThirdwebAuthToken: jest.fn(async () =>
-      options.thirdwebAuthToken !== undefined ? options.thirdwebAuthToken : "thirdweb-jwt"
-    ),
-  }));
-
   await jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
     walletState: {
-      get: jest.fn(() => ({ walletAddress: _walletAddress, chainId: _chainId })),
+      get: jest.fn(() => ({
+        walletAddress: _walletAddress,
+        chainId: _chainId,
+        eoaAddress: options.eoaAddress || null,
+      })),
     },
     _resetForTesting: jest.fn(),
   }));
@@ -207,17 +205,18 @@ describe("createSession", () => {
     });
   });
 
-  test("uses Thirdweb auth token when connected via Thirdweb", async () => {
+  test("uses SIWE when connected via CDP", async () => {
     const freshToken = "fresh-token";
     const fetchMock = jest
       .fn()
       .mockResolvedValue(
         buildResponse({ body: { token: freshToken, expiresAt: Date.now() + 3_600_000 } })
       );
+    const eoaAddress = "0xEOA000000000000000000000000000000000000A";
     const { createSession } = await loadApi({
       fetchMock,
-      connectionSource: "thirdweb",
-      thirdwebAuthToken: "thirdweb-jwt-abc",
+      connectionSource: "cdp",
+      eoaAddress,
     });
 
     await createSession();
@@ -226,25 +225,13 @@ describe("createSession", () => {
     expect(url).toMatch(/\/sessions$/);
     expect(opts.method).toBe("POST");
     const body = JSON.parse(opts.body);
-    expect(body.thirdwebAuthToken).toBe("thirdweb-jwt-abc");
-    expect(body.message).toBeUndefined();
-    expect(body.signature).toBeUndefined();
+    // CDP path still uses SIWE (message + signature), not a JWT
+    expect(body.message).toBeDefined();
+    expect(body.signature).toBeDefined();
+    expect(body.eoaAddress).toBe(eoaAddress);
 
     const cached = JSON.parse(localStorage.getItem("arbesk_session"));
     expect(cached.token).toBe(freshToken);
-  });
-
-  test("throws ApiError when Thirdweb auth token is missing", async () => {
-    const { createSession, ApiError } = await loadApi({
-      connectionSource: "thirdweb",
-      thirdwebAuthToken: null,
-    });
-
-    await expect(createSession()).rejects.toBeInstanceOf(ApiError);
-    await expect(createSession()).rejects.toMatchObject({
-      status: 401,
-      code: "THIRDWB_AUTH_TOKEN_MISSING",
-    });
   });
 });
 

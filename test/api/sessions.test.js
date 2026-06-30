@@ -3,14 +3,12 @@ import express from "express";
 import request from "supertest";
 
 const VALID_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
+const EOA_ADDRESS = "0xEOA000000000000000000000000000000000000A";
 
-async function loadModule(verifySiweResult, verifyThirdwebResult = null) {
+async function loadModule(verifySiweResult) {
   jest.resetModules();
   jest.unstable_mockModule("../../src/api/siwe-verify.js", () => ({
     verifySiwe: jest.fn(async () => verifySiweResult),
-  }));
-  jest.unstable_mockModule("../../src/api/thirdweb-auth.js", () => ({
-    verifyThirdwebAuthToken: jest.fn(async () => verifyThirdwebResult),
   }));
   jest.unstable_mockModule("../../src/api/validation.js", () => ({
     validateBody: jest.fn(() => (req, res, next) => next()),
@@ -128,12 +126,6 @@ describe("session routes", () => {
         throw new Error("verify exploded");
       }),
     }));
-    jest.unstable_mockModule("../../src/api/thirdweb-auth.js", () => ({
-      verifyThirdwebAuthToken: jest.fn(async () => ({
-        valid: false,
-        error: "not used",
-      })),
-    }));
     jest.unstable_mockModule("../../src/api/validation.js", () => ({
       validateBody: jest.fn(() => (req, res, next) => next()),
     }));
@@ -147,35 +139,29 @@ describe("session routes", () => {
     expect(res.body.error.code).toBe("SESSION_CREATION_FAILED");
   });
 
-  it("POST /sessions creates a session for a valid Thirdweb auth token", async () => {
-    mod = await loadModule(
-      { valid: true, address: VALID_ADDRESS },
-      { valid: true, address: VALID_ADDRESS },
-    );
+  it("POST /sessions creates a session for a valid SIWE signature from a smart account", async () => {
+    // CDP smart accounts: SIWE message address = smart account, eoaAddress = embedded EOA
+    jest.resetModules();
+    jest.unstable_mockModule("../../src/api/siwe-verify.js", () => ({
+      verifySiwe: jest.fn(async (_msg, _sig, opts) =>
+        opts && opts.eoaAddress
+          ? { valid: true, address: VALID_ADDRESS }
+          : { valid: false, error: "no eoaAddress" },
+      ),
+    }));
+    jest.unstable_mockModule("../../src/api/validation.js", () => ({
+      validateBody: jest.fn(() => (req, res, next) => next()),
+    }));
+    mod = await import("../../src/api/sessions.js");
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")
-      .send({ thirdwebAuthToken: "thirdweb-jwt" });
+      .send({ message: "smart-acct-siwe", signature: "0xeoa", eoaAddress: EOA_ADDRESS });
 
     expect(res.status).toBe(201);
     expect(res.body.token).toBeDefined();
     expect(res.body.expiresAt).toBeGreaterThan(Date.now());
     expect(mod.sessions.has(res.body.token)).toBe(true);
-  });
-
-  it("POST /sessions returns 400 for an invalid Thirdweb auth token", async () => {
-    mod = await loadModule(
-      { valid: true, address: VALID_ADDRESS },
-      { valid: false, address: null, error: "bad jwt" },
-    );
-    const app = createApp(mod.default);
-    const res = await request(app)
-      .post("/sessions")
-      .send({ thirdwebAuthToken: "thirdweb-jwt" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_THIRDWB_AUTH");
-    expect(res.body.error.message).toBe("bad jwt");
   });
 
   it("DELETE /sessions invalidates the provided session", async () => {

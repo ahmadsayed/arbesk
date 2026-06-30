@@ -117,10 +117,10 @@ describe("siwe-verify", () => {
     expect(result.error).toMatch(/Signature does not match/i);
   });
 
-  it("accepts EIP-1271 smart account signatures on MegaETH Testnet", async () => {
+  it("accepts EIP-1271 smart account signatures on Base Sepolia", async () => {
     const message = buildSiweMessage({
       nonce: "nonceEip1271Ok",
-      chainId: 6343,
+      chainId: 84532,
     });
     const result = await verifySiwe(message, "0xSignature");
     expect(result.valid).toBe(true);
@@ -139,7 +139,7 @@ describe("siwe-verify", () => {
     verifyMessageMock.mockRejectedValue(new Error("RPC unreachable"));
     const message = buildSiweMessage({
       nonce: "nonceViemErr",
-      chainId: 6343,
+      chainId: 84532,
     });
     const result = await verifySiwe(message, "0xSignature");
     expect(result.valid).toBe(false);
@@ -153,7 +153,7 @@ describe("siwe-verify", () => {
     );
     const message = buildSiweMessage({
       nonce: "nonceEoaFallback",
-      chainId: 6343,
+      chainId: 84532,
     });
     const result = await verifySiwe(message, "0xSignature", {
       eoaAddress: "0xABCDEF00112233445566778899aabbccddeeff00",
@@ -169,7 +169,7 @@ describe("siwe-verify", () => {
     );
     const message = buildSiweMessage({
       nonce: "nonceEoaBad",
-      chainId: 6343,
+      chainId: 84532,
     });
     const result = await verifySiwe(message, "0xSignature", {
       eoaAddress: "0xABCDEF00112233445566778899aabbccddeeff00",

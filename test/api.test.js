@@ -287,12 +287,15 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   }
 
   describe("Security headers", () => {
-    it("allows Thirdweb embedded wallet iframe in report-only CSP", async () => {
+    it("includes CDP API hosts in connect-src CSP", async () => {
       const res = await request(app).get("/studio.html");
       const csp = res.headers["content-security-policy-report-only"];
       expect(csp).toBeDefined();
       expect(csp).toMatch(
-        /frame-src[^;]*https:\/\/embedded-wallet\.thirdweb\.com/,
+        /connect-src[^;]*https:\/\/api\.cdp\.coinbase\.com/,
+      );
+      expect(csp).toMatch(
+        /connect-src[^;]*https:\/\/sepolia\.base\.org/,
       );
     });
   });
@@ -1110,6 +1113,13 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body).toHaveProperty("ipfsBackend");
       expect(res.body).toHaveProperty("ipfsGatewayUrl");
       expect(res.body.ipfsGatewayUrl).toMatch(/\/ipfs\/$/);
+    });
+
+    it("reports cdpProjectId (not thirdwebClientId)", async () => {
+      const res = await request(app).get("/api/v1/config");
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("cdpProjectId");
+      expect(res.body).not.toHaveProperty("thirdwebClientId");
     });
   });
 });
