@@ -110,8 +110,8 @@ export async function createCollectionFlow() {
         );
         return;
       }
-      // ASSET_PUBLISHED also triggers a refresh that promotes the card; flip it
-      // here too for instant feedback without waiting on the refresh round trip.
+      // library-init.js no longer subscribes to ASSET_PUBLISHED, so a full refresh
+      // does not run here; flip the card to confirmed directly for instant feedback.
       markCollectionConfirmed(tokenId);
       announce(`Created collection ${name}`);
       showToast({

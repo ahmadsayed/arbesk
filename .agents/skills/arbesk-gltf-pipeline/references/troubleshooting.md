@@ -25,7 +25,7 @@ Common operations, debugging guides, and force re-decomposition.
 Check in order:
 1. **Is it a composite glTF?** Look for `ipfs://` in buffer/image URIs. If yes, `composeGlTF()` must run. Check gateway is accessible at `http://127.0.0.1:8080/ipfs/<CID>`.
 2. **Is it a legacy CID-prefix glTF?** Look for `data:application/cid;base64,`. `composeGlTF()` handles this, but verify the CID is valid.
-3. **Is the CID valid?** Try `docker-compose exec ipfs ipfs cat <CID>` to verify the data exists and is pinned.
+3. **Is the CID valid?** Try `docker compose exec ipfs ipfs cat <CID>` to verify the data exists and is pinned.
 4. **Does glTF have `asset.version`?** The material editor validates this. A non-glTF JSON stored under a source CID will fail.
 5. **Browser console?** Look for `[SCENE]`, `[COMPOSE]`, or `[DECOMPOSE]` prefixed logs.
 
@@ -34,7 +34,7 @@ Check in order:
 1. Check if the node is decomposed: `node.source.path === "composite.gltf"`
 2. If decomposed: colors should be **baked into the composite CID** (node has no `post_processor.color`). Verify `editCompositeColors()` succeeded.
 3. If monolithic: colors should be in `node.post_processor.color`. Verify `applyColor()` runs in `loadNode()`.
-4. Check the manifest in IPFS: `docker-compose exec ipfs ipfs cat <manifestCid>` and inspect the node's `source` and `post_processor`.
+4. Check the manifest in IPFS: `docker compose exec ipfs ipfs cat <manifestCid>` and inspect the node's `source` and `post_processor`.
 
 ### 10.5 Force Re-decomposition
 

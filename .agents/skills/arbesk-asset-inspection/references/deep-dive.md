@@ -48,5 +48,5 @@ Supported networks (from `constants/chains.js` / `frontend/src/js/blockchain/net
 For on-chain `tokenURI` calls and IPFS reads you need:
 - **Full stack**: `./scripts/start-dev.sh --setup-only` (IPFS + Hardhat + Nostr + contracts + frontend)
 - **Or individual**: `docker compose up -d ipfs`, `docker compose up -d hardhat`
-- **Compiled contracts**: `docker-compose run --rm hardhat npx hardhat compile`
+- **Compiled contracts**: `docker compose run --rm hardhat npx hardhat compile`
 - **CONTRACT_ADDRESS** set in root `.env`

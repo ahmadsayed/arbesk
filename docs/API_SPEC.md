@@ -26,6 +26,7 @@ The following routes require a valid session token:
 - `POST /api/v1/ipfs/upload-url`
 - `POST /api/v1/ipfs/unpin`
 - `POST /api/v1/assets/snapshot-comments`
+- `DELETE /api/v1/sessions`
 
 The WebSocket chat proxy (`/api/v1/chat/ws`) receives the same session token in the query string.
 
@@ -39,6 +40,10 @@ Authorization: Session <opaque-token>
 
 `POST /api/v1/sessions` accepts a SIWE proof from any wallet type and issues an opaque session token (24-hour TTL). `authentication.js` validates the issued token.
 
+Session restoration behavior differs by wallet type:
+- **CDP email-login smart accounts** are automatically restored on page reload when the CDP session is still valid.
+- **EOA wallets** (MetaMask/Rabby/WalletConnect) require the user to explicitly click Login/Signup; there is no automatic reconnect on reload.
+
 ### Creating a session
 
 A single session creation path is used for all wallet types.
@@ -50,6 +55,8 @@ Body: { message: string, signature: string, eoaAddress?: string }
 
 - `message` / `signature`: a SIWE message (EIP-4361) and its signature.
 - `eoaAddress` *(optional)*: for CDP email-login smart accounts — the embedded EOA address that actually signed the message. The `message.address` field contains the smart account address; `eoaAddress` triggers fallback signature verification in `siwe-verify.js`.
+
+Server-side verification is performed by `siwe-verify.js` using `viem`'s `verifyMessage` (supporting EIP-1271 and ERC-6492 signatures) with an EOA fallback path when `eoaAddress` is provided.
 
 **EOA wallets (MetaMask/Rabby):**
 
@@ -138,6 +145,28 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
   "cdpProjectId": null
 }
 ```
+
+> **Note:** The `rpcUrl` returned for Base Sepolia (`https://sepolia.base.org`) is the backend's direct RPC config. CDP smart-wallet browser passthrough in `wallet-cdp.js` uses `https://base-sepolia-rpc.publicnode.com` because `sepolia.base.org` blocks browser-origin requests.
+
+---
+
+### `DELETE /api/v1/sessions`
+
+Invalidates the current session token (logout). Requires a valid `Authorization: Session <token>` header.
+
+**Response `200`**
+
+```json
+{
+  "invalidated": true
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 401 | Missing or malformed session header |
 
 ---
 
@@ -400,7 +429,7 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 {
   "error": {
     "code": "ABI_NOT_FOUND",
-    "message": "ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile"
+    "message": "ABI not found. Run: docker compose run --rm hardhat npx hardhat compile"
   }
 }
 ```
@@ -409,7 +438,7 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 
 ### `GET /api/v1/indexer/owned`
 
-Returns the token IDs owned by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 2000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
+Returns the token IDs owned by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 5000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
 
 A background poll catches up every ~15s. The route also runs an inline catch-up before responding if the last one was more than 30s ago, or always when `force=true` is passed — letting the frontend request an immediate refresh right after publishing.
 

@@ -6,7 +6,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
-- Current status: Phases 1–4.1 + Phase 5.1 (token child worlds) + Phase 5.3 (Merkle editor proofs) + Phase 5.4 (collection manifests) are complete. Server-side micro-ledger was removed; activity tracking is client-side only.
+- Current status: Phases 1–5.4 are complete, including Phase 5.1 (token child worlds), Phase 5.2 (free-tier contract), Phase 5.3 (Merkle editor proofs), and Phase 5.4 (collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, and token indexer are also implemented. Server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
 
 ---
 
@@ -26,6 +26,10 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 - **Token ID-based child worlds** — drag/drop worlds from the gallery into other worlds; child refs resolve dynamically via `tokenURI()` with cycle/depth protection and external chain support.
 - **Gallery + team UI** — wallet-connected gallery renders asset names/thumbnails, expands collections, and loads worlds by token ID; team panel manages editors via Merkle updates.
 - **Session auth** — 24-hour reusable session tokens eliminate the per-generation wallet signature pop-up after the first use.
+- **CDP email-login smart accounts** — OTP email login creates an ERC-4337 smart account on Base Sepolia, gas-sponsored by CDP Paymaster.
+- **Standalone library page** — `/library.html` provides a two-level collection/asset browser with optimistic create, upload, burn, and Studio round-trip.
+- **Asset-level Nostr comments** — per-asset comment threads scoped by `<chainId>:<contractAddress>:<tokenId>:<assetId>`, archived to IPFS on republish.
+- **Token indexer** — chunked `eth_getLogs` backfill discovers owned and shared collection tokens for the gallery and library.
 
 See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementation snapshot and known gaps.
 
@@ -95,8 +99,8 @@ arbesk/
 | Styling | SCSS + Bootstrap 5 |
 | 3D renderer | Babylon.js |
 | Frontend JS | Vanilla JavaScript ES modules |
-| Web3 | Web3.js + Web3Modal |
-| Blockchain | EVM-compatible / local Hardhat / MegaETH Testnet |
+| Web3 | Web3.js + custom wallet picker (EIP-6963 + WalletConnect v2) |
+| Blockchain | EVM-compatible / local Hardhat / Base Sepolia Testnet |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
 | Blockchain dev | Dockerized Hardhat |
 | Storage | Private Dockerized Kubo/IPFS (local); Pinata (testnet) |
@@ -120,7 +124,7 @@ cd frontend && npm install && cd ..
 cd blockchain && npm install && cd ..
 
 # 2. Start local infrastructure: private IPFS + Hardhat node
-docker-compose up -d
+docker compose up -d
 
 # 3. Build frontend assets into frontend/dist
 npm run build:frontend
@@ -151,7 +155,7 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/token-re
 npm run build:frontend
 
 # Contract tests inside Dockerized Hardhat
-docker-compose run --rm hardhat npx hardhat test
+docker compose run --rm hardhat npx hardhat test
 ```
 
 ### Zed Tasks
@@ -251,7 +255,11 @@ The gallery expands collection tokens into one card per `assets` entry.
 | 5.2 | Free-tier contract with daily generation quota |
 | 5.3 | Merkle editor proofs for authorization |
 | 5.4 | Collection manifests — every token is a collection of assets |
+| 5.4+ | CDP email-login smart accounts (Base Sepolia) |
+| 5.4+ | Standalone library page with optimistic create and token indexer |
+| 5.4+ | Asset-level Nostr comments with IPFS archive snapshot |
+| 5.4+ | Token indexer — chunked `eth_getLogs` ownership backfill |
 
-The server-side micro-ledger was removed; activity tracking is now client-side only via the manifest-driven ledger panel.
+The server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
 
 See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for deferred items and known gaps.

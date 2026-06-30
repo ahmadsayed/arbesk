@@ -8,7 +8,7 @@ Hardhat console, inline console.log, event decoding, common scenarios, on-chain 
 
 ```bash
 # Start an interactive Hardhat console
-docker-compose run --rm hardhat npx hardhat console --network hardhat
+docker compose run --rm hardhat npx hardhat console --network hardhat
 
 # Then in the console:
 > const ArbeskAsset = await ethers.getContractFactory("ArbeskAsset")
@@ -115,17 +115,17 @@ for (const log of receipt.logs) {
 
 ```bash
 # Run all Hardhat tests (inside container)
-docker-compose run --rm hardhat npx hardhat test
+docker compose run --rm hardhat npx hardhat test
 
 # Run specific test file
-docker-compose run --rm hardhat npx hardhat test test/ArbeskAsset.test.js
+docker compose run --rm hardhat npx hardhat test test/ArbeskAsset.test.js
 
 # Run with gas reporter
-docker-compose run --rm hardhat npx hardhat test --gas
+docker compose run --rm hardhat npx hardhat test --gas
 
 # Run a single test (using .only in the test file)
 # Edit blockchain/test/ArbeskAsset.test.js: change describe → describe.only or it → it.only
-docker-compose run --rm hardhat npx hardhat test
+docker compose run --rm hardhat npx hardhat test
 ```
 
 ### Running the Deployment Integrity Suite

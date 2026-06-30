@@ -26,8 +26,8 @@
 | CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.js`, SIWE with `eoaAddress` fallback in `siwe-verify.js`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
-| Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, auto-rollback on cancel |
-| Phase 5: Micro-Ledger | ❌ Not started | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
+| Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
+| Phase 5: Micro-Ledger | ❌ Not implemented / client-side only | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
 
@@ -164,7 +164,7 @@ frontend/src/js/
 │   └── ...
 ├── blockchain/
 │   ├── wallet.js               # Backward-compat barrel; re-exports the split wallet modules
-│   ├── wallet-core.js          # Web3 init, connect/disconnect, auto-connect, account state; 250ms polling
+│   ├── wallet-core.js          # Web3 init, connect/disconnect, CDP-only auto-restore, account state; 250ms polling
 │   ├── wallet-network.js       # Network switching
 │   ├── wallet-payments.js      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
 │   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
@@ -226,8 +226,11 @@ frontend/src/js/
 **Optimistic Collection Create UI (`ui/library-create.js`)**
 - Shared `createCollectionFlow()` used by both toolbar button and right-click context menu.
 - Card appears with a spinner badge immediately after the manifest write (before the mint tx); `onPending` hook in `createNamedCollection` fires the callback at that moment.
-- On success: card flips to checkmark (`besked`) instantly; `ASSET_PUBLISHED` also triggers a background refresh that promotes it.
+- On success: card flips to checkmark (`besked`) instantly and stays in place. `library-init.js` no longer subscribes to `ASSET_PUBLISHED`, so there is no full background refresh.
 - On failure/wallet-reject: optimistic card is removed automatically (toast). Works identically for EOA (card shows just before the wallet popup; rejecting removes it) and CDP email login.
+
+**Library Burn Action (`ui/library-context-menu.js`)**
+- `requestBurnCollection()` removes the collection from local state directly after a successful on-chain burn; no full page refresh is triggered.
 
 **Performance (smart-account publish path)**
 - `_resolveGas()` in `wallet-publishing.js` skips `eth_estimateGas` entirely for CDP smart accounts (bundler re-estimates, paymaster sponsors) — saves one RPC round trip on every publish/updateURI/updateEditors/burn.
@@ -273,7 +276,7 @@ frontend/src/js/
 
 | Suite | Count | Status |
 |-------|-------|--------|
-| Jest unit (all) | 1011 | ✅ All passing |
+| Jest unit (all) | 1005 | ✅ All passing |
 | E2E Playwright specs | 17 specs / 35 tests | ✅ Chromium (manual run against local stack) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
@@ -301,7 +304,7 @@ frontend/src/js/
 | Capability | EOA (MetaMask/Rabby) | CDP Email Login |
 |------------|---------------------|-----------------|
 | Wallet connect | ✅ Base Sepolia + Hardhat | ✅ Base Sepolia only |
-| Auto-reconnect on page load | ✅ | ✅ |
+| Auto-reconnect on page load | ❌ | ✅ |
 | Session auth (no per-tx popups) | ✅ SIWE | ✅ SIWE (embedded EOA signs for smart account) |
 | Mock asset generation | ✅ | ✅ |
 | Save draft + publish (mint NFT) | ✅ | ✅ (gas sponsored) |
@@ -329,7 +332,7 @@ frontend/src/js/
 
 ### Verdict
 
-**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1011 unit tests green, 17 E2E specs cover the critical path.
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1005 unit tests green, 17 E2E specs cover the critical path.
 
 **Not ready for open beta** until real 3D generation is wired (501 is the first thing a new user hits). Everything else is beta-quality.
 
@@ -358,7 +361,7 @@ frontend/src/js/
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, loopback-only |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container |
 | Local Nostr relay | — | `ws://127.0.0.1:7777` | Dev-only |
-| Base Sepolia Testnet | — | `https://sepolia.base.org` | EOA + CDP email-login smart accounts |
+| Base Sepolia Testnet | — | `https://sepolia.base.org` (backend direct); `https://base-sepolia-rpc.publicnode.com` (CDP smart-wallet browser passthrough) | EOA + CDP email-login smart accounts |
 
 ### Environment Files
 

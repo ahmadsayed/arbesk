@@ -43,10 +43,10 @@ ASCII cheat sheet with all constants, commands, and endpoints.
 │  • Auto-retry on 401 (backend restart)                │
 │  • Clear on wallet disconnect                         │
 ├─────────────────────────────────────────────────────────┤
-│  DEPLOY:              docker-compose run --rm hardhat   │
+│  DEPLOY:              docker compose run --rm hardhat   │
 │                        npx hardhat run scripts/deploy.js│
 │                        --network hardhat                 │
-│  TEST:                docker-compose run --rm hardhat   │
+│  TEST:                docker compose run --rm hardhat   │
 │                        npx hardhat test                  │
 │  INTEGRITY CHECK:     npm run test:frontend             │
 │  ABI SERVE:           GET /api/v1/contracts/            │

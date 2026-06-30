@@ -63,19 +63,19 @@ Compile → deploy → address sync → multi-network config. Adding new network
 
 ```bash
 # Compile (writes artifacts to blockchain/artifacts/)
-docker-compose run --rm hardhat npx hardhat compile
+docker compose run --rm hardhat npx hardhat compile
 
 # Deploy to local Hardhat
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
 # Deploy to testnet (Optimism Sepolia — configure in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismSepolia
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismSepolia
 
 # Deploy to mainnet (Optimism — configure in hardhat.config.js)
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismMainnet
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismMainnet
 
 # Verify on-chain
-docker-compose run --rm hardhat npx hardhat run scripts/verify.js --network optimismSepolia
+docker compose run --rm hardhat npx hardhat run scripts/verify.js --network optimismSepolia
 ```
 
 ### Address Alignment Verification
@@ -117,8 +117,8 @@ When asked to add a function:
 
 5. **Recompile and redeploy:**
    ```bash
-   docker-compose run --rm hardhat npx hardhat compile
-   docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+   docker compose run --rm hardhat npx hardhat compile
+   docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
    # Sync CONTRACT_ADDRESS (blockchain/.env → root .env)
    npm run test:frontend
    ```
@@ -129,7 +129,7 @@ When asked to add a function:
 
 7. **Run full test suite:**
    ```bash
-   docker-compose run --rm hardhat npx hardhat test
+   docker compose run --rm hardhat npx hardhat test
    npm run test:frontend
    ```
 

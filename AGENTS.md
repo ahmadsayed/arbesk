@@ -2,15 +2,15 @@
 
 Conventions, key file references, and practical guidance for AI agents and developers.
 
-> Deep reference: `docs/ARCHITECTURE.md` · `docs/CURRENT_STATUS.md` · `docs/API_SPEC.md`  
+> Deep reference: `docs/ARCHITECTURE.md` · `docs/CURRENT_STATUS.md` · `docs/API_SPEC.md`
 > Claude Code quick guide: `CLAUDE.md`
 
 ---
 
 ## 1. Project Identity
 
-**Name**: Arbesk  
-**Type**: Cloud-Native 4D Fractal Version-Controlled 3D Asset Platform  
+**Name**: Arbesk
+**Type**: Cloud-Native 4D Fractal Version-Controlled 3D Asset Platform
 **Primary Languages**: JavaScript (Node + Browser), Solidity, Pug/SCSS
 
 **Key Constraints**
@@ -94,11 +94,13 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | 3D engine | `frontend/src/js/engine/` |
 | Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
 | Wallet / chain | `frontend/src/js/blockchain/` |
-| Wallet core (connect/auto-connect/state) | `frontend/src/js/blockchain/wallet-core.js` |
+| Wallet core (CDP-only auto-restore / connect / state) | `frontend/src/js/blockchain/wallet-core.js` |
 | CDP email login (OTP + smart account + EIP-1193 shim) | `frontend/src/js/blockchain/wallet-cdp.js` |
 | Smart-wallet chain gating | `frontend/src/js/blockchain/smart-wallet-support.js` |
 | Per-network config | `frontend/src/js/blockchain/network-config.js` |
 | Token resolver | `frontend/src/js/blockchain/token-resolver.js` |
+| CDP email OTP modal | `frontend/src/js/ui/wallet-modal.js` |
+| Header wallet button (CDP email display; hides network selector) | `frontend/src/js/ui/header-wallet-button.js` |
 | IPFS read/write | `frontend/src/js/ipfs/` |
 | glTF pipeline | `frontend/src/js/gltf/` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` (owned + shared tokens, collection expansion, inaccessible-token cards with Burn) |
@@ -132,9 +134,9 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 ./scripts/start-dev.sh                        # local IPFS + Hardhat + Nostr + backend  (UI testing)
 ./scripts/start-dev.sh --setup-only           # local IPFS + Hardhat + Nostr, no backend (E2E testing)
 ./scripts/start-dev.sh --testnet              # public testnet + Pinata + local Nostr
-docker-compose up -d                          # lower-level: start IPFS + Hardhat + Nostr relay
-docker-compose down
-docker-compose logs -f ipfs                   # or: hardhat, nostr
+docker compose up -d                          # lower-level: start IPFS + Hardhat + Nostr relay
+docker compose down
+docker compose logs -f ipfs                   # or: hardhat, nostr
 
 # ─── Dependencies ───
 npm install && cd frontend && npm install && cd ..
@@ -157,19 +159,19 @@ npm run test:contracts                        # Hardhat tests inside Docker cont
 npm run test:e2e -- --project=chromium        # Playwright E2E critical path
 npm run test:e2e:ui -- --project=chromium     # Playwright E2E with visible browser for debugging
 NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
-docker-compose run --rm hardhat npx hardhat test
+docker compose run --rm hardhat npx hardhat test
 
 # ─── Contract workflow (MANDATORY after any .sol change) ───
-docker-compose run --rm hardhat npx hardhat compile
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+docker compose run --rm hardhat npx hardhat compile
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend                         # always verify last
 
 # ─── Deploy to testnet ───
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
 
 # ─── Hardhat shell ───
-docker-compose run --rm hardhat sh
+docker compose run --rm hardhat sh
 ```
 
 ---
@@ -312,6 +314,7 @@ The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't
   - **CDP email login:** `POST /api/v1/sessions { message, signature, eoaAddress }` — the embedded EOA signs the SIWE message; `message.address` is the smart account address; `eoaAddress` triggers fallback verification in `siwe-verify.js`
 - `authentication.js` validates the issued token regardless of wallet type
 - Auto-cleared on wallet disconnect; entry point: `getOrCreateSession()` in `frontend/src/js/services/api.js`
+- **Auto-restore on page load is CDP-only; EOA/WalletConnect wallets require explicit Login / Signup.**
 
 Full auth flow: `docs/API_SPEC.md § Authentication`.
 
@@ -336,6 +339,8 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Deployment integrity | Jest | `test/frontend/deployment-integrity.test.js` |
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
+
+**Unit / integration coverage: 1005 Jest tests across 67 suites (all passing).**
 
 **E2E coverage (17 specs, 35 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07a` collection asset cards · `07b` material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `99` viewport resize regression. Per-spec contract: `e2e/README.md`.
 
@@ -394,8 +399,8 @@ The E2E specs depend on a stable selector map and a known user flow. See `e2e/RE
 **Contract workflow (MANDATORY after any `.sol` change):**
 
 ```bash
-docker-compose run --rm hardhat npx hardhat compile
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+docker compose run --rm hardhat npx hardhat compile
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend
 npx playwright test --config=e2e/playwright.config.js --project=chromium
@@ -412,7 +417,7 @@ Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, no bootstrap, loopback swarm |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container, `./blockchain` volume-mounted |
 | Local Nostr relay | — | `ws://127.0.0.1:7777` | `scsibug/nostr-rs-relay`, SQLite-backed, dev-only |
-| Base Sepolia Testnet | — | `https://sepolia.base.org` | Testnet (EOA + CDP email login smart accounts) |
+| Base Sepolia Testnet | — | `https://sepolia.base.org` (backend direct); `https://base-sepolia-rpc.publicnode.com` (CDP smart-wallet browser passthrough) | Testnet (EOA + CDP email login smart accounts) |
 
 Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`, `docker/nostr-relay.toml`.
 
@@ -495,17 +500,20 @@ See the `arbesk-worktree` skill for the complete rationale, file map, and troubl
 
 ---
 
-## 17. CDP Email Wallet (Base Sepolia)
+## 16. CDP Email Wallet (Base Sepolia)
 
 Email-login smart accounts are implemented via the `@coinbase/cdp-core` SDK (`frontend/src/js/blockchain/wallet-cdp.js`). They are intentionally supported on **Base Sepolia only**; EOA wallets (MetaMask/Rabby) handle all other chains.
 
 ### How it works
 
-- `wallet-modal.js` collects the email, clears stale CDP browser state, and calls `signInWithEmail()` / `verifyEmailOTP()`.
+- `wallet-modal.js` collects the email, clears stale CDP browser state, and calls `requestEmailOtp()` / `verifyEmailOtp()` from `wallet-cdp.js`.
 - `initialize({ projectId, ethereum: { createOnLogin: "smart" } })` tells CDP to create an EOA + ERC-4337 smart account for new users.
 - `buildCdpEip1193Provider()` exposes an EIP-1193 provider so `wallet-core.js` and Web3.js can use the wallet unchanged.
 - `eth_sendTransaction` routes to `sendUserOperation({ ..., useCdpPaymaster: true })`; the provider polls `getUserOperation()` until it has the real on-chain `transactionHash`, then returns that hash to Web3.js.
 - SIWE signing uses `signEvmMessage({ evmAccount: eoaAddressString, message })`.
+- `wallet-core.js` `initWallet()` calls `autoConnectCdpOnly()` to restore a CDP session on page load. EOA/WalletConnect auto-connect is intentionally disabled; those wallets require explicit Login / Signup.
+- The verified email is persisted in `localStorage` under the key `arbesk-cdp-email` and displayed by `header-wallet-button.js` for CDP users (which also hides the network selector).
+- To avoid stale CDP sessions, `wallet-modal.js` initializes the CDP SDK and calls `disconnectCdpWallet()` before starting a new OTP flow.
 
 ### Required environment
 
@@ -524,7 +532,7 @@ CDP Portal:
 |---------|-----------|-----|
 | `Error: EVM account not found` during signing | `signEvmMessage` expects an **address string**, not the account object | Pass `eoaAccount.address`, not `eoaAccount` |
 | `must be a valid HTTP or HTTPS URL with at least 11 characters` | CDP validates `paymasterUrl` and rejects relative paths like `/api/v1/paymaster` | Use `useCdpPaymaster: true` for local dev; for production, expose the backend proxy on a public HTTPS URL |
-| `POST https://sepolia.base.org/ 403` | The public `sepolia.base.org` endpoint blocks browser-origin requests | Use `https://base-sepolia-rpc.publicnode.com` (already in CSP) for RPC passthrough |
+| `POST https://sepolia.base.org 403` | The public `sepolia.base.org` endpoint blocks browser-origin requests | Use `https://base-sepolia-rpc.publicnode.com` (already in CSP) for RPC passthrough |
 | Transaction never resolves / stuck waiting | CDP returns a UserOperation hash, but Web3.js polls for an EVM transaction hash | Poll `getUserOperation()` until `status === "complete"` and return `transactionHash` from `eth_sendTransaction` |
 | `User is already authenticated` | Stale CDP session in localStorage/IndexedDB | `wallet-modal.js` clears CDP/coinbase keys and calls `disconnectCdpWallet()` before starting a new OTP flow |
 
@@ -532,13 +540,14 @@ CDP Portal:
 
 - `frontend/src/js/blockchain/wallet-cdp.js` — CDP SDK wrapper + EIP-1193 shim
 - `frontend/src/js/ui/wallet-modal.js` — email OTP UI
-- `frontend/src/js/blockchain/wallet-core.js` — wallet connection orchestration
+- `frontend/src/js/ui/header-wallet-button.js` — CDP email display + network-selector hiding
+- `frontend/src/js/blockchain/wallet-core.js` — wallet connection orchestration (CDP-only auto-restore)
 - `frontend/src/js/blockchain/smart-wallet-support.js` — Base Sepolia chain gating
 - `src/api/routes/paymaster.js` — backend paymaster proxy (reserved for production custom paymasters)
 
 ---
 
-## 16. Contact & Links
+## 17. Contact & Links
 
 - **Repository**: https://github.com/ahmadsayed/arbesk (private — always use the `gh` CLI for issue/PR access; public `https://` fetches return 404)
 - **Docs**: `docs/` directory in this repo

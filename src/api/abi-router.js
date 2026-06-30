@@ -19,7 +19,7 @@ export default function abiRouter() {
             const abiPath = path.resolve(__dirname, '../../', relativePath);
             if (!fs.existsSync(abiPath)) {
                 console.log(`[ABI] not found at ${abiPath}`);
-                return res.status(404).json({ error: `ABI not found. Run: docker-compose run --rm hardhat npx hardhat compile` });
+                return res.status(404).json({ error: `ABI not found. Run: docker compose run --rm hardhat npx hardhat compile` });
             }
             console.log(`[ABI] serving ${abiPath}`);
             res.setHeader('Content-Type', 'application/json');

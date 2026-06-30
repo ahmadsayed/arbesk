@@ -11,7 +11,7 @@ Use this skill for any task involving Solidity smart contracts: architecture rev
 
 | Question | Action |
 |----------|--------|
-| `c.methods.X is not a function`? | Stale ABI. Recompile: `docker-compose run --rm hardhat npx hardhat compile`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| `c.methods.X is not a function`? | Stale ABI. Recompile: `docker compose run --rm hardhat npx hardhat compile`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
 | `Transaction reverted` / `WRONG_CONTRACT`? | Address mismatch. Check root `.env` vs `blockchain/.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
 | `WRONG_CONTRACT` with MetaMask? | Smart account proxy. Validate events, not `receipt.to`. See [→ Smart Accounts](./references/smart-accounts.md) |
 | Session signing every request? | Case-sensitive address bug in localStorage. See [→ Session Auth](./references/session-auth.md) |

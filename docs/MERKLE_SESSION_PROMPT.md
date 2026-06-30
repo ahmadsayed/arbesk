@@ -107,7 +107,7 @@ Copy `ArbeskAssetFree.sol`. Change:
 ### 4. Compile
 
 ```bash
-docker-compose run --rm hardhat npx hardhat compile
+docker compose run --rm hardhat npx hardhat compile
 ```
 
 ## Key Design Decisions Made
@@ -134,7 +134,7 @@ docker-compose run --rm hardhat npx hardhat compile
 
 ## Success Criteria
 
-- [ ] 3 new .sol files compile cleanly with `docker-compose run --rm hardhat npx hardhat compile`
+- [ ] 3 new .sol files compile cleanly with `docker compose run --rm hardhat npx hardhat compile`
 - [ ] No `_editorRoles`, `members`, `tokensIParticipate`, `_canBurn` in any new file
 - [ ] `publishAsset` accepts `editorRoot_` parameter
 - [ ] `updateAssetURI` and `burn` accept `bytes32[] calldata proof`

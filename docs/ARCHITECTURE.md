@@ -1,6 +1,6 @@
 # Arbesk System Architecture
 
-> Status: Current v0.9 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). Asset-level Nostr comments and CDP email-login smart accounts implemented. Phase 5 micro-ledger planned.
+> Status: Current v0.9 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, and token indexer implemented. Phase 5 server-side micro-ledger is not implemented; the ledger panel is client-side manifest-driven only.
 > Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child worlds, collection manifests, and studio publishing
 
 ---
@@ -24,7 +24,7 @@ The system currently combines:
 - **Optional WebP publish thumbnails** stored as separate IPFS assets and referenced by manifest metadata
 - **On-demand browser IPFS cache** using memory + IndexedDB
 
-Phase 5 will add an append-only micro-ledger for durable auditability.
+A server-side Phase 5 micro-ledger for durable auditability is not implemented; the ledger panel is client-side manifest-driven only.
 
 ---
 
@@ -44,9 +44,13 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │  └─ Activity ledger (client-side chain walk)                         │
 │                                                                      │
 │  Frontend services                                                   │
-│  ├─ wallet-core.js / wallet-payments.js / wallet-publishing.js:      │
-│  │  Web3Modal, network switching, free/paid generation, mint/update/  │
-│  │  editor/burn calls (re-exported via wallet.js barrel)             │
+│  ├─ wallet-core.js / wallet-connect.js / wallet-discovery.js /       │
+│  │  wallet-payments.js / wallet-publishing.js:                        │
+│  │  custom wallet picker (EIP-6963 + WalletConnect v2), network       │
+│  │  switching, free/paid generation, mint/update/                     │
+│  │  editor/burn calls (re-exported via wallet.js barrel);             │
+│  │  auto-restore on reload is CDP-only — EOA/WalletConnect require     │
+│  │  explicit Login / Signup                                           │
 │  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache           │
 │  ├─ write-to-ipfs.js: direct browser→IPFS writes (Kubo/Pinata)       │
 │  ├─ asset-save.js + services/asset-save/:                            │
@@ -108,7 +112,9 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 │ or Pinata presigned URLs     │   │ ├─ updateEditors + Merkle proof  │
 │                              │   │ └─ burn + Merkle proof           │
 │                              │   │ Local RPC: 127.0.0.1:8545        │
-│                              │   │ Base Sepolia RPC: sepolia.base.org│
+│                              │   │ Base Sepolia: sepolia.base.org   │
+│                              │   │ CDP passthrough: publicnode.com  │
+│                              │   │ (browser RPC)                    │
 └──────────────────────────────┘   └──────────────────────────────────┘
 ```
 
@@ -122,7 +128,7 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 |---|---|
 | `src/index.js` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
 | `src/api/index.js` | Route registry — mounts all `/api/v1` routes |
-| `src/api/routes/` | Per-domain route modules (`comments.js`, `ipfs.js`, `contracts.js`, `openapi.js`, `test-utils.js`) |
+| `src/api/routes/` | Per-domain route modules (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `paymaster.js`, `openapi.js`, `test-utils.js`) |
 | `src/api/assets/generate-node.js` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
 | `src/api/storage/index.js` | Storage backend abstraction (`kubo` or `pinata`) |
 | `src/api/storage/pinata-adapter.js` | Pinata v3 SDK uploads + presigned upload URLs |
@@ -156,14 +162,18 @@ Phase 5 will add an append-only micro-ledger for durable auditability.
 | glTF | `gltf/material-editor.js` | Edits PBR material properties on composite glTFs and commits new CIDs |
 | glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
 | glTF | `gltf/merkle-editors.js` | Merkle tree/proof library for editor authorization |
-| Blockchain | `blockchain/wallet.js` | Backward-compat barrel re-exporting `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
-| Blockchain | `blockchain/wallet-core.js` | Web3 init, connect/disconnect, auto-connect, account state |
+| Blockchain | `blockchain/wallet.js` | Backward-compat barrel re-exporting `wallet-core.js`, `wallet-connect.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
+| Blockchain | `blockchain/wallet-core.js` | Web3 init, connect/disconnect, account state; auto-restore on reload is CDP-only |
+| Blockchain | `blockchain/wallet-connect.js` | WalletConnect v2 integration |
+| Blockchain | `blockchain/wallet-discovery.js` | EIP-6963 injected wallets + WalletConnect v2 discovery |
 | Blockchain | `blockchain/wallet-network.js` | Network switching |
 | Blockchain | `blockchain/wallet-payments.js` | Free-tier `recordGeneration()`, USDC PayGo `payForGenerationWithUSDC()` |
 | Blockchain | `blockchain/wallet-publishing.js` | Mint, `updateAssetURI()`, `updateEditors()`, `burn()` |
 | Blockchain | `blockchain/wallet-cdp.js` | CDP email-OTP login, ERC-4337 smart account, EIP-1193 shim for Web3.js |
 | Blockchain | `blockchain/network-config.js` | Per-network contract/USDC/RPC configuration |
 | Blockchain | `blockchain/token-resolver.js` | Resolve `child_ref` tokens to manifest CIDs (client-side, no server) |
+| UI | `ui/wallet-modal.js` | Custom email/Web3 wallet picker modal (not Web3Modal) |
+| UI | `ui/header-wallet-button.js` | Header wallet button; shows email for CDP users, hides network selector |
 | UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
 | UI | `ui/asset-save.js` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
@@ -227,7 +237,7 @@ The contract never stores per-address roles. Instead:
 | `ipfs` | Private Kubo node (local dev / E2E) | `127.0.0.1:5001`, `127.0.0.1:8080` |
 | `hardhat` | Local EVM and contract tooling | `127.0.0.1:8545` |
 | `nostr` | Local Nostr relay (dev only) | `127.0.0.1:7777` |
-| `baseSepolia` | Public testnet target | RPC `https://sepolia.base.org` |
+| `baseSepolia` | Public testnet target | Backend RPC `https://sepolia.base.org`; CDP smart-wallet browser passthrough `https://base-sepolia-rpc.publicnode.com` |
 
 The local Kubo container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm. The Nostr relay is likewise local-only: bound to loopback, SQLite-backed, with no federation or public peering.
 
@@ -384,7 +394,7 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 | Activity ledger | Frontend (`ledger-panel.js`) walks the chain and also reads `node.history` entries when present |
 | Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` and `node.history` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |
-| Micro-ledger (Phase 5) | The ledger records each manifest CID as an append-only log entry, with optional on-chain anchoring via `anchorManifest()` |
+| Micro-ledger (Phase 5) | **Not implemented.** No append-only log or `anchorManifest()` anchoring exists; the ledger panel derives activity from this same chain walk client-side |
 
 ### Version Snapshot Types
 
@@ -475,6 +485,9 @@ The collection token's `tokenURI` always points to the latest collection manifes
 ┌─────────────────────────────────────────────────────────────────┐
 │  HEADERBAR                                                      │
 │  [Logo]  [Library ●] [Studio]      [☀/☾] [Network ▾] [Login]  │
+│                                                                 │
+│  *CDP email-login users: network selector is hidden; header      │
+│   shows the authenticated email address instead of a wallet.     │
 ├─────────────────────────────────────────────────────────────────┤
 │  TOOLBAR                                                        │
 │  [↑ Up]  Home › Collection Name    [Search…] [Sort ▾]          │
@@ -620,8 +633,10 @@ Context menu opens on right-click. Content varies by target:
    - The collection manifest is written to IPFS (`writeJSONToIPFS`).
    - `onPending` is called immediately — a folder card with the `minting` spinner appears at the top of the list. The user can see the card in under a second.
    - The mint transaction is sent in the background (`publishAsset`).
-4. On success: the spinner badge flips to the green ✓ (`besked`). A success toast appears.
+4. On success: the spinner badge flips to the green ✓ (`besked`) directly in the existing card; no full page refresh occurs. A success toast appears.
 5. On failure (network error, wallet rejection): the optimistic card disappears. An error toast appears.
+
+Burning a collection from the context menu likewise removes the card locally without a full refresh.
 
 For EOA wallets (MetaMask/Rabby), the spinner card appears just before the wallet approval popup. Rejecting the popup removes the card. For CDP email-login smart accounts, the card appears before the sponsored UserOperation is submitted.
 
@@ -668,6 +683,7 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 | File | Role |
 |------|------|
 | `frontend/src/pug/library.pug` | HTML template → compiled to `frontend/dist/library.html` |
+| `frontend/src/js/ui/header-wallet-button.js` | Shared header wallet button; shows email for CDP users and hides the network selector |
 | `frontend/src/js/library-init.js` | Page bootstrap: wallet gate, data loading, event wiring |
 | `frontend/src/js/ui/library-grid.js` | Grid/list rendering, selection, keyboard handling, rubber-band |
 | `frontend/src/js/ui/library-toolbar.js` | Toolbar rendering and event handlers |
@@ -681,7 +697,7 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 
 ```text
 Wallet connected
-  → contract.getPastEvents('Transfer', { filter: { to: owner } })
+  → GET /api/v1/indexer/owned (chunked eth_getLogs backfill)
   → tokenURI(tokenId)
   → if tokenURI points to a collection manifest, expand each assets[assetID] entry
   → get asset manifests from IPFS gateway/cache
@@ -747,14 +763,14 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 | Risk | Current Mitigation | Planned Improvement |
 |---|---|---|
 | Unpaid generation | Backend validates session auth + rate limit; on-chain payment/quota is enforced by the contract (`recordGeneration` / `payForGenerationWithUSDC`) | Verify signer/tx sender/event payload alignment |
-| Replay generation | In-memory `usedTxHashes` plus manifest-chain walk | Phase 5 durable ledger-backed replay index |
+| Replay generation | In-memory `usedTxHashes` plus manifest-chain walk | Future: durable ledger-backed replay index (requires Phase 5 ledger) |
 | Private keys/API keys | `.env` files ignored by Git | Secret scanning / deployment secret management |
 | IPFS public exposure | Docker ports bound to loopback, no DHT/bootstrap | Deployment hardening checklist |
 | Mock assets in prod | `MOCK_3D_GENERATION` env flag | Explicit production adapter config validation |
 | Embedded thumbnail bloat | Backend strips `dataUrl` and stores CID only | Optional thumbnail size/crop UI |
 | Unauthorized URI update/burn | Merkle proof required | Multi-sig owner for high-value collections |
 | Editor list tampering | On-chain Merkle root verifies IPFS list integrity | Periodic root consistency checks |
-| Ledger tampering | Not implemented yet | Append-only JSONL/SQLite + IPFS snapshots + contract anchors |
+| Ledger tampering | Not implemented — no server-side ledger | Client-side manifest chain only; no current plan for JSONL/SQLite + anchors |
 
 ---
 
@@ -784,22 +800,11 @@ Key constraints still in force:
 
 ---
 
-## 10. Planned: Phase 5 Micro-Ledger
+## 10. Phase 5 Micro-Ledger (Not Implemented)
 
-Phase 5 (not yet implemented) introduces a display-agnostic micro-ledger:
+The server-side micro-ledger described in earlier roadmaps is **not implemented**. The contract's `anchorManifest()` is stubbed and unavailable, and there is no append-only JSONL store, ledger query API, or on-chain manifest anchoring.
 
-```text
-Generate / Parametric / Save / Publish / Mint / Team edit
-  → Ledger entry schema validation
-  → Append-only JSONL store
-  → Query API: GET /api/ledger
-  → Optional stats/export
-  → Optional IPFS snapshots
-  → Optional on-chain manifest anchoring (not yet implemented)
-  → Frontend ledger panel
-```
-
-The ledger must remain independent from Babylon.js and DOM state so future XR clients can consume the same audit trail.
+The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives activity entirely from the client-side manifest chain walk. It reads `prev_asset_manifest_cid` links and any populated `scene.nodes[].history` entries to render the activity feed. Future durable auditability would require implementing the ledger as a display-agnostic layer independent from Babylon.js and DOM state so XR clients can consume the same trail.
 
 ---
 
@@ -816,7 +821,7 @@ The ledger must remain independent from Babylon.js and DOM state so future XR cl
 
 - Production cloud 3D adapters are not implemented (mock-only, returns 501 when disabled).
 - OpenSCAD WASM integration is schema-compatible but deferred.
-- Phase 5 micro-ledger is planned but not implemented (`anchorManifest()` stubbed; ledger panel derives activities from manifest chain).
+- Phase 5 server-side micro-ledger is not implemented (`anchorManifest()` stubbed; ledger panel derives activities from manifest chain only).
 - `GET /api/health` is a planned route, not a current backend route.
 - IPFS browser cache is disabled by default (`IPFS_CACHE_ENABLED = false` in `remote-ipfs.js`).
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.

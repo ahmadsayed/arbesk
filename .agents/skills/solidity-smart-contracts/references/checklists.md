@@ -7,7 +7,7 @@
 After any contract change, run through this checklist:
 
 ### Phase 1: Compile Verification
-- [ ] `docker-compose run --rm hardhat npx hardhat compile` succeeds
+- [ ] `docker compose run --rm hardhat npx hardhat compile` succeeds
 - [ ] `blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json` exists on host
 - [ ] ABI contains all expected functions (15 required signatures)
 - [ ] No compiler warnings (check Hardhat output)

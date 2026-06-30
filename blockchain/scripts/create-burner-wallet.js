@@ -5,7 +5,7 @@
  * Wallet 2 = Treasury (receives generation payments)
  *
  * Usage:
- *   docker-compose run --rm hardhat node scripts/create-burner-wallet.js
+ *   docker compose run --rm hardhat node scripts/create-burner-wallet.js
  *
  * WARNING: This generates random key pairs. Store them temporarily only.
  *          Never use burner wallets for mainnet or with real funds.

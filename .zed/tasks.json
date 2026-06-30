@@ -15,14 +15,14 @@
   },
   {
     "label": "Start Docker infrastructure",
-    "command": "docker-compose up -d",
+    "command": "docker compose up -d",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
   },
   {
     "label": "Stop Docker infrastructure",
-    "command": "docker-compose down",
+    "command": "docker compose down",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -50,14 +50,14 @@
   },
   {
     "label": "Run contract tests in Docker",
-    "command": "docker-compose run --rm hardhat npx hardhat test",
+    "command": "docker compose run --rm hardhat npx hardhat test",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
   },
   {
     "label": "Compile contracts in Docker",
-    "command": "docker-compose run --rm hardhat npx hardhat compile",
+    "command": "docker compose run --rm hardhat npx hardhat compile",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -78,14 +78,14 @@
   },
   {
     "label": "Run full validation (build + all tests)",
-    "command": "npm run build:frontend && NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest --silent && docker-compose run --rm hardhat npx hardhat test",
+    "command": "npm run build:frontend && NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest --silent && docker compose run --rm hardhat npx hardhat test",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
   },
   {
     "label": "Deploy contracts to local Hardhat",
-    "command": "docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat",
+    "command": "docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"

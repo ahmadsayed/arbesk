@@ -99,8 +99,9 @@ function render() {
 
 /**
  * Extract activity entries from a manifest chain response.
- * The manifest chain is walked by the server via /api/v1/manifests/:cid/history,
- * which simply follows prev_manifest_cid links - no separate ledger store.
+ * The manifest chain is walked client-side via walkManifestChain() and each
+ * manifest is fetched from remote IPFS with getFromRemoteIPFS(); there is no
+ * server endpoint such as /api/v1/manifests/:cid/history.
  */
 function extractActivities(chain) {
   const entries = [];

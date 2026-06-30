@@ -27,7 +27,7 @@ Use this skill when working with any IPFS-related code in the Arbesk project —
 7. **Log IPFS operations with `[IPFS]` tag** — per project logging conventions.
 8. **Storage cap is 100 GB** — adjust `Datastore.StorageMax` if needed.
 9. **Unpin before running GC** — never run `ipfs repo gc` without unpinning first.
-10. **Test IPFS changes with backend running** — `./scripts/start-dev.sh` (or `npm start` + `docker-compose up -d ipfs`).
+10. **Test IPFS changes with backend running** — `./scripts/start-dev.sh` (or `npm start` + `docker compose up -d ipfs`).
 
 ## File Map
 

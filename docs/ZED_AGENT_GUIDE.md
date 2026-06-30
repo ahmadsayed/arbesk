@@ -35,10 +35,10 @@ After **any** change to `blockchain/contracts/*.sol`, the deployment pipeline mu
 
 ```bash
 # 1. Recompile — writes fresh ABI to blockchain/artifacts/ on host
-docker-compose run --rm hardhat npx hardhat compile
+docker compose run --rm hardhat npx hardhat compile
 
 # 2. Redeploy — updates blockchain/.env + deployment artifact
-docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
 
 # 3. Sync CONTRACT_ADDRESS (free tier) and PAID_CONTRACT_ADDRESS (paid tier) from blockchain/.env to root .env
 #    The deploy script updates blockchain/.env but NOT root .env.
