@@ -420,8 +420,4 @@ on(EVENTS.USER_AUTH_REQUIRED, (e) => {
   updateHeaderWalletButton(e?.address, false, walletSource, email);
 });
 
-on(EVENTS.ASSET_PUBLISHED, async () => {
-  // Force an immediate indexer catch-up so the newly published collection
-  // shows up right away instead of waiting for the next background poll.
-  await refreshLibraryData(true);
-});
+

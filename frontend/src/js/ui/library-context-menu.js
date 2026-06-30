@@ -168,8 +168,11 @@ async function requestBurnCollection(id) {
     const txHash = await burnCollection(collection.tokenId);
     if (!txHash) throw new Error("Burn transaction failed");
 
-    const { refreshLibraryData } = await libraryInitOps();
-    await refreshLibraryData();
+    // Remove the burned collection from local state instead of triggering a full refresh.
+    libraryState.set({
+      collections: libraryState.get().collections.filter((c) => c.id !== id),
+      selectedIds: [],
+    });
     announce(`Burned collection ${collection.name}`);
     showToast({
       type: "info",
