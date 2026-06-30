@@ -313,7 +313,7 @@ async function selectEmailWallet() {
         if (emailStep) emailStep.style.display = "";
         if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
         if (emailInput) emailInput.focus();
-      });
+      }, { once: true });
     }
 
     async function handleVerify() {
@@ -350,7 +350,7 @@ async function selectEmailWallet() {
     }
 
     if (otpVerifyBtn) {
-      otpVerifyBtn.addEventListener("click", handleVerify);
+      otpVerifyBtn.addEventListener("click", handleVerify, { once: true });
     }
     if (otpInput) {
       otpInput.addEventListener("keydown", (e) => {

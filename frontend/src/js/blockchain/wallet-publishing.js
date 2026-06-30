@@ -27,12 +27,6 @@ function _getContract() {
 }
 
 /**
- * Check whether the current wallet/chain combination can publish.
- * Smart wallets (Thirdweb Google) are only supported on chains with a
- * compatible ERC-4337 bundler (Monad Testnet). EOA wallets work everywhere.
- * @returns {boolean}
- */
-/**
  * Whether the active wallet is a CDP ERC-4337 smart account.
  * @returns {boolean}
  */
