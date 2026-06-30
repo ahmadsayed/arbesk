@@ -67,6 +67,10 @@ const connectSrc = [
   "https://*.llamarpc.com",
   "https://*.publicnode.com",
   "https://esm.sh",
+  // CDP / Base Sepolia
+  "https://api.cdp.coinbase.com",
+  "https://*.cdp.coinbase.com",
+  "https://sepolia.base.org",
 ];
 const imgSrc = ["'self'", "blob:", "data:", "http://127.0.0.1:8080"];
 if (pinataGateway) {

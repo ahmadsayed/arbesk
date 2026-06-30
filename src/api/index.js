@@ -20,6 +20,7 @@ import contractsRoutes from "./routes/contracts.js";
 import indexerRoutes from "./routes/indexer.js";
 import openapiRoutes from "./routes/openapi.js";
 import testUtilsRoutes from "./routes/test-utils.js";
+import paymasterRoutes from "./routes/paymaster.js";
 import { maybeDecompress } from "./ipfs-utils.js";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ export default () => {
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
       walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,
+      cdpProjectId: process.env.CDP_PROJECT_ID || null,
     });
   });
 
@@ -67,6 +69,10 @@ export default () => {
   // ─── Token Ownership Indexer ───────────────────────────────────────────────
 
   v1.use("/indexer", indexerRoutes());
+
+  // ─── CDP Paymaster Proxy ───────────────────────────────────────────────────
+
+  v1.use("/paymaster", paymasterRoutes());
 
   // ─── OpenAPI Specification ─────────────────────────────────────────────────
 
