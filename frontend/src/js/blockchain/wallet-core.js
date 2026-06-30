@@ -330,7 +330,8 @@ async function autoConnectCdpOnly() {
     web3 = newWeb3(cdpResult.provider);
     window.web3 = web3;
     activeConnectionSource = "cdp";
-    await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, cdpResult.email || null);
+    const email = localStorage.getItem("arbesk-cdp-email") || cdpResult.email || null;
+    await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
   } catch (err) {
     warn("[WALLET] CDP auto-connect failed:", err.message);
     localStorage.removeItem(LAST_WALLET_KEY);
@@ -500,6 +501,9 @@ async function connectWallet() {
       activeConnectionSource = "cdp";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "cdp");
+      if (result.email) {
+        localStorage.setItem("arbesk-cdp-email", result.email);
+      }
       await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress, result.email || null);
     } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
@@ -594,6 +598,7 @@ async function disconnectWallet() {
     lowBalanceToastId = null;
   }
   localStorage.removeItem(LAST_WALLET_KEY);
+  localStorage.removeItem("arbesk-cdp-email");
   emit(EVENTS.WALLET_DISCONNECTED);
 }
 
