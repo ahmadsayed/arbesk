@@ -25,10 +25,10 @@ export { isSmartWalletSupported, SMART_WALLET_SUPPORTED_CHAIN_IDS };
 
 let _cdpInitialized = false;
 
-/** @type {object|null} The embedded EOA account object (user.evmAccounts[0]) */
+/** @type {object|null} The embedded EOA account object (user.evmAccountObjects[0]) */
 let _currentEoaAccount = null;
 
-/** @type {string|null} Smart account address (user.evmSmartAccounts?.[0]) */
+/** @type {string|null} Smart account address (user.evmSmartAccountObjects?.[0]?.address) */
 let _smartAccountAddress = null;
 
 /** @type {{ request: (args: object) => Promise<unknown> } | null} */
@@ -113,12 +113,12 @@ export async function verifyEmailOtp(flowId, otp) {
     const { user, isNewUser } = await verifyEmailOTP({ flowId, otp });
     log("CDP", isNewUser ? "new user created" : "existing user signed in");
 
-    const eoaAccount = user.evmAccounts?.[0];
+    const eoaAccount = user.evmAccountObjects?.[0];
     if (!eoaAccount) {
       throw new Error("CDP user has no EVM account after OTP verification");
     }
 
-    const smartAccountAddress = user.evmSmartAccounts?.[0] ?? null;
+    const smartAccountAddress = user.evmSmartAccountObjects?.[0]?.address ?? null;
     if (!smartAccountAddress) {
       warn("CDP", "user has no smart account — will use EOA address as wallet address");
     }
@@ -158,13 +158,13 @@ export async function autoConnectCdpWallet() {
       return null;
     }
 
-    const eoaAccount = user.evmAccounts?.[0];
+    const eoaAccount = user.evmAccountObjects?.[0];
     if (!eoaAccount) {
       log("CDP", "autoConnect: user has no EVM account");
       return null;
     }
 
-    const smartAccountAddress = user.evmSmartAccounts?.[0] ?? null;
+    const smartAccountAddress = user.evmSmartAccountObjects?.[0]?.address ?? null;
 
     _currentEoaAccount = eoaAccount;
     _smartAccountAddress = smartAccountAddress;
@@ -247,8 +247,8 @@ function hexToUtf8OrKeepHex(hexOrPlain) {
  *  - eth_sendTransaction({ to, value, data }) → sendUserOperation → userOpHash
  *  - all other methods                  → forwarded to Base Sepolia public RPC
  *
- * @param {object} eoaAccount - user.evmAccounts[0] from CDP
- * @param {string|null} smartAccountAddress - user.evmSmartAccounts[0] from CDP
+ * @param {object} eoaAccount - user.evmAccountObjects[0] from CDP
+ * @param {string|null} smartAccountAddress - user.evmSmartAccountObjects[0].address from CDP
  * @returns {{ request: (args: object) => Promise<unknown> }}
  */
 export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
@@ -309,14 +309,16 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
           const [rawMessage] = params ?? [];
           const message = hexToUtf8OrKeepHex(rawMessage);
           log("CDP:EIP1193", "personal_sign message (decoded):", message.slice(0, 80));
-          return await signEvmMessage(eoaAccount, message);
+          const personalSignResult = await signEvmMessage({ evmAccount: eoaAccount, message });
+          return personalSignResult.signature;
         }
 
         case "eth_sign": {
           // Legacy eth_sign passes (address, message) — note reversed order
           const [, rawMessage] = params ?? [];
           const message = hexToUtf8OrKeepHex(rawMessage);
-          return await signEvmMessage(eoaAccount, message);
+          const ethSignResult = await signEvmMessage({ evmAccount: eoaAccount, message });
+          return ethSignResult.signature;
         }
 
         // ── Transactions ──────────────────────────────────────────
@@ -351,10 +353,10 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
             paymasterUrl: "/api/v1/paymaster",
           });
 
-          log("CDP:EIP1193", "UserOperation submitted, hash:", result.userOpHash);
-          // Return the userOpHash as the transaction hash — Web3.js polls
+          log("CDP:EIP1193", "UserOperation submitted, hash:", result.userOperationHash);
+          // Return the userOperationHash as the transaction hash — Web3.js polls
           // eth_getTransactionReceipt with this hash until it's mined.
-          return result.userOpHash;
+          return result.userOperationHash;
         }
 
         // ── Everything else → public RPC passthrough ──────────────
@@ -385,9 +387,9 @@ export async function signSiweMessageWithCdp(message) {
   }
   try {
     log("CDP", "signing SIWE message with EOA:", _currentEoaAccount.address);
-    const signature = await signEvmMessage(_currentEoaAccount, message);
+    const result = await signEvmMessage({ evmAccount: _currentEoaAccount, message });
     log("CDP", "SIWE message signed");
-    return signature;
+    return result.signature;
   } catch (err) {
     error("CDP", "signSiweMessageWithCdp failed:", err);
     throw err;
