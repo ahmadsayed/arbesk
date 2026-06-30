@@ -14,6 +14,8 @@ describe("walletState.get()", () => {
       chainId: null,
       contract: null,
       contractAddress: null,
+      walletSource: null,
+      email: null,
     });
   });
 
@@ -54,6 +56,8 @@ describe("walletState.reset()", () => {
       chainId: null,
       contract: null,
       contractAddress: null,
+      walletSource: null,
+      email: null,
     });
   });
 });
