@@ -15,8 +15,8 @@ Conventions, key file references, and practical guidance for AI agents and devel
 
 **Key Constraints**
 
-- **Blockchain**: EVM-compatible — Hardhat local dev (`31415822`), MegaETH Testnet (`6343`), Monad Testnet (`10143`). Chain IDs live in `constants/chains.js`.
-- **Wallets**: EOA (MetaMask/Rabby) on all three chains via SIWE; social login (Google) via Thirdweb ERC-4337 smart accounts — **Monad Testnet only** (`smart-wallet-support.js`)
+- **Blockchain**: EVM-compatible — Hardhat local dev (`31415822`), MegaETH Testnet (`6343`), Monad Testnet (`10143`), Base Sepolia Testnet (`84532`). Chain IDs live in `constants/chains.js`.
+- **Wallets**: EOA (MetaMask/Rabby) on all chains via SIWE; social login (Google) via Thirdweb ERC-4337 smart accounts — **Monad Testnet only** (`smart-wallet-support.js`)
 - **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`)
@@ -62,7 +62,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
 - `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet-payments.js`, re-exported through `wallet.js`) — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `6343`, `10143`). Per-chain `DEPLOYMENT_BLOCKS` and `LOG_CHUNK_SIZES` also live there for the token indexer.
+- Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `6343`, `10143`, `84532`). Per-chain `DEPLOYMENT_BLOCKS` and `LOG_CHUNK_SIZES` also live there for the token indexer.
 - Contract `owner()` bypasses the free-tier daily generation quota in `recordGeneration()`; Merkle editor proof checks still apply (owner is not automatically an editor)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
 
@@ -162,7 +162,7 @@ docker-compose run --rm hardhat npx hardhat test
 # ─── Contract workflow (MANDATORY after any .sol change) ───
 docker-compose run --rm hardhat npx hardhat compile
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
+grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend                         # always verify last
 
 # ─── Deploy to testnet ───
@@ -398,7 +398,7 @@ The E2E specs depend on a stable selector map and a known user flow. See `e2e/RE
 ```bash
 docker-compose run --rm hardhat npx hardhat compile
 docker-compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
+grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend
 npx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
@@ -416,6 +416,7 @@ Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause
 | Local Nostr relay | — | `ws://127.0.0.1:7777` | `scsibug/nostr-rs-relay`, SQLite-backed, dev-only |
 | MegaETH Testnet | — | `https://carrot.megaeth.com/rpc` | Testnet (EOA wallets) |
 | Monad Testnet | — | `https://testnet-rpc.monad.xyz/` | Testnet (EOA + social-login smart accounts) |
+| Base Sepolia Testnet | — | `https://sepolia.base.org` | Testnet (EOA wallets only) |
 
 Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`, `docker/nostr-relay.toml`.
 
@@ -442,8 +443,9 @@ Full variable reference: `docs/CURRENT_STATUS.md §6.5`.
 | Local dev | Hardhat (Docker) | `http://127.0.0.1:8545` | `hardhat` |
 | Testnet (EOA) | MegaETH Testnet | `https://carrot.megaeth.com/rpc` | `megaethTestnet` |
 | Testnet (EOA + social login) | Monad Testnet | `https://testnet-rpc.monad.xyz/` | `monadTestnet` |
+| Testnet (EOA only) | Base Sepolia Testnet | `https://sepolia.base.org` | `baseSepolia` |
 
-MegaETH uses ETH for gas; block time ~0.5 s. Monad Testnet is the only chain where Thirdweb ERC-4337 smart accounts (social login) work, with gas sponsored by the Thirdweb paymaster.
+MegaETH uses ETH for gas; block time ~0.5 s. Monad Testnet is the only chain where Thirdweb ERC-4337 smart accounts (social login) work, with gas sponsored by the Thirdweb paymaster. Base Sepolia uses ETH for gas.
 
 ---
 

@@ -8,7 +8,9 @@
 
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 
-/** Chain IDs where Thirdweb's bundler supports ERC-4337 smart wallets. */
+/** Chain IDs where Thirdweb's bundler supports ERC-4337 smart wallets.
+ *  Base Sepolia is intentionally excluded — it is EOA-only.
+ */
 export const SMART_WALLET_SUPPORTED_CHAIN_IDS = [CHAIN_IDS.MONAD_TESTNET];
 
 /**

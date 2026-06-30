@@ -119,6 +119,13 @@
   margin: 0 0 var(--size-1);
 }
 
+// Info note (e.g. explaining why Google sign-in is hidden)
+.wallet-modal-note {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  margin: 0 0 var(--size-2);
+}
+
 // Divider between injected wallets and social login
 .wallet-modal-divider {
   display: flex;

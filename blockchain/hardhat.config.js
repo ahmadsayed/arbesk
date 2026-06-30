@@ -34,6 +34,12 @@ module.exports = {
       accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
       chainId: 10143,
     },
+    // ── Base Sepolia Testnet ──
+    baseSepolia: {
+      url: "https://sepolia.base.org",
+      accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY.replace(/^0x/, "")}`] : [],
+      chainId: 84532,
+    },
   },
   etherscan: {
     // A single-string apiKey enables Etherscan API v2 (unified endpoint,
@@ -56,6 +62,14 @@ module.exports = {
         urls: {
           apiURL: "https://api.monadexplorer.com/api",
           browserURL: "https://testnet.monadexplorer.com",
+        },
+      },
+      {
+        network: "baseSepolia",
+        chainId: 84532,
+        urls: {
+          apiURL: "https://api-sepolia.basescan.org/api",
+          browserURL: "https://sepolia.basescan.org",
         },
       },
     ],

@@ -40,6 +40,15 @@ export const NETWORK_CONFIGS = {
     rpcUrl: "https://testnet-rpc.monad.xyz/",
     blockExplorer: "https://testnet.monadexplorer.com",
   },
+  [CHAIN_IDS.BASE_TESTNET]: {
+    name: "Base Sepolia Testnet",
+    chainId: CHAIN_IDS.BASE_TESTNET,
+    contractAddress: "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC",
+    paidContractAddress: null, // Paid tier not deployed on testnet
+    usdcToken: null, // USDC not deployed on testnet
+    rpcUrl: "https://sepolia.base.org",
+    blockExplorer: "https://sepolia.basescan.org",
+  },
 };
 
 /**

@@ -21,11 +21,14 @@ async function main() {
   console.log("Network:", network);
 
   const isLocal = network === "hardhat" || network === "localhost";
-  const isTestnet = network === "megaethTestnet" || network === "monadTestnet";
+  const isTestnet =
+    network === "megaethTestnet" ||
+    network === "monadTestnet" ||
+    network === "baseSepolia";
 
   if (!isLocal && !isTestnet) {
     console.error(
-      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, megaethTestnet, monadTestnet`
+      `ERROR: Unsupported network "${network}". Supported: hardhat, localhost, megaethTestnet, monadTestnet, baseSepolia`
     );
     process.exit(1);
   }
@@ -115,19 +118,22 @@ async function main() {
 
   console.log("Deployment artifacts saved to deployments/" + network);
 
+  const freeEnvKey =
+    network === "baseSepolia" ? "BASE_CONTRACT_ADDRESS" : "CONTRACT_ADDRESS";
+
   // ── Update .env for local and testnet networks ──
   if (isLocal || isTestnet) {
     const envPath = path.join(__dirname, "..", ".env");
     let env = "";
     if (fs.existsSync(envPath)) {
       env = fs.readFileSync(envPath, "utf8");
-      if (env.includes("CONTRACT_ADDRESS=")) {
+      if (env.includes(`${freeEnvKey}=`)) {
         env = env.replace(
-          /CONTRACT_ADDRESS=.*/g,
-          `CONTRACT_ADDRESS=${freeAddress}`
+          new RegExp(`^${freeEnvKey}=.*`, "gm"),
+          `${freeEnvKey}=${freeAddress}`
         );
       } else {
-        env += `\nCONTRACT_ADDRESS=${freeAddress}\n`;
+        env += `\n${freeEnvKey}=${freeAddress}\n`;
       }
       if (isLocal && paidAddress) {
         if (env.includes("PAID_CONTRACT_ADDRESS=")) {
@@ -145,22 +151,22 @@ async function main() {
         }
       }
     } else {
-      env = `CONTRACT_ADDRESS=${freeAddress}\n`;
+      env = `${freeEnvKey}=${freeAddress}\n`;
       if (isLocal && paidAddress) {
         env += `PAID_CONTRACT_ADDRESS=${paidAddress}\nUSDC_TOKEN=${usdcAddress}\n`;
       }
     }
     fs.writeFileSync(envPath, env);
     console.log(
-      `Updated blockchain/.env with CONTRACT_ADDRESS for ${network}`
+      `Updated blockchain/.env with ${freeEnvKey} for ${network}`
     );
   }
 
   if (isTestnet) {
     console.log(`\n=== Next steps for ${network} ===`);
-    console.log("1. CONTRACT_ADDRESS has been written to blockchain/.env");
-    console.log(`   CONTRACT_ADDRESS=${freeAddress}`);
-    console.log("2. Copy CONTRACT_ADDRESS to root .env as well.");
+    console.log(`1. ${freeEnvKey} has been written to blockchain/.env`);
+    console.log(`   ${freeEnvKey}=${freeAddress}`);
+    console.log(`2. Copy ${freeEnvKey} to root .env as well.`);
     console.log(
       "3. Update frontend/src/js/blockchain/network-config.js and src/config.js with the new address"
     );

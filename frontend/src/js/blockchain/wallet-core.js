@@ -61,6 +61,13 @@ export const NETWORKS = {
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     blockExplorerUrls: ["https://megaexplorer.xyz"],
   },
+  baseSepolia: {
+    chainId: `0x${CHAIN_IDS.BASE_TESTNET.toString(16)}`,
+    chainName: "Base Sepolia Testnet",
+    rpcUrls: ["https://sepolia.base.org"],
+    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+    blockExplorerUrls: ["https://sepolia.basescan.org"],
+  },
 };
 
 // ─── Module-level state ───
@@ -223,6 +230,17 @@ async function _checkBalance() {
         type: "warning",
         title: "Low Balance",
         message: `Your wallet has very low MON on Monad Testnet. You need MON for gas. Get testnet MON from https://testnet.monad.xyz/.`,
+        duration: 0,
+      });
+    } else if (
+      chainId === CHAIN_IDS.BASE_TESTNET &&
+      parseFloat(balanceEth) < 0.001
+    ) {
+      warn("Low balance detected on Base Sepolia Testnet");
+      lowBalanceToastId = showToast({
+        type: "warning",
+        title: "Low Balance",
+        message: `Your wallet has very low ETH on Base Sepolia Testnet. You need ETH for gas. Get testnet ETH from a Base Sepolia faucet.`,
         duration: 0,
       });
     }

@@ -42,6 +42,15 @@ export const NETWORK_CONFIGS = {
     usdcToken: null, // USDC not deployed on testnet
     rpcUrl: "https://testnet-rpc.monad.xyz/",
   },
+  [CHAIN_IDS.BASE_TESTNET]: {
+    name: "Base Sepolia Testnet",
+    contractAddress:
+      process.env.BASE_CONTRACT_ADDRESS ||
+      "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC",
+    paidContractAddress: null, // Paid tier not deployed on testnet
+    usdcToken: null, // USDC not deployed on testnet
+    rpcUrl: "https://sepolia.base.org",
+  },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
