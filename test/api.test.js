@@ -288,7 +288,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
   describe("Security headers", () => {
     it("includes CDP API hosts in connect-src CSP", async () => {
-      const res = await request(app).get("/studio.html");
+      const res = await request(app).get("/app.html");
       const csp = res.headers["content-security-policy-report-only"];
       expect(csp).toBeDefined();
       expect(csp).toMatch(

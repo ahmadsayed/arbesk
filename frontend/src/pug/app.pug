@@ -1,0 +1,440 @@
+doctype html
+html(lang="en")
+  head
+    title Arbesk
+    meta(charset="utf-8")
+
+    meta(name="viewport", content="width=device-width, initial-scale=1")
+    link(rel="icon", type="image/webp", href="/logo.webp")
+    link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
+    link(rel="stylesheet", href="/css/styles.css")
+    script(src="/js/engine/theme-init.js")
+    script(src="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.js" crossorigin="anonymous")
+    script(src="https://cdn.jsdelivr.net/npm/tabbable@6.2.0/dist/index.umd.min.js" crossorigin="anonymous")
+    script(src="https://cdn.jsdelivr.net/npm/focus-trap@7.6.2/dist/focus-trap.umd.min.js" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/v9.12.0/babylon.js" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/v9.12.0/loaders/babylonjs.loaders.min.js" crossorigin="anonymous")
+    script(src="https://cdn.babylonjs.com/v9.12.0/materialsLibrary/babylonjs.materials.min.js" crossorigin="anonymous")
+    script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" crossorigin="anonymous")
+    script(type="importmap").
+      {
+        "imports": {
+          "@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js",
+          "pako": "https://cdn.jsdelivr.net/npm/pako@2.2.0/dist/pako.esm.mjs",
+          "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
+          "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113"
+        }
+      }
+  body
+    #app
+      header.headerbar
+        h1.sr-only Arbesk
+        .headerbar-brand
+          img.logo-light(src="/logo.webp", alt="Arbesk")
+          img.logo-dark(src="/logo-dark.webp", alt="Arbesk")
+
+        nav.page-switcher(aria-label="Page")
+          a.page-switcher-tab(href="/library" data-nav) Library
+          a.page-switcher-tab.active(href="/studio" data-nav) Studio
+
+        button#backBtn.headerbar-back.hidden(aria-label="Go back to parent world", title="Go back (Alt+Left)")
+          svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+            path(d="M15 18l-6-6 6-6")
+
+        .headerbar-title
+          nav#pathBar.pathbar.hidden(aria-label="World path")
+          span#assetStatusName.headerbar-title-text(aria-label="Asset name") No asset open
+          span#assetStatusMeta.headerbar-title-meta Create or open an asset
+
+        #assetHistory.history(hidden)
+          span.history-label Version
+          .history-slider-wrap
+            input#historySlider.history-slider(type="range" min="0" max="0" step="1" value="0" aria-label="Asset version" aria-describedby="historyDetailPopover" title="Scrub asset versions")
+            #historyDetailPopover.history-detail(hidden)
+          span#historyVersionBadge.version-badge v1
+
+        .headerbar-divider(aria-hidden="true")
+        .headerbar-doc-actions
+          button#newAssetBtn.btn.btn-secondary(type="button" aria-label="New asset" title="New asset (Ctrl+N)")
+            svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              line(x1="12" y1="5" x2="12" y2="19")
+              line(x1="5" y1="12" x2="19" y2="12")
+            span New
+          button#saveAssetBtn.btn.btn-secondary(hidden type="button" aria-label="Save Draft" title="Save Draft (Ctrl+S)")
+            svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
+              path(d="M17 21v-8H7v8")
+              path(d="M7 3v5h8")
+            span#saveAssetBtnText Save
+          button#publishAssetBtn.btn.btn-primary(hidden type="button" aria-label="Publish asset" title="Publish (Besk it) this asset")
+            svg.besk-it-logo(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M12.00,2.00 L21.51,15.09 L6.12,20.09 L6.12,3.91 L21.51,8.91 L12.00,22.00 L2.49,8.91 L17.88,3.91 L17.88,20.09 L2.49,15.09 Z")
+              path(d="M12.00,7.50 L16.28,13.39 L9.35,15.64 L9.35,8.36 L16.28,10.61 L12.00,16.50 L7.72,10.61 L14.65,8.36 L14.65,15.64 L7.72,13.39 Z")
+            span#publishAssetBtnText Besk it
+
+        .headerbar-actions
+          button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
+            svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              circle(cx="12" cy="12" r="5")
+              line(x1="12" y1="1" x2="12" y2="3")
+              line(x1="12" y1="21" x2="12" y2="23")
+              line(x1="4.22" y1="4.22" x2="5.64" y2="5.64")
+              line(x1="18.36" y1="18.36" x2="19.78" y2="19.78")
+              line(x1="1" y1="12" x2="3" y2="12")
+              line(x1="21" y1="12" x2="23" y2="12")
+              line(x1="4.22" y1="19.78" x2="5.64" y2="18.36")
+              line(x1="18.36" y1="5.64" x2="19.78" y2="4.22")
+            svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
+          select#headerbarNetworkSelect.headerbar-network-select(aria-label="Select network" title="Select network")
+            option(value="baseSepolia" selected) Base Sepolia Testnet
+            option(value="hardhat") Hardhat Local
+          button#connectWalletBtn.headerbar-wallet.disconnected(aria-label="Login or sign up")
+            svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4")
+              path(d="M10 17l5-5-5-5")
+              path(d="M15 12H3")
+            span Login / Signup
+          button#disconnectWalletBtn.headerbar-wallet.hidden(aria-label="Wallet menu")
+            svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
+              path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
+              path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+            span#disconnectWalletBtnText Disconnect
+      //- ═══════════════════════════════════════════════════════════
+      //- Studio view
+      //- ═══════════════════════════════════════════════════════════
+      main#studioView.app-view
+        .studio-layout
+          //- Unified Sidebar with View Switcher
+          aside.sidebar#sidebar
+            .sidebar-switcher(role="tablist")
+              button.sidebar-switcher-btn.active(data-view="settings" role="tab" aria-selected="true" tabindex="0" aria-label="Settings" title="Settings (Ctrl+1)")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  circle(cx="12" cy="12" r="3")
+                  path(d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z")
+              button.sidebar-switcher-btn(data-view="chat" role="tab" aria-selected="false" tabindex="-1" aria-label="Chat" title="Chat (Ctrl+2)")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  path(d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z")
+              button.sidebar-switcher-btn(data-view="outline" role="tab" aria-selected="false" tabindex="-1" aria-label="Outline" title="Outline (Ctrl+3)")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  circle(cx="12" cy="12" r="10")
+                  line(x1="12" y1="2" x2="12" y2="7")
+                  line(x1="12" y1="17" x2="12" y2="22")
+                  line(x1="2" y1="12" x2="7" y2="12")
+                  line(x1="17" y1="12" x2="22" y2="12")
+              button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Gallery" title="Gallery (Ctrl+4)")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  path(d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20")
+                  path(d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z")
+              button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+5)")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  path(d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z")
+                  path(d="M14 2v6h6")
+                  path(d="M8 13h2")
+                  path(d="M8 17h2")
+                  path(d="M14 13h2")
+                  path(d="M14 17h2")
+              .sidebar-switcher-bottom
+                button#sidebarToggle.sidebar-switcher-toggle(aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)" aria-expanded="true" aria-controls="sidebar")
+                  svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                    polyline(points="15 18 9 12 15 6")
+            .sidebar-content
+              //- View: Settings
+              .sidebar-view(data-view="settings")
+                .sidebar-view-header
+                  h3 Settings
+                .sidebar-view-body
+                  #assetSettings
+                    .form-group
+                      label.form-label Asset Name
+                      #assetNameDisplay.form-input Untitled Asset
+                    .form-group
+                      label.form-label(for="collectionSelect") Collection
+                      select#collectionSelect.form-select
+                        option(value="") Default
+                    .form-group
+                      label.form-label(for="providerSelect") Generation Provider
+                      select#providerSelect.form-select
+                        option(value="mock") Mock (Local)
+                        option(value="meshy") Meshy
+                        option(value="tripo3d") Tripo3D
+                        option(value="hunyuan3d") Hunyuan3D
+                    .form-group
+                      label.form-label(for="providerKeyInput") Generation API Key
+                      .byok-field
+                        input#providerKeyInput.form-control(type="password", placeholder="sk-… (optional)", autocomplete="off", aria-describedby="byokHelp")
+                        button#providerKeyToggle.byok-toggle(type="button", aria-label="Show API key") Show
+                      .form-help#byokHelp Bring your own key for the selected provider to generate without the free-tier on-chain quota.
+                    .form-group
+                      label.form-label(for="tierSelect") Quality Tier
+                      select#tierSelect.form-select(aria-describedby="tierHelp")
+                        option(value="0" selected) Free — ~$0.0001 gas
+                      .form-help#tierHelp Higher tiers produce better quality meshes.
+                    #teamPanel.team-section(hidden)
+                      .team-header
+                        h5 Collection Collaborators
+                        span.owner-badge Owner
+                      .team-list
+                      p.team-help Open this collection in the Library to add or remove collaborators.
+
+              //- View: Chat
+              .sidebar-view(data-view="chat" hidden)
+                .sidebar-view-header
+                  h3 Chat
+                .sidebar-view-body
+                  #chatHistory
+                    #chatHistoryList.chat-history-list
+                      .chat-welcome
+                        .welcome-icon ✦
+                        p.welcome-text Create an asset
+                        p.welcome-sub Describe the 3D asset you want to generate.
+
+              //- View: Outline
+              .sidebar-view(data-view="outline" hidden)
+                .sidebar-view-header
+                  h3 Outline
+                  .outliner-toolbar
+                    button#outlinerAddBtn.btn.btn-icon.btn-sm(aria-label="Add child world" title="Add child world")
+                      svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                        line(x1="12" y1="5" x2="12" y2="19")
+                        line(x1="5" y1="12" x2="19" y2="12")
+                    button#outlinerRemoveBtn.btn.btn-icon.btn-sm(aria-label="Remove selected" title="Remove selected")
+                      svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                        line(x1="5" y1="12" x2="19" y2="12")
+                .sidebar-view-body
+                  .outliner
+                    .outliner-tree
+                    .outliner-footer No items
+
+              //- View: Library
+              .sidebar-view(data-view="library" hidden)
+                .sidebar-view-header
+                  h3 Gallery
+                .sidebar-view-body
+                  #assetLibraryBody.asset-library-body
+                    .empty-state
+                      .empty-state-icon
+                        svg(width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                          path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
+                          path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
+                          path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+                      h2.empty-state-title No assets yet
+                      p.empty-state-sub Sign in to browse and open the asset tokens you own.
+                      button#galleryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Login / Signup
+
+              //- View: Ledger
+              .sidebar-view(data-view="ledger" hidden)
+                .sidebar-view-header
+                  h3 Activity
+                .sidebar-view-body
+                  #ledgerBody.ledger-panel-body
+                    .ledger-panel-controls
+                      select#ledgerFilter.ledger-filter
+                        option(value="") All Operations
+                        option(value="GENERATION") Generation
+                        option(value="PARAMETRIC") Parametric
+                        option(value="SAVE") Save
+                        option(value="PUBLISH") Publish
+                        option(value="THUMBNAIL") Thumbnail
+                        option(value="MINT") Mint
+                        option(value="TOKEN_URI_UPDATE") URI Update
+                        option(value="TEAM_EDIT") Team Edit
+                      button#ledgerAnchorBtn.ledger-anchor-btn(
+                        title="Anchor current manifest CID on-chain for immutability proof"
+                      ) Anchor Manifest
+                    #ledgerStats.ledger-stats
+                    ul#ledgerList.ledger-list
+
+          //- Sidebar reveal button
+          button#sidebarReveal.sidebar-reveal(aria-label="Show sidebar" title="Show sidebar (Ctrl+B)")
+            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+              polyline(points="9 18 15 12 9 6")
+
+          //- Main content area
+          main#mainStage.main-stage
+            #viewport.viewport
+              canvas#renderCanvas(aria-label="3D viewport" role="img")
+              canvas#viewportGizmo(aria-label="Viewport orientation gizmo" title="X Y Z orientation")
+
+              #assetDropOverlay.viewport-drop-indicator
+                div(style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent-bg);font-weight:600")
+                  .asset-drop-icon ⊕
+                  p Drop to add linked asset to scene
+
+            //- Message bar
+            .messagebar
+              .messagebar-row
+                textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="1" aria-label="Asset generation prompt")
+                button#generateBtn.messagebar-submit(aria-label="Generate asset")
+                  svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                    polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
+                  .messagebar-spinner
+              p#generateHint.messagebar-hint(hidden)
+                svg.messagebar-hint-icon(width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  rect(x="3" y="11" width="18" height="11" rx="2" ry="2")
+                  path(d="M7 11V7a5 5 0 0 1 10 0v4")
+                span Sign in to start generating assets.
+
+          //- Inspector — right sidebar
+          aside#inspector.inspector.collapsed
+            .inspector-header
+              h3 Properties
+              button#inspectorCloseBtn.btn.btn-icon.btn-sm(aria-label="Close inspector")
+                svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                  line(x1="18" y1="6" x2="6" y2="18")
+                  line(x1="6" y1="6" x2="18" y2="18")
+            .inspector-body
+              section#tokenChildInfo.inspector-section.inspector-token-child(hidden)
+                details
+                  summary.inspector-section-title Token Info
+                  div
+                    .inspector-meta
+                      .inspector-meta-row
+                        span.label Linked Token
+                        span#tokenChildId.value —
+                      .inspector-meta-row
+                        span.label Contract
+                        span#tokenChildContract.value —
+                      .inspector-meta-row
+                        span.label Chain ID
+                        span#tokenChildChain.value —
+                      .inspector-meta-row
+                        span.label Resolution
+                        span#tokenChildResolution.value latest
+                      .inspector-meta-row
+                        span.label Manifest CID
+                        span#tokenChildCid.value(style="font-family:var(--font-mono);font-size:var(--font-size-0);word-break:break-all") —
+                    .inspector-actions
+                      button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open This World &rarr;
+              section#parametricEditor.inspector-section
+                details
+                  summary.inspector-section-title Color
+                  div
+                    #componentEditor(hidden)
+                      .component-editor-header
+                        span#selectedComponentName.component-editor-name —
+                        .component-editor-swatch#selectedComponentSwatch
+                      input#selectedComponentColor.form-color.component-color-editor(type="color" aria-label="Component color")
+              section#commentsSection.inspector-section.comments-section(hidden)
+                h3#commentsTitle.inspector-section-title Comments ·
+                  span#commentsCount 0
+                .comments-scroll
+                  ul#commentList.comment-list(role="list" aria-label="Comments")
+                #commentsEmpty.comments-empty(hidden)
+                  .comments-empty-icon ✦
+                  p.comments-empty-title No comments yet
+                  p.comments-empty-sub Mention an editor to request a change or review.
+                .comment-composer
+                  #commentAutocomplete.autocomplete(hidden role="listbox" aria-label="Mention a wallet")
+                  label.composer-label(for="commentComposerInput") Add a comment
+                  textarea#commentComposerInput.composer-input(rows="3" placeholder="Add a comment… use @ to mention a wallet." aria-label="Add a comment")
+                  .composer-actions
+                    span.composer-hint Ctrl+Enter to send
+                    button#postCommentBtn.btn.btn-primary.btn-sm(type="button" aria-label="Post comment" title="Post comment (Ctrl+Enter)") Post
+                span#commentsLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
+        footer#bottomBar.bottombar
+          .bottombar-status
+            span#bottomBarStatus.bottombar-status-item Draft
+            span.bottombar-status-item Provider: Mock
+            span#srStatus.sr-only(aria-live="polite" aria-atomic="true")
+          button#keyboardHelpBtn.bottombar-help(type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (Ctrl+/)")
+            | ?
+      //- ═══════════════════════════════════════════════════════════
+      //- Library view
+      //- ═══════════════════════════════════════════════════════════
+      main#libraryView.app-view.hidden
+        .library-layout
+          #libraryGate
+            .empty-state
+              .empty-state-icon
+                svg(width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
+                  path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
+                  path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+              h2.empty-state-title Sign in to continue
+              p.empty-state-sub Sign in to browse your collections and assets.
+              button#libraryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Login / Signup
+
+          #libraryMain.hidden
+            .library-toolbar
+              button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to collections" title="Up to collections" hidden)
+                svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                  polyline(points="18 15 12 9 6 15")
+                span Up
+              nav#libraryBreadcrumb.pathbar(aria-label="Collection path")
+              input#librarySearchInput.form-input.library-search(type="search" placeholder="Search collections and assets…" aria-label="Search items")
+              select#librarySortSelect.form-input.library-sort(aria-label="Sort by")
+                option(value="name") Name
+                option(value="date") Date
+                option(value="status") Status
+              .library-toolbar-actions
+                button#libraryCreateCollectionBtn.btn.btn-secondary.btn-sm(type="button" hidden)
+                  svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                    path(d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z")
+                    line(x1="12" y1="11" x2="12" y2="17")
+                    line(x1="9" y1="14" x2="15" y2="14")
+                  span New Collection
+                button#libraryUploadBtn.btn.btn-primary.btn-sm(type="button" hidden)
+                  svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                    path(d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4")
+                    polyline(points="17 8 12 3 7 8")
+                    line(x1="12" y1="3" x2="12" y2="15")
+                  span Upload
+
+            #libraryContent.library-content
+              #libraryItems.library-grid(role="listbox" aria-multiselectable="true")
+
+            .library-statusbar
+              span#libraryItemCount.library-statusbar-count 0 items
+              .library-view-toggle(role="group" aria-label="View mode")
+                button#libraryGridViewBtn.active(type="button" data-view="grid" aria-label="Grid view" title="Grid view")
+                  svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                    rect(x="3" y="3" width="7" height="7")
+                    rect(x="14" y="3" width="7" height="7")
+                    rect(x="3" y="14" width="7" height="7")
+                    rect(x="14" y="14" width="7" height="7")
+                button#libraryListViewBtn(type="button" data-view="list" aria-label="List view" title="List view")
+                  svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                    line(x1="8" y1="6" x2="21" y2="6")
+                    line(x1="8" y1="12" x2="21" y2="12")
+                    line(x1="8" y1="18" x2="21" y2="18")
+                    line(x1="3" y1="6" x2="3.01" y2="6")
+                    line(x1="3" y1="12" x2="3.01" y2="12")
+                    line(x1="3" y1="18" x2="3.01" y2="18")
+
+            #libraryLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
+        input#libraryUploadInput(type="file" accept=".glb,.gltf" hidden)
+      //- Wallet Popover (shared)
+      #walletPopover.wallet-popover.hidden(aria-label="Wallet menu")
+        .wallet-popover-header
+          span#walletPopoverAddress.wallet-popover-address —
+          button#walletPopoverCopy.wallet-popover-copy(type="button") Copy
+        a#walletPopoverExplorer.wallet-popover-explorer.hidden(href="#" target="_blank" rel="noopener noreferrer")
+          | View on Explorer
+          svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+            path(d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6")
+            polyline(points="15 3 21 3 21 9")
+            line(x1="10" y1="14" x2="21" y2="3")
+        .wallet-popover-actions
+          button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button") Sign In
+          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Log Out
+    script(type="module", src="/js/engine/scene-graph.js")
+    script(type="module", src="/js/engine/time-travel.js")
+    script(type="module", src="/js/engine/parametric-preview.js")
+    script(type="module", src="/js/blockchain/token-resolver.js")
+    script(type="module", src="/js/blockchain/wallet.js")
+    script(type="module", src="/js/services/api.js")
+    script(type="module", src="/js/services/team.js")
+    script(type="module", src="/js/ui/toasts.js")
+    script(type="module", src="/js/ui/asset-save.js")
+    script(type="module", src="/js/ui/asset-history.js")
+    script(type="module", src="/js/ui/create-panel.js")
+    script(type="module", src="/js/ui/asset-drop-zone.js")
+    script(type="module", src="/js/ui/sidebar.js")
+    script(type="module", src="/js/ui/outliner.js")
+    script(type="module", src="/js/ui/nesting.js")
+    script(type="module", src="/js/ui/collaborators.js")
+    script(type="module", src="/js/ui/wallet-popover.js")
+    script(type="module", src="/js/ui/comments-panel.js")
+    script(type="module", src="/js/app-init.js")

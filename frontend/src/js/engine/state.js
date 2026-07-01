@@ -39,6 +39,8 @@ export const state = {
   resizeEngineHandler: null,
   /** @type {ResizeObserver|null} */
   resizeObserverInstance: null,
+  /** @type {(() => void)|null} The render-loop callback, stored so the router can pause/resume it on SPA view changes. */
+  renderLoopFn: null,
   /** @type {Function|null} */
   pointerObservableCallback: null,
   /** @type {BABYLON.HighlightLayer|null} */

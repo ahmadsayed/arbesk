@@ -140,6 +140,15 @@ app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 app.use("/api", api());
 
+// ─── SPA fallback ───
+// Studio and Library are served from a single document (app.html) with a
+// client-side router. Serve that shell for the clean-URL routes so deep links
+// and history.pushState() paths resolve. Kept narrow (explicit paths only) so
+// static assets and /api are untouched. Query strings pass through untouched.
+app.get(["/studio", "/library"], (_req, res) => {
+  res.sendFile(path.join(__dirname, "/../frontend/dist/app.html"));
+});
+
 // Attach WebSocket chat proxy to the same HTTP server
 createChatProxy(server);
 

@@ -9,26 +9,24 @@ function readBuilt(name) {
   return fs.readFileSync(path.join(DIST_JS, name), "utf-8");
 }
 
-describe("library-init.js", () => {
-  const src = () => readBuilt("library-init.js");
-
-  test("gates #libraryMain behind #libraryGate by toggling the hidden class", () => {
-    expect(src()).toMatch(/gate\.classList\.toggle\(\s*["']hidden["']\s*,\s*connected\s*\)/);
-    expect(src()).toMatch(/main\.classList\.toggle\(\s*["']hidden["']\s*,\s*!connected\s*\)/);
-  });
+// Library page wiring moved into the unified SPA bootstrap (app-init.js) plus
+// the extracted data/gate module (library-controller.js). These tests guard
+// that the Library controls are still wired in the single-document shell.
+describe("app-init.js (Library wiring)", () => {
+  const src = () => readBuilt("app-init.js");
 
   test("wires the wallet lifecycle", () => {
     expect(src()).toMatch(/initWallet\(\)/);
     expect(src()).not.toMatch(/autoConnectWallet\(\)/);
-    expect(src()).toMatch(/connectWallet\)/);
+    expect(src()).toMatch(/connectWallet/);
     expect(src()).toMatch(/EVENTS\.WALLET_CONNECTED/);
     expect(src()).toMatch(/EVENTS\.WALLET_DISCONNECTED/);
     expect(src()).toMatch(/initLibraryGrid\(\)/);
   });
 
   test("wires both the headerbar and gate Connect Wallet buttons", () => {
-    expect(src()).toMatch(/getElementById\(\s*["']connectWalletBtn["']\s*\)/);
-    expect(src()).toMatch(/getElementById\(\s*["']libraryConnectBtn["']\s*\)/);
+    expect(src()).toMatch(/["']connectWalletBtn["']/);
+    expect(src()).toMatch(/["']libraryConnectBtn["']/);
   });
 
   test("initializes theme and the wallet popover", () => {
@@ -36,11 +34,21 @@ describe("library-init.js", () => {
     expect(src()).toMatch(/initWalletPopover\(\)/);
   });
 
-  test("wires the toolbar module", () => {
+  test("wires the toolbar and context-menu modules", () => {
     expect(src()).toMatch(/initLibraryToolbar\(\)/);
-  });
-
-  test("wires the context menu module", () => {
     expect(src()).toMatch(/initLibraryContextMenu\(\)/);
+  });
+});
+
+describe("library-controller.js", () => {
+  const src = () => readBuilt("ui/library-controller.js");
+
+  test("gates #libraryMain behind #libraryGate by toggling the hidden class", () => {
+    expect(src()).toMatch(
+      /gate\.classList\.toggle\(\s*["']hidden["']\s*,\s*connected\s*\)/
+    );
+    expect(src()).toMatch(
+      /main\.classList\.toggle\(\s*["']hidden["']\s*,\s*!connected\s*\)/
+    );
   });
 });

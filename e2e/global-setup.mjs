@@ -127,7 +127,7 @@ export default async function globalSetup() {
   log(`Checking backend on ${BACKEND_PORT}...`);
   let backendAlreadyRunning = false;
   try {
-    const res = await fetch(`${BACKEND_URL}/studio.html`);
+    const res = await fetch(`${BACKEND_URL}/studio`);
     if (res.ok) {
       backendAlreadyRunning = true;
       log(`Backend already running on ${BACKEND_PORT}; reusing it`);

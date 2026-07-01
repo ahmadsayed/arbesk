@@ -230,7 +230,12 @@ export function openInStudio(tokenId, assetId) {
   const params = new URLSearchParams();
   params.set("asset", tokenId);
   if (assetId) params.set("assetId", assetId);
-  window.location.href = `/studio.html?${params.toString()}`;
+  // SPA in-app transition — no full reload, so the wallet/session stay alive.
+  // The router activates the Studio view and calls loadFromParams() to open the
+  // asset the query string points at.
+  import("../app/router.js")
+    .then(({ navigate }) => navigate(`/studio?${params.toString()}`))
+    .catch((err) => console.error("[LIBRARY] open-in-studio failed:", err));
 }
 
 function openItem(id) {

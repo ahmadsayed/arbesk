@@ -47,7 +47,7 @@ test.describe.serial("Library create collection and upload", () => {
 
     // The upload should be openable in Studio.
     await assetCard.dblclick();
-    await page.waitForURL(/\/studio\.html\?asset=/, { timeout: 10000 });
+    await page.waitForURL(/\/studio\?asset=/, { timeout: 10000 });
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_ASSET_NAME,

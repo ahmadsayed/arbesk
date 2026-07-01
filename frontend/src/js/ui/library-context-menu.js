@@ -15,7 +15,7 @@ import { createCollectionFlow } from "./library-create.js";
 const assetDeleteOps = () => import("../services/asset-delete.js");
 const ipfsOps = () => import("../ipfs/remote-ipfs.js");
 const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.js");
-const libraryInitOps = () => import("../library-init.js");
+const libraryInitOps = () => import("./library-controller.js");
 const collaboratorsPanelOps = () => import("./collaborators-panel.js");
 
 let menuEl = null;
@@ -324,7 +324,7 @@ export async function requestSendToCollection(assetId) {
     });
 
     // Refresh the current view
-    const { refreshLibraryData } = await import("../library-init.js");
+    const { refreshLibraryData } = await import("./library-controller.js");
     await refreshLibraryData();
   } catch (err) {
     console.error("Send to collection failed:", err);

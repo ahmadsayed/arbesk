@@ -9,17 +9,22 @@ function readDist(name) {
   return fs.readFileSync(path.join(DIST, name), "utf-8");
 }
 
-describe("Library page build", () => {
-  test("library.html exists and has the wallet gate + main containers", () => {
-    const html = readDist("library.html");
+// Studio + Library are now a single SPA document (app.html); the Library view
+// lives inside #libraryView and is toggled by the router.
+describe("Library view build (app.html)", () => {
+  test("app.html has the Library view with the wallet gate + main containers", () => {
+    const html = readDist("app.html");
+    expect(html).toMatch(/id="libraryView"/);
     expect(html).toMatch(/id="libraryGate"/);
     expect(html).toMatch(/id="libraryConnectBtn"/);
     expect(html).toMatch(/id="libraryMain"/);
-    expect(html).toMatch(/class="[^"]*hidden[^"]*"\s+id="libraryMain"|id="libraryMain"\s+class="[^"]*hidden/);
+    expect(html).toMatch(
+      /class="[^"]*hidden[^"]*"\s+id="libraryMain"|id="libraryMain"\s+class="[^"]*hidden/
+    );
   });
 
-  test("library.html has the toolbar, content, and statusbar regions", () => {
-    const html = readDist("library.html");
+  test("app.html has the toolbar, content, and statusbar regions", () => {
+    const html = readDist("app.html");
     expect(html).toMatch(/id="libraryUpBtn"/);
     expect(html).toMatch(/id="libraryBreadcrumb"/);
     expect(html).toMatch(/id="librarySearchInput"/);
@@ -32,8 +37,8 @@ describe("Library page build", () => {
     expect(html).toMatch(/id="libraryLiveRegion"/);
   });
 
-  test("library.html shares the headerbar wallet ids with studio.html", () => {
-    const html = readDist("library.html");
+  test("app.html has the shared headerbar wallet ids", () => {
+    const html = readDist("app.html");
     expect(html).toMatch(/id="themeToggle"/);
     expect(html).toMatch(/id="headerbarNetworkSelect"/);
     expect(html).toMatch(/id="connectWalletBtn"/);
@@ -41,22 +46,23 @@ describe("Library page build", () => {
     expect(html).toMatch(/id="walletPopover"/);
   });
 
-  test("library.html loads library-init.js as a module script", () => {
-    const html = readDist("library.html");
-    expect(html).toMatch(/<script[^>]+type="module"[^>]+src="\/js\/library-init\.js"/);
+  test("app.html loads app-init.js as the single module entry", () => {
+    const html = readDist("app.html");
+    expect(html).toMatch(
+      /<script[^>]+type="module"[^>]+src="\/js\/app-init\.js"/
+    );
   });
 
-  test("studio.html gains a page-switcher with Library and Studio links", () => {
-    const html = readDist("studio.html");
+  test("app.html has a page-switcher with SPA route links for both views", () => {
+    const html = readDist("app.html");
     expect(html).toMatch(/class="page-switcher"/);
-    expect(html).toMatch(/href="\/library\.html"/);
-    expect(html).toMatch(/href="\/studio\.html"/);
+    expect(html).toMatch(/href="\/library"/);
+    expect(html).toMatch(/href="\/studio"/);
   });
 
-  test("library.html has its own page-switcher with Library active", () => {
-    const html = readDist("library.html");
-    expect(html).toMatch(/class="page-switcher"/);
-    expect(html).toMatch(/href="\/library\.html"/);
-    expect(html).toMatch(/href="\/studio\.html"/);
+  test("app.html contains both the Studio and Library view containers", () => {
+    const html = readDist("app.html");
+    expect(html).toMatch(/id="studioView"/);
+    expect(html).toMatch(/id="libraryView"/);
   });
 });

@@ -162,11 +162,15 @@ function createAnchorNode(name, scene) {
   return fallback;
 }
 
-function initEngine() {
+export function initEngine() {
+  // Idempotent: in the SPA the router may call this on every Studio entry, but
+  // the engine must be created exactly once and then kept alive.
+  if (state.engine) return;
+
   const canvas = document.getElementById("renderCanvas");
   if (!canvas) {
-    // Non-Studio pages (e.g. library.html) may import modules that pull in
-    // scene-graph.js; missing canvas there is expected, not an error.
+    // Defensive: the single-page shell always has #renderCanvas, but keep the
+    // guard so importing this module in a non-Studio context is harmless.
     console.log("[SCENE] renderCanvas not present — skipping 3D engine init");
     return;
   }
@@ -324,11 +328,14 @@ function initEngine() {
   // window/ResizeObserver handlers leaves a one-frame race during CSS
   // transitions (e.g. sidebar collapse) where a render can use the new canvas
   // size with the old projection matrix and show stretching.
-  state.engine.runRenderLoop(() => {
+  // Stored on state so the router can pause/resume the exact same callback when
+  // toggling between the Studio and Library views.
+  state.renderLoopFn = () => {
     state.engine.resize();
     _updateOrthoFrustumOnResize();
     state.scene.render();
-  });
+  };
+  state.engine.runRenderLoop(state.renderLoopFn);
 
   // Also resize immediately on window resize and canvas ResizeObserver so
   // non-render-loop code (e.g. screenshots) sees the updated size right away.
@@ -694,44 +701,87 @@ export {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Render-loop lifecycle (SPA view switching)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Stop the render loop while the Studio view is hidden (Library is active) so a
+ * hidden 0×0 canvas doesn't burn GPU/CPU. The engine and scene are kept alive.
+ */
+export function pauseRenderLoop() {
+  state.engine?.stopRenderLoop();
+}
+
+/**
+ * Restart the render loop when the Studio view becomes visible again and resize
+ * the engine — the canvas was hidden (0×0) while Library was active, so the
+ * drawing buffer needs to catch up before the next frame.
+ */
+export function resumeRenderLoop() {
+  if (!state.engine || !state.renderLoopFn) return;
+  state.engine.stopRenderLoop();
+  state.engine.runRenderLoop(state.renderLoopFn);
+  state.engine.resize();
+  _updateOrthoFrustumOnResize();
+}
+
+/**
+ * Load whatever asset/manifest the current URL points at (?asset / ?manifest).
+ * Extracted from the old DOMContentLoaded bootstrap so the router can invoke it
+ * on Studio entry — both on a cold deep-link and on the Library → Studio handoff.
+ */
+export function loadFromParams() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const manifestCid = urlParams.get("manifest");
+  const assetTokenId = urlParams.get("asset");
+  // The specific asset within a collection. Carried through in the event so the
+  // asset-library handler opens that asset, not just the collection. On a full
+  // page load asset-library reads this from the URL itself, but on an SPA
+  // pushState handoff (Library → Studio) it does not re-read, so we pass it.
+  const assetId = urlParams.get("assetId");
+
+  const { contract } = walletState.get();
+  if (assetTokenId && contract) {
+    contract.methods
+      .tokenURI(assetTokenId)
+      .call()
+      .then((/** @type {string|null} */ cid) => {
+        if (cid) {
+          assetState.set({
+            activeAssetTokenId: String(assetTokenId),
+            activeCollectionTokenId: String(assetTokenId),
+            selectedCollectionId: null,
+            activeAssetManifestCid: cid,
+            latestAssetManifestCid: cid,
+          });
+          emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, {
+            tokenId: assetTokenId,
+            assetId: assetId || null,
+          });
+        }
+      })
+      .catch(() => {});
+  } else if (manifestCid) {
+    assetState.set({
+      activeAssetManifestCid: manifestCid,
+      latestAssetManifestCid: manifestCid,
+    });
+    loadAssetManifest(manifestCid);
+    dismissCreatePulse();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DOM initialization
 // ═══════════════════════════════════════════════════════════════════════════
 
 (function init() {
   if (typeof document === "undefined") return;
   document.addEventListener("DOMContentLoaded", () => {
-    initEngine();
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const manifestCid = urlParams.get("manifest");
-    const assetTokenId = urlParams.get("asset");
-
-    const { contract } = walletState.get();
-    if (assetTokenId && contract) {
-      contract.methods
-        .tokenURI(assetTokenId)
-        .call()
-        .then((/** @type {string|null} */ cid) => {
-          if (cid) {
-            assetState.set({
-              activeAssetTokenId: String(assetTokenId),
-              activeCollectionTokenId: String(assetTokenId),
-              selectedCollectionId: null,
-              activeAssetManifestCid: cid,
-              latestAssetManifestCid: cid,
-            });
-            emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, { tokenId: assetTokenId });
-          }
-        })
-        .catch(() => {});
-    } else if (manifestCid) {
-      assetState.set({
-        activeAssetManifestCid: manifestCid,
-        latestAssetManifestCid: manifestCid,
-      });
-      loadAssetManifest(manifestCid);
-      dismissCreatePulse();
-    }
+    // NOTE: engine creation (initEngine) and URL-driven asset loading
+    // (loadFromParams) are now owned by the router (app/router.js) so the
+    // Babylon engine is created lazily on first Studio entry, not on every page
+    // load. This block only wires the Studio-view UI handlers.
 
     async function startNewAsset() {
       if (assetState.get().activeAssetManifestCid) {

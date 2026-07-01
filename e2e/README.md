@@ -75,7 +75,7 @@ docker compose -p $(./scripts/start-dev.sh --print-project 2>/dev/null || echo a
 Validates the full wallet-discovery and authentication path:
 
 - Injects a Hardhat-backed EIP-1193/EIP-6963 provider into the browser.
-- Opens `/studio.html`.
+- Opens `/studio`.
 - Confirms the Studio connects via the Login / Signup picker and authenticates via SIWE.
 - Asserts the **Login / Signup** button opens the wallet picker, selecting the injected wallet connects, and the wallet menu button shows the connected address.
 
@@ -184,7 +184,7 @@ Validates the two ways to reuse another collection's asset inside a parent scene
 
 ### 9. Library basics (`e2e/specs/09-library-basics.spec.js`)
 
-Validates the Nautilus-style collection browser on `/library.html`:
+Validates the Nautilus-style collection browser on `/library`:
 
 1. Confirms the wallet gate appears before connection and connects via the Login / Signup picker.
 2. Asserts the wallet-derived default collection is labeled **Default**.
@@ -201,7 +201,7 @@ Validates the context-menu actions available on library assets:
 
 1. **Rename** — opens the GNOME dialog, changes the asset name, and asserts the grid updates.
 2. **Delete** — confirms deletion and asserts the asset is removed from the collection (NFT is not burned).
-3. **Open in Studio** — navigates to `/studio.html?asset=TOKEN&assetId=ID` and asserts the asset loads.
+3. **Open in Studio** — navigates to `/studio?asset=TOKEN&assetId=ID` and asserts the asset loads.
 4. **Send to Collection…** — with only the default collection present, asserts a warning toast explains that another collection is required.
 
 **Why it matters:** These actions exercise `library-context-menu.js`, `services/asset-delete.js`, collection manifest updates, and the Studio deep-link handling.

@@ -7,7 +7,7 @@ import { uploadFileToCollection } from "../services/library-ops.js";
 import { createCollectionFlow } from "./library-create.js";
 
 async function refreshLibraryData() {
-  const { refreshLibraryData: doRefresh } = await import("../library-init.js");
+  const { refreshLibraryData: doRefresh } = await import("./library-controller.js");
   return doRefresh();
 }
 

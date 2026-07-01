@@ -20,7 +20,8 @@ import { execSync } from "child_process";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const DIST_JS = path.resolve(__dirname, "../../frontend/dist/js");
-const STUDIO_HTML = path.resolve(__dirname, "../../frontend/dist/studio.html");
+// Studio + Library are now served from a single SPA document (app.html).
+const STUDIO_HTML = path.resolve(__dirname, "../../frontend/dist/app.html");
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -262,17 +263,17 @@ describe("Frontend Build", () => {
     });
   });
 
-  // ── P0: studio-init.js must start wallet discovery ───────────────────────
+  // ── P0: app-init.js must start wallet discovery ──────────────────────────
   // Regression: EIP-6963 wallet discovery (MetaMask, Rabby, etc.) never
   // started because initWallet() was not called. The wallet modal showed
   // "No injected wallets detected" even when MetaMask was installed.
   //
-  // studio-init.js starts EIP-6963 discovery and calls initWallet(); the
-  // silent auto-restore lives inside initWallet(), so the page-init script
-  // must NOT call autoConnectWallet() itself (that would double-restore).
+  // app-init.js starts EIP-6963 discovery and calls initWallet(); the silent
+  // auto-restore lives inside initWallet(), so the page-init script must NOT
+  // call autoConnectWallet() itself (that would double-restore).
 
-  describe("studio-init.js wallet lifecycle", () => {
-    const init = readBuilt("engine/studio-init.js");
+  describe("app-init.js wallet lifecycle", () => {
+    const init = readBuilt("app-init.js");
 
     test("calls initWallet() to start EIP-6963 discovery", () => {
       expect(init).toMatch(/initWallet\(\)/);
@@ -280,7 +281,35 @@ describe("Frontend Build", () => {
 
     test("does not call autoConnectWallet() directly; wires Login / Signup click", () => {
       expect(init).not.toMatch(/autoConnectWallet\(\)/);
-      expect(init).toMatch(/connectWallet\)/);
+      expect(init).toMatch(/connectWallet/);
+    });
+
+    test("initializes the router to activate the initial view", () => {
+      expect(init).toMatch(/initRouter\(\)/);
+    });
+  });
+
+  // ── P0: app.html is a single-document SPA shell ──────────────────────────
+  // Studio + Library share one document; the router toggles which view is
+  // visible so navigation never triggers a full reload.
+
+  describe("app.html SPA shell", () => {
+    const html = readStudioHtml();
+
+    test("contains both the Studio and Library view containers", () => {
+      expect(html).toMatch(/id="studioView"/);
+      expect(html).toMatch(/id="libraryView"/);
+    });
+
+    test("loads app-init.js as the single entry module", () => {
+      expect(html).toMatch(
+        /<script[^>]+type="module"[^>]+src="\/js\/app-init\.js"/
+      );
+    });
+
+    test("page-switcher tabs are SPA routes (data-nav, clean URLs)", () => {
+      expect(html).toMatch(/href="\/studio"[^>]*data-nav/);
+      expect(html).toMatch(/href="\/library"[^>]*data-nav/);
     });
   });
 });

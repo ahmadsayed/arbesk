@@ -395,7 +395,7 @@ describe("keyboard shortcuts", () => {
 });
 
 describe("openInStudio", () => {
-  test("navigates to studio.html with the token and asset ids, without throwing", () => {
+  test("navigates to the Studio view with the token and asset ids, without throwing", () => {
     expect(() => openInStudio("1", "asset-a")).not.toThrow();
   });
 });

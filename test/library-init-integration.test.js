@@ -52,7 +52,7 @@ async function loadModule() {
     })
   );
 
-  const mod = await import("../frontend/src/js/library-init.js");
+  const mod = await import("../frontend/src/js/ui/library-controller.js");
   return mod;
 }
 

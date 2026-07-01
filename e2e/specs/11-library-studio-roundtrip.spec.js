@@ -30,12 +30,12 @@ test.describe.serial("Library ↔ Studio round-trip", () => {
     const assetName = uniqueAssetName(ASSET_NAME_BASE);
     await connectLibrary(page);
 
-    await page.goto("/studio.html");
+    await page.goto("/studio");
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
 
-    await page.goto("/library.html");
+    await page.goto("/library");
     await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     await expect(libraryAssetLocator(page, assetName).first()).toBeVisible();
@@ -58,12 +58,12 @@ test.describe.serial("Library ↔ Studio round-trip", () => {
     const assetName = uniqueAssetName(ASSET_NAME_BASE);
     await connectLibrary(page);
 
-    await page.goto("/studio.html");
+    await page.goto("/studio");
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
 
-    await page.goto("/library.html");
+    await page.goto("/library");
     await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     await openLibraryAssetInStudio(page, assetName);

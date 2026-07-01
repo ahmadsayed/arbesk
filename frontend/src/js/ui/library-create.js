@@ -105,7 +105,7 @@ export async function createCollectionFlow() {
           title: "Collection Already Exists",
           message: `"${name}" already exists in your library.`,
         });
-        import("../library-init.js").then(({ refreshLibraryData }) =>
+        import("./library-controller.js").then(({ refreshLibraryData }) =>
           refreshLibraryData()
         );
         return;

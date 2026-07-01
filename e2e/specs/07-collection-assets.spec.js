@@ -266,7 +266,7 @@ test.describe.serial("Collection/asset model", () => {
     const firstAsset = await fetchManifest(firstAssetCid);
 
     await page.goto(
-      `/studio.html?asset=${tokenIdHex}&assetId=${firstAssetId}`,
+      `/studio?asset=${tokenIdHex}&assetId=${firstAssetId}`,
     );
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden({
@@ -288,7 +288,14 @@ test.describe.serial("Collection/asset model", () => {
 
   test("collection selector populates on wallet connect", async ({ page }) => {
     await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await page.goto("/studio");
+
+    // The injected provider reports an authorized account, so the wallet
+    // silently auto-restores on load (autoConnectWallet in wallet-core) — this
+    // simulates a returning user. Ensure we're connected, then verify the
+    // collection selector shows the wallet-derived Default collection.
+    await ensureStudioConnected(page);
+    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     // The sidebar defaults to Chat; open Settings to reveal the collection select.
     await page.click(SELECTORS.settingsSwitcherBtn);
@@ -296,21 +303,13 @@ test.describe.serial("Collection/asset model", () => {
     const collectionSelect = page.locator(SELECTORS.collectionSelect);
     await expect(collectionSelect).toBeVisible();
 
-    const optionsBefore = collectionSelect.locator("option");
-    await expect(optionsBefore).toHaveCount(1);
-    await expect(optionsBefore.first()).toHaveText("Default");
-    await expect(optionsBefore.first()).toHaveAttribute("value", "");
+    const options = collectionSelect.locator("option");
+    await expect(options).toHaveCount(1);
+    await expect(options.first()).toHaveText("Default");
 
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-
-    // New page defaults to Chat again.
-    await page.click(SELECTORS.settingsSwitcherBtn);
-
-    const optionsAfter = collectionSelect.locator("option");
-    await expect(optionsAfter).toHaveCount(1);
-    await expect(optionsAfter.first()).toHaveText("Default");
-    const defaultValue = await optionsAfter.first().getAttribute("value");
+    // The single Default option carries the wallet-derived collection id
+    // (soliditySha3 of the connected address), not the empty placeholder value.
+    const defaultValue = await options.first().getAttribute("value");
     expect(defaultValue).toBeTruthy();
 
     const expectedId = await page.evaluate(() => {

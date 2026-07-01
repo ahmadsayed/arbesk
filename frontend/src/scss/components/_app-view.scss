@@ -1,0 +1,28 @@
+// ═══════════════════════════════════════════════════════════════════
+// App views — Studio / Library route containers in the unified SPA shell
+// ═══════════════════════════════════════════════════════════════════
+//
+// Both views are siblings under #app (a vertical flex column: header /
+// view / — ). The router toggles `.hidden` (display:none !important) on
+// whichever view is inactive, so only the active view participates in the
+// flex flow and fills the space between the header and viewport bottom.
+
+.app-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Studio-only header widgets have no meaning in the Library view. Hide them
+// while Library is active (body[data-view] is set by the router).
+body[data-view='library'] {
+  .headerbar-back,
+  .headerbar-title,
+  #assetHistory,
+  .headerbar-divider,
+  .headerbar-doc-actions {
+    display: none !important;
+  }
+}

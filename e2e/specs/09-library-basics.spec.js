@@ -25,13 +25,13 @@ test.describe.serial("Library basics", () => {
     await seedDefaultCollection(browser);
   });
   test("shows wallet gate until connected", async ({ page }) => {
-    await page.goto("/library.html");
+    await page.goto("/library");
     await expect(page.locator(SELECTORS.libraryGate)).toBeVisible();
     await expect(page.locator(SELECTORS.libraryMain)).toBeHidden();
     await expect(page.locator(SELECTORS.libraryConnectBtn)).toBeVisible();
 
     await injectHardhatProvider(page);
-    await page.goto("/library.html");
+    await page.goto("/library");
     await ensureLibraryConnected(page);
     await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
     await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
@@ -44,12 +44,12 @@ test.describe.serial("Library basics", () => {
     await connectLibrary(page);
 
     // Publish an asset from Studio to mint the default collection.
-    await page.goto("/studio.html");
+    await page.goto("/studio");
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, assetName, PROMPT);
 
-    await page.goto("/library.html");
+    await page.goto("/library");
     await ensureLibraryConnected(page);
     await waitForLibraryItemCount(page, 1);
 
@@ -64,12 +64,12 @@ test.describe.serial("Library basics", () => {
     const assetName = uniqueAssetName(ASSET_NAME_BASE);
     await connectLibrary(page);
     // Ensure there is at least one asset by publishing from Studio first.
-    await page.goto("/studio.html");
+    await page.goto("/studio");
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, assetName, PROMPT);
 
-    await page.goto("/library.html");
+    await page.goto("/library");
     await ensureLibraryConnected(page);
     await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
 

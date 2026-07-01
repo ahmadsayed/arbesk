@@ -20,7 +20,7 @@ const DEFAULT_PROMPT = "cowboy";
  */
 export async function connectStudio(page) {
   await injectHardhatProvider(page);
-  await page.goto("/studio.html");
+  await page.goto("/studio");
 
   // The Studio auto-connects a previously authorized / injected wallet on page
   // load. Wait briefly for the connect button to disappear; if it does not,
@@ -53,7 +53,7 @@ export async function connectStudioAs(page, accountIndex) {
     throw new Error(`Unknown Hardhat account index ${accountIndex}`);
   }
   await injectHardhatProvider(page, { accountIndex });
-  await page.goto("/studio.html");
+  await page.goto("/studio");
 
   // Auto-connect on page load: wait for the connect button to hide; if it
   // stays visible, use the manual Login / Signup fallback.
@@ -137,7 +137,7 @@ export async function seedDefaultCollection(
   const page = await browser.newPage();
   try {
     await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await page.goto("/studio");
     await ensureStudioConnected(page);
     const tokenIdHex = await generateSaveAndPublish(page, name, prompt);
     return tokenIdHex;
@@ -308,7 +308,7 @@ export async function scrubHistorySlider(page, index) {
  */
 export async function connectLibrary(page) {
   await injectHardhatProvider(page);
-  await page.goto("/library.html");
+  await page.goto("/library");
 
   // The library page auto-connects on page load just like the Studio. Wait for
   // the wallet gate to disappear; if it does not, use the manual Login / Signup
@@ -367,7 +367,9 @@ export async function openLibraryCollection(page, name) {
 }
 
 /**
- * Double-click the first matching asset card and wait for navigation to Studio.
+ * Double-click the first matching asset card and wait for the SPA router to
+ * activate the Studio view. openInStudio uses history.pushState (no full
+ * reload), so we match the clean-URL route rather than a .html page.
  *
  * @param {Page} page
  * @param {string} name
@@ -376,7 +378,7 @@ export async function openLibraryAssetInStudio(page, name) {
   const card = libraryAssetLocator(page, name).first();
   await expect(card).toBeVisible();
   await card.dblclick();
-  await page.waitForURL(/\/studio\.html\?asset=/, { timeout: 10000 });
+  await page.waitForURL(/\/studio\?asset=/, { timeout: 10000 });
 }
 
 /**
@@ -458,7 +460,7 @@ export async function addCollaborator(
   address,
   collectionName = "Default",
 ) {
-  await page.goto("/library.html");
+  await page.goto("/library");
   await ensureLibraryConnected(page);
   await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
   await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
@@ -492,8 +494,8 @@ export async function addCollaborator(
  */
 export async function openSharedAsset(page, tokenId, assetId) {
   const url = assetId
-    ? `/studio.html?asset=${tokenId}&assetId=${assetId}`
-    : `/studio.html?asset=${tokenId}`;
+    ? `/studio?asset=${tokenId}&assetId=${assetId}`
+    : `/studio?asset=${tokenId}`;
   await page.goto(url);
   await ensureStudioConnected(page);
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();

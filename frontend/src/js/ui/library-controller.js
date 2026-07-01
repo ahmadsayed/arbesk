@@ -1,39 +1,20 @@
 // @ts-nocheck
 /**
- * Library Page Initializer
+ * Library Controller
  *
- * Mirrors engine/studio-init.js: top-level script, no CSP unsafe-inline needed.
+ * Data + gating logic for the Library view, extracted from the old
+ * library-init.js so the unified SPA bootstrap (app-init.js) can import it
+ * without dragging in page-level wiring. Owns collection/asset fetching and the
+ * sign-in gate; the router calls refreshLibraryData() when the Library view
+ * becomes active.
  */
 
-import { on, EVENTS } from "./events/bus.js";
-import {
-  initWallet,
-  connectWallet,
-  contract as walletContract,
-  switchNetwork,
-} from "./blockchain/wallet.js";
-import { initWalletPopover } from "./ui/wallet-popover.js";
-import {
-  getNetworkSelectKey,
-  getSupportedNetworkSelectKeys,
-} from "./blockchain/network-config.js";
-import { initTheme, toggleTheme } from "./engine/theme.js";
-import { walletState } from "./state/wallet-state.js";
-import { libraryState } from "./state/library-state.js";
-import {
-  updateHeaderWalletButton,
-  updateHeaderWalletButtonFromState,
-  isWalletAuthenticated,
-} from "./ui/header-wallet-button.js";
-import { getFromRemoteIPFS } from "./ipfs/remote-ipfs.js";
-import { deriveDefaultCollectionId } from "./utils/collections.js";
-import {
-  fetchAssetLibrary,
-  expandTokenToAssets,
-} from "./ui/asset-library.js";
-import { initLibraryGrid } from "./ui/library-grid.js";
-import { initLibraryToolbar } from "./ui/library-toolbar.js";
-import { initLibraryContextMenu } from "./ui/library-context-menu.js";
+import { walletState } from "../state/wallet-state.js";
+import { libraryState } from "../state/library-state.js";
+import { contract as walletContract } from "../blockchain/wallet.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { deriveDefaultCollectionId } from "../utils/collections.js";
+import { fetchAssetLibrary, expandTokenToAssets } from "./asset-library.js";
 
 // Optimistic collections created within this window are kept even if ownerOf
 // temporarily fails or the indexer has not caught up yet (e.g. smart-wallet
@@ -44,7 +25,7 @@ function ts() {
   return new Date().toLocaleTimeString();
 }
 
-function applyWalletGate(connected) {
+export function applyWalletGate(connected) {
   const gate = document.getElementById("libraryGate");
   const main = document.getElementById("libraryMain");
   if (!gate || !main) return;
@@ -340,79 +321,3 @@ export async function refreshLibraryData(forceIndexer = false) {
     _refreshInFlight = null;
   }
 }
-
-initTheme();
-document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
-
-initWallet();
-document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
-document.getElementById("libraryConnectBtn")?.addEventListener("click", connectWallet);
-initWalletPopover();
-
-let _lastLoadedCollectionTokenId = null;
-on(EVENTS.LIBRARY_STATE_CHANGED, (state) => {
-  const tokenId = state?.currentCollectionTokenId ?? null;
-  if (tokenId !== _lastLoadedCollectionTokenId) {
-    _lastLoadedCollectionTokenId = tokenId;
-    loadCurrentAssets();
-  }
-});
-
-initLibraryGrid();
-initLibraryToolbar();
-initLibraryContextMenu();
-applyWalletGate(Boolean(walletState.get().walletAddress));
-
-// Headerbar network selector (shared with studio-init.js)
-document.getElementById("headerbarNetworkSelect")?.addEventListener("change", async (e) => {
-  const key = e.target.value;
-  if (!key) return;
-  if (!getSupportedNetworkSelectKeys().includes(key)) {
-    console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
-    return;
-  }
-  localStorage.setItem("arbesk-preferred-network", key);
-  console.log("[NETWORK] Preferred network set to:", key);
-  if (walletState.get().walletAddress) {
-    try {
-      await switchNetwork(key);
-    } catch (err) {
-      console.error("Network switch failed:", err);
-    }
-  }
-});
-
-on(EVENTS.WALLET_CONNECTED, async (e) => {
-  const address = e?.address || "";
-  updateHeaderWalletButtonFromState(address, isWalletAuthenticated(address));
-  applyWalletGate(true);
-
-  // Sync network selector to current chain
-  const netSel = document.getElementById("headerbarNetworkSelect");
-  if (netSel) {
-    const key = getNetworkSelectKey(e?.chainId);
-    if (key) netSel.value = key;
-  }
-
-  await refreshLibraryData();
-});
-
-on(EVENTS.WALLET_DISCONNECTED, () => {
-  updateHeaderWalletButton(null, false, null, null);
-  applyWalletGate(false);
-  libraryState.set({
-    collections: [],
-    assets: [],
-    currentCollectionTokenId: null,
-    selectedIds: [],
-  });
-});
-
-on(EVENTS.USER_AUTHENTICATED, (e) => {
-  updateHeaderWalletButtonFromState(e?.address, true);
-});
-on(EVENTS.USER_AUTH_REQUIRED, (e) => {
-  updateHeaderWalletButtonFromState(e?.address, false);
-});
-
-

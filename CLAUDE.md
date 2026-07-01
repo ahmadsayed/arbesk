@@ -38,14 +38,17 @@ Concise guide for Claude Code sessions. For the full developer guide, see `AGENT
 
 | File | Purpose |
 |------|---------|
-| `frontend/src/js/engine/scene-graph.js` | Babylon 3D engine, viewport resize handling |
+| `frontend/src/js/app-init.js` | Single SPA bootstrap (Studio + Library) — replaces old studio-init/library-init |
+| `frontend/src/js/app/router.js` | Client-side router: toggles Studio/Library views, no full reload |
+| `frontend/src/js/engine/scene-graph.js` | Babylon 3D engine; exports `initEngine`/`loadFromParams`/pause+resume render loop |
 | `frontend/src/js/engine/parametric-preview.js` | Client-side parametric version edits |
+| `frontend/src/js/ui/library-controller.js` | Library data + wallet-gate logic (fetch collections/assets) |
 | `frontend/src/js/ui/create-panel.js` | Generation UI |
 | `frontend/src/js/ui/asset-save.js` | Save / publish / republish flow |
 | `frontend/src/js/ui/asset-library.js` | Gallery (owned + shared tokens) |
 | `frontend/src/js/ui/wallet-modal.js` | CDP email OTP UI |
 | `frontend/src/js/ui/header-wallet-button.js` | CDP email display; hides network selector |
-| `frontend/src/js/blockchain/wallet-core.js` | Wallet connection orchestration (CDP-only auto-restore) |
+| `frontend/src/js/blockchain/wallet-core.js` | Wallet connection orchestration (silent auto-restore: CDP/EOA/WalletConnect) |
 | `frontend/src/js/blockchain/wallet-cdp.js` | CDP SDK wrapper + EIP-1193 shim |
 | `frontend/src/js/blockchain/smart-wallet-support.js` | Base Sepolia chain gating |
 | `frontend/src/js/blockchain/network-config.js` | Per-network RPC / contract config |
@@ -145,7 +148,11 @@ Three `.env` files exist and are gitignored — **never commit them**:
 
 ### Wallet Auto-Restore Is Silent (No Popup)
 
-`wallet-core.js` `initWallet()` calls `autoConnectWallet()`, which silently restores the last connection — CDP, EOA (injected), or WalletConnect — using `eth_accounts` / session checks. No popup is shown: a first-time visitor has no authorized account, so nothing happens and they still see Login / Signup, while a returning user keeps their login across page navigations (`index` → `studio` → `library` are separate HTML documents). Page-init scripts must **not** call `autoConnectWallet()` directly — `initWallet()` owns the restore (enforced by `build.test.js` / `library-init.test.js`). The verified CDP email is stored in `localStorage` key `arbesk-cdp-email` and shown in `header-wallet-button.js`.
+`wallet-core.js` `initWallet()` calls `autoConnectWallet()`, which silently restores the last connection — CDP, EOA (injected), or WalletConnect — using `eth_accounts` / session checks. No popup is shown: a first-time visitor has no authorized account, so nothing happens and they still see Login / Signup, while a returning user keeps their login. `app-init.js` (the single SPA bootstrap) owns the restore — page-init scripts must **not** call `autoConnectWallet()` directly (enforced by `build.test.js` / `library-init.test.js`). The verified CDP email is stored in `localStorage` key `arbesk-cdp-email` and shown in `header-wallet-button.js`.
+
+### Studio + Library Are One SPA Document
+
+`app.html` hosts **both** the Studio and Library views (`#studioView` / `#libraryView`); `app/router.js` toggles which is visible and syncs the URL (`/studio` ⇄ `/library`) via `history.pushState` — **no full reload**, so wallet/session/theme/engine persist across the switch. The marketing landing (`index.html`) stays a separate page. Server serves `app.html` for `/studio` and `/library` (SPA fallback in `src/index.js`). Lifecycle is **init-once + toggle-visibility**: the Babylon engine is created lazily on first Studio entry and only paused/resumed after — never disposed. The Library → Studio "open asset" handoff calls `router.navigate()`, not `window.location`.
 
 ### Base Sepolia RPC Split
 

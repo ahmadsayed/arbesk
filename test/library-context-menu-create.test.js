@@ -50,7 +50,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../frontend/src/js/library-init.js",
+    "../frontend/src/js/ui/library-controller.js",
     () => ({
       refreshLibraryData: jest.fn((...args) => _refreshLibraryData(...args)),
     })
