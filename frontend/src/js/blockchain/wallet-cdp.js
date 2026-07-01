@@ -45,6 +45,29 @@ const CDP_NETWORK_BASE_SEPOLIA = "base-sepolia";
 /** Public Base Sepolia RPC endpoint (for read-only passthrough calls) */
 const BASE_SEPOLIA_RPC_URL = "https://base-sepolia-rpc.publicnode.com";
 
+/** localStorage key holding the verified CDP email, for header display across reloads */
+const CDP_EMAIL_KEY = "arbesk-cdp-email";
+
+// ─── Verified email persistence ─────────────────────────────────────────────
+
+/**
+ * @returns {string|null} the verified CDP email stored from a previous session
+ */
+export function getCdpEmail() {
+  return localStorage.getItem(CDP_EMAIL_KEY);
+}
+
+/**
+ * @param {string} email
+ */
+export function setCdpEmail(email) {
+  localStorage.setItem(CDP_EMAIL_KEY, email);
+}
+
+export function clearCdpEmail() {
+  localStorage.removeItem(CDP_EMAIL_KEY);
+}
+
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 /**
@@ -79,6 +102,48 @@ export async function initCdpClient(projectId) {
  */
 export function isCdpInitialized() {
   return _cdpInitialized;
+}
+
+/**
+ * Wipe CDP/Coinbase browser state (localStorage keys, IndexedDB databases)
+ * and sign out. Stale state from a previous session causes "User is already
+ * authenticated" or "EVM account not found" errors on the next login.
+ * Best-effort — failures are swallowed since this is a pre-login cleanup.
+ * @returns {Promise<void>}
+ */
+export async function resetCdpStorage() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.toLowerCase().startsWith("cdp") || key.toLowerCase().startsWith("coinbase")) {
+        localStorage.removeItem(key);
+      }
+    }
+    if (window.indexedDB) {
+      const dbs = await window.indexedDB.databases?.();
+      for (const db of dbs ?? []) {
+        if (db.name?.toLowerCase().includes("cdp") || db.name?.toLowerCase().includes("coinbase")) {
+          window.indexedDB.deleteDatabase(db.name);
+        }
+      }
+    }
+    await disconnectCdpWallet();
+  } catch {
+    // Best-effort cleanup; ignore failures here.
+  }
+}
+
+/**
+ * Set (or clear, when `eoaAccount` is null) the module-level CDP session
+ * state and rebuild the EIP-1193 provider from it.
+ * @param {object|null} eoaAccount
+ * @param {string|null} smartAccountAddress
+ * @returns {{ request: (args: object) => Promise<unknown> } | null}
+ */
+function _applyCdpSession(eoaAccount, smartAccountAddress) {
+  _currentEoaAccount = eoaAccount;
+  _smartAccountAddress = smartAccountAddress;
+  _provider = eoaAccount ? buildCdpEip1193Provider(eoaAccount, smartAccountAddress) : null;
+  return _provider;
 }
 
 // ─── Authentication ──────────────────────────────────────────────────────────
@@ -122,11 +187,7 @@ export async function verifyEmailOtp(flowId, otp) {
     let eoaAccount = user.evmAccountObjects?.[0];
     let smartAccountAddress = user.evmSmartAccountObjects?.[0]?.address ?? null;
 
-    log("CDP", "post-OTP user keys:", Object.keys(user ?? {}).join(","));
-    log("CDP", "post-OTP evmAccountObjects:", JSON.stringify(user?.evmAccountObjects?.map((a) => a?.address)));
-    log("CDP", "post-OTP evmAccounts:", JSON.stringify(user?.evmAccounts));
-    log("CDP", "post-OTP evmSmartAccountObjects:", JSON.stringify(user?.evmSmartAccountObjects?.map((a) => a?.address)));
-    log("CDP", "post-OTP evmSmartAccounts:", JSON.stringify(user?.evmSmartAccounts));
+    log("CDP", "post-OTP accounts:", { eoa: eoaAccount?.address, smartAccount: smartAccountAddress });
 
     if (!eoaAccount || !smartAccountAddress) {
       log("CDP", "no EVM accounts after OTP; creating smart account manually");
@@ -138,11 +199,10 @@ export async function verifyEmailOtp(flowId, otp) {
         throw createErr;
       }
       const updatedUser = await getCurrentUser();
-      log("CDP", "post-create user keys:", Object.keys(updatedUser ?? {}).join(","));
-      log("CDP", "post-create evmAccountObjects:", JSON.stringify(updatedUser?.evmAccountObjects?.map((a) => a?.address)));
-      log("CDP", "post-create evmAccounts:", JSON.stringify(updatedUser?.evmAccounts));
-      log("CDP", "post-create evmSmartAccountObjects:", JSON.stringify(updatedUser?.evmSmartAccountObjects?.map((a) => a?.address)));
-      log("CDP", "post-create evmSmartAccounts:", JSON.stringify(updatedUser?.evmSmartAccounts));
+      log("CDP", "post-create accounts:", {
+        eoa: updatedUser?.evmAccountObjects?.[0]?.address,
+        smartAccount: updatedUser?.evmSmartAccountObjects?.[0]?.address,
+      });
       eoaAccount = updatedUser.evmAccountObjects?.[0] ?? eoaAccount;
       smartAccountAddress = updatedUser.evmSmartAccountObjects?.[0]?.address ?? smartAccountAddress;
     }
@@ -155,9 +215,7 @@ export async function verifyEmailOtp(flowId, otp) {
       warn("CDP", "user has no smart account — will use EOA address as wallet address");
     }
 
-    _currentEoaAccount = eoaAccount;
-    _smartAccountAddress = smartAccountAddress;
-    _provider = buildCdpEip1193Provider(eoaAccount, smartAccountAddress);
+    _applyCdpSession(eoaAccount, smartAccountAddress);
 
     log("CDP", "EOA:", eoaAccount.address);
     log("CDP", "Smart account:", smartAccountAddress);
@@ -199,9 +257,7 @@ export async function autoConnectCdpWallet() {
 
     const smartAccountAddress = user.evmSmartAccountObjects?.[0]?.address ?? null;
 
-    _currentEoaAccount = eoaAccount;
-    _smartAccountAddress = smartAccountAddress;
-    _provider = buildCdpEip1193Provider(eoaAccount, smartAccountAddress);
+    _applyCdpSession(eoaAccount, smartAccountAddress);
 
     log("CDP", "autoConnect: restored EOA", eoaAccount.address);
 
@@ -214,9 +270,7 @@ export async function autoConnectCdpWallet() {
   } catch (err) {
     // getCurrentUser() throws when no session exists — that's expected, not an error
     log("CDP", "autoConnect: no session available:", err.message);
-    _currentEoaAccount = null;
-    _smartAccountAddress = null;
-    _provider = null;
+    _applyCdpSession(null, null);
     return null;
   }
 }
@@ -232,9 +286,7 @@ export async function disconnectCdpWallet() {
   } catch (err) {
     warn("CDP", "signOut failed (non-fatal):", err.message);
   } finally {
-    _currentEoaAccount = null;
-    _smartAccountAddress = null;
-    _provider = null;
+    _applyCdpSession(null, null);
   }
 }
 
@@ -263,28 +315,35 @@ async function _waitForUserOperationTransaction(userOpHash, smartAccountAddress)
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
 
+    let op;
     try {
-      const op = await getUserOperation({
+      op = await getUserOperation({
         evmSmartAccount: smartAccountAddress,
         userOperationHash: userOpHash,
         network: CDP_NETWORK_BASE_SEPOLIA,
       });
-
-      log("CDP:EIP1193", `UserOperation status (attempt ${attempt}):`, op.status);
-
-      if (op.status === "complete" && op.transactionHash) {
-        return op.transactionHash;
-      }
-
-      if (op.status === "failed") {
-        const revertMsg = op.receipts?.[0]?.revert?.message || "unknown";
-        throw new Error(`UserOperation failed: ${revertMsg}`);
-      }
     } catch (err) {
-      // On the last attempt, surface the error. Otherwise keep polling.
+      // Transient fetch error — retry, unless this was the last attempt.
       if (attempt === maxAttempts) {
         throw new Error(`Timed out waiting for UserOperation ${userOpHash}: ${err.message}`);
       }
+      continue;
+    }
+
+    log("CDP:EIP1193", `UserOperation status (attempt ${attempt}):`, op.status);
+
+    // transactionHash is set as soon as the op is broadcast and included in
+    // a block — this can happen before CDP's status string reaches
+    // "complete", so check it directly instead of waiting on status.
+    if (op.transactionHash) {
+      return op.transactionHash;
+    }
+
+    // "failed"/"dropped" are terminal — surface them immediately rather than
+    // retrying for the full polling window.
+    if (op.status === "failed" || op.status === "dropped") {
+      const revertMsg = op.receipts?.[0]?.revert?.message || op.status;
+      throw new Error(`UserOperation ${op.status}: ${revertMsg}`);
     }
   }
 
@@ -305,9 +364,7 @@ function hexToUtf8OrKeepHex(hexOrPlain) {
     return hexOrPlain;
   }
   try {
-    const hex = hexOrPlain.slice(2);
-    const bytes = new Uint8Array(hex.match(/.{1,2}/g).map((b) => parseInt(b, 16)));
-    return new TextDecoder("utf-8").decode(bytes);
+    return Web3.utils.hexToUtf8(hexOrPlain);
   } catch {
     // If decoding fails, return the original hex (e.g. for raw binary data)
     return hexOrPlain;

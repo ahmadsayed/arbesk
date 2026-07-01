@@ -226,24 +226,7 @@ Use `console.error()` for exceptions only; `console.log()` for operational flow.
 
 ### Viewport Resize Handling
 
-The 3D viewport must never stretch during window resize or sidebar collapse/expand. The only reliable pattern is to resize the Babylon engine **inside `runRenderLoop`, immediately before `scene.render()`**:
-
-```js
-state.engine.runRenderLoop(() => {
-  state.engine.resize();
-  updateOrthoFrustumOnResize(); // for orthographic front/right/top views
-  state.scene.render();
-});
-```
-
-Also keep `window.addEventListener("resize")` and a canvas `ResizeObserver` for immediate updates when the render loop is not active, and remove both in `clearScene()` to avoid leaks.
-
-**Do not:**
-- Throttle the render loop to 60 FPS — it delays the corrected frame after a resize.
-- Rely only on `ResizeObserver` or only on `window.resize` — both can race with the render loop.
-- Render synchronously inside the resize handler — this still allows a render-loop frame to use the new canvas size with the old projection matrix.
-
-See `frontend/src/js/engine/scene-graph.js` for the current implementation.
+The 3D viewport must never stretch during window resize or sidebar collapse/expand. The only reliable pattern is to resize the Babylon engine **inside `runRenderLoop`, immediately before `scene.render()`** — never throttle the render loop or resize synchronously inside the resize event handler. See `frontend/src/js/engine/scene-graph.js` for the current implementation, and the `babylon-3d-engine` skill's [Scene Lifecycle reference](.agents/skills/babylon-3d-engine/references/scene-lifecycle.md) for the full pattern and pitfalls.
 
 ---
 
@@ -396,17 +379,7 @@ The E2E specs depend on a stable selector map and a known user flow. See `e2e/RE
 3. Update `e2e/helpers/manifest.mjs` when the manifest schema or version semantics change.
 4. Add or remove test steps when the save/publish flow gains or loses dialogs/confirmations.
 
-**Contract workflow (MANDATORY after any `.sol` change):**
-
-```bash
-docker compose run --rm hardhat npx hardhat compile
-docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
-grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
-npm run test:frontend
-npx playwright test --config=e2e/playwright.config.js --project=chromium
-```
-
-Stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause free-tier generation to fail with "Payment validation failed".
+**After any `.sol` change:** run the contract workflow from §4, then also run the E2E suite (`npx playwright test --config=e2e/playwright.config.js --project=chromium`) — stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause free-tier generation to fail with "Payment validation failed".
 
 ---
 
@@ -463,87 +436,23 @@ Base Sepolia uses ETH for gas. CDP email-login smart accounts are supported on B
 
 ## 15. Worktree Testing & Isolation
 
-For tasks that require a clean, isolated test environment — or when the main checkout's Docker containers/ports are already in use — use a git worktree.
-
-**Preferred workflow:**
+For tasks that require a clean, isolated test environment — or when the main checkout's Docker containers/ports are already in use — use a git worktree:
 
 ```bash
-# Create a worktree already seeded with current changes, env files, built frontend,
-# and compiled contracts. It also forces IPFS_BACKEND=kubo for local E2E.
 npm run worktree:create -- feature-xyz
-
-# Run the full stack inside the worktree
-cd .worktrees/feature-xyz
-npm run test:frontend
-npm run test:api
-COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) npm run test:contracts
-npm run test:e2e -- --project=chromium
 ```
 
-**Cleanup:**
+This seeds `.worktrees/feature-xyz` with current changes, env files, a built frontend, and compiled contracts, and forces `IPFS_BACKEND=kubo` for local E2E.
 
-```bash
-cd .worktrees/feature-xyz
-PROJECT=$(./scripts/start-dev.sh --print-project)
-docker compose -p "$PROJECT" down
-
-# Docker leaves artifacts as root; fix ownership before git worktree remove
-docker run --rm -v "$(pwd):/ws" alpine sh -c \
-  'chown -R $(stat -c "%u:%g" /ws) /ws/blockchain/artifacts /ws/blockchain/deployments 2>/dev/null || true'
-
-cd /path/to/main/checkout
-git worktree remove .worktrees/feature-xyz --force
-git worktree prune
-```
-
-See the `arbesk-worktree` skill for the complete rationale, file map, and troubleshooting.
+See the `arbesk-worktree` skill for the full workflow (running tests inside the worktree, cleanup steps, troubleshooting) and file map.
 
 ---
 
 ## 16. CDP Email Wallet (Base Sepolia)
 
-Email-login smart accounts are implemented via the `@coinbase/cdp-core` SDK (`frontend/src/js/blockchain/wallet-cdp.js`). They are intentionally supported on **Base Sepolia only**; EOA wallets (MetaMask/Rabby) handle all other chains.
+Email-login smart accounts are implemented via the `@coinbase/cdp-core` SDK (`frontend/src/js/blockchain/wallet-cdp.js`). They are intentionally supported on **Base Sepolia only**; EOA wallets (MetaMask/Rabby) handle all other chains. Required env: `CDP_PROJECT_ID` and `CDP_PAYMASTER_URL` (root `.env`).
 
-### How it works
-
-- `wallet-modal.js` collects the email, clears stale CDP browser state, and calls `requestEmailOtp()` / `verifyEmailOtp()` from `wallet-cdp.js`.
-- `initialize({ projectId, ethereum: { createOnLogin: "smart" } })` tells CDP to create an EOA + ERC-4337 smart account for new users.
-- `buildCdpEip1193Provider()` exposes an EIP-1193 provider so `wallet-core.js` and Web3.js can use the wallet unchanged.
-- `eth_sendTransaction` routes to `sendUserOperation({ ..., useCdpPaymaster: true })`; the provider polls `getUserOperation()` until it has the real on-chain `transactionHash`, then returns that hash to Web3.js.
-- SIWE signing uses `signEvmMessage({ evmAccount: eoaAddressString, message })`.
-- `wallet-core.js` `initWallet()` calls `autoConnectCdpOnly()` to restore a CDP session on page load. EOA/WalletConnect auto-connect is intentionally disabled; those wallets require explicit Login / Signup.
-- The verified email is persisted in `localStorage` under the key `arbesk-cdp-email` and displayed by `header-wallet-button.js` for CDP users (which also hides the network selector).
-- To avoid stale CDP sessions, `wallet-modal.js` initializes the CDP SDK and calls `disconnectCdpWallet()` before starting a new OTP flow.
-
-### Required environment
-
-Root `.env`:
-- `CDP_PROJECT_ID` — served to the frontend via `/api/v1/config`
-- `CDP_PAYMASTER_URL` — used only by the backend proxy `src/api/routes/paymaster.js` (currently unused in local dev because we use `useCdpPaymaster: true`)
-
-CDP Portal:
-- Project must have the **Non-custodial Wallet** (Embedded Wallet API v2) product active.
-- A Base Sepolia paymaster must be configured.
-- Domain `http://localhost:9090` (or your production origin) added under **Clients**.
-
-### Troubleshooting
-
-| Symptom | Root cause | Fix |
-|---------|-----------|-----|
-| `Error: EVM account not found` during signing | `signEvmMessage` expects an **address string**, not the account object | Pass `eoaAccount.address`, not `eoaAccount` |
-| `must be a valid HTTP or HTTPS URL with at least 11 characters` | CDP validates `paymasterUrl` and rejects relative paths like `/api/v1/paymaster` | Use `useCdpPaymaster: true` for local dev; for production, expose the backend proxy on a public HTTPS URL |
-| `POST https://sepolia.base.org 403` | The public `sepolia.base.org` endpoint blocks browser-origin requests | Use `https://base-sepolia-rpc.publicnode.com` (already in CSP) for RPC passthrough |
-| Transaction never resolves / stuck waiting | CDP returns a UserOperation hash, but Web3.js polls for an EVM transaction hash | Poll `getUserOperation()` until `status === "complete"` and return `transactionHash` from `eth_sendTransaction` |
-| `User is already authenticated` | Stale CDP session in localStorage/IndexedDB | `wallet-modal.js` clears CDP/coinbase keys and calls `disconnectCdpWallet()` before starting a new OTP flow |
-
-### Key files
-
-- `frontend/src/js/blockchain/wallet-cdp.js` — CDP SDK wrapper + EIP-1193 shim
-- `frontend/src/js/ui/wallet-modal.js` — email OTP UI
-- `frontend/src/js/ui/header-wallet-button.js` — CDP email display + network-selector hiding
-- `frontend/src/js/blockchain/wallet-core.js` — wallet connection orchestration (CDP-only auto-restore)
-- `frontend/src/js/blockchain/smart-wallet-support.js` — Base Sepolia chain gating
-- `src/api/routes/paymaster.js` — backend paymaster proxy (reserved for production custom paymasters)
+See the `cdp-base-wallet` skill for the full architecture diagram, required CDP Portal configuration, implementation rules, troubleshooting table, and key file map.
 
 ---
 

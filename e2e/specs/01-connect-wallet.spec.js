@@ -1,18 +1,15 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
+import { connectStudio } from "../helpers/flows.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import { TEST_WALLET } from "../fixtures/test-wallet.mjs";
 
 const TRUNCATED_ADDRESS = `${TEST_WALLET.address.slice(0, 6)}…${TEST_WALLET.address.slice(-4)}`;
 
 test.describe("wallet connection", () => {
-  test("auto-connects the Hardhat dev wallet on page load and authenticates via SIWE", async ({ page }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
-
-    // With an injected EIP-1193 provider the Studio now connects automatically
-    // on page load, so the Login / Signup button should hide without a click.
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+  test("connects the Hardhat dev wallet and authenticates via SIWE", async ({ page }) => {
+    // The Studio no longer auto-connects EOA wallets on page load; use the
+    // standard connect flow (auto-connect fallback + Login / Signup if needed).
+    await connectStudio(page);
 
     // Wait for SIWE authentication to finish (the wallet menu stops showing
     // "Sign In" once the session is established).

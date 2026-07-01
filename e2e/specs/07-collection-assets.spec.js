@@ -7,7 +7,7 @@ import {
   fetchTokenManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
-import { assetCardLocator } from "../helpers/flows.mjs";
+import { assetCardLocator, connectStudio, ensureStudioConnected, uniqueAssetName } from "../helpers/flows.mjs";
 
 const PROMPT_1 = "a wooden chair";
 const PROMPT_2 = "a small round table";
@@ -27,8 +27,7 @@ test.describe.serial("Collection/asset model", () => {
   test("first besk lazily mints a default collection containing at least one asset", async ({
     page,
   }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
@@ -65,8 +64,7 @@ test.describe.serial("Collection/asset model", () => {
   test("a second besk in the same collection adds a sibling without disturbing existing ones", async ({
     page,
   }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
@@ -132,8 +130,7 @@ test.describe.serial("Collection/asset model", () => {
   test("opening a published token renders the first asset in the viewport", async ({
     page,
   }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
@@ -145,7 +142,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    const viewportName = "Chair Viewport";
+    const viewportName = uniqueAssetName("Chair Viewport");
     await page.fill(SELECTORS.dialogInput, viewportName);
     await page.click(SELECTORS.dialogConfirmBtn);
 
@@ -177,8 +174,7 @@ test.describe.serial("Collection/asset model", () => {
   test("New Asset button clears the scene but preserves collection context", async ({
     page,
   }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     const savedCollectionId = await page
@@ -243,8 +239,7 @@ test.describe.serial("Collection/asset model", () => {
   test("page reload with ?asset=TOKENID restores the viewport", async ({
     page,
   }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
@@ -273,6 +268,7 @@ test.describe.serial("Collection/asset model", () => {
     await page.goto(
       `/studio.html?asset=${tokenIdHex}&assetId=${firstAssetId}`,
     );
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden({
       timeout: 5000,
     });
@@ -291,6 +287,7 @@ test.describe.serial("Collection/asset model", () => {
   });
 
   test("collection selector populates on wallet connect", async ({ page }) => {
+    await injectHardhatProvider(page);
     await page.goto("/studio.html");
 
     // The sidebar defaults to Chat; open Settings to reveal the collection select.
@@ -304,8 +301,7 @@ test.describe.serial("Collection/asset model", () => {
     await expect(optionsBefore.first()).toHaveText("Default");
     await expect(optionsBefore.first()).toHaveAttribute("value", "");
 
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     // New page defaults to Chat again.

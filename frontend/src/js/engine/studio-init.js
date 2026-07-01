@@ -44,12 +44,16 @@ import {
   connectWallet,
   switchNetwork,
 } from "/js/blockchain/wallet.js";
-import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { walletState } from "/js/state/wallet-state.js";
 import {
   updateHeaderWalletButton,
+  updateHeaderWalletButtonFromState,
   isWalletAuthenticated,
 } from "/js/ui/header-wallet-button.js";
+import {
+  getNetworkSelectKey,
+  getSupportedNetworkSelectKeys,
+} from "/js/blockchain/network-config.js";
 
 // ── Headerbar network selector ──
 const networkSelect = document.getElementById("headerbarNetworkSelect");
@@ -58,8 +62,7 @@ if (networkSelect) {
     const key = e.target.value;
     if (!key) return;
     // Only store/select keys the wallet layer actually knows about
-    const validKeys = ["hardhat", "baseSepolia"];
-    if (!validKeys.includes(key)) {
+    if (!getSupportedNetworkSelectKeys().includes(key)) {
       console.warn(`[NETWORK] Ignoring unsupported network key: ${key}`);
       return;
     }
@@ -89,18 +92,12 @@ initWalletPopover();
 
 on(EVENTS.WALLET_CONNECTED, (e) => {
   const address = e?.address || "";
-  const { walletSource, email } = walletState.get();
-  updateHeaderWalletButton(address, isWalletAuthenticated(address), walletSource, email);
+  updateHeaderWalletButtonFromState(address, isWalletAuthenticated(address));
 
   // Sync network selector to current chain
   const netSel = document.getElementById("headerbarNetworkSelect");
   if (netSel) {
-    const chainId = e?.chainId;
-    const keyMap = {
-      [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
-      [CHAIN_IDS.BASE_TESTNET]: "baseSepolia",
-    };
-    const key = keyMap[chainId];
+    const key = getNetworkSelectKey(e?.chainId);
     if (key) netSel.value = key;
   }
 });
@@ -110,11 +107,9 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 });
 
 on(EVENTS.USER_AUTHENTICATED, (e) => {
-  const { walletSource, email } = walletState.get();
-  updateHeaderWalletButton(e?.address, true, walletSource, email);
+  updateHeaderWalletButtonFromState(e?.address, true);
 });
 
 on(EVENTS.USER_AUTH_REQUIRED, (e) => {
-  const { walletSource, email } = walletState.get();
-  updateHeaderWalletButton(e?.address, false, walletSource, email);
+  updateHeaderWalletButtonFromState(e?.address, false);
 });

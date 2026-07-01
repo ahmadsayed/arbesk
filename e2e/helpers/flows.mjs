@@ -30,7 +30,7 @@ export async function connectStudio(page) {
     await expect(connectBtn).toBeHidden({ timeout: 8000 });
   } catch {
     await connectBtn.click();
-    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
+    await page.locator(SELECTORS.hardhatWalletOption).click();
     await expect(connectBtn).toBeHidden();
   }
 
@@ -62,7 +62,7 @@ export async function connectStudioAs(page, accountIndex) {
     await expect(connectBtn).toBeHidden({ timeout: 8000 });
   } catch {
     await connectBtn.click();
-    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
+    await page.locator(SELECTORS.hardhatWalletOption).click();
     await expect(connectBtn).toBeHidden();
   }
 
@@ -74,6 +74,49 @@ export async function connectStudioAs(page, accountIndex) {
   await expect(page.locator(SELECTORS.disconnectWalletBtn)).toContainText(
     truncateAddress(account.address),
   );
+}
+
+/**
+ * Ensure the Studio is connected on the current page. The Studio no longer
+ * auto-connects EOA wallets on page load, so tests that navigate to a fresh
+ * Studio tab must explicitly connect after the navigation.
+ *
+ * @param {Page} page
+ */
+export async function ensureStudioConnected(page) {
+  const connectBtn = page.locator(SELECTORS.connectWalletBtn);
+  try {
+    await expect(connectBtn).toBeHidden({ timeout: 3000 });
+    return;
+  } catch {
+    // not connected - use the manual Login / Signup flow
+  }
+  await connectBtn.click();
+  await page.locator(SELECTORS.hardhatWalletOption).click();
+  await expect(connectBtn).toBeHidden();
+  await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(
+    "Sign In",
+  );
+}
+
+/**
+ * Ensure the Library is connected on the current page. Like the Studio, the
+ * Library no longer auto-connects EOA wallets on page load.
+ *
+ * @param {Page} page
+ */
+export async function ensureLibraryConnected(page) {
+  const libraryGate = page.locator(SELECTORS.libraryGate);
+  try {
+    await expect(libraryGate).toBeHidden({ timeout: 3000 });
+    return;
+  } catch {
+    // not connected - use the library's connect button
+  }
+  await page.locator(SELECTORS.libraryConnectBtn).click();
+  await page.locator(SELECTORS.hardhatWalletOption).click();
+  await expect(libraryGate).toBeHidden();
+  await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
 }
 
 /**
@@ -249,7 +292,7 @@ export async function connectLibrary(page) {
   } catch {
     const libraryConnectBtn = page.locator(SELECTORS.libraryConnectBtn);
     await libraryConnectBtn.click();
-    await page.locator(`${SELECTORS.walletOptionsList} .wallet-option`).first().click();
+    await page.locator(SELECTORS.hardhatWalletOption).click();
     await expect(libraryGate).toBeHidden();
   }
 
@@ -389,6 +432,7 @@ export async function addCollaborator(
   collectionName = "Default",
 ) {
   await page.goto("/library.html");
+  await ensureLibraryConnected(page);
   await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
   await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
@@ -424,6 +468,7 @@ export async function openSharedAsset(page, tokenId, assetId) {
     ? `/studio.html?asset=${tokenId}&assetId=${assetId}`
     : `/studio.html?asset=${tokenId}`;
   await page.goto(url);
+  await ensureStudioConnected(page);
   await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
   // Wait until the Studio has resolved the asset token from the URL. The team
   // panel's `hidden` attribute is removed once activeAssetTokenId is set; it

@@ -10,6 +10,7 @@
 
 import { truncateAddress } from "../utils/format.js";
 import { getCachedSession } from "../services/api.js";
+import { walletState } from "../state/wallet-state.js";
 
 /**
  * Update the header wallet button and network selector for the current wallet state.
@@ -64,6 +65,17 @@ export function updateHeaderWalletButton(address, isAuthenticated, walletSource,
       networkSelect.classList.remove("hidden");
     }
   }
+}
+
+/**
+ * Update the header wallet button using the current walletSource/email from
+ * walletState, so callers only need to pass what actually changed.
+ * @param {string|null} address
+ * @param {boolean} isAuthenticated
+ */
+export function updateHeaderWalletButtonFromState(address, isAuthenticated) {
+  const { walletSource, email } = walletState.get();
+  updateHeaderWalletButton(address, isAuthenticated, walletSource, email);
 }
 
 /**

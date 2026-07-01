@@ -3,7 +3,9 @@ import path from "path";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   connectLibrary,
+  ensureStudioConnected,
   libraryAssetLocator,
+  openLibraryCollection,
   createLibraryCollection,
   uploadLibraryFile,
   uniqueAssetName,
@@ -26,8 +28,12 @@ test.describe.serial("Library create collection and upload", () => {
     await expect(page.locator(SELECTORS.libraryUploadBtn)).toBeVisible();
 
     await createLibraryCollection(page, collectionName);
-    // Newly created collection appears at the collections list level.
-    await expect(page.locator(SELECTORS.libraryCollectionItem)).toHaveCount(1);
+    // The newly created collection appears at the collections list level.
+    // Earlier serial tests may have left the Default collection on-chain, so
+    // assert presence rather than an exact total count.
+    await expect(
+      page.locator(`${SELECTORS.libraryCollectionItem}:has(${SELECTORS.libraryItemName}:text-is("${collectionName}"))`),
+    ).toBeVisible();
 
     await openLibraryCollection(page, collectionName);
     // Opened collection is empty.
@@ -42,6 +48,7 @@ test.describe.serial("Library create collection and upload", () => {
     // The upload should be openable in Studio.
     await assetCard.dblclick();
     await page.waitForURL(/\/studio\.html\?asset=/, { timeout: 10000 });
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_ASSET_NAME,
     );

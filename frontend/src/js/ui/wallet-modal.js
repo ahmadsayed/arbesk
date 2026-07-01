@@ -292,33 +292,18 @@ async function selectEmailWallet() {
       return;
     }
 
-    const { initCdpClient, requestEmailOtp, verifyEmailOtp, autoConnectCdpWallet, disconnectCdpWallet } = await import("../blockchain/wallet-cdp.js");
+    const { initCdpClient, requestEmailOtp, verifyEmailOtp, autoConnectCdpWallet, resetCdpStorage, getCdpEmail } = await import("../blockchain/wallet-cdp.js");
 
     // Initialize the SDK first so that signOut (and any other session calls)
     // actually reach CDP's servers.
     await initCdpClient(config.cdpProjectId);
 
-    // Clear any stale CDP browser state before starting a fresh login flow.
-    // The SDK stores session data under coinbase/cdp keys across localStorage,
-    // IndexedDB, and cookies; stale state causes "User is already authenticated"
-    // or "EVM account not found" errors.
-    try {
-      for (const key of Object.keys(localStorage)) {
-        if (key.toLowerCase().startsWith("cdp") || key.toLowerCase().startsWith("coinbase")) {
-          localStorage.removeItem(key);
-        }
-      }
-      if (window.indexedDB) {
-        const dbs = await window.indexedDB.databases?.();
-        for (const db of dbs ?? []) {
-          if (db.name?.toLowerCase().includes("cdp") || db.name?.toLowerCase().includes("coinbase")) {
-            window.indexedDB.deleteDatabase(db.name);
-          }
-        }
-      }
-      await disconnectCdpWallet();
-    } catch {
-      // Best-effort cleanup; ignore failures here.
+    // Clear stale CDP browser state before starting a fresh login flow — but
+    // only when a previous session actually left some behind. Stale state
+    // causes "User is already authenticated" or "EVM account not found"
+    // errors; a first-time visitor has nothing to clean up.
+    if (getCdpEmail()) {
+      await resetCdpStorage();
     }
 
     const { flowId } = await requestEmailOtp(email);

@@ -1,5 +1,4 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   MANIFEST_URL_REGEX,
@@ -10,7 +9,7 @@ import {
   assertPublishedManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
-import { assetCardLocator } from "../helpers/flows.mjs";
+import { assetCardLocator, connectStudio } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
 const ASSET_NAME = "Cowboy Test";
@@ -21,8 +20,7 @@ function manifestCidFromUrl(url) {
 
 test.describe("save and publish", () => {
   test("saves a draft and publishes an ERC-721 token", async ({ page }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio.html");
+    await connectStudio(page);
 
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await expect(page.locator(SELECTORS.disconnectWalletBtn)).not.toContainText(

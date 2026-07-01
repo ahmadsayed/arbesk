@@ -2,6 +2,8 @@ import { test, expect } from "../fixtures/coverage.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   connectLibrary,
+  ensureLibraryConnected,
+  ensureStudioConnected,
   libraryAssetLocator,
   openLibraryCollection,
   generateSaveAndPublish,
@@ -19,10 +21,12 @@ test.describe.serial("Library asset actions", () => {
 
     // Publish a target asset from Studio.
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, originalName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     const card = libraryAssetLocator(page, originalName).first();
     await expect(card).toBeVisible();
@@ -47,10 +51,12 @@ test.describe.serial("Library asset actions", () => {
     await connectLibrary(page);
 
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, deleteMeName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     const card = libraryAssetLocator(page, deleteMeName).first();
     await expect(card).toBeVisible();
@@ -72,10 +78,12 @@ test.describe.serial("Library asset actions", () => {
     await connectLibrary(page);
 
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, openName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     const card = libraryAssetLocator(page, openName).first();
     await expect(card).toBeVisible();
@@ -88,6 +96,7 @@ test.describe.serial("Library asset actions", () => {
     await page.waitForURL(/\/studio\.html\?asset=.*&assetId=/, {
       timeout: 10000,
     });
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       openName,
     );
@@ -100,10 +109,12 @@ test.describe.serial("Library asset actions", () => {
     await connectLibrary(page);
 
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, sendName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     const card = libraryAssetLocator(page, sendName).first();
     await expect(card).toBeVisible();

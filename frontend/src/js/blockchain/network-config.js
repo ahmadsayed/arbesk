@@ -85,3 +85,26 @@ export function getRpcUrl(chainId) {
 export function getSupportedChainIds() {
   return Object.keys(NETWORK_CONFIGS).map(Number);
 }
+
+/** Maps chainId to the headerbar network-select option value. */
+const NETWORK_SELECT_KEYS = {
+  [CHAIN_IDS.HARDHAT_LOCAL]: "hardhat",
+  [CHAIN_IDS.BASE_TESTNET]: "baseSepolia",
+};
+
+/**
+ * Get the headerbar network-select option key for a chainId.
+ * @param {number|string} chainId
+ * @returns {string|null}
+ */
+export function getNetworkSelectKey(chainId) {
+  return NETWORK_SELECT_KEYS[Number(chainId)] || null;
+}
+
+/**
+ * List all valid headerbar network-select option keys.
+ * @returns {string[]}
+ */
+export function getSupportedNetworkSelectKeys() {
+  return Object.values(NETWORK_SELECT_KEYS);
+}

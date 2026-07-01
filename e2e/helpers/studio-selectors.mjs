@@ -2,6 +2,7 @@ export const SELECTORS = {
   connectWalletBtn: "#connectWalletBtn",
   disconnectWalletBtn: "#disconnectWalletBtn",
   walletOptionsList: "#walletOptionsList",
+  hardhatWalletOption: '[data-rdns="com.arbesk.hardhat-test"]',
   walletEmailInput: "#walletEmailInput",
   walletEmailSendBtn: "#walletEmailSendBtn",
   walletOtpInput: "#walletOtpInput",

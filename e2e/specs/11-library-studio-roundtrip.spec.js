@@ -7,6 +7,8 @@ import {
 } from "../helpers/manifest.mjs";
 import {
   connectLibrary,
+  ensureLibraryConnected,
+  ensureStudioConnected,
   libraryAssetLocator,
   openLibraryCollection,
   openLibraryAssetInStudio,
@@ -24,10 +26,12 @@ test.describe.serial("Library ↔ Studio round-trip", () => {
     await connectLibrary(page);
 
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     await expect(libraryAssetLocator(page, assetName).first()).toBeVisible();
 
@@ -50,12 +54,15 @@ test.describe.serial("Library ↔ Studio round-trip", () => {
     await connectLibrary(page);
 
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     await openLibraryAssetInStudio(page, assetName);
+    await ensureStudioConnected(page);
 
     // URL must include both the collection token and the specific assetId.
     // The library passes the token id in decimal; Studio accepts either form.

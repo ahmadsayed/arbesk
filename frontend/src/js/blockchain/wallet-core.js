@@ -318,7 +318,7 @@ async function autoConnectCdpOnly() {
     const config = await (await import("../services/api.js")).getConfig();
     if (!config?.cdpProjectId) return;
 
-    const { initCdpClient, autoConnectCdpWallet } = await import("./wallet-cdp.js");
+    const { initCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.js");
     await initCdpClient(config.cdpProjectId);
     const cdpResult = await autoConnectCdpWallet();
     if (!cdpResult) {
@@ -330,7 +330,7 @@ async function autoConnectCdpOnly() {
     web3 = newWeb3(cdpResult.provider);
     window.web3 = web3;
     activeConnectionSource = "cdp";
-    const email = localStorage.getItem("arbesk-cdp-email") || cdpResult.email || null;
+    const email = getCdpEmail() || cdpResult.email || null;
     await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
   } catch (err) {
     warn("[WALLET] CDP auto-connect failed:", err.message);
@@ -502,7 +502,8 @@ async function connectWallet() {
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "cdp");
       if (result.email) {
-        localStorage.setItem("arbesk-cdp-email", result.email);
+        const { setCdpEmail } = await import("./wallet-cdp.js");
+        setCdpEmail(result.email);
       }
       await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress, result.email || null);
     } else if (source === "walletconnect") {
@@ -598,7 +599,8 @@ async function disconnectWallet() {
     lowBalanceToastId = null;
   }
   localStorage.removeItem(LAST_WALLET_KEY);
-  localStorage.removeItem("arbesk-cdp-email");
+  const { clearCdpEmail } = await import("./wallet-cdp.js");
+  clearCdpEmail();
   emit(EVENTS.WALLET_DISCONNECTED);
 }
 

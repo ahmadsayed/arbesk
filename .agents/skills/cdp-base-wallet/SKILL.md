@@ -14,7 +14,7 @@ Use this skill for any task involving CDP email-login smart wallets: debugging s
 | `Error: EVM account not found` during SIWE signing | `signEvmMessage` expects an **address string**, not the account object | Pass `eoaAccount.address`, not `eoaAccount` |
 | `must be a valid HTTP or HTTPS URL with at least 11 characters` | `paymasterUrl` must be absolute; relative paths are rejected | Use `useCdpPaymaster: true` for local dev; for production custom paymasters expose the backend proxy on a public HTTPS URL |
 | `POST https://sepolia.base.org/ 403` | `sepolia.base.org` blocks browser-origin RPC requests | Use `https://base-sepolia-rpc.publicnode.com` for RPC passthrough (already in CSP) |
-| Transaction spinner never resolves after UserOperation submit | CDP returns a UserOperation hash; Web3.js expects an EVM txHash | Poll `getUserOperation()` until `status === "complete"`, then return `transactionHash` from `eth_sendTransaction` |
+| Transaction spinner never resolves after UserOperation submit | CDP returns a UserOperation hash; Web3.js expects an EVM txHash | Poll `getUserOperation()` and return `transactionHash` as soon as it appears — it's set once the op is broadcast and included in a block, before `status` reaches `"complete"` |
 | `User is already authenticated` | Stale CDP session in localStorage/IndexedDB | Clear CDP/coinbase keys and call `disconnectCdpWallet()` before starting a new OTP flow |
 | `Network Error` or CORS on `api.cdp.coinbase.com` | Origin not allowed in CDP Portal | Add `http://localhost:9090` (or your production origin) under Non-custodial Wallet → Clients |
 
@@ -78,7 +78,7 @@ Frontend persistence:
 
 2. **Smart accounts are Base Sepolia only.** Gate with `isSmartWalletSupported(chainId)`.
 
-3. **Never return a UserOperation hash to Web3.js.** Web3.js will try to poll `eth_getTransactionReceipt` with it. Poll `getUserOperation()` and return the real `transactionHash`.
+3. **Never return a UserOperation hash to Web3.js.** Web3.js will try to poll `eth_getTransactionReceipt` with it. Poll `getUserOperation()` and return the real `transactionHash` as soon as it's present — it's set once the op is broadcast and included in a block, independent of whether `status` has advanced to `"complete"`.
 
 4. **Use `useCdpPaymaster: true` for local development.** CDP's bundler must be able to reach the paymaster URL; `localhost` is not reachable from CDP's servers.
 

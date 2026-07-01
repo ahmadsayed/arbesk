@@ -3,6 +3,8 @@ import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   connectLibrary,
+  ensureLibraryConnected,
+  ensureStudioConnected,
   libraryCollectionLocator,
   libraryAssetLocator,
   openLibraryCollection,
@@ -25,6 +27,7 @@ test.describe.serial("Library basics", () => {
 
     await injectHardhatProvider(page);
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
     await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
   });
@@ -37,10 +40,12 @@ test.describe.serial("Library basics", () => {
 
     // Publish an asset from Studio to mint the default collection.
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, assetName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await waitForLibraryItemCount(page, 1);
 
     const defaultCollection = libraryCollectionLocator(page, "Default");
@@ -55,10 +60,12 @@ test.describe.serial("Library basics", () => {
     await connectLibrary(page);
     // Ensure there is at least one asset by publishing from Studio first.
     await page.goto("/studio.html");
+    await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
     await generateSaveAndPublish(page, assetName, PROMPT);
 
     await page.goto("/library.html");
+    await ensureLibraryConnected(page);
     await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
 
     await openLibraryCollection(page, "Default");
