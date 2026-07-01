@@ -13,6 +13,7 @@ import {
   openLibraryCollection,
   openLibraryAssetInStudio,
   generateSaveAndPublish,
+  seedDefaultCollection,
   uniqueAssetName,
 } from "../helpers/flows.mjs";
 
@@ -20,7 +21,11 @@ const ASSET_NAME_BASE = "Roundtrip Asset";
 const PROMPT = "a blue cylinder";
 
 // Studio/Library round-trip tests mutate the shared chain; run serially.
+// They self-seed in beforeAll so they can run in isolation.
 test.describe.serial("Library ↔ Studio round-trip", () => {
+  test.beforeAll(async ({ browser }) => {
+    await seedDefaultCollection(browser);
+  });
   test("asset published in Studio appears in the library", async ({ page }) => {
     const assetName = uniqueAssetName(ASSET_NAME_BASE);
     await connectLibrary(page);

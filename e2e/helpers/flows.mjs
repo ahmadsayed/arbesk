@@ -120,6 +120,33 @@ export async function ensureLibraryConnected(page) {
 }
 
 /**
+ * Seed the wallet-derived Default collection on the shared Hardhat chain.
+ * Serial library specs can call this in test.beforeAll so they no longer
+ * depend on earlier specs having published first.
+ *
+ * @param {import('@playwright/test').Browser} browser
+ * @param {string} [name]
+ * @param {string} [prompt]
+ * @returns {Promise<string|null>} token id (hex) of the published collection
+ */
+export async function seedDefaultCollection(
+  browser,
+  name = uniqueAssetName("Seed Asset"),
+  prompt = DEFAULT_PROMPT,
+) {
+  const page = await browser.newPage();
+  try {
+    await injectHardhatProvider(page);
+    await page.goto("/studio.html");
+    await ensureStudioConnected(page);
+    const tokenIdHex = await generateSaveAndPublish(page, name, prompt);
+    return tokenIdHex;
+  } finally {
+    await page.close();
+  }
+}
+
+/**
  * @param {string} address
  * @returns {string}
  */

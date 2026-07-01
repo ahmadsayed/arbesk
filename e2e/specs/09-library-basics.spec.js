@@ -11,6 +11,7 @@ import {
   waitForLibraryItemCount,
   libraryItemNames,
   generateSaveAndPublish,
+  seedDefaultCollection,
   uniqueAssetName,
 } from "../helpers/flows.mjs";
 
@@ -18,7 +19,11 @@ const ASSET_NAME_BASE = "Library Basics Asset";
 const PROMPT = "a glowing cube";
 
 // Library tests mutate the shared default collection, so run them serially.
+// They self-seed in beforeAll so they can run in isolation.
 test.describe.serial("Library basics", () => {
+  test.beforeAll(async ({ browser }) => {
+    await seedDefaultCollection(browser);
+  });
   test("shows wallet gate until connected", async ({ page }) => {
     await page.goto("/library.html");
     await expect(page.locator(SELECTORS.libraryGate)).toBeVisible();

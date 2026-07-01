@@ -7,13 +7,18 @@ import {
   libraryAssetLocator,
   openLibraryCollection,
   generateSaveAndPublish,
+  seedDefaultCollection,
   uniqueAssetName,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "a simple sphere";
 
 // Asset action tests mutate the shared default collection; run serially.
+// They self-seed in beforeAll so they can run in isolation.
 test.describe.serial("Library asset actions", () => {
+  test.beforeAll(async ({ browser }) => {
+    await seedDefaultCollection(browser);
+  });
   test("renames an asset from the context menu", async ({ page }) => {
     const originalName = uniqueAssetName("Rename Me");
     const renamedName = uniqueAssetName("Renamed Asset");
