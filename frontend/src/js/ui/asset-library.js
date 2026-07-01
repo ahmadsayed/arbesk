@@ -77,7 +77,7 @@ function _writeOwnedTokensCache(chainId, address, lastScannedBlock, owned) {
 
 /**
  * Fetch Transfer events for a specific address in small block chunks.
- * Public RPCs like Monad Testnet reject wide eth_getLogs ranges with 413.
+ * Public RPCs like Base Sepolia reject wide eth_getLogs ranges with 413.
  * @param {number} latest - pre-fetched current block number
  */
 async function fetchTransferEvents(contract, address, direction, startBlock, latest) {

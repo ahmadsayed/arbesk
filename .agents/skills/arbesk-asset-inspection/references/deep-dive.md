@@ -15,8 +15,7 @@ Supported networks (from `constants/chains.js` / `frontend/src/js/blockchain/net
 | Chain ID | Name | RPC |
 |----------|------|-----|
 | 31415822 | Hardhat local | `http://127.0.0.1:8545` |
-| 6343 | MegaETH Testnet | `https://carrot.megaeth.com/rpc` |
-| 10143 | Monad Testnet | `https://testnet-rpc.monad.xyz/` |
+| 84532 | Base Sepolia Testnet | `https://sepolia.base.org` |
 
 ## Key Files
 

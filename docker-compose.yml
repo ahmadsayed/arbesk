@@ -42,7 +42,7 @@ services:
     # docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
     #
     # For testnet/mainnet deploy, pass env vars inline:
-    # docker compose run --rm -e PRIVATE_KEY=0x... hardhat npx hardhat run scripts/deploy.js --network megaethTestnet
+    # docker compose run --rm -e PRIVATE_KEY=0x... hardhat npx hardhat run scripts/deploy.js --network baseSepolia
     restart: unless-stopped
 
   nostr:

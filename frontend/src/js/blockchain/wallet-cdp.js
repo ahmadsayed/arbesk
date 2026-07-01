@@ -7,8 +7,6 @@
  * which is wrapped in an ERC-4337 smart account (the token owner on-chain).
  * Transactions are sent as sponsored UserOperations via the CDP Paymaster.
  * Smart wallets are supported on Base Sepolia only.
- *
- * Follows the same structural pattern as the removed wallet-thirdweb.js.
  */
 
 import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut } from "@coinbase/cdp-core";

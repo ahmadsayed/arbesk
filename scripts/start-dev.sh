@@ -6,7 +6,7 @@ set -e
 #
 #   ./scripts/start-dev.sh              → local:  IPFS + Hardhat + Nostr + backend       (UI testing)
 #   ./scripts/start-dev.sh --setup-only → local:  IPFS + Hardhat + Nostr, no backend     (E2E testing)
-#   ./scripts/start-dev.sh --testnet    → testnet: MegaETH Testnet + Pinata + Nostr + backend
+#   ./scripts/start-dev.sh --testnet    → testnet: Base Sepolia Testnet + Pinata + Nostr + backend
 #
 # Flags:
 #   --print-project   Print the Docker Compose project name and exit.
@@ -139,8 +139,8 @@ else
   [ -z "$PINATA_JWT" ]            && { echo "❌ PINATA_JWT is not set."; MISSING=1; }
   [ -z "$CONTRACT_ADDRESS" ]      && { echo "❌ CONTRACT_ADDRESS is not set."; MISSING=1; }
 
-  if [ -z "$API_URL" ] || [[ ! "$API_URL" =~ carrot\.megaeth ]]; then
-    echo "⚠️  API_URL is '${API_URL:-}'. For testnet it should point to MegaETH Testnet."
+  if [ -z "$API_URL" ] || [[ "$API_URL" =~ (localhost|127\.0\.0\.1) ]]; then
+    echo "⚠️  API_URL is '${API_URL:-}'. For testnet it should point to Base Sepolia Testnet."
   fi
 
   if [ "$MISSING" -ne 0 ]; then
@@ -218,7 +218,7 @@ else
   echo "   API:        http://localhost:${BACKEND_PORT}/api"
   echo "   IPFS:       Pinata (remote)"
   echo "   Nostr:      ws://127.0.0.1:7777 (Docker)"
-  echo "   Network:    MegaETH Testnet  |  Chain: 6343 (0x18c7)"
+  echo "   Network:    Base Sepolia Testnet  |  Chain: 84532 (0x14a33)"
   echo "   RPC:        ${API_URL}"
   echo "   Contract:   ${CONTRACT_ADDRESS}"
 fi
