@@ -143,9 +143,9 @@ Three `.env` files exist and are gitignored — **never commit them**:
 - `.env` (root) — backend + cloud adapters
 - `frontend/.env` — build-time public vars (currently unused)
 
-### Wallet Auto-Restore Is CDP-Only
+### Wallet Auto-Restore Is Silent (No Popup)
 
-`wallet-core.js` `initWallet()` calls `autoConnectCdpOnly()`. EOA/WalletConnect auto-connect is disabled; those users must click Login / Signup explicitly. The verified CDP email is stored in `localStorage` key `arbesk-cdp-email` and shown in `header-wallet-button.js`.
+`wallet-core.js` `initWallet()` calls `autoConnectWallet()`, which silently restores the last connection — CDP, EOA (injected), or WalletConnect — using `eth_accounts` / session checks. No popup is shown: a first-time visitor has no authorized account, so nothing happens and they still see Login / Signup, while a returning user keeps their login across page navigations (`index` → `studio` → `library` are separate HTML documents). Page-init scripts must **not** call `autoConnectWallet()` directly — `initWallet()` owns the restore (enforced by `build.test.js` / `library-init.test.js`). The verified CDP email is stored in `localStorage` key `arbesk-cdp-email` and shown in `header-wallet-button.js`.
 
 ### Base Sepolia RPC Split
 

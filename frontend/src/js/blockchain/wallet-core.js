@@ -105,10 +105,13 @@ function newWeb3(provider) {
 function initWallet() {
   startDiscovery();
   log("[WALLET] EIP-6963 discovery started");
-  // Only attempt silent CDP restore. EOA auto-connect was disabled because it
-  // feels too busy for Web2 users arriving at the page.
-  autoConnectCdpOnly().catch((err) => {
-    warn("[WALLET] CDP auto-connect failed:", err);
+  // Silently restore the previous connection (CDP, EOA, or WalletConnect) via
+  // eth_accounts / session checks — no popup is ever shown. First-time visitors
+  // have no authorized account, so nothing happens and they still see
+  // Login / Signup. This is what keeps an EOA login alive across page
+  // navigations (index → studio → library are separate HTML documents).
+  autoConnectWallet().catch((err) => {
+    warn("[WALLET] auto-connect failed:", err);
   });
 }
 
@@ -227,7 +230,7 @@ async function autoConnectWallet() {
       try {
         const config = await (await import("../services/api.js")).getConfig();
         if (config?.cdpProjectId) {
-          const { initCdpClient, autoConnectCdpWallet } = await import("./wallet-cdp.js");
+          const { initCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.js");
           await initCdpClient(config.cdpProjectId);
           const cdpResult = await autoConnectCdpWallet();
           if (cdpResult) {
@@ -235,13 +238,18 @@ async function autoConnectWallet() {
             web3 = newWeb3(cdpResult.provider);
             window.web3 = web3;
             activeConnectionSource = "cdp";
-            await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress);
+            const email = getCdpEmail() || cdpResult.email || null;
+            await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
             return;
           }
         }
+        // lastWallet was "cdp" but restore did not connect — don't fall
+        // through to the injected-wallet probe below.
+        return;
       } catch (cdpErr) {
         warn("[WALLET] CDP auto-connect failed:", cdpErr.message);
         localStorage.removeItem(LAST_WALLET_KEY);
+        return;
       }
     } else if (lastWallet === "walletconnect") {
       // Try WalletConnect silent restore
@@ -305,39 +313,6 @@ async function autoConnectWallet() {
   }
 }
 
-/**
- * Silent restore for CDP email sessions only.
- * EOA and WalletConnect wallets are intentionally skipped so the page shows
- * Login / Signup until the user explicitly connects.
- */
-async function autoConnectCdpOnly() {
-  try {
-    const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
-    if (lastWallet !== "cdp") return;
-
-    const config = await (await import("../services/api.js")).getConfig();
-    if (!config?.cdpProjectId) return;
-
-    const { initCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.js");
-    await initCdpClient(config.cdpProjectId);
-    const cdpResult = await autoConnectCdpWallet();
-    if (!cdpResult) {
-      localStorage.removeItem(LAST_WALLET_KEY);
-      return;
-    }
-
-    web3Provider = cdpResult.provider;
-    web3 = newWeb3(cdpResult.provider);
-    window.web3 = web3;
-    activeConnectionSource = "cdp";
-    const email = getCdpEmail() || cdpResult.email || null;
-    await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
-  } catch (err) {
-    warn("[WALLET] CDP auto-connect failed:", err.message);
-    localStorage.removeItem(LAST_WALLET_KEY);
-  }
-}
-
 // ─── Shared setup ───
 
 /**
@@ -355,8 +330,12 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
   walletState.set({ chainId });
   log("Connected wallet:", address, "chainId:", chainId);
 
-  // Prompt network switch if not on a supported chain
-  if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+  // Prompt network switch if not on a supported chain.
+  // CDP smart wallets are pinned to Base Sepolia, so this only applies to EOA/WC.
+  if (
+    activeConnectionSource !== "cdp" &&
+    !SUPPORTED_CHAIN_IDS.includes(chainId)
+  ) {
     let preferred =
       localStorage.getItem("arbesk-preferred-network") || "baseSepolia";
     // Guard against stale/unknown network keys stored in localStorage
@@ -369,11 +348,11 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
       preferred = "baseSepolia";
     }
     try {
-      const net = NETWORKS[preferred];
-      await web3Provider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: net.chainId }],
-      });
+      // switchNetwork falls back to wallet_addEthereumChain when the chain
+      // is unknown to the wallet (MetaMask 4902 / Rabby -32603), so a wallet
+      // that has never seen Base Sepolia gets prompted to add it.
+      const { switchNetwork } = await import("./wallet-network.js");
+      await switchNetwork(preferred);
       chainId = Number(await web3.eth.getChainId());
       walletState.set({ chainId });
     } catch {
@@ -395,8 +374,26 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
   // Setup listeners (only once per provider)
   _attachProviderListeners();
 
-  // Eagerly authenticate (non-blocking)
-  authenticateUser();
+  // Only authenticate once we're on a supported chain. If the network switch
+  // above was declined, the SIWE message would carry an unsupported chainId
+  // and the backend rejects the session (400 Unsupported chain ID). Surface a
+  // clear prompt instead of spamming failed session-creation requests.
+  if (SUPPORTED_CHAIN_IDS.includes(chainId)) {
+    // Eagerly authenticate (non-blocking)
+    authenticateUser();
+  } else {
+    warn(
+      `[WALLET] Connected on unsupported chain ${chainId}; ` +
+        `skipping session auth until the user switches network.`
+    );
+    showToast({
+      type: "warning",
+      title: "Wrong Network",
+      message:
+        "Arbesk runs on Base Sepolia. Switch networks in your wallet to continue.",
+      duration: 0,
+    });
+  }
 }
 
 // ─── Provider listeners ───
