@@ -323,9 +323,9 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**Unit / integration coverage: 1005 Jest tests across 67 suites (all passing).**
+**Unit / integration coverage: 1018 Jest tests across 70 suites (all passing).**
 
-**E2E coverage (17 specs, 35 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07a` collection asset cards · `07b` material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `99` viewport resize regression. Per-spec contract: `e2e/README.md`.
+**E2E coverage (16 specs, 33 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards and material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
 
 Opt-in E2E coverage is collected via Chromium V8 and merged with Jest coverage:
 - `npm run test:e2e:coverage` — run E2E with coverage

@@ -8,8 +8,8 @@ services:
     # Swarm ports are intentionally not published — the daemon binds swarm to
     # the container's loopback and has no bootstrap peers.
     ports:
-      - "127.0.0.1:5001:5001" # IPFS API
-      - "127.0.0.1:8080:8080" # IPFS Gateway
+      - "127.0.0.1:${IPFS_API_PORT:-5001}:5001" # IPFS API
+      - "127.0.0.1:${IPFS_GW_PORT:-8080}:8080" # IPFS Gateway
     volumes:
       - ipfs-data:/data/ipfs
     # Isolation is enforced inside the daemon, not at the Docker network layer:
@@ -22,7 +22,7 @@ services:
       context: .
       dockerfile: docker/hardhat.Dockerfile
     ports:
-      - "127.0.0.1:8545:8545" # Hardhat local EVM network
+      - "127.0.0.1:${HARDHAT_HOST_PORT:-8545}:8545" # Hardhat local EVM network
     volumes:
       # Mount project files individually so the host's empty node_modules
       # directory does not shadow the image's installed dependencies.
@@ -50,7 +50,7 @@ services:
     # Private/local-only relay: exposed on loopback for studio dev use.
     # No federation or public peering is configured.
     ports:
-      - "127.0.0.1:7777:7777" # Nostr relay WebSocket
+      - "127.0.0.1:${NOSTR_HOST_PORT:-7777}:7777" # Nostr relay WebSocket
     volumes:
       # nostr-rs-relay reads config.toml from its working directory (/usr/src/app)
       - ./docker/nostr-relay.toml:/usr/src/app/config.toml:ro

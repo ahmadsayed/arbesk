@@ -6,7 +6,9 @@
  * Index 0 is the legacy TEST_WALLET used by the rest of the suite.
  */
 
-export const HARDHAT_RPC = "http://127.0.0.1:8545";
+import { HARDHAT_RPC } from "../lib/infra.mjs";
+
+export { HARDHAT_RPC };
 
 export const HARDHAT_ACCOUNTS = [
   {

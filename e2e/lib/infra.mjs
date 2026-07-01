@@ -48,9 +48,34 @@ export const WORKTREE_ID = deriveWorktreeId(ROOT);
 // Docker Compose project names are restricted to [a-z0-9_-].
 export const COMPOSE_PROJECT = `arbesk-${WORKTREE_ID.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
 
-export const BACKEND_PORT = deriveBackendPort(ROOT, WORKTREE_ID);
-export const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
-export const HARDHAT_RPC = "http://127.0.0.1:8545";
+const BACKEND_PORT_BASE = deriveBackendPort(ROOT, WORKTREE_ID);
+
+export const E2E_WORKERS = Number(process.env.E2E_WORKERS) || 4;
+
+/**
+ * Return the host ports/URLs for a given Playwright worker index.
+ * Worker 0 keeps the current single-stack project/ports (backward compatible
+ * with the existing one-stack E2E flow); worker i > 0 offsets from there.
+ */
+export function portsForWorker(i) {
+  const backendPort = BACKEND_PORT_BASE + i;
+  const suffix = i === 0 ? "" : `-w${i}`;
+  return {
+    backendPort,
+    backendUrl: `http://127.0.0.1:${backendPort}`,
+    hardhatRpc: `http://127.0.0.1:${8545 + i}`,
+    ipfsApiUrl: `http://127.0.0.1:${5001 + i}`,
+    ipfsGatewayUrl: `http://127.0.0.1:${8080 + i}`,
+    nostrUrl: `ws://127.0.0.1:${7777 + i}`,
+    composeProject: `${COMPOSE_PROJECT}${suffix}`,
+  };
+}
+
+const CURRENT_WORKER_INDEX = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
+export const BACKEND_PORT = portsForWorker(CURRENT_WORKER_INDEX).backendPort;
+export const BACKEND_URL = portsForWorker(CURRENT_WORKER_INDEX).backendUrl;
+export const HARDHAT_RPC = portsForWorker(CURRENT_WORKER_INDEX).hardhatRpc;
+export const IPFS_GATEWAY = portsForWorker(CURRENT_WORKER_INDEX).ipfsGatewayUrl;
 
 // Shared handoff between global setup and global teardown. Playwright loads the
 // setup and teardown modules in separate evaluations, so in-memory state (the
@@ -72,13 +97,14 @@ export function log(step) {
 }
 
 /**
- * Check whether a Docker Compose service is running for this worktree's
- * project. Using the project name isolates worktrees from each other.
+ * Check whether a Docker Compose service is running for the given project.
+ * Defaults to this worktree's project. Using the project name isolates
+ * worktrees and parallel workers from each other.
  */
-export function isServiceRunning(service) {
+export function isServiceRunning(service, composeProject = COMPOSE_PROJECT) {
   try {
     const out = execSync(
-      `docker compose -p "${COMPOSE_PROJECT}" ps --services --filter "status=running"`,
+      `docker compose -p "${composeProject}" ps --services --filter "status=running"`,
       { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
     );
     return out
@@ -111,8 +137,8 @@ export function clearState() {
   }
 }
 
-async function rpc(method, params = []) {
-  const res = await fetch(HARDHAT_RPC, {
+async function rpc(rpcUrl, method, params = []) {
+  const res = await fetch(rpcUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -137,9 +163,9 @@ async function rpc(method, params = []) {
  * No-op when the Hardhat node isn't reachable yet - in that case
  * start-dev.sh will start it and deploy fresh anyway.
  */
-export async function resetHardhatChain() {
+export async function resetHardhatChain(rpcUrl = HARDHAT_RPC) {
   try {
-    await rpc("hardhat_reset");
+    await rpc(rpcUrl, "hardhat_reset");
     log("Hardhat chain reset to genesis (forces fresh contract deploy)");
   } catch (err) {
     log("Hardhat not reachable for reset (will deploy fresh): " + err.message);

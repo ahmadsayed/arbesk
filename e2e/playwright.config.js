@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { BACKEND_URL } from "./lib/infra.mjs";
+import { E2E_WORKERS } from "./lib/infra.mjs";
 
 export default defineConfig({
   testDir: "./specs",
@@ -16,10 +16,11 @@ export default defineConfig({
   // only passes on retry still shows up flaky in the report).
   retries: process.env.CI ? 2 : 1,
   fullyParallel: false,
-  workers: 1,
+  workers: E2E_WORKERS,
   reporter: "list",
   use: {
-    baseURL: BACKEND_URL,
+    // baseURL is provided per-worker by e2e/fixtures/test.mjs so that each
+    // Playwright worker navigates to its own backend stack.
     headless: true,
     screenshot: "only-on-failure",
     video: "retain-on-failure",

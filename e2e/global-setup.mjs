@@ -1,14 +1,13 @@
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import WebSocket from "ws";
 import {
   ROOT,
-  BACKEND_PORT,
-  BACKEND_URL,
-  COMPOSE_PROJECT,
+  E2E_WORKERS,
+  portsForWorker,
   log,
   sleep,
-  isServiceRunning,
   resetHardhatChain,
   writeState,
 } from "./lib/infra.mjs";
@@ -19,9 +18,9 @@ function readEnvVar(envPath, key) {
   return match ? match[1].trim() : null;
 }
 
-function patchConfigFile(configPath, freeAddress, paidAddress, usdcAddress) {
+function patchConfigFile(configPath, freeAddress, paidAddress, usdcAddress, hardhatRpc) {
   let config = fs.readFileSync(configPath, "utf8");
-  // Replace only the address values inside the Hardhat Local config block
+  // Replace only the address/rpc values inside the Hardhat Local config block
   // so that other fields (chainId, blockExplorer, etc.) are preserved.
   config = config.replace(
     /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?contractAddress: )"[^"]*"/,
@@ -35,10 +34,16 @@ function patchConfigFile(configPath, freeAddress, paidAddress, usdcAddress) {
     /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?usdcToken: )"[^"]*"/,
     `$1"${usdcAddress || "0x5FbDB2315678afecb367f032d93F642f64180aa3"}"`,
   );
+  if (hardhatRpc) {
+    config = config.replace(
+      /(\[CHAIN_IDS\.HARDHAT_LOCAL\]: \{[\s\S]*?rpcUrl: )"[^"]*"/,
+      `$1"${hardhatRpc}"`,
+    );
+  }
   fs.writeFileSync(configPath, config);
 }
 
-function syncNetworkConfigWithDeployedAddresses() {
+function syncNetworkConfigWithDeployedAddresses(hardhatRpc) {
   const blockchainEnvPath = path.join(ROOT, "blockchain", ".env");
   const networkConfigPath = path.join(
     ROOT,
@@ -61,13 +66,13 @@ function syncNetworkConfigWithDeployedAddresses() {
     return;
   }
 
-  patchConfigFile(networkConfigPath, freeAddress, paidAddress, usdcAddress);
+  patchConfigFile(networkConfigPath, freeAddress, paidAddress, usdcAddress, hardhatRpc);
   log(
     `Patched network-config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
   );
 
   if (fs.existsSync(backendConfigPath)) {
-    patchConfigFile(backendConfigPath, freeAddress, paidAddress, usdcAddress);
+    patchConfigFile(backendConfigPath, freeAddress, paidAddress, usdcAddress, hardhatRpc);
     log(
       `Patched src/config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
     );
@@ -88,49 +93,150 @@ async function waitForPort(port, host = "127.0.0.1", timeoutMs = 30000) {
   throw new Error(`Port ${port} did not become ready in ${timeoutMs}ms`);
 }
 
-export default async function globalSetup() {
-  log(
-    `Starting infrastructure for worktree ${COMPOSE_PROJECT} on backend port ${BACKEND_PORT}...`,
-  );
+async function waitForHardhatRpc(rpcUrl, timeoutMs = 60000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_blockNumber",
+          params: [],
+        }),
+      });
+      const data = await res.json();
+      if (data.result !== undefined) return;
+    } catch {
+      // not ready
+    }
+    await sleep(500);
+  }
+  throw new Error(`Hardhat RPC ${rpcUrl} did not become ready in ${timeoutMs}ms`);
+}
 
-  const ipfsRunning = isServiceRunning("ipfs");
-  const hardhatRunning = isServiceRunning("hardhat");
-  log(`Existing services: ipfs=${ipfsRunning} hardhat=${hardhatRunning}`);
-  const weStartedInfra = !ipfsRunning || !hardhatRunning;
+async function waitForIpfsApi(apiUrl, timeoutMs = 120000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(`${apiUrl}/api/v0/version`, { method: "POST" });
+      if (res.ok) return;
+    } catch {
+      // not ready
+    }
+    await sleep(500);
+  }
+  throw new Error(`IPFS API ${apiUrl} did not become ready in ${timeoutMs}ms`);
+}
 
-  // Clean-chain reset BEFORE start-dev.sh: if Hardhat is already running we wipe
-  // it so the next deploy is fresh (no leftover tokens, reset daily quota).
-  // start-dev.sh then sees the old contract has no bytecode and redeploys.
-  if (hardhatRunning) {
-    await resetHardhatChain();
+async function waitForNostrRelay(nostrUrl, timeoutMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await new Promise((resolve, reject) => {
+        const ws = new WebSocket(nostrUrl);
+        const timer = setTimeout(() => {
+          ws.terminate();
+          reject(new Error("timeout"));
+        }, 2000);
+        ws.on("open", () => {
+          clearTimeout(timer);
+          ws.close();
+          resolve();
+        });
+        ws.on("error", (err) => {
+          clearTimeout(timer);
+          ws.terminate();
+          reject(err);
+        });
+      });
+      return;
+    } catch {
+      // not ready
+    }
+    await sleep(500);
+  }
+  throw new Error(`Nostr relay ${nostrUrl} did not become ready in ${timeoutMs}ms`);
+}
+
+function clearUsdcTokenEnv() {
+  const envPath = path.join(ROOT, "blockchain", ".env");
+  if (!fs.existsSync(envPath)) return;
+  const env = fs
+    .readFileSync(envPath, "utf8")
+    .split("\n")
+    .filter((line) => !line.startsWith("USDC_TOKEN="))
+    .join("\n");
+  fs.writeFileSync(envPath, env);
+}
+
+async function startStack(i) {
+  const ports = portsForWorker(i);
+  log(`Starting stack for worker ${i} (project ${ports.composeProject})...`);
+
+  // Always begin from a clean state for this worker's project.
+  try {
+    execSync(`docker compose -p "${ports.composeProject}" down --volumes --remove-orphans`, {
+      stdio: "ignore",
+      cwd: ROOT,
+      timeout: 60000,
+    });
+  } catch {
+    // ignore cleanup errors
   }
 
-  log("Running start-dev.sh --setup-only...");
-  execSync("./scripts/start-dev.sh --setup-only", {
-    stdio: "inherit",
-    cwd: ROOT,
-    env: { ...process.env, COMPOSE_PROJECT_NAME: COMPOSE_PROJECT },
-    timeout: 300000,
-  });
-  log("start-dev.sh finished");
+  const env = {
+    ...process.env,
+    HARDHAT_HOST_PORT: String(8545 + i),
+    IPFS_API_PORT: String(5001 + i),
+    IPFS_GW_PORT: String(8080 + i),
+    NOSTR_HOST_PORT: String(7777 + i),
+  };
 
-  log("Syncing network-config.js with deployed contract addresses...");
-  syncNetworkConfigWithDeployedAddresses();
-  log("Rebuilding frontend with synced contract addresses...");
-  execSync("npm run build:frontend", {
+  execSync(`docker compose -p "${ports.composeProject}" up -d`, {
     stdio: "inherit",
     cwd: ROOT,
+    env,
     timeout: 120000,
   });
-  log("Frontend rebuilt");
 
-  log(`Checking backend on ${BACKEND_PORT}...`);
+  // Wait for the services we need before returning.
+  await waitForHardhatRpc(ports.hardhatRpc);
+  log(`Worker ${i}: Hardhat RPC ready on ${ports.hardhatRpc}`);
+  await waitForIpfsApi(ports.ipfsApiUrl);
+  log(`Worker ${i}: IPFS API ready on ${ports.ipfsApiUrl}`);
+  await waitForNostrRelay(ports.nostrUrl);
+  log(`Worker ${i}: Nostr relay ready on ${ports.nostrUrl}`);
+}
+
+async function deployToStack(composeProject) {
+  // Force a fresh MockUSDC deploy by removing any cached address.
+  clearUsdcTokenEnv();
+
+  // The deploy runs inside the container, so it targets the container's own
+  // Hardhat node on port 8545 regardless of the host port mapping.
+  execSync(
+    `docker compose -p "${composeProject}" exec -T hardhat npx hardhat run scripts/deploy.js --network localhost`,
+    {
+      stdio: "inherit",
+      cwd: ROOT,
+      timeout: 120000,
+    },
+  );
+}
+
+async function startBackend(i) {
+  const ports = portsForWorker(i);
+  log(`Checking backend for worker ${i} on ${ports.backendPort}...`);
+
   let backendAlreadyRunning = false;
   try {
-    const res = await fetch(`${BACKEND_URL}/studio`);
+    const res = await fetch(`${ports.backendUrl}/studio`);
     if (res.ok) {
       backendAlreadyRunning = true;
-      log(`Backend already running on ${BACKEND_PORT}; reusing it`);
+      log(`Worker ${i}: backend already running on ${ports.backendPort}; reusing it`);
     }
   } catch {
     // not running - start it
@@ -138,12 +244,18 @@ export default async function globalSetup() {
 
   let backendPid = null;
   if (!backendAlreadyRunning) {
-    log(`Starting backend on ${BACKEND_PORT}...`);
+    log(`Worker ${i}: starting backend on ${ports.backendPort}...`);
     const backendProcess = spawn("node", ["src/index.js"], {
       cwd: ROOT,
       env: {
         ...process.env,
-        PORT: String(BACKEND_PORT),
+        PORT: String(ports.backendPort),
+        API_URL: ports.hardhatRpc,
+        HARDHAT_RPC_URL: ports.hardhatRpc,
+        IPFS_API_URL: ports.ipfsApiUrl,
+        IPFS_GATEWAY_URL: `${ports.ipfsGatewayUrl}/ipfs/`,
+        NOSTR_RELAY_URL: ports.nostrUrl,
+        IPFS_BACKEND: "kubo",
         MOCK_3D_GENERATION: "true",
         // E2E repeatedly decomposes glTF nodes and mints upload credentials;
         // keep the per-minute credential limit from blocking the suite.
@@ -154,28 +266,19 @@ export default async function globalSetup() {
     });
 
     backendProcess.on("error", (err) => {
-      console.error("[E2E] backend process error:", err.message);
+      console.error(`[E2E] backend process error (worker ${i}):`, err.message);
     });
 
     backendPid = backendProcess.pid;
-    await waitForPort(BACKEND_PORT);
-    log(`Backend ready on ${BACKEND_PORT}`);
+    await waitForPort(ports.backendPort);
+    log(`Worker ${i}: backend ready on ${ports.backendPort}`);
   }
-
-  // Persist handoff state for teardown (separate module evaluation).
-  writeState({ weStartedInfra, backendPid, backendPort: BACKEND_PORT });
-
-  log("Infrastructure ready");
 
   // Reset the in-memory backend rate limiter so repeated E2E runs do not
   // exhaust the per-wallet generation quota left over from previous runs.
   try {
-    // The /api/v1 router enforces Content-Type: application/json (requireJson),
-    // so this POST must send the header + a body or it 415s and the reset
-    // silently no-ops - letting the per-wallet 10-gen/hour limit accumulate
-    // across runs until generation starts failing with "Rate limit reached".
     const resetRes = await fetch(
-      `${BACKEND_URL}/api/v1/test/reset-rate-limit`,
+      `${ports.backendUrl}/api/v1/test/reset-rate-limit`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -183,11 +286,77 @@ export default async function globalSetup() {
       },
     );
     if (resetRes.ok) {
-      log("Rate limiter reset");
+      log(`Worker ${i}: rate limiter reset`);
     } else {
-      log("WARN: rate-limiter reset endpoint returned " + resetRes.status);
+      log(
+        `Worker ${i}: WARN: rate-limiter reset endpoint returned ${resetRes.status}`,
+      );
     }
   } catch (err) {
-    log("WARN: could not reset rate limiter: " + err.message);
+    log(`Worker ${i}: WARN: could not reset rate limiter: ${err.message}`);
   }
+
+  return {
+    workerIndex: i,
+    composeProject: ports.composeProject,
+    backendPid,
+    backendPort: ports.backendPort,
+    weStartedInfra: true,
+  };
+}
+
+export default async function globalSetup() {
+  log(`Starting infrastructure for ${E2E_WORKERS} E2E worker(s)...`);
+
+  // Phase 1: start all Docker stacks in parallel.
+  await Promise.all(
+    Array.from({ length: E2E_WORKERS }, (_, i) => startStack(i)),
+  );
+  log("All Docker stacks ready");
+
+  // Phase 2: compile once. blockchain/artifacts is host-mounted and shared
+  // across all Hardhat containers.
+  const ports0 = portsForWorker(0);
+  log("Compiling contracts once (shared artifacts)...");
+  execSync(
+    `docker compose -p "${ports0.composeProject}" exec -T hardhat npx hardhat compile`,
+    {
+      stdio: "inherit",
+      cwd: ROOT,
+      timeout: 120000,
+    },
+  );
+  log("Contracts compiled");
+
+  // Phase 3: deploy sequentially per worker. Sequential avoids a race writing
+  // the shared blockchain/.env; deterministic addresses mean order is irrelevant.
+  for (let i = 0; i < E2E_WORKERS; i++) {
+    const ports = portsForWorker(i);
+    log(`Deploying contracts for worker ${i}...`);
+    await resetHardhatChain(ports.hardhatRpc);
+    await deployToStack(ports.composeProject);
+    log(`Worker ${i}: contracts deployed`);
+  }
+
+  // Phase 4: sync addresses and build frontend once. Contract addresses are
+  // identical across workers, so a single build serves all workers.
+  log("Syncing network-config.js with deployed contract addresses...");
+  syncNetworkConfigWithDeployedAddresses(ports0.hardhatRpc);
+  log("Rebuilding frontend with synced contract addresses...");
+  execSync("npm run build:frontend", {
+    stdio: "inherit",
+    cwd: ROOT,
+    timeout: 120000,
+  });
+  log("Frontend rebuilt");
+
+  // Phase 5: start backends in parallel.
+  const workers = await Promise.all(
+    Array.from({ length: E2E_WORKERS }, (_, i) => startBackend(i)),
+  );
+
+  // Persist handoff state for teardown (separate module evaluation).
+  writeState({ workers });
+
+  log("Infrastructure ready");
 }

@@ -68,15 +68,17 @@ export function getUsdcToken(chainId) {
 
 /** @param {any} chainId */
 export function getRpcUrl(chainId) {
+  const envUrl = process.env.API_URL || process.env.HARDHAT_RPC_URL;
   if (chainId) {
-    const url = getNetworkConfig(chainId)?.rpcUrl;
-    if (url) return url;
+    const cfg = getNetworkConfig(chainId);
+    if (cfg) {
+      // For local/dev networks, allow env override so parallel E2E stacks
+      // (each on its own Hardhat port) can point each backend at its own node.
+      if (cfg.name === "Hardhat Local" && envUrl) return envUrl;
+      if (cfg.rpcUrl) return cfg.rpcUrl;
+    }
   }
-  return (
-    process.env.API_URL ||
-    process.env.HARDHAT_RPC_URL ||
-    "http://127.0.0.1:8545"
-  );
+  return envUrl || "http://127.0.0.1:8545";
 }
 
 // ─── Web3 Instances ──────────────────────────────────────────────────────────

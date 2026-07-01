@@ -14,24 +14,47 @@ From the repo root:
 npx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
 
-The global setup (`e2e/global-setup.mjs`) delegates infrastructure boot to `scripts/start-dev.sh --setup-only`, which:
+The global setup (`e2e/global-setup.mjs`) orchestrates the test infrastructure directly:
 
-1. Tears down any existing worktree containers for a clean start.
-2. Starts Docker (IPFS + Hardhat + Nostr), resets the Hardhat chain to genesis.
-3. Compiles and deploys fresh `ArbeskAssetFree` + `ArbeskAsset` + `MockUSDC`.
+1. Starts one complete Docker stack per Playwright worker (IPFS + Hardhat + Nostr).
+2. Resets each Hardhat chain to genesis.
+3. Compiles contracts once and deploys fresh `ArbeskAssetFree` + `ArbeskAsset` + `MockUSDC` per stack.
 4. Syncs deployed addresses to `.env` files and JS network configs.
-5. Builds the frontend.
-6. Exits (no backend — global-setup then starts the Express backend with `MOCK_3D_GENERATION=true`).
+5. Builds the frontend once.
+6. Starts one Express backend per worker with `MOCK_3D_GENERATION=true`.
 
-You can also run the setup standalone to pre-warm the environment:
-
-```bash
-./scripts/start-dev.sh --setup-only
-```
-
-The global teardown (`e2e/global-teardown.mjs`) stops the backend and brings the Docker containers down (only if this run started them).
+The global teardown (`e2e/global-teardown.mjs`) stops all backends and brings every worker's Docker stack down.
 
 No manual `node src/index.js` is required.
+
+### Parallel workers
+
+By default the suite runs with **4 workers**, each with its own isolated stack. Set `E2E_WORKERS=N` to override:
+
+```bash
+# Run with the default 4 workers
+npx playwright test --config=e2e/playwright.config.js --project=chromium
+
+# Run with a different number of workers
+E2E_WORKERS=1 npx playwright test --config=e2e/playwright.config.js --project=chromium
+```
+
+Per-worker port scheme (worker index `i`):
+
+| Service | Port |
+|---|---|
+| Backend | `deriveBackendPort(root) + i` (`9090 + i` on the main checkout) |
+| Hardhat RPC | `8545 + i` |
+| IPFS API | `5001 + i` |
+| IPFS Gateway | `8080 + i` |
+| Nostr relay | `7777 + i` |
+| Compose project | `<worktree-project>-w${i}` |
+
+Requirements and caveats:
+
+- **RAM:** the default **4 workers** typically need **6–8 GB** peak. Machines with less than 8 GB should reduce workers with `E2E_WORKERS=1` or `E2E_WORKERS=2`.
+- **Port availability:** the host ports above must be free for each worker index. If they are already in use, the run will fail during global setup.
+- **Coverage:** `E2E_COVERAGE=1` is not yet validated with `E2E_WORKERS > 1`.
 
 ---
 
@@ -64,7 +87,7 @@ You can also stop the current worktree's stack after a run:
 docker compose -p $(./scripts/start-dev.sh --print-project 2>/dev/null || echo arbesk) down
 ```
 
-> **Note:** Hardhat (`8545`), IPFS (`5001`/`8080`), and Nostr (`7777`) still use fixed host ports. True concurrent E2E runs across worktrees on the same machine require stopping one stack before starting another; the isolation guarantees that each stack uses the correct worktree's files.
+> **Note:** The non-backend services still use fixed host ports within a single run (`8545`, `5001`/`8080`, `7777` for worker 0). When `E2E_WORKERS > 1` each worker offsets from those bases. True concurrent E2E runs across *worktrees* on the same machine require stopping one stack before starting another; the isolation guarantees that each stack uses the correct worktree's files.
 
 ---
 

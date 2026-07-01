@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { BACKEND_URL, HARDHAT_RPC } from "../lib/infra.mjs";
+import { BACKEND_URL, HARDHAT_RPC, IPFS_GATEWAY } from "../lib/infra.mjs";
 import Web3 from "web3";
 
-const IPFS_GATEWAY = "http://127.0.0.1:8080/ipfs";
+const IPFS_GATEWAY_URL = `${IPFS_GATEWAY}/ipfs`;
 
 /**
  * Regex matching a `?manifest=` or `&manifest=` value. Supports both CIDv0
@@ -61,7 +61,7 @@ function normalizeTokenURI(uri) {
 }
 
 export async function fetchManifest(cid) {
-  const res = await fetch(`${IPFS_GATEWAY}/${cid}`);
+  const res = await fetch(`${IPFS_GATEWAY_URL}/${cid}`);
   if (!res.ok)
     throw new Error(`Failed to fetch manifest ${cid}: ${res.status}`);
   return res.json();

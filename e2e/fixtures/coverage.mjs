@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect } from "./test.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import v8ToIstanbul from "v8-to-istanbul";
