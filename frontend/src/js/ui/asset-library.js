@@ -21,7 +21,7 @@ import { deleteAssetFromCollection } from "../services/asset-delete.js";
 import { trimTokenId } from "../utils/library-items.js";
 import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
-import { switchView } from "./sidebar.js";
+import { switchView, getActiveView } from "./sidebar.js";
 import { CHAIN_IDS, DEPLOYMENT_BLOCKS } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
@@ -31,6 +31,7 @@ import { getOwnedTokens } from "../services/api.js";
 let assetLibraryBody = null;
 let libraryRenderInFlight = false;
 let libraryRenderPending = false;
+let _libraryDirty = false;
 
 function getContract() {
   return walletContract || walletState.get().contract || null;
@@ -660,10 +661,13 @@ function createInaccessibleCard(entry) {
 
 function createAssetCard(entry) {
   const item = document.createElement("div");
-  item.className = "asset-card";
+  item.className = `asset-card ${
+    entry.role === "editor" ? "asset-card--editor" : ""
+  }`.trim();
   item.dataset.tokenId = entry.tokenId;
   if (entry.assetId) item.dataset.assetId = entry.assetId;
   item.dataset.manifestCid = entry.manifestCid;
+  if (entry.collectionCid) item.dataset.collectionCid = entry.collectionCid;
   item.draggable = true;
   item.tabIndex = 0;
   item.setAttribute("role", "button");
@@ -850,6 +854,54 @@ async function refreshAssetLibrary() {
   }
 }
 
+/**
+ * Update just the active asset's gallery card after publish, using the
+ * in-memory manifest. Avoids re-fetching every asset in the collection when
+ * only one asset changed.
+ */
+async function updateActiveAssetCard() {
+  if (!assetLibraryBody) return false;
+
+  const { activeAssetTokenId, activeAssetId, activeAssetManifestCid } =
+    assetState.get();
+  const tokenId = normalizeTokenId(activeAssetTokenId);
+  const assetId = activeAssetId ? String(activeAssetId) : null;
+  if (!tokenId || !assetId || !activeAssetManifestCid) return false;
+
+  const currentManifest = assetState.get().currentManifest;
+  if (
+    !currentManifest ||
+    currentManifest._manifestCid !== activeAssetManifestCid
+  ) {
+    return false;
+  }
+
+  const selector = `.asset-card[data-token-id="${tokenId}"][data-asset-id="${assetId}"]`;
+  const oldCard = assetLibraryBody.querySelector(selector);
+  if (!oldCard) return false;
+
+  const role = oldCard.classList.contains("asset-card--editor")
+    ? "editor"
+    : "owner";
+  const collectionCid = oldCard.dataset.collectionCid || null;
+
+  const entry = {
+    type: "asset",
+    tokenId: String(activeAssetTokenId),
+    assetId,
+    manifestCid: activeAssetManifestCid,
+    collectionCid,
+    name: currentManifest.name || assetId,
+    thumbnail: currentManifest.thumbnail || null,
+    isCollection: Boolean(collectionCid),
+    role,
+  };
+
+  const newCard = createAssetCard(entry);
+  oldCard.replaceWith(newCard);
+  return true;
+}
+
 function highlightActiveAsset() {
   if (!assetLibraryBody) return;
   const { activeAssetTokenId, activeAssetId } = assetState.get();
@@ -902,6 +954,25 @@ function initAssetLibrary() {
 
 on(EVENTS.SCENE_READY, highlightActiveAsset);
 on(EVENTS.ASSET_PUBLISHED, async () => {
+  // Only pay for a gallery update if the library pane is currently visible.
+  // Otherwise mark it dirty and refresh when the user switches back.
+  if (getActiveView() !== "library") {
+    _libraryDirty = true;
+    return;
+  }
+  // Try a cheap targeted update of the active asset card first; fall back to
+  // a full refresh if the card is not currently rendered or the in-memory
+  // manifest is not available.
+  const updated = await updateActiveAssetCard();
+  if (!updated) {
+    await refreshAssetLibrary();
+  }
+  highlightActiveAsset();
+});
+
+on(EVENTS.SIDEBAR_VIEW_CHANGED, async ({ view }) => {
+  if (view !== "library" || !_libraryDirty) return;
+  _libraryDirty = false;
   await refreshAssetLibrary();
   highlightActiveAsset();
 });
@@ -963,4 +1034,5 @@ export {
   fetchAssetLibrary,
   refreshAssetLibrary,
   renderAssetLibrary,
+  updateActiveAssetCard,
 };

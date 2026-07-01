@@ -10,7 +10,7 @@
 import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
+import { assetState, tagManifestCid } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
 import { getManifestNodes } from "../engine/transforms.js";
 
@@ -114,19 +114,32 @@ function buildOutlineTree(nodes) {
 // ─── Rendering ────────────────────────────────────────────────────────
 
 async function refreshOutliner() {
-  const manifest = await getCurrentManifest();
+  const cid = assetState.get().activeAssetManifestCid;
+  const cached = assetState.get().currentManifest;
+
+  let manifest = null;
+  if (cached?._manifestCid === cid) {
+    // Cache hit: currentManifest already holds this CID's manifest, so reuse it
+    // directly — no clone and no redundant write-back. buildOutlineTree clones
+    // the nodes it needs, so the shared reference is never mutated.
+    manifest = cached;
+  } else if (cid) {
+    manifest = await getCurrentManifest();
+    if (manifest) {
+      assetState.set({ currentManifest: tagManifestCid(manifest, cid) });
+    }
+  }
+
   if (!manifest) {
     collapsedNodeIds.clear();
     renderedManifestCid = null;
     renderEmpty();
     return;
   }
-  const cid = assetState.get().activeAssetManifestCid;
   if (cid !== renderedManifestCid) {
     collapsedNodeIds.clear();
     renderedManifestCid = cid;
   }
-  assetState.set({ currentManifest: manifest });
   renderTree(buildOutlineTree(getNodes()));
 }
 

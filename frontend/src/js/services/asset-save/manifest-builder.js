@@ -36,7 +36,7 @@ import {
   clearPendingChildRefs,
   captureAssetThumbnail,
 } from "../../engine/scene-graph.js";
-import { assetState } from "../../state/asset-state.js";
+import { assetState, tagManifestCid } from "../../state/asset-state.js";
 import { log, warn } from "../../utils/log.js";
 
 function isRateLimitError(err) {
@@ -45,6 +45,46 @@ function isRateLimitError(err) {
     err.message.includes("HTTP 429") ||
     err.message.includes("Too Many Requests")
   );
+}
+
+/**
+ * Use the in-memory manifest if it matches the active CID.
+ * Avoids a round-trip to IPFS when the manifest was just produced by a
+ * previous save/publish in the same session.
+ */
+function _useCachedManifest(activeCid) {
+  if (!activeCid) return null;
+  const cached = assetState.get().currentManifest;
+  const hasAssetId = !!cached?.asset_id;
+  const cachedCid = cached?._manifestCid || null;
+  const hit = hasAssetId && (!cachedCid || cachedCid === activeCid);
+  log(
+    `Save: manifest cache | active=${activeCid} cachedCid=${cachedCid} hasAssetId=${hasAssetId} hit=${hit}`
+  );
+  if (!hit) return null;
+  const copy = JSON.parse(JSON.stringify(cached));
+  delete copy._manifestCid;
+  return copy;
+}
+
+/**
+ * In-memory cache of CIDs we have already verified are composite glTFs.
+ * Persists across saves within the same session so a source only pays the
+ * verification fetch once.
+ */
+const _verifiedCompositeCids = new Set();
+
+/**
+ * Heuristic: a source node that already points to a composite glTF.
+ * Our decomposition pipeline sets `format: "gltf"` + `path: "composite.gltf"`
+ * when it stores a composite; this lets us skip an expensive IPFS fetch just
+ * to verify `isComposite()` on no-op save/publish cycles.
+ */
+function looksComposite(node) {
+  if (!node.source?.cid || node.child_ref) return false;
+  if (_verifiedCompositeCids.has(node.source.cid)) return true;
+  const format = (node.source.format || "gltf").toLowerCase();
+  return format === "gltf" && node.source.path === "composite.gltf";
 }
 
 export function advanceManifestVersion(manifest, latestCid) {
@@ -71,8 +111,21 @@ export function manifestsSemanticallyEqual(a, b) {
 /**
  * Try to decompose a single node's source asset.
  * Returns a { nodeId, cid, path, format } result or null if not applicable.
+ *
+ * @param {object} node
+ * @param {object} manifest
+ * @param {Map<string,string>} [dedupMap]
+ * @param {Map<string,*>} [pendingColorEdits] - Source-color edits still to be
+ *   applied. When a node has a pending edit we cannot take the fast path,
+ *   because baking colors into a GLB produces a monolithic glTF that still
+ *   carries the "composite.gltf" path marker and needs one more decomposition.
  */
-async function _decomposeOneNode(node, manifest, dedupMap = null) {
+async function _decomposeOneNode(
+  node,
+  manifest,
+  dedupMap = null,
+  pendingColorEdits = null
+) {
   if (!node.source?.cid || node.child_ref) return null;
 
   const cid = node.source.cid;
@@ -80,6 +133,18 @@ async function _decomposeOneNode(node, manifest, dedupMap = null) {
   log(
     `Decompose save: checking node ${node.node_id} | sourceCid=${cid} format=${format}`
   );
+
+  // Fast path: already-composite sources don't need a fetch to verify.
+  // Skip only when no source-color edit is pending for this node.
+  if (
+    looksComposite(node) &&
+    !pendingColorEdits?.has(node.node_id)
+  ) {
+    log(
+      `Decompose save: node ${node.node_id} already composite (fast path)`
+    );
+    return null;
+  }
 
   try {
     if (format === "glb") {
@@ -89,6 +154,7 @@ async function _decomposeOneNode(node, manifest, dedupMap = null) {
         assetId: manifest.asset_id,
         dedupMap,
       });
+      _verifiedCompositeCids.add(compositeCid);
       log(
         `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
       );
@@ -107,9 +173,18 @@ async function _decomposeOneNode(node, manifest, dedupMap = null) {
     }
     if (isComposite(gltf)) {
       log(
-        `Decompose save: node ${node.node_id} already composite, skipping`
+        `Decompose save: node ${node.node_id} already composite, normalizing path`
       );
-      return null;
+      _verifiedCompositeCids.add(cid);
+      // Normalize the path marker so future no-op saves/publishes can use the
+      // fast path instead of fetching this composite again.
+      return {
+        nodeId: node.node_id,
+        cid,
+        path: "composite.gltf",
+        format: "gltf",
+        normalizeOnly: true,
+      };
     }
 
     const { compositeCid } = await decomposeAndStoreAsync(gltf, {
@@ -117,6 +192,7 @@ async function _decomposeOneNode(node, manifest, dedupMap = null) {
       assetId: manifest.asset_id,
       dedupMap,
     });
+    _verifiedCompositeCids.add(compositeCid);
     log(
       `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
     );
@@ -138,12 +214,20 @@ async function _decomposeOneNode(node, manifest, dedupMap = null) {
  * Already-composite nodes (ipfs:// URIs) are skipped.
  *
  * @param {object} manifest - The manifest being prepared for write
+ * @param {Map<string,string>} [dedupMap]
+ * @param {Map<string,*>} [pendingColorEdits]
  * @returns {Promise<number>} Count of nodes decomposed
  */
-export async function decomposeManifestNodes(manifest, dedupMap = null) {
+export async function decomposeManifestNodes(
+  manifest,
+  dedupMap = null,
+  pendingColorEdits = null
+) {
   const nodes = manifest.scene?.nodes || [];
 
-  const jobs = nodes.map((node) => _decomposeOneNode(node, manifest, dedupMap));
+  const jobs = nodes.map((node) =>
+    _decomposeOneNode(node, manifest, dedupMap, pendingColorEdits)
+  );
 
   const results = await Promise.allSettled(jobs);
   let decomposed = 0;
@@ -154,7 +238,7 @@ export async function decomposeManifestNodes(manifest, dedupMap = null) {
     node.source.cid = r.value.cid;
     node.source.path = r.value.path;
     if (r.value.format) node.source.format = r.value.format;
-    decomposed++;
+    if (!r.value.normalizeOnly) decomposed++;
   }
 
   return decomposed;
@@ -233,8 +317,12 @@ export async function prepareManifestForWrite(assetName) {
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
 
-  if (assetState.get().activeAssetManifestCid) {
-    manifest = await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
+  const activeCid = assetState.get().activeAssetManifestCid;
+  if (activeCid) {
+    manifest = _useCachedManifest(activeCid);
+    if (!manifest) {
+      manifest = await getFromRemoteIPFS(activeCid);
+    }
     manifest.type = "asset";
   } else if (
     pendingRefs.length > 0 ||
@@ -273,11 +361,9 @@ export async function prepareManifestForWrite(assetName) {
     }
   }
 
-  // Resolve the previous manifest(s) early so we can build a hash→CID map for
-  // component deduplication. We fetch both the active manifest and the latest
-  // chain tip; either may reference composites whose buffers/images can be
-  // reused without re-uploading.
-  const activeCid = assetState.get().activeAssetManifestCid;
+  // Resolve the previous manifest(s) for versioning and, when needed, build a
+  // hash→CID map for component deduplication. Reuse the already-loaded active
+  // manifest as the base; only fetch the latest chain tip when it differs.
   const latestCid = await resolveLatestManifestCid();
   log(
     `Save: versioning base | active=${activeCid} latest=${
@@ -287,28 +373,33 @@ export async function prepareManifestForWrite(assetName) {
     } chosenPrev=${latestCid}`
   );
 
-  const cidToFetch = new Map();
-  if (activeCid) cidToFetch.set(activeCid, "base");
-  if (latestCid && latestCid !== activeCid) cidToFetch.set(latestCid, "prev");
-
-  const fetched = new Map();
-  await Promise.all(
-    [...cidToFetch.entries()].map(async ([cid, _key]) => {
-      try {
-        fetched.set(cid, await getFromRemoteIPFS(cid));
-      } catch {
-        // Leave missing manifests as undefined; callers fall back gracefully.
-      }
-    })
-  );
-
-  const baseManifest = fetched.get(activeCid) || null;
+  const baseManifest = manifest;
+  // prevManifest is the versioning + no-op-detection baseline. It MUST be a
+  // snapshot of the manifest as it is now — before decomposeManifestNodes()
+  // mutates `manifest` in place below. Aliasing the live manifest here makes the
+  // later manifestsSemanticallyEqual() check compare the manifest against
+  // itself, so every first save of a fresh draft (latestCid === activeCid) is
+  // wrongly reported as "no changes" and never written. Fetch the distinct chain
+  // tip when it differs; otherwise clone the current manifest.
   const prevManifest =
-    (latestCid ? fetched.get(latestCid) : null) || baseManifest;
-  const dedupMap = await buildDedupMapFromManifests(
-    [baseManifest, prevManifest].filter(Boolean)
+    latestCid && latestCid !== activeCid
+      ? (await getFromRemoteIPFS(latestCid).catch(() => null)) ||
+        JSON.parse(JSON.stringify(baseManifest))
+      : JSON.parse(JSON.stringify(baseManifest));
+
+  const sourceNodes = manifest.scene.nodes.filter(
+    (n) => n.source?.cid && !n.child_ref
   );
-  log(`Save: dedup map built | entries=${dedupMap.size}`);
+  const needsDedup =
+    pendingColors.size > 0 ||
+    sourceNodes.some((n) => !looksComposite(n));
+
+  const dedupMap = needsDedup
+    ? await buildDedupMapFromManifests(
+        [baseManifest, prevManifest].filter(Boolean)
+      )
+    : new Map();
+  log(`Save: dedup map built | entries=${dedupMap.size} skipped=${!needsDedup}`);
 
   // Apply direct source color edits.
   // These mutate the source glTF/GLB asset and update node.source.cid.
@@ -469,7 +560,11 @@ export async function prepareManifestForWrite(assetName) {
   // Decompose monolithic glTF nodes into composite (ipfs://) format.
   // Only affects glTF nodes that haven't been decomposed yet.
   // Runs on both Save Draft and Publish.
-  const decomposedCount = await decomposeManifestNodes(manifest, dedupMap);
+  const decomposedCount = await decomposeManifestNodes(
+    manifest,
+    dedupMap,
+    pendingColors
+  );
   if (decomposedCount > 0) {
     log(
       `Save: decomposed ${decomposedCount} glTF node(s) to composite format`
@@ -527,6 +622,15 @@ export async function saveAssetDraftCore(
     clearPendingPostProcessorEdits();
     clearPendingTransformEdits();
     clearPendingSourceColorEdits();
+    // Keep the in-memory manifest cache aligned with the active CID even when
+    // no new version is written, so the next save/publish can skip the IPFS
+    // round-trip entirely.
+    assetState.set({
+      currentManifest: tagManifestCid(
+        prepared.manifest,
+        assetState.get().activeAssetManifestCid
+      ),
+    });
     return {
       ok: false,
       reason: "no-changes",
@@ -566,6 +670,7 @@ export async function saveAssetDraftCore(
   assetState.set({
     latestAssetManifestCid: cid,
     activeAssetManifestCid: cid,
+    currentManifest: tagManifestCid(prepared.manifest, cid),
   });
 
   clearPendingChildRefs();

@@ -5,6 +5,8 @@
  * Views: Create, Outline, Library, Ledger.
  */
 
+import { emit, EVENTS } from "../events/bus.js";
+
 const VIEWS = ["settings", "chat", "outline", "library", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
 
@@ -109,6 +111,8 @@ function switchView(viewName) {
   // Show selected pane
   viewPanes[viewName].hidden = false;
   activeView = viewName;
+
+  emit(EVENTS.SIDEBAR_VIEW_CHANGED, { view: viewName });
 
   // Update switcher button active states
   switcherBtns.forEach((btn) => {

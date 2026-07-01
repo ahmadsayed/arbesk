@@ -134,6 +134,46 @@ describe("renderAssetLibrary", () => {
   });
 });
 
+describe("updateActiveAssetCard", () => {
+  test("updates the active asset card from in-memory manifest without IPFS fetches", async () => {
+    const {
+      initAssetLibrary,
+      renderAssetLibrary,
+      updateActiveAssetCard,
+    } = await loadModule();
+    initAssetLibrary();
+
+    // Render an initial card for asset-a inside collection 1.
+    assetState.set({ activeCollectionTokenId: "1" });
+    await renderAssetLibrary(["1"], []);
+
+    // Simulate a publish that updated the manifest in memory.
+    assetState.set({
+      activeAssetTokenId: "1",
+      activeAssetId: "asset-a",
+      activeAssetManifestCid: "bafyAUpdated",
+      currentManifest: {
+        type: "asset",
+        name: "Asset A Updated",
+        thumbnail: { cid: "bafyThumbUpdated" },
+        _manifestCid: "bafyAUpdated",
+      },
+    });
+
+    const updated = await updateActiveAssetCard();
+
+    expect(updated).toBe(true);
+    const card = document.querySelector(
+      '.asset-card[data-token-id="1"][data-asset-id="asset-a"]'
+    );
+    expect(card).not.toBeNull();
+    expect(card.querySelector(".asset-card-name").textContent).toBe(
+      "Asset A Updated"
+    );
+    expect(card.dataset.manifestCid).toBe("bafyAUpdated");
+  });
+});
+
 describe("trimTokenId", () => {
   test("short id is returned with hash prefix", () => {
     expect(trimTokenId("12345678")).toBe("#12345678");

@@ -61,6 +61,7 @@ async function loadModule() {
         })),
         set: jest.fn(),
       },
+      tagManifestCid: (manifest, cid) => ({ ...manifest, _manifestCid: cid }),
     })
   );
 
