@@ -29,14 +29,15 @@ No manual `node src/index.js` is required.
 
 ### Parallel workers
 
-By default the suite runs with **4 workers**, each with its own isolated stack. Set `E2E_WORKERS=N` to override:
+By default the suite runs with **1 worker / 1 stack** (lightest — matches CI and
+low-RAM machines). Opt into parallel isolated stacks with `E2E_WORKERS=N`:
 
 ```bash
-# Run with the default 4 workers
+# Default: 1 worker, 1 stack
 npx playwright test --config=e2e/playwright.config.js --project=chromium
 
-# Run with a different number of workers
-E2E_WORKERS=1 npx playwright test --config=e2e/playwright.config.js --project=chromium
+# Opt into parallel isolated stacks (e.g. 4 workers = 4 full stacks)
+E2E_WORKERS=4 npx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
 
 Per-worker port scheme (worker index `i`):
@@ -52,7 +53,7 @@ Per-worker port scheme (worker index `i`):
 
 Requirements and caveats:
 
-- **RAM:** the default **4 workers** typically need **6–8 GB** peak. Machines with less than 8 GB should reduce workers with `E2E_WORKERS=1` or `E2E_WORKERS=2`.
+- **RAM:** the default single worker is lightest. `E2E_WORKERS=4` spins up 4 full stacks (12 containers + 4 backends) and typically needs **6–8 GB** peak — use fewer workers on machines with less than 8 GB.
 - **Port availability:** the host ports above must be free for each worker index. If they are already in use, the run will fail during global setup.
 - **Coverage:** `E2E_COVERAGE=1` is not yet validated with `E2E_WORKERS > 1`.
 

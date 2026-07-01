@@ -50,7 +50,9 @@ export const COMPOSE_PROJECT = `arbesk-${WORKTREE_ID.toLowerCase().replace(/[^a-
 
 const BACKEND_PORT_BASE = deriveBackendPort(ROOT, WORKTREE_ID);
 
-export const E2E_WORKERS = Number(process.env.E2E_WORKERS) || 4;
+// Default to a single worker / single stack (lightest, matches CI and low-RAM
+// machines). Opt into parallel isolated stacks with E2E_WORKERS=N.
+export const E2E_WORKERS = Number(process.env.E2E_WORKERS) || 1;
 
 /**
  * Return the host ports/URLs for a given Playwright worker index.
