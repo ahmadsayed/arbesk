@@ -53,7 +53,7 @@ export function showWalletModal() {
     modal.className = "wallet-modal";
     modal.innerHTML = `
       <div class="wallet-modal-header">
-        <h3 id="wallet-modal-title">Sign in to Arbesk Studio</h3>
+        <h3 id="wallet-modal-title">Sign in to Arbesk</h3>
         <button class="btn btn-icon btn-sm wallet-modal-close" aria-label="Close" title="Close (Escape)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -65,7 +65,7 @@ export function showWalletModal() {
         <p class="wallet-modal-subtitle">Choose how you want to sign in or create an account.</p>
 
         <div class="wallet-section">
-          <p class="wallet-modal-section-label">Email (gasless, Base Sepolia)</p>
+          <p class="wallet-modal-section-label">Email — free, no wallet needed</p>
           <div id="walletEmailStep" class="wallet-email-step">
             <div class="wallet-email-row">
               <input

@@ -9,6 +9,14 @@
   min-height: 0;
 }
 
+// Signed-out gate — center the empty state in the viewport instead of
+// leaving it stranded at the top of an otherwise blank page.
+#libraryGate {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+}
+
 .library-toolbar {
   display: flex;
   align-items: center;

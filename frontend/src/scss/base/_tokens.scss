@@ -28,6 +28,7 @@
   // Accent: warm gold
   --gold-3: #d4a574; // ≈ --arabesque-accent-light
   --gold-5: #a07848; // ≈ --arabesque-accent (darkened for 3:1 focus contrast)
+  --gold-6: #8c673c; // accent surface — 5.1:1 with white text (AA normal size)
   --gold-7: #a07848;
 
   // Semantic
@@ -61,8 +62,8 @@
   --popover-bg-light: var(--choco-2);
   --popover-fg-light: var(--choco-12);
   --border-light: #b89a7a; // darkened for visible surface separation
-  --accent-bg-light: var(--gold-5);
-  --accent-fg-light: var(--choco-12);
+  --accent-bg-light: var(--gold-6);
+  --accent-fg-light: #ffffff;
   --destructive-bg-light: var(--red-3);
   --destructive-fg-light: #ffffff;
   --dim-fg-light: var(--choco-7);
@@ -81,8 +82,8 @@
   --popover-bg-dark: var(--choco-10);
   --popover-fg-dark: var(--choco-2);
   --border-dark: var(--choco-9);
-  --accent-bg-dark: var(--gold-5);
-  --accent-fg-dark: var(--choco-12);
+  --accent-bg-dark: var(--gold-6);
+  --accent-fg-dark: #ffffff;
   --destructive-bg-dark: var(--red-4);
   --destructive-fg-dark: #ffffff;
   --dim-fg-dark: var(--choco-6);
@@ -195,8 +196,8 @@
 // per-element at computed-value time and track light/dark automatically.
 
 :root {
-  // RGB channels of the gold accent (gold-5 #a07848) for rgba() composition.
-  --accent-bg-rgb: 160 120 72;
+  // RGB channels of the gold accent (gold-6 #8c673c) for rgba() composition.
+  --accent-bg-rgb: 140 103 60;
 
   // Glass / elevated floating surfaces
   --glass-blur: 12px;
@@ -215,9 +216,10 @@
   --accent-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent-bg) 55%, transparent);
 
   // Subtle warm gradients (a few % lightness shift — not neon)
+  // Accent mixes only 4% white so the top edge keeps ≥4.5:1 with white text.
   --gradient-accent: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--accent-bg) 92%, white),
+    color-mix(in srgb, var(--accent-bg) 96%, white),
     var(--accent-bg)
   );
   --gradient-headerbar: linear-gradient(

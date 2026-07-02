@@ -56,6 +56,14 @@ describe("setView", () => {
     expect(document.body.dataset.view).toBe("library");
   });
 
+  test("updates document.title per view", async () => {
+    const { setView } = await loadRouter();
+    setView("library");
+    expect(document.title).toBe("Library — Arbesk");
+    setView("studio");
+    expect(document.title).toBe("Studio — Arbesk");
+  });
+
   test("marks the matching page-switcher tab active", async () => {
     const { setView } = await loadRouter();
     setView("library");

@@ -82,6 +82,46 @@ export async function composeGlTFAsync(compositeJson) {
 }
 
 /**
+ * Compose a composite glTF into a renderable Blob of glTF JSON.
+ *
+ * Worker path: the worker composes, stringifies, and encodes the glTF, then
+ * transfers the bytes zero-copy — the main thread never holds the composed
+ * JSON object or pays a giant JSON.stringify. Fallback matches the previous
+ * behavior: main-thread composeGlTF() + JSON.stringify wrapped in a Blob.
+ *
+ * @param {object} compositeJson
+ * @returns {Promise<Blob>} application/json Blob ready for a blob URL
+ */
+export async function composeGlTFToBlobAsync(compositeJson) {
+  if (!compositeJson) {
+    throw new Error("composeGlTFToBlobAsync: gltfJson is null");
+  }
+
+  if (await checkWorkerAvailable()) {
+    try {
+      const { composedBytes } = await getGlTFWorkerPool().exec(
+        "composeToBytes",
+        [
+          {
+            compositeJson,
+            gatewayBase: await gatewayBase(),
+          },
+        ]
+      );
+      return new Blob([composedBytes], { type: "application/json" });
+    } catch (error) {
+      console.warn(
+        "[ASYNC-GLTF] composeToBytes worker failed, falling back:",
+        error.message
+      );
+    }
+  }
+
+  const composed = await composeGlTF(compositeJson);
+  return new Blob([JSON.stringify(composed)], { type: "application/json" });
+}
+
+/**
  * Decompose a standard glTF JSON into a composite + extracted buffers/images.
  * Does NOT upload to IPFS; caller must upload returned bytes and rewrite URIs,
  * or use decomposeAndStoreAsync.

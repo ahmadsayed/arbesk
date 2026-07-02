@@ -537,10 +537,12 @@ async function connectWallet() {
       await _finishWalletSetup(accounts[0]);
     }
   } catch (err) {
-    error("Wallet connection failed:", err);
+    // Closing the picker is a normal action, not a failure — keep it out of
+    // the error log so real connection failures stand out.
     if (err.message?.includes("User cancelled")) {
-      log("User rejected connection");
+      log("User cancelled wallet selection");
     } else {
+      error("Wallet connection failed:", err);
       showToast({
         type: "error",
         title: "Sign In Failed",

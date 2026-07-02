@@ -238,7 +238,7 @@ describe("Manifest comments archive integration", () => {
     expect(JSON.stringify(res.body.error.details.issues)).toMatch(/assetId/i);
   });
 
-  test("returns 500 when relay query fails", async () => {
+  test("returns empty archive when relay query fails", async () => {
     const { WebSocket } = await import("ws");
     WebSocket.mockImplementationOnce(function () {
       this.readyState = 0;
@@ -258,7 +258,8 @@ describe("Manifest comments archive integration", () => {
         assetId: "asset_99",
       });
 
-    expect(res.status).toBe(500);
-    expect(res.body.error.code).toBe("ARCHIVE_FAILED");
+    expect(res.status).toBe(200);
+    expect(res.body.cid).toBeDefined();
+    expect(res.body.eventCount).toBe(0);
   });
 });

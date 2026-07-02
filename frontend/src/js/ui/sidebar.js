@@ -40,6 +40,12 @@ function initSidebar() {
   const stored = localStorage.getItem(STORAGE_KEY);
   switchView(stored && VIEWS.includes(stored) ? stored : "chat");
 
+  // On narrow screens the sidebar overlays the viewport, so it must start
+  // closed or it hides the canvas and prompt input on first visit.
+  if (window.matchMedia("(max-width: 900px)").matches) {
+    collapseSidebar();
+  }
+
   // Pulse the chat button as an empty-state hint (JS owns this, not the template)
   const chatBtn = switcherBtns.find((b) => b.dataset.view === "chat");
   if (chatBtn) chatBtn.classList.add("pulse");

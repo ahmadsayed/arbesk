@@ -101,6 +101,10 @@ app.use(
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
+        // Helmet adds this by default, but browsers ignore it in Report-Only
+        // mode and log a console warning on every page load. Re-add it when
+        // the policy is promoted to enforcing mode.
+        upgradeInsecureRequests: null,
       },
       reportOnly: true,
     },

@@ -99,9 +99,7 @@ export async function composeGlTF(gltfJson) {
   if (composed.images) {
     composed.images.forEach((img, i) => {
       if (!img.uri) return;
-      const mimeType =
-        img.mimeType ||
-        (img.uri.startsWith(IPFS_URI_PREFIX) ? "image/png" : "image/png");
+      const mimeType = img.mimeType || "image/png";
       jobs.push(
         resolveURI(img.uri, gltfJson.images?.[i]?._arbesk, mimeType).then((uri) => {
           composed.images[i] = { ...img, uri };

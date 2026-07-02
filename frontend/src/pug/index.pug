@@ -4,6 +4,14 @@ html(lang="en")
     title Arbesk — 4D Version-Controlled 3D Assets
     meta(charset="utf-8")
     meta(name="viewport", content="width=device-width, initial-scale=1")
+    meta(name="description", content="Arbesk is a 4D 3D-asset platform: generate, edit, and publish 3D worlds where every past version stays open-able. Time is a dimension you can travel — but only backward.")
+    meta(property="og:title", content="Arbesk — 4D Version-Controlled 3D Assets")
+    meta(property="og:description", content="Generate, edit, and publish 3D worlds with built-in version history. Every asset is its own micro-ledger.")
+    meta(property="og:type", content="website")
+    meta(property="og:site_name", content="Arbesk")
+    meta(name="twitter:card", content="summary_large_image")
+    //- TODO: add og:image, og:url, and rel=canonical once the production
+    //- domain is fixed — those tags require absolute URLs.
     link(rel="icon", type="image/webp", href="/logo.webp")
     link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
@@ -16,6 +24,7 @@ html(lang="en")
         --landing-fg: var(--choco-12, #2a1a0e);
         --landing-muted: var(--choco-7, #8c6a4a);
         --landing-gold: var(--gold, #a07848);
+        --landing-gold-strong: var(--gold-6, #8c673c); /* ≥4.5:1 with white text */
         --landing-card: var(--choco-2, #f0e6d8);
         --landing-border: var(--choco-5, #b89a7a);
         --landing-dark: var(--choco-12, #2a1a0e);
@@ -135,7 +144,7 @@ html(lang="en")
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
-        background: var(--landing-gold);
+        background: var(--landing-gold-strong);
         color: #fff;
         padding: 0.95rem 2.25rem;
         border-radius: 999px;
@@ -168,7 +177,7 @@ html(lang="en")
 
       .cta-secondary {
         background: transparent;
-        color: var(--landing-gold);
+        color: var(--landing-gold-strong);
         box-shadow: none;
         border: 1.5px solid color-mix(in srgb, var(--landing-gold) 55%, transparent);
       }
@@ -214,6 +223,13 @@ html(lang="en")
         min-height: 240px;
       }
 
+      /* Grid items default to min-width:auto, which lets fixed-width cards
+         (viewer, memory) force the track past the viewport on phones. */
+      .landing-section .text,
+      .landing-section .visual {
+        min-width: 0;
+      }
+
       /* Real-render visuals fill their frame */
       .asset-render {
         display: block;
@@ -225,7 +241,7 @@ html(lang="en")
       /* Live 3D viewer */
       .viewer-card {
         position: relative;
-        width: 420px;
+        width: min(420px, 100%);
         aspect-ratio: 1 / 1;
         max-width: 100%;
         border-radius: 28px;
@@ -276,12 +292,21 @@ html(lang="en")
         opacity: 1;
       }
 
+      /* The static render shows immediately and crossfades out once the live
+         viewer boots, so fast scrollers never see an empty card. */
       .viewer-card .viewer-fallback {
         position: absolute;
         inset: 0;
-        display: none;
+        display: grid;
         place-items: center;
         padding: 1.5rem;
+        opacity: 1;
+        transition: opacity 0.6s ease;
+      }
+
+      .viewer-card.viewer-ready .viewer-fallback {
+        opacity: 0;
+        pointer-events: none;
       }
 
       .viewer-card.viewer-failed canvas,
@@ -309,7 +334,7 @@ html(lang="en")
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        width: 360px;
+        width: min(360px, 100%);
         max-width: 100%;
         margin: 0 auto;
       }
@@ -360,7 +385,7 @@ html(lang="en")
       .memory-card.touched .memory-stage .memory-hint { opacity: 0; }
 
       .memory-stage .memory-fallback {
-        display: none;
+        display: grid;
         position: absolute;
         inset: 0;
         margin: 0;
@@ -369,6 +394,13 @@ html(lang="en")
         padding: 1.5rem;
         color: var(--landing-muted);
         font-size: 0.95rem;
+        opacity: 1;
+        transition: opacity 0.5s ease;
+      }
+
+      .memory-card.ready .memory-stage .memory-fallback {
+        opacity: 0;
+        pointer-events: none;
       }
 
       .memory-controls {
@@ -653,7 +685,7 @@ html(lang="en")
       }
 
       .band-dark .cta {
-        background: var(--landing-gold);
+        background: var(--landing-gold-strong);
         color: #fff;
       }
 
@@ -830,6 +862,18 @@ html(lang="en")
         }
       }
 
+      /* Keep the sticky header a single row on phones: the logo mark alone
+         identifies the brand, freeing room for the tabs + Launch Studio. */
+      @media (max-width: 520px) {
+        .landing-page .brand-name {
+          display: none;
+        }
+
+        .landing-page .headerbar {
+          padding: 0 var(--size-2, 0.5rem);
+        }
+      }
+
       @media (max-width: 860px) {
         .landing-section,
         .landing-section.reverse {
@@ -871,6 +915,19 @@ html(lang="en")
           scale: 1 !important;
           transition: none !important;
         }
+
+        .cta,
+        .cta svg {
+          transition: none;
+        }
+
+        .cta:hover {
+          transform: none;
+        }
+
+        .cta:hover svg {
+          transform: none;
+        }
       }
 
     noscript
@@ -908,7 +965,6 @@ html(lang="en")
           a.page-switcher-tab(href="/studio") Studio
 
         .headerbar-actions
-          a.btn(href="/library") File Manager
           a.btn.btn-primary(href="/studio") Launch Studio
 
       main
@@ -925,7 +981,7 @@ html(lang="en")
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
                 line(x1="5" y1="12" x2="19" y2="12")
                 polyline(points="12 5 19 12 12 19")
-            a.cta.cta-secondary(href="/library") Launch File Manager
+            a.cta.cta-secondary(href="/library") Browse the Library
 
         section.landing-section.reverse.reveal
           .text
@@ -1037,7 +1093,7 @@ html(lang="en")
           h2.reveal-child-1 Start building the future.
           .cta-row.reveal-child-2
             a.cta(href="/studio") Launch Studio
-            a.cta(href="/library") Launch File Manager
+            a.cta(href="/library") Browse the Library
 
     script.
       (function () {
@@ -1077,6 +1133,9 @@ html(lang="en")
       (function () {
         if (!('IntersectionObserver' in window)) return;
 
+        // Minified core comes from jsDelivr (cdn.babylonjs.com only ships the
+        // unminified build at versioned paths); loaders stay on the BJS CDN.
+        var BJS_CORE = 'https://cdn.jsdelivr.net/npm/babylonjs@9.12.0/babylon.min.js';
         var BJS = 'https://cdn.babylonjs.com/v9.12.0/';
         var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var coreP = null, loadersP = null;
@@ -1092,7 +1151,7 @@ html(lang="en")
           });
         }
         function ensureCore() {
-          if (!coreP) coreP = loadScript(BJS + 'babylon.js');
+          if (!coreP) coreP = loadScript(BJS_CORE);
           return coreP;
         }
         function ensureLoaders() {

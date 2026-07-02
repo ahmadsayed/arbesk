@@ -39,6 +39,30 @@
   }
 }
 
+// ── Narrow-medium screens (700px and below) ──
+// The headerbar stays a single 48px row: drop the title/meta (the bottombar
+// already shows draft status) and collapse doc-action buttons to icons only.
+
+@media (max-width: 700px) {
+  .headerbar {
+    gap: var(--size-1);
+  }
+
+  .headerbar-title,
+  .headerbar-divider {
+    display: none;
+  }
+
+  .headerbar-doc-actions .btn span {
+    display: none;
+  }
+
+  .headerbar-doc-actions .btn {
+    padding-left: var(--size-2);
+    padding-right: var(--size-2);
+  }
+}
+
 // ── Medium screens (480px - 900px) ──
 // Sidebar and inspector overlay content instead of pushing it
 
@@ -91,6 +115,29 @@
 
   .headerbar-actions {
     gap: var(--size-1);
+  }
+
+  // Keep everything on one row: the network pill moves out of the picture
+  // (CDP logins hide it anyway; EOA users switch networks in their wallet),
+  // the wallet button collapses to its icon, tabs and history slim down.
+  .headerbar-network-select {
+    display: none;
+  }
+
+  .headerbar-wallet span {
+    display: none;
+  }
+
+  .headerbar-wallet {
+    padding: 0 var(--size-2);
+  }
+
+  .page-switcher-tab {
+    padding: 4px var(--size-2);
+  }
+
+  #assetHistory {
+    display: none;
   }
 
   .sidebar {

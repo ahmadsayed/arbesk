@@ -148,8 +148,11 @@ async function fetchRawBytes(cid, gatewayBase) {
 
   const url = `${gatewayBase.replace(/\/$/, "")}/${cid}`;
   const downloadPromise = (async () => {
+    // CIDs are content-addressed and immutable, and the gateway serves /ipfs/
+    // with `Cache-Control: ... immutable`, so the shared browser HTTP cache is
+    // always safe here (matches the main thread's remote-ipfs.js).
     const response = await downloadLimiter.run(() =>
-      fetch(url, { cache: "no-store" })
+      fetch(url, { cache: "default" })
     );
     if (!response.ok) {
       throw new Error(
@@ -244,6 +247,19 @@ async function compose(payload) {
   }
 
   return { composedJson: composed };
+}
+
+/**
+ * Compose and serialize in one worker call. Stringifying + encoding the
+ * composed glTF here lets the result cross the worker boundary as a
+ * transferred ArrayBuffer (zero-copy) instead of a structured-cloned JSON
+ * object full of giant base64 strings that the main thread would have to
+ * re-stringify.
+ */
+async function composeToBytes(payload) {
+  const { composedJson } = await compose(payload);
+  const composedBytes = new TextEncoder().encode(JSON.stringify(composedJson));
+  return new Transfer({ composedBytes }, [composedBytes.buffer]);
 }
 
 function decomposeGltf(payload) {
@@ -779,6 +795,8 @@ function wrapWithTransfer(handler) {
 try {
   workerpool.worker({
     compose: wrapWithTransfer(compose),
+    // Builds its own Transfer (transfers composedBytes.buffer directly).
+    composeToBytes,
     decomposeGltf: wrapWithTransfer(decomposeGltf),
     decomposeGlb: wrapWithTransfer(decomposeGlb),
     decomposeAndUploadGltf: wrapWithTransfer(decomposeAndUploadGltf),

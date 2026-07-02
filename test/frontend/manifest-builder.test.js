@@ -32,6 +32,7 @@ async function load() {
   }));
   jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
     composeGlTFAsync: jest.fn(),
+    composeGlTFToBlobAsync: jest.fn(),
     decomposeGlTFAsync: jest.fn(),
     decomposeAndStoreAsync: jest.fn(),
     decomposeGLBAsync: jest.fn(),

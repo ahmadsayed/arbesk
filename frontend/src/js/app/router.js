@@ -66,6 +66,7 @@ export function setView(view, { updateHistory = false, href = null } = {}) {
   document.getElementById("studioView")?.classList.toggle("hidden", view !== "studio");
   document.getElementById("libraryView")?.classList.toggle("hidden", view !== "library");
   document.body.dataset.view = view;
+  document.title = view === "library" ? "Library — Arbesk" : "Studio — Arbesk";
 
   document.querySelectorAll(".page-switcher-tab").forEach((tab) => {
     const tabView = pathToView(new URL(tab.href, location.origin).pathname);

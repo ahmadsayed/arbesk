@@ -593,21 +593,26 @@ export async function saveAssetDraftCore(
   assetName,
   { captureThumbnail = false, publishContext = null } = {}
 ) {
+  // Thumbnail capture (canvas read + upload) is independent of manifest
+  // preparation, so run both concurrently. Failures are non-fatal.
+  const thumbnailPromise = captureThumbnail
+    ? captureAssetThumbnail().catch((thumbnailError) => {
+        warn("[SAVE] thumbnail capture skipped:", thumbnailError.message);
+        return null;
+      })
+    : null;
+
   const prepared = await prepareManifestForWrite(assetName);
   if (!prepared) {
     return { ok: false, reason: "empty" };
   }
 
-  if (captureThumbnail) {
-    try {
-      const thumbnail = await captureAssetThumbnail();
-      if (thumbnail?.cid) {
-        prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
-          ? { ...prepared.manifest.thumbnail, cid: thumbnail.cid }
-          : thumbnail;
-      }
-    } catch (thumbnailError) {
-      warn("[SAVE] thumbnail capture skipped:", thumbnailError.message);
+  if (thumbnailPromise) {
+    const thumbnail = await thumbnailPromise;
+    if (thumbnail?.cid) {
+      prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
+        ? { ...prepared.manifest.thumbnail, cid: thumbnail.cid }
+        : thumbnail;
     }
   }
 
@@ -639,16 +644,9 @@ export async function saveAssetDraftCore(
     };
   }
 
-  // Write manifest directly to IPFS - no backend middleman.
-  // The browser already writes glTF buffers and textures this way.
-  let cid = await writeJSONToIPFS(prepared.manifest, null, {
-    type: prepared.manifest.type,
-    assetId: prepared.manifest.asset_id,
-  });
-
-  // On republish, snapshot the Nostr comment thread to IPFS so the
-  // archive CID is embedded in the manifest. Failures are logged
-  // but never block the save - the manifest is already uploaded.
+  // On republish, snapshot the Nostr comment thread to IPFS first so the
+  // archive CID is embedded in the manifest and it is written only once.
+  // Snapshot failures are logged but never block the save.
   if (publishContext?.tokenId) {
     try {
       const archiveContext = {
@@ -657,15 +655,17 @@ export async function saveAssetDraftCore(
       };
       const { cid: archiveCid } = await snapshotCommentsArchive(archiveContext);
       prepared.manifest.comments_archive_cid = archiveCid;
-      // Re-upload with the archive CID - content differs, so CID changes.
-      cid = await writeJSONToIPFS(prepared.manifest, null, {
-        type: prepared.manifest.type,
-        assetId: prepared.manifest.asset_id,
-      });
     } catch (archiveErr) {
       warn(`[SAVE] comments archive skipped: ${archiveErr.message}`);
     }
   }
+
+  // Write manifest directly to IPFS - no backend middleman.
+  // The browser already writes glTF buffers and textures this way.
+  const cid = await writeJSONToIPFS(prepared.manifest, null, {
+    type: prepared.manifest.type,
+    assetId: prepared.manifest.asset_id,
+  });
 
   assetState.set({
     latestAssetManifestCid: cid,

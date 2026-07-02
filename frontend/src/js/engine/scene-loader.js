@@ -11,7 +11,7 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
-import { composeGlTFAsync } from "../gltf/async-gltf.js";
+import { composeGlTFToBlobAsync } from "../gltf/async-gltf.js";
 import {
   resolveChildRef,
   resolveCollectionChildRef,
@@ -73,11 +73,9 @@ async function loadAsset(src, parentNode, nodeId) {
         }`
       );
 
-      const resolvedGltf = await composeGlTFAsync(gltfJson);
-      const gltfString = JSON.stringify(resolvedGltf);
-      console.log(`[SCENE] glTF stringified | chars=${gltfString.length}`);
+      const gltfBlob = await composeGlTFToBlobAsync(gltfJson);
+      console.log(`[SCENE] glTF composed | bytes=${gltfBlob.size}`);
 
-      const gltfBlob = new Blob([gltfString], { type: "application/json" });
       const blobUrl = URL.createObjectURL(gltfBlob);
 
       const result = await BABYLON.SceneLoader.ImportMeshAsync(

@@ -445,6 +445,34 @@ describe("Deployment Pipeline Integrity", () => {
   });
 
   // ================================================================
+  // 6b. Worker gateway HTTP caching
+  //
+  // CIDs are content-addressed and immutable, and the IPFS gateway serves
+  // /ipfs/ responses with `Cache-Control: ... immutable`. The worker runs
+  // most compose fetches, so it must use the shared browser HTTP cache
+  // (cache: "default", matching remote-ipfs.js) — `no-store` would refetch
+  // every buffer/texture from the gateway on each asset re-open.
+  // ================================================================
+
+  describe("worker gateway HTTP caching", () => {
+    const WORKER_PATH = resolve(
+      ROOT_DIR,
+      "frontend/src/js/workers/gltf-worker.js",
+    );
+
+    test("worker gateway fetches use the browser HTTP cache, not no-store", () => {
+      const content = readFileSync(WORKER_PATH, "utf-8");
+      expect(content).toContain('cache: "default"');
+      expect(content).not.toContain('cache: "no-store"');
+    });
+
+    test("worker registers the composeToBytes op used by composeGlTFToBlobAsync", () => {
+      const content = readFileSync(WORKER_PATH, "utf-8");
+      expect(content).toContain("composeToBytes");
+    });
+  });
+
+  // ================================================================
   // 7. On-chain contract verification
   // ================================================================
 
