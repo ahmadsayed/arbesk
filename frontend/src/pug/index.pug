@@ -997,7 +997,7 @@ html(lang="en")
         section.landing-section.reveal
           .text
             h2.reveal-child-1 Objects have memory.
-            p.reveal-child-2 A scratch, a repaint, a redesign — in the real world, every change stays part of the object. Digital assets should work the same way.
+            p.reveal-child-2 Every edit is a first-class version. The manifest chain stores parametric history so any past state can be reopened without copies.
             p.reveal-child-2.hint-line Click the cube to repaint it — then drag the timeline to travel back through every colour it has ever been.
           .visual.reveal-child-3
             .feature-card.memory-card
@@ -1010,27 +1010,6 @@ html(lang="en")
                 p.memory-status(aria-live="polite")
               ul.memory-log(aria-live="polite")
 
-        section.landing-section.band-dark.reverse.reveal
-          .text
-            h2.reveal-child-1 Time is a dimension.
-            p.reveal-child-2 Arbesk adds history as a first-class axis. Open any past version of any asset, instantly. No copies. No confusion.
-          .visual.reveal-child-3
-            .timeline(aria-label="Version timeline, currently at version 4")
-              .stop
-                span.dot
-                span.label v1
-              .stop
-                span.dot
-                span.label v2
-              .stop
-                span.dot
-                span.label v3
-              .stop.active
-                .thumb
-                  img(src="/landing/asset-howdy.webp", alt="", aria-hidden="true")
-                span.dot
-                span.label v4
-
         section.landing-section.pull-quote.band-dark.reveal
           .quote-mark.reveal-child-1 “
           blockquote.reveal-child-2 The future is what you build.
@@ -1039,7 +1018,7 @@ html(lang="en")
         section.landing-section.reverse.reveal
           .text
             h2.reveal-child-1 Each asset is its own micro-ledger.
-            p.reveal-child-2 Every version is a manifest. Every manifest links to the one before. Data + history, content-addressed and immutable.
+            p.reveal-child-2 A content-addressed manifest chain: each version links to `prev_manifest_cid` via IPFS, making the asset its own immutable audit log.
           .visual.reveal-child-3
             .feature-card.ledger-card
               .ledger-chain
