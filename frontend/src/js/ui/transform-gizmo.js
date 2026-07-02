@@ -135,6 +135,7 @@ function wireEvents(gizmoManager) {
       setMode("translate");
     } else {
       attachToSelected(gizmoManager);
+      updateToolbarUI();
     }
   });
 
