@@ -20,14 +20,17 @@
 
 ## Implementation Notes / Deviations
 
-During inline execution, the following adjustments were made to the original plan to ensure robustness and clean screenshots:
+During inline execution, the following adjustments were made to the original plan to ensure robustness, avoid a blank/white page, and keep the content concise:
 
-- Added a `<script>` in `<head>` that adds `.js-animations` to `<html>`. Reveal/hero animations are only active when this class is present. This keeps content visible if JavaScript fails or is disabled (the `<noscript>` block then also forces visibility).
-- Reveal CSS was restructured so `.reveal .reveal-child-*` defaults to `opacity: 1` and only becomes invisible under `.js-animations`.
-- `.landing-section.band-dark` and `.landing-section.pull-quote` override `max-width: none` so dark bands are full-bleed.
-- The pull quote section received `.band-dark` so it renders as a full-width dark band.
-- Manifest chain SVG coordinates were tightened so M4 is fully visible inside the card.
-- Screenshot verification uses a local HTTP server (`python3 -m http.server`) and a small Playwright script that force-reveals all `.reveal` elements before capture, because full-page CLI screenshots do not trigger `IntersectionObserver` for below-the-fold sections.
+- Added a `<script>` in `<head>` that adds `.js-animations` to `<html>`. Reveal/hero animations are only active when this class is present. Content remains visible if JavaScript fails or is disabled (the `<noscript>` block then also forces visibility).
+- Reveal CSS was restructured so `.reveal .reveal-child-*` defaults to `opacity: 1` and only animates after `.revealed` is added by `IntersectionObserver`; if the observer never fires, content is still readable.
+- The hero was changed from `min-height: 100vh` to a compact auto-height section with stronger gold gradients, a subtle dot-grid texture, a bottom gold rule, and a scroll cue — so the next section is visible above the fold and the page no longer looks like a blank white canvas.
+- `.landing-section.band-dark` overrides `max-width: none` so dark bands are full-bleed.
+- The standalone "Time is a dimension" and "Pull quote" sections were removed; the hero states the time-travel premise once, and the technology sections (Objects have memory, Each asset is its own micro-ledger) were kept brief.
+- "Objects have memory" and "Built for teams" were converted to full-bleed dark bands; "We build in 3D" and "Each asset is its own micro-ledger" use tinted backgrounds. This creates contrast and breaks up the long cream page.
+- Dark-band overrides were added for the colour-memory card so its text remains readable on the dark background.
+- Manifest chain diagram uses inline blocks instead of an SVG.
+- Screenshot verification uses `google-chrome --headless` against a local HTTP server (`python3 -m http.server`) because full-page CLI screenshots do not trigger `IntersectionObserver` for below-the-fold sections.
 
 ---
 

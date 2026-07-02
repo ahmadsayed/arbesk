@@ -111,7 +111,7 @@ html(lang="en")
       .landing-footer {
         width: 100%;
         margin: 0 auto;
-        padding: 7rem 2rem;
+        padding: clamp(3.5rem, 8vh, 5.5rem) 2rem;
       }
 
       .landing-section.band-dark,
@@ -120,12 +120,56 @@ html(lang="en")
       }
 
       .landing-hero {
-        min-height: 100vh;
+        min-height: auto;
+        padding: clamp(4rem, 10vh, 6rem) 2rem clamp(3rem, 7vh, 4.5rem);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         text-align: center;
+        position: relative;
+        isolation: isolate;
+        background:
+          radial-gradient(140% 100% at 50% 0%,
+            color-mix(in srgb, var(--landing-gold) 28%, transparent) 0%,
+            transparent 60%),
+          radial-gradient(120% 80% at 80% 100%,
+            color-mix(in srgb, var(--landing-gold) 16%, transparent) 0%,
+            transparent 50%),
+          radial-gradient(120% 80% at 20% 100%,
+            color-mix(in srgb, var(--landing-gold) 16%, transparent) 0%,
+            transparent 50%),
+          var(--landing-bg);
+      }
+
+      /* Subtle dot grid to break up the flat cream background. */
+      .landing-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        opacity: 0.35;
+        background-image:
+          radial-gradient(circle at center,
+            color-mix(in srgb, var(--landing-gold) 45%, transparent) 1px,
+            transparent 1px);
+        background-size: 28px 28px;
+        mask-image: radial-gradient(80% 80% at 50% 50%, black 0%, transparent 70%);
+        -webkit-mask-image: radial-gradient(80% 80% at 50% 50%, black 0%, transparent 70%);
+      }
+
+      .landing-hero::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: min(800px, 80%);
+        height: 1px;
+        transform: translateX(-50%);
+        background: linear-gradient(90deg,
+          transparent 0%,
+          color-mix(in srgb, var(--landing-gold) 45%, transparent) 50%,
+          transparent 100%);
       }
 
       .landing-hero .lead {
@@ -137,6 +181,31 @@ html(lang="en")
 
       .landing-hero .lead strong {
         color: var(--landing-gold);
+      }
+
+      .scroll-cue {
+        margin-top: clamp(2rem, 5vh, 3.5rem);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--landing-muted);
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.7;
+        animation: kBounce 2s ease-in-out infinite;
+      }
+
+      .scroll-cue svg {
+        width: 24px;
+        height: 24px;
+        stroke: currentColor;
+      }
+
+      @keyframes kBounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(8px); }
       }
 
       /* CTA */
@@ -206,6 +275,14 @@ html(lang="en")
 
       .landing-section.reverse .visual {
         order: 1;
+      }
+
+      /* Alternate section tint — breaks up the long cream page. */
+      .landing-section.section-tint {
+        background:
+          linear-gradient(180deg,
+            color-mix(in srgb, var(--landing-gold) 4%, var(--landing-bg)) 0%,
+            color-mix(in srgb, var(--landing-gold) 7%, var(--landing-bg)) 100%);
       }
 
       .feature-card {
@@ -478,6 +555,33 @@ html(lang="en")
         height: 1.3rem;
       }
 
+      /* Dark-section overrides: keep the light card readable on dark bands. */
+      .band-dark .memory-card {
+        background: var(--landing-card);
+      }
+
+      .band-dark .memory-status,
+      .band-dark .memory-log li,
+      .band-dark .memory-stage .memory-fallback,
+      .band-dark .memory-stage .memory-hint {
+        color: var(--landing-muted);
+      }
+
+      .band-dark .memory-log li.now,
+      .band-dark .memory-log li.active,
+      .band-dark .memory-status strong,
+      .band-dark .text .hint-line {
+        color: var(--landing-fg);
+      }
+
+      .band-dark .memory-log .when {
+        color: color-mix(in srgb, var(--landing-muted) 80%, transparent);
+      }
+
+      .band-dark .memory-log .swatch {
+        border-color: color-mix(in srgb, var(--landing-fg) 18%, transparent);
+      }
+
       .memory-log .when {
         margin-left: auto;
         font-size: 0.82rem;
@@ -739,52 +843,56 @@ html(lang="en")
       }
 
 
-      /* ── Scroll-driven reveals & parallax ──────────────────────────────
-         Modern path  — CSS animation-timeline: view() (Chrome 115+, FF 110+)
-           · Headings  slide in from their outside edge (left on normal, right on
-             .reverse sections) — distinctly horizontal, not the old "fade up".
-           · Body text fades in cleanly, no vertical jump.
-           · Visual cards lift and scale (0.93→1) as they enter.
-           · Visual column drifts against text via a subtle parallax on cover.
-           · animation-range ends before entry 65%, so nothing is ever stuck
-             half-faded — all elements are fully visible once mostly in view.
-         Fallback path — JS IntersectionObserver toggles .revealed for browsers
-           without scroll-timeline support (unchanged behaviour, IO bails out
-           when @supports passes).
+      /* ── Scroll-driven reveals ─────────────────────────────────────────
+         Content is visible by default (SSR / no-JS / animation-failure safe).
+         When JS is available, IntersectionObserver adds .revealed and triggers
+         short CSS animations. No view-timeline dependency, so nothing gets
+         stuck half-faded if the browser implementation is incomplete.
       */
 
-      /* No-JS / SSR baseline: always readable. */
+      /* Base: always readable. */
       .reveal .reveal-child-1,
       .reveal .reveal-child-2,
-      .reveal .reveal-child-3 { opacity: 1; translate: none; scale: 1; }
-
-      /* Fallback: IO path. */
-      .js-animations .reveal .reveal-child-1,
-      .js-animations .reveal .reveal-child-2,
-      .js-animations .reveal .reveal-child-3 {
-        opacity: 0;
-        translate: 0 28px;
-        transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
-                    translate 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+      .reveal .reveal-child-3,
+      .hero-animate {
+        opacity: 1;
+        translate: none;
+        transform: none;
+        scale: 1;
       }
-      .js-animations .reveal.revealed .reveal-child-1 { opacity: 1; translate: none; transition-delay: 0s; }
-      .js-animations .reveal.revealed .reveal-child-2 { opacity: 1; translate: none; transition-delay: 0.12s; }
-      .js-animations .reveal.revealed .reveal-child-3 { opacity: 1; translate: none; transition-delay: 0.26s; }
+
+      /* When JS is on, animate from hidden to visible only after .revealed is
+         added by IntersectionObserver. Before that, no animation applies, so
+         content stays visible as a safe baseline. */
+      .js-animations .reveal.revealed .reveal-child-1,
+      .js-animations .reveal.revealed .reveal-child-2,
+      .js-animations .reveal.revealed .reveal-child-3 {
+        animation-duration: 0.75s;
+        animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+        animation-fill-mode: both;
+      }
+
+      /* Headings slide in from the outside edge. */
+      .js-animations .landing-section:not(.reverse):not(.pull-quote).revealed .text h2.reveal-child-1 { animation-name: kSlideLeft; }
+      .js-animations .landing-section.reverse:not(.pull-quote).revealed .text h2.reveal-child-1 { animation-name: kSlideRight; }
+      /* All other reveal-child-1 elements fade-rise. */
+      .js-animations .reveal.revealed .reveal-child-1 { animation-name: kFadeRise; animation-delay: 0s; }
+      .js-animations .reveal.revealed .reveal-child-2 { animation-name: kFadeRise; animation-delay: 0.12s; }
+      .js-animations .reveal.revealed .reveal-child-3 { animation-name: kCardLift; animation-delay: 0.26s; }
 
       /* Hero entrance — time-based, not scroll-driven. */
-      .hero-animate { opacity: 1; transform: none; }
       .js-animations .hero-animate {
-        opacity: 0;
-        transform: translateY(36px);
         animation: kHeroIn 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
       .js-animations .hero-animate:nth-child(1) { animation-delay: 0.1s; }
       .js-animations .hero-animate:nth-child(2) { animation-delay: 0.25s; }
       .js-animations .hero-animate:nth-child(3) { animation-delay: 0.4s; }
-      @keyframes kHeroIn { to { opacity: 1; transform: none; } }
+      @keyframes kHeroIn {
+        from { opacity: 0; transform: translateY(36px); }
+        to { opacity: 1; transform: none; }
+      }
 
-      /* Keyframes — using individual transform properties (translate, scale) so
-         they compose cleanly with kParallax which uses transform: translateY(). */
+      /* Keyframes */
       @keyframes kSlideLeft  {
         from { opacity: 0; translate: -48px 0; }
         to   { opacity: 1; translate: 0 0; }
@@ -799,67 +907,7 @@ html(lang="en")
       }
       @keyframes kCardLift {
         from { opacity: 0; scale: 0.92; translate: 0 20px; }
-        to   { opacity: 1; scale: 1;    translate: 0 0; }
-      }
-      @keyframes kParallax {
-        from { transform: translateY(26px); }
-        to   { transform: translateY(-26px); }
-      }
-
-      @supports (animation-timeline: view()) {
-        /* All ranges end by entry 36% so even footer elements (which can't be
-           scrolled past) are fully visible at the page's maximum scroll position. */
-
-        /* Child-1: section headings slide in from the outside column edge. */
-        .js-animations .landing-section:not(.pull-quote) h2.reveal-child-1 {
-          opacity: 0; transition: none;
-          animation: kSlideLeft 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-          animation-timeline: view();
-          animation-range: entry 0% entry 28%;
-          will-change: opacity, translate;
-        }
-        .js-animations .landing-section.reverse:not(.pull-quote) h2.reveal-child-1 {
-          opacity: 0; transition: none;
-          animation: kSlideRight 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-          animation-timeline: view();
-          animation-range: entry 0% entry 28%;
-          will-change: opacity, translate;
-        }
-        /* Child-1 for all other contexts (pull-quote mark, footer h2): fade-rise. */
-        .js-animations .reveal .reveal-child-1 {
-          opacity: 0; transition: none;
-          animation: kFadeRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-          animation-timeline: view();
-          animation-range: entry 0% entry 28%;
-          will-change: opacity, translate;
-        }
-
-        /* Child-2: body text, staggered slightly after child-1. */
-        .js-animations .reveal .reveal-child-2 {
-          opacity: 0; transition: none;
-          animation: kFadeRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-          animation-timeline: view();
-          animation-range: entry 5% entry 33%;
-          will-change: opacity, translate;
-        }
-
-        /* Child-3 default: fade-rise (pull-quote body text, footer links). */
-        .js-animations .reveal .reveal-child-3 {
-          opacity: 0; transition: none;
-          animation: kFadeRise 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
-          animation-timeline: view();
-          animation-range: entry 8% entry 36%;
-          will-change: opacity, translate;
-        }
-        /* Child-3 for visual cards: scale lift + simultaneous parallax drift. */
-        .js-animations .landing-section .visual.reveal-child-3 {
-          opacity: 0; transition: none;
-          animation: kCardLift 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
-                     kParallax linear both;
-          animation-timeline: view(), view();
-          animation-range: entry 8% entry 36%, cover 0% cover 100%;
-          will-change: opacity, translate, scale, transform;
-        }
+        to   { opacity: 1; scale: 1; translate: 0 0; }
       }
 
       /* Keep the sticky header a single row on phones: the logo mark alone
@@ -982,8 +1030,12 @@ html(lang="en")
                 line(x1="5" y1="12" x2="19" y2="12")
                 polyline(points="12 5 19 12 12 19")
             a.cta.cta-secondary(href="/library") Browse the Library
+          .scroll-cue(aria-hidden="true")
+            span Scroll
+            svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+              polyline(points="6 9 12 15 18 9")
 
-        section.landing-section.reverse.reveal
+        section.landing-section.reverse.section-tint.reveal
           .text
             h2.reveal-child-1 We build in 3D.
             p.reveal-child-2 Move, rotate, and scale in space. That part is familiar — every 3D tool gives you the three spatial dimensions. Grab the model and see.
@@ -994,7 +1046,7 @@ html(lang="en")
                 img(src="/landing/asset-howdy.webp", alt="A 3D character asset rendered in Arbesk")
               span.viewer-hint Live · drag to rotate
 
-        section.landing-section.reveal
+        section.landing-section.band-dark.reverse.reveal
           .text
             h2.reveal-child-1 Objects have memory.
             p.reveal-child-2 Every edit is a first-class version. The manifest chain stores parametric history so any past state can be reopened without copies.
@@ -1010,7 +1062,7 @@ html(lang="en")
                 p.memory-status(aria-live="polite")
               ul.memory-log(aria-live="polite")
 
-        section.landing-section.reverse.reveal
+        section.landing-section.section-tint.reverse.reveal
           .text
             h2.reveal-child-1 Each asset is its own micro-ledger.
             p.reveal-child-2 A content-addressed manifest chain: each version links to `prev_manifest_cid` via IPFS, making the asset its own immutable audit log.
@@ -1034,7 +1086,7 @@ html(lang="en")
                   span.cid bafy…x4
               .ledger-caption prev_manifest_cid
 
-        section.landing-section.reverse.reveal
+        section.landing-section.band-dark.reverse.reveal
           .text
             h2.reveal-child-1 Built for teams.
             p.reveal-child-2 Comment on assets, invite editors with Merkle proofs, and collaborate on collections — all without reminting or losing history.

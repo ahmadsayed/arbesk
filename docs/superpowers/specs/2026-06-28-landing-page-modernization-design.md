@@ -21,21 +21,21 @@ Modernize `frontend/src/pug/index.pug` with a bold editorial look and smooth tra
 - Pull quote: `clamp(2.5rem, 7vw, 5rem)`, weight 800, centered.
 
 ### Layout
-- Hero: centered, full viewport height (`min-height: 100vh`).
+- Hero: centered, compact viewport presence (`min-height: auto`) with a scroll cue to invite scrolling; not a full-screen blank canvas.
 - Feature sections: asymmetric two-column splits (~55/45 or 60/40), alternating text/visual sides.
 - Each feature section places its visual inside a rounded contrast card (`--choco-2`) with a subtle shadow.
-- Section separators use diagonal `clip-path` polygons on alternating sections to create a slanted scroll rhythm.
-- Pull quote and Time section use full-bleed dark bands (`--choco-12`) with gold/white text.
+- Section separators are clean horizontal rules and alternating light/tint/dark backgrounds; no diagonal clip-path separators.
+- Key sections use full-bleed dark bands (`--choco-12`) with gold/white text to break up the cream background.
 
 ### Section Plan
-1. **Hero** — large centered headline, narrow subtitle, single pill CTA with arrow hover animation.
-2. **We build in 3D** — text left, axes/cube visual inside contrast card right.
-3. **Objects have memory** — ghost-cube visual left, text right.
-4. **Time is a dimension** — full-bleed dark band with gold timeline and overlaid text.
-5. **Pull quote** — full-bleed dark band, gold headline, white supporting text.
-6. **Each asset is its own micro-ledger** — text left, manifest chain inside contrast card right.
-7. **Built for teams** — folder/avatars visual left, text right.
-8. **Footer** — dark band with diagonal top edge, large CTA, Library/Studio links.
+1. **Hero** — large centered headline, narrow subtitle, two CTAs (Launch Studio, Browse Library), and a scroll cue.
+2. **We build in 3D** — text right, live Howdy model viewer inside contrast card left; tinted background.
+3. **Objects have memory** — interactive colour-memory cube inside contrast card left, text right; full-bleed dark band.
+4. **Each asset is its own micro-ledger** — text right, manifest chain diagram inside contrast card left; tinted background.
+5. **Built for teams** — team pedestals visual inside contrast card left, text right; full-bleed dark band.
+6. **Footer** — dark band, large CTA, Library/Studio links.
+
+> **Content note:** The "Time is a dimension" and separate "Pull quote" sections were removed; the hero already states the core time-travel premise once, and the technology sections stay brief.
 
 ### Color & Contrast
 - Base sections: `--landing-bg` background, `--landing-fg` text.
