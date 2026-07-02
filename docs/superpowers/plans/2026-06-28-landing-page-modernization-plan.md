@@ -1,6 +1,8 @@
 # Arbesk Landing Page Modernization — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Historical note:** This plan references `/library.html` for Library links. The current unified SPA serves Library under `/library` inside `app.html`; update links accordingly when implementing.
 
 **Goal:** Modernize `frontend/src/pug/index.pug` with a bold editorial layout, asymmetric sections, diagonal separators, dark contrast bands, and scroll-triggered transitions.
 

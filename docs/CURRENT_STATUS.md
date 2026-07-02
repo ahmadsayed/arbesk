@@ -15,14 +15,14 @@
 | Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.js`, `src/api/adapters/mock-adapter.js`, `docker-compose.yml`, `src/api/storage/` |
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.js`, `frontend/src/js/engine/time-travel.js` |
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
-| Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/studio.pug`, 29 SCSS partials, sidebar/outliner/nesting |
+| Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/app.pug` (unified Studio + Library SPA), 29 SCSS partials, sidebar/outliner/nesting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, browser-side thumbnail upload to IPFS, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
-| Standalone Library Page | ✅ Complete | `library.pug`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
+| Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.js`, `library-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
 | CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.js`, SIWE with `eoaAddress` fallback in `siwe-verify.js`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
@@ -53,7 +53,7 @@ src/
     ├── authentication.js       # Session token validation middleware (SIWE)
     ├── authorization.js        # On-chain asset access checks for chat proxy
     ├── chat-proxy.js           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
-    ├── comments-archive.js     # Asset-level Nostr comment thread → IPFS archive
+    ├── comments-archive.js     # Asset-level Nostr comment thread → IPFS archive; returns empty archive if relay is unreachable
     ├── errors.js               # Standardized error response helper
     ├── ipfs-utils.js           # catManifest() with timeout/abort
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
@@ -82,7 +82,7 @@ src/
 | POST | `/paymaster` | None | CDP Paymaster JSON-RPC proxy — forwards sponsorship requests, keeps `CDP_PAYMASTER_URL` secret |
 | DELETE | `/sessions` | Session | Invalidates session token |
 | POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes |
-| POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId` |
+| POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId`; returns empty archive if the relay is unreachable |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
 | POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
@@ -111,8 +111,8 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 - ✅ Multi-network config (Hardhat `31415822`, Base Sepolia `84532`)
 - ✅ Multi-storage backend (`kubo` local, `pinata` testnet)
 - ✅ Presigned upload URLs for browser uploads
-- ✅ Nostr comments archive snapshot on republish
-- ✅ Standalone Library page (collections, uploads, grid/list, search/sort, context actions)
+- ✅ Nostr comments archive snapshot on republish (resilient: empty archive returned if relay is unreachable)
+- ✅ Unified Studio + Library SPA (collections, uploads, grid/list, search/sort, context actions)
 - ✅ CDP email-login (OTP → embedded EOA → ERC-4337 smart account on Base Sepolia)
 - ✅ Chunked token indexer with per-chain `LOG_CHUNK_SIZES` and force-refresh
 
@@ -143,6 +143,8 @@ frontend/src/js/
 │   ├── studio-init.js          # Studio bootstrap
 │   ├── theme.js / theme-init.js# CSS → Babylon color mapping
 │   └── viewport-gizmo.js       # Corner orientation gizmo
+├── app/
+│   └── router.js               # Unified SPA view router: Studio ⇄ Library
 ├── ui/
 │   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
 │   ├── asset-save.js           # Save Draft / Publish UI; delegates building to services/asset-save/
@@ -155,6 +157,7 @@ frontend/src/js/
 │   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
 │   ├── sidebar.js              # 5-view switcher (Settings/Chat/Outline/Gallery/Activity)
+│   ├── library-controller.js   # Library view orchestration, data loading, and Studio handoff
 │   ├── library-grid.js         # Library grid/list rendering, selection, keyboard, rubber-band; minting/besked/wip status badges
 │   ├── library-toolbar.js      # Breadcrumb, search, sort, view toggle, New Collection, Upload
 │   ├── library-context-menu.js # Library right-click actions (Open, Rename, Burn, Delete, Send to Collection…)
@@ -164,7 +167,7 @@ frontend/src/js/
 │   └── ...
 ├── blockchain/
 │   ├── wallet.js               # Backward-compat barrel; re-exports the split wallet modules
-│   ├── wallet-core.js          # Web3 init, connect/disconnect, CDP-only auto-restore, account state; 250ms polling
+│   ├── wallet-core.js          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA/WalletConnect), account state; 250ms polling
 │   ├── wallet-network.js       # Network switching
 │   ├── wallet-payments.js      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
 │   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
@@ -304,7 +307,7 @@ frontend/src/js/
 | Capability | EOA (MetaMask/Rabby) | CDP Email Login |
 |------------|---------------------|-----------------|
 | Wallet connect | ✅ Base Sepolia + Hardhat | ✅ Base Sepolia only |
-| Auto-reconnect on page load | ❌ | ✅ |
+| Auto-reconnect on page load | ✅ | ✅ |
 | Session auth (no per-tx popups) | ✅ SIWE | ✅ SIWE (embedded EOA signs for smart account) |
 | Mock asset generation | ✅ | ✅ |
 | Save draft + publish (mint NFT) | ✅ | ✅ (gas sponsored) |

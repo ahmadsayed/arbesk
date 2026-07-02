@@ -6,6 +6,8 @@
 **Design spec:** `docs/superpowers/specs/2026-06-30-cdp-email-login-base-design.md`  
 **Related (deprecated):** `docs/superpowers/plans/2026-06-28-thirdweb-aa-plan.md`
 
+> **Historical note:** This plan references separate `studio.pug` / `library.pug` templates. The current frontend uses a unified `frontend/src/pug/app.pug` SPA shell with client-side routing (`frontend/src/js/app/router.js`).
+
 ---
 
 ## Goal

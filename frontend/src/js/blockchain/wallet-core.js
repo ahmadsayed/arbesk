@@ -100,7 +100,8 @@ function newWeb3(provider) {
 
 /**
  * Initialize wallet system. Starts EIP-6963 discovery.
- * Auto-restores CDP email sessions only; EOA wallets require explicit Login / Signup.
+ * Auto-restores the previous connection (CDP, EOA, or WalletConnect) via silent
+ * eth_accounts / session checks — no popup is shown.
  */
 function initWallet() {
   startDiscovery();

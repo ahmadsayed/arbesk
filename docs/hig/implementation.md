@@ -1,6 +1,8 @@
 # Implementation Plan, Migration & Tracking
 
 > Part of [GNOME HIG Unification Plan](README.md)
+>
+> **Historical note:** This plan was written before the Studio + Library SPA unification. The current frontend uses a single `frontend/src/pug/app.pug` shell with client-side routing (`frontend/src/js/app/router.js`) instead of separate `/studio.html` and `/library.html` pages. Keep this in mind when reading references to `studio.pug`, `/library.html`, or `/studio.html` below.
 
 ---
 

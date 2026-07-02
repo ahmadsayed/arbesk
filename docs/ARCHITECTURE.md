@@ -1,6 +1,6 @@
 # Arbesk System Architecture
 
-> Status: Current v0.9 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, and token indexer implemented. Phase 5 server-side micro-ledger is not implemented; the ledger panel is client-side manifest-driven only.
+> Status: Current v0.9 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented. Phase 5 server-side micro-ledger is not implemented; the ledger panel is client-side manifest-driven only.
 > Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child worlds, collection manifests, and studio publishing
 
 ---
@@ -49,8 +49,8 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 │  │  custom wallet picker (EIP-6963 + WalletConnect v2), network       │
 │  │  switching, free/paid generation, mint/update/                     │
 │  │  editor/burn calls (re-exported via wallet.js barrel);             │
-│  │  auto-restore on reload is CDP-only — EOA/WalletConnect require     │
-│  │  explicit Login / Signup                                           │
+│  │  auto-restore on reload for CDP, EOA, and WalletConnect via silent  │
+│  │  eth_accounts / session checks — no popup is shown                  │
 │  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache           │
 │  ├─ write-to-ipfs.js: direct browser→IPFS writes (Kubo/Pinata)       │
 │  ├─ asset-save.js + services/asset-save/:                            │
@@ -62,8 +62,8 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 │  ├─ merkle-editors.js: computeRoot / getProof / makeLeaf             │
 │  ├─ comment-thread.js: per-asset Nostr thread state                  │
 │  ├─ comments-panel.js: asset comment UI                              │
-│  ├─ library-init.js + library-grid.js / library-toolbar.js           │
-│  │  / library-context-menu.js: standalone Library page               │
+│  ├─ library-controller.js + library-grid.js / library-toolbar.js     │
+│  │  / library-context-menu.js: Library view inside unified SPA       │
 │  └─ library-ops.js: create collection, upload glTF/GLB file          │
 │                                                                      │
 │  IPFS writes happen directly from the browser:                       │
@@ -163,7 +163,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
 | glTF | `gltf/merkle-editors.js` | Merkle tree/proof library for editor authorization |
 | Blockchain | `blockchain/wallet.js` | Backward-compat barrel re-exporting `wallet-core.js`, `wallet-connect.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
-| Blockchain | `blockchain/wallet-core.js` | Web3 init, connect/disconnect, account state; auto-restore on reload is CDP-only |
+| Blockchain | `blockchain/wallet-core.js` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |
 | Blockchain | `blockchain/wallet-connect.js` | WalletConnect v2 integration |
 | Blockchain | `blockchain/wallet-discovery.js` | EIP-6963 injected wallets + WalletConnect v2 discovery |
 | Blockchain | `blockchain/wallet-network.js` | Network switching |
@@ -188,7 +188,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | Services | `services/team.js` | Merkle-based editor add/remove |
 | Services | `services/asset-delete.js` | Remove an asset from a collection (direct IPFS write) |
 | State | `state/comment-thread.js` | Per-asset Nostr WebSocket + archive state |
-| UI | `pug/library.pug` | Standalone Library page (built to `dist/library.html`) |
+| UI | `pug/app.pug` | Unified Studio + Library SPA shell (built to `dist/app.html`) |
 | UI | `ui/library-grid.js` | Library grid/list rendering, selection, keyboard shortcuts, rubber-band select |
 | UI | `ui/library-toolbar.js` | Breadcrumb, search, sort, view mode, New Collection, Upload |
 | UI | `ui/library-context-menu.js` | Right-click actions: Open, Open in Studio, Rename, Manage Collaborators, Burn, Delete, Send to Collection |
@@ -335,7 +335,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 - `format` — `"glb"` or `"gltf"`.
 - `bundleCid` *(optional)* — an IPFS UnixFS directory root CID grouping the composite glTF + its `.bin` buffers + textures under their friendly names (`composite.gltf`, `buffer_0.bin`, `texture_0.png`). **Organizational only** — exists so Pinata/Kubo show a browsable folder for the asset. Loading ignores it. Dropped on color-bake edits (JSON-only changes), since re-bundling isn't worth the upload. Burn unpins it alongside `cid`.
 
-**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `state/comment-thread.js` before live relay events are merged.
+**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `state/comment-thread.js` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
 
 **Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides world-level history. The optional `scene.nodes[].history` array can carry a per-node provenance log (generation events, parametric edits); it is consumed by the activity ledger and burn cleanup, but current generation and save paths do not populate it.
 
@@ -473,9 +473,9 @@ Publish
 
 The collection token's `tokenURI` always points to the latest collection manifest CID. Updating an existing asset republishes the collection, not a new token. All manifest and thumbnail writes are direct browser→IPFS; only the comments archive snapshot touches the server (needs Nostr private key).
 
-### 5.4 Library Page (`/library.html`)
+### 5.4 Library View (inside the unified SPA)
 
-`frontend/dist/library.html` is a standalone single-page application linked from the headerbar "Library" tab. It shares the wallet/theme chrome with Studio but has its own state, layout, and JS entry point (`library-init.js`).
+The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). `frontend/src/js/app/router.js` swaps visibility between `#studioView` and `#libraryView`; the Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is still bootstrapped by `library-init.js` and rendered by `library-controller.js`, `library-grid.js`, `library-toolbar.js`, and `library-context-menu.js`.
 
 ---
 
@@ -682,9 +682,11 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 
 | File | Role |
 |------|------|
-| `frontend/src/pug/library.pug` | HTML template → compiled to `frontend/dist/library.html` |
+| `frontend/src/pug/app.pug` | Unified Studio + Library SPA template → compiled to `frontend/dist/app.html` |
+| `frontend/src/js/app/router.js` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume |
 | `frontend/src/js/ui/header-wallet-button.js` | Shared header wallet button; shows email for CDP users and hides the network selector |
-| `frontend/src/js/library-init.js` | Page bootstrap: wallet gate, data loading, event wiring |
+| `frontend/src/js/library-init.js` | Library view bootstrap: wallet gate, data loading, event wiring |
+| `frontend/src/js/ui/library-controller.js` | Library view orchestration and Studio handoff |
 | `frontend/src/js/ui/library-grid.js` | Grid/list rendering, selection, keyboard handling, rubber-band |
 | `frontend/src/js/ui/library-toolbar.js` | Toolbar rendering and event handlers |
 | `frontend/src/js/ui/library-context-menu.js` | Right-click menu construction and actions |

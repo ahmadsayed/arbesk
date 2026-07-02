@@ -275,7 +275,8 @@ Comments are scoped per asset using the canonical tag `<chainId>:<contractAddres
 | 400 | `tokenId` or `assetId` missing |
 | 401 | Missing or invalid session |
 | 503 | Contract address not configured |
-| 500 | Archive creation failed |
+
+**Relay failures.** If the configured Nostr relay is unreachable, the endpoint returns `200` with an empty archive (`eventCount: 0`) instead of failing. This keeps republish flows resilient when the relay is down and makes the route testable without a live relay.
 
 ---
 

@@ -3,7 +3,7 @@
 **Status:** Approved (UI/UX only — backend/persistence intentionally out of scope)
 **Date:** 2026-06-20
 
-> **Implemented as:** The Library page shipped as a **blockchain collection/asset browser**, not a local file manager. It displays on-chain collections (one per token) and expands each collection into its asset cards. Folders, local upload/drop, and the "Save vs. Besk it" local-only states described in this spec were not implemented; persistence is on-chain/IPFS via the same save/publish flow used in Studio. The standalone `frontend/src/pug/library.pug` page exists alongside a Library/Gallery sidebar view inside `studio.pug`.
+> **Implemented as:** The Library page shipped as a **blockchain collection/asset browser**, not a local file manager. It displays on-chain collections (one per token) and expands each collection into its asset cards. Folders, local upload/drop, and the "Save vs. Besk it" local-only states described in this spec were not implemented; persistence is on-chain/IPFS via the same save/publish flow used in Studio. The Library view was later merged into the unified Studio + Library SPA (`frontend/src/pug/app.pug`, `frontend/src/js/app/router.js`); `frontend/src/pug/library.pug` and the separate `/library.html` build output are no longer used.
 
 ## Purpose
 

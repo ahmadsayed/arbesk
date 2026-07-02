@@ -28,7 +28,7 @@ The goal of every change: **make the interface feel like a native GNOME applicat
 5. **All viewport chrome has `metadata.isViewportChrome = true`** so `clearScene()` preserves it.
 6. **Rebuild after every change** — `npm run build:frontend`. Backend serves `dist/`, not `src/`.
 7. **Babylon.js is a CDN global** — never `import` it. The studio HTML loads it via `<script>`.
-8. **Pug has no includes** — everything is in `studio.pug`.
+8. **Pug has no includes** — the unified SPA shell is in `app.pug` (Studio + Library views).
 9. **SCSS components need `@use` in `styles.scss`** — a new file won't be built unless imported.
 10. **Use CSS variables, not raw px** — spacing, colors, radii, durations all from tokens.
 11. **UI changes must keep E2E in sync** — `e2e/helpers/studio-selectors.mjs` is a public contract. Renaming an `id`/class/label, changing a status message, or reordering a flow breaks the specs. Update selectors + specs and run the suite. See [→ E2E Sync](./references/e2e-sync.md).

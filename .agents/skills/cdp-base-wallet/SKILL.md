@@ -47,7 +47,7 @@ User email ──► signInWithEmail() ──► verifyEmailOTP() ──► crea
 - `frontend/src/js/blockchain/wallet-cdp.js` — CDP SDK wrapper + EIP-1193 shim
 - `frontend/src/js/ui/wallet-modal.js` — email OTP UI; clears stale CDP browser state before starting a new OTP flow
 - `frontend/src/js/ui/header-wallet-button.js` — displays the CDP user's email and hides the network selector for CDP sessions
-- `frontend/src/js/blockchain/wallet-core.js` — wallet connection orchestration; persists the CDP email in `localStorage` under `arbesk-cdp-email` and auto-restores CDP sessions on page load
+- `frontend/src/js/blockchain/wallet-core.js` — wallet connection orchestration; persists the CDP email in `localStorage` under `arbesk-cdp-email` and auto-restores CDP, EOA, and WalletConnect sessions on page load
 - `frontend/src/js/blockchain/smart-wallet-support.js` — Base Sepolia chain gating
 - `frontend/src/js/blockchain/wallet-publishing.js` — publish/updateURI with smart-account gas skipping
 - `src/api/routes/paymaster.js` — backend paymaster proxy (reserved for production custom paymasters)
@@ -66,7 +66,7 @@ CDP Portal:
 
 Frontend persistence:
 - `wallet-core.js` stores the CDP email in `localStorage` key `arbesk-cdp-email` so the header can display the user's email after sign-in. This value is cleared on disconnect.
-- CDP auto-restore on page reload is CDP-only; EOA wallets must reconnect through the wallet modal.
+- `wallet-core.js` stores the last-used wallet identifier (`arbesk-last-wallet`) and auto-restores CDP, EOA, and WalletConnect sessions on page reload via silent `eth_accounts` / session checks — no popup is shown.
 
 ## Implementation Rules
 

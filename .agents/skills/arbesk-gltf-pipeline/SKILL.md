@@ -38,7 +38,9 @@ Use this skill when working with any glTF or GLB-related code in the Arbesk proj
 | `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` runtime overlays | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/engine/parametric-preview.js` | Inspector UI for color/scale/mesh overrides | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/services/asset-save/manifest-builder.js` | `prepareManifestForWrite()` — save/publish flow | [→ Deep Dive](./references/deep-dive.md) |
-| `frontend/src/js/gltf/async-gltf.js` | Off-main-thread decompose fallback (`decomposeGlTFAsync`, `decomposeAndStoreAsync`) | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/gltf/async-gltf.js` | Worker-pool wrappers for compose, decompose, GLB parse, and source-color edits (fallback to main thread) | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/workers/gltf-worker-pool.js` | Manages a `workerpool` of `gltf-worker.js` instances for off-main-thread glTF work | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/workers/gltf-worker.js` | Web Worker entry point: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS write | [→ Deep Dive](./references/deep-dive.md) |
 | `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS read | [→ Deep Dive](./references/deep-dive.md) |
 

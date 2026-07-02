@@ -109,7 +109,7 @@ Studio shows a virtual "default collection" placeholder before the user has mint
 
 ## Studio UX implications (high-level — detailed in implementation plan)
 
-> **Implemented as:** The Studio sidebar Gallery and the standalone Library page both expand each collection token into one card per `assets` entry (`frontend/src/js/ui/asset-library.js::expandTokenToAssets`). The token ID still means "collection," but the user browses and opens individual assets, not a raw collection card. The default collection token ID is derived deterministically from the wallet address via `deriveDefaultCollectionId` (`frontend/src/js/utils/collections.js`), not from the manifest CID. Manifest and collection writes happen client-side directly to IPFS; there is no `POST /api/v1/manifests` backend route.
+> **Implemented as:** The Studio sidebar Gallery and the Library view inside the unified SPA both expand each collection token into one card per `assets` entry (`frontend/src/js/ui/asset-library.js::expandTokenToAssets`). The token ID still means "collection," but the user browses and opens individual assets, not a raw collection card. The default collection token ID is derived deterministically from the wallet address via `deriveDefaultCollectionId` (`frontend/src/js/utils/collections.js`), not from the manifest CID. Manifest and collection writes happen client-side directly to IPFS; there is no `POST /api/v1/manifests` backend route.
 
 - Gallery now lists **collections** (tokenId-level), not individual assets. The token ID always means "collection."
 - Selecting a collection in the gallery shows its `assets` map as a browsable list; selecting an asset within shows that asset's scene.
