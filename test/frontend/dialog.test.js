@@ -14,7 +14,7 @@
  */
 
 import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
-import { showDialog, showConfirmDialog, showInfoDialog } from "../../frontend/src/js/ui/dialog.js";
+import { showDialog, showConfirmDialog, showInfoDialog, showForkOrLiveRefDialog } from "../../frontend/src/js/ui/dialog.js";
 
 // ─── MockFocusTrap ────────────────────────────────────────────────────────────
 // Minimal stand-in for window.focusTrap (loaded via CDN in studio.pug).
@@ -208,4 +208,32 @@ test("showInfoDialog resolves when Escape is pressed", async () => {
   const p = showInfoDialog("Info", "<p>Done</p>");
   pressKey(document, "Escape");
   await expect(p).resolves.not.toThrow();
+});
+
+// ─── showForkOrLiveRefDialog ──────────────────────────────────────────────────
+
+test("showForkOrLiveRefDialog offers both fork and live-ref by default", () => {
+  showForkOrLiveRefDialog("asset_1");
+  const labels = [...document.querySelectorAll(".dialog-actions button")].map(
+    (b) => b.textContent.trim()
+  );
+  expect(labels).toContain("Fork (copy)");
+  expect(labels).toContain("Live reference");
+});
+
+test("showForkOrLiveRefDialog hides live-ref when allowLiveRef is false", () => {
+  showForkOrLiveRefDialog("asset_1", { allowLiveRef: false });
+  const labels = [...document.querySelectorAll(".dialog-actions button")].map(
+    (b) => b.textContent.trim()
+  );
+  expect(labels).toContain("Fork (copy)");
+  expect(labels).not.toContain("Live reference");
+});
+
+test("showForkOrLiveRefDialog fork-only mode still resolves 'fork'", async () => {
+  const p = showForkOrLiveRefDialog("asset_1", { allowLiveRef: false });
+  [...document.querySelectorAll(".dialog-actions button")]
+    .find((b) => b.textContent.trim() === "Fork (copy)")
+    .click();
+  expect(await p).toBe("fork");
 });

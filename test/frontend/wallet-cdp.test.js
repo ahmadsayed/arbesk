@@ -39,6 +39,21 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+describe("resetCdpStorage", () => {
+  test("clears CDP/coinbase localStorage keys, app email key, and signs out", async () => {
+    localStorage.setItem("cdp-session", "stale");
+    localStorage.setItem("coinbase-cache", "stale");
+    localStorage.setItem("arbesk-cdp-email", "stale@example.com");
+
+    const { resetCdpStorage } = await loadModule();
+    await resetCdpStorage();
+
+    expect(localStorage.getItem("cdp-session")).toBeNull();
+    expect(localStorage.getItem("coinbase-cache")).toBeNull();
+    expect(localStorage.getItem("arbesk-cdp-email")).toBeNull();
+  });
+});
+
 describe("buildCdpEip1193Provider eth_sendTransaction — UserOperation confirmation", () => {
   test("resolves with transactionHash as soon as it appears, before status reaches 'complete'", async () => {
     _getUserOperationImpl = async () => ({

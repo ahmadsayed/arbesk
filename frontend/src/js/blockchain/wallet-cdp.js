@@ -116,6 +116,9 @@ export async function resetCdpStorage() {
         localStorage.removeItem(key);
       }
     }
+    // Also clear the app-level CDP email key so a stale header/display value
+    // does not survive into the next login attempt.
+    clearCdpEmail();
     if (window.indexedDB) {
       const dbs = await window.indexedDB.databases?.();
       for (const db of dbs ?? []) {

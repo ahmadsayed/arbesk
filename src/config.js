@@ -7,6 +7,8 @@
  */
 
 import Web3 from "web3";
+import http_ from "http";
+import https_ from "https";
 import { createPublicClient, http } from "viem";
 import { CHAIN_IDS } from "../constants/chains.js";
 
@@ -14,6 +16,29 @@ import { CHAIN_IDS } from "../constants/chains.js";
 // so alias it to any for construction while keeping the runtime default import.
 /** @type {any} */
 const Web3Ctor = Web3;
+
+// Keep-alive agents shared across all web3 instances. Public RPCs behind
+// Cloudflare (sepolia.base.org) throttle repeated fresh TLS handshakes, which
+// intermittently kills web3's per-request connections with ETIMEDOUT;
+// reusing sockets avoids the handshake churn entirely.
+const httpKeepAliveAgent = new http_.Agent({ keepAlive: true });
+const httpsKeepAliveAgent = new https_.Agent({ keepAlive: true });
+
+/** @param {string} rpcUrl */
+function makeWeb3(rpcUrl) {
+  const HttpProvider = Web3Ctor.providers?.HttpProvider ?? Web3Ctor.HttpProvider;
+  if (!HttpProvider) {
+    // Test mocks may only expose the default constructor.
+    return new Web3Ctor(rpcUrl);
+  }
+  const agent = rpcUrl.startsWith("https")
+    ? httpsKeepAliveAgent
+    : httpKeepAliveAgent;
+  const provider = new HttpProvider(rpcUrl, {
+    providerOptions: /** @type {any} */ ({ agent }),
+  });
+  return new Web3Ctor(provider);
+}
 
 // ─── Per-Network Configuration ───────────────────────────────────────────────
 
@@ -91,7 +116,7 @@ export function getWeb3(chainId) {
   const id = chainId ? Number(chainId) : null;
   if (!id) return web3;
   if (!web3Instances.has(id)) {
-    web3Instances.set(id, new Web3Ctor(getRpcUrl(id)));
+    web3Instances.set(id, makeWeb3(getRpcUrl(id)));
   }
   return web3Instances.get(id);
 }
@@ -130,4 +155,4 @@ export const NOSTR_RELAY_URL =
 export const NOSTR_SERVICE_PRIVATE_KEY = process.env.NOSTR_SERVICE_PRIVATE_KEY;
 
 // Default shared Web3 instance (Hardhat local or env-configured RPC)
-export const web3 = new Web3Ctor(API_URL);
+export const web3 = makeWeb3(API_URL);

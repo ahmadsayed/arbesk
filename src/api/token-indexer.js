@@ -237,8 +237,14 @@ class TokenIndexer {
     if (this.initialized) return;
     this.initialized = true;
     this._loadState();
-    await this.catchUp();
-    this.start();
+    try {
+      await this.catchUp();
+    } finally {
+      // Start polling even when the boot-time catch-up fails (e.g. a
+      // transient RPC outage): each poll tick retries catchUp, so the
+      // indexer self-heals instead of staying dead until a restart.
+      this.start();
+    }
   }
 
   /**
@@ -289,8 +295,9 @@ export async function initIndexers() {
       try {
         await getIndexer(chainId).init();
       } catch (err) {
-        console.error(
-          `[${ts()}] [INDEXER] failed to initialize chain ${chainId}:`,
+        console.warn(
+          `[${ts()}] [INDEXER] initial catch-up failed for chain ${chainId} ` +
+            `(background poll retries every 15s):`,
           String(/** @type {Error} */ (err).message)
         );
       }

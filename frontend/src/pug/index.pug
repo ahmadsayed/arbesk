@@ -4,9 +4,9 @@ html(lang="en")
     title Arbesk — 4D Version-Controlled 3D Assets
     meta(charset="utf-8")
     meta(name="viewport", content="width=device-width, initial-scale=1")
-    meta(name="description", content="Arbesk is a 4D 3D-asset platform: generate, edit, and publish 3D worlds where every past version stays open-able. Time is a dimension you can travel — but only backward.")
+    meta(name="description", content="Arbesk is a 4D 3D-asset platform: build 3D worlds together, publish them on-chain, and travel back through every version.")
     meta(property="og:title", content="Arbesk — 4D Version-Controlled 3D Assets")
-    meta(property="og:description", content="Generate, edit, and publish 3D worlds with built-in version history. Every asset is its own micro-ledger.")
+    meta(property="og:description", content="Build 3D worlds together with built-in version history. Invite editors, comment on assets, and share files.")
     meta(property="og:type", content="website")
     meta(property="og:site_name", content="Arbesk")
     meta(name="twitter:card", content="summary_large_image")
@@ -81,6 +81,20 @@ html(lang="en")
         color: var(--landing-fg);
       }
 
+      /* Warm the shared header pills so they match the landing palette. */
+      .landing-page .page-switcher {
+        background-color: color-mix(in srgb, var(--landing-gold) 12%, transparent);
+      }
+
+      .landing-page .page-switcher-tab {
+        color: var(--landing-muted);
+      }
+
+      .landing-page .page-switcher-tab:hover {
+        color: var(--landing-fg);
+        background-color: color-mix(in srgb, var(--landing-gold) 18%, transparent);
+      }
+
       /* Typography */
       .landing-hero h1 {
         font-size: clamp(3.5rem, 10vw, 7rem);
@@ -114,14 +128,21 @@ html(lang="en")
         padding: clamp(3.5rem, 8vh, 5.5rem) 2rem;
       }
 
-      .landing-section.band-dark,
-      .landing-section.pull-quote {
-        max-width: none;
+      /* Inner wrapper constrains the feature-section grid so the section
+         background (tint / dark band) can run full-bleed while content stays
+         within a readable measure. */
+      .landing-section-inner {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: clamp(3rem, 5vw, 5.5rem);
+        align-items: center;
+        max-width: 1240px;
+        margin: 0 auto;
       }
 
       .landing-hero {
-        min-height: auto;
-        padding: clamp(4rem, 10vh, 6rem) 2rem clamp(3rem, 7vh, 4.5rem);
+        min-height: min(92svh, 56rem);
+        padding: clamp(3rem, 8vh, 5rem) 2rem clamp(4.5rem, 9vh, 6rem);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -131,7 +152,7 @@ html(lang="en")
         isolation: isolate;
         background:
           radial-gradient(140% 100% at 50% 0%,
-            color-mix(in srgb, var(--landing-gold) 28%, transparent) 0%,
+            color-mix(in srgb, var(--landing-gold) 32%, transparent) 0%,
             transparent 60%),
           radial-gradient(120% 80% at 80% 100%,
             color-mix(in srgb, var(--landing-gold) 16%, transparent) 0%,
@@ -148,7 +169,7 @@ html(lang="en")
         position: absolute;
         inset: 0;
         z-index: -1;
-        opacity: 0.35;
+        opacity: 0.55;
         background-image:
           radial-gradient(circle at center,
             color-mix(in srgb, var(--landing-gold) 45%, transparent) 1px,
@@ -184,7 +205,12 @@ html(lang="en")
       }
 
       .scroll-cue {
-        margin-top: clamp(2rem, 5vh, 3.5rem);
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 1.5rem;
+        margin: 0 auto;
+        width: max-content;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -257,23 +283,15 @@ html(lang="en")
       }
 
       /* Feature sections */
-      .landing-section {
-        display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
-        gap: 4rem;
-        align-items: center;
-        max-width: 1180px;
-      }
-
-      .landing-section.reverse {
+      .landing-section.reverse .landing-section-inner {
         grid-template-columns: 0.85fr 1.15fr;
       }
 
-      .landing-section.reverse .text {
+      .landing-section.reverse .landing-section-inner .text {
         order: 2;
       }
 
-      .landing-section.reverse .visual {
+      .landing-section.reverse .landing-section-inner .visual {
         order: 1;
       }
 
@@ -281,8 +299,8 @@ html(lang="en")
       .landing-section.section-tint {
         background:
           linear-gradient(180deg,
-            color-mix(in srgb, var(--landing-gold) 4%, var(--landing-bg)) 0%,
-            color-mix(in srgb, var(--landing-gold) 7%, var(--landing-bg)) 100%);
+            color-mix(in srgb, var(--landing-gold) 8%, var(--landing-bg)) 0%,
+            color-mix(in srgb, var(--landing-gold) 12%, var(--landing-bg)) 100%);
       }
 
       .feature-card {
@@ -569,9 +587,13 @@ html(lang="en")
 
       .band-dark .memory-log li.now,
       .band-dark .memory-log li.active,
-      .band-dark .memory-status strong,
-      .band-dark .text .hint-line {
+      .band-dark .memory-status strong {
         color: var(--landing-fg);
+      }
+
+      /* Hint line sits directly on the dark band — needs a light warm tone. */
+      .band-dark .text .hint-line {
+        color: color-mix(in srgb, var(--landing-bg) 45%, var(--landing-gold));
       }
 
       .band-dark .memory-log .when {
@@ -656,8 +678,13 @@ html(lang="en")
         border: 3px solid var(--landing-gold);
       }
 
-      /* Manifest chain ("micro-ledger") */
-      .ledger-card .ledger-chain {
+      /* Manifest chain — compact strip under the memory-section copy. */
+      .memory-ledger {
+        margin-top: 2rem;
+        width: min(380px, 100%);
+      }
+
+      .memory-ledger .ledger-chain {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -671,24 +698,24 @@ html(lang="en")
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.45rem;
-        background: color-mix(in srgb, var(--landing-bg) 60%, transparent);
-        border: 1.5px solid color-mix(in srgb, var(--landing-gold) 60%, transparent);
-        border-radius: 14px;
-        padding: 1rem 0.4rem;
+        gap: 0.35rem;
+        background: color-mix(in srgb, var(--landing-bg) 8%, transparent);
+        border: 1.5px solid color-mix(in srgb, var(--landing-gold) 50%, transparent);
+        border-radius: 12px;
+        padding: 0.75rem 0.4rem;
       }
 
       .ledger-chain .manifest .mtag {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         font-weight: 800;
-        color: var(--landing-fg);
+        color: var(--landing-bg);
         letter-spacing: -0.01em;
       }
 
       .ledger-chain .manifest .cid {
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
-        font-size: 0.68rem;
-        color: var(--landing-muted);
+        font-size: 0.65rem;
+        color: color-mix(in srgb, var(--landing-bg) 55%, transparent);
       }
 
       .ledger-chain .link {
@@ -699,12 +726,20 @@ html(lang="en")
         opacity: 0.6;
       }
 
-      .ledger-card .ledger-caption {
-        margin-top: 1.1rem;
+      .memory-ledger .ledger-note {
+        margin: 0.8rem 0 0;
         text-align: center;
         font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--landing-muted);
+        color: color-mix(in srgb, var(--landing-bg) 65%, transparent);
+      }
+
+      .memory-ledger .ledger-note code {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.78rem;
+        color: var(--landing-gold);
+        background: color-mix(in srgb, var(--landing-gold) 14%, transparent);
+        padding: 0.1em 0.45em;
+        border-radius: 6px;
       }
 
       /* Collaboration ("Built for teams") — three pedestals, one per editor */
@@ -772,9 +807,88 @@ html(lang="en")
         font-size: 0.92rem;
       }
 
-      /* Dark bands — clean straight edges with a gold rule at each boundary */
+      /* "Worlds are built together" — flagship collaboration section */
+      .team-section {
+        text-align: center;
+      }
+
+      .team-section-inner {
+        max-width: 1240px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(2.25rem, 4vw, 3.25rem);
+      }
+
+      .team-section .text p {
+        max-width: 52ch;
+        margin: 0 auto;
+      }
+
+      .team-section .team-card {
+        width: min(520px, 100%);
+      }
+
+      .team-features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.25rem;
+        width: 100%;
+        max-width: 1100px;
+      }
+
+      .team-feature {
+        background: var(--landing-card);
+        border: 1px solid color-mix(in srgb, var(--landing-border) 40%, transparent);
+        border-radius: 18px;
+        padding: 1.5rem;
+        text-align: left;
+        box-shadow: 0 10px 30px rgba(42, 26, 14, 0.05);
+      }
+
+      .team-feature .tf-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--landing-gold) 16%, transparent);
+        color: var(--landing-gold-strong);
+      }
+
+      .team-feature .tf-icon svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+      }
+
+      .team-feature h3 {
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0.8rem 0 0.35rem;
+        color: var(--landing-fg);
+      }
+
+      .team-feature p {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: var(--landing-muted);
+        margin: 0;
+      }
+
+      /* Dark bands — clean straight edges with a gold rule at each boundary.
+         Soft gold glows keep wide screens from reading as a flat brown void. */
       .band-dark {
-        background: var(--landing-dark);
+        background:
+          radial-gradient(90% 130% at 12% 0%,
+            color-mix(in srgb, var(--landing-gold) 11%, transparent) 0%,
+            transparent 55%),
+          radial-gradient(80% 110% at 88% 100%,
+            color-mix(in srgb, var(--landing-gold) 8%, transparent) 0%,
+            transparent 50%),
+          var(--landing-dark);
         color: var(--landing-bg);
         border-top: 1px solid color-mix(in srgb, var(--landing-gold) 22%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--landing-gold) 22%, transparent);
@@ -832,7 +946,15 @@ html(lang="en")
       /* Footer */
       .landing-footer {
         text-align: center;
-        padding: 7rem 2rem 6rem;
+        padding: 5rem 2rem 4.5rem;
+      }
+
+      .landing-footer.band-dark {
+        background:
+          radial-gradient(55% 90% at 50% 0%,
+            color-mix(in srgb, var(--landing-gold) 14%, transparent) 0%,
+            transparent 60%),
+          var(--landing-dark);
       }
 
       .landing-footer h2 {
@@ -872,8 +994,8 @@ html(lang="en")
         animation-fill-mode: both;
       }
 
-      /* Headings slide in from the outside edge. */
-      .js-animations .landing-section:not(.reverse):not(.pull-quote).revealed .text h2.reveal-child-1 { animation-name: kSlideLeft; }
+      /* Headings slide in from the outside edge (centered sections fade-rise). */
+      .js-animations .landing-section:not(.reverse):not(.pull-quote):not(.team-section).revealed .text h2.reveal-child-1 { animation-name: kSlideLeft; }
       .js-animations .landing-section.reverse:not(.pull-quote).revealed .text h2.reveal-child-1 { animation-name: kSlideRight; }
       /* All other reveal-child-1 elements fade-rise. */
       .js-animations .reveal.revealed .reveal-child-1 { animation-name: kFadeRise; animation-delay: 0s; }
@@ -911,7 +1033,7 @@ html(lang="en")
       }
 
       /* Keep the sticky header a single row on phones: the logo mark alone
-         identifies the brand, freeing room for the tabs + Launch Studio. */
+         identifies the brand, freeing room for the tabs + Edit button. */
       @media (max-width: 520px) {
         .landing-page .brand-name {
           display: none;
@@ -923,8 +1045,8 @@ html(lang="en")
       }
 
       @media (max-width: 860px) {
-        .landing-section,
-        .landing-section.reverse {
+        .landing-section-inner,
+        .landing-section.reverse .landing-section-inner {
           grid-template-columns: 1fr;
           gap: 2.5rem;
           text-align: center;
@@ -935,14 +1057,24 @@ html(lang="en")
           margin: 0 auto;
         }
 
-        .landing-section.reverse .text,
-        .landing-section.reverse .visual,
-        .landing-section .visual {
+        .landing-section.reverse .landing-section-inner .text,
+        .landing-section.reverse .landing-section-inner .visual,
+        .landing-section .landing-section-inner .visual {
           order: 0;
         }
 
-        .landing-section .visual {
+        .landing-section .landing-section-inner .visual {
           order: -1;
+        }
+
+        .team-features {
+          grid-template-columns: 1fr;
+          max-width: 420px;
+        }
+
+        .memory-ledger {
+          margin-left: auto;
+          margin-right: auto;
         }
       }
 
@@ -1009,89 +1141,87 @@ html(lang="en")
             span.brand-name Arbesk
 
         nav.page-switcher(aria-label="Page")
-          a.page-switcher-tab(href="/library") Library
-          a.page-switcher-tab(href="/studio") Studio
+          a.page-switcher-tab(href="/library") Files
+          a.page-switcher-tab(href="/studio") Edit
 
         .headerbar-actions
-          a.btn.btn-primary(href="/studio") Launch Studio
+          a.btn.btn-primary(href="/studio") Edit
 
       main
         section.landing-hero
           h1.hero-animate The world is 4D.
           p.lead.hero-animate
-            | Move freely in three dimensions — then move back through the fourth.
-            | In Arbesk, time is a dimension you can travel, but only backward.
+            | Move in the three dimensions of space — and in the fourth: time.
+            | One constraint: you can only move backward.
             br
             strong Because the future is what you build.
           .cta-row.hero-animate
             a.cta(href="/studio")
-              | Launch Studio
+              | Edit
               svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
                 line(x1="5" y1="12" x2="19" y2="12")
                 polyline(points="12 5 19 12 12 19")
-            a.cta.cta-secondary(href="/library") Browse the Library
+            a.cta.cta-secondary(href="/library") Upload
           .scroll-cue(aria-hidden="true")
             span Scroll
             svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
               polyline(points="6 9 12 15 18 9")
 
         section.landing-section.reverse.section-tint.reveal
-          .text
-            h2.reveal-child-1 We build in 3D.
-            p.reveal-child-2 Move, rotate, and scale in space. That part is familiar — every 3D tool gives you the three spatial dimensions. Grab the model and see.
-          .visual.reveal-child-3
-            .viewer-card
-              canvas#hero-viewer(aria-label="Live 3D model — drag to rotate")
-              .viewer-fallback
-                img(src="/landing/asset-howdy.webp", alt="A 3D character asset rendered in Arbesk")
-              span.viewer-hint Live · drag to rotate
+          .landing-section-inner
+            .text
+              h2.reveal-child-1 We build in 3D.
+              p.reveal-child-2 Move, rotate, scale — the three spatial dimensions every tool gives you. Grab the model.
+            .visual.reveal-child-3
+              .viewer-card
+                canvas#hero-viewer(aria-label="Live 3D model — drag to rotate")
+                .viewer-fallback
+                  img(src="/landing/asset-howdy.webp", alt="A 3D character asset rendered in Arbesk")
+                span.viewer-hint Live · drag to rotate
 
-        section.landing-section.band-dark.reverse.reveal
-          .text
-            h2.reveal-child-1 Objects have memory.
-            p.reveal-child-2 Every edit is a first-class version. The manifest chain stores parametric history so any past state can be reopened without copies.
-            p.reveal-child-2.hint-line Click the cube to repaint it — then drag the timeline to travel back through every colour it has ever been.
-          .visual.reveal-child-3
-            .feature-card.memory-card
-              .memory-stage
-                canvas#memory-cube(aria-label="Interactive 3D object — click it to change its color")
-                span.memory-hint Click to repaint
-                p.memory-fallback An object that remembers every colour it has ever been.
-              .memory-controls
-                input#memory-scrub(type="range", min="0", max="2", value="2", step="1", aria-label="Scrub through past versions")
-                p.memory-status(aria-live="polite")
-              ul.memory-log(aria-live="polite")
+        section.landing-section.band-dark.reveal
+          .landing-section-inner
+            .text
+              h2.reveal-child-1 Objects have memory.
+              p.reveal-child-2 Every edit is a first-class version — scrub back through everything this object has ever been.
+              p.reveal-child-2.hint-line Click the cube to repaint it, then drag the timeline back.
+              .memory-ledger.reveal-child-2
+                .ledger-chain(aria-hidden="true")
+                  .manifest
+                    span.mtag M1
+                    span.cid bafy…q2
+                  span.link
+                  .manifest
+                    span.mtag M2
+                    span.cid bafy…7h
+                  span.link
+                  .manifest
+                    span.mtag M3
+                    span.cid bafy…k9
+                  span.link
+                  .manifest
+                    span.mtag M4
+                    span.cid bafy…x4
+                p.ledger-note
+                  | Each version links to the last —&nbsp;
+                  code prev_manifest_cid
+            .visual.reveal-child-3
+              .feature-card.memory-card
+                .memory-stage
+                  canvas#memory-cube(aria-label="Interactive 3D object — click it to change its color")
+                  span.memory-hint Click to repaint
+                  p.memory-fallback An object that remembers every colour it has ever been.
+                .memory-controls
+                  input#memory-scrub(type="range", min="0", max="2", value="2", step="1", aria-label="Scrub through past versions")
+                  p.memory-status(aria-live="polite")
+                ul.memory-log(aria-live="polite")
 
-        section.landing-section.section-tint.reverse.reveal
-          .text
-            h2.reveal-child-1 Each asset is its own micro-ledger.
-            p.reveal-child-2 A content-addressed manifest chain: each version links to `prev_manifest_cid` via IPFS, making the asset its own immutable audit log.
-          .visual.reveal-child-3
-            .feature-card.ledger-card
-              .ledger-chain
-                .manifest
-                  span.mtag M1
-                  span.cid bafy…q2
-                span.link
-                .manifest
-                  span.mtag M2
-                  span.cid bafy…7h
-                span.link
-                .manifest
-                  span.mtag M3
-                  span.cid bafy…k9
-                span.link
-                .manifest
-                  span.mtag M4
-                  span.cid bafy…x4
-              .ledger-caption prev_manifest_cid
-
-        section.landing-section.band-dark.reverse.reveal
-          .text
-            h2.reveal-child-1 Built for teams.
-            p.reveal-child-2 Comment on assets, invite editors with Merkle proofs, and collaborate on collections — all without reminting or losing history.
-          .visual.reveal-child-3
-            .feature-card.team-card
+        section.landing-section.team-section.reveal
+          .team-section-inner
+            .text
+              h2.reveal-child-1 Worlds are built together.
+              p.reveal-child-2 Invite editors, talk on every asset, and share files — without reminting or losing history.
+            .feature-card.team-card.reveal-child-3
               .team-scene
                 .pedestal
                   .pedestal-asset
@@ -1114,12 +1244,31 @@ html(lang="en")
                   span.pedestal-label
                     strong You
                     span edit Suka
+            .team-features.reveal-child-3
+              .team-feature
+                .tf-icon(aria-hidden="true")
+                  svg(viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    path(d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z")
+                h3 Invite editors
+                p Cryptographic editor proofs. No reminting, no copies.
+              .team-feature
+                .tf-icon(aria-hidden="true")
+                  svg(viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    path(d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z")
+                h3 Comment on every asset
+                p Per-asset threads, archived with each publish.
+              .team-feature
+                .tf-icon(aria-hidden="true")
+                  svg(viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    path(d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z")
+                h3 Shared files
+                p Shared collections appear for every editor, live.
 
         footer.landing-footer.band-dark.reveal
           h2.reveal-child-1 Start building the future.
           .cta-row.reveal-child-2
-            a.cta(href="/studio") Launch Studio
-            a.cta(href="/library") Browse the Library
+            a.cta(href="/studio") Edit
+            a.cta(href="/library") Upload
 
     script.
       (function () {

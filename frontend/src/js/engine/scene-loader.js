@@ -475,6 +475,36 @@ function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
   throw new Error(`Unknown fork/live-ref choice: ${choice}`);
 }
 
+/**
+ * BigInt-safe token id normalization so "0x2a" and "42" compare equal.
+ */
+function normalizeTokenId(id) {
+  if (id == null) return "";
+  try {
+    return BigInt(id).toString();
+  } catch {
+    return String(id);
+  }
+}
+
+/**
+ * True when a dropped linked asset is the asset currently open in the
+ * Studio (same collection token + same assetID). A live-ref to itself is a
+ * guaranteed cycle, so such drops must be fork-only.
+ */
+function isSelfLinkedAssetDrop(collectionRef, assetID) {
+  const active = state.activeCollectionRef;
+  if (!active || !state.activeCollectionCurrentAssetID) return false;
+  if (assetID !== state.activeCollectionCurrentAssetID) return false;
+  if (Number(active.chainId) !== Number(collectionRef.chainId)) return false;
+  const activeContract = (active.contractAddress || "").toLowerCase();
+  const droppedContract = (collectionRef.contractAddress || "").toLowerCase();
+  if (activeContract !== droppedContract) return false;
+  return (
+    normalizeTokenId(active.tokenId) === normalizeTokenId(collectionRef.tokenId)
+  );
+}
+
 async function handleLinkedAssetDropped(event) {
   const detail = event;
   if (!detail) return;
@@ -489,19 +519,29 @@ async function handleLinkedAssetDropped(event) {
   if (!tokenId) return;
 
   if (detail.assetID) {
-    const { showForkOrLiveRefDialog } = await import("../ui/dialog.js");
-    const choice = await showForkOrLiveRefDialog(detail.assetID);
-    if (!choice) return; // user cancelled
-
-    const { resolveCollectionChildRef } = await import(
-      "../blockchain/token-resolver.js"
-    );
     const collectionRef = {
       chainId: Number(eventChainId || walletState.get().chainId),
       contractAddress:
         eventContractAddress || walletState.get().contractAddress,
       tokenId,
     };
+    const isSelfDrop = isSelfLinkedAssetDrop(collectionRef, detail.assetID);
+
+    const { showForkOrLiveRefDialog } = await import("../ui/dialog.js");
+    const choice = await showForkOrLiveRefDialog(detail.assetID, {
+      allowLiveRef: !isSelfDrop,
+    });
+    if (!choice) return; // user cancelled
+    if (isSelfDrop && choice === "live-ref") {
+      console.warn(
+        `[SCENE] live-ref self-add rejected for asset ${detail.assetID}`
+      );
+      return;
+    }
+
+    const { resolveCollectionChildRef } = await import(
+      "../blockchain/token-resolver.js"
+    );
     const resolution = await resolveCollectionChildRef(
       { collection: collectionRef, assetID: detail.assetID },
       null

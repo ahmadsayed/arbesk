@@ -151,9 +151,15 @@ export async function createSession() {
   try {
     signature = await web3.eth.personal.sign(message, signerAddress, "");
   } catch (err) {
-    error("Session sign failed:", err);
+    const cause = /** @type {any} */ (err);
+    // Log the reason inline: wallets bury it in nested objects that render
+    // as a collapsed "Object" in the console and never reach bug reports.
+    error(
+      `Session sign failed (signer=${signerAddress}, code=${cause?.code ?? "?"}):`,
+      cause?.message || cause?.error?.message || String(cause)
+    );
     throw new ApiError(
-      "Failed to sign session creation message",
+      `Failed to sign session creation message: ${cause?.message || cause?.error?.message || "unknown wallet error"}`,
       401,
       "SIGN_FAILED"
     );

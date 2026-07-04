@@ -216,9 +216,19 @@ export function showConfirmDialog(title, body, buttons = []) {
  * live-ref points back to the original collection and auto-updates.
  *
  * @param {string} assetID
+ * @param {{allowLiveRef?: boolean}} [options] - allowLiveRef: false hides the
+ *   live-reference button (used when the drop targets the asset itself, where
+ *   a live-ref would be a guaranteed cycle).
  * @returns {Promise<"fork"|"live-ref"|null>}
  */
-export function showForkOrLiveRefDialog(assetID) {
+export function showForkOrLiveRefDialog(assetID, { allowLiveRef = true } = {}) {
+  if (!allowLiveRef) {
+    return showConfirmDialog(
+      "Link Asset",
+      `"${assetID}" is the asset currently open, so it can only be added as a frozen copy - a live reference to itself would loop forever.`,
+      [{ text: "Fork (copy)", value: "fork", className: "btn btn-primary" }]
+    );
+  }
   return showConfirmDialog(
     "Link Asset",
     `How would you like to include "${assetID}" in your scene?`,
