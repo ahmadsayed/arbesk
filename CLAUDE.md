@@ -75,7 +75,7 @@ Concise guide for Claude Code sessions. For the full developer guide, see `AGENT
 | Contracts | `npm run test:contracts` | `blockchain/test/*.js` |
 | E2E | `npm run test:e2e -- --project=chromium` | `e2e/specs/*.spec.js` |
 
-**Current counts:** 1005 Jest tests / 67 suites (all passing); 17 Playwright specs / 35 E2E tests.
+**Current counts:** 1080 Jest tests / 82 suites (all passing); 16 Playwright specs / 33 E2E tests.
 
 ---
 
