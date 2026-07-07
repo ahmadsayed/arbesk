@@ -51,13 +51,6 @@ html(lang="en")
           span#assetStatusName.headerbar-title-text(aria-label="Asset name") No asset open
           span#assetStatusMeta.headerbar-title-meta Create or open an asset
 
-        #assetHistory.history(hidden)
-          span.history-label Version
-          .history-slider-wrap
-            input#historySlider.history-slider(type="range" min="0" max="0" step="1" value="0" aria-label="Asset version" aria-describedby="historyDetailPopover" title="Scrub asset versions")
-            #historyDetailPopover.history-detail(hidden)
-          span#historyVersionBadge.version-badge v1
-
         .headerbar-divider(aria-hidden="true")
         .headerbar-doc-actions
           button#newAssetBtn.btn.btn-secondary(type="button" aria-label="New asset" title="New asset (Ctrl+N)")
@@ -433,7 +426,7 @@ html(lang="en")
     script(type="module", src="/js/services/team.js")
     script(type="module", src="/js/ui/toasts.js")
     script(type="module", src="/js/ui/asset-save.js")
-    script(type="module", src="/js/ui/asset-history.js")
+    script(type="module", src="/js/ui/scene-clock.js")
     script(type="module", src="/js/ui/create-panel.js")
     script(type="module", src="/js/ui/asset-drop-zone.js")
     script(type="module", src="/js/ui/sidebar.js")

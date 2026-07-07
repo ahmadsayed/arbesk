@@ -123,7 +123,7 @@ describe("wallet.js export block", () => {
       expect(exported).toContain("updateAssetURI");
     });
 
-    test("asset-history.js: contract", () => {
+    test("version-history-store.js: contract", () => {
       expect(exported).toContain("contract");
     });
 
