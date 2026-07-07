@@ -324,13 +324,13 @@ export function initEngine() {
     });
 
   // Model clock (version dial above the selected node).
-  import("../ui/model-clock.js")
-    .then(({ initModelClock }) => {
-      initModelClock(state.scene, camera);
-      console.log("[SCENE] model clock initialized");
+  import("../ui/model-clock-gizmo.js")
+    .then(({ initModelClockGizmo }) => {
+      initModelClockGizmo(state.scene, camera);
+      console.log("[SCENE] model clock gizmo initialized");
     })
     .catch((e) => {
-      console.warn("[SCENE] model clock init failed:", e.message);
+      console.warn("[SCENE] model clock gizmo init failed:", e.message);
     });
 
   // Resize the drawing buffer at the start of every render loop iteration so
