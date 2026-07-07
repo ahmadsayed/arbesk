@@ -56,6 +56,11 @@ export const state = {
   /** @type {'translate' | 'rotate' | 'scale' | null} */
   transformMode: null,
   /**
+   * True while the transform gizmo is being dragged; used by overlays such as
+   * the model clock to suppress their per-frame update and avoid jitter.
+   */
+  isGizmoDragging: false,
+  /**
    * Transform edits (move/rotate/scale) accumulated by the viewport gizmo
    * but not yet persisted. Keyed by node_id. Picked up by
    * `asset-save.js → prepareManifestForWrite` and cleared on save.

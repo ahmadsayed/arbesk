@@ -209,10 +209,21 @@ const _subscribedGizmos = new WeakSet();
 
 function ensureDragEndSubscription(gizmo) {
   if (!gizmo || _subscribedGizmos.has(gizmo)) return;
-  if (gizmo.onDragEndObservable) {
-    gizmo.onDragEndObservable.add(() => captureSelectedTransform());
-    _subscribedGizmos.add(gizmo);
+  let subscribed = false;
+  if (gizmo.onDragStartObservable) {
+    gizmo.onDragStartObservable.add(() => {
+      state.isGizmoDragging = true;
+    });
+    subscribed = true;
   }
+  if (gizmo.onDragEndObservable) {
+    gizmo.onDragEndObservable.add(() => {
+      state.isGizmoDragging = false;
+      captureSelectedTransform();
+    });
+    subscribed = true;
+  }
+  if (subscribed) _subscribedGizmos.add(gizmo);
 }
 
 function attachToSelected(gizmoManager) {

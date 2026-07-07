@@ -323,6 +323,16 @@ export function initEngine() {
       console.warn("[SCENE] transform gizmo init failed:", e.message);
     });
 
+  // Model clock (version dial above the selected node).
+  import("../ui/model-clock.js")
+    .then(({ initModelClock }) => {
+      initModelClock(state.scene, camera);
+      console.log("[SCENE] model clock initialized");
+    })
+    .catch((e) => {
+      console.warn("[SCENE] model clock init failed:", e.message);
+    });
+
   // Resize the drawing buffer at the start of every render loop iteration so
   // the camera always uses the current canvas CSS size. Doing this only in
   // window/ResizeObserver handlers leaves a one-frame race during CSS
