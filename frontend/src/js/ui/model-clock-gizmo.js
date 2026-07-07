@@ -66,7 +66,7 @@ function createMaterial(scene, name, color) {
   return mat;
 }
 
-function buildGizmoForNode(scene, camera, nodeId) {
+function buildGizmoForNode(scene, nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   const meshes = state.nodeMeshes.get(nodeId) || [];
   const filtered = store.versionsForNode(nodeId);
@@ -126,17 +126,47 @@ function buildGizmoForNode(scene, camera, nodeId) {
   handle.material = createMaterial(scene, "handleMat", new BABYLON.Color3(0.2, 0.6, 1));
   handle.renderingGroupId = 1;
 
+  const dragBehavior = new BABYLON.PointerDragBehavior({
+    dragPlaneNormal: new BABYLON.Vector3(0, 1, 0),
+  });
+  dragBehavior.onDragObservable.add(() => {
+    // Project handle position onto ring circle in local XZ plane.
+    const localX = handle.position.x;
+    const localZ = handle.position.z;
+    const angle = Math.atan2(localZ, localX);
+    const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
+    const snapAngle = (_angleForIndex(idx, filtered.length) * Math.PI) / 180;
+    handle.position = new BABYLON.Vector3(
+      Math.cos(snapAngle) * radius,
+      0,
+      Math.sin(snapAngle) * radius
+    );
+  });
+  dragBehavior.onDragEndObservable.add(() => {
+    const localX = handle.position.x;
+    const localZ = handle.position.z;
+    const angle = Math.atan2(localZ, localX);
+    const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
+    const entry = filtered[idx];
+    if (entry && entry.cid !== store.getState().activeCid) {
+      store.loadVersion(entry.cid);
+    }
+  });
+  handle.addBehavior(dragBehavior);
+
   return { root, ring, ticks, handle, radius, filtered };
 }
 
 export function initModelClockGizmo(scene, camera) {
+  // camera is reserved for badge projection in Task 7.
+  void camera;
   let current = null;
 
-  function onSelect() {
+  function onSelect(e) {
     destroyCurrent();
-    const nodeId = state.highlightedNodeId;
+    const nodeId = e?.nodeId || state.highlightedNodeId;
     if (!nodeId) return;
-    current = buildGizmoForNode(scene, camera, nodeId);
+    current = buildGizmoForNode(scene, nodeId);
     if (current) {
       placeHandle(current);
     }
@@ -144,7 +174,7 @@ export function initModelClockGizmo(scene, camera) {
 
   function destroyCurrent() {
     if (current) {
-      current.root.dispose();
+      current.root.dispose(false, true);
       current = null;
     }
   }
@@ -161,7 +191,20 @@ export function initModelClockGizmo(scene, camera) {
     );
   }
 
-  on(EVENTS.NODE_SELECTED, onSelect);
-  on(EVENTS.NODE_DESELECTED, destroyCurrent);
-  on(EVENTS.SCENE_EMPTY, destroyCurrent);
+  function render() {
+    // Reserved for per-frame badge/handle updates (Task 7).
+  }
+
+  const unsubscribeSelected = on(EVENTS.NODE_SELECTED, onSelect);
+  const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, destroyCurrent);
+  const unsubscribeEmpty = on(EVENTS.SCENE_EMPTY, destroyCurrent);
+  const renderHandle = scene.onBeforeRenderObservable.add(render);
+
+  return function destroy() {
+    destroyCurrent();
+    unsubscribeSelected();
+    unsubscribeDeselected();
+    unsubscribeEmpty();
+    scene.onBeforeRenderObservable.remove(renderHandle);
+  };
 }

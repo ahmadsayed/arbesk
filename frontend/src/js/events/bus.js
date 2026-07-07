@@ -8,8 +8,9 @@
  *
  * Usage:
  *   import { on, off, emit, EVENTS } from "../events/bus.js";
- *   on(EVENTS.SCENE_READY, ({ manifest, manifestCid }) => { ... });
+ *   const unsubscribe = on(EVENTS.SCENE_READY, ({ manifest, manifestCid }) => { ... });
  *   emit(EVENTS.SCENE_READY, { manifest, manifestCid });
+ *   unsubscribe();
  */
 
 import mitt from "./mitt.mjs";
@@ -56,6 +57,9 @@ export const EVENTS = {
 
 const _bus = mitt();
 
-export const on   = _bus.on.bind(_bus);
+export function on(type, handler) {
+  _bus.on(type, handler);
+  return () => _bus.off(type, handler);
+}
 export const off  = _bus.off.bind(_bus);
 export const emit = _bus.emit.bind(_bus);

@@ -80,14 +80,24 @@ function createBabylonMock() {
       this.rotation = new MockVector3();
       this.scaling = new MockVector3(1, 1, 1);
       this.parent = null;
+      this._children = [];
       this._disposed = false;
     }
-    dispose() {
+    dispose(doNotRecurse = false, disposeMaterialAndTextures = false) {
       this._disposed = true;
       disposed.push(this);
+      if (!doNotRecurse) {
+        for (const child of this._children) {
+          child.dispose(doNotRecurse, disposeMaterialAndTextures);
+        }
+        this._children = [];
+      }
     }
     setParent(p) {
       this.parent = p;
+      if (p && p._children && !p._children.includes(this)) {
+        p._children.push(this);
+      }
     }
     getAbsolutePosition() {
       return this.position.clone();
@@ -106,8 +116,11 @@ function createBabylonMock() {
     addBehavior(b) {
       this.behaviors.push(b);
     }
-    dispose() {
-      super.dispose();
+    dispose(doNotRecurse = false, disposeMaterialAndTextures = false) {
+      if (disposeMaterialAndTextures && this.material) {
+        this.material.dispose();
+      }
+      super.dispose(doNotRecurse, disposeMaterialAndTextures);
     }
   }
 
@@ -146,6 +159,10 @@ function createBabylonMock() {
         this.diffuseColor = null;
         this.emissiveColor = null;
         this.alpha = 1;
+        this._disposed = false;
+      }
+      dispose() {
+        this._disposed = true;
       }
     },
     Color3: class {
@@ -202,6 +219,7 @@ describe("model-clock-gizmo math", () => {
 
 describe("model-clock-gizmo lifecycle", () => {
   let viewport, scene, camera, babylon;
+  let destroyGizmo = null;
 
   beforeEach(() => {
     document.getElementById("viewport")?.remove();
@@ -234,6 +252,8 @@ describe("model-clock-gizmo lifecycle", () => {
   });
 
   afterEach(() => {
+    destroyGizmo?.();
+    destroyGizmo = null;
     delete global.BABYLON;
   });
 
@@ -241,7 +261,7 @@ describe("model-clock-gizmo lifecycle", () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
-    initModelClockGizmo(scene, camera);
+    destroyGizmo = initModelClockGizmo(scene, camera);
 
     state.highlightedNodeId = "node-a";
     state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
@@ -252,5 +272,83 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(torus).toBeDefined();
     expect(handle).toBeDefined();
     expect(babylon.createdMeshes.filter((m) => m.name.startsWith("versionTick")).length).toBe(3);
+  });
+
+  test("dragging handle commits the landed version", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const handle = babylon.createdMeshes.find((m) => m.name === "versionHandle");
+    const dragEnd = handle.behaviors?.find((b) => b.onDragEndObservable)?.onDragEndObservable;
+    expect(dragEnd).toBeDefined();
+
+    // Simulate drag that snaps to the oldest version.
+    handle.position = new babylon.Vector3(-1, 0, 0); // 180° side
+    dragEnd._callbacks?.[0]?.();
+
+    expect(storeMock.loadVersion).toHaveBeenCalledWith("c1");
+  });
+
+  test("deselecting node disposes gizmo and its materials", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const materials = babylon.createdMeshes
+      .map((m) => m.material)
+      .filter(Boolean);
+    expect(materials.length).toBeGreaterThan(0);
+
+    emit(EVENTS.NODE_DESELECTED);
+
+    expect(babylon.disposed.length).toBeGreaterThan(0);
+    expect(materials.every((m) => m._disposed)).toBe(true);
+  });
+
+  test("scene empty disposes the gizmo", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+    expect(babylon.createdMeshes.length).toBeGreaterThan(0);
+
+    emit(EVENTS.SCENE_EMPTY);
+    expect(babylon.disposed.length).toBeGreaterThan(0);
+  });
+
+  test("destroy() unsubscribes and removes render callback", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+    const createdCount = babylon.createdMeshes.length;
+    expect(createdCount).toBeGreaterThan(0);
+
+    scene.onBeforeRenderObservable.remove.mockClear();
+    destroyGizmo();
+
+    expect(scene.onBeforeRenderObservable.remove).toHaveBeenCalled();
+
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+    expect(babylon.createdMeshes.length).toBe(createdCount);
   });
 });
