@@ -248,9 +248,10 @@ const MAX_RING_RADIUS = 8.0;
 export function _ringRadiusFromBounds(min, max) {
   const dx = max.x - min.x;
   const dz = max.z - min.z;
+  // Radius is based on the half-extent so the ring encircles the bounding box.
   return Math.min(
     MAX_RING_RADIUS,
-    Math.max(MIN_RING_RADIUS, Math.max(dx, dz) * RING_RADIUS_FACTOR)
+    Math.max(MIN_RING_RADIUS, (Math.max(dx, dz) / 2) * RING_RADIUS_FACTOR)
   );
 }
 ```

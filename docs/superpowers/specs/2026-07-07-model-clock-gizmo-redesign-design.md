@@ -29,7 +29,7 @@ This redesign replaces the DOM model clock with a **true 3D Babylon mesh gizmo**
 |----------|----------|
 | Visual metaphor | 3D ring gizmo with draggable handle (spatial/arc), replacing the floating clock dial |
 | Anchoring | Centered at the selected node’s pivot/origin, ring plane horizontal (world Y-up) |
-| Ring size | Radius = `max(modelBoundingBox.x, modelBoundingBox.z) * RING_RADIUS_FACTOR` with min/max clamps so it always encircles the model without dominating the view |
+| Ring size | Radius = `(max(bbox.x, bbox.z) / 2) * RING_RADIUS_FACTOR` (half-extent) with min/max clamps so it always encircles the model without dominating the view |
 | Rendering | Babylon mesh gizmo (`MeshBuilder.CreateTorus`, tick meshes, draggable handle sphere), `renderingGroupId = 1` so it draws on top |
 | Coexistence with T/R/S | Auto-appears when a node is selected and has >1 filtered versions; hidden while transform gizmo is being dragged; transform gizmo remains the primary spatial tool |
 | Activation | No toolbar button or mode switch by default; ring is contextual like the transform gizmo. Optional `V` hotkey toggles focus/visibility when a node is selected |
