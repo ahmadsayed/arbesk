@@ -27,7 +27,6 @@ frontend/src/scss/
 │   ├── _buttons.scss
 │   ├── _forms.scss
 │   ├── _cards.scss
-│   ├── _history.scss
 │   ├── _outliner.scss
 │   ├── _pathbar.scss
 │   ├── _ledger.scss
@@ -67,7 +66,7 @@ frontend/src/scss/
 - Brand icon only (no text)
 - Page switcher tabs linking `/library.html` and `/studio.html`
 - Document title (read-only span, `#assetStatusName`)
-- History timeline pill (`#assetHistory` slider)
+- Version-control clocks (`#sceneClock` scene clock, `#modelClock` per-model clock)
 - Save + Besk it as header buttons (`#saveAssetBtn`, `#publishAssetBtn`)
 - Wallet connect/disconnect button remains in header actions (`#connectWalletBtn`, `#disconnectWalletBtn`)
 - New footer: `<footer class="bottombar">` with status text + keyboard-help button
@@ -187,7 +186,7 @@ Three breakpoints:
 | `ui/ledger-panel.js` | Refactored to `[data-view="ledger"]` (Activity) |
 | `ui/comments-panel.js` | **New** — asset-level comments in inspector |
 | `engine/parametric-preview.js` | **New** — node inspector / parametric color binding |
-| `ui/asset-history.js` | History pill in headerbar, scoped to current level |
+| `state/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clocks |
 | `ui/asset-save.js` | Buttons in headerbar, Publish hidden for non-token nested worlds |
 | `ui/asset-drop-zone.js` | Drop overlay → viewport border + Outliner highlight |
 | `engine/scene-graph.js` | Minor: expose dive/ascend hooks |

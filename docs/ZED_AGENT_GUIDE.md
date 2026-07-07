@@ -73,7 +73,7 @@ The `test/frontend/deployment-integrity.test.js` suite validates:
 | Asset drop zone | `frontend/src/js/ui/asset-drop-zone.js` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` |
 | Asset editors (team) | `frontend/src/js/ui/collaborators-panel.js` |
-| Asset history / timeline | `frontend/src/js/ui/asset-history.js` |
+| Asset history / timeline | `frontend/src/js/state/version-history-store.js`, `frontend/src/js/ui/version-clock.js`, `frontend/src/js/ui/scene-clock.js`, `frontend/src/js/ui/model-clock.js` |
 | Asset save / publish | `frontend/src/js/ui/asset-save.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
 | API service | `frontend/src/js/services/api.js` |

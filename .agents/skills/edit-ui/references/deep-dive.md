@@ -36,7 +36,10 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/js/ui/asset-library.js` | Gallery of saved assets (left sidebar) |
 | `frontend/src/js/ui/asset-drop-zone.js` | Drop target for dragged gallery cards |
 | `frontend/src/js/ui/asset-editors.js` | Chat / studio editor surfaces |
-| `frontend/src/js/ui/asset-history.js` | Timeline scrubber in header bar |
+| `frontend/src/js/state/version-history-store.js` | Version history state store (feeds scene/model clocks) |
+| `frontend/src/js/ui/version-clock.js` | Shared SVG clock face component |
+| `frontend/src/js/ui/scene-clock.js` | Scene-level version clock |
+| `frontend/src/js/ui/model-clock.js` | Per-model version clock |
 | `frontend/src/js/ui/asset-save.js` | Save Draft / Publish wiring |
 | `frontend/src/js/ui/create-panel.js` | "New asset" dialog flow |
 | `frontend/src/js/ui/outliner.js` | Scene graph tree in left sidebar |

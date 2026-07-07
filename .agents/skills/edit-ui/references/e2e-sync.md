@@ -38,7 +38,7 @@ Update + run the suite before merging any change that touches:
 | Gallery cards, Add to Scene | `03`, `06` | `assetCard` + `[data-token-id]`, `assetCardName`, button `Add to Scene` |
 | Outliner tree / node rows | `04`, `06` | `outlinerSwitcherBtn`, `outlinerNode` |
 | Parametric component color editor | `04`, `05`, `06` | `componentEditor`, `componentColorInput` |
-| Version slider / time-travel | `04` | `assetHistory`, `historySlider`, `historyVersionBadge` |
+| Version clocks / time-travel | `04` | `sceneClock`, `sceneClockBadge`, `modelClock`, `modelClockDial` |
 | New asset, dive/ascend breadcrumb | `06` | `newAssetBtn`, `inspectorDiveBtn`, `backBtn` |
 | Manifest shape / versioning | matching spec + `e2e/helpers/manifest.mjs` | the validators in `manifest.mjs` |
 | Comments panel / composer | `14`, `15` | `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount` |

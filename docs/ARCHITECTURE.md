@@ -177,7 +177,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
 | UI | `ui/asset-save.js` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
-| UI | `ui/asset-history.js` | Manifest-chain timeline browser (uses client-side walkManifestChain) |
+| State / UI | `state/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clock UIs |
 | UI | `ui/collaborators-panel.js` | Editor list / add/remove UI |
 | UI | `ui/comments-panel.js` | Asset-level comment thread UI |
 | UI | `ui/ledger-panel.js` | Activity feed — walks manifest chain client-side, fetches full manifests |
@@ -390,7 +390,7 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 
 | Consumer | Description |
 |---|---|
-| History timeline UI | Frontend (`time-travel.js` / `asset-history.js`) walks `prev_asset_manifest_cid` client-side and renders a version scrubber |
+| Version clock UI | Frontend (`time-travel.js` / `state/version-history-store.js` / `ui/scene-clock.js` / `ui/model-clock.js`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
 | Activity ledger | Frontend (`ledger-panel.js`) walks the chain and also reads `node.history` entries when present |
 | Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` and `node.history` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |

@@ -359,7 +359,7 @@ E2E is isolated per git worktree: each checkout gets its own Docker Compose proj
 - Wallet integration (`wallet.js`, `wallet-core.js`, `wallet-connect.js`, `wallet-discovery.js`, `wallet-cdp.js`, `smart-wallet-support.js`, `network-config.js`, `siwe.js`, session auth)
 - Generation flow (`create-panel.js`, generation API, transaction validation, mock adapter, provider/tier selection)
 - Save/publish/republish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture, `updateAssetURI`)
-- Parametric editing + version history (`parametric-preview.js`, `asset-history.js`, the outliner selection path, the version slider)
+- Parametric editing + version history (`parametric-preview.js`, `version-history-store.js`, `version-clock.js`, `scene-clock.js`, `model-clock.js`)
 - Nesting / linked child worlds (`nesting.js`, `scene-graph.js` linked-asset handling, token resolver, `child_ref` / `transform_matrix`)
 - Smart contracts, ABI, or deployment scripts
 - Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`)

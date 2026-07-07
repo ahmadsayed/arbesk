@@ -145,7 +145,7 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 5. Scrubs the scene clock back to the oldest version and asserts the badge follows to `v1` (and forward again to `v2`).
 6. Selects the outliner node, asserts the model clock (`#modelClock`) also spans two versions, scrubs it to the oldest entry, and returns to the newest scene version before publishing.
 
-**Why it matters:** Colour/scale edits are first-class versions, and the slider is the app's sole version-control surface. Changes to `parametric-preview.js`, `asset-history.js`, the outliner selection path, or version-chain logic can break it.
+**Why it matters:** Colour/scale edits are first-class versions, and the scene/model clocks are the app's version-control surfaces. Changes to `parametric-preview.js`, `version-history-store.js`, `scene-clock.js`, `model-clock.js`, the outliner selection path, or version-chain logic can break it.
 
 ### 5. Republish existing token (`e2e/specs/05-republish.spec.js`)
 

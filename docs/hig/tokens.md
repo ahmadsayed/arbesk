@@ -376,7 +376,6 @@ styles.scss              ← entry point, ~38 @use lines
 │   ├── _buttons.scss
 │   ├── _forms.scss
 │   ├── _cards.scss
-│   ├── _history.scss
 │   ├── _outliner.scss
 │   ├── _pathbar.scss
 │   ├── _ledger.scss
