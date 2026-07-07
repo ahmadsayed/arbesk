@@ -141,8 +141,9 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 1. Generates `cowboy` (version 1).
 2. Selects the node in the **Outliner**, which auto-opens the component colour editor.
 3. Changes the colour and **Save**s — asserts a new version `2` whose `prev_asset_manifest_cid` is the generation CID.
-4. Asserts the version slider (`#historySlider`) now spans two versions and the badge shows `v2`.
-5. Scrubs the slider back to index `0` and asserts the badge follows to `v1` (and forward again to `v2`).
+4. Asserts the scene clock (`#sceneClock`) now spans two versions and the badge shows `v2`.
+5. Scrubs the scene clock back to the oldest version and asserts the badge follows to `v1` (and forward again to `v2`).
+6. Selects the outliner node, asserts the model clock (`#modelClock`) also spans two versions, scrubs it to the oldest entry, and returns to the newest scene version before publishing.
 
 **Why it matters:** Colour/scale edits are first-class versions, and the slider is the app's sole version-control surface. Changes to `parametric-preview.js`, `asset-history.js`, the outliner selection path, or version-chain logic can break it.
 

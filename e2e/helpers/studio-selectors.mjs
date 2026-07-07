@@ -38,9 +38,11 @@ export const SELECTORS = {
   componentEditor: "#componentEditor",
   componentColorInput: "#selectedComponentColor",
   // Version history / time-travel
-  assetHistory: "#assetHistory",
-  historySlider: "#historySlider",
-  historyVersionBadge: "#historyVersionBadge",
+  sceneClock: "#sceneClock",
+  sceneClockDial: "#sceneClock .version-clock",
+  sceneClockBadge: "#sceneClock .vc-badge",
+  modelClock: "#modelClock",
+  modelClockDial: "#modelClock .version-clock",
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
   settingsSwitcherBtn: '[data-view="settings"]',

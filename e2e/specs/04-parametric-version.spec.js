@@ -13,7 +13,7 @@ import {
   generate,
   saveDraft,
   editFirstNodeColor,
-  scrubHistorySlider,
+  scrubSceneClock,
   publishWithName,
 } from "../helpers/flows.mjs";
 
@@ -42,11 +42,11 @@ test.describe("parametric versioning + time-travel", () => {
     expect(savedManifest.version).toBe(2);
     expect(savedManifest.prev_asset_manifest_cid).toBe(genCid);
 
-    // 5. The version slider now spans two versions and sits on the newest.
-    await expect(page.locator(SELECTORS.assetHistory)).toBeVisible();
-    await expect(page.locator(SELECTORS.historyVersionBadge)).toHaveText("v2");
-    await expect(page.locator(SELECTORS.historySlider)).toHaveAttribute(
-      "max",
+    // 5. The scene clock now spans two versions and sits on the newest.
+    await expect(page.locator(SELECTORS.sceneClock)).toBeVisible();
+    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v2");
+    await expect(page.locator(SELECTORS.sceneClockDial)).toHaveAttribute(
+      "aria-valuemax",
       "1",
     );
 
@@ -65,12 +65,10 @@ test.describe("parametric versioning + time-travel", () => {
       );
     });
 
-    // 6. Time-travel back to v1 (index 0): the original GLB source re-renders.
-    await scrubHistorySlider(page, 0);
-    await expect(page.locator(SELECTORS.historyVersionBadge)).toHaveText("v1");
-    // Loading finished (the section drops its .loading state once the older
-    // manifest is back in the scene).
-    await expect(page.locator(SELECTORS.assetHistory)).not.toHaveClass(
+    // 6. Time-travel back to v1 (oldest): the original GLB source re-renders.
+    await scrubSceneClock(page, "oldest");
+    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v1");
+    await expect(page.locator(SELECTORS.sceneClockDial)).not.toHaveClass(
       /loading/,
     );
     await expect
@@ -82,8 +80,33 @@ test.describe("parametric versioning + time-travel", () => {
     // edit; if its node still claimed format:"glb" while holding glTF JSON,
     // loadAssetManifest would throw in the binary-GLB loader and scene:ready
     // would never fire for v2.
-    await scrubHistorySlider(page, 1);
-    await expect(page.locator(SELECTORS.historyVersionBadge)).toHaveText("v2");
+    await scrubSceneClock(page, "newest");
+    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v2");
+    await expect
+      .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
+      .toBe(saveCid);
+
+    // 7b. Model clock: selecting the node surfaces its filtered dial —
+    // 2 versions (v1 introduction + v2 color edit) → aria-valuemax 1.
+    await page.click(SELECTORS.outlinerSwitcherBtn);
+    await page.locator(SELECTORS.outlinerNode).first().click();
+    await expect(page.locator(SELECTORS.modelClock)).toBeVisible();
+    await expect(page.locator(SELECTORS.modelClockDial)).toHaveAttribute(
+      "aria-valuemax",
+      "1",
+    );
+
+    // Scrub the model clock to its oldest entry → whole scene reloads v1.
+    await page.locator(SELECTORS.modelClockDial).focus();
+    await page.keyboard.press("Home");
+    await expect
+      .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
+      .toBe(genCid);
+
+    // Reloading cleared the selection (model clock hides again); return to
+    // the newest version via the scene clock before publishing.
+    await expect(page.locator(SELECTORS.modelClock)).toBeHidden();
+    await scrubSceneClock(page, "newest");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);

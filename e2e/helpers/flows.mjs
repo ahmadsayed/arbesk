@@ -279,22 +279,17 @@ export async function editFirstNodeColor(page, color) {
 }
 
 /**
- * Move the version slider to an index. `input` updates the badge; `change`
- * commits the load of that version.
+ * Scrub the scene clock to the oldest or newest version. Focusing the dial
+ * expands the collapsed watch face; Home/End commit the version load
+ * immediately (keyboard contract of version-clock.js).
  *
  * @param {Page} page
- * @param {number} index
+ * @param {"oldest" | "newest"} position
  */
-export async function scrubHistorySlider(page, index) {
-  await page.locator(SELECTORS.historySlider).evaluate(
-    /** @type {(el: any, value: string) => void} */ ((el, value) => {
-      const input = /** @type {any} */ (el);
-      input.value = value;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    }),
-    String(index),
-  );
+export async function scrubSceneClock(page, position) {
+  const dial = page.locator(SELECTORS.sceneClockDial);
+  await dial.focus();
+  await page.keyboard.press(position === "oldest" ? "Home" : "End");
 }
 
 // ── Library helpers ──────────────────────────────────────────────────────────
