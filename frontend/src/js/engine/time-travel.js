@@ -114,11 +114,11 @@ function applyScale(meshes, scale) {
 
 /**
  * Walk the manifest chain from a CID backward through prev_asset_manifest_cid.
- * Returns an array of { cid, version, color, scale, sourceCid } in chronological order.
+ * Returns an array of { cid, version, color, scale, sourceCid, nodes } in chronological order.
  *
  * @param {string} startCid - The latest manifest CID to start walking from
  * @param {number} maxDepth - Maximum chain depth to traverse
- * @returns {Promise<Array<{cid: string, version: number, color: string|null, scale: object, sourceCid: string|null}>>}
+ * @returns {Promise<Array<{cid: string, version: number, color: string|null, scale: object, sourceCid: string|null, nodes: Record<string, string>}>>}
  */
 async function walkManifestChain(startCid, maxDepth = 50) {
   // Check cache first
@@ -134,6 +134,19 @@ async function walkManifestChain(startCid, maxDepth = 50) {
       const nodes = manifest.scene?.nodes || [];
       const firstNode = nodes[0] || {};
 
+      // Per-node snapshot for node-level change detection (model clock).
+      // A snapshot string changes whenever the node's source, parametric
+      // edits, or staged transform change between versions.
+      const nodeSnapshots = {};
+      for (const n of nodes) {
+        if (!n.node_id) continue;
+        nodeSnapshots[n.node_id] = JSON.stringify({
+          sourceCid: n.source?.cid || null,
+          postProcessor: n.post_processor || null,
+          transform: n.transform_matrix || null,
+        });
+      }
+
       chain.unshift({
         cid,
         version: manifest.version || 0,
@@ -143,6 +156,7 @@ async function walkManifestChain(startCid, maxDepth = 50) {
         color: firstNode.post_processor?.color || null,
         scale: firstNode.post_processor?.scale || { x: 1, y: 1, z: 1 },
         sourceCid: firstNode.source?.cid || null,
+        nodes: nodeSnapshots,
       });
 
       cid = manifest.prev_asset_manifest_cid || null;
