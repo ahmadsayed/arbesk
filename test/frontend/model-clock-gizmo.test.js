@@ -386,4 +386,22 @@ describe("model-clock-gizmo lifecycle", () => {
     emit(EVENTS.NODE_DESELECTED);
     expect(babylon.disposed.length).toBeGreaterThan(0);
   });
+
+  test("arrow keys step version when a node is selected", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
+    expect(storeMock.loadVersion).toHaveBeenCalledWith("c2");
+
+    storeMock.loadVersion.mockClear();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }));
+    expect(storeMock.loadVersion).toHaveBeenCalledWith("c1");
+  });
 });

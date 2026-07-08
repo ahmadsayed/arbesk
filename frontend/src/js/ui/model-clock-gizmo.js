@@ -265,11 +265,53 @@ export function initModelClockGizmo(scene, camera) {
     render();
   }
 
+  function onKeyDown(e) {
+    if (!current) return;
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    const editable =
+      document.activeElement?.isContentEditable ||
+      tag === "input" ||
+      tag === "textarea" ||
+      tag === "select";
+    if (editable) return;
+
+    const n = current.filtered.length;
+    let idx = null;
+    const activeIdx = current.filtered.findIndex(
+      (entry) => entry.cid === store.getState().activeCid
+    );
+    switch (e.key) {
+      case "ArrowLeft":
+      case "ArrowDown":
+        idx = Math.max(0, activeIdx - 1);
+        break;
+      case "ArrowRight":
+      case "ArrowUp":
+        idx = Math.min(n - 1, activeIdx + 1);
+        break;
+      case "Home":
+        idx = 0;
+        break;
+      case "End":
+        idx = n - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const entry = current.filtered[idx];
+    if (entry && entry.cid !== store.getState().activeCid) {
+      store.loadVersion(entry.cid);
+    }
+  }
+
   const unsubscribeSelected = on(EVENTS.NODE_SELECTED, onSelect);
   const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, destroyCurrent);
   const unsubscribeEmpty = on(EVENTS.SCENE_EMPTY, destroyCurrent);
   const renderHandle = scene.onBeforeRenderObservable.add(render);
   const unsubscribeStore = store.subscribe(onStoreChange);
+
+  document.addEventListener("keydown", onKeyDown);
 
   return function destroy() {
     destroyCurrent();
@@ -278,5 +320,6 @@ export function initModelClockGizmo(scene, camera) {
     unsubscribeEmpty();
     unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
+    document.removeEventListener("keydown", onKeyDown);
   };
 }
