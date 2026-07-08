@@ -331,6 +331,21 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(babylon.disposed.length).toBeGreaterThan(0);
   });
 
+  test("scene cleared disposes the gizmo", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+    expect(babylon.createdMeshes.length).toBeGreaterThan(0);
+
+    emit(EVENTS.SCENE_CLEARED);
+    expect(babylon.disposed.length).toBeGreaterThan(0);
+  });
+
   test("destroy() unsubscribes and removes render callback", async () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"

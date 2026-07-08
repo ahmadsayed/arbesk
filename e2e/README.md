@@ -143,7 +143,7 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 3. Changes the colour and **Save**s — asserts a new version `2` whose `prev_asset_manifest_cid` is the generation CID.
 4. Asserts the scene clock (`#sceneClock`) now spans two versions and the badge shows `v2`.
 5. Scrubs the scene clock back to the oldest version and asserts the badge follows to `v1` (and forward again to `v2`).
-6. Selects the outliner node, asserts the model clock (`#modelClock`) also spans two versions, scrubs it to the oldest entry, and returns to the newest scene version before publishing.
+6. Selects the outliner node, asserts the model-clock badge (`#modelClockBadge`) shows `v2`, presses `Home` to step the 3D gizmo to the oldest version, and returns to the newest scene version before publishing.
 
 **Why it matters:** Colour/scale edits are first-class versions, and the scene/model clocks are the app's version-control surfaces. Changes to `parametric-preview.js`, `version-history-store.js`, `scene-clock.js`, `model-clock.js`, the outliner selection path, or version-chain logic can break it.
 

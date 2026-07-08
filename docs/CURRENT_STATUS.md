@@ -150,7 +150,7 @@ frontend/src/js/
 │   ├── asset-save.js           # Save Draft / Publish UI; delegates building to services/asset-save/
 │   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag; inaccessible token cards with Burn action
 │   ├── asset-drop-zone.js      # Viewport drag/drop overlay
-│   ├── scene-clock.js / model-clock.js / version-clock.js  # Viewport version clock gizmos (scene + selected node)
+│   ├── scene-clock.js / model-clock-gizmo.js / version-clock.js  # Viewport version clock gizmos (scene + selected-node 3D ring)
 │   ├── collaborators-panel.js  # Team panel (add/remove editors, owner badge)
 │   ├── comments-panel.js       # Asset-level comment thread UI
 │   ├── ledger-panel.js         # Activity feed derived from manifest chain

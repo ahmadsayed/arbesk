@@ -343,6 +343,7 @@ export function initModelClockGizmo(scene, camera) {
 
   const unsubscribeSelected = on(EVENTS.NODE_SELECTED, onSelect);
   const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, destroyCurrent);
+  const unsubscribeCleared = on(EVENTS.SCENE_CLEARED, destroyCurrent);
   const unsubscribeEmpty = on(EVENTS.SCENE_EMPTY, destroyCurrent);
   const renderHandle = scene.onBeforeRenderObservable.add(render);
   const unsubscribeStore = store.subscribe(onStoreChange);
@@ -353,6 +354,7 @@ export function initModelClockGizmo(scene, camera) {
     destroyCurrent();
     unsubscribeSelected();
     unsubscribeDeselected();
+    unsubscribeCleared();
     unsubscribeEmpty();
     unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
