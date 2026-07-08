@@ -139,6 +139,10 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   gizmo.radius = radius;
   gizmo.filtered = filtered;
 
+  const badgeHost = new BABYLON.TransformNode("modelClockBadgeHost", scene);
+  badgeHost.setParent(root);
+  gizmo.badgeHost = badgeHost;
+
   const dragBehavior = new BABYLON.PointerDragBehavior({
     dragPlaneNormal: new BABYLON.Vector3(0, 1, 0),
   });
@@ -179,14 +183,21 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   return gizmo;
 }
 
-function syncHandlePosition(g, activeIdx) {
+function syncHandlePosition(g, activeIdx, badge) {
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
-  g.handle.position = new BABYLON.Vector3(
+  const pos = new BABYLON.Vector3(
     Math.cos(angle) * g.radius,
     0,
     Math.sin(angle) * g.radius
   );
+  g.handle.position = pos;
+  if (g.badgeHost) {
+    g.badgeHost.position = pos.clone();
+  }
+  if (badge) {
+    badge.textContent = `v${g.filtered[safeIdx].version}`;
+  }
 }
 
 function updateTickColors(g, activeIdx) {
@@ -205,19 +216,26 @@ function updateTickColors(g, activeIdx) {
   }
 }
 
-function syncVisuals(g) {
+function syncVisuals(g, badge) {
   const s = store.getState();
   const activeIdx = g.filtered.findIndex((e) => e.cid === s.activeCid);
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   updateTickColors(g, safeIdx);
   if (!isDraggingHandle) {
-    syncHandlePosition(g, safeIdx);
+    syncHandlePosition(g, safeIdx, badge);
   }
 }
 
 export function initModelClockGizmo(scene, camera) {
-  // camera is reserved for badge projection in Task 7.
-  void camera;
+  const viewport = document.getElementById("viewport");
+  let badge = document.getElementById("modelClockBadge");
+  if (!badge && viewport) {
+    badge = document.createElement("div");
+    badge.id = "modelClockBadge";
+    badge.className = "model-clock-badge";
+    viewport.appendChild(badge);
+  }
+
   let current = null;
   let currentNodeId = null;
 
@@ -227,7 +245,25 @@ export function initModelClockGizmo(scene, camera) {
     current.ring.isVisible = !hidden;
     for (const t of current.ticks) t.isVisible = !hidden;
     current.handle.isVisible = !hidden;
-    syncVisuals(current);
+    syncVisuals(current, badge);
+
+    if (badge && current.badgeHost) {
+      const world = current.badgeHost.getAbsolutePosition
+        ? current.badgeHost.getAbsolutePosition()
+        : new BABYLON.Vector3(0, 0, 0);
+      const engine = scene.getEngine();
+      const projected = BABYLON.Vector3.Project(
+        world,
+        BABYLON.Matrix.Identity(),
+        scene.getTransformMatrix(),
+        camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+      );
+      const canvas = engine.getRenderingCanvas();
+      const sx = canvas.clientWidth / engine.getRenderWidth();
+      const sy = canvas.clientHeight / engine.getRenderHeight();
+      badge.style.transform = `translate(${projected.x * sx}px, ${projected.y * sy}px) translate(-50%, -50%)`;
+      badge.hidden = hidden || projected.z < 0 || projected.z > 1;
+    }
   }
 
   function onSelect(e) {
@@ -237,7 +273,7 @@ export function initModelClockGizmo(scene, camera) {
     currentNodeId = nodeId;
     current = buildGizmoForNode(scene, nodeId, state.isGizmoDragging);
     if (current) {
-      syncVisuals(current);
+      syncVisuals(current, badge);
     }
   }
 
@@ -257,7 +293,7 @@ export function initModelClockGizmo(scene, camera) {
         destroyCurrent();
         current = buildGizmoForNode(scene, currentNodeId, state.isGizmoDragging);
         if (current) {
-          syncVisuals(current);
+          syncVisuals(current, badge);
         }
         return;
       }
@@ -321,5 +357,6 @@ export function initModelClockGizmo(scene, camera) {
     unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
     document.removeEventListener("keydown", onKeyDown);
+    badge?.remove();
   };
 }

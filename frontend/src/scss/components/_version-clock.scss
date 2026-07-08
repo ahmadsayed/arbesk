@@ -5,7 +5,7 @@
 //   .scene-clock — fixed bottom-right of #viewport, collapsed watch face
 //                  that expands on hover/focus.
 //   .model-clock — floats above the selected node's bounding box,
-//                  repositioned per frame by model-clock.js.
+//                  repositioned per frame by model-clock-gizmo.js.
 // ═══════════════════════════════════════════════════════════════════
 
 .version-clock {
@@ -176,4 +176,20 @@
     animation: none;
     opacity: 0.6;
   }
+}
+
+.model-clock-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--popover-fg);
+  background: var(--popover-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--size-1);
+  pointer-events: none;
+  z-index: 20;
+  white-space: nowrap;
 }

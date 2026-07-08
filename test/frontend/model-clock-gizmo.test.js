@@ -356,7 +356,7 @@ describe("model-clock-gizmo lifecycle", () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
-    initModelClockGizmo(scene, camera);
+    destroyGizmo = initModelClockGizmo(scene, camera);
 
     state.highlightedNodeId = "node-a";
     state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
@@ -375,7 +375,7 @@ describe("model-clock-gizmo lifecycle", () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
-    initModelClockGizmo(scene, camera);
+    destroyGizmo = initModelClockGizmo(scene, camera);
 
     state.highlightedNodeId = "node-a";
     state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
@@ -391,7 +391,7 @@ describe("model-clock-gizmo lifecycle", () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
-    initModelClockGizmo(scene, camera);
+    destroyGizmo = initModelClockGizmo(scene, camera);
 
     state.highlightedNodeId = "node-a";
     state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
@@ -403,5 +403,20 @@ describe("model-clock-gizmo lifecycle", () => {
     storeMock.loadVersion.mockClear();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }));
     expect(storeMock.loadVersion).toHaveBeenCalledWith("c1");
+  });
+
+  test("badge element is created and positioned", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const badge = document.getElementById("modelClockBadge");
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toContain("v3");
   });
 });
