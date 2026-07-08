@@ -86,26 +86,21 @@ test.describe("parametric versioning + time-travel", () => {
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);
 
-    // 7b. Model clock: selecting the node surfaces its filtered dial —
-    // 2 versions (v1 introduction + v2 color edit) → aria-valuemax 1.
+    // 7b. Model clock: selecting the node surfaces the 3D ring gizmo badge.
     await page.click(SELECTORS.outlinerSwitcherBtn);
     await page.locator(SELECTORS.outlinerNode).first().click();
-    await expect(page.locator(SELECTORS.modelClock)).toBeVisible();
-    await expect(page.locator(SELECTORS.modelClockDial)).toHaveAttribute(
-      "aria-valuemax",
-      "1",
-    );
+    await expect(page.locator(SELECTORS.modelClockBadge)).toBeVisible();
+    await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v2");
 
-    // Scrub the model clock to its oldest entry → whole scene reloads v1.
-    await page.locator(SELECTORS.modelClockDial).focus();
+    // Step the gizmo to its oldest entry via keyboard → whole scene reloads v1.
     await page.keyboard.press("Home");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(genCid);
 
-    // Reloading cleared the selection (model clock hides again); return to
+    // Reloading cleared the selection (model clock badge hides again); return to
     // the newest version via the scene clock before publishing.
-    await expect(page.locator(SELECTORS.modelClock)).toBeHidden();
+    await expect(page.locator(SELECTORS.modelClockBadge)).toBeHidden();
     await scrubSceneClock(page, "newest");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
