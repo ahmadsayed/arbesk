@@ -4,8 +4,8 @@
 // Two hosts share one face component (.version-clock):
 //   .scene-clock — fixed bottom-right of #viewport, collapsed watch face
 //                  that expands on hover/focus.
-//   .model-clock — floats above the selected node's bounding box,
-//                  repositioned per frame by model-clock-gizmo.js.
+//   .model-clock-badge — floating label that follows the 3D gizmo handle
+//                         (rendered by frontend/src/js/ui/model-clock-gizmo.js).
 // ═══════════════════════════════════════════════════════════════════
 
 .version-clock {
@@ -121,41 +121,6 @@
   }
 }
 
-// ─── Model clock host: positioned per frame above the selected node ───
-
-.model-clock {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 28px;
-  height: 28px;
-  z-index: 20;
-  transition: width 160ms ease, height 160ms ease;
-
-  .vc-badge,
-  .vc-detail,
-  .vc-ticks,
-  .vc-published-ring {
-    opacity: 0;
-    transition: opacity var(--duration-quick) ease;
-  }
-
-  &.expanded {
-    width: 88px;
-    height: 88px;
-
-    .vc-badge,
-    .vc-ticks,
-    .vc-published-ring {
-      opacity: 1;
-    }
-    .version-clock:hover .vc-detail,
-    .version-clock:focus .vc-detail {
-      opacity: 1;
-    }
-  }
-}
-
 @keyframes vc-pulse {
   0%,
   100% {
@@ -168,7 +133,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .scene-clock,
-  .model-clock,
   .version-clock .vc-detail {
     transition: none;
   }
