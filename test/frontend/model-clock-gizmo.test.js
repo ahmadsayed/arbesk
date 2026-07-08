@@ -351,4 +351,39 @@ describe("model-clock-gizmo lifecycle", () => {
     emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
     expect(babylon.createdMeshes.length).toBe(createdCount);
   });
+
+  test("ring is hidden while transform gizmo is dragging", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const ring = babylon.createdMeshes.find((m) => m.name === "versionRing");
+    expect(ring.isVisible).toBe(true);
+
+    state.isGizmoDragging = true;
+    const render = scene.onBeforeRenderObservable.add.mock.calls[0][0];
+    render();
+    expect(ring.isVisible).toBe(false);
+  });
+
+  test("deselecting disposes the gizmo", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+    expect(babylon.createdMeshes.length).toBeGreaterThan(0);
+
+    state.highlightedNodeId = null;
+    emit(EVENTS.NODE_DESELECTED);
+    expect(babylon.disposed.length).toBeGreaterThan(0);
+  });
 });

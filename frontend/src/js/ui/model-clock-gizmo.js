@@ -60,27 +60,35 @@ const TICK_PREFIX = "versionTick";
 const RING_TESSELLATION = 64;
 const TICK_RADIUS = 0.04;
 
+let isDraggingHandle = false;
+
 function createMaterial(scene, name, color) {
   const mat = new BABYLON.StandardMaterial(name, scene);
   mat.diffuseColor = color;
   return mat;
 }
 
-function buildGizmoForNode(scene, nodeId) {
+function buildGizmoForNode(scene, nodeId, hidden = false) {
   const anchor = state.nodeAnchors.get(nodeId);
   const meshes = state.nodeMeshes.get(nodeId) || [];
   const filtered = store.versionsForNode(nodeId);
   if (!anchor || filtered.length < 2) return null;
 
+  /** @type {any} */
+  const gizmo = { nodeId };
+
   const root = new BABYLON.TransformNode("modelClockRoot", scene);
   root.setParent(anchor);
+  gizmo.root = root;
 
   // Compute radius from bounding box.
   let min = null;
   let max = null;
   for (const mesh of meshes) {
     if (!mesh || mesh.isDisposed()) continue;
-    const bb = mesh.getBoundingInfo().boundingBox;
+    const bi = mesh.getBoundingInfo();
+    if (!bi || !bi.boundingBox) continue;
+    const bb = bi.boundingBox;
     min = min ? BABYLON.Vector3.Minimize(min, bb.minimumWorld) : bb.minimumWorld.clone();
     max = max ? BABYLON.Vector3.Maximize(max, bb.maximumWorld) : bb.maximumWorld.clone();
   }
@@ -95,6 +103,7 @@ function buildGizmoForNode(scene, nodeId) {
   ring.setParent(root);
   ring.material = createMaterial(scene, "ringMat", new BABYLON.Color3(0.65, 0.65, 0.65));
   ring.renderingGroupId = 1;
+  gizmo.ring = ring;
 
   // Ticks.
   const ticks = [];
@@ -115,6 +124,7 @@ function buildGizmoForNode(scene, nodeId) {
     tick.renderingGroupId = 1;
     ticks.push(tick);
   }
+  gizmo.ticks = ticks;
 
   // Handle.
   const handle = BABYLON.MeshBuilder.CreateSphere(
@@ -125,9 +135,15 @@ function buildGizmoForNode(scene, nodeId) {
   handle.setParent(root);
   handle.material = createMaterial(scene, "handleMat", new BABYLON.Color3(0.2, 0.6, 1));
   handle.renderingGroupId = 1;
+  gizmo.handle = handle;
+  gizmo.radius = radius;
+  gizmo.filtered = filtered;
 
   const dragBehavior = new BABYLON.PointerDragBehavior({
     dragPlaneNormal: new BABYLON.Vector3(0, 1, 0),
+  });
+  dragBehavior.onDragStartObservable.add(() => {
+    isDraggingHandle = true;
   });
   dragBehavior.onDragObservable.add(() => {
     // Project handle position onto ring circle in local XZ plane.
@@ -141,8 +157,10 @@ function buildGizmoForNode(scene, nodeId) {
       0,
       Math.sin(snapAngle) * radius
     );
+    updateTickColors(gizmo, idx);
   });
   dragBehavior.onDragEndObservable.add(() => {
+    isDraggingHandle = false;
     const localX = handle.position.x;
     const localZ = handle.position.z;
     const angle = Math.atan2(localZ, localX);
@@ -154,21 +172,72 @@ function buildGizmoForNode(scene, nodeId) {
   });
   handle.addBehavior(dragBehavior);
 
-  return { root, ring, ticks, handle, radius, filtered };
+  ring.isVisible = !hidden;
+  for (const t of ticks) t.isVisible = !hidden;
+  handle.isVisible = !hidden;
+
+  return gizmo;
+}
+
+function syncHandlePosition(g, activeIdx) {
+  const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
+  const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
+  g.handle.position = new BABYLON.Vector3(
+    Math.cos(angle) * g.radius,
+    0,
+    Math.sin(angle) * g.radius
+  );
+}
+
+function updateTickColors(g, activeIdx) {
+  const s = store.getState();
+  const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
+  const publishedIdx = g.filtered.findIndex((e) => e.cid === s.publishedCid);
+
+  for (let i = 0; i < g.ticks.length; i++) {
+    const color =
+      i === publishedIdx
+        ? new BABYLON.Color3(0.2, 0.8, 0.2)
+        : i === safeIdx
+        ? new BABYLON.Color3(0.2, 0.6, 1)
+        : new BABYLON.Color3(0.5, 0.5, 0.5);
+    g.ticks[i].material.diffuseColor = color;
+  }
+}
+
+function syncVisuals(g) {
+  const s = store.getState();
+  const activeIdx = g.filtered.findIndex((e) => e.cid === s.activeCid);
+  const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
+  updateTickColors(g, safeIdx);
+  if (!isDraggingHandle) {
+    syncHandlePosition(g, safeIdx);
+  }
 }
 
 export function initModelClockGizmo(scene, camera) {
   // camera is reserved for badge projection in Task 7.
   void camera;
   let current = null;
+  let currentNodeId = null;
+
+  function render() {
+    if (!current) return;
+    const hidden = state.isGizmoDragging;
+    current.ring.isVisible = !hidden;
+    for (const t of current.ticks) t.isVisible = !hidden;
+    current.handle.isVisible = !hidden;
+    syncVisuals(current);
+  }
 
   function onSelect(e) {
     destroyCurrent();
     const nodeId = e?.nodeId || state.highlightedNodeId;
     if (!nodeId) return;
-    current = buildGizmoForNode(scene, nodeId);
+    currentNodeId = nodeId;
+    current = buildGizmoForNode(scene, nodeId, state.isGizmoDragging);
     if (current) {
-      placeHandle(current);
+      syncVisuals(current);
     }
   }
 
@@ -177,34 +246,37 @@ export function initModelClockGizmo(scene, camera) {
       current.root.dispose(false, true);
       current = null;
     }
+    currentNodeId = null;
+    isDraggingHandle = false;
   }
 
-  function placeHandle(g) {
-    const s = store.getState();
-    const idx = g.filtered.findIndex((e) => e.cid === s.activeCid);
-    const safeIdx = idx >= 0 ? idx : g.filtered.length - 1;
-    const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
-    g.handle.position = new BABYLON.Vector3(
-      Math.cos(angle) * g.radius,
-      0,
-      Math.sin(angle) * g.radius
-    );
-  }
-
-  function render() {
-    // Reserved for per-frame badge/handle updates (Task 7).
+  function onStoreChange() {
+    if (current && currentNodeId) {
+      const latest = store.versionsForNode(currentNodeId);
+      if (latest.length !== current.filtered.length) {
+        destroyCurrent();
+        current = buildGizmoForNode(scene, currentNodeId, state.isGizmoDragging);
+        if (current) {
+          syncVisuals(current);
+        }
+        return;
+      }
+    }
+    render();
   }
 
   const unsubscribeSelected = on(EVENTS.NODE_SELECTED, onSelect);
   const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, destroyCurrent);
   const unsubscribeEmpty = on(EVENTS.SCENE_EMPTY, destroyCurrent);
   const renderHandle = scene.onBeforeRenderObservable.add(render);
+  const unsubscribeStore = store.subscribe(onStoreChange);
 
   return function destroy() {
     destroyCurrent();
     unsubscribeSelected();
     unsubscribeDeselected();
     unsubscribeEmpty();
+    unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
   };
 }
