@@ -54,6 +54,49 @@ export function _indexForAngle(angleDeg, n) {
   return (n - 1 - steps + n) % n;
 }
 
+/**
+ * Ray/plane intersection on plain {x,y,z} vectors.
+ * Returns the hit point, or null when the ray is parallel to the plane or
+ * the plane lies behind the ray origin.
+ *
+ * @param {{x:number,y:number,z:number}} origin
+ * @param {{x:number,y:number,z:number}} dir
+ * @param {{x:number,y:number,z:number}} planePoint
+ * @param {{x:number,y:number,z:number}} planeNormal
+ * @returns {{x:number,y:number,z:number}|null}
+ */
+export function _rayPlaneIntersect(origin, dir, planePoint, planeNormal) {
+  const denom =
+    dir.x * planeNormal.x + dir.y * planeNormal.y + dir.z * planeNormal.z;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t =
+    ((planePoint.x - origin.x) * planeNormal.x +
+      (planePoint.y - origin.y) * planeNormal.y +
+      (planePoint.z - origin.z) * planeNormal.z) /
+    denom;
+  if (t < 0) return null;
+  return {
+    x: origin.x + dir.x * t,
+    y: origin.y + dir.y * t,
+    z: origin.z + dir.z * t,
+  };
+}
+
+/**
+ * Interpolate between two angles (radians) along the shortest arc.
+ *
+ * @param {number} from
+ * @param {number} to
+ * @param {number} t
+ * @returns {number}
+ */
+export function _lerpAngle(from, to, t) {
+  let d = to - from;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return from + d * t;
+}
+
 const RING_NAME = "versionRing";
 const HANDLE_NAME = "versionHandle";
 const TICK_PREFIX = "versionTick";

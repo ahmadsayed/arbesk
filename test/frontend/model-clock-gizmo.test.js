@@ -215,6 +215,51 @@ describe("model-clock-gizmo math", () => {
     expect(_indexForAngle(80, 4)).toBe(1); // closer to index 1
     expect(_indexForAngle(-90, 4)).toBe(3); // oldest
   });
+
+  test("_rayPlaneIntersect hits the plane and rejects parallel/behind rays", async () => {
+    const { _rayPlaneIntersect } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    const hit = _rayPlaneIntersect(
+      { x: 1, y: 2, z: -10 },
+      { x: 0, y: 0, z: 1 },
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 1 }
+    );
+    expect(hit).toEqual({ x: 1, y: 2, z: 0 });
+
+    // Parallel ray never hits.
+    expect(
+      _rayPlaneIntersect(
+        { x: 0, y: 0, z: -10 },
+        { x: 1, y: 0, z: 0 },
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 1 }
+      )
+    ).toBeNull();
+
+    // Plane behind the ray origin.
+    expect(
+      _rayPlaneIntersect(
+        { x: 0, y: 0, z: 10 },
+        { x: 0, y: 0, z: 1 },
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 1 }
+      )
+    ).toBeNull();
+  });
+
+  test("_lerpAngle interpolates along the shortest arc across the wrap", async () => {
+    const { _lerpAngle } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    expect(_lerpAngle(0, Math.PI / 2, 0.5)).toBeCloseTo(Math.PI / 4, 5);
+    // From 170° to -170° the short way is +20°, not -340°.
+    const from = (170 * Math.PI) / 180;
+    const to = (-170 * Math.PI) / 180;
+    expect(_lerpAngle(from, to, 0.5)).toBeCloseTo((180 * Math.PI) / 180, 5);
+    expect(_lerpAngle(1.2, 1.2, 0.5)).toBeCloseTo(1.2, 5);
+  });
 });
 
 describe("model-clock-gizmo lifecycle", () => {
