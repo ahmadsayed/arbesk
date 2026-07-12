@@ -16,18 +16,18 @@ const MAX_RING_RADIUS = 8.0;
  * Compute world-space ring radius from a node bounding box so the ring
  * always encircles the model without dominating the view.
  *
- * The ring lies in the XZ plane, so the radius is driven by the larger of
- * the X and Z extents (Y is ignored).
+ * The ring lies in the XY plane, so the radius is driven by the larger of
+ * the X and Y extents (Z is ignored).
  *
  * @param {BABYLON.Vector3} min
  * @param {BABYLON.Vector3} max
  */
 export function _ringRadiusFromBounds(min, max) {
   const dx = max.x - min.x;
-  const dz = max.z - min.z;
+  const dy = max.y - min.y;
   return Math.min(
     MAX_RING_RADIUS,
-    Math.max(MIN_RING_RADIUS, (Math.max(dx, dz) / 2) * RING_RADIUS_FACTOR)
+    Math.max(MIN_RING_RADIUS, (Math.max(dx, dy) / 2) * RING_RADIUS_FACTOR)
   );
 }
 
@@ -117,8 +117,8 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
     tick.setParent(root);
     tick.position = new BABYLON.Vector3(
       Math.cos(angle) * radius,
-      0,
-      Math.sin(angle) * radius
+      Math.sin(angle) * radius,
+      0
     );
     tick.material = createMaterial(scene, `tickMat-${i}`, new BABYLON.Color3(0.5, 0.5, 0.5));
     tick.renderingGroupId = 1;
@@ -144,30 +144,30 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   gizmo.badgeHost = badgeHost;
 
   const dragBehavior = new BABYLON.PointerDragBehavior({
-    dragPlaneNormal: new BABYLON.Vector3(0, 1, 0),
+    dragPlaneNormal: new BABYLON.Vector3(0, 0, 1),
   });
   dragBehavior.onDragStartObservable.add(() => {
     isDraggingHandle = true;
   });
   dragBehavior.onDragObservable.add(() => {
-    // Project handle position onto ring circle in local XZ plane.
+    // Project handle position onto ring circle in local XY plane.
     const localX = handle.position.x;
-    const localZ = handle.position.z;
-    const angle = Math.atan2(localZ, localX);
+    const localY = handle.position.y;
+    const angle = Math.atan2(localY, localX);
     const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
     const snapAngle = (_angleForIndex(idx, filtered.length) * Math.PI) / 180;
     handle.position = new BABYLON.Vector3(
       Math.cos(snapAngle) * radius,
-      0,
-      Math.sin(snapAngle) * radius
+      Math.sin(snapAngle) * radius,
+      0
     );
     updateTickColors(gizmo, idx);
   });
   dragBehavior.onDragEndObservable.add(() => {
     isDraggingHandle = false;
     const localX = handle.position.x;
-    const localZ = handle.position.z;
-    const angle = Math.atan2(localZ, localX);
+    const localY = handle.position.y;
+    const angle = Math.atan2(localY, localX);
     const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
     const entry = filtered[idx];
     if (entry && entry.cid !== store.getState().activeCid) {
@@ -188,8 +188,8 @@ function syncHandlePosition(g, activeIdx, badge) {
   const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
   const pos = new BABYLON.Vector3(
     Math.cos(angle) * g.radius,
-    0,
-    Math.sin(angle) * g.radius
+    Math.sin(angle) * g.radius,
+    0
   );
   g.handle.position = pos;
   if (g.badgeHost) {
