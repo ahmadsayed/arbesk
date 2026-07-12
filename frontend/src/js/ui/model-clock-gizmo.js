@@ -145,7 +145,16 @@ function placeHandle(g, angleRad) {
     0
   );
   g.handle.rotation.z = angleRad;
-  if (g.badgeHost) g.badgeHost.position = g.handle.position.clone();
+  if (g.badgeHost) {
+    // Sit the badge just outside the ring, radially past the handle, so the
+    // DOM label doesn't fully occlude the handle mesh underneath it.
+    const badgeRadius = g.radius + g.radius * 0.22;
+    g.badgeHost.position = new BABYLON.Vector3(
+      Math.cos(angleRad) * badgeRadius,
+      Math.sin(angleRad) * badgeRadius,
+      0
+    );
+  }
 }
 
 /** Copy the anchor's world position/rotation to the unparented gizmo root.
