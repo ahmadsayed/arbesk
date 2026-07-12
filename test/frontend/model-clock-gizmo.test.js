@@ -331,7 +331,7 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(babylon.disposed.length).toBeGreaterThan(0);
   });
 
-  test("scene cleared disposes the gizmo", async () => {
+  test("scene cleared disposes the gizmo and hides the badge", async () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
@@ -342,8 +342,10 @@ describe("model-clock-gizmo lifecycle", () => {
     emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
     expect(babylon.createdMeshes.length).toBeGreaterThan(0);
 
+    const badge = document.getElementById("modelClockBadge");
     emit(EVENTS.SCENE_CLEARED);
     expect(babylon.disposed.length).toBeGreaterThan(0);
+    expect(badge.hidden).toBe(true);
   });
 
   test("destroy() unsubscribes and removes render callback", async () => {

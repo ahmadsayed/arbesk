@@ -284,6 +284,7 @@ export function initModelClockGizmo(scene, camera) {
     }
     currentNodeId = null;
     isDraggingHandle = false;
+    if (badge) badge.hidden = true;
   }
 
   function onStoreChange() {
