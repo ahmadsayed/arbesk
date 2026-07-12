@@ -103,6 +103,8 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   ring.setParent(root);
   ring.material = createMaterial(scene, "ringMat", new BABYLON.Color3(0.65, 0.65, 0.65));
   ring.renderingGroupId = 1;
+  // CreateTorus defaults to the XZ plane in this Babylon build; rotate to XY.
+  ring.rotation.x = Math.PI / 2;
   gizmo.ring = ring;
 
   // Ticks.
