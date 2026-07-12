@@ -355,7 +355,72 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(handle.material.disableLighting).toBe(true);
   });
 
-  test.todo("dragging handle commits the landed version");
+  test("dragging handle commits the landed version and manages camera", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const handle = babylon.createdMeshes.find((m) => m.name === "versionHandle");
+    const pointerCb = scene.onPointerObservable.add.mock.calls[0][0];
+    const PET = babylon.PointerEventTypes;
+
+    pointerCb({ type: PET.POINTERDOWN, pickInfo: { pickedMesh: handle } });
+    expect(camera.detachControl).toHaveBeenCalled();
+
+    // Ray hits the ring plane at the oldest version's position (180° for n=3
+    // → world (-radius, 0, 0); root sits at the origin in this test).
+    const radius = 0.5; // MIN_RING_RADIUS: no meshes registered → fallback
+    scene.createPickingRay.mockReturnValue({
+      origin: new babylon.Vector3(-radius, 0, -10),
+      direction: new babylon.Vector3(0, 0, 1),
+    });
+    pointerCb({ type: PET.POINTERMOVE });
+
+    pointerCb({ type: PET.POINTERUP });
+    expect(camera.attachControl).toHaveBeenCalled();
+    expect(storeMock.loadVersion).toHaveBeenCalledWith("c1");
+  });
+
+  test("hovering the handle swaps to the hover material", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const handle = babylon.createdMeshes.find((m) => m.name === "versionHandle");
+    const baseMat = handle.material;
+    const pointerCb = scene.onPointerObservable.add.mock.calls[0][0];
+    const PET = babylon.PointerEventTypes;
+
+    pointerCb({ type: PET.POINTERMOVE, pickInfo: { pickedMesh: handle } });
+    expect(handle.material).not.toBe(baseMat);
+
+    pointerCb({ type: PET.POINTERMOVE, pickInfo: { pickedMesh: null } });
+    expect(handle.material).toBe(baseMat);
+  });
+
+  test("disposing the gizmo removes the pointer observer", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    emit(EVENTS.NODE_DESELECTED);
+    expect(scene.onPointerObservable.remove).toHaveBeenCalled();
+  });
 
   test("deselecting node disposes gizmo and its materials", async () => {
     const { initModelClockGizmo } = await import(

@@ -110,6 +110,8 @@ const COLOR_ACTIVE = [0.2, 0.6, 1];
 const COLOR_PUBLISHED = [0.2, 0.8, 0.2];
 const COLOR_HOVER = [1, 1, 0.4];
 
+const DRAG_SMOOTHING = 0.5;
+
 let isDraggingHandle = false;
 
 function createGizmoMaterial(scene, name, [r, g, b]) {
@@ -304,6 +306,90 @@ function syncVisuals(g, badge) {
   }
 }
 
+/** Wire rotation-gizmo-style drag + hover on the handle.
+ * @param {any} gizmo
+ * @param {BABYLON.Scene} mainScene
+ * @param {BABYLON.ArcRotateCamera} camera
+ */
+function wireDrag(gizmo, mainScene, camera) {
+  const uScene = utilityScene(mainScene);
+  const canvas = mainScene.getEngine().getRenderingCanvas();
+
+  function ringAngleFromPointer() {
+    const ray = mainScene.createPickingRay(
+      mainScene.pointerX,
+      mainScene.pointerY,
+      null,
+      camera
+    );
+    const rootPos = gizmo.root.getAbsolutePosition();
+    const rot = gizmo.root.rotationQuaternion;
+    const normal = rot
+      ? new BABYLON.Vector3(0, 0, 1).applyRotationQuaternion(rot)
+      : new BABYLON.Vector3(0, 0, 1);
+    const hit = _rayPlaneIntersect(ray.origin, ray.direction, rootPos, normal);
+    if (!hit) return null;
+    const world = new BABYLON.Vector3(hit.x, hit.y, hit.z);
+    const local = rot
+      ? world.subtract(rootPos).applyRotationQuaternion(BABYLON.Quaternion.Inverse(rot))
+      : world.subtract(rootPos);
+    return Math.atan2(local.y, local.x);
+  }
+
+  gizmo.pointerObserver = uScene.onPointerObservable.add((pi) => {
+    const picked = pi.pickInfo?.pickedMesh;
+    switch (pi.type) {
+      case BABYLON.PointerEventTypes.POINTERDOWN: {
+        if (picked !== gizmo.handle) return;
+        isDraggingHandle = true;
+        gizmo.dragAngle = Math.atan2(gizmo.handle.position.y, gizmo.handle.position.x);
+        gizmo.dragTargetAngle = gizmo.dragAngle;
+        gizmo.dragHoverIdx = -1;
+        camera.detachControl();
+        if (canvas) canvas.style.cursor = "grabbing";
+        break;
+      }
+      case BABYLON.PointerEventTypes.POINTERMOVE: {
+        if (!isDraggingHandle) {
+          const hovered = picked === gizmo.handle;
+          gizmo.handle.material = hovered ? gizmo.handleHoverMat : gizmo.handleMat;
+          if (canvas) canvas.style.cursor = hovered ? "grab" : "";
+          return;
+        }
+        const target = ringAngleFromPointer();
+        if (target === null) return;
+        gizmo.dragTargetAngle = target;
+        gizmo.dragAngle = _lerpAngle(gizmo.dragAngle, target, DRAG_SMOOTHING);
+        placeHandle(gizmo, gizmo.dragAngle);
+        gizmo.dragHoverIdx = _indexForAngle(
+          (gizmo.dragTargetAngle * 180) / Math.PI,
+          gizmo.filtered.length
+        );
+        updateTickColors(gizmo, gizmo.dragHoverIdx);
+        break;
+      }
+      case BABYLON.PointerEventTypes.POINTERUP: {
+        if (!isDraggingHandle) return;
+        isDraggingHandle = false;
+        camera.attachControl(canvas, true);
+        if (canvas) canvas.style.cursor = "";
+        // Commit where the cursor actually is, not the smoothed position.
+        const idx = _indexForAngle(
+          (gizmo.dragTargetAngle * 180) / Math.PI,
+          gizmo.filtered.length
+        );
+        gizmo.dragHoverIdx = -1;
+        placeHandle(gizmo, (_angleForIndex(idx, gizmo.filtered.length) * Math.PI) / 180);
+        const entry = gizmo.filtered[idx];
+        if (entry && entry.cid !== store.getState().activeCid) {
+          store.loadVersion(entry.cid);
+        }
+        break;
+      }
+    }
+  });
+}
+
 export function initModelClockGizmo(scene, camera) {
   const viewport = document.getElementById("viewport");
   let badge = document.getElementById("modelClockBadge");
@@ -349,6 +435,7 @@ export function initModelClockGizmo(scene, camera) {
     currentNodeId = nodeId;
     current = buildGizmoForNode(scene, nodeId);
     if (current) {
+      wireDrag(current, scene, camera);
       syncVisuals(current, badge);
     }
   }
@@ -382,6 +469,7 @@ export function initModelClockGizmo(scene, camera) {
         destroyCurrent();
         current = buildGizmoForNode(scene, currentNodeId);
         if (current) {
+          wireDrag(current, scene, camera);
           syncVisuals(current, badge);
         }
         return;
