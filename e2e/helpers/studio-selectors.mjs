@@ -42,6 +42,7 @@ export const SELECTORS = {
   sceneClockDial: "#sceneClock .version-clock",
   sceneClockBadge: "#sceneClock .vc-badge",
   modelClockBadge: "#modelClockBadge",
+  timeModeButton: '#transformToolbar [data-mode="time"]',
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
   settingsSwitcherBtn: '[data-view="settings"]',

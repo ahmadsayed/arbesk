@@ -86,9 +86,11 @@ test.describe("parametric versioning + time-travel", () => {
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);
 
-    // 7b. Model clock: selecting the node surfaces the 3D ring gizmo badge.
+    // 7b. Model clock: selecting the node + entering Time mode (V) surfaces
+    // the 3D ring gizmo badge.
     await page.click(SELECTORS.outlinerSwitcherBtn);
     await page.locator(SELECTORS.outlinerNode).first().click();
+    await page.click(SELECTORS.timeModeButton);
     await expect(page.locator(SELECTORS.modelClockBadge)).toBeVisible();
     await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v2");
 
