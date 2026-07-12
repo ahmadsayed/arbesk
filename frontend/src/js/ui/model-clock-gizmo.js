@@ -100,18 +100,69 @@ export function _lerpAngle(from, to, t) {
 const RING_NAME = "versionRing";
 const HANDLE_NAME = "versionHandle";
 const TICK_PREFIX = "versionTick";
+const ARROW_NAME = "versionArrow";
 const RING_TESSELLATION = 64;
-const TICK_RADIUS = 0.04;
+
+// Flat, unlit gizmo palette (matches Babylon transform-gizmo styling).
+const COLOR_RING = [0.65, 0.65, 0.65];
+const COLOR_TICK = [0.5, 0.5, 0.5];
+const COLOR_ACTIVE = [0.2, 0.6, 1];
+const COLOR_PUBLISHED = [0.2, 0.8, 0.2];
+const COLOR_HOVER = [1, 1, 0.4];
 
 let isDraggingHandle = false;
 
-function createMaterial(scene, name, color) {
+function createGizmoMaterial(scene, name, [r, g, b]) {
   const mat = new BABYLON.StandardMaterial(name, scene);
-  mat.diffuseColor = color;
+  mat.emissiveColor = new BABYLON.Color3(r, g, b);
+  mat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+  mat.specularColor = new BABYLON.Color3(0, 0, 0);
+  mat.disableLighting = true;
   return mat;
 }
 
-function buildGizmoForNode(scene, nodeId, hidden = false) {
+/** The shared gizmo utility layer scene; falls back to the main scene when
+ * the utility layer is unavailable (older Babylon builds).
+ * @param {BABYLON.Scene} mainScene
+ */
+function utilityScene(mainScene) {
+  return (
+    BABYLON.UtilityLayerRenderer?.DefaultUtilityLayer?.utilityLayerScene ||
+    mainScene
+  );
+}
+
+/** Position + orient the handle (and badge host) at an angle on the ring.
+ * @param {any} g
+ * @param {number} angleRad
+ */
+function placeHandle(g, angleRad) {
+  g.handle.position = new BABYLON.Vector3(
+    Math.cos(angleRad) * g.radius,
+    Math.sin(angleRad) * g.radius,
+    0
+  );
+  g.handle.rotation.z = angleRad;
+  if (g.badgeHost) g.badgeHost.position = g.handle.position.clone();
+}
+
+/** Copy the anchor's world position/rotation to the unparented gizmo root.
+ * Scale is intentionally NOT copied: the radius is already computed from
+ * world-space bounds, so inheriting anchor scale would double-scale the ring.
+ * @param {any} root
+ * @param {any} anchor
+ */
+function syncRootToAnchor(root, anchor) {
+  if (!anchor || anchor.isDisposed?.()) return;
+  root.position.copyFrom(anchor.getAbsolutePosition());
+  const rot = anchor.absoluteRotationQuaternion;
+  if (rot) {
+    if (root.rotationQuaternion) root.rotationQuaternion.copyFrom(rot);
+    else root.rotationQuaternion = rot.clone();
+  }
+}
+
+function buildGizmoForNode(scene, nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   const meshes = state.nodeMeshes.get(nodeId) || [];
   // Show the full asset version chain on the model clock so the active
@@ -119,14 +170,15 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   const filtered = store.getState().entries;
   if (!anchor || filtered.length < 2) return null;
 
-  /** @type {any} */
-  const gizmo = { nodeId };
+  const uScene = utilityScene(scene);
 
-  const root = new BABYLON.TransformNode("modelClockRoot", scene);
-  root.setParent(anchor);
+  /** @type {any} */
+  const gizmo = { nodeId, anchor, dragHoverIdx: -1 };
+
+  const root = new BABYLON.TransformNode("modelClockRoot", uScene);
   gizmo.root = root;
 
-  // Compute radius from bounding box.
+  // Compute radius from the node's world bounding box.
   let min = null;
   let max = null;
   for (const mesh of meshes) {
@@ -138,28 +190,32 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
     max = max ? BABYLON.Vector3.Maximize(max, bb.maximumWorld) : bb.maximumWorld.clone();
   }
   const radius = min && max ? _ringRadiusFromBounds(min, max) : MIN_RING_RADIUS;
+  gizmo.radius = radius;
+  gizmo.filtered = filtered;
 
-  // Ring.
+  syncRootToAnchor(root, anchor);
+
+  // Ring: thin flat torus in the XY plane.
   const ring = BABYLON.MeshBuilder.CreateTorus(
     RING_NAME,
     { diameter: radius * 2, thickness: radius * 0.005, tessellation: RING_TESSELLATION },
-    scene
+    uScene
   );
   ring.setParent(root);
-  ring.material = createMaterial(scene, "ringMat", new BABYLON.Color3(0.65, 0.65, 0.65));
-  ring.renderingGroupId = 1;
+  ring.material = createGizmoMaterial(uScene, "ringMat", COLOR_RING);
   // CreateTorus defaults to the XZ plane in this Babylon build; rotate to XY.
   ring.rotation.x = Math.PI / 2;
+  ring.isPickable = false;
   gizmo.ring = ring;
 
-  // Ticks.
+  // Ticks: radial marks like clock minute marks (local X = radial).
   const ticks = [];
   for (let i = 0; i < filtered.length; i++) {
     const angle = (_angleForIndex(i, filtered.length) * Math.PI) / 180;
-    const tick = BABYLON.MeshBuilder.CreateSphere(
+    const tick = BABYLON.MeshBuilder.CreateBox(
       `${TICK_PREFIX}-${i}`,
-      { diameter: radius * TICK_RADIUS * 2 },
-      scene
+      { width: radius * 0.1, height: radius * 0.02, depth: radius * 0.02 },
+      uScene
     );
     tick.setParent(root);
     tick.position = new BABYLON.Vector3(
@@ -167,66 +223,51 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
       Math.sin(angle) * radius,
       0
     );
-    tick.material = createMaterial(scene, `tickMat-${i}`, new BABYLON.Color3(0.5, 0.5, 0.5));
-    tick.renderingGroupId = 1;
+    tick.rotation.z = angle;
+    tick.material = createGizmoMaterial(uScene, `tickMat-${i}`, COLOR_TICK);
+    tick.isPickable = false;
     ticks.push(tick);
   }
   gizmo.ticks = ticks;
 
-  // Handle.
-  const handle = BABYLON.MeshBuilder.CreateSphere(
+  // Arrowhead: cone just past the newest tick, pointing "toward newer"
+  // (decreasing angle / clockwise, matching _angleForIndex ordering).
+  const n = filtered.length;
+  const newestAngle = (_angleForIndex(n - 1, n) * Math.PI) / 180;
+  const arrowAngle = newestAngle - Math.min(0.35, Math.PI / n);
+  const arrow = BABYLON.MeshBuilder.CreateCylinder(
+    ARROW_NAME,
+    { height: radius * 0.08, diameterTop: 0, diameterBottom: radius * 0.05, tessellation: 12 },
+    uScene
+  );
+  arrow.setParent(root);
+  arrow.position = new BABYLON.Vector3(
+    Math.cos(arrowAngle) * radius,
+    Math.sin(arrowAngle) * radius,
+    0
+  );
+  // Cone axis is +Y; rotating by (angle + PI) aligns it with the clockwise
+  // tangent (sin a, -cos a, 0).
+  arrow.rotation.z = arrowAngle + Math.PI;
+  arrow.material = createGizmoMaterial(uScene, "arrowMat", COLOR_RING);
+  arrow.isPickable = false;
+  gizmo.arrow = arrow;
+
+  // Handle: tangent lozenge seated on the ring (local Y = tangent).
+  const handle = BABYLON.MeshBuilder.CreateBox(
     HANDLE_NAME,
-    { diameter: radius * 0.12 },
-    scene
+    { width: radius * 0.05, height: radius * 0.16, depth: radius * 0.05 },
+    uScene
   );
   handle.setParent(root);
-  handle.material = createMaterial(scene, "handleMat", new BABYLON.Color3(0.2, 0.6, 1));
-  handle.renderingGroupId = 1;
+  gizmo.handleMat = createGizmoMaterial(uScene, "handleMat", COLOR_ACTIVE);
+  gizmo.handleHoverMat = createGizmoMaterial(uScene, "handleHoverMat", COLOR_HOVER);
+  handle.material = gizmo.handleMat;
   gizmo.handle = handle;
-  gizmo.radius = radius;
-  gizmo.filtered = filtered;
 
-  const badgeHost = new BABYLON.TransformNode("modelClockBadgeHost", scene);
+  const badgeHost = new BABYLON.TransformNode("modelClockBadgeHost", uScene);
   badgeHost.setParent(root);
   gizmo.badgeHost = badgeHost;
-
-  const dragBehavior = new BABYLON.PointerDragBehavior({
-    dragPlaneNormal: new BABYLON.Vector3(0, 0, 1),
-  });
-  dragBehavior.onDragStartObservable.add(() => {
-    isDraggingHandle = true;
-    gizmo.dragHoverIdx = -1;
-  });
-  dragBehavior.onDragObservable.add(() => {
-    // Keep the handle continuously on the XY ring circle while dragging.
-    const localX = handle.position.x;
-    const localY = handle.position.y;
-    const angle = Math.atan2(localY, localX);
-    handle.position = new BABYLON.Vector3(
-      Math.cos(angle) * radius,
-      Math.sin(angle) * radius,
-      0
-    );
-    gizmo.dragHoverIdx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
-    updateTickColors(gizmo, gizmo.dragHoverIdx);
-  });
-  dragBehavior.onDragEndObservable.add(() => {
-    isDraggingHandle = false;
-    const localX = handle.position.x;
-    const localY = handle.position.y;
-    const angle = Math.atan2(localY, localX);
-    const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
-    gizmo.dragHoverIdx = -1;
-    const entry = filtered[idx];
-    if (entry && entry.cid !== store.getState().activeCid) {
-      store.loadVersion(entry.cid);
-    }
-  });
-  handle.addBehavior(dragBehavior);
-
-  ring.isVisible = !hidden;
-  for (const t of ticks) t.isVisible = !hidden;
-  handle.isVisible = !hidden;
 
   return gizmo;
 }
@@ -234,15 +275,7 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
 function syncHandlePosition(g, activeIdx, badge) {
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
-  const pos = new BABYLON.Vector3(
-    Math.cos(angle) * g.radius,
-    Math.sin(angle) * g.radius,
-    0
-  );
-  g.handle.position = pos;
-  if (g.badgeHost) {
-    g.badgeHost.position = pos.clone();
-  }
+  placeHandle(g, angle);
   if (badge) {
     badge.textContent = `v${g.filtered[safeIdx].version}`;
   }
@@ -254,13 +287,9 @@ function updateTickColors(g, activeIdx) {
   const publishedIdx = g.filtered.findIndex((e) => e.cid === s.publishedCid);
 
   for (let i = 0; i < g.ticks.length; i++) {
-    const color =
-      i === publishedIdx
-        ? new BABYLON.Color3(0.2, 0.8, 0.2)
-        : i === safeIdx
-        ? new BABYLON.Color3(0.2, 0.6, 1)
-        : new BABYLON.Color3(0.5, 0.5, 0.5);
-    g.ticks[i].material.diffuseColor = color;
+    const rgb =
+      i === publishedIdx ? COLOR_PUBLISHED : i === safeIdx ? COLOR_ACTIVE : COLOR_TICK;
+    g.ticks[i].material.emissiveColor = new BABYLON.Color3(rgb[0], rgb[1], rgb[2]);
   }
 }
 
@@ -290,10 +319,7 @@ export function initModelClockGizmo(scene, camera) {
 
   function render() {
     if (!current) return;
-    const hidden = state.isGizmoDragging;
-    current.ring.isVisible = !hidden;
-    for (const t of current.ticks) t.isVisible = !hidden;
-    current.handle.isVisible = !hidden;
+    syncRootToAnchor(current.root, current.anchor);
     syncVisuals(current, badge);
 
     if (badge && current.badgeHost) {
@@ -311,16 +337,17 @@ export function initModelClockGizmo(scene, camera) {
       const sx = canvas.clientWidth / engine.getRenderWidth();
       const sy = canvas.clientHeight / engine.getRenderHeight();
       badge.style.transform = `translate(${projected.x * sx}px, ${projected.y * sy}px) translate(-50%, -50%)`;
-      badge.hidden = hidden || projected.z < 0 || projected.z > 1;
+      badge.hidden = projected.z < 0 || projected.z > 1;
     }
   }
 
   function onSelect(e) {
     destroyCurrent();
+    if (state.transformMode !== "time") return;
     const nodeId = e?.nodeId || state.highlightedNodeId;
     if (!nodeId) return;
     currentNodeId = nodeId;
-    current = buildGizmoForNode(scene, nodeId, state.isGizmoDragging);
+    current = buildGizmoForNode(scene, nodeId);
     if (current) {
       syncVisuals(current, badge);
     }
@@ -328,6 +355,10 @@ export function initModelClockGizmo(scene, camera) {
 
   function destroyCurrent() {
     if (current) {
+      if (current.pointerObserver) {
+        utilityScene(scene).onPointerObservable.remove(current.pointerObserver);
+      }
+      current.handleHoverMat?.dispose();
       current.root.dispose(false, true);
       current = null;
     }
@@ -336,12 +367,20 @@ export function initModelClockGizmo(scene, camera) {
     if (badge) badge.hidden = true;
   }
 
+  function onModeChanged(e) {
+    if (e?.mode === "time") {
+      if (state.highlightedNodeId) onSelect({ nodeId: state.highlightedNodeId });
+    } else {
+      destroyCurrent();
+    }
+  }
+
   function onStoreChange() {
     if (current && currentNodeId) {
       const latest = store.getState().entries;
       if (latest.length !== current.filtered.length) {
         destroyCurrent();
-        current = buildGizmoForNode(scene, currentNodeId, state.isGizmoDragging);
+        current = buildGizmoForNode(scene, currentNodeId);
         if (current) {
           syncVisuals(current, badge);
         }
@@ -353,6 +392,7 @@ export function initModelClockGizmo(scene, camera) {
 
   function onKeyDown(e) {
     if (!current) return;
+    if (state.transformMode !== "time") return;
     const tag = document.activeElement?.tagName?.toLowerCase();
     const editable =
       document.activeElement?.isContentEditable ||
@@ -395,6 +435,7 @@ export function initModelClockGizmo(scene, camera) {
   const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, destroyCurrent);
   const unsubscribeCleared = on(EVENTS.SCENE_CLEARED, destroyCurrent);
   const unsubscribeEmpty = on(EVENTS.SCENE_EMPTY, destroyCurrent);
+  const unsubscribeMode = on(EVENTS.TRANSFORM_MODE_CHANGED, onModeChanged);
   const renderHandle = scene.onBeforeRenderObservable.add(render);
   const unsubscribeStore = store.subscribe(onStoreChange);
 
@@ -406,6 +447,7 @@ export function initModelClockGizmo(scene, camera) {
     unsubscribeDeselected();
     unsubscribeCleared();
     unsubscribeEmpty();
+    unsubscribeMode();
     unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
     document.removeEventListener("keydown", onKeyDown);
