@@ -71,7 +71,9 @@ function createMaterial(scene, name, color) {
 function buildGizmoForNode(scene, nodeId, hidden = false) {
   const anchor = state.nodeAnchors.get(nodeId);
   const meshes = state.nodeMeshes.get(nodeId) || [];
-  const filtered = store.versionsForNode(nodeId);
+  // Show the full asset version chain on the model clock so the active
+  // version always has a tick and the scene/model clocks stay in sync.
+  const filtered = store.getState().entries;
   if (!anchor || filtered.length < 2) return null;
 
   /** @type {any} */
@@ -293,7 +295,7 @@ export function initModelClockGizmo(scene, camera) {
 
   function onStoreChange() {
     if (current && currentNodeId) {
-      const latest = store.versionsForNode(currentNodeId);
+      const latest = store.getState().entries;
       if (latest.length !== current.filtered.length) {
         destroyCurrent();
         current = buildGizmoForNode(scene, currentNodeId, state.isGizmoDragging);
