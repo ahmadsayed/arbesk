@@ -8,7 +8,7 @@
  * next Save Draft / Publish.
  */
 
-import { on, EVENTS } from "../events/bus.js";
+import { on, emit, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 
 const TOOLBAR_ID = "transformToolbar";
@@ -20,6 +20,8 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2.5 11a9 9 0 0 1 15.2-5.8L21.5 8"/><path d="M21.5 13a9 9 0 0 1-15.2 5.8L2.5 16"/></svg>',
   scale:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 9 15"/><path d="M12 3H3v18h18v-9"/><path d="M16 3h5v5"/><path d="M14 15l7 7"/></svg>',
+  time:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
 };
 
 /**
@@ -116,6 +118,9 @@ function createToolbar() {
     <button class="btn btn-flat btn-sm transform-tool" data-mode="scale" aria-label="Scale (S)" title="Scale (S)">
       ${ICONS.scale}
     </button>
+    <button class="btn btn-flat btn-sm transform-tool" data-mode="time" aria-label="Time (V)" title="Time (V)">
+      ${ICONS.time}
+    </button>
   `;
 
   viewport.appendChild(toolbar);
@@ -176,6 +181,10 @@ function wireKeyboard(_gizmoManager) {
         e.preventDefault();
         setMode("scale");
         break;
+      case "v":
+        e.preventDefault();
+        setMode("time");
+        break;
     }
   });
 }
@@ -183,7 +192,7 @@ function wireKeyboard(_gizmoManager) {
 /**
  * Switch the active transform mode.
  *
- * @param {'translate' | 'rotate' | 'scale'} mode
+ * @param {'translate' | 'rotate' | 'scale' | 'time'} mode
  */
 function setMode(mode) {
   if (!state.gizmoManager) return;
@@ -203,6 +212,7 @@ function setMode(mode) {
 
   attachToSelected(state.gizmoManager);
   updateToolbarUI();
+  emit(EVENTS.TRANSFORM_MODE_CHANGED, { mode });
 }
 
 const _subscribedGizmos = new WeakSet();

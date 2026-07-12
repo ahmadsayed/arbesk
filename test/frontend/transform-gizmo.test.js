@@ -72,4 +72,38 @@ describe("transform-gizmo toolbar", () => {
 
     expect(buttons().every((b) => !b.disabled)).toBe(true);
   });
+
+  test("time mode button exists, disables all gizmos, and emits mode event", async () => {
+    const { on, EVENTS } = await import("../../frontend/src/js/events/bus.js");
+    const modes = [];
+    const off = on(EVENTS.TRANSFORM_MODE_CHANGED, (e) => modes.push(e.mode));
+
+    const anchor = { isDisposed: () => false };
+    state.nodeAnchors.set("node-1", anchor);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    expect(modes).toEqual(["translate"]);
+
+    const timeBtn = viewport.querySelector('.transform-tool[data-mode="time"]');
+    expect(timeBtn).toBeTruthy();
+    timeBtn.click();
+
+    expect(state.transformMode).toBe("time");
+    expect(modes).toEqual(["translate", "time"]);
+    expect(state.gizmoManager.positionGizmoEnabled).toBe(false);
+    expect(state.gizmoManager.rotationGizmoEnabled).toBe(false);
+    expect(state.gizmoManager.scaleGizmoEnabled).toBe(false);
+    expect(timeBtn.classList.contains("active")).toBe(true);
+    off();
+  });
+
+  test("V key switches to time mode", () => {
+    const anchor = { isDisposed: () => false };
+    state.nodeAnchors.set("node-1", anchor);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));
+    expect(state.transformMode).toBe("time");
+  });
 });
