@@ -150,20 +150,20 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   });
   dragBehavior.onDragStartObservable.add(() => {
     isDraggingHandle = true;
+    gizmo.dragHoverIdx = -1;
   });
   dragBehavior.onDragObservable.add(() => {
-    // Project handle position onto ring circle in local XY plane.
+    // Keep the handle continuously on the XY ring circle while dragging.
     const localX = handle.position.x;
     const localY = handle.position.y;
     const angle = Math.atan2(localY, localX);
-    const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
-    const snapAngle = (_angleForIndex(idx, filtered.length) * Math.PI) / 180;
     handle.position = new BABYLON.Vector3(
-      Math.cos(snapAngle) * radius,
-      Math.sin(snapAngle) * radius,
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
       0
     );
-    updateTickColors(gizmo, idx);
+    gizmo.dragHoverIdx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
+    updateTickColors(gizmo, gizmo.dragHoverIdx);
   });
   dragBehavior.onDragEndObservable.add(() => {
     isDraggingHandle = false;
@@ -171,6 +171,7 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
     const localY = handle.position.y;
     const angle = Math.atan2(localY, localX);
     const idx = _indexForAngle((angle * 180) / Math.PI, filtered.length);
+    gizmo.dragHoverIdx = -1;
     const entry = filtered[idx];
     if (entry && entry.cid !== store.getState().activeCid) {
       store.loadVersion(entry.cid);
@@ -222,7 +223,8 @@ function syncVisuals(g, badge) {
   const s = store.getState();
   const activeIdx = g.filtered.findIndex((e) => e.cid === s.activeCid);
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
-  updateTickColors(g, safeIdx);
+  const colorIdx = isDraggingHandle && g.dragHoverIdx >= 0 ? g.dragHoverIdx : safeIdx;
+  updateTickColors(g, colorIdx);
   if (!isDraggingHandle) {
     syncHandlePosition(g, safeIdx, badge);
   }
