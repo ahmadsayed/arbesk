@@ -4,8 +4,12 @@
 // Two hosts share one face component (.version-clock):
 //   .scene-clock — fixed bottom-right of #viewport, collapsed watch face
 //                  that expands on hover/focus.
-//   .model-clock-badge — floating label that follows the 3D gizmo handle
-//                         (rendered by frontend/src/js/ui/model-clock-gizmo.js).
+//   .model-clock-tick-label — one per tick (rendered by
+//                              frontend/src/js/ui/model-clock-gizmo.js),
+//                              always visible, showing that tick's own
+//                              version number. The tick currently active (or
+//                              under the drag cursor) gets id="modelClockBadge"
+//                              and the .active/.hover modifier classes.
 // ═══════════════════════════════════════════════════════════════════
 
 .version-clock {
@@ -142,18 +146,52 @@
   }
 }
 
-.model-clock-badge {
+// One label per tick, always visible, showing that tick's own version
+// number — so the ring communicates version count/direction at a glance.
+// The active (or drag-hovered) tick's label stands out via .active/.hover
+// and doubles as the "current version" indicator (id="modelClockBadge").
+.model-clock-tick-labels {
   position: absolute;
   left: 0;
   top: 0;
-  padding: 2px 6px;
-  font-size: 11px;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 19;
+}
+
+.model-clock-tick-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 5px;
+  font-size: 10px;
   font-family: var(--font-mono);
-  color: var(--popover-fg);
+  color: var(--dim-fg);
   background: var(--popover-bg);
   border: var(--border-size-1) solid var(--border-color);
   border-radius: var(--size-1);
-  pointer-events: none;
-  z-index: 20;
+  opacity: 0.75;
   white-space: nowrap;
+  transition: opacity var(--duration-quick) ease;
+
+  &.active {
+    padding: 2px 6px;
+    font-size: 11px;
+    color: var(--accent-fg);
+    background: var(--accent-bg);
+    border-color: var(--accent-bg);
+    opacity: 1;
+    z-index: 1;
+  }
+
+  &.hover {
+    padding: 2px 6px;
+    font-size: 11px;
+    color: var(--window-fg);
+    background: var(--yellow-4);
+    border-color: var(--yellow-4);
+    opacity: 1;
+    z-index: 2;
+  }
 }

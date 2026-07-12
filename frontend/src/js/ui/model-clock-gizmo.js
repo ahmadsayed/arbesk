@@ -111,6 +111,9 @@ const COLOR_PUBLISHED = [0.2, 0.8, 0.2];
 const COLOR_HOVER = [1, 1, 0.4];
 
 const DRAG_SMOOTHING = 0.5;
+// How far outside the ring the DOM tick labels sit, as a multiple of the
+// ring radius, so they don't occlude the 3D tick/handle meshes.
+const LABEL_RADIUS_FACTOR = 1.22;
 
 let isDraggingHandle = false;
 
@@ -134,7 +137,7 @@ function utilityScene(mainScene) {
   );
 }
 
-/** Position + orient the handle (and badge host) at an angle on the ring.
+/** Position + orient the handle at an angle on the ring.
  * @param {any} g
  * @param {number} angleRad
  */
@@ -145,16 +148,6 @@ function placeHandle(g, angleRad) {
     0
   );
   g.handle.rotation.z = angleRad;
-  if (g.badgeHost) {
-    // Sit the badge just outside the ring, radially past the handle, so the
-    // DOM label doesn't fully occlude the handle mesh underneath it.
-    const badgeRadius = g.radius + g.radius * 0.22;
-    g.badgeHost.position = new BABYLON.Vector3(
-      Math.cos(angleRad) * badgeRadius,
-      Math.sin(angleRad) * badgeRadius,
-      0
-    );
-  }
 }
 
 /** Copy the anchor's world position/rotation to the unparented gizmo root.
@@ -219,8 +212,11 @@ function buildGizmoForNode(scene, nodeId) {
   ring.isPickable = false;
   gizmo.ring = ring;
 
-  // Ticks: radial marks like clock minute marks (local X = radial).
+  // Ticks: radial marks like clock minute marks (local X = radial). Each
+  // tick also gets a label host, further out, so a DOM label can show that
+  // tick's own version number without touching the mesh underneath it.
   const ticks = [];
+  const tickLabelHosts = [];
   for (let i = 0; i < filtered.length; i++) {
     const angle = (_angleForIndex(i, filtered.length) * Math.PI) / 180;
     const tick = BABYLON.MeshBuilder.CreateBox(
@@ -238,8 +234,19 @@ function buildGizmoForNode(scene, nodeId) {
     tick.material = createGizmoMaterial(uScene, `tickMat-${i}`, COLOR_TICK);
     tick.isPickable = false;
     ticks.push(tick);
+
+    const labelHost = new BABYLON.TransformNode(`versionTickLabelHost-${i}`, uScene);
+    labelHost.setParent(root);
+    const labelRadius = radius * LABEL_RADIUS_FACTOR;
+    labelHost.position = new BABYLON.Vector3(
+      Math.cos(angle) * labelRadius,
+      Math.sin(angle) * labelRadius,
+      0
+    );
+    tickLabelHosts.push(labelHost);
   }
   gizmo.ticks = ticks;
+  gizmo.tickLabelHosts = tickLabelHosts;
 
   // Arrowhead: cone just past the newest tick, pointing "toward newer"
   // (decreasing angle / clockwise, matching _angleForIndex ordering).
@@ -276,20 +283,13 @@ function buildGizmoForNode(scene, nodeId) {
   handle.material = gizmo.handleMat;
   gizmo.handle = handle;
 
-  const badgeHost = new BABYLON.TransformNode("modelClockBadgeHost", uScene);
-  badgeHost.setParent(root);
-  gizmo.badgeHost = badgeHost;
-
   return gizmo;
 }
 
-function syncHandlePosition(g, activeIdx, badge) {
+function syncHandlePosition(g, activeIdx) {
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
   placeHandle(g, angle);
-  if (badge) {
-    badge.textContent = `v${g.filtered[safeIdx].version}`;
-  }
 }
 
 function updateTickColors(g, activeIdx) {
@@ -304,14 +304,14 @@ function updateTickColors(g, activeIdx) {
   }
 }
 
-function syncVisuals(g, badge) {
+function syncVisuals(g) {
   const s = store.getState();
   const activeIdx = g.filtered.findIndex((e) => e.cid === s.activeCid);
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   const colorIdx = isDraggingHandle && g.dragHoverIdx >= 0 ? g.dragHoverIdx : safeIdx;
   updateTickColors(g, colorIdx);
   if (!isDraggingHandle) {
-    syncHandlePosition(g, safeIdx, badge);
+    syncHandlePosition(g, safeIdx);
   }
 }
 
@@ -401,38 +401,69 @@ function wireDrag(gizmo, mainScene, camera) {
 
 export function initModelClockGizmo(scene, camera) {
   const viewport = document.getElementById("viewport");
-  let badge = document.getElementById("modelClockBadge");
-  if (!badge && viewport) {
-    badge = document.createElement("div");
-    badge.id = "modelClockBadge";
-    badge.className = "model-clock-badge";
-    viewport.appendChild(badge);
+  let tickLabelsContainer = document.getElementById("modelClockTickLabels");
+  if (!tickLabelsContainer && viewport) {
+    tickLabelsContainer = document.createElement("div");
+    tickLabelsContainer.id = "modelClockTickLabels";
+    tickLabelsContainer.className = "model-clock-tick-labels";
+    viewport.appendChild(tickLabelsContainer);
   }
 
   let current = null;
   let currentNodeId = null;
 
+  /** Project a world position to a viewport-relative CSS transform and
+   * apply it to a floating label element, hiding it if behind the camera.
+   * @param {HTMLElement} el
+   * @param {BABYLON.Vector3} world
+   */
+  function positionLabelEl(el, world) {
+    const engine = scene.getEngine();
+    const projected = BABYLON.Vector3.Project(
+      world,
+      BABYLON.Matrix.Identity(),
+      scene.getTransformMatrix(),
+      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+    );
+    const canvas = engine.getRenderingCanvas();
+    const sx = canvas.clientWidth / engine.getRenderWidth();
+    const sy = canvas.clientHeight / engine.getRenderHeight();
+    el.style.transform = `translate(${projected.x * sx}px, ${projected.y * sy}px) translate(-50%, -50%)`;
+    el.hidden = projected.z < 0 || projected.z > 1;
+  }
+
+  function createTickLabels(gizmo) {
+    if (!tickLabelsContainer) return;
+    gizmo.tickLabelEls = gizmo.filtered.map((entry) => {
+      const el = document.createElement("div");
+      el.className = "model-clock-tick-label";
+      el.textContent = `v${entry.version}`;
+      tickLabelsContainer.appendChild(el);
+      return el;
+    });
+  }
+
   function render() {
     if (!current) return;
     syncRootToAnchor(current.root, current.anchor);
-    syncVisuals(current, badge);
+    syncVisuals(current);
+    if (!current.tickLabelEls) return;
 
-    if (badge && current.badgeHost) {
-      const world = current.badgeHost.getAbsolutePosition
-        ? current.badgeHost.getAbsolutePosition()
-        : new BABYLON.Vector3(0, 0, 0);
-      const engine = scene.getEngine();
-      const projected = BABYLON.Vector3.Project(
-        world,
-        BABYLON.Matrix.Identity(),
-        scene.getTransformMatrix(),
-        camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
-      );
-      const canvas = engine.getRenderingCanvas();
-      const sx = canvas.clientWidth / engine.getRenderWidth();
-      const sy = canvas.clientHeight / engine.getRenderHeight();
-      badge.style.transform = `translate(${projected.x * sx}px, ${projected.y * sy}px) translate(-50%, -50%)`;
-      badge.hidden = projected.z < 0 || projected.z > 1;
+    const s = store.getState();
+    const activeIdx = current.filtered.findIndex((e) => e.cid === s.activeCid);
+    const safeActiveIdx = activeIdx >= 0 ? activeIdx : current.filtered.length - 1;
+    const hoverIdx = isDraggingHandle && current.dragHoverIdx >= 0 ? current.dragHoverIdx : -1;
+    // Whichever tick is "current" (the drag target while scrubbing, else the
+    // active version) carries the #modelClockBadge id — there's no separate
+    // floating badge element, so it never desyncs from the tick it labels.
+    const badgeIdx = hoverIdx >= 0 ? hoverIdx : safeActiveIdx;
+
+    for (let i = 0; i < current.tickLabelEls.length; i++) {
+      const el = current.tickLabelEls[i];
+      positionLabelEl(el, current.tickLabelHosts[i].getAbsolutePosition());
+      el.classList.toggle("active", i === safeActiveIdx);
+      el.classList.toggle("hover", i === hoverIdx);
+      el.id = i === badgeIdx ? "modelClockBadge" : "";
     }
   }
 
@@ -445,7 +476,8 @@ export function initModelClockGizmo(scene, camera) {
     current = buildGizmoForNode(scene, nodeId);
     if (current) {
       wireDrag(current, scene, camera);
-      syncVisuals(current, badge);
+      createTickLabels(current);
+      render();
     }
   }
 
@@ -455,12 +487,12 @@ export function initModelClockGizmo(scene, camera) {
         utilityScene(scene).onPointerObservable.remove(current.pointerObserver);
       }
       current.handleHoverMat?.dispose();
+      for (const el of current.tickLabelEls || []) el.remove();
       current.root.dispose(false, true);
       current = null;
     }
     currentNodeId = null;
     isDraggingHandle = false;
-    if (badge) badge.hidden = true;
   }
 
   function onModeChanged(e) {
@@ -479,7 +511,8 @@ export function initModelClockGizmo(scene, camera) {
         current = buildGizmoForNode(scene, currentNodeId);
         if (current) {
           wireDrag(current, scene, camera);
-          syncVisuals(current, badge);
+          createTickLabels(current);
+          render();
         }
         return;
       }
@@ -548,6 +581,6 @@ export function initModelClockGizmo(scene, camera) {
     unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
     document.removeEventListener("keydown", onKeyDown);
-    badge?.remove();
+    tickLabelsContainer?.remove();
   };
 }

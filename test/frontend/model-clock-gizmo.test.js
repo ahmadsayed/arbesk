@@ -355,6 +355,26 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(handle.material.disableLighting).toBe(true);
   });
 
+  test("every tick gets an always-visible label showing its own version, active one highlighted", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const labels = Array.from(document.querySelectorAll(".model-clock-tick-label"));
+    expect(labels.length).toBe(3);
+    expect(labels.map((el) => el.textContent)).toEqual(["v1", "v2", "v3"]);
+
+    // ENTRIES[2] (v3) is the active CID per storeMock.getState().
+    expect(labels[2].classList.contains("active")).toBe(true);
+    expect(labels[0].classList.contains("active")).toBe(false);
+    expect(labels[1].classList.contains("active")).toBe(false);
+  });
+
   test("dragging handle commits the landed version and manages camera", async () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
@@ -384,6 +404,45 @@ describe("model-clock-gizmo lifecycle", () => {
     pointerCb({ type: PET.POINTERUP });
     expect(camera.attachControl).toHaveBeenCalled();
     expect(storeMock.loadVersion).toHaveBeenCalledWith("c1");
+  });
+
+  test("badge and tick label reflect the hovered version live during drag, not just after release", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const handle = babylon.createdMeshes.find((m) => m.name === "versionHandle");
+    const pointerCb = scene.onPointerObservable.add.mock.calls[0][0];
+    const renderCb = scene.onBeforeRenderObservable.add.mock.calls[0][0];
+    const PET = babylon.PointerEventTypes;
+
+    // The badge id lives on whichever tick label is currently "current" —
+    // re-query it each time rather than caching the element, since the id
+    // moves between elements as the active/hover tick changes.
+    expect(document.getElementById("modelClockBadge").textContent).toBe("v3");
+
+    pointerCb({ type: PET.POINTERDOWN, pickInfo: { pickedMesh: handle } });
+
+    // Drag toward the oldest version's position (180° for n=3) without releasing.
+    const radius = 0.5;
+    scene.createPickingRay.mockReturnValue({
+      origin: new babylon.Vector3(-radius, 0, -10),
+      direction: new babylon.Vector3(0, 0, 1),
+    });
+    pointerCb({ type: PET.POINTERMOVE });
+    renderCb(); // simulate the next animation frame while still dragging
+
+    expect(document.getElementById("modelClockBadge").textContent).toBe("v1");
+    const labels = Array.from(document.querySelectorAll(".model-clock-tick-label"));
+    expect(labels[0].classList.contains("hover")).toBe(true);
+    expect(labels[2].classList.contains("active")).toBe(true); // real active version unchanged until commit
+
+    pointerCb({ type: PET.POINTERUP });
   });
 
   test("hovering the handle swaps to the hover material", async () => {
@@ -458,7 +517,7 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(babylon.disposed.length).toBeGreaterThan(0);
   });
 
-  test("scene cleared disposes the gizmo and hides the badge", async () => {
+  test("scene cleared disposes the gizmo and removes the badge", async () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
@@ -468,11 +527,13 @@ describe("model-clock-gizmo lifecycle", () => {
     state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
     emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
     expect(babylon.createdMeshes.length).toBeGreaterThan(0);
+    expect(document.getElementById("modelClockBadge")).toBeTruthy();
 
-    const badge = document.getElementById("modelClockBadge");
     emit(EVENTS.SCENE_CLEARED);
     expect(babylon.disposed.length).toBeGreaterThan(0);
-    expect(badge.hidden).toBe(true);
+    // No standalone badge element persists — it's the id of whichever tick
+    // label is current, and all tick labels are removed with the gizmo.
+    expect(document.getElementById("modelClockBadge")).toBeNull();
   });
 
   test("destroy() unsubscribes and removes render callback", async () => {
@@ -510,7 +571,7 @@ describe("model-clock-gizmo lifecycle", () => {
     state.transformMode = "translate";
     emit(EVENTS.TRANSFORM_MODE_CHANGED, { mode: "translate" });
     expect(babylon.disposed.length).toBeGreaterThan(0);
-    expect(document.getElementById("modelClockBadge").hidden).toBe(true);
+    expect(document.getElementById("modelClockBadge")).toBeNull();
   });
 
   test("no ring is built outside time mode; entering time mode builds it", async () => {
