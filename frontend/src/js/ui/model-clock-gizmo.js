@@ -97,7 +97,7 @@ function buildGizmoForNode(scene, nodeId, hidden = false) {
   // Ring.
   const ring = BABYLON.MeshBuilder.CreateTorus(
     RING_NAME,
-    { diameter: radius * 2, thickness: radius * 0.03, tessellation: RING_TESSELLATION },
+    { diameter: radius * 2, thickness: radius * 0.005, tessellation: RING_TESSELLATION },
     scene
   );
   ring.setParent(root);
