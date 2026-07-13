@@ -148,6 +148,9 @@ function createBabylonMock() {
     addBehavior(b) {
       this.behaviors.push(b);
     }
+    bakeCurrentTransformIntoVertices() {
+      // Vertex data isn't modeled in the mock; transform baking is a no-op.
+    }
     dispose(doNotRecurse = false, disposeMaterialAndTextures = false) {
       if (disposeMaterialAndTextures && this.material) {
         this.material.dispose();
@@ -189,6 +192,25 @@ function createBabylonMock() {
     PointerEventTypes: { POINTERDOWN: 1, POINTERUP: 2, POINTERMOVE: 4 },
     UtilityLayerRenderer: null,
     Material: { MATERIAL_ALPHABLEND: 2 },
+    Effect: { ShadersStore: {} },
+    ShaderMaterial: class {
+      constructor(name, scene, shaderPath, options) {
+        this.name = name;
+        this.scene = scene;
+        this.shaderPath = shaderPath;
+        this.options = options;
+        this.backFaceCulling = true;
+        this.floats = {};
+        this._disposed = false;
+      }
+      setFloat(key, value) {
+        this.floats[key] = value;
+        return this;
+      }
+      dispose() {
+        this._disposed = true;
+      }
+    },
     StandardMaterial: class {
       constructor(name, scene) {
         this.name = name;
@@ -688,6 +710,54 @@ describe("model-clock-gizmo lifecycle", () => {
     emit(EVENTS.TRANSFORM_MODE_CHANGED, { mode: "translate" });
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
     expect(storeMock.loadVersion).not.toHaveBeenCalled();
+  });
+
+  test("progress arc uses the clipping shader and sweeps from v1 to the active version", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const arc = babylon.createdMeshes.find((m) => m.name === "versionArc");
+    expect(arc).toBeDefined();
+    expect(arc.material.shaderPath).toBe("modelClockArc");
+    // n=3: v1 sits at 150°, active v3 at -90° → clockwise sweep of 240°.
+    expect(arc.material.floats.startAngle).toBeCloseTo((150 * Math.PI) / 180, 5);
+    expect(arc.material.floats.sweep).toBeCloseTo((240 * Math.PI) / 180, 5);
+    // Both shader sources were registered.
+    expect(babylon.Effect.ShadersStore.modelClockArcVertexShader).toContain("worldViewProjection");
+    expect(babylon.Effect.ShadersStore.modelClockArcFragmentShader).toContain("discard");
+  });
+
+  test("dragging the knob updates the arc sweep uniform live", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+    const arc = babylon.createdMeshes.find((m) => m.name === "versionArc");
+    const handle = babylon.createdMeshes.find((m) => m.name === "versionHandle");
+    const pointerCb = scene.onPointerObservable.add.mock.calls[0][0];
+    const PET = babylon.PointerEventTypes;
+    const sweepBefore = arc.material.floats.sweep;
+
+    pointerCb({ type: PET.POINTERDOWN, pickInfo: { pickedMesh: handle } });
+    scene.createPickingRay.mockReturnValue({
+      origin: new babylon.Vector3(-0.5, 0, -10),
+      direction: new babylon.Vector3(0, 0, 1),
+    });
+    pointerCb({ type: PET.POINTERMOVE });
+
+    expect(arc.material.floats.sweep).not.toBeCloseTo(sweepBefore, 5);
+    pointerCb({ type: PET.POINTERUP });
   });
 
   test("badge element is created and positioned", async () => {

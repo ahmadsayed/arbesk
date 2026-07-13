@@ -99,6 +99,7 @@ export function _lerpAngle(from, to, t) {
 }
 
 const RING_NAME = "versionRing";
+const ARC_NAME = "versionArc";
 const HANDLE_NAME = "versionHandle";
 const TICK_PREFIX = "versionTick";
 const RING_TESSELLATION = 64;
@@ -159,6 +160,38 @@ function utilityScene(mainScene) {
   );
 }
 
+const ARC_SHADER_NAME = "modelClockArc";
+const ARC_THICKNESS_FACTOR = 0.021; // slightly fatter than the track so it fully covers it
+const ARC_Z_OFFSET_FACTOR = 0.01; // nudged toward the viewer to avoid z-fighting the track
+
+/** Register the arc-clipping shader sources once per page. The fragment
+ * shader discards everything outside the clockwise sweep from startAngle,
+ * so drags only ever update one float uniform — no mesh rebuilds. */
+function ensureArcShader() {
+  if (BABYLON.Effect.ShadersStore[`${ARC_SHADER_NAME}VertexShader`]) return;
+  BABYLON.Effect.ShadersStore[`${ARC_SHADER_NAME}VertexShader`] = `
+    precision highp float;
+    attribute vec3 position;
+    uniform mat4 worldViewProjection;
+    varying vec2 vLocalXY;
+    void main() {
+      vLocalXY = position.xy;
+      gl_Position = worldViewProjection * vec4(position, 1.0);
+    }`;
+  BABYLON.Effect.ShadersStore[`${ARC_SHADER_NAME}FragmentShader`] = `
+    precision highp float;
+    varying vec2 vLocalXY;
+    uniform float startAngle;
+    uniform float sweep;
+    void main() {
+      float TWO_PI = 6.28318530718;
+      float ang = atan(vLocalXY.y, vLocalXY.x);
+      float off = mod(startAngle - ang, TWO_PI);
+      if (off > sweep) discard;
+      gl_FragColor = vec4(0.2, 0.6, 1.0, 1.0);
+    }`;
+}
+
 /** Position + orient the handle at an angle on the ring.
  * @param {any} g
  * @param {number} angleRad
@@ -169,6 +202,11 @@ function placeHandle(g, angleRad) {
     Math.sin(angleRad) * g.radius,
     0
   );
+  if (g.arcMat) {
+    const TWO_PI = Math.PI * 2;
+    const sweep = (((g.arcStartAngle - angleRad) % TWO_PI) + TWO_PI) % TWO_PI;
+    g.arcMat.setFloat("sweep", sweep);
+  }
 }
 
 /** Copy the anchor's world position/rotation to the unparented gizmo root.
@@ -310,6 +348,34 @@ function buildGizmoForNode(scene, nodeId) {
   ring.rotation.x = Math.PI / 2;
   ring.isPickable = false;
   gizmo.ring = ring;
+
+  // Progress arc: accent torus overlaying the track, clipped by the shader
+  // to the clockwise sweep from v1's tick to the knob. The filled/unfilled
+  // boundary IS the current position, which also communicates direction.
+  const arc = BABYLON.MeshBuilder.CreateTorus(
+    ARC_NAME,
+    { diameter: radius * 2, thickness: radius * ARC_THICKNESS_FACTOR, tessellation: RING_TESSELLATION },
+    uScene
+  );
+  arc.setParent(root);
+  arc.rotation.x = Math.PI / 2;
+  // Bake the XZ→XY rotation into the vertices so the shader's mesh-local
+  // position.xy is the ring plane and atan2(y, x) is the ring angle.
+  arc.bakeCurrentTransformIntoVertices();
+  arc.position = new BABYLON.Vector3(0, 0, radius * ARC_Z_OFFSET_FACTOR);
+  ensureArcShader();
+  const arcMat = new BABYLON.ShaderMaterial("arcMat", uScene, ARC_SHADER_NAME, {
+    attributes: ["position"],
+    uniforms: ["worldViewProjection", "startAngle", "sweep"],
+  });
+  arcMat.backFaceCulling = false;
+  gizmo.arcStartAngle = (_angleForIndex(0, filtered.length) * Math.PI) / 180;
+  arcMat.setFloat("startAngle", gizmo.arcStartAngle);
+  arcMat.setFloat("sweep", 0);
+  arc.material = arcMat;
+  arc.isPickable = false;
+  gizmo.arc = arc;
+  gizmo.arcMat = arcMat;
 
   // Ticks: radial marks like clock minute marks (local X = radial). Each
   // tick also gets a label host, further out, so a DOM label can show that
