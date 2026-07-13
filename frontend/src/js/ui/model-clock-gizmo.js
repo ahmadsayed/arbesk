@@ -117,6 +117,10 @@ const DRAG_SMOOTHING = 0.5;
 // ring radius, so they don't occlude the 3D tick/handle meshes.
 const LABEL_RADIUS_FACTOR = 1.12;
 
+// The badge sits a little further out than the tick labels so it clears the
+// knob and its rim.
+const BADGE_RADIUS_FACTOR = 1.22;
+
 // Translucent analog-clock styling.
 const CLOCK_ALPHA = 0.5; // alpha for track/ticks/face accents
 const FACE_ALPHA = 0.30; // slightly darker face
@@ -200,6 +204,12 @@ function placeHandle(g, angleRad) {
   g.handle.position = new BABYLON.Vector3(
     Math.cos(angleRad) * g.radius,
     Math.sin(angleRad) * g.radius,
+    0
+  );
+  const badgeR = g.radius * BADGE_RADIUS_FACTOR;
+  g.badgeHost.position = new BABYLON.Vector3(
+    Math.cos(angleRad) * badgeR,
+    Math.sin(angleRad) * badgeR,
     0
   );
   if (g.arcMat) {
@@ -417,6 +427,12 @@ function buildGizmoForNode(scene, nodeId) {
   gizmo.ticks = ticks;
   gizmo.tickLabelHosts = tickLabelHosts;
 
+  // Anchor for the DOM version badge; placeHandle keeps it just outside the
+  // knob so the badge travels with the thing you drag.
+  const badgeHost = new BABYLON.TransformNode("versionBadgeHost", uScene);
+  badgeHost.setParent(root);
+  gizmo.badgeHost = badgeHost;
+
   // Knob: flat accent disc seated on the ring, facing the viewer, with a
   // lighter rim so it reads as the grabbable playhead. Mesh name is kept as
   // versionHandle so picking and tests are unchanged.
@@ -596,7 +612,6 @@ export function initModelClockGizmo(scene, camera) {
   let current = null;
   let currentNodeId = null;
   let clockTargetNodeId = null;
-  let lastBadgeIdx = -1;
 
   /** Project a world position to a viewport-relative CSS transform and
    * apply it to a floating label element, hiding it if behind the camera.
@@ -620,7 +635,6 @@ export function initModelClockGizmo(scene, camera) {
 
   function createTickLabels(gizmo) {
     if (!tickLabelsContainer) return;
-    lastBadgeIdx = -1;
     gizmo.tickLabelEls = gizmo.filtered.map((entry) => {
       const el = document.createElement("div");
       el.className = "model-clock-tick-label";
@@ -628,6 +642,11 @@ export function initModelClockGizmo(scene, camera) {
       tickLabelsContainer.appendChild(el);
       return el;
     });
+    const badge = document.createElement("div");
+    badge.id = "modelClockBadge";
+    badge.className = "model-clock-badge";
+    tickLabelsContainer.appendChild(badge);
+    gizmo.badgeEl = badge;
   }
 
   function render() {
@@ -654,15 +673,13 @@ export function initModelClockGizmo(scene, camera) {
     const activeIdx = current.filtered.findIndex((e) => e.cid === s.activeCid);
     const safeActiveIdx = activeIdx >= 0 ? activeIdx : current.filtered.length - 1;
     const hoverIdx = isDraggingHandle && current.dragHoverIdx >= 0 ? current.dragHoverIdx : -1;
-    // Whichever tick is "current" (the drag target while scrubbing, else the
-    // active version) carries the #modelClockBadge id — there's no separate
-    // floating badge element, so it never desyncs from the tick it labels.
     const badgeIdx = hoverIdx >= 0 ? hoverIdx : safeActiveIdx;
+    const publishedIdx = current.filtered.findIndex((e) => e.cid === s.publishedCid);
 
-    if (badgeIdx !== lastBadgeIdx) {
-      if (lastBadgeIdx >= 0) current.tickLabelEls[lastBadgeIdx].id = "";
-      current.tickLabelEls[badgeIdx].id = "modelClockBadge";
-      lastBadgeIdx = badgeIdx;
+    const badgeEntry = current.filtered[badgeIdx];
+    if (current.badgeEl && badgeEntry) {
+      current.badgeEl.textContent = `v${badgeEntry.version}`;
+      positionLabelEl(current.badgeEl, current.badgeHost.getAbsolutePosition());
     }
 
     for (let i = 0; i < current.tickLabelEls.length; i++) {
@@ -670,6 +687,9 @@ export function initModelClockGizmo(scene, camera) {
       positionLabelEl(el, current.tickLabelHosts[i].getAbsolutePosition());
       el.classList.toggle("active", i === safeActiveIdx);
       el.classList.toggle("hover", i === hoverIdx);
+      el.classList.toggle("published", i === publishedIdx);
+      // The knob + badge occupy this tick; hide its label to avoid doubling.
+      el.hidden = i === badgeIdx;
     }
   }
 
@@ -695,6 +715,7 @@ export function initModelClockGizmo(scene, camera) {
       }
       current.handleHoverMat?.dispose();
       for (const el of current.tickLabelEls || []) el.remove();
+      current.badgeEl?.remove();
       current.root.dispose(false, true);
       current = null;
     }
