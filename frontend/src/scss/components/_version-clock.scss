@@ -8,8 +8,11 @@
 //                              frontend/src/js/ui/model-clock-gizmo.js),
 //                              always visible, showing that tick's own
 //                              version number. The tick currently active (or
-//                              under the drag cursor) gets id="modelClockBadge"
-//                              and the .active/.hover modifier classes.
+//                              under the drag cursor) is hidden because the
+//                              knob sits on it; the standalone badge
+//                              (#modelClockBadge, .model-clock-badge) shows
+//                              the active/hovered version and travels with
+//                              the knob.
 // ═══════════════════════════════════════════════════════════════════
 
 .version-clock {
@@ -146,10 +149,11 @@
   }
 }
 
-// One label per tick, always visible, showing that tick's own version
-// number — so the ring communicates version count/direction at a glance.
-// The active (or drag-hovered) tick's label stands out via .active/.hover
-// and doubles as the "current version" indicator (id="modelClockBadge").
+// One label per tick, dimmed until relevant, showing that tick's own version
+// number. The published version's label stays bright with a green tint. The
+// active (or drag-hovered) tick's label is hidden entirely — the knob sits on
+// that tick and the standalone badge (#modelClockBadge, .model-clock-badge)
+// travels with it showing the version.
 .model-clock-tick-labels {
   position: absolute;
   left: 0;
@@ -171,7 +175,7 @@
   background: var(--popover-bg);
   border: var(--border-size-1) solid var(--border-color);
   border-radius: var(--size-1);
-  opacity: 0.75;
+  opacity: 0.35;
   white-space: nowrap;
   transition: opacity var(--duration-quick) ease;
 
@@ -194,4 +198,25 @@
     opacity: 1;
     z-index: 2;
   }
+
+  &.published {
+    color: var(--green-4);
+    border-color: var(--green-4);
+    opacity: 1;
+  }
+}
+
+// Standalone version badge riding just outside the knob.
+.model-clock-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--accent-fg);
+  background: var(--accent-bg);
+  border-radius: var(--size-1);
+  white-space: nowrap;
+  z-index: 3;
 }
