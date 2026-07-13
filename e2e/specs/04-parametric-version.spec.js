@@ -95,14 +95,15 @@ test.describe("parametric versioning + time-travel", () => {
     await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v2");
 
     // Step the gizmo to its oldest entry via keyboard → whole scene reloads v1.
+    // The model clock gizmo persists across the reload and lands on v1.
     await page.keyboard.press("Home");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(genCid);
+    await expect(page.locator(SELECTORS.modelClockBadge)).toBeVisible();
+    await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v1");
 
-    // Reloading cleared the selection (model clock badge hides again); return to
-    // the newest version via the scene clock before publishing.
-    await expect(page.locator(SELECTORS.modelClockBadge)).toBeHidden();
+    // Return to the newest version via the scene clock before publishing.
     await scrubSceneClock(page, "newest");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
