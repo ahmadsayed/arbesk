@@ -8,7 +8,7 @@ import * as store from "../state/version-history-store.js";
 import { on, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 
-const RING_RADIUS_FACTOR = 1.4;
+const RING_RADIUS_FACTOR = 1.15;
 const MIN_RING_RADIUS = 0.5;
 const MAX_RING_RADIUS = 8.0;
 
@@ -55,9 +55,10 @@ export function _indexForAngle(angleDeg, n) {
 }
 
 /**
- * Ray/plane intersection on plain {x,y,z} vectors.
- * Returns the hit point, or null when the ray is parallel to the plane or
- * the plane lies behind the ray origin.
+ * Ray/plane intersection. Inputs may be plain {x,y,z} objects or
+ * BABYLON.Vector3 instances; the returned hit point is a plain object.
+ * Returns null when the ray is parallel to the plane or the plane lies
+ * behind the ray origin.
  *
  * @param {{x:number,y:number,z:number}} origin
  * @param {{x:number,y:number,z:number}} dir
@@ -100,7 +101,6 @@ export function _lerpAngle(from, to, t) {
 const RING_NAME = "versionRing";
 const HANDLE_NAME = "versionHandle";
 const TICK_PREFIX = "versionTick";
-const ARROW_NAME = "versionArrow";
 const RING_TESSELLATION = 64;
 
 // Flat, unlit gizmo palette (matches Babylon transform-gizmo styling).
@@ -109,20 +109,42 @@ const COLOR_TICK = [0.5, 0.5, 0.5];
 const COLOR_ACTIVE = [0.2, 0.6, 1];
 const COLOR_PUBLISHED = [0.2, 0.8, 0.2];
 const COLOR_HOVER = [1, 1, 0.4];
+const COLOR_KNOB_RIM = [0.55, 0.8, 1];
 
 const DRAG_SMOOTHING = 0.5;
 // How far outside the ring the DOM tick labels sit, as a multiple of the
 // ring radius, so they don't occlude the 3D tick/handle meshes.
-const LABEL_RADIUS_FACTOR = 1.22;
+const LABEL_RADIUS_FACTOR = 1.12;
+
+// Translucent analog-clock styling.
+const CLOCK_ALPHA = 0.5; // alpha for track/ticks/face accents
+const FACE_ALPHA = 0.30; // slightly darker face
+const HANDLE_ALPHA = 1.0; // knob stays prominent
+const CLOCK_DEPTH_OFFSET_FACTOR = 0.3; // how far behind the anchor the clock sits
+const FACE_RADIUS_FACTOR = 1.05; // face extends slightly past the ring
+const FACE_Z_OFFSET_FACTOR = 0.02; // face sits just behind the ticks in local Z
+const FACE_COLOR = [0.08, 0.08, 0.10];
+
+// Track / knob sizing (fractions of the ring radius).
+const TRACK_THICKNESS_FACTOR = 0.015;
+const TICK_WIDTH_FACTOR = 0.12;
+const TICK_THICKNESS_FACTOR = 0.035;
+const KNOB_DIAMETER_FACTOR = 0.16;
+const KNOB_HEIGHT_FACTOR = 0.03;
+const RIM_THICKNESS_FACTOR = 0.012;
 
 let isDraggingHandle = false;
 
-function createGizmoMaterial(scene, name, [r, g, b]) {
+function createGizmoMaterial(scene, name, [r, g, b], alpha = 1.0) {
   const mat = new BABYLON.StandardMaterial(name, scene);
   mat.emissiveColor = new BABYLON.Color3(r, g, b);
   mat.diffuseColor = new BABYLON.Color3(0, 0, 0);
   mat.specularColor = new BABYLON.Color3(0, 0, 0);
   mat.disableLighting = true;
+  if (alpha < 1.0) {
+    mat.alpha = alpha;
+    mat.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
+  }
   return mat;
 }
 
@@ -147,7 +169,6 @@ function placeHandle(g, angleRad) {
     Math.sin(angleRad) * g.radius,
     0
   );
-  g.handle.rotation.z = angleRad;
 }
 
 /** Copy the anchor's world position/rotation to the unparented gizmo root.
@@ -166,6 +187,63 @@ function syncRootToAnchor(root, anchor) {
   }
 }
 
+/** Position the clock root behind the anchor along the camera view ray and
+ * billboard it so the clock face points at the viewer.
+ * @param {any} root
+ * @param {any} anchor
+ * @param {BABYLON.ArcRotateCamera} camera
+ * @param {number} offset
+ */
+function syncRootToCamera(root, anchor, camera, offset) {
+  if (!anchor || anchor.isDisposed?.()) return;
+  const anchorPos = anchor.getAbsolutePosition();
+  const cameraPos = camera.position;
+  const dir = anchorPos.subtract(cameraPos);
+  const dist = dir.length();
+  if (dist < 0.001) return; // camera coincident with anchor; keep previous pose
+  const forward = dir.scale(1 / dist);
+  root.position.copyFrom(anchorPos.subtract(forward.scale(offset)));
+  root.lookAt(cameraPos);
+  // lookAt sets Euler rotation; keep rotationQuaternion in sync so the drag
+  // plane math can transform world hit points back into root-local space.
+  root.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(
+    root.rotation.x,
+    root.rotation.y,
+    root.rotation.z
+  );
+}
+
+/** Compute the radius of the model's silhouette on the billboarded ring plane.
+ * This measures how far the bounding box extends from the anchor center when
+ * projected onto the plane perpendicular to the camera, so the ring can keep a
+ * consistent padding around the visible model regardless of viewport aspect.
+ * @param {any} gizmo
+ * @returns {number}
+ */
+function silhouetteRadiusOnClockPlane(gizmo) {
+  const min = gizmo.boundsMin;
+  const max = gizmo.boundsMax;
+  if (!min || !max) return gizmo.radius;
+
+  const rootPos = gizmo.root.getAbsolutePosition();
+  const rot = gizmo.root.rotationQuaternion;
+  const invRot = rot ? BABYLON.Quaternion.Inverse(rot) : null;
+
+  let maxDistSq = 0;
+  for (const x of [min.x, max.x]) {
+    for (const y of [min.y, max.y]) {
+      for (const z of [min.z, max.z]) {
+        const corner = new BABYLON.Vector3(x, y, z);
+        const local = corner.subtract(rootPos);
+        if (invRot) local.applyRotationQuaternion(invRot);
+        const distSq = local.x * local.x + local.y * local.y;
+        if (distSq > maxDistSq) maxDistSq = distSq;
+      }
+    }
+  }
+  return Math.sqrt(maxDistSq);
+}
+
 function buildGizmoForNode(scene, nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   const meshes = state.nodeMeshes.get(nodeId) || [];
@@ -182,11 +260,18 @@ function buildGizmoForNode(scene, nodeId) {
   const root = new BABYLON.TransformNode("modelClockRoot", uScene);
   gizmo.root = root;
 
-  // Compute radius from the node's world bounding box.
+  // Compute radius from the node's world bounding box. Force world-matrix
+  // updates first: after a version load the scene has not rendered yet, so
+  // boundingBox.{minimum,maximum}World may still reflect pre-centering local
+  // bounds and produce an oversized ring.
   let min = null;
   let max = null;
   for (const mesh of meshes) {
     if (!mesh || mesh.isDisposed()) continue;
+    mesh.computeWorldMatrix(true);
+    if (typeof mesh.refreshBoundingInfo === "function") {
+      mesh.refreshBoundingInfo();
+    }
     const bi = mesh.getBoundingInfo();
     if (!bi || !bi.boundingBox) continue;
     const bb = bi.boundingBox;
@@ -195,18 +280,32 @@ function buildGizmoForNode(scene, nodeId) {
   }
   const radius = min && max ? _ringRadiusFromBounds(min, max) : MIN_RING_RADIUS;
   gizmo.radius = radius;
+  gizmo.boundsMin = min;
+  gizmo.boundsMax = max;
   gizmo.filtered = filtered;
 
   syncRootToAnchor(root, anchor);
 
-  // Ring: thin flat torus in the XY plane.
+  // Clock face: translucent dark disc that sits just behind the ticks.
+  const face = BABYLON.MeshBuilder.CreateDisc(
+    "modelClockFace",
+    { radius: radius * FACE_RADIUS_FACTOR, tessellation: RING_TESSELLATION },
+    uScene
+  );
+  face.setParent(root);
+  face.position = new BABYLON.Vector3(0, 0, -radius * FACE_Z_OFFSET_FACTOR);
+  face.material = createGizmoMaterial(uScene, "faceMat", FACE_COLOR, FACE_ALPHA);
+  face.isPickable = false;
+  gizmo.face = face;
+
+  // Ring: flat torus track in the XY plane.
   const ring = BABYLON.MeshBuilder.CreateTorus(
     RING_NAME,
-    { diameter: radius * 2, thickness: radius * 0.005, tessellation: RING_TESSELLATION },
+    { diameter: radius * 2, thickness: radius * TRACK_THICKNESS_FACTOR, tessellation: RING_TESSELLATION },
     uScene
   );
   ring.setParent(root);
-  ring.material = createGizmoMaterial(uScene, "ringMat", COLOR_RING);
+  ring.material = createGizmoMaterial(uScene, "ringMat", COLOR_RING, CLOCK_ALPHA);
   // CreateTorus defaults to the XZ plane in this Babylon build; rotate to XY.
   ring.rotation.x = Math.PI / 2;
   ring.isPickable = false;
@@ -221,7 +320,11 @@ function buildGizmoForNode(scene, nodeId) {
     const angle = (_angleForIndex(i, filtered.length) * Math.PI) / 180;
     const tick = BABYLON.MeshBuilder.CreateBox(
       `${TICK_PREFIX}-${i}`,
-      { width: radius * 0.1, height: radius * 0.02, depth: radius * 0.02 },
+      {
+        width: radius * TICK_WIDTH_FACTOR,
+        height: radius * TICK_THICKNESS_FACTOR,
+        depth: radius * TICK_THICKNESS_FACTOR,
+      },
       uScene
     );
     tick.setParent(root);
@@ -231,7 +334,7 @@ function buildGizmoForNode(scene, nodeId) {
       0
     );
     tick.rotation.z = angle;
-    tick.material = createGizmoMaterial(uScene, `tickMat-${i}`, COLOR_TICK);
+    tick.material = createGizmoMaterial(uScene, `tickMat-${i}`, COLOR_TICK, CLOCK_ALPHA);
     tick.isPickable = false;
     ticks.push(tick);
 
@@ -248,40 +351,40 @@ function buildGizmoForNode(scene, nodeId) {
   gizmo.ticks = ticks;
   gizmo.tickLabelHosts = tickLabelHosts;
 
-  // Arrowhead: cone just past the newest tick, pointing "toward newer"
-  // (decreasing angle / clockwise, matching _angleForIndex ordering).
-  const n = filtered.length;
-  const newestAngle = (_angleForIndex(n - 1, n) * Math.PI) / 180;
-  const arrowAngle = newestAngle - Math.min(0.35, Math.PI / n);
-  const arrow = BABYLON.MeshBuilder.CreateCylinder(
-    ARROW_NAME,
-    { height: radius * 0.08, diameterTop: 0, diameterBottom: radius * 0.05, tessellation: 12 },
-    uScene
-  );
-  arrow.setParent(root);
-  arrow.position = new BABYLON.Vector3(
-    Math.cos(arrowAngle) * radius,
-    Math.sin(arrowAngle) * radius,
-    0
-  );
-  // Cone axis is +Y; rotating by (angle + PI) aligns it with the clockwise
-  // tangent (sin a, -cos a, 0).
-  arrow.rotation.z = arrowAngle + Math.PI;
-  arrow.material = createGizmoMaterial(uScene, "arrowMat", COLOR_RING);
-  arrow.isPickable = false;
-  gizmo.arrow = arrow;
-
-  // Handle: tangent lozenge seated on the ring (local Y = tangent).
-  const handle = BABYLON.MeshBuilder.CreateBox(
+  // Knob: flat accent disc seated on the ring, facing the viewer, with a
+  // lighter rim so it reads as the grabbable playhead. Mesh name is kept as
+  // versionHandle so picking and tests are unchanged.
+  const handle = BABYLON.MeshBuilder.CreateCylinder(
     HANDLE_NAME,
-    { width: radius * 0.05, height: radius * 0.16, depth: radius * 0.05 },
+    {
+      diameter: radius * KNOB_DIAMETER_FACTOR,
+      height: radius * KNOB_HEIGHT_FACTOR,
+      tessellation: 24,
+    },
     uScene
   );
   handle.setParent(root);
-  gizmo.handleMat = createGizmoMaterial(uScene, "handleMat", COLOR_ACTIVE);
-  gizmo.handleHoverMat = createGizmoMaterial(uScene, "handleHoverMat", COLOR_HOVER);
+  handle.rotation.x = Math.PI / 2; // cylinder axis (local Y) → ring-plane normal
+  gizmo.handleMat = createGizmoMaterial(uScene, "handleMat", COLOR_ACTIVE, HANDLE_ALPHA);
+  gizmo.handleHoverMat = createGizmoMaterial(uScene, "handleHoverMat", COLOR_HOVER, HANDLE_ALPHA);
   handle.material = gizmo.handleMat;
   gizmo.handle = handle;
+
+  // Rim: thin torus around the knob edge; coaxial with the cylinder, so as a
+  // child it needs no extra rotation and follows every drag for free.
+  const rim = BABYLON.MeshBuilder.CreateTorus(
+    "versionHandleRim",
+    {
+      diameter: radius * KNOB_DIAMETER_FACTOR,
+      thickness: radius * RIM_THICKNESS_FACTOR,
+      tessellation: 24,
+    },
+    uScene
+  );
+  rim.setParent(handle);
+  rim.position = new BABYLON.Vector3(0, 0, 0);
+  rim.material = createGizmoMaterial(uScene, "handleRimMat", COLOR_KNOB_RIM, HANDLE_ALPHA);
+  rim.isPickable = false;
 
   return gizmo;
 }
@@ -355,7 +458,12 @@ function wireDrag(gizmo, mainScene, camera) {
         gizmo.dragTargetAngle = gizmo.dragAngle;
         gizmo.dragHoverIdx = -1;
         camera.detachControl();
-        if (canvas) canvas.style.cursor = "grabbing";
+        if (canvas) {
+          canvas.style.cursor = "grabbing";
+          if (pi.event?.pointerId !== undefined) {
+            canvas.setPointerCapture(pi.event.pointerId);
+          }
+        }
         break;
       }
       case BABYLON.PointerEventTypes.POINTERMOVE: {
@@ -381,7 +489,17 @@ function wireDrag(gizmo, mainScene, camera) {
         if (!isDraggingHandle) return;
         isDraggingHandle = false;
         camera.attachControl(canvas, true);
-        if (canvas) canvas.style.cursor = "";
+        if (canvas) {
+          canvas.style.cursor = "";
+          if (pi.event?.pointerId !== undefined) {
+            try {
+              canvas.releasePointerCapture(pi.event.pointerId);
+            } catch {
+              // Capture may already been released if the pointer left
+              // the canvas; releasing the camera is what matters here.
+            }
+          }
+        }
         // Commit where the cursor actually is, not the smoothed position.
         const idx = _indexForAngle(
           (gizmo.dragTargetAngle * 180) / Math.PI,
@@ -411,6 +529,8 @@ export function initModelClockGizmo(scene, camera) {
 
   let current = null;
   let currentNodeId = null;
+  let clockTargetNodeId = null;
+  let lastBadgeIdx = -1;
 
   /** Project a world position to a viewport-relative CSS transform and
    * apply it to a floating label element, hiding it if behind the camera.
@@ -434,6 +554,7 @@ export function initModelClockGizmo(scene, camera) {
 
   function createTickLabels(gizmo) {
     if (!tickLabelsContainer) return;
+    lastBadgeIdx = -1;
     gizmo.tickLabelEls = gizmo.filtered.map((entry) => {
       const el = document.createElement("div");
       el.className = "model-clock-tick-label";
@@ -445,7 +566,21 @@ export function initModelClockGizmo(scene, camera) {
 
   function render() {
     if (!current) return;
-    syncRootToAnchor(current.root, current.anchor);
+    syncRootToCamera(
+      current.root,
+      current.anchor,
+      camera,
+      current.radius * CLOCK_DEPTH_OFFSET_FACTOR
+    );
+    // Scale the ring so it always keeps the same padding around the model's
+    // projected silhouette, even when the side panel changes the viewport/camera
+    // framing.
+    const silhouetteR = silhouetteRadiusOnClockPlane(current);
+    const targetR = silhouetteR * RING_RADIUS_FACTOR;
+    const scale = targetR / current.radius;
+    if (Number.isFinite(scale) && scale > 0) {
+      current.root.scaling = new BABYLON.Vector3(scale, scale, scale);
+    }
     syncVisuals(current);
     if (!current.tickLabelEls) return;
 
@@ -458,12 +593,17 @@ export function initModelClockGizmo(scene, camera) {
     // floating badge element, so it never desyncs from the tick it labels.
     const badgeIdx = hoverIdx >= 0 ? hoverIdx : safeActiveIdx;
 
+    if (badgeIdx !== lastBadgeIdx) {
+      if (lastBadgeIdx >= 0) current.tickLabelEls[lastBadgeIdx].id = "";
+      current.tickLabelEls[badgeIdx].id = "modelClockBadge";
+      lastBadgeIdx = badgeIdx;
+    }
+
     for (let i = 0; i < current.tickLabelEls.length; i++) {
       const el = current.tickLabelEls[i];
       positionLabelEl(el, current.tickLabelHosts[i].getAbsolutePosition());
       el.classList.toggle("active", i === safeActiveIdx);
       el.classList.toggle("hover", i === hoverIdx);
-      el.id = i === badgeIdx ? "modelClockBadge" : "";
     }
   }
 
@@ -472,6 +612,7 @@ export function initModelClockGizmo(scene, camera) {
     if (state.transformMode !== "time") return;
     const nodeId = e?.nodeId || state.highlightedNodeId;
     if (!nodeId) return;
+    clockTargetNodeId = nodeId;
     currentNodeId = nodeId;
     current = buildGizmoForNode(scene, nodeId);
     if (current) {
@@ -497,8 +638,10 @@ export function initModelClockGizmo(scene, camera) {
 
   function onModeChanged(e) {
     if (e?.mode === "time") {
-      if (state.highlightedNodeId) onSelect({ nodeId: state.highlightedNodeId });
+      const target = clockTargetNodeId || state.highlightedNodeId;
+      if (target) onSelect({ nodeId: target });
     } else {
+      clockTargetNodeId = null;
       destroyCurrent();
     }
   }
@@ -518,6 +661,21 @@ export function initModelClockGizmo(scene, camera) {
       }
     }
     render();
+  }
+
+  function onDeselect() {
+    // Do not clear clockTargetNodeId here. A node:deselected can fire from the
+    // follow-up POINTERPICK after releasing the clock handle, and we need the
+    // target to survive so the clock can rebuild on SCENE_READY after
+    // loadVersion clears and reloads the scene.
+    destroyCurrent();
+  }
+
+  function onSceneReady() {
+    if (state.transformMode !== "time") return;
+    if (!clockTargetNodeId) return;
+    if (!state.nodeAnchors.has(clockTargetNodeId)) return;
+    onSelect({ nodeId: clockTargetNodeId });
   }
 
   function onKeyDown(e) {
@@ -562,10 +720,11 @@ export function initModelClockGizmo(scene, camera) {
   }
 
   const unsubscribeSelected = on(EVENTS.NODE_SELECTED, onSelect);
-  const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, destroyCurrent);
+  const unsubscribeDeselected = on(EVENTS.NODE_DESELECTED, onDeselect);
   const unsubscribeCleared = on(EVENTS.SCENE_CLEARED, destroyCurrent);
   const unsubscribeEmpty = on(EVENTS.SCENE_EMPTY, destroyCurrent);
   const unsubscribeMode = on(EVENTS.TRANSFORM_MODE_CHANGED, onModeChanged);
+  const unsubscribeReady = on(EVENTS.SCENE_READY, onSceneReady);
   const renderHandle = scene.onBeforeRenderObservable.add(render);
   const unsubscribeStore = store.subscribe(onStoreChange);
 
@@ -578,6 +737,7 @@ export function initModelClockGizmo(scene, camera) {
     unsubscribeCleared();
     unsubscribeEmpty();
     unsubscribeMode();
+    unsubscribeReady();
     unsubscribeStore();
     scene.onBeforeRenderObservable.remove(renderHandle);
     document.removeEventListener("keydown", onKeyDown);

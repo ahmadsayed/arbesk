@@ -79,6 +79,17 @@ function createBabylonMock() {
     subtract(v) {
       return new MockVector3(this.x - v.x, this.y - v.y, this.z - v.z);
     }
+    scale(s) {
+      return new MockVector3(this.x * s, this.y * s, this.z * s);
+    }
+    length() {
+      return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    }
+    normalize() {
+      const len = this.length();
+      if (len === 0) return new MockVector3(0, 0, 0);
+      return this.scale(1 / len);
+    }
     applyRotationQuaternion(_q) {
       return this;
     }
@@ -115,6 +126,11 @@ function createBabylonMock() {
     getAbsolutePosition() {
       return this.position.clone();
     }
+    lookAt(_target) {
+      // Euler rotation stays zero; rotationQuaternion will be overwritten by
+      // the caller using BABYLON.Quaternion.FromEulerAngles.
+      this.rotation = new MockVector3(0, 0, 0);
+    }
     isDisposed() {
       return this._disposed;
     }
@@ -147,6 +163,9 @@ function createBabylonMock() {
     static Inverse(q) {
       return q;
     }
+    static FromEulerAngles(_x, _y, _z) {
+      return new MockQuaternion();
+    }
     clone() {
       return this;
     }
@@ -164,10 +183,12 @@ function createBabylonMock() {
       CreateSphere: (name, opts, scene) => new MockMesh(name, scene),
       CreateCylinder: (name, opts, scene) => new MockMesh(name, scene),
       CreateBox: (name, opts, scene) => new MockMesh(name, scene),
+      CreateDisc: (name, opts, scene) => new MockMesh(name, scene),
     },
     Quaternion: MockQuaternion,
     PointerEventTypes: { POINTERDOWN: 1, POINTERUP: 2, POINTERMOVE: 4 },
     UtilityLayerRenderer: null,
+    Material: { MATERIAL_ALPHABLEND: 2 },
     StandardMaterial: class {
       constructor(name, scene) {
         this.name = name;
@@ -208,7 +229,7 @@ describe("model-clock-gizmo math", () => {
     const { _ringRadiusFromBounds } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
-    expect(_ringRadiusFromBounds({ x: -1, y: 0, z: -1 }, { x: 1, y: 2, z: 1 })).toBeCloseTo(1.4, 5);
+    expect(_ringRadiusFromBounds({ x: -1, y: 0, z: -1 }, { x: 1, y: 2, z: 1 })).toBeCloseTo(1.15, 5);
     expect(_ringRadiusFromBounds({ x: 0, y: 0, z: 0 }, { x: 0.1, y: 0.1, z: 0.1 })).toBe(0.5);
     expect(_ringRadiusFromBounds({ x: -10, y: 0, z: -10 }, { x: 10, y: 20, z: 10 })).toBe(8.0);
   });
@@ -295,7 +316,6 @@ describe("model-clock-gizmo lifecycle", () => {
     global.BABYLON = babylon;
 
     state.highlightedNodeId = null;
-    state.isGizmoDragging = false;
     state.nodeMeshes = new Map();
     state.nodeAnchors = new Map();
     state.transformMode = "time";
@@ -322,6 +342,7 @@ describe("model-clock-gizmo lifecycle", () => {
     };
     babylon.UtilityLayerRenderer = { DefaultUtilityLayer: { utilityLayerScene: scene } };
     camera = {
+      position: new babylon.Vector3(0, 0, -10),
       viewport: { toGlobal: () => ({ width: 800, height: 600 }) },
       detachControl: jest.fn(),
       attachControl: jest.fn(),
@@ -334,7 +355,7 @@ describe("model-clock-gizmo lifecycle", () => {
     delete global.BABYLON;
   });
 
-  test("selecting a node creates ring, ticks, and handle", async () => {
+  test("selecting a node creates face, ring, ticks, knob handle with rim — and no arrow", async () => {
     const { initModelClockGizmo } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
     );
@@ -344,15 +365,29 @@ describe("model-clock-gizmo lifecycle", () => {
     state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
     emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
 
+    const face = babylon.createdMeshes.find((m) => m.name === "modelClockFace");
     const torus = babylon.createdMeshes.find((m) => m.name === "versionRing");
     const handle = babylon.createdMeshes.find((m) => m.name === "versionHandle");
+    const rim = babylon.createdMeshes.find((m) => m.name === "versionHandleRim");
     const arrow = babylon.createdMeshes.find((m) => m.name === "versionArrow");
+    expect(face).toBeDefined();
     expect(torus).toBeDefined();
     expect(handle).toBeDefined();
-    expect(arrow).toBeDefined();
+    expect(rim).toBeDefined();
+    // The arrow is gone — direction is communicated by the progress arc.
+    expect(arrow).toBeUndefined();
     expect(babylon.createdMeshes.filter((m) => m.name.startsWith("versionTick")).length).toBe(3);
     expect(torus.material.disableLighting).toBe(true);
     expect(handle.material.disableLighting).toBe(true);
+    // Knob is a flat disc facing the viewer, seated on the ring plane.
+    expect(handle.rotation.x).toBeCloseTo(Math.PI / 2, 5);
+    // Rim rides the knob so it follows every drag for free.
+    expect(rim.parent).toBe(handle);
+    // Translucent clock parts use alpha blending; knob and rim stay opaque.
+    expect(face.material.alpha).toBeLessThan(1);
+    expect(torus.material.alpha).toBeLessThan(1);
+    expect(handle.material.alpha).toBe(1);
+    expect(rim.material.alpha).toBe(1);
   });
 
   test("every tick gets an always-visible label showing its own version, active one highlighted", async () => {
@@ -534,6 +569,30 @@ describe("model-clock-gizmo lifecycle", () => {
     // No standalone badge element persists — it's the id of whichever tick
     // label is current, and all tick labels are removed with the gizmo.
     expect(document.getElementById("modelClockBadge")).toBeNull();
+  });
+
+  test("clock rebuilds for the same node after scene ready", async () => {
+    const { initModelClockGizmo } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    destroyGizmo = initModelClockGizmo(scene, camera);
+
+    state.highlightedNodeId = "node-a";
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+    const liveRings = () =>
+      babylon.createdMeshes.filter((m) => m.name === "versionRing" && !m._disposed);
+    expect(liveRings().length).toBe(1);
+
+    emit(EVENTS.SCENE_CLEARED);
+    expect(liveRings().length).toBe(0);
+    expect(document.getElementById("modelClockBadge")).toBeNull();
+
+    // Simulate the new scene finishing load with the same node available.
+    state.nodeAnchors.set("node-a", new babylon.TransformNode("anchor", scene));
+    emit(EVENTS.SCENE_READY, { manifestCid: "c2" });
+    expect(liveRings().length).toBe(1);
+    expect(document.getElementById("modelClockBadge")).toBeTruthy();
   });
 
   test("destroy() unsubscribes and removes render callback", async () => {
