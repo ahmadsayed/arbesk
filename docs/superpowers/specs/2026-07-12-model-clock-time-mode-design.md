@@ -52,6 +52,9 @@ style of Babylon's built-in gizmos.
 - The old "hide while the transform gizmo is dragging" plumbing
   (`state.isGizmoDragging` checks in `render()`) is removed — modes are
   mutually exclusive, so the clock and transform gizmos never coexist.
+- The ring shows the **full asset version chain**, not the versions filtered
+  to the selected node. This keeps the model clock and the scene clock
+  visually identical and guarantees the active version always has a tick.
 
 ### 3. Rendering: utility layer + flat gizmo materials
 
@@ -73,6 +76,9 @@ style of Babylon's built-in gizmos.
   oriented along the ring's radius, like clock minute marks. Colors: gray =
   other versions, accent blue = active, green = published. Mesh names keep the
   `versionTick-<i>` prefix.
+- **Tick labels:** every tick gets a projected DOM label (`v1`, `v2`, …) that
+  is always visible while Time mode is active. Labels are positioned just
+  beyond the tick via a dedicated host mesh so they never intersect the model.
 - **Handle:** the sphere becomes a small flat **lozenge** seated on the ring,
   oriented tangent to the circle. Unlit accent blue; on pointer-over it
   switches to Babylon's gizmo hover yellow and the canvas cursor becomes
@@ -97,6 +103,12 @@ layer scene:
 - Pointer-up: snap to the nearest tick; if it differs from the active version,
   call `store.loadVersion(entry.cid)`. Reattach camera controls, restore
   cursor.
+- **Selection preservation:** releasing the handle over empty space can produce
+  a follow-up `POINTERPICK` that deselects the node before `loadVersion` has
+  reloaded the scene. The clock keeps its own `clockTargetNodeId` and does not
+  clear it on `NODE_DESELECTED`; it is only cleared when leaving Time mode.
+  This lets the ring rebuild on `SCENE_READY` even if the transient
+  empty-space click cleared the scene selection.
 
 Angle/index math (`_angleForIndex`, `_indexForAngle`, `_ringRadiusFromBounds`)
 is unchanged.
@@ -108,8 +120,11 @@ ArrowLeft/Right/Up/Down/Home/End version stepping fires only while
 
 ### 7. Badge
 
-The DOM badge (`#modelClockBadge`, `vN` text, follows the handle via
-projection) is unchanged in behavior but only exists/shows in Time mode.
+There is no separate floating badge element. Instead, the `#modelClockBadge`
+id is applied to whichever tick label is currently active (or, while dragging,
+the tick label under the drag target). Because the badge text is the label's
+own text, it can never desync from the visible tick. The id/text/visibility
+contract used by E2E specs is preserved.
 
 ## Testing
 
@@ -130,6 +145,5 @@ projection) is unchanged in behavior but only exists/shows in Time mode.
 
 ## Out of scope
 
-- Version labels on ticks, hover tooltips, and a "v3 / 7" counter badge
-  (declined during design).
+- Hover tooltips and a "v3 / 7" counter badge (declined during design).
 - Any change to the version-history store or manifest chain semantics.
