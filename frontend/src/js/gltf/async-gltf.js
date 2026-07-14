@@ -203,6 +203,10 @@ export async function decomposeAndStoreAsync(gltfJson, options = {}) {
  *
  * @param {ArrayBuffer} arrayBuffer
  * @param {boolean} [storeComposite=true]
+ * @param {object} [options]
+ * @param {string} [options.assetName]
+ * @param {string} [options.assetId]
+ * @param {Map<string, string>} [options.dedupMap]
  * @returns {Promise<{composite: object, compositeCid: string|null}>}
  */
 export async function decomposeGLBAsync(
@@ -262,6 +266,7 @@ export async function decomposeGLBAsync(
  * @param {object} [options] - Optional parameters
  * @param {string} [options.assetName] - Asset name for IPFS filename
  * @param {string} [options.assetId] - Asset ID for IPFS filename
+ * @param {Map<string, string>} [options.dedupMap]
  * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
  */
 export async function editSourceColorsAsync(
