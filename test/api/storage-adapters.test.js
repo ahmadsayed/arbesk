@@ -181,21 +181,6 @@ describe("pinata adapter", () => {
     expect(JSON.stringify(cred)).not.toMatch(/jwt|JWT|Bearer/);
   });
 
-  it("mintUploadCredential() retries transient Pinata failures", async () => {
-    const p = fakePinata();
-    p.upload.public.createSignedURL = jest
-      .fn()
-      .mockRejectedValueOnce(new Error("fetch failed"))
-      .mockResolvedValue("https://uploads.pinata.cloud/signed");
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
-    });
-    const cred = await a.mintUploadCredential();
-    expect(cred.url).toBe("https://uploads.pinata.cloud/signed");
-    expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(2);
-  });
-
   it("unpin() resolves cid -> file id(s) and deletes them", async () => {
     const p = fakePinata();
     const a = createPinataAdapter(p, {

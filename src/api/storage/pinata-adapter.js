@@ -114,13 +114,9 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
     },
 
     async mintUploadCredential() {
-      const url = await retryPinata(
-        () =>
-          pinata.upload.public.createSignedURL({
-            expires: uploadTtl,
-          }),
-        "createSignedURL",
-      );
+      const url = await pinata.upload.public.createSignedURL({
+        expires: uploadTtl,
+      });
       return { backend: "pinata", url, gateway: gatewayBase, reusable: false };
     },
 
@@ -130,34 +126,4 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
   };
 }
 
-/**
- * Retry a Pinata SDK call with exponential backoff.
- * createSignedURL occasionally fails with "fetch failed" during Pinata-side
- * hiccups; a small retry absorbs the transient error without surfacing a 500.
- *
- * @template T
- * @param {() => Promise<T>} fn
- * @param {string} operation
- * @returns {Promise<T>}
- */
-async function retryPinata(fn, operation) {
-  const maxAttempts = 3;
-  const baseDelayMs = 500;
-  let lastError;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = /** @type {Error} */ (error);
-      console.warn(
-        `[IPFS] pinata ${operation} attempt ${attempt}/${maxAttempts} failed: ${lastError.message}`,
-      );
-      if (attempt < maxAttempts) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, baseDelayMs * 2 ** (attempt - 1)),
-        );
-      }
-    }
-  }
-  throw lastError;
-}
+
