@@ -19,15 +19,7 @@ export function extractCid(src) {
   return src;
 }
 
-/**
- * Detect the asset format from its source reference.
- */
-export function detectAssetFormat(src) {
-  if (src && typeof src === "object" && src.format) {
-    return src.format.toLowerCase();
-  }
-  return "gltf";
-}
+export { detectAssetFormat } from "../formats/registry.js";
 
 /**
  * Safely access manifest scene nodes.
