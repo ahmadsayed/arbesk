@@ -24,20 +24,33 @@ async function loadModule() {
   await jest.unstable_mockModule(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
+      gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
       getFromRemoteIPFS: jest.fn().mockResolvedValue({
         type: "asset",
         scene: { nodes: [] },
       }),
+      getBase64FromRemoteIPFS: jest.fn(),
       getBlobFromRemoteIPFS: jest.fn(),
+      getArrayBufferFromRemoteIPFS: jest.fn(),
+      getRawArrayBufferFromRemoteIPFS: jest.fn(),
+      getManifestChain: jest.fn(),
+      isIpfsCidReachable: jest.fn(),
+      clearRemoteIPFSCache: jest.fn(),
     })
   );
 
   await jest.unstable_mockModule(
     "../../frontend/src/js/gltf/async-gltf.js",
     () => ({
+      composeGlTFAsync: jest.fn(),
       composeGlTFToBlobAsync: jest
         .fn()
         .mockResolvedValue(new Blob(["gltf"])),
+      decomposeGlTFAsync: jest.fn(),
+      decomposeAndStoreAsync: jest.fn(),
+      decomposeGLBAsync: jest.fn(),
+      editSourceColorsAsync: jest.fn(),
+      isComposite: jest.fn(),
     })
   );
 
