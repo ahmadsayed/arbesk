@@ -43,6 +43,12 @@
   --axis-x: #e22b30; // Blender convention — red
   --axis-y: #43c142; // Blender convention — green
   --axis-z: #3478eb; // Blender convention — blue
+
+  // Model-clock badge/label accent: matches COLOR_ACTIVE in
+  // model-clock-gizmo.js (the knob/arc blue) so the DOM badge doesn't clash
+  // with the app's gold --accent-bg. 5.2:1 with white text (AA normal size).
+  --clock-accent: #2563eb;
+  --clock-accent-fg: #ffffff;
 }
 
 // ── Layer 2: Per-surface variants ────────────────────────────────────
@@ -253,7 +259,10 @@
 :root {
   --headerbar-height: 48px;
   --sidebar-width: 340px;
-  --inspector-width: 340px;
+  // Sidebar's 340px includes its 48px view-switcher rail; the inspector has
+  // no rail, so it's sized to the sidebar's content column (340 - 48) to
+  // keep both panels' visible content the same width.
+  --inspector-width: 292px;
   --messagebar-min-height: 52px;
   --bottombar-height: 32px;
 }

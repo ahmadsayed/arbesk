@@ -168,45 +168,44 @@
   position: absolute;
   left: 0;
   top: 0;
-  padding: 1px 5px;
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--dim-fg);
-  background: var(--popover-bg);
-  border: var(--border-size-1) solid var(--border-color);
-  border-radius: var(--size-1);
-  opacity: 0.35;
+  opacity: 0.45;
   white-space: nowrap;
-  transition: opacity var(--duration-quick) ease;
+  transition: opacity var(--duration-quick) ease, color var(--duration-quick) ease;
 
-  &.active {
+  // Published stays plain text (brightened, no chip) so it doesn't compete
+  // with the active/hover chips, which sit where the knob or drag cursor is.
+  &.published {
+    color: var(--green-4);
+    opacity: 1;
+  }
+
+  &.active,
+  &.hover {
     padding: 2px 6px;
     font-size: 11px;
-    color: var(--accent-fg);
-    background: var(--accent-bg);
-    border-color: var(--accent-bg);
+    border-radius: var(--size-1);
     opacity: 1;
+  }
+
+  &.active {
+    color: var(--clock-accent-fg);
+    background: var(--clock-accent);
     z-index: 1;
   }
 
   &.hover {
-    padding: 2px 6px;
-    font-size: 11px;
     color: var(--window-fg);
     background: var(--yellow-4);
-    border-color: var(--yellow-4);
-    opacity: 1;
     z-index: 2;
-  }
-
-  &.published {
-    color: var(--green-4);
-    border-color: var(--green-4);
-    opacity: 1;
   }
 }
 
-// Standalone version badge riding just outside the knob.
+// Standalone version badge riding just outside the knob. Uses --clock-accent
+// (not the app's gold --accent-bg) so it visually matches the blue knob/arc
+// it travels with.
 .model-clock-badge {
   position: absolute;
   left: 0;
@@ -214,8 +213,8 @@
   padding: 2px 7px;
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--accent-fg);
-  background: var(--accent-bg);
+  color: var(--clock-accent-fg);
+  background: var(--clock-accent);
   border-radius: var(--size-1);
   white-space: nowrap;
   z-index: 3;

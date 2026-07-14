@@ -106,11 +106,11 @@ const RING_TESSELLATION = 64;
 
 // Flat, unlit gizmo palette (matches Babylon transform-gizmo styling).
 const COLOR_RING = [0.65, 0.65, 0.65];
-const COLOR_TICK = [0.5, 0.5, 0.5];
+const COLOR_TICK = [0.72, 0.72, 0.76]; // lighter than the track so ticks stay legible under the opaque arc
 const COLOR_ACTIVE = [0.2, 0.6, 1];
 const COLOR_PUBLISHED = [0.2, 0.8, 0.2];
 const COLOR_HOVER = [1, 1, 0.4];
-const COLOR_KNOB_RIM = [0.55, 0.8, 1];
+const COLOR_KNOB_RIM = [0.78, 0.92, 1]; // bright highlight rim so the knob reads as raised, not flat
 
 const DRAG_SMOOTHING = 0.5;
 // How far outside the ring the DOM tick labels sit, as a multiple of the
@@ -122,7 +122,8 @@ const LABEL_RADIUS_FACTOR = 1.12;
 const BADGE_RADIUS_FACTOR = 1.22;
 
 // Translucent analog-clock styling.
-const CLOCK_ALPHA = 0.5; // alpha for track/ticks/face accents
+const CLOCK_ALPHA = 0.5; // alpha for track/face accents
+const TICK_ALPHA = 0.85; // ticks stay opaque-ish so they don't wash out under the arc/track
 const FACE_ALPHA = 0.30; // slightly darker face
 const HANDLE_ALPHA = 1.0; // knob stays prominent
 const CLOCK_DEPTH_OFFSET_FACTOR = 0.3; // how far behind the anchor the clock sits
@@ -136,7 +137,7 @@ const TICK_WIDTH_FACTOR = 0.12;
 const TICK_THICKNESS_FACTOR = 0.035;
 const KNOB_DIAMETER_FACTOR = 0.16;
 const KNOB_HEIGHT_FACTOR = 0.03;
-const RIM_THICKNESS_FACTOR = 0.012;
+const RIM_THICKNESS_FACTOR = 0.022;
 
 let isDraggingHandle = false;
 
@@ -410,7 +411,7 @@ function buildGizmoForNode(scene, nodeId) {
       0
     );
     tick.rotation.z = angle;
-    tick.material = createGizmoMaterial(uScene, `tickMat-${i}`, COLOR_TICK, CLOCK_ALPHA);
+    tick.material = createGizmoMaterial(uScene, `tickMat-${i}`, COLOR_TICK, TICK_ALPHA);
     tick.isPickable = false;
     ticks.push(tick);
 
