@@ -43,7 +43,9 @@
   border-top: var(--border-size-1) solid var(--border-hairline);
 }
 
-.sidebar-switcher-toggle {
+// Shared collapse-toggle look, reused by the inspector's own collapse
+// button (see _inspector.scss usage in app.pug) so both side panels match.
+.panel-toggle {
   display: flex;
   align-items: center;
   justify-content: center;

@@ -151,7 +151,9 @@ function wireEvents(gizmoManager) {
 
   on(EVENTS.SCENE_CLEARED, () => {
     gizmoManager.attachToNode(null);
-    state.transformMode = null;
+    // Do not reset transformMode here: clearing the scene is part of version
+    // navigation (loadVersion -> clearScene -> loadAssetManifest), and the user
+    // should remain in Time mode so the model clock can rebuild on SCENE_READY.
     updateToolbarUI();
   });
 }

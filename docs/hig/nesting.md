@@ -64,7 +64,8 @@ Primary navigation for fractal nesting. Shows what's in the current world withou
 
 | Action | Behavior |
 |---|---|
-| **Click** | Select node in viewport (highlight, open inspector) |
+| **Click** | Select/highlight node in viewport (does not open inspector) |
+| **Double-click** node | Open inspector for that node |
 | **Double-click** on 🧩 | Dive into child world |
 | **Drag** from Gallery view onto Outline | Add token as child world at specific position |
 | **[+] button** | Switch to Gallery view so an asset can be dragged into the scene |
@@ -76,7 +77,7 @@ Matches **GNOME Builder project tree** and **Blender Outliner** pattern.
 
 ## Inspector — Three Modes
 
-Right sidebar. Appears on node selection, hidden when nothing selected. Pushes viewport (doesn't overlay).
+Right sidebar. Open by default; its content is contextual to the selected node. Collapse with the X button, reopen by double-clicking a node in the viewport or clicking a node in the Outline. Pushes viewport (doesn't overlay).
 
 ### Mode 1: Regular Mesh Node — Parametric Color Editor
 
@@ -137,8 +138,8 @@ Color edits are live-previewed on the selected component. They are baked into th
 | Trigger | Result |
 |---|---|
 | Click node in Outline | Viewport highlights it + inspector opens |
-| Click mesh in viewport | Outline highlights it + inspector opens |
-| Click empty space in viewport | Inspector closes |
+| Click mesh in viewport | Outline highlights it (inspector stays as-is; double-click to open) |
+| Click empty space in viewport | Node deselects; inspector stays open |
 
 Width: 340px (`--inspector-width`).
 

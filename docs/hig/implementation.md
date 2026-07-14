@@ -105,6 +105,8 @@ frontend/src/scss/
 
 - Move inspector from floating `position: absolute` to right sidebar column
 - Three inspector modes: parametric color editor, token child world info, asset comments
+- Inspector starts open by default; collapse is user-controlled
+- Single-click selects/highlight; double-click opens inspector
 - Selection sync: Outliner ↔ viewport ↔ inspector
 - Width: 340px
 

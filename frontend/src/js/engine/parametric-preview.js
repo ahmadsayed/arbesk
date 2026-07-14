@@ -23,11 +23,14 @@ import {
 
 // DOM references
 const inspector = document.getElementById("inspector");
+const inspectorToggle = document.getElementById("inspectorToggle");
+const inspectorReveal = document.getElementById("inspectorReveal");
 const parametricEditor = document.getElementById("parametricEditor");
 const tokenChildInfo = document.getElementById("tokenChildInfo");
 const tokenChildInfoDetails = tokenChildInfo?.querySelector("details");
 const parametricEditorDetails = parametricEditor?.querySelector("details");
 const nodeColorInput = document.getElementById("nodeColor");
+
 /** @type {HTMLInputElement|null} */
 const nodeScaleX = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleX"));
 /** @type {HTMLInputElement|null} */
@@ -187,6 +190,58 @@ function showTokenChildInfo(nodeId) {
 }
 
 /**
+ * Collapse the inspector panel without changing the current selection or
+ * reverting the live preview.
+ */
+function collapseInspector() {
+  if (inspector) inspector.classList.add("collapsed");
+  syncInspectorToggleAria();
+}
+
+/**
+ * Expand the inspector panel.
+ */
+function expandInspector() {
+  if (inspector) inspector.classList.remove("collapsed");
+  syncInspectorToggleAria();
+}
+
+/**
+ * Toggle the inspector panel open/closed.
+ */
+function toggleInspector() {
+  if (inspector && inspector.classList.contains("collapsed")) {
+    expandInspector();
+  } else {
+    collapseInspector();
+  }
+}
+
+/**
+ * Sync the header toggle button's aria-expanded state and label to match the
+ * current inspector visibility.
+ */
+function syncInspectorToggleAria() {
+  if (!inspectorToggle) return;
+  const collapsed = inspector?.classList.contains("collapsed") ?? false;
+  inspectorToggle.setAttribute("aria-expanded", String(!collapsed));
+  inspectorToggle.setAttribute(
+    "aria-label",
+    collapsed ? "Expand inspector" : "Collapse inspector"
+  );
+  inspectorToggle.title = collapsed ? "Expand inspector" : "Collapse inspector";
+}
+
+/**
+ * Ensure the inspector starts open by default. Collapse state is not persisted
+ * across reloads, so the panel is reliably open until the user toggles it.
+ */
+function restoreInspectorCollapsedState() {
+  expandInspector();
+}
+restoreInspectorCollapsedState();
+
+/**
  * Show the parametric editor for a regular node.
  *
  * @param {string} nodeId
@@ -200,6 +255,7 @@ async function openInspector(nodeId) {
   const childRef = getNodeChildRef(nodeId);
   if (childRef) {
     showTokenChildInfo(nodeId);
+    expandInspector();
     return;
   }
 
@@ -222,7 +278,7 @@ async function openInspector(nodeId) {
     selectSubMesh(nodeId, first);
   }
 
-  if (inspector) inspector.classList.remove("collapsed");
+  expandInspector();
 }
 
 /**
@@ -246,7 +302,9 @@ function closeInspector() {
   activeMeshName = null;
   originalMaterialColors = {};
   _clearUndoRedo();
-  if (inspector) inspector.classList.add("collapsed");
+  // NOTE: we intentionally do not collapse the panel here. The user controls
+  // collapse explicitly via the X button; programmatic scene clears should not
+  // hide the panel.
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
   if (componentEditor) componentEditor.hidden = true;
@@ -336,10 +394,34 @@ export function clearPendingSourceColorEdit(nodeId) {
  */
 function onNodeSelected(e) {
   selectNodeById(e.nodeId);
-  openInspector(e.nodeId);
+  // Single click updates the inspector content when the panel is open, but
+  // does not expand it when the user has explicitly collapsed it.
+  if (inspector && !inspector.classList.contains("collapsed")) {
+    openInspector(e.nodeId);
+  } else {
+    activeNodeId = e.nodeId || null;
+    activeMeshName = null;
+  }
 }
 on(EVENTS.NODE_SELECTED, onNodeSelected);
-on(EVENTS.OUTLINER_NODE_SELECTED, onNodeSelected);
+
+/**
+ * @param {{nodeId: string}} e
+ */
+function onNodeDoubleClicked(e) {
+  selectNodeById(e.nodeId);
+  openInspector(e.nodeId);
+}
+on(EVENTS.NODE_DOUBLE_CLICKED, onNodeDoubleClicked);
+
+/**
+ * @param {{nodeId: string}} e
+ */
+function onOutlinerNodeSelected(e) {
+  selectNodeById(e.nodeId);
+  openInspector(e.nodeId);
+}
+on(EVENTS.OUTLINER_NODE_SELECTED, onOutlinerNodeSelected);
 
 // Sub-mesh selected from the viewport: sync the inspector to that component.
 on(EVENTS.SUBMESH_SELECTED, (/** @type {{meshName?: string}} */ e) => {
@@ -348,10 +430,9 @@ on(EVENTS.SUBMESH_SELECTED, (/** @type {{meshName?: string}} */ e) => {
   selectComponent(meshName);
 });
 
-// Inspector close button
-const inspectorCloseBtn = document.getElementById("inspectorCloseBtn");
-if (inspectorCloseBtn)
-  inspectorCloseBtn.addEventListener("click", closeInspector);
+// Inspector toggle + reveal buttons (same behavior as the left sidebar)
+if (inspectorToggle) inspectorToggle.addEventListener("click", toggleInspector);
+if (inspectorReveal) inspectorReveal.addEventListener("click", expandInspector);
 
 // Dive button for child worlds
 const diveBtn = document.getElementById("inspectorDiveBtn");

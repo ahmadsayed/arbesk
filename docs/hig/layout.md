@@ -37,7 +37,7 @@ GNOME apps follow a consistent layout:
 │ 💬 Chat  │            (Babylon.js canvas)                        │ Insp  │
 │ 🌳 Outln │                                                       │ (coll)│
 │ 📚 Gallery│                                                       │       │
-│ 📋 Activity│          [Inspector — only on selection]            │       │
+│ 📋 Activity│          [Inspector — open by default]             │       │
 │          │                                                       │       │
 │          ├───────────────────────────────────────────────────────┤       │
 │          │ [Describe your 3D asset…                        ][✦]  │       │
@@ -57,7 +57,7 @@ GNOME apps follow a consistent layout:
 │ 💬 Chat  │            (Living Room's canvas)                     │ Insp  │
 │ 🌳 Outln │                                                       │ (coll)│
 │ 📚 Gallery│                                                       │       │
-│ 📋 Activity│          [Inspector — only on selection]            │       │
+│ 📋 Activity│          [Inspector — open by default]             │       │
 │          │                                                       │       │
 │          ├───────────────────────────────────────────────────────┤       │
 │          │ [Describe an object for this room…             ][✦]  │       │
@@ -75,7 +75,7 @@ GNOME apps follow a consistent layout:
 | **Header Bar** | Current `.arabesque-topbar` | Brand icon, page switcher (Library/Studio), back button (nested), breadcrumb path bar, document title, history timeline pill, Save/Besk it buttons, wallet button |
 | **Left Sidebar** | `.chat-sidebar` + `.asset-library-panel` + `.ledger-panel` | Unified sidebar with View Switcher (5 icons) |
 | **Content Area** | `.main-stage` + `.viewport` | 3D canvas + bottom message bar |
-| **Right Inspector** | Floating `#inspector` | Contextual sidebar. Appears on node selection. Modes: parametric color editor, token child info, asset comments. |
+| **Right Inspector** | Floating `#inspector` | Right sidebar. Open by default; content is contextual to the selected node. Collapsible via the X button. Modes: parametric color editor, token child info, asset comments. |
 | **Bottom Bar** | New | Document state, nesting depth, node/child counts, keyboard-shortcuts button |
 
 ---

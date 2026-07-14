@@ -134,7 +134,7 @@ html(lang="en")
                   path(d="M14 13h2")
                   path(d="M14 17h2")
               .sidebar-switcher-bottom
-                button#sidebarToggle.sidebar-switcher-toggle(aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)" aria-expanded="true" aria-controls="sidebar")
+                button#sidebarToggle.panel-toggle(aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)" aria-expanded="true" aria-controls="sidebar")
                   svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                     polyline(points="15 18 9 12 15 6")
             .sidebar-content
@@ -274,14 +274,10 @@ html(lang="en")
                   path(d="M7 11V7a5 5 0 0 1 10 0v4")
                 span Sign in to start generating assets.
 
-          //- Inspector — right sidebar
-          aside#inspector.inspector.collapsed
+          //- Inspector — right sidebar (open by default; user collapses via toggle)
+          aside#inspector.inspector
             .inspector-header
               h3 Properties
-              button#inspectorCloseBtn.btn.btn-icon.btn-sm(aria-label="Close inspector")
-                svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                  line(x1="18" y1="6" x2="6" y2="18")
-                  line(x1="6" y1="6" x2="18" y2="18")
             .inspector-body
               section#tokenChildInfo.inspector-section.inspector-token-child(hidden)
                 details
@@ -331,6 +327,13 @@ html(lang="en")
                     span.composer-hint Ctrl+Enter to send
                     button#postCommentBtn.btn.btn-primary.btn-sm(type="button" aria-label="Post comment" title="Post comment (Ctrl+Enter)") Post
                 span#commentsLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
+            .inspector-footer
+              button#inspectorToggle.panel-toggle(aria-label="Collapse inspector" title="Collapse inspector" aria-expanded="true")
+                svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                  polyline(points="9 18 15 12 9 6")
+          button#inspectorReveal.inspector-reveal(aria-label="Show inspector" title="Show inspector")
+            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+              polyline(points="15 18 9 12 15 6")
         footer#bottomBar.bottombar
           .bottombar-status
             span#bottomBarStatus.bottombar-status-item Draft

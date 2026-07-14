@@ -53,11 +53,13 @@ export const state = {
   camera: null,
   /** @type {BABYLON.GizmoManager|null} */
   gizmoManager: null,
-  /** @type {'translate' | 'rotate' | 'scale' | null} */
+  /** @type {'translate' | 'rotate' | 'scale' | 'time' | null} */
   transformMode: null,
   /**
-   * True while the transform gizmo is being dragged; used by overlays such as
-   * the model clock to suppress their per-frame update and avoid jitter.
+   * True while the move/rotate/scale gizmo is being dragged. Legacy: the model
+   * clock used to read this to suppress its per-frame update, but Time mode is
+   * now mutually exclusive with the transform gizmos, so only transform-gizmo
+   * code should set or inspect this flag.
    */
   isGizmoDragging: false,
   /**

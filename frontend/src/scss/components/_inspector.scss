@@ -45,6 +45,18 @@
   gap: var(--size-4);
 }
 
+// Full-width divider, like the header/body above it, but the toggle itself
+// is tucked into the outer (right) corner — mirroring where the sidebar's
+// toggle sits within its narrow view-switcher rail — instead of centered.
+.inspector-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--size-2) var(--size-3);
+  border-top: var(--border-size-1) solid var(--border-hairline);
+}
+
 // Section within inspector
 .inspector-section {
   display: flex;
@@ -133,6 +145,44 @@
   font-size: var(--font-size-0);
   color: var(--dim-fg);
   line-height: 1.4;
+}
+
+// Show-inspector button (visible when collapsed), mirroring the left sidebar reveal.
+.inspector-reveal {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 72px;
+  background-color: var(--headerbar-bg);
+  border: var(--border-size-1) solid var(--accent-bg);
+  border-right: none;
+  border-radius: var(--radius-3) 0 0 var(--radius-3);
+  color: var(--accent-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-quick) var(--ease-out-3),
+              width var(--duration-quick) var(--ease-out-3),
+              background-color var(--duration-quick) var(--ease-out-3),
+              color var(--duration-quick) var(--ease-out-3);
+  box-shadow: var(--shadow-2);
+
+  &:hover {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    width: 36px;
+  }
+
+  .inspector.collapsed ~ & {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 // Single component color editor

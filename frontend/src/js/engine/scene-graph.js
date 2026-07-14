@@ -361,7 +361,13 @@ export function initEngine() {
   state.resizeObserverInstance = new ResizeObserver(() => resizeEngine());
   state.resizeObserverInstance.observe(canvas);
 
-  // Click-to-select
+  // Click-to-select. Single click selects/highlight; double-click opens the
+  // Properties inspector. Track the last click to detect double-clicks.
+  const DOUBLE_CLICK_MS = 300;
+  /** @type {string|null} */
+  let lastClickNodeId = null;
+  let lastClickTime = 0;
+
   // Store the callback so it can be removed later
   /** @param {BABYLON.PointerInfo} pointerInfo */
   state.pointerObservableCallback = (pointerInfo) => {
@@ -394,7 +400,23 @@ export function initEngine() {
       const resolvedNodeId = childWorldNodeId || firstNodeId;
       const isChildWorldNode = !!childWorldNodeId;
 
+      const now = Date.now();
+      const isDoubleClick =
+        resolvedNodeId &&
+        resolvedNodeId === lastClickNodeId &&
+        now - lastClickTime < DOUBLE_CLICK_MS;
+      lastClickNodeId = resolvedNodeId || null;
+      lastClickTime = now;
+
       if (resolvedNodeId) {
+        if (isDoubleClick) {
+          // Double-click opens the inspector; don't run the single-click
+          // sub-mesh toggle on the second click.
+          selectNode(resolvedNodeId, target);
+          emit(EVENTS.NODE_DOUBLE_CLICKED, { nodeId: resolvedNodeId, mesh });
+          return;
+        }
+
         if (resolvedNodeId === state.highlightedNodeId) {
           // Sub-mesh toggle only applies to regular (non-child-world) nodes.
           if (!isChildWorldNode && mesh.name) {
@@ -410,7 +432,7 @@ export function initEngine() {
         return;
       }
     }
-    // Clicked empty space → deselect
+    // Clicked empty space → deselect.
     if (state.highlightedNodeId) {
       deselectAll();
     }
