@@ -121,7 +121,14 @@ describe("pinata adapter", () => {
           delete: jest.fn(async () => [{ id: "id-1", status: "OK" }]),
         },
       },
-      gateways: { public: {} },
+      gateways: {
+        public: {
+          get: jest.fn(async (cid) => ({
+            data: `{"hello":"world","cid":"${cid}"}`,
+            contentType: "application/json",
+          })),
+        },
+      },
     };
   }
 
@@ -174,6 +181,21 @@ describe("pinata adapter", () => {
     expect(JSON.stringify(cred)).not.toMatch(/jwt|JWT|Bearer/);
   });
 
+  it("mintUploadCredential() retries transient Pinata failures", async () => {
+    const p = fakePinata();
+    p.upload.public.createSignedURL = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockResolvedValue("https://uploads.pinata.cloud/signed");
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 60,
+    });
+    const cred = await a.mintUploadCredential();
+    expect(cred.url).toBe("https://uploads.pinata.cloud/signed");
+    expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(2);
+  });
+
   it("unpin() resolves cid -> file id(s) and deletes them", async () => {
     const p = fakePinata();
     const a = createPinataAdapter(p, {
@@ -195,73 +217,58 @@ describe("pinata adapter", () => {
     expect(p.files.public.delete).not.toHaveBeenCalled();
   });
 
-  it("catBytes() returns raw bytes from the gateway", async () => {
-    const savedFetch = global.fetch;
-    const payload = Buffer.from('{"hello":"world"}', "utf-8");
-    global.fetch = jest.fn(async () => ({
-      ok: true,
-      arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
+  it("catBytes() returns raw bytes from the authenticated gateway", async () => {
+    const p = fakePinata();
+    p.gateways.public.get = jest.fn(async () => ({
+      data: Buffer.from('{"hello":"world"}', "utf-8"),
+      contentType: "application/json",
     }));
-    try {
-      const a = createPinataAdapter(fakePinata(), {
-        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-        uploadTtl: 60,
-      });
-      const bytes = await a.catBytes("bafyWorld");
-      expect(Buffer.isBuffer(bytes)).toBe(true);
-      expect(bytes.toString("utf-8")).toBe('{"hello":"world"}');
-    } finally {
-      global.fetch = savedFetch;
-    }
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 60,
+    });
+    const bytes = await a.catBytes("bafyWorld");
+    expect(Buffer.isBuffer(bytes)).toBe(true);
+    expect(bytes.toString("utf-8")).toBe('{"hello":"world"}');
+    expect(p.gateways.public.get).toHaveBeenCalledWith("bafyWorld");
   });
 
-  it("cat() returns text from the gateway", async () => {
-    const savedFetch = global.fetch;
-    global.fetch = jest.fn(async () => ({
-      ok: true,
-      text: async () => '{"hello":"world"}',
+  it("cat() returns text from the authenticated gateway", async () => {
+    const p = fakePinata();
+    p.gateways.public.get = jest.fn(async () => ({
+      data: '{"hello":"world"}',
+      contentType: "application/json",
     }));
-    try {
-      const a = createPinataAdapter(fakePinata(), {
-        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-        uploadTtl: 60,
-      });
-      expect(await a.cat("bafyText")).toBe('{"hello":"world"}');
-      expect(global.fetch).toHaveBeenCalledWith(
-        "https://gw.mypinata.cloud/ipfs/bafyText",
-        { cache: "no-store" },
-      );
-    } finally {
-      global.fetch = savedFetch;
-    }
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 60,
+    });
+    expect(await a.cat("bafyText")).toBe('{"hello":"world"}');
+    expect(p.gateways.public.get).toHaveBeenCalledWith("bafyText");
   });
 
-  it("cat() throws when the gateway responds with an error", async () => {
-    const savedFetch = global.fetch;
-    global.fetch = jest.fn(async () => ({ ok: false, status: 504 }));
-    try {
-      const a = createPinataAdapter(fakePinata(), {
-        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-        uploadTtl: 60,
-      });
-      await expect(a.cat("bafyFail")).rejects.toThrow("pinata gateway 504");
-    } finally {
-      global.fetch = savedFetch;
-    }
+  it("cat() propagates authenticated gateway errors", async () => {
+    const p = fakePinata();
+    p.gateways.public.get = jest.fn(async () => {
+      throw new Error("pinata gateway 504");
+    });
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 60,
+    });
+    await expect(a.cat("bafyFail")).rejects.toThrow("pinata gateway 504");
   });
 
-  it("catBytes() throws when the gateway responds with an error", async () => {
-    const savedFetch = global.fetch;
-    global.fetch = jest.fn(async () => ({ ok: false, status: 503 }));
-    try {
-      const a = createPinataAdapter(fakePinata(), {
-        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-        uploadTtl: 60,
-      });
-      await expect(a.catBytes("bafyFail")).rejects.toThrow("pinata gateway 503");
-    } finally {
-      global.fetch = savedFetch;
-    }
+  it("catBytes() propagates authenticated gateway errors", async () => {
+    const p = fakePinata();
+    p.gateways.public.get = jest.fn(async () => {
+      throw new Error("pinata gateway 503");
+    });
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 60,
+    });
+    await expect(a.catBytes("bafyFail")).rejects.toThrow("pinata gateway 503");
   });
 
   it("add() propagates upload errors", async () => {

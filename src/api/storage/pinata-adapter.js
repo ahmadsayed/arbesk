@@ -5,6 +5,11 @@
  * the server). Public IPFS so CIDs resolve through a normal gateway and can be
  * embedded in on-chain tokenURIs.
  *
+ * The published Pinata SDK types omit the `gateways` accessor, so we cast
+ * through a local typedef when performing authenticated gateway reads.
+ *
+ * @typedef {{ gateways: { public: { get(cid: string): Promise<{data: any, contentType: string}> } } }} PinataWithGateways
+ *
  * @param {import('pinata').PinataSDK} pinata
  * @param {{ gatewayBase: string; uploadTtl: number }} options
  * @returns {import('./index.js').StorageAdapter}
@@ -47,18 +52,27 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
      * @param {string} cid
      */
     async cat(cid) {
-      const res = await fetch(`${gatewayBase}${cid}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`pinata gateway ${res.status} for ${cid}`);
-      return await res.text();
+      const response = await /** @type {PinataWithGateways} */ (/** @type {unknown} */ (pinata)).gateways.public.get(cid);
+      const data = response.data;
+      if (typeof data === "string") return data;
+      if (data instanceof Blob) return await data.text();
+      if (data && typeof data === "object") return JSON.stringify(data);
+      return "";
     },
 
     /**
      * @param {string} cid
      */
     async catBytes(cid) {
-      const res = await fetch(`${gatewayBase}${cid}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`pinata gateway ${res.status} for ${cid}`);
-      return Buffer.from(await res.arrayBuffer());
+      const response = await /** @type {PinataWithGateways} */ (/** @type {unknown} */ (pinata)).gateways.public.get(cid);
+      const data = response.data;
+      if (Buffer.isBuffer(data)) return data;
+      if (data instanceof Uint8Array) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+      if (data instanceof ArrayBuffer) return Buffer.from(data);
+      if (data instanceof Blob) return Buffer.from(await data.arrayBuffer());
+      if (typeof data === "string") return Buffer.from(data, "utf-8");
+      if (data && typeof data === "object") return Buffer.from(JSON.stringify(data), "utf-8");
+      return Buffer.alloc(0);
     },
 
     /**
@@ -100,9 +114,13 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
     },
 
     async mintUploadCredential() {
-      const url = await pinata.upload.public.createSignedURL({
-        expires: uploadTtl,
-      });
+      const url = await retryPinata(
+        () =>
+          pinata.upload.public.createSignedURL({
+            expires: uploadTtl,
+          }),
+        "createSignedURL",
+      );
       return { backend: "pinata", url, gateway: gatewayBase, reusable: false };
     },
 
@@ -110,4 +128,36 @@ export function createPinataAdapter(pinata, { gatewayBase, uploadTtl }) {
       return gatewayBase;
     },
   };
+}
+
+/**
+ * Retry a Pinata SDK call with exponential backoff.
+ * createSignedURL occasionally fails with "fetch failed" during Pinata-side
+ * hiccups; a small retry absorbs the transient error without surfacing a 500.
+ *
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @param {string} operation
+ * @returns {Promise<T>}
+ */
+async function retryPinata(fn, operation) {
+  const maxAttempts = 3;
+  const baseDelayMs = 500;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = /** @type {Error} */ (error);
+      console.warn(
+        `[IPFS] pinata ${operation} attempt ${attempt}/${maxAttempts} failed: ${lastError.message}`,
+      );
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, baseDelayMs * 2 ** (attempt - 1)),
+        );
+      }
+    }
+  }
+  throw lastError;
 }
