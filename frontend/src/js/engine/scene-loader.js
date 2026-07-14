@@ -7,11 +7,8 @@
  * linked asset composition.
  */
 
-import {
-  getFromRemoteIPFS,
-  getBlobFromRemoteIPFS,
-} from "../ipfs/remote-ipfs.js";
-import { composeGlTFToBlobAsync } from "../gltf/async-gltf.js";
+import { resolveFormatHandler } from "../formats/index.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import {
   resolveChildRef,
   resolveCollectionChildRef,
@@ -23,7 +20,6 @@ import { walletState } from "../state/wallet-state.js";
 import { state, MAX_CHILD_WORLD_DEPTH } from "./state.js";
 import {
   extractCid,
-  detectAssetFormat,
   getManifestNodes,
   applyTransformMatrix,
   applyDefaultMaterial,
@@ -36,66 +32,22 @@ import { createAnchorNode } from "./scene-graph.js";
 
 async function loadAsset(src, parentNode, nodeId) {
   const cid = extractCid(src);
-  const format = detectAssetFormat(src);
-  console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${format}`);
+  const handler = resolveFormatHandler(src);
+  console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${handler.format}`);
 
   try {
-    if (format === "glb") {
-      const blob = await getBlobFromRemoteIPFS(cid);
-      console.log(
-        `[SCENE] GLB fetched | cid=${cid} size=${blob.size} bytes | type=${blob.type}`
-      );
-      const blobUrl = URL.createObjectURL(blob);
-
-      const result = await BABYLON.SceneLoader.ImportMeshAsync(
-        "",
-        blobUrl,
-        "",
-        state.scene,
-        null,
-        ".glb"
-      );
-      URL.revokeObjectURL(blobUrl);
-      console.log(`[SCENE] GLB loaded | meshes=${result.meshes.length}`);
-      attachMetadata(
-        result.meshes,
-        nodeId,
-        parentNode,
-        result.transformNodes || []
-      );
-      return result.meshes;
-    } else {
-      console.log(`[SCENE] fetching glTF JSON from gateway | cid=${cid}`);
-      const gltfJson = await getFromRemoteIPFS(cid);
-      console.log(
-        `[SCENE] glTF JSON fetched | hasBuffers=${!!gltfJson?.buffers} | bufferCount=${
-          gltfJson?.buffers?.length || 0
-        }`
-      );
-
-      const gltfBlob = await composeGlTFToBlobAsync(gltfJson);
-      console.log(`[SCENE] glTF composed | bytes=${gltfBlob.size}`);
-
-      const blobUrl = URL.createObjectURL(gltfBlob);
-
-      const result = await BABYLON.SceneLoader.ImportMeshAsync(
-        "",
-        blobUrl,
-        "",
-        state.scene,
-        null,
-        ".gltf"
-      );
-      URL.revokeObjectURL(blobUrl);
-      console.log(`[SCENE] glTF loaded | meshes=${result.meshes.length}`);
-      attachMetadata(
-        result.meshes,
-        nodeId,
-        parentNode,
-        result.transformNodes || []
-      );
-      return result.meshes;
-    }
+    const result = await handler.load(src, {
+      scene: state.scene,
+      cid,
+      importFromBlob,
+    });
+    attachMetadata(
+      result.meshes,
+      nodeId,
+      parentNode,
+      result.transformNodes || []
+    );
+    return result.meshes;
   } catch (error) {
     console.error(`[SCENE] FAILED to load asset for node ${nodeId}:`, error);
     const box = BABYLON.MeshBuilder.CreateBox(
@@ -107,6 +59,26 @@ async function loadAsset(src, parentNode, nodeId) {
     box.metadata = { nodeId };
     applyDefaultMaterial([box]);
     return [box];
+  }
+}
+
+async function importFromBlob(blob, extension) {
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync(
+      "",
+      blobUrl,
+      "",
+      state.scene,
+      null,
+      extension
+    );
+    return {
+      meshes: result.meshes,
+      transformNodes: result.transformNodes || [],
+    };
+  } finally {
+    URL.revokeObjectURL(blobUrl);
   }
 }
 
