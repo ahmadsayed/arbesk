@@ -39,6 +39,36 @@ async function load() {
     editSourceColorsAsync: jest.fn(),
     isComposite: jest.fn(),
   }));
+  jest.unstable_mockModule(
+    "../../frontend/src/js/formats/handlers/gltf-handler.js",
+    () => ({
+      gltfHandler: {
+        format: "gltf",
+        extensions: [".gltf"],
+        load: jest.fn(),
+        decomposeForSave: jest.fn(),
+        isStoredForm: jest.fn(),
+        isDedupSource: jest.fn(),
+        editSourceColors: jest.fn(),
+        editCompositeColors: jest.fn(),
+      },
+    })
+  );
+  jest.unstable_mockModule(
+    "../../frontend/src/js/formats/handlers/glb-handler.js",
+    () => ({
+      glbHandler: {
+        format: "glb",
+        extensions: [".glb"],
+        sniff: jest.fn(),
+        load: jest.fn(),
+        decomposeForSave: jest.fn(),
+        isStoredForm: jest.fn().mockReturnValue(false),
+        isDedupSource: jest.fn().mockReturnValue(false),
+        editSourceColors: jest.fn(),
+      },
+    })
+  );
   jest.unstable_mockModule("../../frontend/src/js/utils/log.js", () => ({
     log: jest.fn(),
     warn: jest.fn(),
@@ -51,7 +81,13 @@ async function load() {
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
   const asyncGltf = await import("../../frontend/src/js/gltf/async-gltf.js");
   const decomposer = await import("../../frontend/src/js/gltf/decomposer.js");
-  return { mod, remote, asyncGltf, decomposer };
+  const { gltfHandler } = await import(
+    "../../frontend/src/js/formats/handlers/gltf-handler.js"
+  );
+  const { glbHandler } = await import(
+    "../../frontend/src/js/formats/handlers/glb-handler.js"
+  );
+  return { mod, remote, asyncGltf, decomposer, gltfHandler, glbHandler };
 }
 
 function makeManifest(nodes = []) {
@@ -81,29 +117,39 @@ describe("decomposeManifestNodes", () => {
     ctx.asyncGltf.decomposeAndStoreAsync.mockReset();
     ctx.asyncGltf.decomposeGLBAsync.mockReset();
     ctx.decomposer.isComposite.mockReset();
+    ctx.gltfHandler.decomposeForSave.mockReset();
+    ctx.gltfHandler.isStoredForm.mockReset();
+    ctx.gltfHandler.isDedupSource.mockReset();
+    ctx.glbHandler.decomposeForSave.mockReset();
+    ctx.glbHandler.isStoredForm.mockReset();
+    ctx.glbHandler.isDedupSource.mockReset();
   });
 
-  it("skips IPFS fetch for composite-looking glTF nodes with no pending color edits", async () => {
+  it("skips stored-form nodes with no pending color edits", async () => {
     const manifest = makeManifest([makeNode()]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
 
     const count = await ctx.mod.decomposeManifestNodes(manifest, new Map());
 
     expect(count).toBe(0);
-    expect(ctx.remote.getFromRemoteIPFS).not.toHaveBeenCalled();
-    expect(ctx.remote.getArrayBufferFromRemoteIPFS).not.toHaveBeenCalled();
-    expect(ctx.asyncGltf.decomposeAndStoreAsync).not.toHaveBeenCalled();
-    expect(ctx.asyncGltf.decomposeGLBAsync).not.toHaveBeenCalled();
+    expect(ctx.gltfHandler.decomposeForSave).not.toHaveBeenCalled();
+    expect(ctx.glbHandler.decomposeForSave).not.toHaveBeenCalled();
   });
 
-  it("fetches and decomposes a composite-looking node when a source-color edit is pending", async () => {
+  it("decomposes a stored-form node when a source-color edit is pending", async () => {
     const manifest = makeManifest([makeNode()]);
-    ctx.decomposer.isComposite.mockReturnValue(true);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.decomposeForSave.mockResolvedValue({
+      cid: "bafyComposite",
+      path: "composite.gltf",
+      format: "gltf",
+      normalizeOnly: true,
+    });
     const pending = new Map([["n1", new Map([["Body", "#ff0000"]])]]);
 
     const count = await ctx.mod.decomposeManifestNodes(manifest, new Map(), pending);
 
-    expect(ctx.remote.getFromRemoteIPFS).toHaveBeenCalledWith("bafyComposite");
-    expect(ctx.asyncGltf.decomposeAndStoreAsync).not.toHaveBeenCalled();
+    expect(ctx.gltfHandler.decomposeForSave).toHaveBeenCalled();
     expect(count).toBe(0);
   });
 
@@ -111,14 +157,15 @@ describe("decomposeManifestNodes", () => {
     const manifest = makeManifest([
       makeNode({ format: "glb", path: "asset.glb", cid: "bafyGlb" }),
     ]);
-    ctx.asyncGltf.decomposeGLBAsync.mockResolvedValue({
-      compositeCid: "bafyGlbComposite",
+    ctx.glbHandler.decomposeForSave.mockResolvedValue({
+      cid: "bafyGlbComposite",
+      path: "composite.gltf",
+      format: "gltf",
     });
 
     const count = await ctx.mod.decomposeManifestNodes(manifest, new Map());
 
-    expect(ctx.remote.getArrayBufferFromRemoteIPFS).toHaveBeenCalledWith("bafyGlb");
-    expect(ctx.asyncGltf.decomposeGLBAsync).toHaveBeenCalled();
+    expect(ctx.glbHandler.decomposeForSave).toHaveBeenCalled();
     expect(count).toBe(1);
     expect(manifest.scene.nodes[0].source).toEqual({
       cid: "bafyGlbComposite",
@@ -131,16 +178,15 @@ describe("decomposeManifestNodes", () => {
     const manifest = makeManifest([
       makeNode({ format: "gltf", path: "asset.gltf", cid: "bafyMono" }),
     ]);
-    ctx.remote.getFromRemoteIPFS.mockResolvedValue({ asset: { version: "2.0" } });
-    ctx.decomposer.isComposite.mockReturnValue(false);
-    ctx.asyncGltf.decomposeAndStoreAsync.mockResolvedValue({
-      compositeCid: "bafyMonoComposite",
+    ctx.gltfHandler.decomposeForSave.mockResolvedValue({
+      cid: "bafyMonoComposite",
+      path: "composite.gltf",
+      format: "gltf",
     });
 
     const count = await ctx.mod.decomposeManifestNodes(manifest, new Map());
 
-    expect(ctx.remote.getFromRemoteIPFS).toHaveBeenCalledWith("bafyMono");
-    expect(ctx.asyncGltf.decomposeAndStoreAsync).toHaveBeenCalled();
+    expect(ctx.gltfHandler.decomposeForSave).toHaveBeenCalled();
     expect(count).toBe(1);
     expect(manifest.scene.nodes[0].source.cid).toBe("bafyMonoComposite");
   });
@@ -158,23 +204,24 @@ describe("decomposeManifestNodes", () => {
     const count = await ctx.mod.decomposeManifestNodes(manifest, new Map());
 
     expect(count).toBe(0);
-    expect(ctx.remote.getFromRemoteIPFS).not.toHaveBeenCalled();
+    expect(ctx.gltfHandler.decomposeForSave).not.toHaveBeenCalled();
   });
 
   it("normalizes path for an already-composite source that lacks the composite marker", async () => {
     const manifest = makeManifest([
       makeNode({ format: "gltf", path: "asset.gltf", cid: "bafyOldComposite" }),
     ]);
-    ctx.remote.getFromRemoteIPFS.mockResolvedValue({
-      asset: { version: "2.0" },
-      buffers: [{ uri: "ipfs://bafyBuffer" }],
+    ctx.gltfHandler.isStoredForm.mockReturnValue(false);
+    ctx.gltfHandler.decomposeForSave.mockResolvedValue({
+      cid: "bafyOldComposite",
+      path: "composite.gltf",
+      format: "gltf",
+      normalizeOnly: true,
     });
-    ctx.decomposer.isComposite.mockReturnValue(true);
 
     const count = await ctx.mod.decomposeManifestNodes(manifest, new Map());
 
-    expect(ctx.remote.getFromRemoteIPFS).toHaveBeenCalledWith("bafyOldComposite");
-    expect(ctx.asyncGltf.decomposeAndStoreAsync).not.toHaveBeenCalled();
+    expect(ctx.gltfHandler.decomposeForSave).toHaveBeenCalled();
     expect(count).toBe(0);
     expect(manifest.scene.nodes[0].source).toEqual({
       cid: "bafyOldComposite",
@@ -183,10 +230,11 @@ describe("decomposeManifestNodes", () => {
     });
 
     // A second call should now use the fast path and avoid any fetch.
-    ctx.remote.getFromRemoteIPFS.mockClear();
+    ctx.gltfHandler.decomposeForSave.mockClear();
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
     const count2 = await ctx.mod.decomposeManifestNodes(manifest, new Map());
     expect(count2).toBe(0);
-    expect(ctx.remote.getFromRemoteIPFS).not.toHaveBeenCalled();
+    expect(ctx.gltfHandler.decomposeForSave).not.toHaveBeenCalled();
   });
 });
 
@@ -248,8 +296,10 @@ describe("prepareManifestForWrite", () => {
       latestAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
     });
-    ctx.asyncGltf.decomposeGLBAsync.mockResolvedValue({
-      compositeCid: "bafyGlbComposite",
+    ctx.glbHandler.decomposeForSave.mockResolvedValue({
+      cid: "bafyGlbComposite",
+      path: "composite.gltf",
+      format: "gltf",
     });
 
     const result = await ctx.mod.prepareManifestForWrite("Draft");

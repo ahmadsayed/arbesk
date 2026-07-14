@@ -8,21 +8,12 @@
  * to IPFS.
  */
 
-import {
-  getFromRemoteIPFS,
-  getArrayBufferFromRemoteIPFS,
-} from "../../ipfs/remote-ipfs.js";
+import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.js";
 import { snapshotCommentsArchive } from "../api.js";
 import { getTokenURI } from "../token.js";
 import { getPendingChildRefs } from "../../engine/scene-graph.js";
-import { isComposite } from "../../gltf/decomposer.js";
-import {
-  decomposeAndStoreAsync,
-  decomposeGLBAsync,
-  editSourceColorsAsync,
-} from "../../gltf/async-gltf.js";
-import { editCompositeColors } from "../../gltf/material-editor.js";
+import { resolveFormatHandler } from "../../formats/index.js";
 import { buildDedupMap } from "../../gltf/dedup.js";
 import {
   getPendingSourceColorEdits,
@@ -75,16 +66,15 @@ function _useCachedManifest(activeCid) {
 const _verifiedCompositeCids = new Set();
 
 /**
- * Heuristic: a source node that already points to a composite glTF.
- * Our decomposition pipeline sets `format: "gltf"` + `path: "composite.gltf"`
- * when it stores a composite; this lets us skip an expensive IPFS fetch just
- * to verify `isComposite()` on no-op save/publish cycles.
+ * Heuristic: a source node that already points to its stored form.
+ * For glTF this is `format: "gltf"` + `path: "composite.gltf"`; other formats
+ * declare their own stored-form predicate via the format handler.
+ * Lets us skip an expensive IPFS fetch on no-op save/publish cycles.
  */
-function looksComposite(node) {
+function looksStored(node) {
   if (!node.source?.cid || node.child_ref) return false;
   if (_verifiedCompositeCids.has(node.source.cid)) return true;
-  const format = (node.source.format || "gltf").toLowerCase();
-  return format === "gltf" && node.source.path === "composite.gltf";
+  return resolveFormatHandler(node.source).isStoredForm(node);
 }
 
 export function advanceManifestVersion(manifest, latestCid) {
@@ -134,69 +124,39 @@ async function _decomposeOneNode(
     `Decompose save: checking node ${node.node_id} | sourceCid=${cid} format=${format}`
   );
 
-  // Fast path: already-composite sources don't need a fetch to verify.
+  // Fast path: already-stored sources don't need a fetch to verify.
   // Skip only when no source-color edit is pending for this node.
-  if (
-    looksComposite(node) &&
-    !pendingColorEdits?.has(node.node_id)
-  ) {
-    log(
-      `Decompose save: node ${node.node_id} already composite (fast path)`
-    );
+  if (looksStored(node) && !pendingColorEdits?.has(node.node_id)) {
+    log(`Decompose save: node ${node.node_id} already stored (fast path)`);
     return null;
   }
 
   try {
-    if (format === "glb") {
-      const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-      const { compositeCid } = await decomposeGLBAsync(glbBuffer, true, {
-        assetName: manifest.name,
-        assetId: manifest.asset_id,
-        dedupMap,
-      });
-      _verifiedCompositeCids.add(compositeCid);
-      log(
-        `Decompose save: node ${node.node_id} GLB decomposed | old=${cid} new=${compositeCid}`
-      );
-      return {
-        nodeId: node.node_id,
-        cid: compositeCid,
-        path: "composite.gltf",
-        format: "gltf",
-      };
-    }
-
-    const gltf = await getFromRemoteIPFS(cid);
-    if (!gltf.asset?.version) {
-      log(`Decompose save: CID ${cid} is not a glTF, skipping`);
-      return null;
-    }
-    if (isComposite(gltf)) {
-      log(
-        `Decompose save: node ${node.node_id} already composite, normalizing path`
-      );
-      _verifiedCompositeCids.add(cid);
-      // Normalize the path marker so future no-op saves/publishes can use the
-      // fast path instead of fetching this composite again.
-      return {
-        nodeId: node.node_id,
-        cid,
-        path: "composite.gltf",
-        format: "gltf",
-        normalizeOnly: true,
-      };
-    }
-
-    const { compositeCid } = await decomposeAndStoreAsync(gltf, {
+    const handler = resolveFormatHandler(node.source);
+    const result = await handler.decomposeForSave(node, {
       assetName: manifest.name,
       assetId: manifest.asset_id,
       dedupMap,
     });
-    _verifiedCompositeCids.add(compositeCid);
-    log(
-      `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${compositeCid}`
-    );
-    return { nodeId: node.node_id, cid: compositeCid, path: "composite.gltf" };
+    if (!result) return null;
+
+    _verifiedCompositeCids.add(result.cid);
+    if (result.normalizeOnly) {
+      log(
+        `Decompose save: node ${node.node_id} already composite, normalizing path`
+      );
+    } else {
+      log(
+        `Decompose save: node ${node.node_id} decomposed | old=${cid} new=${result.cid}`
+      );
+    }
+    return {
+      nodeId: node.node_id,
+      cid: result.cid,
+      path: result.path,
+      format: result.format,
+      normalizeOnly: result.normalizeOnly,
+    };
   } catch (err) {
     if (isRateLimitError(err)) throw err;
     warn(
@@ -289,7 +249,7 @@ async function buildDedupMapFromManifests(manifests) {
       .filter(
         (n) =>
           n.source?.cid &&
-          (n.source.path === "composite.gltf" || n.source.format === "gltf")
+          (resolveFormatHandler(n.source).isDedupSource?.(n) ?? false)
       )
       .map(async (n) => {
         try {
@@ -391,8 +351,7 @@ export async function prepareManifestForWrite(assetName) {
     (n) => n.source?.cid && !n.child_ref
   );
   const needsDedup =
-    pendingColors.size > 0 ||
-    sourceNodes.some((n) => !looksComposite(n));
+    pendingColors.size > 0 || sourceNodes.some((n) => !looksStored(n));
 
   const dedupMap = needsDedup
     ? await buildDedupMapFromManifests(
@@ -418,15 +377,18 @@ export async function prepareManifestForWrite(assetName) {
       colorJobs.push(
         (async () => {
           try {
-            const result = await editSourceColorsAsync(
-              node.source.cid,
-              colorMap,
-              {
-                assetName: manifest.name,
-                assetId: manifest.asset_id,
-                dedupMap,
-              }
-            );
+            const handler = resolveFormatHandler(node.source);
+            if (typeof handler.editSourceColors !== "function") {
+              warn(
+                `Save: source-color edit unsupported for format ${handler.format} | node=${nodeId}`
+              );
+              return null;
+            }
+            const result = await handler.editSourceColors(node, colorMap, {
+              assetName: manifest.name,
+              assetId: manifest.asset_id,
+              dedupMap,
+            });
             return { nodeId, result };
           } catch (err) {
             if (isRateLimitError(err)) throw err;
@@ -467,7 +429,7 @@ export async function prepareManifestForWrite(assetName) {
       if (!node) continue;
 
       const isDecomposed =
-        node.source?.path === "composite.gltf" && node.source?.cid;
+        !!node.source?.cid && resolveFormatHandler(node.source).isStoredForm(node);
 
       if (isDecomposed && (pp.color || pp.meshOverrides)) {
         // Decomposed nodes need an async composite bake. Capture the node id
@@ -475,9 +437,14 @@ export async function prepareManifestForWrite(assetName) {
         ppJobs.push(
           (async () => {
             let result = null;
+            const handler = resolveFormatHandler(node.source);
+            if (typeof handler.editCompositeColors !== "function") {
+              // Fall through to overlay path by returning null.
+              return { nodeId, pp, result };
+            }
             try {
-              result = await editCompositeColors(
-                node.source.cid,
+              result = await handler.editCompositeColors(
+                node,
                 pp.meshOverrides || null,
                 pp.color || null,
                 {
