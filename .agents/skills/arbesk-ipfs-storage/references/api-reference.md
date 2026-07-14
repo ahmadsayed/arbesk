@@ -1,5 +1,38 @@
 # API Reference — Arbesk IPFS & Storage
 
+## `POST /api/v1/ipfs/upload-urls`
+
+Session-gated, rate-limited (same budget as `/upload-url`). Mints `count`
+upload credentials in one call — see [→ Pinata Mode](./pinata-mode.md) for
+why (Pinata signed URLs are single-use, so batch uploads need one credential
+per file).
+
+### Request
+```json
+{ "count": 5 }
+```
+`count` is optional (default 1), integer, 1–200 (`uploadUrlsSchema` in
+`src/api/schemas.js`).
+
+### Response (200)
+```json
+{
+  "credentials": [
+    { "backend": "pinata", "url": "https://uploads.pinata.cloud/...", "gateway": "https://.../ipfs/", "reusable": false },
+    { "backend": "pinata", "url": "https://uploads.pinata.cloud/...", "gateway": "https://.../ipfs/", "reusable": false }
+  ]
+}
+```
+Kubo mode returns `count` copies of the same `{ backend: "kubo", apiUrl, gateway, reusable: true }` credential (no-op — Kubo credentials are already reusable).
+
+### Errors
+| HTTP | Meaning |
+|---:|---|
+| 400 | `count` missing bounds (must be 1–200) |
+| 401 | Missing or invalid session |
+| 429 | Rate limit exceeded |
+| 500 | Mint failed (e.g. Pinata API error) |
+
 ## `POST /api/v1/ipfs/unpin`
 
 Session-gated. Unpins all IPFS CIDs owned by a manifest chain. Called after token burn or asset removal from a collection.

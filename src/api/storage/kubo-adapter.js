@@ -112,6 +112,16 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
       return { backend: "kubo", apiUrl, gateway: gatewayBase, reusable: true };
     },
 
+    /**
+     * Kubo credentials are already reusable across unlimited uploads, so a
+     * batch mint just returns `count` copies of the same credential.
+     * @param {number} count
+     */
+    async mintUploadCredentials(count) {
+      const credential = { backend: "kubo", apiUrl, gateway: gatewayBase, reusable: true };
+      return Array.from({ length: count }, () => credential);
+    },
+
     gatewayBase() {
       return gatewayBase;
     },

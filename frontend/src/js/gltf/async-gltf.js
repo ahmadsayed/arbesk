@@ -12,7 +12,7 @@ import {
   isWorkerPoolAvailable,
 } from "../workers/gltf-worker-pool.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
-import { getUploadCredential } from "../services/api.js";
+import { getUploadCredentials } from "../services/api.js";
 import {
   getArrayBufferFromRemoteIPFS,
   gatewayBase,
@@ -42,6 +42,117 @@ async function checkWorkerAvailable() {
     workerAvailable = await isWorkerPoolAvailable();
   }
   return workerAvailable;
+}
+
+/**
+ * Upper-bound count of IPFS uploads a glTF decompose will need (buffers +
+ * images + the composite JSON itself). Deliberately a loose upper bound
+ * rather than mirroring decomposeGltf's exact skip logic (already-ipfs://
+ * refs, external image URIs) - a few unused pooled credentials just expire
+ * unused, while under-counting would starve the pool mid-upload.
+ */
+function estimateUploadCount(gltfJson) {
+  return (gltfJson?.buffers?.length || 0) + (gltfJson?.images?.length || 0) + 1;
+}
+
+const GLB_MAGIC = 0x46546c67; // 'glTF'
+const GLB_HEADER_LENGTH = 12;
+const GLB_CHUNK_HEADER_LENGTH = 8;
+
+/**
+ * Cheaply peek a GLB's embedded JSON chunk to size the credential pool,
+ * without pulling in the full gltf-transform parser on the main thread.
+ * Falls back to a conservative fixed estimate if the header can't be read.
+ */
+function estimateGlbUploadCount(arrayBuffer) {
+  try {
+    const view = new DataView(arrayBuffer);
+    if (view.getUint32(0, true) !== GLB_MAGIC) return 8;
+    const jsonChunkLength = view.getUint32(GLB_HEADER_LENGTH, true);
+    const jsonBytes = new Uint8Array(
+      arrayBuffer,
+      GLB_HEADER_LENGTH + GLB_CHUNK_HEADER_LENGTH,
+      jsonChunkLength
+    );
+    return estimateUploadCount(
+      JSON.parse(new TextDecoder().decode(jsonBytes))
+    );
+  } catch {
+    return 8;
+  }
+}
+
+// Matches the backend's uploadUrlsSchema cap (src/api/schemas.js). Clamped
+// client-side so an unusually large decompose (many discrete buffers/images)
+// degrades to a smaller pool - triggering the existing worker-failure ->
+// main-thread fallback path - instead of the mint request itself failing
+// with HTTP 400.
+const MAX_POOLED_CREDENTIALS = 200;
+
+/**
+ * Mint an upload credential sized for a batch of `count` files in one round
+ * trip. Kubo credentials are already reusable across unlimited uploads, so
+ * `count` only matters for Pinata: its signed URLs are strictly single-use
+ * (verified: a second upload against the same URL gets HTTP 409 "duplicate
+ * file id"), so uploading N files previously meant N sequential
+ * backend + Pinata mint round trips. This mints all N up front instead.
+ *
+ * @param {number} count
+ * @returns {Promise<object>}
+ */
+async function getPooledUploadCredential(count) {
+  const clamped = Math.min(Math.max(count, 1), MAX_POOLED_CREDENTIALS);
+  const credentials = await getUploadCredentials(clamped);
+  const first = credentials[0];
+  if (!first) {
+    throw new Error("getPooledUploadCredential: no credentials returned");
+  }
+  if (first.backend !== "pinata") return first;
+  return {
+    backend: "pinata",
+    gateway: first.gateway,
+    urls: credentials.map((c) => c.url),
+    reusable: true,
+  };
+}
+
+/**
+ * Carve one URL off a pooled Pinata credential for a follow-up upload that
+ * happens on the main thread AFTER a worker call that also draws from the
+ * pool.
+ *
+ * Necessary because `workerPool.exec()` passes the credential through
+ * structured clone: the worker mutates its OWN copy of `credential.urls` as
+ * it uploads, and the main thread's copy is never touched. Without this, a
+ * post-worker upload (e.g. the composite JSON) would pop url[0] from the
+ * still-full main-thread copy - a URL the worker already spent inside its
+ * clone - and get HTTP 409 "duplicate file id" from Pinata.
+ *
+ * Reserving one URL up front sidesteps the clone desync entirely: the worker
+ * gets a pool one shorter, the main thread gets a single dedicated URL, and
+ * neither can collide with the other.
+ *
+ * No-op for kubo (or an already single-shot credential) since there's no
+ * clone-desync risk to guard against.
+ *
+ * @param {object} credential
+ * @returns {{workerCredential: object, followUpCredential: object}}
+ */
+function reserveFollowUpCredential(credential) {
+  if (credential?.backend === "pinata" && credential.urls?.length > 1) {
+    const urls = credential.urls.slice();
+    const reservedUrl = urls.pop();
+    return {
+      workerCredential: { ...credential, urls },
+      followUpCredential: {
+        backend: "pinata",
+        url: reservedUrl,
+        gateway: credential.gateway,
+        reusable: false,
+      },
+    };
+  }
+  return { workerCredential: credential, followUpCredential: credential };
 }
 
 /**
@@ -156,20 +267,27 @@ export async function decomposeGlTFAsync(gltfJson) {
  */
 export async function decomposeAndStoreAsync(gltfJson, options = {}) {
   const { assetName, assetId, dedupMap = null } = options;
-  const credential = await getUploadCredential();
+  const credential = await getPooledUploadCredential(
+    estimateUploadCount(gltfJson)
+  );
   const reusableCredential = credential?.reusable ? credential : null;
 
   if (reusableCredential && (await checkWorkerAvailable())) {
     try {
       // Worker path: extraction + batched IPFS upload happen off the main thread.
       // Components are stored uncompressed because the worker cannot import pako.
+      // The composite JSON is written back on the main thread afterward, so its
+      // credential is reserved up front (see reserveFollowUpCredential) rather
+      // than shared with the worker's clone of the pool.
+      const { workerCredential, followUpCredential } =
+        reserveFollowUpCredential(reusableCredential);
       const { composite } = await getGlTFWorkerPool().exec(
         "decomposeAndUploadGltf",
-        [{ gltfJson, credential: reusableCredential, options: { dedupMap } }]
+        [{ gltfJson, credential: workerCredential, options: { dedupMap } }]
       );
       const compositeCid = await writeJSONToIPFS(
         composite,
-        reusableCredential,
+        followUpCredential,
         {
           compress: true,
           assetId,
@@ -218,7 +336,9 @@ export async function decomposeGLBAsync(
   if (!arrayBuffer)
     throw new Error("decomposeGLBAsync: arrayBuffer is required");
 
-  const credential = await getUploadCredential();
+  const credential = await getPooledUploadCredential(
+    estimateGlbUploadCount(arrayBuffer)
+  );
   const reusableCredential = credential?.reusable ? credential : null;
 
   if (reusableCredential && (await checkWorkerAvailable())) {
@@ -336,4 +456,9 @@ export async function editSourceColorsAsync(
   return editSourceColorsMain(sourceCid, nodeColors, options);
 }
 
-export { isComposite };
+export {
+  isComposite,
+  estimateUploadCount,
+  estimateGlbUploadCount,
+  reserveFollowUpCredential,
+};

@@ -585,6 +585,49 @@ export async function getUploadCredential() {
   return res.json();
 }
 
+/**
+ * POST /api/v1/ipfs/upload-urls
+ * Mint `count` short-lived upload credentials in one call. Pinata signed URLs
+ * are single-use, so batch upload flows (e.g. decomposing a glTF into many
+ * buffers/images) request one credential per file up front instead of paying
+ * a backend + Pinata round trip per file.
+ * @param {number} count
+ * @returns {Promise<Array<{backend:string, url?:string, gateway?:string, apiUrl?:string}>>}
+ */
+export async function getUploadCredentials(count) {
+  let token = await getOrCreateSession();
+  let res = await fetch(`${API_BASE}/ipfs/upload-urls`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Session ${token}`,
+    },
+    body: JSON.stringify({ count }),
+  });
+
+  if (res.status === 401) {
+    log(
+      "[SESSION] upload-urls rejected cached token - re-authenticating"
+    );
+    clearSession();
+    token = await getOrCreateSession();
+    res = await fetch(`${API_BASE}/ipfs/upload-urls`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Session ${token}`,
+      },
+      body: JSON.stringify({ count }),
+    });
+  }
+
+  if (!res.ok) {
+    throw new Error(`upload-urls failed: HTTP ${res.status}`);
+  }
+  const { credentials } = await res.json();
+  return credentials;
+}
+
 // ─── IPFS Unpin ────────────────────────────────────────────────────────────────
 
 /**

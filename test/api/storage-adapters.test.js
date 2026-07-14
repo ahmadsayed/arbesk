@@ -99,18 +99,37 @@ describe("kubo adapter", () => {
       reusable: true,
     });
   });
+
+  it("mintUploadCredentials(count) returns count copies of the reusable kubo credential", async () => {
+    const a = createKuboAdapter(fakeIpfs(), {
+      apiUrl: "http://127.0.0.1:5001",
+      gatewayBase: "http://127.0.0.1:8080/ipfs/",
+    });
+    const creds = await a.mintUploadCredentials(3);
+    expect(creds).toHaveLength(3);
+    for (const cred of creds) {
+      expect(cred).toEqual({
+        backend: "kubo",
+        apiUrl: "http://127.0.0.1:5001",
+        gateway: "http://127.0.0.1:8080/ipfs/",
+        reusable: true,
+      });
+    }
+  });
 });
 
 describe("pinata adapter", () => {
   function fakePinata() {
+    let signCalls = 0;
     return {
       upload: {
         public: {
           file: jest.fn(async () => ({ id: "id-1", cid: "bafyFakeCid" })),
           fileArray: jest.fn(async () => ({ id: "id-dir", cid: "bafyDirRoot" })),
-          createSignedURL: jest.fn(
-            async () => "https://uploads.pinata.cloud/signed",
-          ),
+          createSignedURL: jest.fn(async () => {
+            signCalls += 1;
+            return `https://uploads.pinata.cloud/signed-${signCalls}`;
+          }),
         },
       },
       files: {
@@ -173,12 +192,36 @@ describe("pinata adapter", () => {
     const cred = await a.mintUploadCredential();
     expect(cred).toEqual({
       backend: "pinata",
-      url: "https://uploads.pinata.cloud/signed",
+      url: "https://uploads.pinata.cloud/signed-1",
       gateway: "https://gw.mypinata.cloud/ipfs/",
       reusable: false,
     });
     expect(p.upload.public.createSignedURL).toHaveBeenCalledWith({ expires: 90 });
     expect(JSON.stringify(cred)).not.toMatch(/jwt|JWT|Bearer/);
+  });
+
+  it("mintUploadCredentials(count) mints one signed URL per file in parallel", async () => {
+    const p = fakePinata();
+    const a = createPinataAdapter(p, {
+      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+      uploadTtl: 90,
+    });
+    const creds = await a.mintUploadCredentials(3);
+    expect(creds).toHaveLength(3);
+    expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(3);
+    expect(p.upload.public.createSignedURL).toHaveBeenCalledWith({ expires: 90 });
+    // Every credential gets a distinct URL, since Pinata signed URLs are single-use.
+    const urls = creds.map((c) => c.url);
+    expect(new Set(urls).size).toBe(3);
+    for (const cred of creds) {
+      expect(cred).toEqual({
+        backend: "pinata",
+        url: expect.stringContaining("https://uploads.pinata.cloud/signed-"),
+        gateway: "https://gw.mypinata.cloud/ipfs/",
+        reusable: false,
+      });
+    }
+    expect(JSON.stringify(creds)).not.toMatch(/jwt|JWT|Bearer/);
   });
 
   it("unpin() resolves cid -> file id(s) and deletes them", async () => {
@@ -397,5 +440,245 @@ describe("pinata adapter", () => {
       uploadTtl: 60,
     });
     expect(a.gatewayBase()).toBe("https://gw.example.com/ipfs/");
+  });
+
+  describe("signed-url diagnostics (fetch instrumentation)", () => {
+    let originalFetch;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it("logs a dispatched + OK line for a /files/sign call, passes other URLs through untouched", async () => {
+      const rawFetch = jest.fn(async (url) => {
+        if (String(url).includes("/files/sign")) {
+          return { ok: true, status: 200 };
+        }
+        return { ok: true, status: 200, other: true };
+      });
+      globalThis.fetch = rawFetch;
+      const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+
+      createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+      });
+
+      const otherResult = await globalThis.fetch("https://example.com/other");
+      expect(otherResult.other).toBe(true);
+      expect(rawFetch).toHaveBeenCalledWith("https://example.com/other", undefined);
+
+      const signResult = await globalThis.fetch(
+        "https://uploads.pinata.cloud/v3/files/sign",
+        { method: "POST" },
+      );
+      expect(signResult.status).toBe(200);
+
+      const messages = logSpy.mock.calls.map((c) => c[0]);
+      expect(messages.some((m) => m.includes("pinata sign") && m.includes("dispatched"))).toBe(true);
+      expect(messages.some((m) => m.includes("pinata sign") && m.includes("→ OK"))).toBe(true);
+
+      logSpy.mockRestore();
+    });
+
+    it("logs an ERROR line with the failure message and rethrows on a failed sign attempt", async () => {
+      const rawFetch = jest.fn(async () => {
+        throw new Error("network down");
+      });
+      globalThis.fetch = rawFetch;
+      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+      createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+      });
+
+      await expect(
+        globalThis.fetch("https://uploads.pinata.cloud/v3/files/sign", {
+          method: "POST",
+        }),
+      ).rejects.toThrow("network down");
+
+      const messages = warnSpy.mock.calls.map((c) => c[0]);
+      expect(
+        messages.some((m) => m.includes("ERROR") && m.includes("network down")),
+      ).toBe(true);
+
+      warnSpy.mockRestore();
+    });
+
+    it("logs a warning with the HTTP status on a non-OK sign response", async () => {
+      const rawFetch = jest.fn(async () => ({ ok: false, status: 503 }));
+      globalThis.fetch = rawFetch;
+      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+      createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+      });
+
+      await globalThis.fetch("https://uploads.pinata.cloud/v3/files/sign", {
+        method: "POST",
+      });
+
+      const messages = warnSpy.mock.calls.map((c) => c[0]);
+      expect(messages.some((m) => m.includes("HTTP 503"))).toBe(true);
+
+      warnSpy.mockRestore();
+    });
+
+    it("wraps fetch only once across multiple adapter constructions", () => {
+      globalThis.fetch = jest.fn();
+
+      createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+      });
+      const wrappedOnce = globalThis.fetch;
+
+      createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+      });
+
+      expect(globalThis.fetch).toBe(wrappedOnce);
+    });
+  });
+
+  describe("pre-minted credential pool", () => {
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    }
+
+    it("warms the pool in the background at construction, serving mintUploadCredential from the pool (not a fresh mint)", async () => {
+      const p = fakePinata();
+      const a = createPinataAdapter(p, {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 300,
+        poolSize: 3,
+      });
+      await flushMicrotasks();
+      expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(3);
+      const warmedUrls = [
+        "https://uploads.pinata.cloud/signed-1",
+        "https://uploads.pinata.cloud/signed-2",
+        "https://uploads.pinata.cloud/signed-3",
+      ];
+
+      const cred = await a.mintUploadCredential();
+      expect(cred).toEqual({
+        backend: "pinata",
+        url: expect.stringContaining("https://uploads.pinata.cloud/signed-"),
+        gateway: "https://gw.mypinata.cloud/ipfs/",
+        reusable: false,
+      });
+      // The credential itself is one that was minted during warm-up, not
+      // freshly minted for this call - proving it was served from the pool.
+      // (Popping does trigger a background top-up, which mints a *new*
+      // credential for the pool - that's covered separately below, and is
+      // exactly why this asserts pool membership rather than zero calls.)
+      expect(warmedUrls).toContain(cred.url);
+    });
+
+    it("mintUploadCredentials serves partially from the pool and mints only the shortfall fresh", async () => {
+      const p = fakePinata();
+      const a = createPinataAdapter(p, {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 300,
+        poolSize: 2,
+      });
+      await flushMicrotasks();
+      expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(2);
+
+      p.upload.public.createSignedURL.mockClear();
+      const creds = await a.mintUploadCredentials(5);
+      expect(creds).toHaveLength(5);
+      // No duplicate URLs between pooled and freshly minted entries.
+      expect(new Set(creds.map((c) => c.url)).size).toBe(5);
+      // 2 served from the pool + 3 minted fresh for the shortfall = 3 calls
+      // on the request path, plus the pool (now empty) immediately triggers
+      // a background top-up back to poolSize=2 -> 2 more calls. Total 5.
+      expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(5);
+    });
+
+    it("falls back to minting fresh with no background warm-up when pooling is disabled (poolSize omitted)", async () => {
+      const p = fakePinata();
+      const a = createPinataAdapter(p, {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 300,
+      });
+      await flushMicrotasks();
+      expect(p.upload.public.createSignedURL).not.toHaveBeenCalled();
+
+      const cred = await a.mintUploadCredential();
+      expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(1);
+      expect(cred.url).toBeTruthy();
+    });
+
+    it("refills the pool in the background after a pop", async () => {
+      const p = fakePinata();
+      const a = createPinataAdapter(p, {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 300,
+        poolSize: 2,
+      });
+      await flushMicrotasks();
+      expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(2);
+
+      p.upload.public.createSignedURL.mockClear();
+      await a.mintUploadCredential(); // pops 1 from the pool of 2
+      await flushMicrotasks(); // let the post-pop refill settle
+      // Topped back up to poolSize (1 replacement minted).
+      expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(1);
+    });
+
+    it("prunes pool entries once they cross the expiry margin and mints a fresh replacement", async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(0);
+        const p = fakePinata();
+        const a = createPinataAdapter(p, {
+          gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+          uploadTtl: 100,
+          poolSize: 1,
+          poolExpiryMarginSeconds: 60,
+        });
+        await flushMicrotasks();
+        expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(1);
+
+        // Fresh-lifetime window is uploadTtl - margin = 40s. Cross it.
+        jest.setSystemTime(41_000);
+        p.upload.public.createSignedURL.mockClear();
+
+        const cred = await a.mintUploadCredential();
+        // The pooled entry was stale and discarded, so a fresh one was
+        // minted to serve this call (1) - and since the pool is now empty,
+        // popping also triggers a background top-up (1 more). Total 2.
+        expect(p.upload.public.createSignedURL).toHaveBeenCalledTimes(2);
+        expect(cred.url).toBeTruthy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("warns once at construction when uploadTtl leaves no positive fresh-lifetime window", () => {
+      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+      createPinataAdapter(fakePinata(), {
+        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
+        uploadTtl: 60,
+        poolSize: 5,
+        poolExpiryMarginSeconds: 60,
+      });
+      expect(
+        warnSpy.mock.calls.some(([m]) => m.includes("pinata pool misconfigured")),
+      ).toBe(true);
+      warnSpy.mockRestore();
+    });
   });
 });

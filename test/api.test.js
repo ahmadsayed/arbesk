@@ -551,6 +551,56 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
+  describe("POST /api/v1/ipfs/upload-urls", () => {
+    beforeEach(() => _resetRateLimiters());
+
+    it("rejects without a session (401)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-urls")
+        .send({ count: 3 });
+      expect(res.status).toBe(401);
+    });
+
+    it("returns `count` credentials for an authed session", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-urls")
+        .set("Authorization", await makeSessionHeader())
+        .send({ count: 3 });
+      expect(res.status).toBe(200);
+      expect(res.body.credentials).toHaveLength(3);
+      for (const cred of res.body.credentials) {
+        expect(cred.backend).toBe("kubo");
+        expect(cred).toHaveProperty("apiUrl");
+      }
+      expect(JSON.stringify(res.body)).not.toMatch(/PINATA_JWT|Bearer/i);
+    });
+
+    it("defaults count to 1 when omitted", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-urls")
+        .set("Authorization", await makeSessionHeader())
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body.credentials).toHaveLength(1);
+    });
+
+    it("rejects count above the cap (400)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-urls")
+        .set("Authorization", await makeSessionHeader())
+        .send({ count: 201 });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects count below 1 (400)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/upload-urls")
+        .set("Authorization", await makeSessionHeader())
+        .send({ count: 0 });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe("POST /api/v1/ipfs/unpin via storage", () => {
     it("rejects without a session (401)", async () => {
       const startCid = saveManifestToStorage({

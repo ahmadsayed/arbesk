@@ -28,14 +28,34 @@ function toBlob(data) {
   throw new Error("uploadWithCredential: unsupported data type");
 }
 
+/**
+ * Pinata signed URLs are single-use (a second upload against the same URL
+ * gets HTTP 409 "duplicate file id" - verified empirically). Batch callers
+ * pass a pooled credential (`credential.urls`, one per file); single-shot
+ * callers still pass a plain `credential.url`. Popping mutates the pool
+ * in place, which is safe here because JS is single-threaded and each pop
+ * happens synchronously before the upload's first `await`.
+ */
+function nextPinataUrl(credential) {
+  if (credential.urls) {
+    const url = credential.urls.shift();
+    if (!url) {
+      throw new Error("uploadToPinata: credential pool exhausted");
+    }
+    return url;
+  }
+  return credential.url;
+}
+
 async function uploadToPinata(blob, filename, credential, attempt = 1) {
   const form = new FormData();
   form.append("file", blob, filename);
   form.append("network", "public");
   const start = performance.now();
+  const url = nextPinataUrl(credential);
 
   try {
-    const res = await fetch(credential.url, {
+    const res = await fetch(url, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -54,6 +74,10 @@ async function uploadToPinata(blob, filename, credential, attempt = 1) {
     );
     return cid;
   } catch (err) {
+    // Retrying against the SAME url would be wrong when the pool has moved on
+    // (that url may have already stored the file, turning the retry into a
+    // guaranteed 409). Only retry with a pool url on hand; a single-shot
+    // credential has no replacement, so it retries the same url as before.
     if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(err.message)) {
       console.warn(
         `[${ts()}] [UPLOAD] Pinata upload error after ` +
@@ -119,10 +143,12 @@ export async function uploadToIPFSWithCredential(data, filename, credential) {
 /**
  * Upload multiple files in one batch when the backend supports it.
  *
- * Currently Kubo supports true multi-file `add` via multipart. Pinata's
- * presigned URLs are per-file, so this falls back to individual uploads for
- * pinata. Callers must pre-compress data and use `.gz` filenames if they want
- * compression. Returns a map of filename -> CID.
+ * Kubo supports true multi-file `add` via multipart. Pinata signed URLs are
+ * strictly single-use, so this instead uploads concurrently with one pooled
+ * url per file (`credential.urls`, minted via `getUploadCredentials()`) -
+ * bounded by the per-credential limiter. Callers must pre-compress data and
+ * use `.gz` filenames if they want compression. Returns a map of
+ * filename -> CID.
  *
  * @param {Array<{name: string, data: Uint8Array|string}>} files
  * @param {object} credential
@@ -137,8 +163,6 @@ export async function uploadBatchToIPFSWithCredential(files, credential) {
     return uploadBatchToKubo(files, credential);
   }
 
-  // Pinata presigned URLs are single-file; upload concurrently but still
-  // bounded by the per-credential limiter.
   const results = new Map();
   await Promise.all(
     files.map(async ({ name, data }) => {

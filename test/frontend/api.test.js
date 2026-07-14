@@ -474,6 +474,68 @@ describe("getUploadCredential", () => {
   });
 });
 
+describe("getUploadCredentials", () => {
+  test("sends the correct headers and body, returns the credentials array", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      buildResponse({
+        body: {
+          credentials: [
+            { backend: "pinata", url: "https://signed-1" },
+            { backend: "pinata", url: "https://signed-2" },
+          ],
+        },
+      })
+    );
+    const { getUploadCredentials } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const creds = await getUploadCredentials(2);
+    expect(creds).toHaveLength(2);
+    expect(creds[0].url).toBe("https://signed-1");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/ipfs\/upload-urls$/);
+    expect(opts.method).toBe("POST");
+    expect(opts.headers.Authorization).toBe(`Session ${TEST_TOKEN}`);
+    expect(JSON.parse(opts.body)).toEqual({ count: 2 });
+  });
+
+  test("retries once on a 401 and then succeeds", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 401,
+          body: { error: { code: "INVALID_SESSION", message: "bad token" } },
+        })
+      )
+      .mockResolvedValueOnce(buildResponse({ body: { token: "fresh-token", expiresAt: Date.now() + 3_600_000 } }))
+      .mockResolvedValueOnce(buildResponse({ body: { credentials: [{ backend: "pinata", url: "https://signed" }] } }));
+    const { getUploadCredentials } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const creds = await getUploadCredentials(1);
+    expect(creds).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  test("throws on non-OK response", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ status: 500, body: {} }));
+    const { getUploadCredentials } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await expect(getUploadCredentials(3)).rejects.toThrow("upload-urls failed: HTTP 500");
+  });
+});
+
 describe("unpinAssetCids", () => {
   test("sends the correct headers and body", async () => {
     const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { unpinned: ["bafyA"], count: 1 } }));

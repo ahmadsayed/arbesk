@@ -10,7 +10,7 @@ import { getStorage } from "../storage/index.js";
 import { walkManifestChain } from "../manifest-chain-walker.js";
 import { runIpfsGC } from "../ipfs-gc.js";
 import { validateBody } from "../validation.js";
-import { unpinSchema, gcSchema } from "../schemas.js";
+import { unpinSchema, gcSchema, uploadUrlsSchema } from "../schemas.js";
 
 const Router = express.Router;
 
@@ -53,6 +53,38 @@ export default function ipfsRoutes() {
         res.json(credential);
       } catch (error) {
         console.error("[IPFS] upload-url error:", (/** @type {Error} */ (error)).message);
+        sendError(res, 500, "UPLOAD_URL_FAILED", (/** @type {Error} */ (error)).message);
+      }
+    },
+  );
+
+  /**
+   * POST /api/v1/ipfs/upload-urls
+   *
+   * Mint several short-lived upload credentials in one call. Session-gated
+   * and rate-limited per wallet (same budget as /upload-url). Pinata signed
+   * URLs are single-use, so a client uploading N files must request N
+   * credentials up front rather than reusing one mint - this endpoint lets it
+   * do that in one round trip plus one parallelized Pinata sign burst,
+   * instead of N sequential backend + Pinata round trips.
+   *
+   * Body: { count: number } (1-50, default 1)
+   */
+  router.post(
+    "/upload-urls",
+    authenticate,
+    uploadUrlRateLimit,
+    validateBody(uploadUrlsSchema),
+    async (req, res) => {
+      try {
+        const { count } = req.body;
+        const credentials = await getStorage().mintUploadCredentials(count);
+        console.log(
+          `[IPFS] minted ${credentials.length} upload credential(s) - backend=${credentials[0]?.backend} wallet=${res.locals.userAddress}`,
+        );
+        res.json({ credentials });
+      } catch (error) {
+        console.error("[IPFS] upload-urls error:", (/** @type {Error} */ (error)).message);
         sendError(res, 500, "UPLOAD_URL_FAILED", (/** @type {Error} */ (error)).message);
       }
     },

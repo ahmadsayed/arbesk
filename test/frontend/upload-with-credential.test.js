@@ -122,4 +122,99 @@ describe("uploadBatchToIPFSWithCredential", () => {
     expect(result.get("y.bin")).toBe("bafyP2");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("draws one pooled URL per file for a Pinata credential pool", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ cid: "bafyP1" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ cid: "bafyP2" }) });
+
+    const credential = {
+      backend: "pinata",
+      urls: [
+        "https://uploads.pinata.cloud/signed-a",
+        "https://uploads.pinata.cloud/signed-b",
+      ],
+    };
+
+    const result = await uploadBatchToIPFSWithCredential(
+      [
+        { name: "x.bin", data: new Uint8Array([1]) },
+        { name: "y.bin", data: new Uint8Array([2]) },
+      ],
+      credential
+    );
+
+    expect(result.get("x.bin")).toBe("bafyP1");
+    expect(result.get("y.bin")).toBe("bafyP2");
+    const calledUrls = fetchMock.mock.calls.map(([url]) => url).sort();
+    expect(calledUrls).toEqual(
+      [
+        "https://uploads.pinata.cloud/signed-a",
+        "https://uploads.pinata.cloud/signed-b",
+      ].sort()
+    );
+    // Pool is drained after use.
+    expect(credential.urls).toHaveLength(0);
+  });
+
+  it("throws a clear error when a Pinata credential pool is exhausted", async () => {
+    const credential = { backend: "pinata", urls: [] };
+
+    await expect(
+      uploadBatchToIPFSWithCredential(
+        [{ name: "x.bin", data: new Uint8Array([1]) }],
+        credential
+      )
+    ).rejects.toThrow("credential pool exhausted");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("uploadToIPFSWithCredential Pinata retry", () => {
+  let fetchMock;
+
+  beforeEach(() => {
+    fetchMock = jest.fn();
+    global.fetch = fetchMock;
+  });
+
+  it("retries with a fresh pooled URL on a transient network error, not the spent one", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ cid: "bafyRetried" }) });
+
+    const credential = {
+      backend: "pinata",
+      urls: ["https://uploads.pinata.cloud/signed-1", "https://uploads.pinata.cloud/signed-2"],
+    };
+
+    const cid = await uploadToIPFSWithCredential(
+      new Uint8Array([1]),
+      "retry.bin",
+      credential
+    );
+
+    expect(cid).toBe("bafyRetried");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://uploads.pinata.cloud/signed-1");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://uploads.pinata.cloud/signed-2");
+    expect(credential.urls).toHaveLength(0);
+  });
+
+  it("retries against the same URL for a single-shot (non-pooled) credential", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ cid: "bafyRetried" }) });
+
+    const cid = await uploadToIPFSWithCredential(
+      new Uint8Array([1]),
+      "retry.bin",
+      { backend: "pinata", url: "https://uploads.pinata.cloud/signed" }
+    );
+
+    expect(cid).toBe("bafyRetried");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://uploads.pinata.cloud/signed");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://uploads.pinata.cloud/signed");
+  });
 });

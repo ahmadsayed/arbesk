@@ -13,6 +13,7 @@ import { createPinataAdapter } from "./pinata-adapter.js";
  * @property {(cid: string) => Promise<boolean>} unpin
  * @property {() => Promise<string[]>} listPinned
  * @property {() => Promise<{ backend: string; [key: string]: any }>} mintUploadCredential
+ * @property {(count: number) => Promise<{ backend: string; [key: string]: any }[]>} mintUploadCredentials
  * @property {() => string} gatewayBase
  */
 
@@ -40,6 +41,8 @@ export function getStorage() {
     _storage = createPinataAdapter(pinata, {
       gatewayBase: `https://${gateway}/ipfs/`,
       uploadTtl: Number(process.env.PINATA_UPLOAD_TTL || 60),
+      poolSize: Number(process.env.PINATA_POOL_SIZE || 20),
+      poolExpiryMarginSeconds: Number(process.env.PINATA_POOL_EXPIRY_MARGIN || 60),
     });
     console.log(`[STORAGE] backend=pinata gateway=${gateway}`);
   } else {

@@ -55,6 +55,10 @@ export const unpinSchema = z.object({
   cid: cidSchema,
 });
 
+export const uploadUrlsSchema = z.object({
+  count: z.number().int().min(1).max(200).optional().default(1),
+});
+
 export const ownedQuerySchema = z.object({
   address: ethereumAddressSchema,
   chainId: chainIdSchema,
