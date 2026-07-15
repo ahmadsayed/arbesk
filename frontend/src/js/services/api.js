@@ -316,6 +316,33 @@ export async function getOwnedTokens(address, chainId, force = false) {
   }
 }
 
+/**
+ * GET /api/v1/indexer/shared?address=0x...&chainId=...
+ * Returns token IDs where the address is an editor but not the owner,
+ * or null on failure.
+ *
+ * @param {string} address
+ * @param {number} chainId
+ * @param {boolean} [force]
+ * @returns {Promise<string[]|null>}
+ */
+export async function getSharedTokens(address, chainId, force = false) {
+  try {
+    const forceParam = force ? "&force=true" : "";
+    const res = await fetch(
+      `${API_BASE}/indexer/shared?address=${encodeURIComponent(address)}&chainId=${chainId}${forceParam}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) throw new Error(`indexer returned ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data.shared)) throw new Error("invalid indexer response");
+    return data.shared.map(String);
+  } catch (err) {
+    warn("[SESSION] shared indexer query failed:", err.message);
+    return null;
+  }
+}
+
 // ─── Generations ─────────────────────────────────────────────────────────────
 
 /**

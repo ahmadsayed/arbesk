@@ -40,9 +40,9 @@ Authorization: Session <opaque-token>
 
 `POST /api/v1/sessions` accepts a SIWE proof from any wallet type and issues an opaque session token (24-hour TTL). `authentication.js` validates the issued token.
 
-Session restoration behavior differs by wallet type:
-- **CDP email-login smart accounts** are automatically restored on page reload when the CDP session is still valid.
-- **EOA wallets** (MetaMask/Rabby/WalletConnect) require the user to explicitly click Login/Signup; there is no automatic reconnect on reload.
+Session restoration behavior:
+- **CDP email-login smart accounts**, **EOA wallets** (MetaMask/Rabby), and **WalletConnect** sessions are all automatically restored on page reload when their underlying session/provider is still available.
+- If no prior wallet session is found, the user must explicitly click Login/Signup.
 
 ### Creating a session
 
@@ -439,9 +439,11 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 
 ### `GET /api/v1/indexer/owned`
 
-Returns the token IDs owned by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 5000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
+Returns the token IDs **owned** by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 2000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
 
 A background poll catches up every ~15s. The route also runs an inline catch-up before responding if the last one was more than 30s ago, or always when `force=true` is passed — letting the frontend request an immediate refresh right after publishing.
+
+For tokens where the address is an editor but not the owner, see `GET /api/v1/indexer/shared`.
 
 **Query Parameters**
 
@@ -471,6 +473,40 @@ A background poll catches up every ~15s. The route also runs an inline catch-up 
 
 ---
 
+### `GET /api/v1/indexer/shared`
+
+Returns token IDs where the address is a Merkle **editor** but **not** the current owner. The indexer scans `EditorSetChanged` events, reads the on-chain `editorListURI` for each affected token, fetches the editor list JSON from IPFS, and maintains a reverse index of editor address → token IDs. The response is built from that index, so it reflects the latest editor set on chain.
+
+Like `/indexer/owned`, a background poll runs every ~15s and the route performs an inline catch-up when stale or when `force=true` is passed.
+
+**Query Parameters**
+
+| Param | Required | Description |
+|---|---|---|
+| `address` | Yes | Wallet address to look up |
+| `chainId` | Yes | One of the supported chain IDs (`31415822`, `84532`) |
+| `force` | No | `true` bypasses the 30s catch-up throttle for an immediate rescan |
+
+**Response `200`**
+
+```json
+{
+  "chainId": 84532,
+  "address": "0x...",
+  "shared": ["7", "42"],
+  "lastScannedBlock": 7000000
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 400 | Invalid/missing `address` or `chainId` (`VALIDATION_ERROR`) |
+| 500 | Failed to read indexer state |
+
+---
+
 ## Frontend/Contract Flow Summary
 
 1. User connects wallet.
@@ -487,7 +523,7 @@ A background poll catches up every ~15s. The route also runs an inline catch-up 
 10. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
 11. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
 12. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
-13. Owner or editors burn tokens via `burn(tokenId, proof)`, which then triggers non-blocking IPFS unpin via `POST /api/v1/ipfs/unpin`.
+13. Editors burn tokens via `burn(tokenId, proof)`; because the owner is the initial editor, they can produce a valid proof. Burning triggers non-blocking IPFS unpin via `POST /api/v1/ipfs/unpin`.
 14. Asset-level live comments travel through `/api/v1/chat/ws`; the proxy checks the SIWE session and either owner status or a Merkle editor proof before bridging to the Nostr relay.
 
 ---
@@ -504,8 +540,8 @@ The contract does **not** store per-address roles. It stores a Merkle root of th
 |---|---|---|
 | `publishAsset(string uri, uint256 tokenId, bytes32 editorRoot, string editorListUri)` | Any | Mint a new token with the initial editor Merkle root and the IPFS URI of the editor list |
 | `updateEditors(uint256 tokenId, bytes32 newRoot, string newListUri, uint8 callerRole, bytes32[] callerProof)` | Current Editor | Replace the editor set with a new Merkle root and list URI |
-| `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` | Owner or Editor with proof | Update the token's URI (collection manifest CID) |
-| `burn(uint256 tokenId, bytes32[] proof)` | Owner or Editor with proof | Destroy the token |
+| `updateAssetURI(uint256 tokenId, string newURI, bytes32[] proof)` | Editor with proof | Update the token's URI (collection manifest CID). The owner is added as the initial editor, so they can provide a valid proof. |
+| `burn(uint256 tokenId, bytes32[] proof)` | Editor with proof | Destroy the token. The owner is added as the initial editor, so they can provide a valid proof. |
 | `editorRoot(uint256 tokenId)` | Public | Current editor Merkle root |
 | `editorSetVersion(uint256 tokenId)` | Public | Current editor set version |
 
@@ -517,7 +553,7 @@ The contract does **not** store per-address roles. It stores a Merkle root of th
 | 1 | Viewer | Recognized collaborator, read-only |
 | 2 | Editor | Can call `updateAssetURI`, `updateEditors`, and `burn` with a valid Merkle proof |
 
-The token **owner** always has implicit full permissions regardless of role.
+The token **owner** has no special bypass. The owner can call `updateAssetURI` and `burn` only by proving Editor membership in the current Merkle tree. In practice the owner is included as the initial editor when a token is minted.
 
 **Merkle leaf format (matches `merkle-editors.js`):**
 

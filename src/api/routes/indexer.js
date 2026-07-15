@@ -1,7 +1,7 @@
 import express from "express";
 import { getIndexer } from "../token-indexer.js";
 import { validateQuery } from "../validation.js";
-import { ownedQuerySchema } from "../schemas.js";
+import { ownedQuerySchema, sharedQuerySchema } from "../schemas.js";
 
 const Router = express.Router;
 
@@ -14,6 +14,9 @@ function ts() {
  *
  * GET /api/v1/indexer/owned?address=0x...&chainId=10143
  * Returns the token IDs owned by the given address on the given chain.
+ *
+ * GET /api/v1/indexer/shared?address=0x...&chainId=10143
+ * Returns token IDs where the address is an editor but not the current owner.
  */
 export default function indexerRoutes() {
   const router = Router();
@@ -61,6 +64,47 @@ export default function indexerRoutes() {
       });
     } catch (err) {
       console.error(`[${ts()}] [INDEXER-API] failed to get owned tokens:`, String(/** @type {Error} */ (err).message));
+      res.status(500).json({ error: "failed to read indexer state" });
+    }
+  });
+
+  router.get("/shared", validateQuery(sharedQuerySchema), async (req, res) => {
+    const { address, chainId, force } = /** @type {{ address: string, chainId: number, force: boolean }} */ (/** @type {unknown} */ (req.query));
+
+    try {
+      const indexer = getIndexer(chainId);
+      const catchUpStart = Date.now();
+      const msSinceCatchUp = Date.now() - indexer.lastCatchUpAt;
+      if (force || msSinceCatchUp > 30000) {
+        try {
+          await indexer.catchUp();
+        } catch (catchUpErr) {
+          console.warn(
+            `[${ts()}] [INDEXER-API] catchUp failed for chain`,
+            chainId,
+            String(/** @type {Error} */ (catchUpErr).message)
+          );
+        }
+        console.log(
+          `[${ts()}] [INDEXER-API] catchUp for chain ${chainId} took ` +
+            `${Date.now() - catchUpStart}ms, lastScannedBlock=${indexer.lastScannedBlock}` +
+            (force ? " (forced)" : "")
+        );
+      } else {
+        console.log(
+          `[${ts()}] [INDEXER-API] skipped catchUp for chain ${chainId} ` +
+            `(${msSinceCatchUp}ms since last)`
+        );
+      }
+      const shared = indexer.getSharedTokens(address);
+      res.json({
+        chainId,
+        address: address.toLowerCase(),
+        shared,
+        lastScannedBlock: indexer.lastScannedBlock,
+      });
+    } catch (err) {
+      console.error(`[${ts()}] [INDEXER-API] failed to get shared tokens:`, String(/** @type {Error} */ (err).message));
       res.status(500).json({ error: "failed to read indexer state" });
     }
   });

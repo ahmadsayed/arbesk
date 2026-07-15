@@ -526,8 +526,9 @@ The Library operates as a two-level browser. State is held in `library-state.js`
 
 **Level 1 — Collections list** (`currentCollectionTokenId === null`):
 
-- Loaded at wallet connect via the token indexer (`GET /api/v1/indexer/owned`) — chunked `eth_getLogs` backfill discovers all `Transfer` events to the wallet.
-- Shared collections (where the wallet is a Merkle editor) are discovered alongside owned ones.
+- Loaded at wallet connect via the token indexer:
+  - `GET /api/v1/indexer/owned` returns owned tokens via chunked `eth_getLogs` backfill of ERC-721 `Transfer` events.
+  - `GET /api/v1/indexer/shared` returns tokens where the wallet is a Merkle editor but not the owner. The indexer scans `EditorSetChanged` events, reads the on-chain `editorListURI`, fetches the editor list from IPFS, and builds a reverse index of editor address → token IDs.
 - Each collection is shown as a folder card with a thumbnail (if available), name, and a role badge (owner/editor).
 - Inaccessible tokens (owned on-chain but manifest unresolvable) appear as greyed-out skeleton cards with a Burn action.
 
@@ -699,7 +700,8 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 
 ```text
 Wallet connected
-  → GET /api/v1/indexer/owned (chunked eth_getLogs backfill)
+  → GET /api/v1/indexer/owned (chunked eth_getLogs backfill for owned tokens)
+  → GET /api/v1/indexer/shared (editor-shared tokens from EditorSetChanged events + IPFS editor lists)
   → tokenURI(tokenId)
   → if tokenURI points to a collection manifest, expand each assets[assetID] entry
   → get asset manifests from IPFS gateway/cache

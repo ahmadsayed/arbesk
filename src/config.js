@@ -51,15 +51,19 @@ export const NETWORK_CONFIGS = {
     usdcToken: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     rpcUrl: "http://127.0.0.1:8545",
   },
-  [CHAIN_IDS.BASE_TESTNET]: {
-    name: "Base Sepolia Testnet",
-    contractAddress:
-      process.env.BASE_CONTRACT_ADDRESS ||
-      "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC",
-    paidContractAddress: null, // Paid tier not deployed on testnet
-    usdcToken: null, // USDC not deployed on testnet
-    rpcUrl: "https://sepolia.base.org",
-  },
+  ...(process.env.INDEXER_DISABLE_TESTNET
+    ? {}
+    : {
+        [CHAIN_IDS.BASE_TESTNET]: {
+          name: "Base Sepolia Testnet",
+          contractAddress:
+            process.env.BASE_CONTRACT_ADDRESS ||
+            "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC",
+          paidContractAddress: null, // Paid tier not deployed on testnet
+          usdcToken: null, // USDC not deployed on testnet
+          rpcUrl: "https://sepolia.base.org",
+        },
+      }),
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

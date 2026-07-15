@@ -114,7 +114,16 @@ export async function createNamedCollection(name, { onPending } = {}) {
 
   const editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   const editorRoot = computeRoot(editorList, tokenId, 1);
-  const editorListUri = saveEditorListLocally(tokenId, editorList, null);
+
+  // Persist the editor list to IPFS and record its CID on-chain. localStorage
+  // only caches the list; the contract's editorListURI is the source of truth.
+  const editorListUri = await writeJSONToIPFS(editorList, null, {
+    compress: true,
+    type: "editors",
+    assetId: `token_${tokenId}_v1`,
+  });
+  if (!editorListUri) throw new Error("Failed to persist editor list to IPFS");
+  saveEditorListLocally(tokenId, editorList, editorListUri);
 
   // Surface the (deterministic) token id + manifest CID before the mint so the
   // UI can show an optimistic "minting" card while the transaction settles.

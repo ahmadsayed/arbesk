@@ -24,7 +24,7 @@ Conventions, key file references, and practical guidance for AI agents and devel
 - **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
 - **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
 - **Editor Authorization**: Off-chain Merkle editor lists; the contract stores only a Merkle root and version
-- **Token Discovery**: The asset library loads owned/shared tokens from the backend token indexer (`GET /api/v1/indexer/owned`), a chunked `eth_getLogs` backfill — not a genesis-walk in the browser
+- **Token Discovery**: The asset library loads owned tokens from `GET /api/v1/indexer/owned` and editor-shared tokens from `GET /api/v1/indexer/shared`, both backed by the backend token indexer's chunked `eth_getLogs` backfill — not a genesis-walk in the browser
 
 **Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). Asset-level Nostr comments, CDP email-login smart accounts (on Base Sepolia), and the token indexer are also implemented. See `docs/CURRENT_STATUS.md` for the definitive snapshot.
 
@@ -94,7 +94,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | 3D engine | `frontend/src/js/engine/` |
 | Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
 | Wallet / chain | `frontend/src/js/blockchain/` |
-| Wallet core (CDP-only auto-restore / connect / state) | `frontend/src/js/blockchain/wallet-core.js` |
+| Wallet core (auto-restore / connect / state for CDP, EOA, and WalletConnect) | `frontend/src/js/blockchain/wallet-core.js` |
 | CDP email login (OTP + smart account + EIP-1193 shim) | `frontend/src/js/blockchain/wallet-cdp.js` |
 | Smart-wallet chain gating | `frontend/src/js/blockchain/smart-wallet-support.js` |
 | Per-network config | `frontend/src/js/blockchain/network-config.js` |
@@ -218,7 +218,7 @@ All logs use `[TAG]` prefixes. Log start + outcome of every async operation; inc
 | `[ABI]` | ABI serving |
 | `[TOKEN]` | Token child ref resolution |
 | `[SESSION]` | Session auth |
-| `[INDEXER]` / `[INDEXER-API]` | Token indexer backfill / `/indexer/owned` route |
+| `[INDEXER]` / `[INDEXER-API]` | Token indexer backfill / `/indexer/owned` and `/indexer/shared` routes |
 | `[UNPIN]` | IPFS unpin |
 | `[BURN]` | Token burn |
 
@@ -297,7 +297,7 @@ The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't
   - **CDP email login:** `POST /api/v1/sessions { message, signature, eoaAddress }` — the embedded EOA signs the SIWE message; `message.address` is the smart account address; `eoaAddress` triggers fallback verification in `siwe-verify.js`
 - `authentication.js` validates the issued token regardless of wallet type
 - Auto-cleared on wallet disconnect; entry point: `getOrCreateSession()` in `frontend/src/js/services/api.js`
-- **Auto-restore on page load is CDP-only; EOA/WalletConnect wallets require explicit Login / Signup.**
+- **Auto-restore on page load applies to CDP, EOA, and WalletConnect wallets** when their underlying session/provider is still available. If no prior session is found, the user must explicitly click Login/Signup.
 
 Full auth flow: `docs/API_SPEC.md § Authentication`.
 
@@ -323,7 +323,7 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**Unit / integration coverage: 1018 Jest tests across 70 suites (all passing).**
+**Unit / integration coverage: 1162 Jest tests across 88 suites (all passing).**
 
 **E2E coverage (16 specs, 33 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards and material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
 

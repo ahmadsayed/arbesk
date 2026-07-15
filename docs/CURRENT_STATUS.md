@@ -1,6 +1,6 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-07-01
+> **Generated:** 2026-07-15
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
@@ -59,11 +59,11 @@ src/
     ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
     ├── nostr-relay.js          # Shared relay primitives (used by chat-proxy + comments-archive)
     ├── rate-limiter.js         # In-memory per-wallet rate limiter
-    ├── token-indexer.js        # Chunked eth_getLogs backfill for owned/shared token discovery
+    ├── token-indexer.js        # Chunked eth_getLogs backfill for owned + editor-shared token discovery
     ├── routes/                 # Per-domain route modules
     │   ├── comments.js         # POST /assets/snapshot-comments
     │   ├── contracts.js        # GET /contracts/:name/abi
-    │   ├── indexer.js          # GET /indexer/owned — token ownership lookup
+    │   ├── indexer.js          # GET /indexer/owned + /indexer/shared — token ownership & editor-shared lookup
     │   ├── ipfs.js             # POST /ipfs/upload-url + /ipfs/unpin
     │   ├── openapi.js          # GET /openapi.json + /docs
     │   ├── paymaster.js        # POST /paymaster — CDP Paymaster JSON-RPC proxy
@@ -87,6 +87,7 @@ src/
 | POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
 | GET | `/indexer/owned` | None | Returns owned token IDs for an address+chainId via chunked eth_getLogs backfill; supports `force=true` to bypass cache |
+| GET | `/indexer/shared` | None | Returns token IDs where the address is a Merkle editor but not the owner; indexer scans `EditorSetChanged` events and fetches editor lists from IPFS |
 | GET | `/openapi.json` | None | Static OpenAPI spec |
 | GET | `/docs` | None | Swagger UI HTML bundle |
 | WS | `/v1/chat/ws` | Session (query) | WebSocket bridge to Nostr relay for live comments, rate-limited (10 msg/min) |
@@ -221,10 +222,12 @@ frontend/src/js/
   - CDP rejects relative `paymasterUrl`; local dev uses `useCdpPaymaster: true`. The backend proxy at `/api/v1/paymaster` is reserved for production deployments with a public HTTPS custom paymaster.
 
 **Token Indexer (`src/api/token-indexer.js`)**
-- Chunked `eth_getLogs` backfill scans for `Transfer` and editor-change events per chain.
-- Per-chain chunk sizes in `constants/chains.js`: Hardhat=10000, Base Sepolia=5000.
+- Chunked `eth_getLogs` backfill scans for `Transfer` events (ownership) and `EditorSetChanged` events (editor-shared tokens) per chain.
+- Editor list CIDs are read from chain (`editorListURI`) and resolved from IPFS to build a reverse index of editor address → token IDs.
+- Per-chain chunk sizes in `constants/chains.js`: Hardhat=10000, Base Sepolia=2000.
 - `force=true` query param bypasses cache for on-demand refresh.
 - Base Sepolia deployment block pinned in `constants/chains.js` to avoid scanning from genesis.
+- Exposes `GET /api/v1/indexer/owned` and `GET /api/v1/indexer/shared`.
 
 **Optimistic Collection Create UI (`ui/library-create.js`)**
 - Shared `createCollectionFlow()` used by both toolbar button and right-click context menu.
@@ -279,8 +282,8 @@ frontend/src/js/
 
 | Suite | Count | Status |
 |-------|-------|--------|
-| Jest unit (all) | 1005 | ✅ All passing |
-| E2E Playwright specs | 17 specs / 35 tests | ✅ Chromium (manual run against local stack) |
+| Jest unit (all) | 1162 | ✅ All passing |
+| E2E Playwright specs | 16 specs / 33 tests | ✅ Chromium (manual run against local stack) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**
@@ -291,6 +294,8 @@ frontend/src/js/
 - `test/frontend/asset-library.test.js` — inaccessible token card rendering
 - `test/frontend/library-init.test.js` — token indexer integration, optimistic grace window
 - `test/frontend/library-ops.test.js` — `onPending` hook, `createNamedCollection` options
+- `test/token-indexer-shared.test.js` — editor-shared token indexing from `EditorSetChanged` events
+- `test/api/indexer-shared.test.js` — `GET /indexer/shared` route validation and response shape
 
 ### Test Gaps
 
@@ -335,7 +340,7 @@ frontend/src/js/
 
 ### Verdict
 
-**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1005 unit tests green, 17 E2E specs cover the critical path.
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1162 unit tests green, 16 E2E specs cover the critical path.
 
 **Not ready for open beta** until real 3D generation is wired (501 is the first thing a new user hits). Everything else is beta-quality.
 

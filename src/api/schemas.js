@@ -68,6 +68,15 @@ export const ownedQuerySchema = z.object({
     .transform((v) => v === true || v === "true" || v === "1"),
 });
 
+export const sharedQuerySchema = z.object({
+  address: ethereumAddressSchema,
+  chainId: chainIdSchema,
+  force: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v) => v === true || v === "true" || v === "1"),
+});
+
 export const gcSchema = z.object({
   dryRun: z.boolean().optional().default(true),
   maxUnpin: z.number().int().positive().optional(),
