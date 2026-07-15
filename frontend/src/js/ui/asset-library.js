@@ -26,7 +26,7 @@ import { CHAIN_IDS, DEPLOYMENT_BLOCKS } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
-import { getOwnedTokens } from "../services/api.js";
+import { getOwnedTokens, getSharedTokens } from "../services/api.js";
 
 let assetLibraryBody = null;
 let libraryRenderInFlight = false;
@@ -188,16 +188,17 @@ async function fetchAssetLibrary(address, forceIndexer = false) {
   }
 
   let owned = [];
-  const shared = [];
+  let shared = [];
 
   try {
-    owned = await fetchOwnedTokenIds(contract, address, forceIndexer);
+    [owned, shared] = await Promise.all([
+      fetchOwnedTokenIds(contract, address, forceIndexer),
+      getSharedTokens(address, walletState.get().chainId, forceIndexer),
+    ]);
+    if (!Array.isArray(shared)) shared = [];
 
-    // Shared tokens (editor but not owner) are not discoverable on-chain
-    // without an indexer because editor state is a Merkle root. A future
-    // off-chain indexer can populate this list from EditorSetChanged events
-    // and editor list IPFS CIDs.
-    if (typeof contract.methods.listTokens === "function") {
+    // Fallback for local/dev contracts that expose listTokens(address).
+    if (shared.length === 0 && typeof contract.methods.listTokens === "function") {
       const memberTokens = await contract.methods.listTokens(address).call();
       for (const tokenId of memberTokens) {
         const id = String(tokenId);

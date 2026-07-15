@@ -42,6 +42,10 @@
     {
       "name": "Contracts",
       "description": "Smart contract ABI serving"
+    },
+    {
+      "name": "Indexer",
+      "description": "Token ownership and editor-shared token discovery"
     }
   ],
   "paths": {
@@ -549,6 +553,102 @@
               }
             }
           }
+        }
+      }
+    },
+    "/indexer/owned": {
+      "get": {
+        "tags": ["Indexer"],
+        "summary": "List owned tokens",
+        "description": "Returns token IDs owned by the given address on the given chain.",
+        "operationId": "getOwnedTokens",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" }
+          },
+          {
+            "name": "chainId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned token IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chainId": { "type": "integer" },
+                    "address": { "type": "string" },
+                    "owned": { "type": "array", "items": { "type": "string" } },
+                    "lastScannedBlock": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "500": { "description": "Indexer failure" }
+        }
+      }
+    },
+    "/indexer/shared": {
+      "get": {
+        "tags": ["Indexer"],
+        "summary": "List editor-shared tokens",
+        "description": "Returns token IDs where the address has the Editor role but is not the current owner.",
+        "operationId": "getSharedTokens",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" }
+          },
+          {
+            "name": "chainId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared token IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chainId": { "type": "integer" },
+                    "address": { "type": "string" },
+                    "shared": { "type": "array", "items": { "type": "string" } },
+                    "lastScannedBlock": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "500": { "description": "Indexer failure" }
         }
       }
     }
