@@ -313,4 +313,57 @@ describe("prepareManifestForWrite", () => {
       ctx.mod.manifestsSemanticallyEqual(result.manifest, result.prevManifest)
     ).toBe(false);
   });
+
+  // Regression: stored-form 3MF nodes have no editCompositeColors hook —
+  // color edits must stay post_processor overlays, not be sent to the bake
+  // branch where the null result silently drops them.
+  // NOTE: keep this test LAST in the describe — the scene-graph mock below
+  // survives jest.resetModules() and would leak into later tests.
+  it("keeps color edits as overlays for stored-form 3MF nodes", async () => {
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/scene-graph.js",
+      () => ({
+        getPendingChildRefs: jest.fn().mockReturnValue([]),
+        getPendingPostProcessorEdits: jest
+          .fn()
+          .mockReturnValue(new Map([["n1", { color: "#ff0000" }]])),
+        clearPendingPostProcessorEdits: jest.fn(),
+        getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingTransformEdits: jest.fn(),
+        clearPendingChildRefs: jest.fn(),
+        captureAssetThumbnail: jest.fn(),
+        // parametric-preview.js / time-travel.js are pulled in transitively
+        // by manifest-builder and also import scene-graph — ESM linking
+        // requires every named import to exist on the mocked module.
+        getNodeMeshes: jest.fn(),
+        getNodeSubMeshes: jest.fn(),
+        getNodeChildRef: jest.fn(),
+        deselectAll: jest.fn(),
+        selectNodeById: jest.fn(),
+        selectSubMesh: jest.fn(),
+      })
+    );
+    const ctx = await load();
+
+    const manifest = makeManifest([
+      makeNode({
+        nodeId: "n1",
+        cid: "bafyComposite3mf",
+        path: "composite.3mf.json",
+        format: "3mf",
+      }),
+    ]);
+    const stateMod = await import("../../frontend/src/js/state/asset-state.js");
+    stateMod._resetForTesting();
+    stateMod.assetState.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("3MF Asset");
+
+    expect(
+      result.manifest.scene.nodes[0].post_processor?.color
+    ).toBe("#ff0000");
+  });
 });

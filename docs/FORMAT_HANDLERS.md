@@ -6,8 +6,9 @@ Arbesk's 3D asset pipeline is format-agnostic at the dispatch layer. Adding supp
 
 - `gltf` — loose glTF JSON assets (`frontend/src/js/formats/handlers/gltf-handler.js`)
 - `glb` — binary glTF assets (`frontend/src/js/formats/handlers/glb-handler.js`)
+- `3mf` — 3D Manufacturing Format assets (`frontend/src/js/formats/handlers/3mf-handler.js`)
 
-Both are registered automatically by `frontend/src/js/formats/index.js`.
+All three are registered automatically by `frontend/src/js/formats/index.js`.
 
 ## Handler interface
 
@@ -61,16 +62,17 @@ interface DecomposeResult {
 ## Stored-form convention
 
 A "stored form" is a source that does not need re-processing on the next save.
-The built-in handlers store decomposed assets as:
+The built-in `gltf`/`glb` handlers store decomposed assets as:
 
 ```json
 { "format": "gltf", "path": "composite.gltf" }
 ```
 
-A 3MF handler could either:
-
-1. **Converge on glTF** — `decomposeForSave` converts to glTF, stores it as `composite.gltf`, and returns `{ format: "gltf", path: "composite.gltf" }`.
-2. **Keep native form** — return `{ format: "3mf", path: "asset.3mf" }` and implement `load` to load `.3mf` files directly.
+The built-in `3mf` handler keeps the native form: `decomposeForSave`
+extracts the OPC package into a composite 3MF JSON — XML parts verbatim, binary
+parts referenced by CID — and returns `{ format: "3mf", path: "composite.3mf.json" }`.
+Loading parses the package and converts it to glTF in memory for Babylon.js; the
+glTF is never persisted. The composer/decomposer/parser live in `frontend/src/js/3mf/`.
 
 ## Adding a format in four steps
 

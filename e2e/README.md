@@ -289,6 +289,16 @@ Validates that comments do not leak between assets in the same collection:
 
 **Why it matters:** Comments are keyed by asset, not by collection or token. Any regression in `comment-thread.js` context reset, the chat proxy `assetTag`, or the archive snapshot `assetId` would cause cross-asset leakage.
 
+### 16. 3MF generation (`e2e/specs/16-3mf-generation.spec.js`)
+
+Validates the 3MF format path end to end:
+
+1. Generates with a "3mf" prompt — the mock adapter returns `box.3mf` and the manifest node source is `{ format: "3mf", path: "asset.3mf" }`.
+2. Saves a draft — the 3mf handler decomposes the raw package into composite 3MF form (`path: "composite.3mf.json"`) with a new source CID.
+3. Publishes the asset on-chain, then reloads it from the chain (`?asset=&assetId=`) — resolving token → collection → composite 3MF and exercising `compose3mf()` + the in-memory 3MF → glTF render conversion a second time.
+
+**Why it matters:** The only E2E coverage of the 3MF format path end to end — mock keyword routing, decompose-on-save into composite 3MF, and the composite → compose → render round-trip after a chain reload. A regression in the 3mf handler, the composer/decomposer, or the mock routing shows up here first.
+
 ---
 
 ## When you MUST run these tests
