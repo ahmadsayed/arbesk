@@ -431,7 +431,15 @@ export async function prepareManifestForWrite(assetName) {
       const isDecomposed =
         !!node.source?.cid && resolveFormatHandler(node.source).isStoredForm(node);
 
-      if (isDecomposed && (pp.color || pp.meshOverrides)) {
+      // Handlers without a composite color bake (e.g. 3MF, which keeps edits
+      // as overlays by design) must take the overlay branch even in stored
+      // form — otherwise the null bake result silently drops the edit.
+      const canBakeCompositeColors =
+        isDecomposed &&
+        typeof resolveFormatHandler(node.source).editCompositeColors ===
+          "function";
+
+      if (canBakeCompositeColors && (pp.color || pp.meshOverrides)) {
         // Decomposed nodes need an async composite bake. Capture the node id
         // and the edit payload so we can apply the result later.
         ppJobs.push(

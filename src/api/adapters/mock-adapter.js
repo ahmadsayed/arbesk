@@ -5,6 +5,7 @@ const MOCK_ASSETS_DIR = process.env.MOCK_ASSETS_DIR || "./mock-gltf-assets";
 
 /**
  * Generate a mock asset from local files.
+ *   - box.3mf for 3MF prompts ("3mf")
  *   - howdy.glb for cowboy/western prompts
  *   - suka.gltf for character/figure/person/avatar prompts
  *   - intro.gltf for everything else
@@ -18,7 +19,10 @@ export async function mockGenerate(prompt, _opts = {}) {
   let filename = "intro.gltf";
   let format = "gltf";
 
-  if (lower.includes("howdy") || lower.includes("cowboy")) {
+  if (lower.includes("3mf")) {
+    filename = "box.3mf";
+    format = "3mf";
+  } else if (lower.includes("howdy") || lower.includes("cowboy")) {
     filename = "howdy.glb";
     format = "glb";
   } else if (
@@ -32,9 +36,9 @@ export async function mockGenerate(prompt, _opts = {}) {
 
   const filepath = path.resolve(MOCK_ASSETS_DIR, filename);
 
-  if (format === "glb") {
+  if (format === "glb" || format === "3mf") {
     const buffer = fs.readFileSync(filepath);
-    return { buffer, format: "glb", provider: "mock" };
+    return { buffer, format, provider: "mock" };
   }
 
   const data = fs.readFileSync(filepath, "utf-8");

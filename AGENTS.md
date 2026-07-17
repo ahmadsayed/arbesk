@@ -19,7 +19,7 @@ Conventions, key file references, and practical guidance for AI agents and devel
 - **Wallets**: EOA (MetaMask/Rabby) on all chains via SIWE; email login (OTP, no social) via CDP Embedded Wallets smart accounts — **Base Sepolia only** (`smart-wallet-support.js`)
 - **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
-- **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`)
+- **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`, `mock-gltf-assets/box.3mf` — prompt keyword `3mf` returns the 3MF sample)
 - **Parametric Versions**: Color + scale edits append new history entries client-side — no cloud generation
 - **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
 - **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
@@ -103,6 +103,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Header wallet button (CDP email display; hides network selector) | `frontend/src/js/ui/header-wallet-button.js` |
 | IPFS read/write | `frontend/src/js/ipfs/` |
 | glTF pipeline | `frontend/src/js/gltf/` |
+| 3MF pipeline (parser, glTF converter, composer/decomposer) | `frontend/src/js/3mf/` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` (owned + shared tokens, collection expansion, inaccessible-token cards with Burn) |
 | Standalone Library page | `frontend/src/pug/library.pug` → `frontend/dist/library.html` |
 | Library page bootstrap | `frontend/src/js/library-init.js` |
@@ -323,9 +324,9 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**Unit / integration coverage: 1162 Jest tests across 88 suites (all passing).**
+**Unit / integration coverage: 1194 Jest tests across 93 suites (all passing).**
 
-**E2E coverage (16 specs, 33 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards and material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
+**E2E coverage (17 specs, 34 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards and material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
 
 Opt-in E2E coverage is collected via Chromium V8 and merged with Jest coverage:
 - `npm run test:e2e:coverage` — run E2E with coverage

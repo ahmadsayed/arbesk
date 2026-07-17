@@ -349,6 +349,23 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.path).toMatch(/\.glb$/);
     });
 
+    it("returns box.3mf for 3mf prompts", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          prompt: "a 3mf box",
+          nodeId: "node_3mf_001",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.format).toBe("3mf");
+      expect(res.body.path).toMatch(/\.3mf$/);
+      const bytes = Buffer.from(res.body.assetData, "base64");
+      expect(bytes[0]).toBe(0x50); // 'P'
+      expect(bytes[1]).toBe(0x4b); // 'K'
+    });
+
     it("rejects when prompt or nodeId is missing", async () => {
       const res = await request(app)
         .post("/api/v1/generations")
