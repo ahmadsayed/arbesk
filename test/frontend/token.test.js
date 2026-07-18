@@ -23,7 +23,10 @@ function makeContract(overrides = {}) {
 async function loadModule({ contract = null, walletStateValue = null, remoteIPFS = null } = {}) {
   jest.resetModules();
 
-  const walletModule = { contract };
+  const walletModule = {
+    contract,
+    getActiveContract: () => contract ?? walletStateValue?.contract ?? null,
+  };
   const walletStateModule = {
     walletState: {
       get: jest.fn(() => walletStateValue ?? {}),

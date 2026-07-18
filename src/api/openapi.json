@@ -437,7 +437,7 @@
       "post": {
         "tags": ["IPFS"],
         "summary": "Unpin all IPFS CIDs owned by a manifest chain",
-        "description": "Called after token burn or asset removal from a collection. Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs (and embedded buffer/image CIDs), thumbnail CIDs, comments archive CIDs, and optional `history` entry CIDs, then unpins them all.",
+        "description": "Called before token burn or after asset removal from a collection (the backend verifies ownership on-chain, so the token must still be live). The session wallet must own the token or be an editor (Merkle proof), and `cid` must belong to the claimed token: accepted when it equals the tokenURI CID or appears in the `assets` map of the collection manifest at tokenURI or of up to 5 `prev_asset_manifest_cid` ancestors. A body-supplied `contractAddress` must be one of the chain's configured contracts (free or paid tier); when omitted, both are tried in order. Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, thumbnail CIDs, and comments archive CIDs, then unpins them so they become GC-eligible.",
         "operationId": "unpinManifestChain",
         "security": [
           {
@@ -450,11 +450,33 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["cid"],
+                "required": ["cid", "tokenId"],
                 "properties": {
                   "cid": {
                     "type": "string",
                     "description": "Starting manifest CID (typically the latest version)"
+                  },
+                  "tokenId": {
+                    "type": "string",
+                    "pattern": "^[0-9]+$",
+                    "description": "Collection token ID the CID belongs to (decimal string, uint256-safe)"
+                  },
+                  "chainId": {
+                    "type": "integer",
+                    "description": "Chain ID (defaults to the backend's configured chain)"
+                  },
+                  "contractAddress": {
+                    "type": "string",
+                    "pattern": "^0x[a-fA-F0-9]{40}$",
+                    "description": "Optional contract override; must be one of the chain's configured contracts (free or paid tier)"
+                  },
+                  "proof": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^0x[a-fA-F0-9]{64}$"
+                    },
+                    "description": "Merkle editor proof (bytes32 hex entries); required for non-owners"
                   }
                 }
               }
@@ -489,7 +511,7 @@
             }
           },
           "400": {
-            "description": "Missing or invalid cid",
+            "description": "Validation failed (VALIDATION_ERROR), invalid or unknown token (INVALID_TOKEN), contractAddress not in the chain's configured contracts (INVALID_CONTRACT), or CID not referenced by the token (CID_NOT_IN_TOKEN)",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }
@@ -498,6 +520,22 @@
           },
           "401": {
             "description": "Missing or invalid session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Session wallet is not the token owner or an editor (FORBIDDEN)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "502": {
+            "description": "Token's collection manifest could not be read (COLLECTION_UNREADABLE)",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }
@@ -649,6 +687,45 @@
           },
           "400": { "description": "Validation error" },
           "500": { "description": "Indexer failure" }
+        }
+      }
+    },
+    "/paymaster": {
+      "post": {
+        "tags": ["Paymaster"],
+        "summary": "Proxy ERC-4337 paymaster JSON-RPC calls to the CDP paymaster",
+        "description": "Forwards the JSON-RPC body verbatim to the configured `CDP_PAYMASTER_URL` (the API key never reaches the browser) and returns the upstream status and body unchanged. Only standard paymaster methods (`pm_*`) are proxied. Session-authenticated and wallet-keyed rate limited (default 30 requests/minute, `PAYMASTER_RATE_LIMIT_MAX`) because every call spends the deployment's paymaster quota.",
+        "operationId": "proxyPaymaster",
+        "security": [{ "sessionAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["method"],
+                "properties": {
+                  "jsonrpc": { "type": "string", "example": "2.0" },
+                  "id": { "type": "integer", "example": 1 },
+                  "method": {
+                    "type": "string",
+                    "pattern": "^pm_",
+                    "description": "ERC-4337 paymaster JSON-RPC method",
+                    "example": "pm_sponsorUserOperation"
+                  },
+                  "params": { "type": "array", "items": {} }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Upstream CDP response, returned verbatim" },
+          "400": { "description": "Non-paymaster method rejected (PAYMASTER_METHOD_NOT_ALLOWED)" },
+          "401": { "description": "Missing or invalid session token" },
+          "429": { "description": "Rate limit exceeded" },
+          "502": { "description": "Upstream fetch failed (PAYMASTER_UPSTREAM_ERROR)" },
+          "503": { "description": "CDP_PAYMASTER_URL not configured (PAYMASTER_NOT_CONFIGURED)" }
         }
       }
     }

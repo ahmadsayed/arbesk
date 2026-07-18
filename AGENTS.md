@@ -49,8 +49,8 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with
 
 | Contract | File | Role | Limits |
 |----------|------|------|--------|
-| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, ~5000 editors/token (safety net) |
-| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, ~5000 editors/token (safety net) |
+| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, 5000 editors/token (client-enforced in `merkle-editors.js`; on-chain constant is documentation only) |
+| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, 5000 editors/token (client-enforced in `merkle-editors.js`; on-chain constant is documentation only) |
 
 The contract stores per token:
 - `tokenURI` → collection manifest CID
@@ -61,7 +61,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 
 **Rules:**
 - `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
-- `create-panel.js` dispatches via `isFreeTierContract()` (from `frontend/src/js/blockchain/wallet-payments.js`, re-exported through `wallet.js`) — never hard-code the paid path in new generation UI code
+- Generation UI goes through `wallet-payments.js`, which dispatches via `isFreeTierContract()` (re-exported through `wallet.js`) — never hard-code the paid path in new generation UI code
 - Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `84532`). Per-chain `DEPLOYMENT_BLOCKS` and `LOG_CHUNK_SIZES` also live there for the token indexer.
 - Contract `owner()` bypasses the free-tier daily generation quota in `recordGeneration()`; Merkle editor proof checks still apply (owner is not automatically an editor)
 - **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
@@ -89,6 +89,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Nostr relay primitives | `src/api/nostr-relay.js` |
 | Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `openapi.js`, `test-utils.js`) |
 | Manifest utilities | `src/api/manifest-utils.js` |
+| Canonical asset-tag builder (`<chainId>:<contract>:<tokenId>:<assetId>`) | `src/api/asset-tag.js` |
 | IPFS utilities | `src/api/ipfs-utils.js` |
 | OpenAPI spec | `src/api/openapi.json` |
 | 3D engine | `frontend/src/js/engine/` |
@@ -105,12 +106,13 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | glTF pipeline | `frontend/src/js/gltf/` |
 | 3MF pipeline (parser, glTF converter, composer/decomposer) | `frontend/src/js/3mf/` |
 | Asset library (gallery) | `frontend/src/js/ui/asset-library.js` (owned + shared tokens, collection expansion, inaccessible-token cards with Burn) |
-| Standalone Library page | `frontend/src/pug/library.pug` → `frontend/dist/library.html` |
-| Library page bootstrap | `frontend/src/js/library-init.js` |
+| Library page (view inside the SPA) | `frontend/src/pug/app.pug` → `frontend/dist/app.html` (served for `/library`) |
+| Library page bootstrap | `frontend/src/js/app-init.js` + `frontend/src/js/ui/library-controller.js` |
 | Library grid / toolbar / context menu | `frontend/src/js/ui/library-grid.js`, `library-toolbar.js`, `library-context-menu.js` |
 | Optimistic collection-create flow | `frontend/src/js/ui/library-create.js` (shared by EOA + CDP email login) |
 | Library operations | `frontend/src/js/services/library-ops.js` (create collection, upload file) |
 | Library state / item helpers | `frontend/src/js/state/library-state.js`, `frontend/src/js/utils/library-items.js` |
+| Shared thumbnail helpers | `frontend/src/js/utils/thumbnail.js` |
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
 | Save/publish helpers | `frontend/src/js/services/asset-save/` (`manifest-builder.js`, `collection-publish.js`, `editor-publish.js`) |
 | Comments panel | `frontend/src/js/ui/comments-panel.js` |
@@ -164,9 +166,13 @@ docker compose run --rm hardhat npx hardhat test
 
 # ─── Contract workflow (MANDATORY after any .sol change) ───
 docker compose run --rm hardhat npx hardhat compile
-docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+docker compose up -d hardhat               # local node must be running (in-memory chain)
+docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend                         # always verify last
+# NOTE: `run --rm hardhat ... --network hardhat` deploys to an ephemeral in-process chain
+# that vanishes with the container — always deploy with `--network localhost` against the
+# running node (same path as scripts/start-dev.sh).
 
 # ─── Deploy to testnet ───
 docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
@@ -185,13 +191,13 @@ docker compose run --rm hardhat sh
 - **Naming**: camelCase variables/functions, PascalCase classes, UPPER_SNAKE module-level constants
 - **Pure JavaScript source, TypeScript-powered checking**: Source files remain `.js`. TypeScript is used only as a static type-checking layer via `allowJs`/`checkJs` (`npm run typecheck`, `npm run typecheck:frontend`). Both `tsconfig.json` and `frontend/tsconfig.json` run with `strict: true`; new code must type-check under that setting. Add JSDoc when documenting new public functions; cast catch variables to `Error` when logging `.message`; files that are too dynamic to type cleanly can use `// @ts-nocheck` with a TODO. Ambient declarations for runtime/CDN globals live in `src/types/modules.d.ts` and `frontend/src/js/types/globals.d.ts`.
 - **ESLint**: The project uses ESLint with `eslint.config.js`. Run `npm run lint` to check; `npm run lint:fix` to auto-fix. The gate is part of `npm run test:all`. Avoid unused imports/variables, prefer `const`, use `===`, and keep `var` out of new code.
-- **Runtime validation**: API route bodies/params and manifest shapes are validated with Zod (`src/api/schemas.js`, `src/api/validation.js`). Add schemas for new route inputs; use `validateBody`/`validateParams`/`validateQuery` middleware. Existing endpoints return `VALIDATION_ERROR` (400) with structured `details.issues` on schema failure.
+- **Runtime validation**: API route bodies/params and manifest shapes are validated with Zod (`src/api/schemas.js`, `src/api/validation.js`). Add schemas for new route inputs; use `validateBody`/`validateQuery` middleware. Existing endpoints return `VALIDATION_ERROR` (400) with structured `details.issues` on schema failure.
 - **Pre-commit hooks**: Husky runs `lint-staged` (ESLint on staged JS files) and both TypeScript typechecks before every commit. First commit after clone/install may be slower while hooks install; after that only changed files are linted.
 
 ### CDN Script Tags — No SRI Hashes
 Pug templates must **not** include `integrity="sha384-…"` attributes. CDNs silently rebuild assets, breaking SRI and blocking scripts entirely (symptom: `BABYLON.Engine is not a constructor`). Pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"`.
 
-Current pinned versions live in `frontend/src/pug/studio.pug` — update intentionally, never silently.
+Current pinned versions live in `frontend/src/pug/app.pug` (script tags + import map) — update intentionally, never silently.
 
 ### Solidity
 - Version `^0.8.20`, OpenZeppelin v5 base; compiled with Solidity `0.8.24` (Cancun EVM)
@@ -201,7 +207,7 @@ Current pinned versions live in `frontend/src/pug/studio.pug` — update intenti
 ### Pug / SCSS
 - Build via custom Node.js scripts in `frontend/scripts/` (not Webpack/Vite)
 - Pug templates in `frontend/src/pug/` (no `includes/` subdirectory)
-- Bootstrap 5 with custom Sass overrides
+- Custom SCSS design system (`frontend/src/scss/styles.scss` entry) — Bootstrap was fully replaced; no Bootstrap dependency remains
 
 ### Backend Logging
 All logs use `[TAG]` prefixes. Log start + outcome of every async operation; include CID / txHash / nodeId.
@@ -291,7 +297,8 @@ The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't
 ## 8. Session Authentication
 
 - Header: `Authorization: Session <token>` (not Bearer)
-- `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, and `POST /api/v1/assets/snapshot-comments` all require a valid session
+- `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, `POST /api/v1/assets/snapshot-comments`, and `POST /api/v1/paymaster` all require a valid session
+- `POST /api/v1/ipfs/unpin` additionally verifies on-chain that the session wallet owns (or edits, via Merkle proof) the token whose `tokenId` is passed in the body, and that the requested `cid` belongs to that token's collection (tokenURI CID or an asset CID in the current/previous collection manifests). The token must still be live, so the frontend unpins *before* burning.
 - The WebSocket chat proxy (`/api/v1/chat/ws`) receives the session token in the query string
 - **Single session creation path** — SIWE for all users — issuing an opaque token (24 h TTL, bound to wallet address):
   - **EOA (MetaMask/Rabby):** `POST /api/v1/sessions { message, signature }` — standard SIWE flow (`siwe-verify.js`)
@@ -324,9 +331,9 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**Unit / integration coverage: 1194 Jest tests across 93 suites (all passing).**
+**Unit / integration coverage: 1185 Jest tests across 93 suites (all passing).**
 
-**E2E coverage (17 specs, 35 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards and material editor multi-primitive · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload (GLB + 3MF, decompose-at-upload assertions) · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
+**E2E coverage (17 specs, 35 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload (GLB + 3MF, decompose-at-upload assertions) · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
 
 Opt-in E2E coverage is collected via Chromium V8 and merged with Jest coverage:
 - `npm run test:e2e:coverage` — run E2E with coverage
@@ -360,7 +367,7 @@ E2E is isolated per git worktree: each checkout gets its own Docker Compose proj
 - Wallet integration (`wallet.js`, `wallet-core.js`, `wallet-connect.js`, `wallet-discovery.js`, `wallet-cdp.js`, `smart-wallet-support.js`, `network-config.js`, `siwe.js`, session auth)
 - Generation flow (`create-panel.js`, generation API, transaction validation, mock adapter, provider/tier selection)
 - Save/publish/republish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture, `updateAssetURI`)
-- Parametric editing + version history (`parametric-preview.js`, `version-history-store.js`, `version-clock.js`, `scene-clock.js`, `model-clock.js`)
+- Parametric editing + version history (`parametric-preview.js`, `version-history-store.js`, `version-clock.js`, `scene-clock.js`, `model-clock-gizmo.js`)
 - Nesting / linked child worlds (`nesting.js`, `scene-graph.js` linked-asset handling, token resolver, `child_ref` / `transform_matrix`)
 - Smart contracts, ABI, or deployment scripts
 - Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`)
@@ -407,7 +414,9 @@ Three `.env` files — all gitignored, **never commit**:
 | `.env` (root) | Backend + cloud adapters. `CONTRACT_ADDRESS` + `PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy | Copy from `.env.example` + set values |
 | `frontend/.env` | Build-time public vars (optional, not currently used) | — |
 
-Key backend variables (root `.env`): `CDP_PROJECT_ID` (served to frontend via `/api/v1/config` as `cdpProjectId`), `CDP_PAYMASTER_URL` (secret — used only by `src/api/routes/paymaster.js`), `CDP_EMAIL_DEV_MODE` (placeholder for future E2E mock bypass). Removed: `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY`, `THIRDWB_AUTH_DEV_MODE`.
+Key backend variables (root `.env`): `CDP_PROJECT_ID` (served to frontend via `/api/v1/config` as `cdpProjectId`), `CDP_PAYMASTER_URL` (secret — used only by `src/api/routes/paymaster.js`), `CDP_EMAIL_DEV_MODE` (placeholder for future E2E mock bypass), `INDEXER_DISABLE_TESTNET` (optional kill-switch — skips the Base Sepolia token indexer). Removed: `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY`, `THIRDWB_AUTH_DEV_MODE`.
+
+Ops scripts: `scripts/run-ipfs-gc.mjs` is the IPFS garbage-collection CLI (unpins manifest chains no longer referenced by live tokens); `scripts/sync-deployed-addresses.mjs` patches deployed addresses into `src/config.js` / `network-config.js`.
 
 Full variable reference: `docs/CURRENT_STATUS.md §8`.
 

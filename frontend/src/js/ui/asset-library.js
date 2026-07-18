@@ -12,17 +12,18 @@ import {
   clearScene,
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
-import { contract as walletContract, web3 } from "../blockchain/wallet.js";
-import {
-  getBlobFromRemoteIPFS,
-  getFromRemoteIPFS,
-} from "../ipfs/remote-ipfs.js";
+import { getActiveContract, web3 } from "../blockchain/wallet.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { deleteAssetFromCollection } from "../services/asset-delete.js";
 import { trimTokenId } from "../utils/library-items.js";
+import {
+  extractThumbnailCid,
+  loadThumbnailInto,
+} from "../utils/thumbnail.js";
 import { showToast } from "./toasts.js";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView, getActiveView } from "./sidebar.js";
-import { CHAIN_IDS, DEPLOYMENT_BLOCKS } from "../../../../constants/chains.js";
+import { CHAIN_IDS, DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
@@ -33,16 +34,15 @@ let libraryRenderInFlight = false;
 let libraryRenderPending = false;
 let _libraryDirty = false;
 
-function getContract() {
-  return walletContract || walletState.get().contract || null;
-}
-
 /**
  * Reconstruct the list of tokens currently owned by an address by scanning
  * ERC-721 Transfer events. This replaces the ERC721Enumerable
  * `tokenOfOwnerByIndex` function that was removed to save storage slots.
+ *
+ * Scan chunk size comes from LOG_CHUNK_SIZES (per-chain) — public RPCs like
+ * Base Sepolia reject wide eth_getLogs ranges.
  */
-const EVENT_CHUNK_SIZE = 100;
+const DEFAULT_EVENT_CHUNK_SIZE = 100;
 
 function _ownedTokensCacheKey(chainId, address) {
   return `arbesk-owned-tokens-${chainId}-${address.toLowerCase()}`;
@@ -87,6 +87,7 @@ async function fetchTransferEvents(contract, address, direction, startBlock, lat
 
   try {
     const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
+    const chunkSize = LOG_CHUNK_SIZES[chainId] ?? DEFAULT_EVENT_CHUNK_SIZE;
     const fromBlock = Math.max(
       startBlock ?? DEPLOYMENT_BLOCKS[chainId] ?? 0,
       0
@@ -94,11 +95,11 @@ async function fetchTransferEvents(contract, address, direction, startBlock, lat
 
     console.log(
       `[ASSET-LIBRARY] scanning Transfer ${direction} events ` +
-        `from block ${fromBlock} to ${latest} (chain ${chainId})`
+        `from block ${fromBlock} to ${latest} (chain ${chainId}, chunk ${chunkSize})`
     );
 
-    for (let from = fromBlock; from <= latest; from += EVENT_CHUNK_SIZE) {
-      const to = Math.min(from + EVENT_CHUNK_SIZE - 1, latest);
+    for (let from = fromBlock; from <= latest; from += chunkSize) {
+      const to = Math.min(from + chunkSize - 1, latest);
       const chunk = await contract.getPastEvents("Transfer", {
         filter,
         fromBlock: from,
@@ -178,7 +179,7 @@ export async function fetchOwnedTokenIds(contract, address, forceIndexer = false
 }
 
 async function fetchAssetLibrary(address, forceIndexer = false) {
-  const contract = getContract();
+  const contract = getActiveContract();
   if (!contract || !address) {
     console.warn(
       "[ASSET-LIBRARY] No contract available. " +
@@ -219,7 +220,7 @@ async function fetchAssetLibrary(address, forceIndexer = false) {
  *   Each card's "Add to Scene" and "Delete" actions operate on its own asset.
  */
 export async function expandTokenToAssets(tokenId) {
-  const contract = getContract();
+  const contract = getActiveContract();
   if (!contract) return [];
 
   try {
@@ -286,7 +287,7 @@ export async function expandTokenToAssets(tokenId) {
 }
 
 async function openAssetEntry(entry) {
-  const contract = getContract();
+  const contract = getActiveContract();
   if (!contract) {
     console.warn("[LIBRARY] No contract available to open asset");
     return;
@@ -346,7 +347,7 @@ async function openAssetEntry(entry) {
 }
 
 export async function openAssetByTokenId(tokenId, assetId = null) {
-  const contract = getContract();
+  const contract = getActiveContract();
   if (!contract) {
     console.warn("[LIBRARY] No contract available to open asset");
     return;
@@ -798,35 +799,11 @@ async function onDeleteAsset(event, entry) {
   }
 }
 
-function extractThumbnailCid(thumbnail) {
-  if (!thumbnail) return null;
-  if (typeof thumbnail === "string") return thumbnail;
-  return thumbnail.cid || thumbnail.source?.cid || null;
-}
-
 async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
   const thumbnailCid = extractThumbnailCid(thumbnail);
   if (!thumbnailCid) return;
-
-  try {
-    const blob = await getBlobFromRemoteIPFS(thumbnailCid);
-    const objectUrl = URL.createObjectURL(blob);
-    const img = document.createElement("img");
-    img.alt = `${assetName || "Asset"} thumbnail`;
-    img.loading = "lazy";
-    img.src = objectUrl;
-    img.addEventListener("load", () => URL.revokeObjectURL(objectUrl), {
-      once: true,
-    });
-    img.addEventListener("error", () => URL.revokeObjectURL(objectUrl), {
-      once: true,
-    });
-    thumbnailEl.textContent = "";
-    thumbnailEl.classList.remove("asset-card-thumbnail-empty");
-    thumbnailEl.appendChild(img);
-  } catch (err) {
-    console.warn("Failed to load asset thumbnail", thumbnailCid, err);
-  }
+  const img = await loadThumbnailInto(thumbnailEl, thumbnailCid, assetName || "Asset");
+  if (img) thumbnailEl.classList.remove("asset-card-thumbnail-empty");
 }
 
 async function refreshAssetLibrary() {
@@ -993,7 +970,7 @@ on(EVENTS.WALLET_CONNECTED, async () => {
   const params = new URLSearchParams(window.location.search);
   const assetTokenId = params.get("asset");
   const assetId = params.get("assetId");
-  if (assetTokenId && getContract()) {
+  if (assetTokenId && getActiveContract()) {
     await openAssetByTokenId(assetTokenId, assetId);
   }
 
@@ -1011,7 +988,7 @@ on(EVENTS.WALLET_CONNECTED, async () => {
   const params = new URLSearchParams(window.location.search);
   const assetTokenId = params.get("asset");
   const assetId = params.get("assetId");
-  if (assetTokenId && getContract()) openAssetByTokenId(assetTokenId, assetId);
+  if (assetTokenId && getActiveContract()) openAssetByTokenId(assetTokenId, assetId);
 })();
 
 let _lastRenderedCollectionTokenId = null;

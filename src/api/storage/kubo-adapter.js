@@ -40,16 +40,14 @@ export function createKuboAdapter(ipfs, { apiUrl, gatewayBase }) {
       const source = files.map((f) => ({ path: f.name, content: f.data }));
       let rootCid = null;
       // addAll yields one result per file plus the wrapping directory node
-      // (which has an empty path) when wrapWithDirectory is true. The last
-      // result is the directory root.
+      // (which has an empty path) when wrapWithDirectory is true. Kubo yields
+      // the directory root last, so the final result wins.
       for await (const result of ipfs.addAll(source, {
         wrapWithDirectory: true,
         // @ts-ignore ipfs-http-client types omit cidVersion, but Kubo supports it
         cidVersion: 1,
       })) {
-        if (result.path === "" || result.cid) {
-          rootCid = result.cid.toString();
-        }
+        rootCid = result.cid.toString();
       }
       if (!rootCid) throw new Error("Kubo addDirectory returned no root CID");
       try {

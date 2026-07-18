@@ -24,9 +24,6 @@ General Solidity expertise: architecture principles, common patterns, OpenZeppel
 function payForService(bytes32 requestId) external payable nonReentrant whenNotPaused {
     require(msg.value == serviceCost, "Incorrect payment");
     require(requestId != bytes32(0), "Invalid request");
-    bytes32 key = keccak256(abi.encodePacked(requestId, msg.sender, block.number));
-    require(!usedPayments[key], "Already paid");
-    usedPayments[key] = true;
     (bool ok, ) = treasury.call{value: msg.value}("");
     require(ok, "Transfer failed");
     emit ServicePaid(msg.sender, requestId, msg.value, block.timestamp);
@@ -38,25 +35,14 @@ function payForService(bytes32 requestId) external payable nonReentrant whenNotP
 function payWithToken(bytes32 requestId, uint256 tierIndex) external nonReentrant whenNotPaused {
     uint256 cost = tierCosts[tierIndex];
     require(cost > 0, "Tier not set");
-    bytes32 key = keccak256(abi.encodePacked(requestId, msg.sender, block.number));
-    require(!usedPayments[key], "Already paid");
-    usedPayments[key] = true;
     token.safeTransferFrom(msg.sender, treasury, cost);
     emit ServicePaidToken(msg.sender, requestId, cost, block.timestamp, tierIndex);
 }
 ```
 
-**Transfer hook for editor management:**
-```solidity
-function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
-    address from = _ownerOf(tokenId);
-    if (from != address(0) && from != to) {
-        _removeEditor(tokenId, from);
-        if (to != address(0)) _addEditor(tokenId, to);
-    }
-    return super._update(to, tokenId, auth);
-}
-```
+**Editor management — no transfer hook (Arbesk-specific):**
+
+Arbesk deliberately does NOT override `_update` to auto-manage editors on transfer. The editor set is a Merkle root committed at mint (`publishAsset`) and only changes via an explicit `updateEditors()` call with a proof — a transfer leaves the editor set untouched. Don't reintroduce a transfer hook; the contract tests assert transfers do not auto-add editors.
 
 **Swap-and-pop removal (O(1) array element removal):**
 ```solidity

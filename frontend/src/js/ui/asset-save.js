@@ -23,6 +23,7 @@ import { log, error } from "../utils/log.js";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.js";
 import { verifyCanEdit } from "../services/asset-save/editor-publish.js";
 import { publishCollectionForAsset } from "../services/asset-save/collection-publish.js";
+import { announceStatus } from "../services/api.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -50,17 +51,6 @@ function isRateLimitError(err) {
     err.message.includes("HTTP 429") ||
     err.message.includes("Too Many Requests")
   );
-}
-
-function announceStatus(message) {
-  const el = document.getElementById("srStatus");
-  if (el) {
-    el.textContent = "";
-    // Force screen reader announcement by clearing then setting
-    requestAnimationFrame(() => {
-      el.textContent = message;
-    });
-  }
 }
 
 function updateAssetStatus(name, meta) {

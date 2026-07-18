@@ -87,6 +87,30 @@ describe("merkle-editors", () => {
     expect(root).toMatch(/^0x[0-9a-fA-F]{64}$/);
   });
 
+  test("computeRoot accepts exactly MAX_EDITORS_PER_TOKEN members", () => {
+    const editors = Array.from(
+      { length: merkleEditors.MAX_EDITORS_PER_TOKEN },
+      (_, i) => ({
+        address: `0x${String(i + 1).padStart(40, "0")}`,
+        role: 2,
+      })
+    );
+    expect(merkleEditors.computeRoot(editors, 1, 1)).toBe(FAKE_ROOT);
+  });
+
+  test("computeRoot throws above MAX_EDITORS_PER_TOKEN members", () => {
+    const editors = Array.from(
+      { length: merkleEditors.MAX_EDITORS_PER_TOKEN + 1 },
+      (_, i) => ({
+        address: `0x${String(i + 1).padStart(40, "0")}`,
+        role: 2,
+      })
+    );
+    expect(() => merkleEditors.computeRoot(editors, 1, 1)).toThrow(
+      /maximum is 5000/
+    );
+  });
+
   test("getProof returns proof+role for listed editor", () => {
     const editors = [
       { address: "0x1111111111111111111111111111111111111111", role: 1 },

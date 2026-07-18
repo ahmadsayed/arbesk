@@ -3,7 +3,7 @@ import { jest } from "@jest/globals";
 
 /**
  * Finding A regression: the worker path (native CompressionStream) and the
- * main-thread path (pako) emit different gzip bytes for the same input. If the
+ * main-thread path (fflate) emit different gzip bytes for the same input. If the
  * dedup / content-cache key were computed over the *compressed* bytes, the two
  * paths would never share a dedup map and the content cache would double-store
  * identical content. Both paths must therefore key on the RAW content hash.

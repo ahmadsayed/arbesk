@@ -13,11 +13,13 @@ import {
   getContractAddress as getNetworkContractAddress,
 } from "../blockchain/network-config.js";
 import { log, warn, error } from "../utils/log.js";
+import { base64ToBytes } from "../utils/encoding.js";
+import { identityMatrix } from "../utils/collections.js";
 
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
 
-function announceStatus(message) {
+export function announceStatus(message) {
   const el = document.getElementById("srStatus");
   if (el) {
     el.textContent = "";
@@ -236,6 +238,47 @@ export async function getOrCreateSession() {
   return sessionCreationPromise;
 }
 
+// ─── Authenticated Fetch ─────────────────────────────────────────────────────
+
+/**
+ * fetch() with a session token, retrying once on 401.
+ *
+ * If the backend rejects the cached token (e.g. server restart wiped the
+ * session store), the stale token is cleared, a fresh session is created,
+ * and the request is retried exactly once.
+ *
+ * @param {string} path - path relative to API_BASE (e.g. "/generations")
+ * @param {Object} [options]
+ * @param {string} [options.method="POST"]
+ * @param {Object|string} [options.body] - JSON-serialized unless already a string
+ * @param {Object} [options.headers] - extra request headers
+ * @returns {Promise<Response>}
+ */
+async function fetchWithSession(path, { method = "POST", body, headers = {} } = {}) {
+  const doFetch = (token) =>
+    fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Session ${token}`,
+        ...headers,
+      },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+
+  let token = await getOrCreateSession();
+  let response = await doFetch(token);
+
+  if (response.status === 401) {
+    log(`[SESSION] ${path} rejected cached token - re-authenticating`);
+    clearSession();
+    token = await getOrCreateSession();
+    response = await doFetch(token);
+  }
+
+  return response;
+}
+
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 let _configPromise = null;
@@ -375,8 +418,6 @@ export async function generateAsset({
   providerKey,
 }) {
   announceStatus("Authenticating…");
-  const sessionToken = await getOrCreateSession();
-  let authHeader = `Session ${sessionToken}`;
 
   const rawChainId = walletState.get().chainId;
   const chainId = rawChainId ? Number(rawChainId) : null;
@@ -389,33 +430,12 @@ export async function generateAsset({
     ...(providerKey && { providerKey }),
   };
 
-  async function doFetch(authorization) {
-    return fetch(`${API_BASE}/generations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authorization,
-        ...(chainId && { "x-chain-id": String(chainId) }),
-      },
-      body: JSON.stringify(body),
-    });
-  }
-
   announceStatus("Generating 3D asset…");
-  let response = await doFetch(authHeader);
-  let data = await response.json().catch(() => ({}));
-
-  if (response.status === 401) {
-    const { code } = parseErrorBody(data);
-    if (code === "INVALID_SESSION" || code === "MISSING_AUTH") {
-      log("[SESSION] backend rejected token - creating fresh session…");
-      clearSession();
-      const freshToken = await createSession();
-      authHeader = `Session ${freshToken.token}`;
-      response = await doFetch(authHeader);
-      data = await response.json().catch(() => ({}));
-    }
-  }
+  const response = await fetchWithSession("/generations", {
+    body,
+    headers: chainId ? { "x-chain-id": String(chainId) } : {},
+  });
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
@@ -438,9 +458,7 @@ export async function generateAsset({
   const { getFromRemoteIPFS } = await import("../ipfs/remote-ipfs.js");
 
   // Decode base64 asset data from the backend response
-  const assetBytes = Uint8Array.from(atob(data.assetData), (c) =>
-    c.charCodeAt(0)
-  );
+  const assetBytes = base64ToBytes(data.assetData);
   const sourceAssetCid = await writeToIPFS(
     assetBytes,
     data.path || `asset.${data.format}`
@@ -496,7 +514,7 @@ export async function generateAsset({
       transform_matrix:
         Array.isArray(transformMatrix) && transformMatrix.length === 16
           ? transformMatrix
-          : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+          : identityMatrix(),
       post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
     },
   ];
@@ -529,31 +547,9 @@ export async function generateAsset({
  */
 export async function snapshotCommentsArchive(publishContext) {
   announceStatus("Archiving comments…");
-  let token = await getOrCreateSession();
-  let response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Session ${token}`,
-    },
-    body: JSON.stringify(publishContext),
+  const response = await fetchWithSession("/assets/snapshot-comments", {
+    body: publishContext,
   });
-
-  // If the server lost its session store (e.g. restart), re-authenticate once.
-  if (response.status === 401) {
-    log("[SESSION] snapshot-comments rejected cached token - re-authenticating");
-    clearSession();
-    token = await getOrCreateSession();
-    response = await fetch(`${API_BASE}/assets/snapshot-comments`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Session ${token}`,
-      },
-      body: JSON.stringify(publishContext),
-    });
-  }
-
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -578,33 +574,7 @@ export async function snapshotCommentsArchive(publishContext) {
  * @returns {Promise<{backend:string, url?:string, gateway?:string, apiUrl?:string}>}
  */
 export async function getUploadCredential() {
-  let token = await getOrCreateSession();
-  let res = await fetch(`${API_BASE}/ipfs/upload-url`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Session ${token}`,
-    },
-    body: "{}",
-  });
-
-  // If the server lost its session store (e.g. restart), clear the stale
-  // cached token and re-authenticate once.
-  if (res.status === 401) {
-    log(
-      "[SESSION] upload-url rejected cached token - re-authenticating"
-    );
-    clearSession();
-    token = await getOrCreateSession();
-    res = await fetch(`${API_BASE}/ipfs/upload-url`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Session ${token}`,
-      },
-      body: "{}",
-    });
-  }
+  const res = await fetchWithSession("/ipfs/upload-url", { body: "{}" });
 
   if (!res.ok) {
     throw new Error(`upload-url failed: HTTP ${res.status}`);
@@ -622,31 +592,7 @@ export async function getUploadCredential() {
  * @returns {Promise<Array<{backend:string, url?:string, gateway?:string, apiUrl?:string}>>}
  */
 export async function getUploadCredentials(count) {
-  let token = await getOrCreateSession();
-  let res = await fetch(`${API_BASE}/ipfs/upload-urls`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Session ${token}`,
-    },
-    body: JSON.stringify({ count }),
-  });
-
-  if (res.status === 401) {
-    log(
-      "[SESSION] upload-urls rejected cached token - re-authenticating"
-    );
-    clearSession();
-    token = await getOrCreateSession();
-    res = await fetch(`${API_BASE}/ipfs/upload-urls`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Session ${token}`,
-      },
-      body: JSON.stringify({ count }),
-    });
-  }
+  const res = await fetchWithSession("/ipfs/upload-urls", { body: { count } });
 
   if (!res.ok) {
     throw new Error(`upload-urls failed: HTTP ${res.status}`);
@@ -659,37 +605,29 @@ export async function getUploadCredentials(count) {
 
 /**
  * POST /api/v1/ipfs/unpin
- * Unpin all CIDs in a manifest chain (called after token burn).
+ * Unpin all CIDs in a manifest chain (called before token burn, or after
+ * removing an asset from a collection). The backend verifies on-chain that
+ * the session wallet owns (or edits) the token and that `cid` belongs to it,
+ * so callers must pass the token context.
  * @param {string} cid - Manifest CID to start unpinning from
- * @param {string} [actorAddress] - Wallet address of the burner
+ * @param {Object} [tokenContext] - Token the CID belongs to
+ * @param {string|number} [tokenContext.tokenId] - Collection token ID
+ * @param {number} [tokenContext.chainId]
+ * @param {string} [tokenContext.contractAddress] - Contract override
+ * @param {string[]} [tokenContext.proof] - Merkle editor proof (non-owners)
  * @returns {Promise<{unpinned: string[], count: number, errors?: string[]}>}
  */
-export async function unpinAssetCids(cid, actorAddress) {
-  let token = await getOrCreateSession();
-  let response = await fetch(`${API_BASE}/ipfs/unpin`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Session ${token}`,
-    },
-    body: JSON.stringify({ cid, ...(actorAddress && { actorAddress }) }),
-  });
+export async function unpinAssetCids(
+  cid,
+  { tokenId, chainId, contractAddress, proof } = {}
+) {
+  const body = { cid };
+  if (tokenId != null) body.tokenId = String(tokenId);
+  if (Number.isFinite(chainId) && chainId > 0) body.chainId = chainId;
+  if (contractAddress) body.contractAddress = contractAddress;
+  if (Array.isArray(proof) && proof.length > 0) body.proof = proof;
 
-  // If the server lost its session store (e.g. restart), re-authenticate once.
-  if (response.status === 401) {
-    log("[SESSION] unpin rejected cached token - re-authenticating");
-    clearSession();
-    token = await getOrCreateSession();
-    response = await fetch(`${API_BASE}/ipfs/unpin`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Session ${token}`,
-      },
-      body: JSON.stringify({ cid, ...(actorAddress && { actorAddress }) }),
-    });
-  }
-
+  const response = await fetchWithSession("/ipfs/unpin", { body });
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {

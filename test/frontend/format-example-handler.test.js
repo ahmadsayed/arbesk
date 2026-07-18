@@ -26,7 +26,7 @@ describe("example format handler extension point", () => {
     _resetFormatRegistry();
 
     const { createExampleFormatHandler } = await import(
-      "../../frontend/src/js/formats/handlers/example-format.js"
+      "./fixtures/example-format.js"
     );
     const handler = createExampleFormatHandler();
     handler.decomposeForSave = jest.fn().mockResolvedValue({

@@ -21,14 +21,13 @@ import indexerRoutes from "./routes/indexer.js";
 import openapiRoutes from "./routes/openapi.js";
 import testUtilsRoutes from "./routes/test-utils.js";
 import paymasterRoutes from "./routes/paymaster.js";
-import { maybeDecompress } from "./ipfs-utils.js";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default () => {
   const v1 = Router();
 
-  // JSON body parsing and content-type enforcement are handled by the
-  // body-parser.json() middleware applied in src/index.js before /api is mounted.
+  // JSON body parsing is handled by the express.json() middleware applied in
+  // src/index.js before /api is mounted.
 
   // ─── Config ───────────────────────────────────────────────────────────────
 
@@ -88,14 +87,6 @@ export default () => {
 
   const api = Router();
   api.use("/v1", v1);
-
-  // Expose for test helpers
-  /** @type {any} */
-  const apiAny = api;
-  apiAny._getFromIPFS = async (/** @type {string} */ cid) => {
-    const raw = await getStorage().catBytes(cid);
-    return maybeDecompress(raw);
-  };
 
   return api;
 };

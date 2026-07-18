@@ -72,7 +72,6 @@ async function loadModule() {
       getRawArrayBufferFromRemoteIPFS: jest.fn().mockRejectedValue(new Error("no raw buffer")),
       getManifestChain: jest.fn((cid) => Promise.resolve([{ cid, version: 1, name: null, nodeCount: 0 }])),
       isIpfsCidReachable: jest.fn().mockResolvedValue(true),
-      clearRemoteIPFSCache: jest.fn(),
     })
   );
 

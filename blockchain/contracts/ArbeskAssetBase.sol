@@ -26,6 +26,9 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     error NotAuthorizedEditor(uint256 tokenId, address caller);
     error InvalidCollaboratorRole();
     error ZeroAddress();
+    error InvalidPromptLength();
+    error InvalidNodeId();
+    error ZeroEditorRoot();
 
     // ── Enums ──
     enum CollaboratorRole {
@@ -69,7 +72,9 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     /// @param uri IPFS CID pointing to the asset manifest (tokenURI).
     /// @param tokenId Unique identifier chosen by the dapp.
     /// @param editorRoot_ Merkle root of the initial editor list (computed
-    ///        off-chain from the full list stored on IPFS).
+    ///        off-chain from the full list stored on IPFS). Must be non-zero:
+    ///        a zero root permanently bricks the token because every
+    ///        editor-gated operation requires a proof against it.
     function publishAsset(
         string memory uri,
         uint256 tokenId,
@@ -77,6 +82,7 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
         string memory editorListUri
     ) public returns (uint256) {
         if (_exists(tokenId)) revert TokenAlreadyMinted(tokenId);
+        if (editorRoot_ == bytes32(0)) revert ZeroEditorRoot();
 
         _mint(msg.sender, tokenId);
         _setTokenURI(tokenId, uri);
@@ -91,24 +97,6 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     ) public view override returns (string memory) {
         _requireOwned(tokenId);
         return _tokenURIs[tokenId];
-    }
-
-    /// @notice Returns the asset manifest URI and current owner.
-    /// @dev The editor list is off-chain (IPFS); retrieve it via the
-    ///      Merkle root. The old `editorList` return is removed.
-    function getAssetManifest(
-        uint256 tokenId
-    )
-        public
-        view
-        returns (
-            string memory manifestURI,
-            address owner_
-        )
-    {
-        if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        manifestURI = _tokenURIs[tokenId];
-        owner_ = _ownerOf(tokenId);
     }
 
     // ── URI Updates (requires Merkle proof) ──
@@ -132,6 +120,9 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     /// @notice Replace the entire editor set with a new Merkle root.
     ///         Caller must prove they are an Editor in the CURRENT tree.
     ///         Bumping editorSetVersion invalidates all old proofs.
+    /// @dev The new root must be non-zero: with a zero root no proof can ever
+    ///      verify, permanently bricking the token (updateAssetURI,
+    ///      updateEditors, and burn all require a proof against the root).
     function updateEditors(
         uint256 tokenId,
         bytes32 newRoot,
@@ -142,6 +133,7 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
         _requireEditor(tokenId, msg.sender, callerRole, callerProof);
         if (callerRole != CollaboratorRole.Editor)
             revert InvalidCollaboratorRole();
+        if (newRoot == bytes32(0)) revert ZeroEditorRoot();
 
         unchecked {
             editorSetVersion[tokenId]++;
@@ -168,10 +160,16 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
 
     // ── Admin ──
 
+    /// @notice Pause the contract.
+    /// @dev Payment-pause-only by design: Pausable gates generation/payment
+    ///      entry points (`recordGeneration`, `payForGenerationWithUSDC`).
+    ///      Publishing, URI updates, editor-set changes, and burn stay live
+    ///      while paused so asset management is never frozen.
     function pause() external onlyOwner {
         _pause();
     }
 
+    /// @notice Unpause the contract. See `pause()` for the pause scope.
     function unpause() external onlyOwner {
         _unpause();
     }
@@ -199,10 +197,10 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     }
 
     /// @dev One-time initialization of the editor root for a newly minted
-    ///      token. Called internally by publishAsset only.
+    ///      token. Called internally by publishAsset only. No existing-root
+    ///      guard is needed here: publishAsset/_mint already revert on
+    ///      existing tokens, and burn deletes the root.
     function initEditors(uint256 tokenId, bytes32 root, string memory listUri) internal {
-        if (editorRoot[tokenId] != bytes32(0))
-            revert TokenAlreadyMinted(tokenId);
         editorRoot[tokenId] = root;
         editorSetVersion[tokenId] = 1;
         editorListURI[tokenId] = listUri;
@@ -212,5 +210,20 @@ abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
     function _setTokenURI(uint256 tokenId, string memory uri) internal {
         if (!_exists(tokenId)) revert NonexistentToken(tokenId);
         _tokenURIs[tokenId] = uri;
+    }
+
+    /// @dev Shared input validation for generation entry points
+    ///      (`recordGeneration`, `payForGenerationWithUSDC`).
+    /// @param nodeId Off-chain scene node the generation is for. Reverts with
+    ///        InvalidNodeId if zero.
+    /// @param prompt Generation prompt. Reverts with InvalidPromptLength if
+    ///        empty or longer than 500 bytes.
+    function _validateGenerationInput(
+        bytes32 nodeId,
+        string calldata prompt
+    ) internal pure {
+        uint256 promptLen = bytes(prompt).length;
+        if (promptLen == 0 || promptLen > 500) revert InvalidPromptLength();
+        if (nodeId == bytes32(0)) revert InvalidNodeId();
     }
 }

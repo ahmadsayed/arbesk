@@ -7,7 +7,7 @@
  * never burned.
  */
 
-import { contract as walletContract } from "../blockchain/wallet.js";
+import { getActiveContract } from "../blockchain/wallet.js";
 import {
   updateAssetURI,
   CollaboratorRole,
@@ -54,7 +54,7 @@ async function loadEditorList(tokenId) {
 
 async function getEditorSetVersion(tokenId) {
   try {
-    const c = walletContract || walletState.get().contract;
+    const c = getActiveContract();
     if (!c) return 1;
     const version = await c.methods.editorSetVersion(tokenId).call();
     return Number(version);
@@ -139,11 +139,19 @@ export async function deleteAssetFromCollection({
 
   // The on-chain tokenURI now points at the new collection, so the deleted
   // asset's manifest chain is orphaned. Unpin it best-effort, non-blocking -
-  // the backend walks the chain and unpins the manifest, source glTF, and
-  // thumbnail CIDs. Failures are non-fatal (the asset is already detached).
+  // the backend verifies ownership/editor rights on-chain (token still live)
+  // and checks the orphaned CID against the collection's previous version
+  // (prev_asset_manifest_cid), then walks the chain and unpins the manifest,
+  // source glTF, and thumbnail CIDs. Failures are non-fatal (the asset is
+  // already detached).
   if (deletedAssetManifestCid) {
     const capturedCid = deletedAssetManifestCid;
-    unpinAssetCids(capturedCid, walletAddr)
+    unpinAssetCids(capturedCid, {
+      tokenId,
+      chainId: Number(walletState.get().chainId),
+      contractAddress: walletState.get().contractAddress,
+      proof: proofResult.proof,
+    })
       .then((result) => {
         console.log(
           `[DELETE] unpinned ${result.count} CIDs for asset ${assetId}`
@@ -193,14 +201,6 @@ export async function burnCollection(tokenId) {
   if (!proofResult) throw new Error("Not authorized to burn this collection");
 
   return burn(tokenId, proofResult.proof);
-}
-
-export async function loadEditorListForToken(tokenId) {
-  return loadEditorList(tokenId);
-}
-
-export async function getEditorSetVersionForToken(tokenId) {
-  return getEditorSetVersion(tokenId);
 }
 
 /**

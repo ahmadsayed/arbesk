@@ -49,3 +49,15 @@ cp node_modules/workerpool/dist/workerpool.js src/js/vendor/workerpool-<version>
 Then update the import in `frontend/src/js/workers/gltf-worker.js` and
 `frontend/src/js/workers/gltf-worker-pool.js` if the filename changes, and bump
 `workerpool` in `frontend/package.json` to match.
+
+## ../events/mitt.mjs
+
+Source: hand-inlined copy of `mitt` v3 (`https://github.com/developit/mitt`),
+the ~200-byte event emitter. It lives at `frontend/src/js/events/mitt.mjs`
+(next to `bus.js`, its only consumer) rather than in this directory because it
+is used by the main-thread event bus, not by a Web Worker.
+
+Vendored so the runtime does not depend on the npm `mitt` package; the package
+is intentionally NOT a dependency of `frontend/package.json`. If it ever needs
+refreshing, copy the `mitt(src).mjs` ESM source from the upstream repo and keep
+the default-export shape (`on` / `off` / `emit` / wildcard `"*"`).

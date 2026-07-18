@@ -365,8 +365,3 @@ export class CommentThread {
     emit(EVENTS.COMMENT_THREAD_STATUS, { status: this.status, ...extra });
   }
 }
-
-export const COMMENT_THREAD_EVENTS = {
-  CHANGE: EVENTS.COMMENT_THREAD_CHANGE,
-  STATUS: EVENTS.COMMENT_THREAD_STATUS,
-};

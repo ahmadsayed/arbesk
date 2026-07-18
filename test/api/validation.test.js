@@ -125,11 +125,65 @@ describe("API schemas", () => {
 
   describe("unpinSchema", () => {
     it("requires a non-empty CID", () => {
-      expect(unpinSchema.safeParse({ cid: "" }).success).toBe(false);
+      expect(unpinSchema.safeParse({ cid: "", tokenId: "1" }).success).toBe(
+        false,
+      );
     });
 
-    it("accepts a valid CID", () => {
-      expect(unpinSchema.safeParse({ cid: "bafyTest" }).success).toBe(true);
+    it("requires tokenId", () => {
+      expect(unpinSchema.safeParse({ cid: "bafyTest" }).success).toBe(false);
+    });
+
+    it("rejects a non-decimal tokenId", () => {
+      expect(
+        unpinSchema.safeParse({ cid: "bafyTest", tokenId: "0x12" }).success,
+      ).toBe(false);
+      expect(
+        unpinSchema.safeParse({ cid: "bafyTest", tokenId: "1.5" }).success,
+      ).toBe(false);
+    });
+
+    it("accepts a valid CID and tokenId", () => {
+      expect(
+        unpinSchema.safeParse({ cid: "bafyTest", tokenId: "123" }).success,
+      ).toBe(true);
+    });
+
+    it("accepts optional chainId, contractAddress, and proof", () => {
+      const result = unpinSchema.safeParse({
+        cid: "bafyTest",
+        tokenId: "123",
+        chainId: 31415822,
+        contractAddress: "0x1234567890123456789012345678901234567890",
+        proof: [
+          "0x1111111111111111111111111111111111111111111111111111111111111111",
+        ],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects invalid optional fields", () => {
+      expect(
+        unpinSchema.safeParse({
+          cid: "bafyTest",
+          tokenId: "123",
+          chainId: 0,
+        }).success,
+      ).toBe(false);
+      expect(
+        unpinSchema.safeParse({
+          cid: "bafyTest",
+          tokenId: "123",
+          contractAddress: "not-an-address",
+        }).success,
+      ).toBe(false);
+      expect(
+        unpinSchema.safeParse({
+          cid: "bafyTest",
+          tokenId: "123",
+          proof: ["0xabc"],
+        }).success,
+      ).toBe(false);
     });
   });
 
@@ -193,6 +247,49 @@ describe("validateManifest", () => {
       },
     });
     expect(result.valid).toBe(false);
+  });
+
+  it("accepts a manifest with a thumbnail metadata object", () => {
+    const result = validateManifest({
+      version: 1,
+      thumbnail: {
+        cid: "bafyThumb",
+        type: "snapshot",
+        mime: "image/webp",
+        width: 512,
+        height: 288,
+      },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects a thumbnail object without a cid", () => {
+    const result = validateManifest({
+      version: 1,
+      thumbnail: { mime: "image/webp" },
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("accepts a history entry with a src snapshot", () => {
+    const result = validateManifest({
+      version: 1,
+      scene: {
+        nodes: [
+          {
+            node_id: "n1",
+            history: [
+              {
+                timestamp: 1720000000000,
+                operation: "generate",
+                src: { cid: "bafyHistSource", bundleCid: "bafyHistBundle" },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(result.valid).toBe(true);
   });
 
   it("rejects an invalid Ethereum address in child_ref", () => {

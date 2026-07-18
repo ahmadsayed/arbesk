@@ -24,6 +24,7 @@ export {
   authenticateUser,
   walletWeb3,
   getActiveConnectionSource,
+  getActiveContract,
   NETWORKS,
 } from "./wallet-core.js";
 

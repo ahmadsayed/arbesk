@@ -10,7 +10,6 @@
  * (color, scale, source). History is the manifest chain.
  */
 
-import { getNodeMeshes } from "./scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 // Cache of manifest chain versions for each starting CID
@@ -174,28 +173,4 @@ async function walkManifestChain(startCid, maxDepth = 50) {
   return chain;
 }
 
-/**
- * Apply a specific manifest version's state to a node's meshes.
- * Fetches the manifest at manifestCid, finds the node by nodeId,
- * and applies its color + scale to the current scene meshes.
- *
- * @param {string} nodeId - The node to update
- * @param {string} manifestCid - The CID of the manifest version to apply
- */
-async function applyManifestVersion(nodeId, manifestCid) {
-  const manifest = await getFromRemoteIPFS(manifestCid);
-  const node = (manifest.scene?.nodes || []).find((n) => n.node_id === nodeId);
-  if (!node) {
-    console.warn(`[TIME] node ${nodeId} not found in manifest ${manifestCid}`);
-    return;
-  }
-
-  const pp = node.post_processor;
-  const meshes = getNodeMeshes(nodeId);
-  if (meshes) {
-    applyColor(meshes, pp?.color, pp?.meshOverrides || null);
-    applyScale(meshes, pp?.scale);
-  }
-}
-
-export { applyColor, applyScale, walkManifestChain, applyManifestVersion };
+export { applyColor, applyScale, walkManifestChain };

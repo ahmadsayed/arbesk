@@ -108,7 +108,7 @@ function extFromMimeType(mimeType) {
 /**
  * Decompress a gzip stream (magic bytes 0x1f 0x8b) using the native
  * DecompressionStream API. Web Workers can't use the page import map, so we
- * can't import pako here - but DecompressionStream is a global in module
+ * can't import fflate here - but DecompressionStream is a global in module
  * workers in all evergreen browsers (Chrome 80+, FF 113+, Safari 16.4+).
  * Assets are stored gzipped on IPFS (see commit 401da4b), so without this the
  * worker hands compressed bytes to Babylon.js, which fails with errors like
@@ -128,7 +128,7 @@ async function gunzip(bytes) {
 
 /**
  * Gzip-compress bytes using the native CompressionStream. The worker can't
- * import pako (no page import map), but CompressionStream is a module-worker
+ * import fflate (no page import map), but CompressionStream is a module-worker
  * global in all evergreen browsers - the symmetric counterpart to gunzip().
  * Compressing here keeps IPFS uploads small (fewer bytes to the pinning
  * service); reads sniff the gzip magic bytes so the encoding is transparent.

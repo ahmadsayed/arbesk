@@ -29,11 +29,9 @@ ArbeskAsset
 
 | Variable | Type | Notes |
 |----------|------|-------|
-| `costPerGeneration` | `uint256` | 0.01 ether default |
-| `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC amounts |
+| `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC amounts (public getter) |
 | `usdcToken` | `IERC20` | address(0) = disabled |
 | `developerTreasuryWallet` | `address` | All payments go here |
-| `paymentNonce` | `mapping(address => uint256)` | Per-user replay guard |
 | `_tokenURIs` | `mapping(uint256 => string)` | IPFS CIDs (inherited base) |
 | `editorRoot` | `mapping(uint256 => bytes32)` | Merkle root per token (inherited base) |
 | `editorSetVersion` | `mapping(uint256 => uint256)` | Monotonic editor-set version (inherited base) |
@@ -47,24 +45,21 @@ ArbeskAsset
 
 ### Complete Function Inventory
 
-#### Payment — Native Token
-| Function | Visibility | Modifiers | Parameters | Events |
-|----------|-----------|-----------|------------|--------|
-| `payForGeneration(bytes32,string)` | `external payable` | `nonReentrant whenNotPaused` | nodeId, prompt | `AssetGenerationPaid` |
-
-#### Payment — USDC (ERC-20 Tiered)
+#### Payment — USDC (ERC-20 Tiered, only payment path)
 | Function | Visibility | Modifiers | Parameters | Events |
 |----------|-----------|-----------|------------|--------|
 | `payForGenerationWithUSDC(bytes32,string,uint8)` | `external` | `nonReentrant whenNotPaused` | nodeId, prompt, tier | `AssetGenerationPaidUSDC` |
-| `getTierCost(Tier)` | `external view` | — | tier | — |
-| `getPaymentNonce(address)` | `external view` | — | user | `uint256` |
+| `tierCosts(Tier)` | `public view` (auto getter) | — | tier | `uint256` |
+
+There is no native-token payment path — `receive()`/`fallback()` revert with `DirectTransferNotAllowed`.
 
 #### NFT Minting (inherited from `ArbeskAssetBase`)
 | Function | Visibility | Modifiers | Parameters | Returns/Events |
 |----------|-----------|-----------|------------|----------------|
 | `publishAsset(string,uint256,bytes32,string)` | `public` | — | uri, tokenId, editorRoot_, editorListUri | `AssetPublished` |
 | `tokenURI(uint256)` | `public view override` | — | tokenId | `string` |
-| `getAssetManifest(uint256)` | `public view` | — | tokenId | `(uri, owner)` |
+
+`publishAsset` reverts `ZeroEditorRoot` when `editorRoot_` is zero (a zero root would brick the token). Generation entry points share `_validateGenerationInput(nodeId, prompt)` — reverts `InvalidPromptLength` (empty or >500 bytes) / `InvalidNodeId` (zero).
 
 #### Collaboration (inherited from `ArbeskAssetBase`)
 | Function | Visibility | Modifiers | Parameters | Events |
@@ -73,16 +68,10 @@ ArbeskAsset
 | `updateEditors(uint256,bytes32,string,uint8,bytes32[])` | `external` | — | tokenId, newRoot, newListUri, callerRole, callerProof | `EditorSetChanged` |
 | `burn(uint256,bytes32[])` | `public` | — | tokenId, proof | `AssetBurned` |
 
-#### Admin — Native Token
+#### Admin
 | Function | Visibility | Modifiers | Parameters | Events |
 |----------|-----------|-----------|------------|--------|
-| `setCost(uint256)` | `external` | `onlyOwner` | newCost | `CostUpdated` |
 | `setTreasury(address)` | `external` | `onlyOwner` | newWallet | `TreasuryUpdated` |
-| `withdraw()` | `external` | `onlyOwner nonReentrant` | — | — |
-
-#### Admin — USDC
-| Function | Visibility | Modifiers | Parameters | Events |
-|----------|-----------|-----------|------------|--------|
 | `setUsdcToken(address)` | `external` | `onlyOwner` | _usdcToken | `UsdcTokenUpdated` |
 | `setTierCost(Tier,uint256)` | `external` | `onlyOwner` | tier, newCost | `TierCostUpdated` |
 | `withdrawUSDC()` | `external` | `onlyOwner nonReentrant` | — | — |
@@ -92,6 +81,8 @@ ArbeskAsset
 |----------|-----------|-----------|------------|--------|
 | `pause()` | `external` | `onlyOwner` | — | OZ `Paused` |
 | `unpause()` | `external` | `onlyOwner` | — | OZ `Unpaused` |
+
+Pause scope is payment/generation-only (`recordGeneration`, `payForGenerationWithUSDC`). Publishing, `updateAssetURI`, `updateEditors`, and `burn` stay live while paused.
 
 #### Fallback
 | Function | Visibility | Behavior |
@@ -104,9 +95,6 @@ ArbeskAsset
 When verifying events in tx logs, use these keccak256 hashes:
 
 ```
-AssetGenerationPaid(address,bytes32,string,uint256,uint256)
-  → keccak256 = topic[0]
-
 AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)
   → keccak256 = topic[0]
 
@@ -123,9 +111,6 @@ AssetURIUpdated(uint256,string)
   → keccak256 = topic[0]
 
 TreasuryUpdated(address,address)
-  → keccak256 = topic[0]
-
-CostUpdated(uint256,uint256)
   → keccak256 = topic[0]
 
 TierCostUpdated(uint8,uint256,uint256)

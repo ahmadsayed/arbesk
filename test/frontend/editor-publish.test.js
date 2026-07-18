@@ -44,6 +44,7 @@ async function loadModule() {
     "../../frontend/src/js/blockchain/wallet.js",
     () => ({
       contract: walletContract,
+      getActiveContract: () => walletContract,
       web3: null,
       walletWeb3: null,
       NETWORKS: {},
@@ -82,6 +83,7 @@ async function loadModule() {
   await jest.unstable_mockModule(
     "../../frontend/src/js/gltf/merkle-editors.js",
     () => ({
+      MAX_EDITORS_PER_TOKEN: 5000,
       computeRoot: jest.fn((list, _tokenId, _version) => {
         if (!list || list.length === 0) return "0x" + "0".repeat(64);
         if (list.length === 1 && list[0].address.toLowerCase() === OWNER.toLowerCase()) {

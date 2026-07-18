@@ -11,9 +11,10 @@
 
 import { walletState } from "../state/wallet-state.js";
 import { libraryState } from "../state/library-state.js";
-import { contract as walletContract } from "../blockchain/wallet.js";
+import { getActiveContract } from "../blockchain/wallet.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { deriveDefaultCollectionId } from "../utils/collections.js";
+import { extractThumbnailCid } from "../utils/thumbnail.js";
 import { fetchAssetLibrary, expandTokenToAssets } from "./asset-library.js";
 
 // Optimistic collections created within this window are kept even if ownerOf
@@ -38,12 +39,6 @@ export function applyWalletGate(connected) {
   if (uploadBtn) uploadBtn.hidden = !connected;
 }
 
-function extractThumbnailCid(thumbnail) {
-  if (!thumbnail) return "";
-  if (typeof thumbnail === "string") return thumbnail;
-  return thumbnail.cid || thumbnail.source?.cid || "";
-}
-
 function isNonexistentTokenError(err) {
   const msg = (err?.message || err?.data || "").toString().toLowerCase();
   return (
@@ -56,7 +51,7 @@ function isNonexistentTokenError(err) {
 
 async function fetchCollectionMetadata(tokenId) {
   const start = performance.now();
-  const c = walletContract || walletState.get().contract;
+  const c = getActiveContract();
   if (!c) return null;
   try {
     const uriStart = performance.now();
@@ -95,7 +90,7 @@ async function fetchCollectionMetadata(tokenId) {
 }
 
 async function isTokenOwnedBy(tokenId, address) {
-  const c = walletContract || walletState.get().contract;
+  const c = getActiveContract();
   if (!c || !address) return false;
   try {
     const owner = await c.methods.ownerOf(tokenId).call();

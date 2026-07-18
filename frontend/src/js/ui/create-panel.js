@@ -20,7 +20,7 @@ import {
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
-import { deriveDefaultCollectionId } from "../utils/collections.js";
+import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
 
 // ─── DOM References ───
 const chatHistoryList = document.getElementById("chatHistoryList");
@@ -198,7 +198,7 @@ function getTier() {
 }
 
 function buildTransformMatrix() {
-  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  return identityMatrix();
 }
 
 // ─── Generation Flow ───

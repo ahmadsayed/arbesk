@@ -25,7 +25,7 @@ export const NETWORK_CONFIGS = {
   [CHAIN_IDS.BASE_TESTNET]: {
     name: "Base Sepolia Testnet",
     chainId: CHAIN_IDS.BASE_TESTNET,
-    contractAddress: "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC",
+    contractAddress: "0xa39eFfc859b326CCCeB177CfBbef00C1876e18d8",
     paidContractAddress: null, // Paid tier not deployed on testnet
     usdcToken: null, // USDC not deployed on testnet
     rpcUrl: "https://sepolia.base.org",
@@ -61,29 +61,12 @@ export function getUsdcToken(chainId) {
 }
 
 /**
- * Get the block explorer base URL for a chainId.
- * @param {number|string} chainId
- * @returns {string|null}
- */
-export function getBlockExplorer(chainId) {
-  return getNetworkConfig(chainId)?.blockExplorer || null;
-}
-
-/**
  * Get the RPC URL for a chainId.
  * @param {number|string} chainId
  * @returns {string}
  */
 export function getRpcUrl(chainId) {
   return getNetworkConfig(chainId)?.rpcUrl || "http://127.0.0.1:8545";
-}
-
-/**
- * List all supported chain IDs.
- * @returns {number[]}
- */
-export function getSupportedChainIds() {
-  return Object.keys(NETWORK_CONFIGS).map(Number);
 }
 
 /** Maps chainId to the headerbar network-select option value. */

@@ -6,8 +6,7 @@
  * Wraps contract calls to provide a clean abstraction for UI components.
  */
 
-import { contract } from "../blockchain/wallet.js";
-import { walletState } from "../state/wallet-state.js";
+import { getActiveContract } from "../blockchain/wallet.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 /**
@@ -17,7 +16,7 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
  */
 export async function getTokenURI(tokenId) {
   try {
-    const c = contract || walletState.get().contract;
+    const c = getActiveContract();
     if (!c) return null;
     const cid = await c.methods.tokenURI(String(tokenId)).call();
     return cid || null;
@@ -34,7 +33,7 @@ export async function getTokenURI(tokenId) {
  */
 export async function getOwnerOf(tokenId) {
   try {
-    const c = contract || walletState.get().contract;
+    const c = getActiveContract();
     if (!c) return null;
     const owner = await c.methods.ownerOf(String(tokenId)).call();
     return owner || null;

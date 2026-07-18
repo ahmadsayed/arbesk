@@ -512,7 +512,7 @@ export async function openSharedAsset(page, tokenId, assetId) {
 export async function openInspector(page) {
   await page.evaluate(
     /** @type {() => void} */ (() => {
-      const inspector = /** @type {any} */ (document).getElementById(
+      const inspector = /** @type {any} */ (globalThis).document.getElementById(
         "inspector",
       );
       if (inspector) inspector.classList.remove("collapsed");

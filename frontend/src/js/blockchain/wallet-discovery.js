@@ -116,19 +116,3 @@ export function getWallets() {
 export function getWalletByRdns(rdns) {
   return wallets.get(rdns) || null;
 }
-
-/**
- * Clear the wallet registry. Useful on disconnect.
- */
-export function clearWallets() {
-  wallets.clear();
-  notify();
-}
-
-/**
- * Stop listening for wallet announcements.
- */
-export function stopDiscovery() {
-  if (typeof window === "undefined") return;
-  window.removeEventListener("eip6963:announceProvider", onAnnounceProvider);
-}

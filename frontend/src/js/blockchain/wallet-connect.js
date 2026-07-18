@@ -187,14 +187,6 @@ export async function disconnectWalletConnect() {
 }
 
 /**
- * Check if WalletConnect is currently connected.
- * @returns {boolean}
- */
-export function isWalletConnectConnected() {
-  return provider?.connected || false;
-}
-
-/**
  * Subscribe to WalletConnect events.
  * @param {string} event - 'accountsChanged' | 'chainChanged' | 'disconnect'
  * @param {Function} handler

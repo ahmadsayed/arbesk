@@ -1,8 +1,10 @@
 /**
  * Merkle Editor Tree - Node backend version
  *
- * Builds and verifies Merkle proofs compatible with ArbeskAssetBase._requireEditor
- * using OpenZeppelin's reference Merkle-tree implementation.
+ * Leaf encoding and proof verification compatible with
+ * ArbeskAssetBase._requireEditor, using OpenZeppelin's reference Merkle-tree
+ * implementation. Root/proof construction happens client-side
+ * (frontend/src/js/gltf/merkle-editors.js); the backend only verifies.
  */
 
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
@@ -26,65 +28,6 @@ export function makeLeaf(address, role, tokenId, setVersion) {
       { type: "uint256", value: setVersion.toString() },
     )
   );
-}
-
-/**
- * Build a SimpleMerkleTree from a list of editor leaves.
- *
- * @param {string[]} leaves - Array of bytes32 hex leaf hashes
- * @returns {SimpleMerkleTree|null}
- */
-function buildTree(leaves) {
-  if (!leaves || leaves.length === 0) return null;
-  return SimpleMerkleTree.of(leaves);
-}
-
-/**
- * Compute the Merkle root for an editor list.
- *
- * @param {Array<{address: string, role: number}>} editorList
- * @param {string|number|BigInt} tokenId
- * @param {string|number|BigInt} setVersion
- * @returns {string} bytes32 hex root, or zero bytes for an empty list
- */
-export function computeRoot(editorList, tokenId, setVersion) {
-  if (!editorList || editorList.length === 0) {
-    return "0x0000000000000000000000000000000000000000000000000000000000000000";
-  }
-  const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion),
-  );
-  const tree = /** @type {import("@openzeppelin/merkle-tree").SimpleMerkleTree} */ (
-    buildTree(leaves)
-  );
-  return tree.root;
-}
-
-/**
- * Build a Merkle proof for a target editor.
- *
- * @param {Array<{address: string, role: number}>} editorList
- * @param {string} targetAddress
- * @param {string|number|BigInt} tokenId
- * @param {string|number|BigInt} setVersion
- * @returns {{proof: string[], role: number}|null}
- */
-export function getProof(editorList, targetAddress, tokenId, setVersion) {
-  if (!editorList || editorList.length === 0) return null;
-  const entry = editorList.find(
-    (e) => e.address.toLowerCase() === targetAddress.toLowerCase(),
-  );
-  if (!entry) return null;
-
-  const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion),
-  );
-  const tree = /** @type {import("@openzeppelin/merkle-tree").SimpleMerkleTree} */ (
-    buildTree(leaves)
-  );
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
-  const proof = tree.getProof(leaf);
-  return { proof, role: entry.role };
 }
 
 /**

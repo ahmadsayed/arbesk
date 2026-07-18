@@ -21,8 +21,8 @@ Compile → deploy → address sync → multi-network config. Adding new network
 | Source | File | Used By |
 |--------|------|---------|
 | Root `.env` | `./.env` → `CONTRACT_ADDRESS=0x...` | Backend (`src/config.js`) |
-| Blockchain `.env` | `blockchain/.env` → `CONTRACT_ADDRESS=0x...` | Hardhat scripts |
-| Deployment artifact | `blockchain/deployments/<network>/ArbeskAsset.json` | Reference only |
+| Blockchain `.env` | `blockchain/.env` → `CONTRACT_ADDRESS=0x...` (local) / `BASE_CONTRACT_ADDRESS=0x...` (baseSepolia) | Hardhat scripts |
+| Deployment artifact | `blockchain/deployments/<network>/ArbeskAssetFree.json` (+ `ArbeskAsset.json` for the paid tier, local only) | Reference only |
 
 **All three must agree**, or the deployment-integrity tests fail.
 
@@ -30,10 +30,12 @@ Compile → deploy → address sync → multi-network config. Adding new network
 
 ```
 ┌─ deploy.js ───────────────────────────────────────────────┐
-│ 1. Deploys contract                                       │
-│ 2. Saves → blockchain/deployments/<network>/ArbeskAsset.json │
-│ 3. Updates blockchain/.env with CONTRACT_ADDRESS          │
-│ 4. (For local) also sets USDC_TOKEN                       │
+│ 1. Deploys ArbeskAssetFree (+ ArbeskAsset paid & MockUSDC │
+│    on local networks only; baseSepolia gets free tier)    │
+│ 2. Saves → blockchain/deployments/<network>/ArbeskAssetFree.json │
+│ 3. Updates blockchain/.env (CONTRACT_ADDRESS locally,     │
+│    BASE_CONTRACT_ADDRESS on baseSepolia)                  │
+│ 4. (For local) also sets PAID_CONTRACT_ADDRESS + USDC_TOKEN │
 └───────────────────────────────────────────────────────────┘
          │
          ▼ (MANUAL step — copy CONTRACT_ADDRESS)
@@ -65,17 +67,17 @@ Compile → deploy → address sync → multi-network config. Adding new network
 # Compile (writes artifacts to blockchain/artifacts/)
 docker compose run --rm hardhat npx hardhat compile
 
-# Deploy to local Hardhat
-docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+# Deploy to local Hardhat — the node must be running; `--network hardhat`
+# alone would target an ephemeral in-process chain and lose the deployment
+docker compose up -d hardhat
+docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 
-# Deploy to testnet (Optimism Sepolia — configure in hardhat.config.js)
-docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismSepolia
+# Deploy to testnet (Base Sepolia — ArbeskAssetFree only, no paid tier/USDC)
+docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
 
-# Deploy to mainnet (Optimism — configure in hardhat.config.js)
-docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network optimismMainnet
-
-# Verify on-chain
-docker compose run --rm hardhat npx hardhat run scripts/verify.js --network optimismSepolia
+# Verify on block explorer (defaults to ArbeskAssetFree; prefers
+# BASE_CONTRACT_ADDRESS on baseSepolia; VERIFY_CONTRACT=ArbeskAsset for paid)
+docker compose run --rm hardhat npx hardhat run scripts/verify.js --network baseSepolia
 ```
 
 ### Address Alignment Verification
@@ -113,12 +115,13 @@ When asked to add a function:
 3. **Add tests** in `blockchain/test/ArbeskAsset.test.js`
    - Success case, access control, edge cases
 
-4. **Add to `REQUIRED_ABI_FUNCTIONS`** in `test/frontend/deployment-integrity.test.js`
+4. **Add to `REQUIRED_PAID_ABI_FUNCTIONS` / `REQUIRED_FREE_ABI_FUNCTIONS`** in `test/frontend/deployment-integrity.test.js`
 
 5. **Recompile and redeploy:**
    ```bash
    docker compose run --rm hardhat npx hardhat compile
-   docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network hardhat
+   docker compose up -d hardhat
+   docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
    # Sync CONTRACT_ADDRESS (blockchain/.env → root .env)
    npm run test:frontend
    ```
@@ -135,11 +138,11 @@ When asked to add a function:
 
 ---
 
-## 8. Multi-Network Deployment (Hardhat Local + Optimism Sepolia)
+## 8. Multi-Network Deployment (Hardhat Local + Base Sepolia)
 
 ### Why Per-Network Config?
 
-Different networks have different contract addresses, USDC tokens, and RPC endpoints. Hard-coding a single `CONTRACT_ADDRESS` in `.env` breaks when users switch networks. The solution is a `NETWORK_CONFIGS` map keyed by `chainId`.
+Different networks have different contract addresses, USDC tokens, and RPC endpoints. Hard-coding a single `CONTRACT_ADDRESS` in `.env` breaks when users switch networks. The solution is a `NETWORK_CONFIGS` map keyed by `chainId` (chain IDs centralized in `constants/chains.js`).
 
 ### Network Configurations
 
@@ -150,57 +153,48 @@ export const NETWORK_CONFIGS = {
   31415822: {
     name: "Hardhat Local",
     chainId: 31415822,
-    contractAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-    usdcToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // ArbeskAssetFree
+    paidContractAddress: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    usdcToken: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512", // MockUSDC
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,
   },
-  11155420: {
-    name: "Optimism Sepolia",
-    chainId: 11155420,
-    contractAddress: null, // Deploy to Optimism Sepolia first
-    usdcToken: "0x5fd84259d66Cd461235407180D3B4c8d0F273e15",
-    rpcUrl: "https://sepolia.optimism.io",
-    blockExplorer: "https://sepolia-optimism.etherscan.io",
-  },
-  10: {
-    name: "Optimism Mainnet",
-    chainId: 10,
-    contractAddress: null, // Deploy to Optimism mainnet first
-    usdcToken: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-    rpcUrl: "https://mainnet.optimism.io",
-    blockExplorer: "https://optimistic.etherscan.io",
+  84532: {
+    name: "Base Sepolia Testnet",
+    chainId: 84532,
+    contractAddress: "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC", // ArbeskAssetFree
+    paidContractAddress: null, // Paid tier not deployed on testnet
+    usdcToken: null, // USDC not deployed on testnet
+    rpcUrl: "https://sepolia.base.org",
+    blockExplorer: "https://sepolia.basescan.org",
   },
 };
 ```
 
-### Backend Chain-Aware Validation
+### Backend Chain-Aware Helpers
 
-The backend must use the correct RPC and contract address for the chain the user is on:
+The backend resolves the correct RPC and contract address per chain via `src/config.js` (used by `authorization.js`, `token-indexer.js`, `ipfs-gc.js`):
 
 ```javascript
-// src/api/assets/generate-node.js
-const { chainId } = req.body;
-const effectiveChainId = chainId || req.headers["x-chain-id"];
-const txWeb3 = effectiveChainId ? getWeb3(effectiveChainId) : web3;
-const contractAddr = getContractAddress(effectiveChainId);
+// src/config.js
+import { getWeb3, getContractAddress } from "../config.js";
+const txWeb3 = getWeb3(chainId);                   // per-chain cached Web3 instance
+const contractAddr = getContractAddress(chainId);  // falls back to CONTRACT_ADDRESS env
 ```
 
-**Critical:** Pass `chainId` in both the request body AND `x-chain-id` header for redundancy.
+### Base Sepolia Specifics
 
-### Optimism Sepolia Specifics
-
-- **Chain ID:** 11155420
-- **Currency:** ETH (for gas), USDC (for payments)
-- **USDC Token:** `0x5fd84259d66Cd461235407180D3B4c8d0F273e15` (Circle's official Optimism Sepolia USDC)
+- **Chain ID:** 84532
+- **Currency:** ETH (for gas); free tier only — no paid tier/USDC on testnet
 - **Block Time:** ~2 seconds
-- **Faucet:** https://docs.optimism.io/builders/tools/build/faucets
-- **Explorer:** https://sepolia-optimism.etherscan.io
+- **Faucet:** https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet
+- **Explorer:** https://sepolia.basescan.org
+- **Wallets:** EOA + CDP email-login smart accounts (Base Sepolia only)
 
 ### Adding a New Network
 
 1. Add entry to `NETWORK_CONFIGS` in both frontend and backend
 2. Deploy contract to the new network
 3. Update contract address and USDC token in the config
-4. Add chain ID to `SUPPORTED_CHAIN_IDS` in `src/api/siwe-verify.js`
+4. Add chain ID to `CHAIN_IDS` in `constants/chains.js` (`SUPPORTED_CHAIN_IDS` used by `src/api/siwe-verify.js` derives from it)
 5. Update `hardhat.config.js` with the new network RPC

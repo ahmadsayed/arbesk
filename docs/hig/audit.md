@@ -6,7 +6,7 @@
 
 ## 1.1 What's There Now
 
-The current studio (`studio.pug` + `styles.scss` + `_studio-legacy.scss` + ~27 UI modules) is a single-page 3D workspace using the GNOME HIG layout:
+The current studio (`app.pug` + `styles.scss` + ~27 UI modules) is a single-page 3D workspace using the GNOME HIG layout:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐

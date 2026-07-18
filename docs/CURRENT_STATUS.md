@@ -22,7 +22,7 @@
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
 | Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
-| Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.js`, `library-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
+| Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.js`, `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
 | CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.js`, SIWE with `eoaAddress` fallback in `siwe-verify.js`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
@@ -219,7 +219,7 @@ frontend/src/js/
   - `signEvmMessage` expects the EOA **address string**, not the account object.
   - `eth_sendTransaction` returns a UserOperation hash; the provider polls `getUserOperation()` until the on-chain `transactionHash` is available, then returns the real EVM txHash to Web3.js.
   - `sepolia.base.org` blocks browser-origin RPC requests; use `https://base-sepolia-rpc.publicnode.com` for RPC passthrough.
-  - CDP rejects relative `paymasterUrl`; local dev uses `useCdpPaymaster: true`. The backend proxy at `/api/v1/paymaster` is reserved for production deployments with a public HTTPS custom paymaster.
+  - CDP rejects relative `paymasterUrl`; local dev uses `useCdpPaymaster: true`. The backend proxy at `/api/v1/paymaster` is reserved for production deployments with a public HTTPS custom paymaster; it is session-gated, wallet-keyed rate limited (`PAYMASTER_RATE_LIMIT_MAX`, default 30/min), and forwards only `pm_*` methods.
 
 **Token Indexer (`src/api/token-indexer.js`)**
 - Chunked `eth_getLogs` backfill scans for `Transfer` events (ownership) and `EditorSetChanged` events (editor-shared tokens) per chain.
@@ -232,7 +232,7 @@ frontend/src/js/
 **Optimistic Collection Create UI (`ui/library-create.js`)**
 - Shared `createCollectionFlow()` used by both toolbar button and right-click context menu.
 - Card appears with a spinner badge immediately after the manifest write (before the mint tx); `onPending` hook in `createNamedCollection` fires the callback at that moment.
-- On success: card flips to checkmark (`besked`) instantly and stays in place. `library-init.js` no longer subscribes to `ASSET_PUBLISHED`, so there is no full background refresh.
+- On success: card flips to checkmark (`besked`) instantly and stays in place. `app-init.js` no longer subscribes to `ASSET_PUBLISHED`, so there is no full background refresh.
 - On failure/wallet-reject: optimistic card is removed automatically (toast). Works identically for EOA (card shows just before the wallet popup; rejecting removes it) and CDP email login.
 
 **Library Burn Action (`ui/library-context-menu.js`)**
@@ -266,14 +266,14 @@ frontend/src/js/
 |---------|----------|---------|-------|
 | `hardhat` / `localhost` (chain 31415822) | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
 | `hardhat` / `localhost` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
-| `baseSepolia` (chain 84532) | ArbeskAssetFree | *(deploy address in `blockchain/.env`)* | **Current testnet target (EOA + CDP email login)** |
+| `baseSepolia` (chain 84532) | ArbeskAssetFree | `0xa39eFfc859b326CCCeB177CfBbef00C1876e18d8` (block 44309130, verified on Basescan) | **Current testnet target (EOA + CDP email login)** — fresh breaking deployment 2026-07-18, no token migration from the previous contract |
 | `baseSepolia` (chain 84532) | ArbeskAsset (paid) | — | Not deployed on testnet |
 
 ### 4.2 Known Contract Issues
 
 | Issue | Severity |
 |-------|----------|
-| `verify.js` passes `[treasury]` as sole constructor arg but constructor is `(address _treasury, address _usdcToken)` — Etherscan verification will fail | High |
+| ~~`verify.js` constructor args~~ Fixed — `verify.js` passes `[treasury, usdcAddress]` and defaults to `ArbeskAssetFree` (prefers `BASE_CONTRACT_ADDRESS` on baseSepolia) | — |
 | No reentrancy attack tests | Low |
 
 ---
@@ -282,8 +282,8 @@ frontend/src/js/
 
 | Suite | Count | Status |
 |-------|-------|--------|
-| Jest unit (all) | 1162 | ✅ All passing |
-| E2E Playwright specs | 16 specs / 33 tests | ✅ Chromium (manual run against local stack) |
+| Jest unit (all) | 1185 across 93 suites | ✅ All passing |
+| E2E Playwright specs | 17 specs / 35 tests | ✅ Chromium (manual run against local stack) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**
@@ -335,12 +335,10 @@ frontend/src/js/
 | **No real 3D generation** | Critical for core feature | Mock adapter works; cloud adapter returns 501. MVP feature gap. |
 | **CDP email login limited to Base Sepolia** | Medium — limits non-EOA users | CDP smart-wallet support is intentionally Base Sepolia only in this branch. |
 | **ArbeskAsset (paid tier) not deployed on any testnet** | Low for beta | Free tier is fully deployed on both testnets. |
-| **`verify.js` bug** | Low for beta | Affects Etherscan verification only, not runtime. |
-| **IPFS cache disabled** | Low — UX degradation | Every read hits the gateway; slow on IPFS cold reads but not a blocker. |
 
 ### Verdict
 
-**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1162 unit tests green, 16 E2E specs cover the critical path.
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1185 unit tests green, 17 E2E specs cover the critical path.
 
 **Not ready for open beta** until real 3D generation is wired (501 is the first thing a new user hits). Everything else is beta-quality.
 
@@ -353,8 +351,6 @@ frontend/src/js/
 | Cloud 3D generation adapter | `src/api/assets/generate-node.js` | 🔴 Critical for MVP |
 | CDP email login on Hardhat | `smart-wallet-support.js` | 🟡 Smart wallets only supported on Base Sepolia |
 | Micro-ledger (`anchorManifest`) | `ledger-panel.js` | 🟡 Post-beta |
-| `verify.js` constructor args fix | `blockchain/scripts/verify.js` | 🟡 Before mainnet |
-| IPFS browser cache re-enable | `remote-ipfs.js` | 🟢 Performance improvement |
 | Health check endpoint | — | 🟢 Ops convenience |
 | OpenSCAD WASM | — | ⚪ Explicitly deferred |
 
@@ -378,3 +374,5 @@ frontend/src/js/
 | Root `.env` | ✅ Exists |
 | `blockchain/.env` | ✅ Exists |
 | `frontend/.env` | ❌ Not present (optional, not currently used) |
+
+Optional root `.env` kill-switch: `INDEXER_DISABLE_TESTNET=1` skips starting the Base Sepolia token indexer (see `.env.example`).

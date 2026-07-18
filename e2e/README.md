@@ -186,11 +186,11 @@ Validates that every ERC-721 token is a collection manifest containing one or mo
 
 **Why it matters:** This is the only spec that exercises the collection manifest shape end-to-end, the `activeAssetId` → collection `assets` map, and the gallery asset-card deep-link into the Studio. Changes to `asset-save.js`, `collection-publish.js`, the collection selector, or the gallery card rendering can break it.
 
-### 7b. Material editor: multi-primitive mesh color override (`e2e/specs/07-material-editor-multi-primitive.spec.js`)
+### 7b. Material editor: multi-primitive mesh color override (Jest, not E2E)
 
-Regression test for issue #25: `applyMeshOverrideColors()` must update **all** primitives of a mesh, not just the first matching one.
+Regression coverage for issue #25 lives in `test/frontend/material-editor.test.js` (a Playwright spec once existed and was retired): `applyMeshOverrideColors()` must update **all** primitives of a mesh, not just the first matching one.
 
-- Dynamically imports `material-editor.js` in the browser and runs it against a minimal two-primitive, two-material glTF fixture.
+- Runs `material-editor.js` against a minimal two-primitive, two-material glTF fixture.
 - Asserts both materials receive the override color.
 - Also validates the `defaultColor` baseline branch.
 

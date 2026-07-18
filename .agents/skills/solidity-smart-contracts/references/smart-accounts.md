@@ -20,9 +20,6 @@ Instead of validating `receipt.to`, validate that the transaction contains a val
 
 ```javascript
 // src/api/assets/generate-node.js
-const nativeEventSig = txWeb3.utils.keccak256(
-  "AssetGenerationPaid(address,bytes32,string,uint256,uint256)"
-);
 const usdcEventSig = txWeb3.utils.keccak256(
   "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)"
 );
@@ -31,7 +28,7 @@ const contractAddrLower = contractAddr?.toLowerCase();
 const hasPaymentEvent = contractAddr
   ? receipt.logs.some(
       (log) =>
-        (log.topics[0] === nativeEventSig || log.topics[0] === usdcEventSig) &&
+        log.topics[0] === usdcEventSig &&
         log.address.toLowerCase() === contractAddrLower
     )
   : false;

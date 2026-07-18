@@ -275,7 +275,7 @@ export async function decomposeAndStoreAsync(gltfJson, options = {}) {
   if (reusableCredential && (await checkWorkerAvailable())) {
     try {
       // Worker path: extraction + batched IPFS upload happen off the main thread.
-      // Components are stored uncompressed because the worker cannot import pako.
+      // Components are stored uncompressed because the worker cannot import fflate.
       // The composite JSON is written back on the main thread afterward, so its
       // credential is reserved up front (see reserveFollowUpCredential) rather
       // than shared with the worker's clone of the pool.

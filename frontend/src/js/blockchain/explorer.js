@@ -3,7 +3,6 @@
  * Arbesk Block Explorer Utilities
  *
  * Builds block explorer URLs for EVM networks.
- * Supports address, transaction, and token pages.
  */
 
 import { switchNetwork } from "./wallet.js";
@@ -15,20 +14,6 @@ const EXPLORER_URLS = {
   // Base Sepolia Testnet
   [CHAIN_IDS.BASE_TESTNET]: "https://sepolia.basescan.org",
 };
-
-const NETWORK_NAMES = {
-  [CHAIN_IDS.HARDHAT_LOCAL]: "Hardhat Local",
-  [CHAIN_IDS.BASE_TESTNET]: "Base Sepolia Testnet",
-};
-
-/**
- * Get the human-readable network name for a chain ID.
- * @param {number|string} chainId
- * @returns {string}
- */
-export function getNetworkName(chainId) {
-  return NETWORK_NAMES[Number(chainId)] || `Chain ${chainId}`;
-}
 
 /**
  * Get the explorer base URL for a chain ID.
@@ -49,42 +34,6 @@ export function getAddressExplorerUrl(chainId, address) {
   const base = getExplorerBaseUrl(chainId);
   if (!base || !address) return null;
   return `${base}/address/${address}`;
-}
-
-/**
- * Build a transaction explorer URL.
- * @param {number|string} chainId
- * @param {string} txHash
- * @returns {string|null}
- */
-export function getTxExplorerUrl(chainId, txHash) {
-  const base = getExplorerBaseUrl(chainId);
-  if (!base || !txHash) return null;
-  return `${base}/tx/${txHash}`;
-}
-
-/**
- * Build a token explorer URL.
- * @param {number|string} chainId
- * @param {string} contractAddress
- * @param {string|number} tokenId
- * @returns {string|null}
- */
-export function getTokenExplorerUrl(chainId, contractAddress, tokenId) {
-  const base = getExplorerBaseUrl(chainId);
-  if (!base || !contractAddress) return null;
-  return `${base}/token/${contractAddress}?a=${tokenId}`;
-}
-
-/**
- * Open an explorer URL in a new tab.
- * @param {string|null} url
- * @returns {boolean} whether a tab was opened
- */
-export function openExplorer(url) {
-  if (!url) return false;
-  window.open(url, "_blank", "noopener,noreferrer");
-  return true;
 }
 
 /**

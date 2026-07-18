@@ -48,7 +48,7 @@ frontend/src/scss/
 
 **Files changed:**
 - `styles.scss` — replace Bootstrap import with `@use` lines
-- `studio.scss` — renamed to `_studio-legacy.scss` and retained as legacy reference, no longer imported
+- `studio.scss` — renamed to `_studio-legacy.scss`, later deleted (2026-07 cleanup); styles live in `styles.scss` + `components/`
 
 **Rules enforced:**
 - Colors only through semantic tokens
@@ -178,7 +178,7 @@ Three breakpoints:
 | File | Fate |
 |---|---|
 | `studio.pug` | Rewritten (headerbar, pathbar, sidebar, outliner, bottombar) |
-| `studio.scss` | Renamed to `_studio-legacy.scss`; retained as legacy reference, not imported |
+| `studio.scss` | Renamed to `_studio-legacy.scss`; deleted in the 2026-07 cleanup |
 | `styles.scss` | Simplified to `@use` imports |
 | `ui/create-panel.js` | Refactored to drive Settings and Chat view controls |
 | `ui/sidebar.js` | **New** — 5-view controller |

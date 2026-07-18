@@ -1,5 +1,7 @@
 import express from "express";
 import { sendError } from "../errors.js";
+import authenticate from "../authentication.js";
+import { paymasterRateLimit } from "../rate-limiter.js";
 
 const Router = express.Router;
 
@@ -9,6 +11,11 @@ const Router = express.Router;
  * POST /api/v1/paymaster
  * Forwards bundler/paymaster JSON-RPC calls to CDP_PAYMASTER_URL.
  * The API key is embedded in CDP_PAYMASTER_URL — it never reaches the browser.
+ *
+ * Auth: Session token required + wallet-keyed rate limit (default 30/min,
+ * PAYMASTER_RATE_LIMIT_MAX) — every proxied call spends the deployment's CDP
+ * paymaster quota. Only standard ERC-4337 paymaster JSON-RPC methods (`pm_*`)
+ * are forwarded; anything else is rejected with PAYMASTER_METHOD_NOT_ALLOWED.
  */
 export default function paymasterRoutes() {
   const router = Router();
@@ -20,7 +27,7 @@ export default function paymasterRoutes() {
    *
    * Returns 503 if CDP_PAYMASTER_URL is not configured.
    */
-  router.post("/", async (req, res) => {
+  router.post("/", authenticate, paymasterRateLimit, async (req, res) => {
     const paymasterUrl = process.env.CDP_PAYMASTER_URL;
 
     if (!paymasterUrl) {
@@ -30,6 +37,17 @@ export default function paymasterRoutes() {
 
     const method = req.body?.method ?? "(unknown)";
     const id = req.body?.id ?? null;
+
+    if (typeof method !== "string" || !method.startsWith("pm_")) {
+      console.warn(`[PAYMASTER] rejected non-paymaster method=${method}`);
+      return sendError(
+        res,
+        400,
+        "PAYMASTER_METHOD_NOT_ALLOWED",
+        `Only pm_* paymaster JSON-RPC methods are proxied (got: ${method})`,
+      );
+    }
+
     console.log(`[PAYMASTER] forwarding method=${method} id=${id}`);
 
     try {

@@ -19,6 +19,7 @@ const walletStateGetMock = jest.fn(() => ({ walletAddress: "0xOwnerAddress" }));
 
 jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
   contract: contractMock,
+  getActiveContract: () => contractMock ?? walletStateGetMock()?.contract ?? null,
   updateEditors: updateEditorsMock,
   CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
 }));
@@ -38,6 +39,7 @@ jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
 jest.unstable_mockModule("../../frontend/src/js/gltf/merkle-editors.js", () => ({
   computeRoot: computeRootMock,
   getProof: getProofMock,
+  MAX_EDITORS_PER_TOKEN: 5000,
 }));
 
 jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-guard.js", () => ({
@@ -128,6 +130,7 @@ describe("team service", () => {
       };
       jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
         contract: null,
+        getActiveContract: () => walletStateGetMock()?.contract ?? null,
         updateEditors: updateEditorsMock,
         CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
       }));
@@ -214,6 +217,20 @@ describe("team service", () => {
       await expect(
         team.addTeamMember("42", "0xEditorAddress"),
       ).rejects.toThrow("already an editor");
+    });
+
+    it("throws when the editor list is already at the cap", async () => {
+      const fullList = Array.from({ length: 5000 }, (_, i) => ({
+        address: `0x${String(i + 1).padStart(40, "0")}`,
+        role: 2,
+      }));
+      getFromRemoteIPFSMock.mockResolvedValue(fullList);
+
+      await expect(team.addTeamMember("42", "0xNewEditor")).rejects.toThrow(
+        "Editor limit reached",
+      );
+      expect(updateEditorsMock).not.toHaveBeenCalled();
+      expect(writeJSONToIPFSMock).not.toHaveBeenCalled();
     });
 
     it("throws when the current wallet is not an editor", async () => {

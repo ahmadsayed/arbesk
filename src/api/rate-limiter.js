@@ -102,10 +102,16 @@ const gcLimiter = createLimiter({
   message: "GC rate limit exceeded.",
 });
 
+const paymasterLimiter = createLimiter({
+  max: () => Number(process.env.PAYMASTER_RATE_LIMIT_MAX || 30),
+  message: "Paymaster rate limit exceeded.",
+});
+
 export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
 export const generationRateLimit = generationLimiter.middleware;
 export const unpinRateLimit = unpinLimiter.middleware;
 export const gcRateLimit = gcLimiter.middleware;
+export const paymasterRateLimit = paymasterLimiter.middleware;
 
 /**
  * Reset all in-memory rate-limit stores. Used by test teardown.
@@ -115,4 +121,5 @@ export function _resetRateLimiters() {
   generationLimiter.store.resetAll();
   unpinLimiter.store.resetAll();
   gcLimiter.store.resetAll();
+  paymasterLimiter.store.resetAll();
 }

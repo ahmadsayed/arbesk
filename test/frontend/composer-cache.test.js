@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { jest } from "@jest/globals";
 import { TextEncoder, TextDecoder } from "util";
-import { gzip } from "pako";
+import { gzipSync } from "fflate";
 
 if (!global.TextEncoder) global.TextEncoder = TextEncoder;
 if (!global.TextDecoder) global.TextDecoder = TextDecoder;
@@ -62,7 +62,6 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
     }),
     getManifestChain: jest.fn(async () => []),
     isIpfsCidReachable: jest.fn(async () => true),
-    clearRemoteIPFSCache: jest.fn(),
   }));
 
   const mod = await import("../../frontend/src/js/gltf/composer.js");
@@ -126,7 +125,7 @@ describe("composeGlTF content-cache integration", () => {
     }
     // Use level 1 compression in the test to keep the TDD loop fast.
     // The cache only cares that the stored bytes match the manifest hash.
-    const raw = gzip(original, { level: 1 });
+    const raw = gzipSync(original, { level: 1 });
     expect(raw.length).toBeGreaterThanOrEqual(64 * 1024);
     const hash = "11223344";
     const cid = "bafyCompressed";

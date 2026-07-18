@@ -7,11 +7,11 @@
  * All writes go through updateEditors (Merkle root update).
  */
 
-import { contract, updateEditors } from "../blockchain/wallet.js";
+import { contract, getActiveContract, updateEditors } from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
-import { computeRoot, getProof } from "../gltf/merkle-editors.js";
+import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "../gltf/merkle-editors.js";
 import { requireWallet } from "../blockchain/wallet-guard.js";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
@@ -33,7 +33,7 @@ export async function fetchEditors(tokenId) {
   // atomically whenever editorSetVersion bumps, so it is always in sync with
   // the current Merkle root. Use this for proof generation and mutations.
   try {
-    const c = contract || walletState.get().contract;
+    const c = getActiveContract();
     if (c) {
       const cid = await c.methods.editorListURI(tokenId).call();
       if (cid) {
@@ -181,6 +181,12 @@ export async function addTeamMember(tokenId, address) {
 
   if (editors.some((e) => e.address.toLowerCase() === normalized)) {
     throw new Error("Address is already an editor");
+  }
+
+  if (editors.length >= MAX_EDITORS_PER_TOKEN) {
+    throw new Error(
+      `Editor limit reached (maximum ${MAX_EDITORS_PER_TOKEN} members)`
+    );
   }
 
   const nextEditors = [

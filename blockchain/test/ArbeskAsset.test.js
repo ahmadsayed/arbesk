@@ -1,8 +1,12 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
+const { SimpleMerkleTree } = require("@openzeppelin/merkle-tree");
 
 // ════════════════════════════════════════════════════════════════════════════
-// Merkle Helpers - must match ArbeskAssetBase._requireEditor leaf structure
+// Merkle Helpers - must match ArbeskAssetBase._requireEditor leaf structure.
+// Tree construction uses @openzeppelin/merkle-tree — the same library the
+// frontend uses (frontend/src/js/gltf/merkle-editors.js) — so tests are
+// byte-compatible with OZ MerkleProof.sol by construction.
 // ════════════════════════════════════════════════════════════════════════════
 
 function makeLeaf(address, role, tokenId, setVersion) {
@@ -12,40 +16,12 @@ function makeLeaf(address, role, tokenId, setVersion) {
   );
 }
 
-function hashPair(a, b) {
-  const [lo, hi] = BigInt(a) <= BigInt(b) ? [a, b] : [b, a];
-  return ethers.solidityPackedKeccak256(["bytes32", "bytes32"], [lo, hi]);
-}
-
-function sortLeaves(leaves) {
-  return [...leaves].sort((a, b) =>
-    BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0
-  );
-}
-
-function buildRoot(leaves) {
-  if (leaves.length === 0) return ethers.ZeroHash;
-  let layer = sortLeaves(leaves);
-  while (layer.length > 1) {
-    const next = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      if (i + 1 < layer.length) {
-        next.push(hashPair(layer[i], layer[i + 1]));
-      } else {
-        next.push(layer[i]);
-      }
-    }
-    layer = next;
-  }
-  return layer[0];
-}
-
 function computeRoot(editorList, tokenId, setVersion) {
   if (!editorList || editorList.length === 0) return ethers.ZeroHash;
   const leaves = editorList.map((e) =>
     makeLeaf(e.address, e.role, tokenId, setVersion)
   );
-  return buildRoot(leaves);
+  return SimpleMerkleTree.of(leaves).root;
 }
 
 function getProof(editorList, targetAddress, tokenId, setVersion) {
@@ -54,37 +30,13 @@ function getProof(editorList, targetAddress, tokenId, setVersion) {
   );
   if (!entry) return null;
 
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
-  const allLeaves = editorList.map((e) =>
+  const leaves = editorList.map((e) =>
     makeLeaf(e.address, e.role, tokenId, setVersion)
   );
+  const tree = SimpleMerkleTree.of(leaves);
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
 
-  let layer = sortLeaves(allLeaves);
-  const proof = [];
-  let targetLeaf = leaf;
-
-  while (layer.length > 1) {
-    const idx = layer.findIndex((l) => l === targetLeaf);
-    if (idx === -1) break;
-
-    const pairIdx = idx % 2 === 0 ? idx + 1 : idx - 1;
-    if (pairIdx >= 0 && pairIdx < layer.length) {
-      proof.push(layer[pairIdx]);
-    }
-
-    const next = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      if (i + 1 < layer.length) {
-        next.push(hashPair(layer[i], layer[i + 1]));
-      } else {
-        next.push(layer[i]);
-      }
-    }
-    targetLeaf = next[Math.floor(idx / 2)];
-    layer = next;
-  }
-
-  return { proof, role: entry.role };
+  return { proof: tree.getProof(leaf), role: entry.role };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -93,7 +45,6 @@ function getProof(editorList, targetAddress, tokenId, setVersion) {
 
 describe("ArbeskAsset (Merkle)", function () {
   let asset, usdc, owner, treasury, user, editor, editor2;
-  const COST = ethers.parseEther("0.01");
   const USDC_DECIMALS = 6;
 
   const TIER_COSTS = {
@@ -184,84 +135,7 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // Payment - Native Token (unchanged logic)
-  // ════════════════════════════════════════════════════════════════════
-
-  describe("payForGeneration (native token)", function () {
-    const nodeId = ethers.id("node-1");
-    const prompt = "a red cube";
-
-    it("accepts exact payment and emits AssetGenerationPaid", async () => {
-      await expect(
-        asset.connect(user).payForGeneration(nodeId, prompt, { value: COST })
-      )
-        .to.emit(asset, "AssetGenerationPaid")
-        .withArgs(user.address, nodeId, prompt, COST, (v) => v > 0n);
-    });
-
-    it("increments payment nonce", async () => {
-      const nonceBefore = await asset.getPaymentNonce(user.address);
-      await asset
-        .connect(user)
-        .payForGeneration(nodeId, prompt, { value: COST });
-      expect(await asset.getPaymentNonce(user.address)).to.equal(
-        nonceBefore + 1n
-      );
-    });
-
-    it("forwards 100% to treasury", async () => {
-      const before = await ethers.provider.getBalance(treasury.address);
-      await asset
-        .connect(user)
-        .payForGeneration(nodeId, prompt, { value: COST });
-      const after = await ethers.provider.getBalance(treasury.address);
-      expect(after - before).to.equal(COST);
-    });
-
-    it("reverts if payment amount is incorrect", async () => {
-      await expect(
-        asset
-          .connect(user)
-          .payForGeneration(nodeId, prompt, {
-            value: ethers.parseEther("0.02"),
-          })
-      ).to.be.revertedWithCustomError(asset, "IncorrectPaymentAmount");
-    });
-
-    it("reverts if prompt is empty", async () => {
-      await expect(
-        asset.connect(user).payForGeneration(nodeId, "", { value: COST })
-      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
-    });
-
-    it("reverts if prompt exceeds 500 bytes", async () => {
-      const longPrompt = "x".repeat(501);
-      await expect(
-        asset
-          .connect(user)
-          .payForGeneration(nodeId, longPrompt, { value: COST })
-      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
-    });
-
-    it("reverts if nodeId is zero", async () => {
-      await expect(
-        asset
-          .connect(user)
-          .payForGeneration(ethers.ZeroHash, prompt, { value: COST })
-      ).to.be.revertedWithCustomError(asset, "InvalidNodeId");
-    });
-
-    it("reverts when paused", async () => {
-      await asset.connect(owner).pause();
-      await expect(
-        asset.connect(user).payForGeneration(nodeId, prompt, { value: COST })
-      ).to.be.reverted;
-      await asset.connect(owner).unpause();
-    });
-  });
-
-  // ════════════════════════════════════════════════════════════════════
-  // Payment - USDC (unchanged logic)
+  // Payment - USDC
   // ════════════════════════════════════════════════════════════════════
 
   describe("payForGenerationWithUSDC", function () {
@@ -292,16 +166,6 @@ describe("ArbeskAsset (Merkle)", function () {
         );
     });
 
-    it("increments payment nonce", async () => {
-      const nonceBefore = await asset.getPaymentNonce(user.address);
-      await asset
-        .connect(user)
-        .payForGenerationWithUSDC(nodeId, prompt, Tier.Basic);
-      expect(await asset.getPaymentNonce(user.address)).to.equal(
-        nonceBefore + 1n
-      );
-    });
-
     it("reverts if USDC token is not set (address(0))", async () => {
       const Factory = await ethers.getContractFactory("ArbeskAsset");
       const noUsdc = await Factory.deploy(treasury.address, ethers.ZeroAddress);
@@ -317,18 +181,35 @@ describe("ArbeskAsset (Merkle)", function () {
       ).to.be.revertedWithCustomError(noUsdc, "UsdcPaymentsDisabled");
     });
 
-    it("shared nonce: USDC and native payments both increment same counter", async () => {
-      const nonce0 = await asset.getPaymentNonce(user.address);
-      await asset
-        .connect(user)
-        .payForGenerationWithUSDC(nodeId, prompt, Tier.Basic);
-      const nonce1 = await asset.getPaymentNonce(user.address);
-      expect(nonce1).to.equal(nonce0 + 1n);
+    it("reverts if prompt is empty", async () => {
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, "", Tier.Basic)
+      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
+    });
 
-      await asset
-        .connect(user)
-        .payForGeneration(ethers.id("node-2"), "test", { value: COST });
-      expect(await asset.getPaymentNonce(user.address)).to.equal(nonce1 + 1n);
+    it("reverts if prompt exceeds 500 bytes", async () => {
+      const longPrompt = "x".repeat(501);
+      await expect(
+        asset
+          .connect(user)
+          .payForGenerationWithUSDC(nodeId, longPrompt, Tier.Basic)
+      ).to.be.revertedWithCustomError(asset, "InvalidPromptLength");
+    });
+
+    it("reverts if nodeId is zero", async () => {
+      await expect(
+        asset
+          .connect(user)
+          .payForGenerationWithUSDC(ethers.ZeroHash, prompt, Tier.Basic)
+      ).to.be.revertedWithCustomError(asset, "InvalidNodeId");
+    });
+
+    it("reverts when paused", async () => {
+      await asset.connect(owner).pause();
+      await expect(
+        asset.connect(user).payForGenerationWithUSDC(nodeId, prompt, Tier.Basic)
+      ).to.be.reverted;
+      await asset.connect(owner).unpause();
     });
   });
 
@@ -337,11 +218,6 @@ describe("ArbeskAsset (Merkle)", function () {
   // ════════════════════════════════════════════════════════════════════
 
   describe("Access Control", function () {
-    it("only owner can setCost", async () => {
-      await expect(asset.connect(user).setCost(ethers.parseEther("0.02"))).to.be
-        .reverted;
-    });
-
     it("only owner can pause/unpause", async () => {
       await expect(asset.connect(user).pause()).to.be.reverted;
       await asset.connect(owner).pause();
@@ -409,6 +285,12 @@ describe("ArbeskAsset (Merkle)", function () {
       await expect(
         asset.connect(user).publishAsset("ipfs://b", tokenId, root, "")
       ).to.be.revertedWithCustomError(asset, "TokenAlreadyMinted");
+    });
+
+    it("reverts on zero Merkle root (a zero root would brick the token)", async () => {
+      await expect(
+        asset.connect(user).publishAsset("ipfs://zero-root", 6, ethers.ZeroHash, "")
+      ).to.be.revertedWithCustomError(asset, "ZeroEditorRoot");
     });
 
     it("supports multiple initial editors", async () => {
@@ -648,6 +530,15 @@ describe("ArbeskAsset (Merkle)", function () {
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
 
+    it("reverts on zero new root (a zero root would brick the token)", async () => {
+      const { proof } = getProof(editors, user.address, tokenId, 1);
+      await expect(
+        asset
+          .connect(user)
+          .updateEditors(tokenId, ethers.ZeroHash, "", CollaboratorRole.Editor, proof)
+      ).to.be.revertedWithCustomError(asset, "ZeroEditorRoot");
+    });
+
     it("stale proof (old version) reverts after a set change", async () => {
       // First change: add editor2
       const newEditors1 = [
@@ -759,31 +650,6 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // getAssetManifest (new return shape)
-  // ════════════════════════════════════════════════════════════════════
-
-  describe("getAssetManifest", function () {
-    it("returns manifestURI and owner (2 values, no editorList)", async () => {
-      const tokenId = 700;
-      const uri = "ipfs://manifest-test";
-      await publishAsEditor(user, tokenId, uri);
-
-      const result = await asset.getAssetManifest(tokenId);
-      expect(result.manifestURI).to.equal(uri);
-      expect(result.owner_).to.equal(user.address);
-      // No third return value
-      expect(result.editorList).to.be.undefined;
-    });
-
-    it("reverts on nonexistent token", async () => {
-      await expect(asset.getAssetManifest(9999)).to.be.revertedWithCustomError(
-        asset,
-        "NonexistentToken"
-      );
-    });
-  });
-
-  // ════════════════════════════════════════════════════════════════════
   // Free Tier (ArbeskAssetFree) - Merkle version
   // ════════════════════════════════════════════════════════════════════
 
@@ -833,13 +699,24 @@ describe("ArbeskAsset (Merkle)", function () {
     });
 
     it("owner bypasses daily generation limit", async () => {
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 14; i++) {
         await freeAsset
           .connect(owner)
           .recordGeneration(ethers.id(`o${i}`), `prompt ${i}`);
       }
-      // No revert - owner is exempt
-      expect(await freeAsset.generationCountToday(owner.address)).to.equal(15n);
+      // 15th call must not revert - owner is exempt. The event's countToday
+      // argument proves the counter kept incrementing past the limit.
+      await expect(
+        freeAsset.connect(owner).recordGeneration(ethers.id("o14"), "prompt 14")
+      )
+        .to.emit(freeAsset, "AssetGenerationRecorded")
+        .withArgs(
+          owner.address,
+          ethers.id("o14"),
+          "prompt 14",
+          (v) => v > 0n,
+          15n
+        );
     });
 
     it("updateAssetURI with Merkle proof", async () => {

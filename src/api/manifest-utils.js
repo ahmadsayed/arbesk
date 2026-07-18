@@ -2,7 +2,8 @@
  * Arbesk Manifest Utilities
  *
  * Shared helpers for working with fractal manifest structures.
- * Used by both backend API routes.
+ * `getSceneNodes` is used by the manifest chain walker; `bumpManifestVersion`
+ * is exported for backend tests only (the frontend builds manifests itself).
  */
 
 /**

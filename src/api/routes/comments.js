@@ -5,6 +5,7 @@ import { archiveCommentsForAsset } from "../comments-archive.js";
 import { getStorage } from "../storage/index.js";
 import { validateBody } from "../validation.js";
 import { snapshotCommentsSchema } from "../schemas.js";
+import { buildAssetTag } from "../asset-tag.js";
 
 const Router = express.Router;
 
@@ -43,33 +44,34 @@ export default function commentsRoutes({ getContractAddress }) {
 
         const chainIdNum = chainId ?? null;
         const contractAddr = reqContract || getContractAddress(chainIdNum);
-      if (!contractAddr) {
-        return sendError(
-          res,
-          503,
-          "CONTRACT_NOT_CONFIGURED",
-          "Contract address not configured",
+        if (!contractAddr) {
+          return sendError(
+            res,
+            503,
+            "CONTRACT_NOT_CONFIGURED",
+            "Contract address not configured",
+          );
+        }
+
+        const assetTag = buildAssetTag(chainIdNum, contractAddr, tokenId, assetId);
+
+        console.log(`[ARCHIVE] snapshotting comments for ${assetTag}`);
+        const { cid: archiveCid, eventCount } = await archiveCommentsForAsset(
+          assetTag,
+          getStorage(),
         );
+        console.log(
+          `[ARCHIVE] snapshot complete - ${eventCount} events → ${archiveCid}`,
+        );
+
+        res.json({ cid: archiveCid, eventCount });
+      } catch (error) {
+        const err = /** @type {Error} */ (error);
+        console.error("[ARCHIVE] snapshot error:", err.message);
+        sendError(res, 500, "ARCHIVE_FAILED", err.message);
       }
-
-      const assetTag = `${chainIdNum || 31415822}:${contractAddr.toLowerCase()}:${tokenId}:${assetId}`;
-
-      console.log(`[ARCHIVE] snapshotting comments for ${assetTag}`);
-      const { cid: archiveCid, eventCount } = await archiveCommentsForAsset(
-        assetTag,
-        getStorage(),
-      );
-      console.log(
-        `[ARCHIVE] snapshot complete - ${eventCount} events → ${archiveCid}`,
-      );
-
-      res.json({ cid: archiveCid, eventCount });
-    } catch (error) {
-      const err = /** @type {Error} */ (error);
-      console.error("[ARCHIVE] snapshot error:", err.message);
-      sendError(res, 500, "ARCHIVE_FAILED", err.message);
-    }
-  });
+    },
+  );
 
   return router;
 }

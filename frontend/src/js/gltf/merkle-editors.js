@@ -12,6 +12,20 @@
 
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 
+/**
+ * Client-side safety cap mirroring the on-chain MAX_EDITORS_PER_TOKEN
+ * constant. The Merkle design keeps proof cost O(log n) at any size, so this
+ * is not a security boundary — it guards against runaway lists that would
+ * hang the browser during tree building or bloat the IPFS editor document.
+ * Enforced at root-computation time (publish/update paths); proof generation
+ * for existing lists is intentionally NOT capped, so members of an
+ * oversized-but-live set can still act (burn, comment, republish). Note that
+ * editor-set mutations on such a set (including removals that still leave it
+ * above the cap) will fail the cap check — proof-only operations remain the
+ * escape path.
+ */
+export const MAX_EDITORS_PER_TOKEN = 5000;
+
 function _soliditySha3(...args) {
   const W3 = window.Web3;
   if (!W3 || !W3.utils || !W3.utils.soliditySha3) {
@@ -60,6 +74,11 @@ function buildTree(leaves) {
 export function computeRoot(editorList, tokenId, setVersion) {
   if (!editorList || editorList.length === 0) {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
+  }
+  if (editorList.length > MAX_EDITORS_PER_TOKEN) {
+    throw new Error(
+      `Editor list has ${editorList.length} members; the maximum is ${MAX_EDITORS_PER_TOKEN}`
+    );
   }
   const leaves = editorList.map((e) =>
     makeLeaf(e.address, e.role, tokenId, setVersion)

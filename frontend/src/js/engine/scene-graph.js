@@ -682,27 +682,6 @@ async function captureAssetThumbnail(options = {}) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Mock registration
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * @param {string} nodeId
- * @param {BABYLON.AbstractMesh} mesh
- * @param {any[]} [_history]
- */
-function registerMockNode(nodeId, mesh, _history = []) {
-  const anchor = createAnchorNode(`anchor_${nodeId}`, state.scene);
-  mesh.parent = anchor;
-  mesh.metadata = {
-    nodeId,
-    isNodeRoot: true,
-  };
-  state.nodeMeshes.set(nodeId, [mesh]);
-  state.nodeAnchors.set(nodeId, anchor);
-  state._nonChromeMeshCache = null;
-}
-
 on(EVENTS.OUTLINER_REMOVE_REQUESTED, (/** @type {{nodeId?: string}} */ payload) => {
   // TODO(#18): implement node removal from manifest
   console.warn(
@@ -727,7 +706,6 @@ export {
   getNodeMeshes,
   getNodeSubMeshes,
   getNodeChildRef,
-  registerMockNode,
   captureAssetThumbnail,
   dismissCreatePulse,
 };

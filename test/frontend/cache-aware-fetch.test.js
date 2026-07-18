@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { jest } from "@jest/globals";
-import { gzip, ungzip } from "pako";
+import { gzipSync, gunzipSync } from "fflate";
 
 const BIG_BYTES = 65 * 1024;
 
@@ -42,7 +42,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
     const fetchRaw = jest.fn();
     const fetchDecompressed = jest.fn();
 
-    const base64 = await fetchCIDAsBase64(cid, { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES }, { fetchRaw, fetchDecompressed, decompress: ungzip });
+    const base64 = await fetchCIDAsBase64(cid, { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES }, { fetchRaw, fetchDecompressed, decompress: gunzipSync });
 
     expect(cacheGet).toHaveBeenCalledWith(hash);
     expect(cachePut).not.toHaveBeenCalled();
@@ -61,7 +61,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
     const fetchRaw = jest.fn(async () => raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
     const fetchDecompressed = jest.fn();
 
-    await fetchCIDAsBase64(cid, { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES }, { fetchRaw, fetchDecompressed, decompress: ungzip });
+    await fetchCIDAsBase64(cid, { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES }, { fetchRaw, fetchDecompressed, decompress: gunzipSync });
 
     expect(cacheGet).toHaveBeenCalledWith(hash);
     expect(fetchRaw).toHaveBeenCalledWith(cid);
@@ -72,14 +72,14 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
   it("decompresses cached compressed payloads", async () => {
     const original = new Uint8Array(BIG_BYTES);
     for (let i = 0; i < BIG_BYTES; i++) original[i] = Math.floor(Math.random() * 256);
-    const raw = gzip(original, { level: 1 });
+    const raw = gzipSync(original, { level: 1 });
     const hash = "11223344";
     const cid = "bafyCompressed";
     const { fetchCIDAsBase64, cachePut } = await load({
       cacheHits: new Map([[hash, { hash, cid, compressed: true, bytes: raw, bytesCount: raw.length }]]),
     });
 
-    const base64 = await fetchCIDAsBase64(cid, { hash, hashAlgo: "murmur3-32", compressed: true, bytes: raw.length }, { fetchRaw: jest.fn(), fetchDecompressed: jest.fn(), decompress: ungzip });
+    const base64 = await fetchCIDAsBase64(cid, { hash, hashAlgo: "murmur3-32", compressed: true, bytes: raw.length }, { fetchRaw: jest.fn(), fetchDecompressed: jest.fn(), decompress: gunzipSync });
 
     expect(cachePut).not.toHaveBeenCalled();
     const payload = dataUriPayload(`data:application/octet-stream;base64,${base64}`);
@@ -94,7 +94,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
     const fetchRaw = jest.fn();
     const fetchDecompressed = jest.fn(async () => raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
 
-    await fetchCIDAsBase64(cid, { hash: "smallhash", hashAlgo: "murmur3-32", compressed: false, bytes: 1024 }, { fetchRaw, fetchDecompressed, decompress: ungzip });
+    await fetchCIDAsBase64(cid, { hash: "smallhash", hashAlgo: "murmur3-32", compressed: false, bytes: 1024 }, { fetchRaw, fetchDecompressed, decompress: gunzipSync });
 
     expect(cacheGet).not.toHaveBeenCalled();
     expect(cachePut).not.toHaveBeenCalled();
@@ -110,7 +110,7 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
     const fetchRaw = jest.fn();
     const fetchDecompressed = jest.fn(async () => raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
 
-    await fetchCIDAsBase64(cid, null, { fetchRaw, fetchDecompressed, decompress: ungzip });
+    await fetchCIDAsBase64(cid, null, { fetchRaw, fetchDecompressed, decompress: gunzipSync });
 
     expect(cacheGet).not.toHaveBeenCalled();
     expect(cachePut).not.toHaveBeenCalled();

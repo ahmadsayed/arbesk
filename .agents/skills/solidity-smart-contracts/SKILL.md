@@ -15,7 +15,7 @@ Use this skill for any task involving Solidity smart contracts: architecture rev
 | `Transaction reverted` / `WRONG_CONTRACT`? | Address mismatch. Check root `.env` vs `blockchain/.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
 | `WRONG_CONTRACT` with MetaMask? | Smart account proxy. Validate events, not `receipt.to`. See [→ Smart Accounts](./references/smart-accounts.md) |
 | Session signing every request? | Case-sensitive address bug in localStorage. See [→ Session Auth](./references/session-auth.md) |
-| Need to add a contract function? | Write Solidity → add tests → add to `REQUIRED_ABI_FUNCTIONS` → recompile → redeploy → sync `.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
+| Need to add a contract function? | Write Solidity → add tests → add to `REQUIRED_PAID_ABI_FUNCTIONS` / `REQUIRED_FREE_ABI_FUNCTIONS` → recompile → redeploy → sync `.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
 | Debugging a failed generation tx? | Check `[GEN]` logs, validate receipt, decode events. See [→ Debugging](./references/debugging.md) |
 
 ## Contract Overview
@@ -31,26 +31,23 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
 
 **Solidity:** `^0.8.20` (compiled 0.8.24, Cancun EVM)
 **Dependencies:** OpenZeppelin v5 — ERC721, Ownable, ReentrancyGuard, Pausable
-**Test file:** `blockchain/test/ArbeskAsset.test.js` (~856 lines, 30+ test cases)
+**Test file:** `blockchain/test/ArbeskAsset.test.js` (~786 lines, 48 test cases, Merkle trees via `SimpleMerkleTree` from `@openzeppelin/merkle-tree`)
 **Security audit:** `blockchain/SECURITY.md` (6 documented findings)
 
 ### Storage Layout (key variables)
 
 | Variable | Type | Notes |
 |----------|------|-------|
-| `costPerGeneration` | `uint256` | 0.01 ether default |
-| `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC |
+| `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC (public getter) |
 | `usdcToken` | `IERC20` | address(0) = disabled |
 | `developerTreasuryWallet` | `address` | All payments go here |
-| `paymentNonce` | `mapping(address => uint256)` | Per-user replay guard |
 
 ### Function Categories
 
-- **Payment — Native:** `payForGeneration(bytes32,string)` — payable, nonReentrant
-- **Payment — USDC:** `payForGenerationWithUSDC(bytes32,string,uint8)` — tiered ERC-20
+- **Payment — USDC only:** `payForGenerationWithUSDC(bytes32,string,uint8)` — tiered ERC-20 (no native-token path)
 - **NFT Minting:** `publishAsset(string,uint256,bytes32,string)`, `tokenURI(uint256)`
 - **Collaboration:** `updateAssetURI`, `updateEditors`, `burn`
-- **Admin:** `setCost`, `setTreasury`, `setUsdcToken`, `setTierCost`, `pause`, `unpause`, `withdraw`
+- **Admin:** `setTreasury`, `setUsdcToken`, `setTierCost`, `withdrawUSDC`, `pause`, `unpause`
 
 ### Tier Pricing (6-decimal USDC)
 
@@ -64,7 +61,6 @@ Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
 ### Event Signatures (keccak256 topic[0])
 
 ```
-AssetGenerationPaid(address,bytes32,string,uint256,uint256)
 AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)
 AssetPublished(address,uint256,string)
 EditorSetChanged(uint256,bytes32,uint256)

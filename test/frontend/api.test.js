@@ -537,7 +537,7 @@ describe("getUploadCredentials", () => {
 });
 
 describe("unpinAssetCids", () => {
-  test("sends the correct headers and body", async () => {
+  test("sends the correct headers and body with token context", async () => {
     const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { unpinned: ["bafyA"], count: 1 } }));
     const { unpinAssetCids } = await loadApi({ fetchMock });
     localStorage.setItem(
@@ -545,12 +545,36 @@ describe("unpinAssetCids", () => {
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    const result = await unpinAssetCids("bafyManifest", TEST_ADDRESS);
+    const result = await unpinAssetCids("bafyManifest", {
+      tokenId: "42",
+      chainId: 31415822,
+      contractAddress: "0x1234567890123456789012345678901234567890",
+      proof: ["0xProof"],
+    });
     expect(result).toEqual({ unpinned: ["bafyA"], count: 1 });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/ipfs\/unpin$/);
     expect(opts.headers.Authorization).toBe(`Session ${TEST_TOKEN}`);
-    expect(JSON.parse(opts.body)).toEqual({ cid: "bafyManifest", actorAddress: TEST_ADDRESS });
+    expect(JSON.parse(opts.body)).toEqual({
+      cid: "bafyManifest",
+      tokenId: "42",
+      chainId: 31415822,
+      contractAddress: "0x1234567890123456789012345678901234567890",
+      proof: ["0xProof"],
+    });
+  });
+
+  test("omits missing/invalid token context fields from the body", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { unpinned: ["bafyA"], count: 1 } }));
+    const { unpinAssetCids } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await unpinAssetCids("bafyManifest", { chainId: NaN });
+    const [, opts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(opts.body)).toEqual({ cid: "bafyManifest" });
   });
 
   test("retries once on a 401 and then succeeds", async () => {

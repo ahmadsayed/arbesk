@@ -70,14 +70,15 @@ function createSession(address) {
 
 ### SIWE Chain ID Support
 
-When adding a new network, update `SUPPORTED_CHAIN_IDS` in `src/api/siwe-verify.js`:
+`SUPPORTED_CHAIN_IDS` lives in `constants/chains.js` (derived from `CHAIN_IDS` — currently Hardhat Local `31415822` + Base Sepolia `84532`) and is imported by `src/api/siwe-verify.js`. When adding a new network, add the chain ID to `CHAIN_IDS` in `constants/chains.js`:
 
 ```javascript
-const SUPPORTED_CHAIN_IDS = [
-  31415822, // Hardhat Local
-  11155420, // Optimism Sepolia
-  10,       // Optimism Mainnet
-];
+// constants/chains.js
+export const CHAIN_IDS = {
+  HARDHAT_LOCAL: 31415822,
+  BASE_TESTNET: 84532,
+};
+export const SUPPORTED_CHAIN_IDS = Object.values(CHAIN_IDS);
 ```
 
 If the chain ID is not in this list, session creation returns `400 Bad Request`.

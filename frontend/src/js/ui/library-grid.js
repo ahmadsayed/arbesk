@@ -2,7 +2,7 @@
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
 import { escapeHtml } from "../utils/html.js";
-import { getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { loadThumbnailInto } from "../utils/thumbnail.js";
 import {
   computeRangeSelection,
   filterItems,
@@ -82,28 +82,6 @@ export function createItemElement(item, viewMode) {
   return el;
 }
 
-async function loadItemThumbnail(el, cid, name) {
-  if (!cid || !el) return;
-  try {
-    const blob = await getBlobFromRemoteIPFS(cid);
-    const objectUrl = URL.createObjectURL(blob);
-    const img = document.createElement("img");
-    img.alt = `${name || "Item"} thumbnail`;
-    img.loading = "lazy";
-    img.src = objectUrl;
-    img.addEventListener("load", () => URL.revokeObjectURL(objectUrl), {
-      once: true,
-    });
-    img.addEventListener("error", () => URL.revokeObjectURL(objectUrl), {
-      once: true,
-    });
-    el.textContent = "";
-    el.appendChild(img);
-  } catch (err) {
-    console.warn("Failed to load library thumbnail", cid, err);
-  }
-}
-
 function loadVisibleThumbnails(container) {
   container?.querySelectorAll("[data-thumbnail-cid]").forEach((el) => {
     const cid = el.dataset.thumbnailCid;
@@ -111,7 +89,7 @@ function loadVisibleThumbnails(container) {
     const name = el
       .closest("[data-id]")
       ?.querySelector(".library-item-name")?.textContent;
-    loadItemThumbnail(el, cid, name);
+    loadThumbnailInto(el, cid, name || "Item");
   });
 }
 

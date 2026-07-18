@@ -8,6 +8,7 @@
 import { validateSession } from "./sessions.js";
 import { getContractAddress, getWeb3 } from "../config.js";
 import { makeLeaf, verifyProof } from "./merkle-editors-node.js";
+import { CHAIN_IDS } from "../../constants/chains.js";
 
 /**
  * Minimal ABI for owner/editor checks.
@@ -34,13 +35,31 @@ const MINIMAL_COLLAB_ABI = [
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     type: "function",
   },
+  {
+    constant: true,
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "tokenURI",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
+    type: "function",
+  },
 ];
 
 /**
- * Default chain ID for local dev when chainId not supplied.
+ * Resolve the collection contract for a chain, honoring an optional explicit
+ * contract address override.
+ * @param {number|null} chainId - Chain ID (null for default)
+ * @param {string} [contractAddressOverride] - Explicit contract address
+ * @returns {{ cid: number|null, contractAddr: string, contract: any }}
  */
-function defaultChainId() {
-  return 31415822; // Matches CHAIN_IDS.HARDHAT_LOCAL
+function _resolveCollabContract(chainId, contractAddressOverride) {
+  const cid = chainId ? Number(chainId) : null;
+  const contractAddr = contractAddressOverride || getContractAddress(cid);
+  if (!contractAddr) {
+    throw new Error(`No contract address for chain ${chainId || "default"}`);
+  }
+  const w3 = getWeb3(cid);
+  const contract = new w3.eth.Contract(MINIMAL_COLLAB_ABI, contractAddr);
+  return { cid, contractAddr, contract };
 }
 
 /**
@@ -51,6 +70,8 @@ function defaultChainId() {
  * @param {object} [opts] - Optional proof for non-owner collaborators
  * @param {string[]} [opts.proof] - Merkle proof (bytes32 hex strings)
  * @param {number} [opts.requiredRole] - Claimed collaborator role (1=Viewer, 2=Editor)
+ * @param {string} [opts.contractAddress] - Explicit contract address override
+ *   (defaults to the configured contract for the chain)
  * @returns {Promise<{allowed: boolean, assetId: string, chainId: number|null, isOwner: boolean, role: number}>}
  */
 export async function checkAssetAccess(tokenId, chainId, address, opts = {}) {
@@ -66,15 +87,12 @@ export async function checkAssetAccess(tokenId, chainId, address, opts = {}) {
     throw new Error("Invalid tokenId");
   }
 
-  const cid = chainId ? Number(chainId) : null;
-  const contractAddr = getContractAddress(cid);
-  if (!contractAddr) {
-    throw new Error(`No contract address for chain ${chainId || "default"}`);
-  }
+  const { cid, contractAddr, contract } = _resolveCollabContract(
+    chainId,
+    opts.contractAddress,
+  );
 
-  const assetId = `${cid || defaultChainId()}:${contractAddr}:${id.toString()}`;
-  const w3 = getWeb3(cid);
-  const contract = new w3.eth.Contract(MINIMAL_COLLAB_ABI, contractAddr);
+  const assetId = `${cid || CHAIN_IDS.HARDHAT_LOCAL}:${contractAddr}:${id.toString()}`;
 
   const owner = await contract.methods.ownerOf(id.toString()).call();
 
@@ -150,8 +168,18 @@ export async function authorizeAssetAccess(token, tokenId, chainId, opts = {}) {
 }
 
 /**
- * Validate session token only.
- * @param {string} token - Session token
- * @returns {string|null} Wallet address or null if invalid
+ * Read `tokenURI(tokenId)` from the collection contract — the CID of the
+ * token's current collection manifest. Throws when the token does not exist
+ * (e.g. burned) or the chain/contract is unknown.
+ *
+ * @param {string|number} tokenId - Token ID
+ * @param {number|null} chainId - Chain ID (null for default)
+ * @param {object} [opts]
+ * @param {string} [opts.contractAddress] - Explicit contract address override
+ * @returns {Promise<string>}
  */
-export { validateSession };
+export async function getTokenUri(tokenId, chainId, opts = {}) {
+  const { contract } = _resolveCollabContract(chainId, opts.contractAddress);
+  const uri = await contract.methods.tokenURI(String(tokenId)).call();
+  return typeof uri === "string" ? uri : String(uri || "");
+}

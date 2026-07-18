@@ -10,7 +10,7 @@ import "./ArbeskAssetBase.sol";
  * @title ArbeskAsset
  * @dev Paid-tier contract: PayGo + NFT + Merkle-root editor architecture.
  *      Inherits base NFT/Merkle logic from ArbeskAssetBase.
- *      Adds native-token and USDC payment paths for 3D asset generation.
+ *      Adds the USDC payment path for 3D asset generation.
  *
  *      MAX_EDITORS_PER_TOKEN = 5000 (safety net — full list on IPFS).
  */
@@ -25,16 +25,10 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
     }
 
     // ── Custom Errors ──
-    error IncorrectPaymentAmount();
-    error InvalidPromptLength();
-    error InvalidNodeId();
-    error PaymentAlreadyUsed();
-    error TreasuryTransferFailed();
     error UsdcPaymentsDisabled();
     error TierCostNotSet();
     error InvalidCost();
     error NoBalanceToWithdraw();
-    error WithdrawFailed();
     error UsdcTokenNotSet();
     error DirectTransferNotAllowed();
 
@@ -42,24 +36,11 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
     uint256 public constant MAX_EDITORS_PER_TOKEN = 5000;
 
     // ── State ──
-    uint256 public costPerGeneration = 0.01 ether;
     mapping(Tier => uint256) public tierCosts;
     IERC20 public usdcToken;
     address public developerTreasuryWallet;
 
-    /// @dev Per-user nonce for payment replay protection.
-    ///      First payment per user creates a new storage slot (zero→non-zero);
-    ///      all subsequent payments overwrite that slot (zero storage gas).
-    mapping(address => uint256) public paymentNonce;
-
     // ── Events ──
-    event AssetGenerationPaid(
-        address indexed userWallet,
-        bytes32 indexed nodeId,
-        string prompt,
-        uint256 amount,
-        uint256 timestamp
-    );
     event AssetGenerationPaidUSDC(
         address indexed userWallet,
         bytes32 indexed nodeId,
@@ -72,7 +53,6 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         address indexed previousWallet,
         address indexed newWallet
     );
-    event CostUpdated(uint256 previousCost, uint256 newCost);
     event TierCostUpdated(
         Tier indexed tier,
         uint256 previousCost,
@@ -98,34 +78,6 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         tierCosts[Tier.Pro] = 2500000;
     }
 
-    // ── Payment — Native Token ──
-
-    function payForGeneration(
-        bytes32 nodeId,
-        string calldata prompt
-    ) external payable nonReentrant whenNotPaused {
-        if (msg.value != costPerGeneration) revert IncorrectPaymentAmount();
-        uint256 promptLen = bytes(prompt).length;
-        if (promptLen == 0 || promptLen > 500) revert InvalidPromptLength();
-        if (nodeId == bytes32(0)) revert InvalidNodeId();
-
-        uint256 nonce = paymentNonce[msg.sender];
-        unchecked {
-            paymentNonce[msg.sender] = nonce + 1;
-        }
-
-        (bool sent, ) = developerTreasuryWallet.call{value: msg.value}("");
-        if (!sent) revert TreasuryTransferFailed();
-
-        emit AssetGenerationPaid(
-            msg.sender,
-            nodeId,
-            prompt,
-            msg.value,
-            block.timestamp
-        );
-    }
-
     // ── Payment — USDC ──
 
     function payForGenerationWithUSDC(
@@ -134,17 +86,10 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         Tier tier
     ) external nonReentrant whenNotPaused {
         if (address(usdcToken) == address(0)) revert UsdcPaymentsDisabled();
-        uint256 promptLen = bytes(prompt).length;
-        if (promptLen == 0 || promptLen > 500) revert InvalidPromptLength();
-        if (nodeId == bytes32(0)) revert InvalidNodeId();
+        _validateGenerationInput(nodeId, prompt);
 
         uint256 cost = tierCosts[tier];
         if (cost == 0) revert TierCostNotSet();
-
-        uint256 nonce = paymentNonce[msg.sender];
-        unchecked {
-            paymentNonce[msg.sender] = nonce + 1;
-        }
 
         usdcToken.safeTransferFrom(msg.sender, developerTreasuryWallet, cost);
 
@@ -158,22 +103,7 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         );
     }
 
-    function getTierCost(Tier tier) external view returns (uint256) {
-        return tierCosts[tier];
-    }
-
-    function getPaymentNonce(address user) external view returns (uint256) {
-        return paymentNonce[user];
-    }
-
     // ── Admin ──
-
-    function setCost(uint256 newCost) external onlyOwner {
-        if (newCost == 0) revert InvalidCost();
-        uint256 oldCost = costPerGeneration;
-        costPerGeneration = newCost;
-        emit CostUpdated(oldCost, newCost);
-    }
 
     function setTreasury(address newWallet) external onlyOwner {
         if (newWallet == address(0)) revert ZeroAddress();
@@ -193,13 +123,6 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         uint256 oldCost = tierCosts[tier];
         tierCosts[tier] = newCost;
         emit TierCostUpdated(tier, oldCost, newCost);
-    }
-
-    function withdraw() external onlyOwner nonReentrant {
-        uint256 balance = address(this).balance;
-        if (balance == 0) revert NoBalanceToWithdraw();
-        (bool sent, ) = developerTreasuryWallet.call{value: balance}("");
-        if (!sent) revert WithdrawFailed();
     }
 
     function withdrawUSDC() external onlyOwner nonReentrant {

@@ -17,22 +17,17 @@ import { walletState } from "../state/wallet-state.js";
 import { showToast } from "../ui/toasts.js";
 import { getUsdcToken as getNetworkUsdcToken } from "./network-config.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
-import { web3, contract } from "./wallet-core.js";
+import { web3, getActiveContract } from "./wallet-core.js";
 
 // ─── Tier constants ──────────────────────────────────────────────────────────
 
 /** Tier names for USDC quality levels */
 const TIER_NAMES = ["Basic", "Standard", "Premium", "Pro"];
-const TIER_COSTS_USDC = { 0: "0.75", 1: "1.25", 2: "1.75", 3: "2.50" };
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
 function _getWeb3() {
   return web3 || window.web3 || null;
-}
-
-function _getContract() {
-  return contract || walletState.get().contract || null;
 }
 
 /**
@@ -56,7 +51,7 @@ function _getContractAddress() {
  * @returns {boolean}
  */
 function isFreeTierContract() {
-  const c = _getContract();
+  const c = getActiveContract();
   return !!c && typeof c.methods.recordGeneration === "function";
 }
 
@@ -97,7 +92,7 @@ async function recordGeneration(nodeId, prompt) {
     });
     return null;
   }
-  const c = _getContract();
+  const c = getActiveContract();
   const contractAddress = _getContractAddress();
   if (!c || !contractAddress) {
     showToast({
@@ -182,7 +177,7 @@ async function payWithUSDC(nodeId, prompt, tier) {
     });
     return null;
   }
-  const c = _getContract();
+  const c = getActiveContract();
   const contractAddress = _getContractAddress();
   if (!c || !contractAddress) {
     showToast({
@@ -458,6 +453,4 @@ export {
   payWithUSDC,
   recordGeneration,
   isFreeTierContract,
-  TIER_NAMES,
-  TIER_COSTS_USDC,
 };

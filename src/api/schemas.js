@@ -13,8 +13,6 @@ export const ethereumAddressSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
 
-export const hexStringSchema = z.string().regex(/^0x[a-fA-F0-9]+$/, "Invalid hex string");
-
 export const tokenIdSchema = z
   .union([z.string().min(1), z.number().int().nonnegative()])
   .transform((v) => String(v));
@@ -31,10 +29,7 @@ export const chainIdSchema = z
 export const createSessionSchema = z.object({
   message: z.string().min(1, "message is required"),
   signature: z.string().min(1, "signature is required"),
-  eoaAddress: z
-    .string()
-    .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid EOA address")
-    .optional(),
+  eoaAddress: ethereumAddressSchema.optional(),
 });
 
 export const generateAssetSchema = z.object({
@@ -53,6 +48,17 @@ export const snapshotCommentsSchema = z.object({
 
 export const unpinSchema = z.object({
   cid: cidSchema,
+  // uint256-safe: decimal string, never a JS number.
+  tokenId: z.string().regex(/^\d+$/, "tokenId must be a decimal string"),
+  chainId: z.number().int().positive().optional(),
+  contractAddress: ethereumAddressSchema.optional(),
+  proof: z
+    .array(
+      z
+        .string()
+        .regex(/^0x[a-fA-F0-9]{64}$/, "proof entries must be bytes32 hex"),
+    )
+    .optional(),
 });
 
 export const uploadUrlsSchema = z.object({
@@ -87,11 +93,36 @@ export const gcSchema = z.object({
 
 const transformMatrixSchema = z.array(z.number()).length(16).optional();
 
+// Thumbnails are captured client-side and uploaded to IPFS directly; the
+// manifest stores a metadata object (never a bare CID string). Only `cid` is
+// load-bearing — the manifest chain walker unpins it with the manifest — the
+// rest is best-effort metadata written by the frontend
+// (engine/scene-graph.js captureAssetThumbnail).
+const thumbnailSchema = z.object({
+  cid: z.string().min(1),
+  type: z.string().optional(),
+  mime: z.string().optional(),
+  format: z.string().optional(),
+  path: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  bytes: z.number().optional(),
+  timestamp: z.number().optional(),
+});
+
 const historyEntrySchema = z.object({
   timestamp: z.union([z.string(), z.number()]),
   node_id: z.string().optional(),
   operation: z.string(),
   params: z.record(z.unknown()).optional(),
+  // Per-version source snapshot (see manifest-chain-walker.js): the glTF CID
+  // is required, the UnixFS bundle directory CID is optional metadata.
+  src: z
+    .object({
+      cid: z.string().min(1),
+      bundleCid: z.string().min(1).optional(),
+    })
+    .optional(),
 });
 
 const sourceSchema = z.object({
@@ -130,7 +161,7 @@ export const manifestSchema = z.object({
   assets: z.record(z.string().min(1)).optional(),
   prev_manifest_cid: z.union([z.string().min(1), z.null()]).optional(),
   prev_asset_manifest_cid: z.union([z.string().min(1), z.null()]).optional(),
-  thumbnail: z.string().min(1).optional(),
+  thumbnail: thumbnailSchema.optional(),
   comments_archive_cid: z.string().min(1).optional(),
 });
 

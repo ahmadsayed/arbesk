@@ -145,7 +145,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | `src/api/comments-archive.js` | Snapshots Nostr comment threads to IPFS on republish |
 | `src/api/chat-proxy.js` | WebSocket bridge: browser ↔ Nostr relay (session-gated) |
 | `src/api/nostr-relay.js` | Shared relay primitives (used by chat-proxy + comments-archive) |
-| `src/api/manifest-utils.js` | getSceneNodes (used by unpin route) |
+| `src/api/manifest-utils.js` | getSceneNodes (used by the manifest chain walker) |
 | `src/api/ipfs-utils.js` | catManifest() with timeout/abort |
 | `src/config.js` | Multi-network Web3 config (Hardhat local, Base Sepolia Testnet) |
 
@@ -475,7 +475,7 @@ The collection token's `tokenURI` always points to the latest collection manifes
 
 ### 5.4 Library View (inside the unified SPA)
 
-The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). `frontend/src/js/app/router.js` swaps visibility between `#studioView` and `#libraryView`; the Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is still bootstrapped by `library-init.js` and rendered by `library-controller.js`, `library-grid.js`, `library-toolbar.js`, and `library-context-menu.js`.
+The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). `frontend/src/js/app/router.js` swaps visibility between `#studioView` and `#libraryView`; the Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is bootstrapped by `app-init.js` and rendered by `library-controller.js`, `library-grid.js`, `library-toolbar.js`, and `library-context-menu.js`.
 
 ---
 
@@ -516,7 +516,7 @@ The page has two mutually exclusive sections:
 - **`#libraryGate`** — shown when no wallet is connected. Displays a wallet icon, "Sign in to continue", and a "Login / Signup" button that opens the wallet modal.
 - **`#libraryMain`** — shown after wallet connect. Contains the toolbar, content area, and status bar.
 
-The gate is toggled by `applyWalletGate()` in `library-init.js` in response to `WALLET_STATE_CHANGED` events.
+The gate is toggled by `applyWalletGate()` in `library-controller.js` in response to `WALLET_STATE_CHANGED` events.
 
 ---
 
@@ -686,7 +686,7 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 | `frontend/src/pug/app.pug` | Unified Studio + Library SPA template → compiled to `frontend/dist/app.html` |
 | `frontend/src/js/app/router.js` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume |
 | `frontend/src/js/ui/header-wallet-button.js` | Shared header wallet button; shows email for CDP users and hides the network selector |
-| `frontend/src/js/library-init.js` | Library view bootstrap: wallet gate, data loading, event wiring |
+| `frontend/src/js/app-init.js` | SPA bootstrap incl. Library view wiring: wallet gate, data loading, event wiring |
 | `frontend/src/js/ui/library-controller.js` | Library view orchestration and Studio handoff |
 | `frontend/src/js/ui/library-grid.js` | Grid/list rendering, selection, keyboard handling, rubber-band |
 | `frontend/src/js/ui/library-toolbar.js` | Toolbar rendering and event handlers |
@@ -827,7 +827,7 @@ The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives act
 - OpenSCAD WASM integration is schema-compatible but deferred.
 - Phase 5 server-side micro-ledger is not implemented (`anchorManifest()` stubbed; ledger panel derives activities from manifest chain only).
 - `GET /api/health` is a planned route, not a current backend route.
-- IPFS browser cache is disabled by default (`IPFS_CACHE_ENABLED = false` in `remote-ipfs.js`).
+- IPFS browser reads rely on the browser HTTP cache (immutable CID responses) + request coalescing; the glTF pipeline adds memory + IndexedDB caching (`utils/content-cache.js`). There is no app-level gateway read cache.
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.
 - Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`). Chain IDs are consolidated in `constants/chains.js`.
 - Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).

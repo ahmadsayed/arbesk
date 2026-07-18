@@ -31,7 +31,6 @@ async function load({ workerAvailable, execImpl } = {}) {
     getRawArrayBufferFromRemoteIPFS: jest.fn(),
     getManifestChain: jest.fn(),
     isIpfsCidReachable: jest.fn(),
-    clearRemoteIPFSCache: jest.fn(),
   }));
 
   const mod = await import("../../frontend/src/js/gltf/async-gltf.js");

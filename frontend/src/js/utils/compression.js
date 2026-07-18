@@ -2,12 +2,12 @@
 /**
  * Browser-safe gzip / gunzip helpers.
  *
- * Uses `pako` (pure-JS zlib port) so it works in the browser without
+ * Uses `fflate` (small pure-JS zlib) so it works in the browser without
  * bundler polyfills. The consumer code is responsible for deciding whether
  * to compress; reads auto-detect the gzip magic bytes and decompress.
  */
 
-import { gzip, ungzip } from "pako";
+import { gzipSync, gunzipSync } from "fflate";
 
 const GZIP_MAGIC = new Uint8Array([0x1f, 0x8b]);
 
@@ -49,7 +49,7 @@ export function isGzipped(data) {
  * @returns {Uint8Array}
  */
 export function compress(data) {
-  return gzip(toUint8Array(data), { level: 9 });
+  return gzipSync(toUint8Array(data), { level: 9 });
 }
 
 /**
@@ -58,23 +58,5 @@ export function compress(data) {
  * @returns {Uint8Array}
  */
 export function decompress(data) {
-  return ungzip(toBytes(data));
-}
-
-/**
- * Compress a UTF-8 string and return bytes.
- * @param {string} str
- * @returns {Uint8Array}
- */
-export function compressString(str) {
-  return compress(str);
-}
-
-/**
- * Decompress gzip bytes and return a UTF-8 string.
- * @param {Uint8Array|ArrayBuffer} data
- * @returns {string}
- */
-export function decompressToString(data) {
-  return new TextDecoder().decode(decompress(data));
+  return gunzipSync(toBytes(data));
 }

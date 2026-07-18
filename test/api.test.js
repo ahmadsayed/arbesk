@@ -120,6 +120,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     // Mutable state for GC token discovery tests.
     const gcTokens = new Map();
     const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    const ZERO_ROOT =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+    // A token registered with extras.contractAddress is only "visible" on
+    // that contract; any other contract address behaves as if the token does
+    // not exist (like querying the wrong tier's contract).
+    const visibleOn = (t, address) =>
+      !t?.contractAddress ||
+      !address ||
+      String(t.contractAddress).toLowerCase() === String(address).toLowerCase();
 
     jest.unstable_mockModule("web3", () => ({
       default: jest.fn(() => ({
@@ -154,7 +164,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               };
             }),
           },
-          Contract: jest.fn(() => ({
+          Contract: jest.fn((_abi, address) => ({
             getPastEvents: jest.fn(async (event, _opts) => {
               if (event !== "Transfer") return [];
               // Return mint events for every registered GC token.
@@ -169,35 +179,43 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               );
             }),
             methods: {
-              costPerGeneration: jest.fn(() => ({
-                call: jest.fn(() => Promise.resolve("10000000000000000")),
-              })),
-              payForGeneration: jest.fn(() => ({
-                estimateGas: jest.fn(() => Promise.resolve(100000)),
-                send: jest.fn(() =>
-                  Promise.resolve({
-                    transactionHash: "0xRealTxHash",
-                    blockNumber: 123,
-                  }),
-                ),
-              })),
               tokenURI: jest.fn((tokenId) => ({
                 call: jest.fn(() => {
                   const t = gcTokens.get(String(tokenId));
-                  if (t) return Promise.resolve(t.tokenURI);
+                  if (t && visibleOn(t, address)) {
+                    return Promise.resolve(t.tokenURI);
+                  }
+                  if (t) throw new Error("Token does not exist");
                   return Promise.resolve(_tokenURICid);
                 }),
               })),
               ownerOf: jest.fn((tokenId) => ({
                 call: jest.fn(() => {
                   const t = gcTokens.get(String(tokenId));
-                  if (!t) throw new Error("Token does not exist");
+                  if (!t || !visibleOn(t, address)) {
+                    throw new Error("Token does not exist");
+                  }
                   return Promise.resolve(t.owner);
+                }),
+              })),
+              editorRoot: jest.fn((tokenId) => ({
+                call: jest.fn(() => {
+                  const t = gcTokens.get(String(tokenId));
+                  if (!visibleOn(t, address)) return Promise.resolve(ZERO_ROOT);
+                  return Promise.resolve(t?.editorRoot || ZERO_ROOT);
+                }),
+              })),
+              editorSetVersion: jest.fn((tokenId) => ({
+                call: jest.fn(() => {
+                  const t = gcTokens.get(String(tokenId));
+                  if (!visibleOn(t, address)) return Promise.resolve("1");
+                  return Promise.resolve(t?.editorSetVersion || "1");
                 }),
               })),
               editorListURI: jest.fn((tokenId) => ({
                 call: jest.fn(() => {
                   const t = gcTokens.get(String(tokenId));
+                  if (!visibleOn(t, address)) return Promise.resolve("");
                   return Promise.resolve(t?.editorListURI || "");
                 }),
               })),
@@ -211,11 +229,20 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     globalThis.__setTokenURICid = (cid) => {
       _tokenURICid = cid;
     };
-    globalThis.__registerGCToken = (tokenId, tokenURI, owner, editorListURI) => {
+    globalThis.__registerGCToken = (
+      tokenId,
+      tokenURI,
+      owner,
+      editorListURI,
+      extras = {},
+    ) => {
       gcTokens.set(String(tokenId), {
         tokenURI,
         owner: owner || "0xOwner",
         editorListURI: editorListURI || "",
+        editorRoot: extras.editorRoot || null,
+        editorSetVersion: extras.editorSetVersion || "1",
+        contractAddress: extras.contractAddress || null,
       });
     };
     globalThis.__burnGCToken = (tokenId) => {
@@ -619,6 +646,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   });
 
   describe("POST /api/v1/ipfs/unpin via storage", () => {
+    // Default session wallet used by makeSessionHeader().
+    const SESSION_WALLET = "0x1234567890123456789012345678901234567890";
+
+    beforeEach(() => globalThis.__clearGCTokens?.());
+
     it("rejects without a session (401)", async () => {
       const startCid = saveManifestToStorage({
         version: 1,
@@ -628,8 +660,226 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
-        .send({ cid: startCid });
+        .send({ cid: startCid, tokenId: "1" });
       expect(res.status).toBe(401);
+    });
+
+    it("rejects when tokenId is missing (400)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: "bafyWhatever" });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("rejects a non-decimal tokenId (400)", async () => {
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: "bafyWhatever", tokenId: "abc" });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("rejects when the session wallet is not owner/editor (403)", async () => {
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      globalThis.__registerGCToken(
+        "1",
+        startCid,
+        "0x0000000000000000000000000000000000000002",
+      );
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: startCid, tokenId: "1" });
+      expect(res.status).toBe(403);
+      expect(res.body.error?.code).toBe("FORBIDDEN");
+    });
+
+    it("rejects when the CID does not belong to the claimed token (400)", async () => {
+      // The session wallet owns token 1, but bafyVictimManifest is not the
+      // tokenURI CID nor an asset in its collection.
+      const collectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { a1: "bafySomeoneElsesAsset" },
+      });
+      globalThis.__registerGCToken("1", collectionCid, SESSION_WALLET);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: "bafyVictimManifest", tokenId: "1" });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("CID_NOT_IN_TOKEN");
+    });
+
+    it("allows an editor with a valid Merkle proof", async () => {
+      const { SimpleMerkleTree } = await import("@openzeppelin/merkle-tree");
+      const { makeLeaf } = await import("../src/api/merkle-editors-node.js");
+
+      const tokenId = "7";
+      const setVersion = "1";
+      const leaves = [
+        makeLeaf(SESSION_WALLET, 2, tokenId, setVersion),
+        makeLeaf("0x0000000000000000000000000000000000000002", 2, tokenId, setVersion),
+      ];
+      const tree = SimpleMerkleTree.of(leaves);
+      const proof = tree.getProof(leaves[0]);
+
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      // Owned by someone else; session wallet is only an editor.
+      globalThis.__registerGCToken(
+        tokenId,
+        startCid,
+        "0x0000000000000000000000000000000000000003",
+        "",
+        { editorRoot: tree.root, editorSetVersion: setVersion },
+      );
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: startCid, tokenId, proof });
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(startCid);
+    });
+
+    it("accepts an asset CID from a previous collection version (delete-asset flow)", async () => {
+      // The orphaned asset manifest sits one step back in the collection's
+      // prev_asset_manifest_cid chain.
+      const orphanedAssetCid = saveManifestToStorage({
+        version: 1,
+        type: "asset",
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      const oldCollectionCid = saveManifestToStorage({
+        version: 1,
+        type: "collection",
+        prev_asset_manifest_cid: null,
+        assets: { a1: orphanedAssetCid },
+      });
+      const newCollectionCid = saveManifestToStorage({
+        version: 2,
+        type: "collection",
+        prev_asset_manifest_cid: oldCollectionCid,
+        assets: {},
+      });
+      globalThis.__registerGCToken("1", newCollectionCid, SESSION_WALLET);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: orphanedAssetCid, tokenId: "1" });
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(orphanedAssetCid);
+    });
+
+    it("rejects a contractAddress that is not configured for the chain (400)", async () => {
+      // Guards against pointing the ownership/membership checks at an
+      // attacker-deployed contract that spoofs ownerOf()/tokenURI().
+      const { CHAIN_IDS } = await import("../constants/chains.js");
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      globalThis.__registerGCToken("1", startCid, SESSION_WALLET);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          cid: startCid,
+          tokenId: "1",
+          chainId: CHAIN_IDS.HARDHAT_LOCAL,
+          contractAddress: "0x0000000000000000000000000000000000000bad",
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_CONTRACT");
+    });
+
+    it("accepts an allowlisted contractAddress from the body", async () => {
+      const { NETWORK_CONFIGS } = await import("../src/config.js");
+      const { CHAIN_IDS } = await import("../constants/chains.js");
+      const freeAddr = NETWORK_CONFIGS[CHAIN_IDS.HARDHAT_LOCAL].contractAddress;
+
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      globalThis.__registerGCToken("1", startCid, SESSION_WALLET);
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          cid: startCid,
+          tokenId: "1",
+          chainId: CHAIN_IDS.HARDHAT_LOCAL,
+          contractAddress: freeAddr,
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(startCid);
+    });
+
+    it("falls back to the paid contract when the token only exists there", async () => {
+      const { NETWORK_CONFIGS } = await import("../src/config.js");
+      const { CHAIN_IDS } = await import("../constants/chains.js");
+      const paidAddr =
+        NETWORK_CONFIGS[CHAIN_IDS.HARDHAT_LOCAL].paidContractAddress;
+
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      // Token lives ONLY on the paid contract: the free-tier candidate misses
+      // (ownerOf reverts), the paid candidate matches.
+      globalThis.__registerGCToken("9", startCid, SESSION_WALLET, "", {
+        contractAddress: paidAddr,
+      });
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: startCid, tokenId: "9", chainId: CHAIN_IDS.HARDHAT_LOCAL });
+      expect(res.status).toBe(200);
+      expect(res.body.unpinned).toContain(startCid);
+    });
+
+    it("403s when the token exists on a configured contract but the caller is not owner/editor", async () => {
+      const { CHAIN_IDS } = await import("../constants/chains.js");
+      const startCid = saveManifestToStorage({
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      });
+      globalThis.__registerGCToken(
+        "1",
+        startCid,
+        "0x0000000000000000000000000000000000000002",
+      );
+
+      const res = await request(app)
+        .post("/api/v1/ipfs/unpin")
+        .set("Authorization", await makeSessionHeader())
+        .send({ cid: startCid, tokenId: "1", chainId: CHAIN_IDS.HARDHAT_LOCAL });
+      expect(res.status).toBe(403);
+      expect(res.body.error?.code).toBe("FORBIDDEN");
     });
 
     it("walks the chain and reports unpinned CIDs", async () => {
@@ -638,11 +888,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         prev_asset_manifest_cid: null,
         scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
       });
+      globalThis.__registerGCToken("1", startCid, SESSION_WALLET);
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
-        .send({ cid: startCid });
+        .send({ cid: startCid, tokenId: "1" });
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.unpinned)).toBe(true);
       expect(res.body.unpinned).toContain(startCid);
@@ -661,11 +912,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           ],
         },
       });
+      globalThis.__registerGCToken("1", startCid, SESSION_WALLET);
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
-        .send({ cid: startCid });
+        .send({ cid: startCid, tokenId: "1" });
       expect(res.status).toBe(200);
       // The manifest itself is unpinned, but source CIDs are shared via dedup
       // and must survive the delete so other assets can still reference them.
@@ -695,11 +947,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       );
       // Source asset must exist and be readable JSON for the ref-walker.
       ipfsStorage.set("bafySource", '{"buffers":[{"uri":"ipfs://bafyBuffer"}]}');
+      globalThis.__registerGCToken("1", startCid, SESSION_WALLET);
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
-        .send({ cid: startCid });
+        .send({ cid: startCid, tokenId: "1" });
       expect(res.status).toBe(200);
       expect(res.body.errors).toBeUndefined();
       // Manifest chain CIDs are asset-unique and get unpinned.
@@ -732,12 +985,13 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         prev_asset_manifest_cid: null,
         scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
       });
+      globalThis.__registerGCToken("1", cowboy2Cid, SESSION_WALLET);
 
       // Deleting cowboy2 must not unpin the shared mesh or its buffer.
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
-        .send({ cid: cowboy2Cid });
+        .send({ cid: cowboy2Cid, tokenId: "1" });
       expect(res.status).toBe(200);
       expect(res.body.unpinned).toContain(cowboy2Cid);
       expect(res.body.unpinned).not.toContain("bafySharedMesh");
@@ -760,11 +1014,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         prev_asset_manifest_cid: null,
         assets: { a1: assetCid },
       });
+      globalThis.__registerGCToken("1", collectionCid, SESSION_WALLET);
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
-        .send({ cid: collectionCid });
+        .send({ cid: collectionCid, tokenId: "1" });
 
       expect(res.status).toBe(200);
       expect(res.body.unpinned).toContain(collectionCid);
@@ -780,11 +1035,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         comments_archive_cid: "bafyComments",
         scene: { nodes: [] },
       });
+      globalThis.__registerGCToken("1", cid, SESSION_WALLET);
 
       const res = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
-        .send({ cid });
+        .send({ cid, tokenId: "1" });
 
       expect(res.status).toBe(200);
       expect(res.body.unpinned).toContain(cid);
@@ -800,18 +1056,19 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         prev_asset_manifest_cid: null,
         scene: {},
       });
+      globalThis.__registerGCToken("1", cid, SESSION_WALLET);
       const auth = await makeSessionHeader();
 
       const res1 = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", auth)
-        .send({ cid });
+        .send({ cid, tokenId: "1" });
       expect(res1.status).toBe(200);
 
       const res2 = await request(app)
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", auth)
-        .send({ cid });
+        .send({ cid, tokenId: "1" });
       expect(res2.status).toBe(429);
       expect(res2.text).toMatch(/Unpin rate limit exceeded/i);
     });

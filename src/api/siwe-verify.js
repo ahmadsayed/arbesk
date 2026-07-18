@@ -189,8 +189,7 @@ export async function verifySiwe(
     console.log(`[SIWE] viem verifyMessage result for ${address}: ${signatureValid}`);
   } catch (err) {
     const error = /** @type {Error} */ (err);
-    console.log(`[SIWE] viem verification error for ${address}:`, error.message);
-    console.log(`[SIWE] viem verification error stack for ${address}:`, error.stack);
+    console.error(`[SIWE] viem verification error for ${address}:`, error.message);
     return {
       valid: false,
       address: null,

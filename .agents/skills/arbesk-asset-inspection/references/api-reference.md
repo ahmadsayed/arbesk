@@ -41,9 +41,12 @@ docker compose exec ipfs ipfs cat <CID>
 
 ## Backend helper (tests only)
 
-In a Node.js test context, the API app exposes `api._getFromIPFS(cid)`:
+In a Node.js test context, fetch content through the storage adapter directly:
 
 ```js
-const raw = await api._getFromIPFS("bafkreifsk5guke4cc7nzx72gugg5sakgwaqe4zso76vyamwzwadtuqmbri");
+import { getStorage } from "../src/api/storage/index.js";
+import { maybeDecompress } from "../src/api/ipfs-utils.js";
+
+const raw = await maybeDecompress(await getStorage().catBytes(cid));
 const manifest = JSON.parse(raw);
 ```

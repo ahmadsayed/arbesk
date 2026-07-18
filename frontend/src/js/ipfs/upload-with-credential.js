@@ -121,7 +121,7 @@ async function uploadToKubo(blob, filename, credential) {
  *
  * The caller is responsible for compression (e.g. appending `.gz` and passing
  * pre-compressed bytes). Keeping compression out of this module lets it run
- * safely inside a Web Worker without pulling in the pako dependency.
+ * safely inside a Web Worker without pulling in the fflate dependency.
  *
  * @param {Uint8Array|ArrayBuffer|Blob|string} data
  * @param {string} filename

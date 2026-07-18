@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
 import { getWeb3, getContractAddress, NETWORK_CONFIGS } from "../config.js";
+import { getStorage } from "./storage/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, "../../.data");
@@ -203,7 +204,6 @@ class TokenIndexer {
         this._removeTokenEditors(tokenId);
         return;
       }
-      const { getStorage } = await import("./storage/index.js");
       const raw = await getStorage().cat(cid);
       const list = JSON.parse(raw);
       if (!Array.isArray(list)) {

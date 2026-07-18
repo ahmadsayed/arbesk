@@ -86,7 +86,7 @@ export async function uploadWithDedup(
   const finalFilename = shouldCompress ? `${filename}.gz` : filename;
   // Hash over the RAW (uncompressed) content, not the stored payload. The
   // worker path compresses with the native CompressionStream while this
-  // main-thread path uses pako; the two emit slightly different gzip bytes for
+  // main-thread path uses fflate; the two emit slightly different gzip bytes for
   // the same input. Keying dedup and the content cache on the raw content lets
   // their hash maps interoperate (see test/frontend/dedup-hash-parity.test.js).
   const hash = hashBytes(bytes);

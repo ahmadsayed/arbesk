@@ -96,13 +96,6 @@ export async function initCdpClient(projectId) {
 }
 
 /**
- * @returns {boolean} true if the CDP SDK has been initialized
- */
-export function isCdpInitialized() {
-  return _cdpInitialized;
-}
-
-/**
  * Wipe CDP/Coinbase browser state (localStorage keys, IndexedDB databases)
  * and sign out. Stale state from a previous session causes "User is already
  * authenticated" or "EVM account not found" errors on the next login.
@@ -289,13 +282,6 @@ export async function disconnectCdpWallet() {
   } finally {
     _applyCdpSession(null, null);
   }
-}
-
-/**
- * @returns {boolean} true if a CDP user is currently signed in
- */
-export function isCdpConnected() {
-  return _currentEoaAccount !== null;
 }
 
 // ─── UserOperation Helpers ───────────────────────────────────────────────────
@@ -516,33 +502,4 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
     on() {},
     removeListener() {},
   };
-}
-
-// ─── SIWE Signing Helper ─────────────────────────────────────────────────────
-
-/**
- * Sign a SIWE message using the embedded EOA (not the smart account).
- *
- * SIWE requires the signer to be the EOA that owns the smart account.
- * The backend's siwe-verify.js handles the ERC-6492/EIP-1271 + eoaAddress
- * fallback path so the session is bound to the smart account address.
- *
- * Equivalent to web3.eth.personal.sign(message, eoaAddress, "").
- *
- * @param {string} message - plain-text SIWE message (not hex-encoded)
- * @returns {Promise<string>} hex signature
- */
-export async function signSiweMessageWithCdp(message) {
-  if (!_currentEoaAccount) {
-    throw new Error("CDP wallet not connected. Call verifyEmailOtp or autoConnectCdpWallet first.");
-  }
-  try {
-    log("CDP", "signing SIWE message with EOA:", _currentEoaAccount.address);
-    const result = await signEvmMessage({ evmAccount: _currentEoaAccount.address, message });
-    log("CDP", "SIWE message signed");
-    return result.signature;
-  } catch (err) {
-    error("CDP", "signSiweMessageWithCdp failed:", err);
-    throw err;
-  }
 }

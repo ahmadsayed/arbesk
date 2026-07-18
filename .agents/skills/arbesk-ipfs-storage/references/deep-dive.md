@@ -101,8 +101,8 @@ With default `Datastore.StorageGCWatermark` at 90%, GC triggers at ~90 GB of pin
 
 When a token is burned:
 1. **Frontend** resolves the manifest CID via `tokenURI(tokenId).call()` **before** burning (after burn, `tokenURI` reverts)
-2. Contract burns the token on-chain (`_burn(tokenId)`)
-3. **Frontend** fires `unpinAssetCids(manifestCid)` → `POST /api/v1/ipfs/unpin`
+2. **Frontend** calls `unpinAssetCids(manifestCid, { tokenId, chainId, contractAddress, proof })` → `POST /api/v1/ipfs/unpin` — strictly best-effort; any failure (including 403) only logs a warning and never blocks the burn. The backend verifies on-chain that the session wallet owns (or edits, via Merkle proof) the token and that the CID belongs to it, so this must happen **while the token is still live**
+3. Contract burns the token on-chain (`burn(tokenId, proof)`)
 4. **Backend** walks the full manifest chain, collects all owned CIDs, calls `ipfs.pin.rm()` on each
 5. Content is now eligible for GC — it will be evicted when the GC watermark is next hit, or when `ipfs repo gc` is run manually
 

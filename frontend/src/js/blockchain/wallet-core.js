@@ -606,6 +606,15 @@ async function disconnectWallet() {
 
 // ─── Exports ───
 
+/**
+ * Get the active contract instance, preferring the module-level binding and
+ * falling back to walletState (both are kept in sync by _initContract).
+ * @returns {any|null} web3 Contract instance, or null when not initialized
+ */
+function getActiveContract() {
+  return contract || walletState.get().contract || null;
+}
+
 export {
   web3,
   web3Provider,
@@ -616,6 +625,7 @@ export {
   autoConnectWallet,
   authenticateUser,
   getActiveConnectionSource,
+  getActiveContract,
 };
 
 export { web3 as walletWeb3 };

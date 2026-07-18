@@ -51,6 +51,9 @@ export const NETWORK_CONFIGS = {
     usdcToken: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     rpcUrl: "http://127.0.0.1:8545",
   },
+  // INDEXER_DISABLE_TESTNET: intentional kill-switch (set nowhere by default).
+  // Set it to any non-empty value to drop Base Sepolia from NETWORK_CONFIGS,
+  // e.g. to keep a local-only backend from indexing the public testnet.
   ...(process.env.INDEXER_DISABLE_TESTNET
     ? {}
     : {
@@ -58,7 +61,7 @@ export const NETWORK_CONFIGS = {
           name: "Base Sepolia Testnet",
           contractAddress:
             process.env.BASE_CONTRACT_ADDRESS ||
-            "0xE3d99B0FfF7c3dc33e324C9375b5A83ED4cE6deC",
+            "0xa39eFfc859b326CCCeB177CfBbef00C1876e18d8",
           paidContractAddress: null, // Paid tier not deployed on testnet
           usdcToken: null, // USDC not deployed on testnet
           rpcUrl: "https://sepolia.base.org",
@@ -86,13 +89,30 @@ export function getContractAddress(chainId) {
   );
 }
 
-/** @param {any} chainId */
-export function getUsdcToken(chainId) {
-  if (chainId) {
-    const addr = getNetworkConfig(chainId)?.usdcToken;
-    if (addr) return addr;
+/**
+ * Return the chain's configured Arbesk contract set: the free-tier contract
+ * first, then the paid-tier contract when configured for that chain. For the
+ * default/unknown chain this falls back to the single address
+ * `getContractAddress()` would resolve (env override or first network).
+ * Used to allowlist caller-supplied contract addresses and to try both tiers
+ * when the caller does not specify one.
+ * @param {any} chainId
+ * @returns {string[]} Ordered, deduped candidate contract addresses.
+ */
+export function getConfiguredContracts(chainId) {
+  const cfg = getNetworkConfig(chainId);
+  const addrs = cfg
+    ? [cfg.contractAddress, cfg.paidContractAddress]
+    : [getContractAddress(chainId)];
+  /** @type {string[]} */
+  const seen = [];
+  for (const addr of addrs) {
+    if (!addr) continue;
+    if (!seen.some((a) => a.toLowerCase() === addr.toLowerCase())) {
+      seen.push(addr);
+    }
   }
-  return process.env.USDC_TOKEN || null;
+  return seen;
 }
 
 /** @param {any} chainId */
@@ -149,8 +169,6 @@ export function getViemPublicClient(chainId) {
 // ─── Legacy Exports (backward compatible) ────────────────────────────────────
 
 export const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-export const ASSETS_IPFS = process.env.ASSETS_IPFS;
-export const IPFS_API_URL = process.env.IPFS_API_URL || "http://127.0.0.1:5001";
 export const HARDHAT_RPC_URL =
   process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545";
 export const API_URL = process.env.API_URL || HARDHAT_RPC_URL;

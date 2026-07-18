@@ -105,8 +105,6 @@ describe("Manifest comments archive integration", () => {
     jest.unstable_mockModule("../src/config.js", () => ({
       CONTRACT_ADDRESS: "0xArbeskContractAddress",
       PAID_CONTRACT_ADDRESS: "0xPaidContractAddress",
-      ASSETS_IPFS: null,
-      IPFS_API_URL: "http://127.0.0.1:5001",
       HARDHAT_RPC_URL: "http://127.0.0.1:8545",
       NETWORK_CONFIGS: {
         31337: {
@@ -128,7 +126,10 @@ describe("Manifest comments archive integration", () => {
           })[Number(id)] || null,
       ),
       getContractAddress: jest.fn(() => "0xArbeskContractAddress"),
-      getUsdcToken: jest.fn(() => "0xUsdcToken"),
+      getConfiguredContracts: jest.fn(() => [
+        "0xArbeskContractAddress",
+        "0xPaidContractAddress",
+      ]),
       getRpcUrl: jest.fn(() => "http://127.0.0.1:8545"),
       getWeb3: jest.fn(() => ({})),
       web3: {},

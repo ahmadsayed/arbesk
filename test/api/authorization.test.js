@@ -27,6 +27,7 @@ jest.unstable_mockModule("../../src/api/merkle-editors-node.js", () => ({
 const {
   checkAssetAccess,
   authorizeAssetAccess,
+  getTokenUri,
 } = await import("../../src/api/authorization.js");
 
 describe("authorization", () => {
@@ -56,6 +57,7 @@ describe("authorization", () => {
         ownerOf: makeMethod("ownerOf"),
         editorRoot: makeMethod("editorRoot"),
         editorSetVersion: makeMethod("editorSetVersion"),
+        tokenURI: makeMethod("tokenURI"),
       },
     };
   }
@@ -177,6 +179,59 @@ describe("authorization", () => {
     it("throws for negative tokenId", async () => {
       await expect(checkAssetAccess(-1, CHAIN_ID, OWNER)).rejects.toThrow(
         "Invalid tokenId",
+      );
+    });
+
+    it("uses the contractAddress override instead of the chain default", async () => {
+      const OVERRIDE = "0xOverride0000000000000000000000000000000001";
+      contractCallState.ownerOf = OWNER;
+
+      const result = await checkAssetAccess(1, CHAIN_ID, OWNER, {
+        contractAddress: OVERRIDE,
+      });
+
+      expect(result.allowed).toBe(true);
+      expect(result.assetId).toBe(`${CHAIN_ID}:${OVERRIDE}:1`);
+    });
+
+    it("override wins even when the chain has no configured contract", async () => {
+      const OVERRIDE = "0xOverride0000000000000000000000000000000001";
+      mockGetContractAddress.mockReturnValue(null);
+      contractCallState.ownerOf = OWNER;
+
+      const result = await checkAssetAccess(1, 999, OWNER, {
+        contractAddress: OVERRIDE,
+      });
+
+      expect(result.allowed).toBe(true);
+      expect(result.isOwner).toBe(true);
+    });
+  });
+
+  describe("getTokenUri", () => {
+    it("returns the tokenURI from the chain contract", async () => {
+      contractCallState.tokenURI = "bafyCollection";
+
+      const uri = await getTokenUri(1, CHAIN_ID);
+
+      expect(uri).toBe("bafyCollection");
+    });
+
+    it("honors the contractAddress override", async () => {
+      const OVERRIDE = "0xOverride0000000000000000000000000000000001";
+      mockGetContractAddress.mockReturnValue(null);
+      contractCallState.tokenURI = "bafyOverrideCollection";
+
+      const uri = await getTokenUri(1, 999, { contractAddress: OVERRIDE });
+
+      expect(uri).toBe("bafyOverrideCollection");
+    });
+
+    it("throws when no contract can be resolved", async () => {
+      mockGetContractAddress.mockReturnValue(null);
+
+      await expect(getTokenUri(1, 999)).rejects.toThrow(
+        "No contract address for chain 999",
       );
     });
   });

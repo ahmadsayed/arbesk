@@ -1,9 +1,41 @@
+import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import {
-  computeRoot,
-  getProof,
   makeLeaf,
   verifyProof,
 } from "../../src/api/merkle-editors-node.js";
+
+// Root/proof construction is a client-side concern (the backend only verifies),
+// so the test builds trees directly with @openzeppelin/merkle-tree — the same
+// library the frontend uses (frontend/src/js/gltf/merkle-editors.js) — keeping
+// leaf/tree encoding byte-compatible with MerkleProof.sol by construction.
+
+const ZERO_ROOT =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+function computeRoot(editorList, tokenId, setVersion) {
+  if (!editorList || editorList.length === 0) {
+    return ZERO_ROOT;
+  }
+  const leaves = editorList.map((e) =>
+    makeLeaf(e.address, e.role, tokenId, setVersion),
+  );
+  return SimpleMerkleTree.of(leaves).root;
+}
+
+function getProof(editorList, targetAddress, tokenId, setVersion) {
+  if (!editorList || editorList.length === 0) return null;
+  const entry = editorList.find(
+    (e) => e.address.toLowerCase() === targetAddress.toLowerCase(),
+  );
+  if (!entry) return null;
+
+  const leaves = editorList.map((e) =>
+    makeLeaf(e.address, e.role, tokenId, setVersion),
+  );
+  const tree = SimpleMerkleTree.of(leaves);
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
+  return { proof: tree.getProof(leaf), role: entry.role };
+}
 
 describe("merkle-editors-node", () => {
   const tokenId = 42;

@@ -49,27 +49,6 @@ export function validateBody(schema) {
 }
 
 /**
- * Create Express middleware that validates `req.params` against a Zod schema.
- *
- * @param {import('zod').ZodSchema} schema
- * @returns {import('express').RequestHandler}
- */
-export function validateParams(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.params);
-    if (!result.success) {
-      const issues = issuesFromZod(result.error);
-      console.log(`[VALIDATE] params rejected - ${formatIssues(issues)}`);
-      return sendError(res, 400, "VALIDATION_ERROR", "Invalid URL parameters", {
-        issues,
-      });
-    }
-    req.params = result.data;
-    next();
-  };
-}
-
-/**
  * Create Express middleware that validates `req.query` against a Zod schema.
  *
  * @param {import('zod').ZodSchema} schema

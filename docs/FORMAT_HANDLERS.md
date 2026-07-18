@@ -76,7 +76,7 @@ glTF is never persisted. The composer/decomposer/parser live in `frontend/src/js
 
 ## Adding a format in four steps
 
-1. Copy `frontend/src/js/formats/handlers/example-format.js` to a new file.
+1. Copy `test/frontend/fixtures/example-format.js` to a new file under `frontend/src/js/formats/handlers/`.
 2. Implement `load`, `decomposeForSave`, and `isStoredForm` for your format.
 3. Import and register it somewhere in your application bootstrap:
    ```js

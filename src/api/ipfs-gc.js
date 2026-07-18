@@ -54,19 +54,15 @@ function getContractInstance(name, address, chainId) {
  * Discover token IDs that have been minted (Transfer from zero address) and
  * are still alive (ownerOf does not revert and is not zero address).
  *
- * @param {Object} contract - web3.eth.Contract instance
- * @param {number} deployBlock - block to start scanning from
- * @param {number} [batchSize=10000] - RPC log query chunk size
- * @returns {Promise<string[]>} live token IDs as decimal strings
- */
-/**
  * @param {import('web3').Contract<any>} contract - web3.eth.Contract instance
  * @param {number} deployBlock - block to start scanning from
  * @param {number} [batchSize=10000] - RPC log query chunk size
+ * @param {any} [w3=web3] - web3 instance for the chain the contract lives on;
+ *   must match the contract's chain or the block range is nonsense
  * @returns {Promise<string[]>} live token IDs as decimal strings
  */
-async function discoverLiveTokenIds(contract, deployBlock, batchSize = 10000) {
-  const endBlock = Number(await web3.eth.getBlockNumber());
+async function discoverLiveTokenIds(contract, deployBlock, batchSize = 10000, w3 = web3) {
+  const endBlock = Number(await w3.eth.getBlockNumber());
 
   const minted = new Set();
 
@@ -249,6 +245,9 @@ export async function runIpfsGC(options = {}) {
         contract,
         deployBlock,
         eventBatchSize,
+        // The block-number read must come from the same chain as the contract
+        // (getWeb3 falls back to the default instance when chainId is null).
+        getWeb3(chainId),
       );
       for (const id of live) allLiveTokenIds.add(id);
       console.log(`[GC] ${name} live tokens: ${live.length}`);

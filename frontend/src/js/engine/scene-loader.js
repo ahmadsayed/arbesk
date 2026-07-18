@@ -29,6 +29,7 @@ import { createPlaceholder, disposePlaceholder } from "./placeholders.js";
 import { applyColor, applyScale } from "./time-travel.js";
 import { disposeNode, clearScene } from "./cleanup.js";
 import { createAnchorNode } from "./scene-graph.js";
+import { identityMatrix } from "../utils/collections.js";
 
 async function loadAsset(src, parentNode, nodeId) {
   const cid = extractCid(src);
@@ -430,7 +431,7 @@ function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
   const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
   const baseNode = {
     node_id: nodeId,
-    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    transform_matrix: identityMatrix(),
   };
   if (choice === "fork") {
     return {

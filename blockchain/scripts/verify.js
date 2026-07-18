@@ -1,17 +1,23 @@
 const hre = require("hardhat");
 
 async function main() {
-  // Determine which contract to verify
-  const contractName = process.env.VERIFY_CONTRACT || "ArbeskAsset";
+  // Determine which contract to verify (free tier is the one deployed on testnet)
+  const contractName = process.env.VERIFY_CONTRACT || "ArbeskAssetFree";
+  // deploy.js writes the testnet free-tier address to BASE_CONTRACT_ADDRESS;
+  // local deploys use CONTRACT_ADDRESS.
   const address =
     contractName === "ArbeskAssetFree"
-      ? process.env.CONTRACT_ADDRESS
+      ? hre.network.name === "baseSepolia"
+        ? process.env.BASE_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS
+        : process.env.CONTRACT_ADDRESS
       : process.env.PAID_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS;
 
   const treasury = process.env.TREASURY_ADDRESS;
 
   if (!address) {
-    console.error(`Set CONTRACT_ADDRESS (or PAID_CONTRACT_ADDRESS) in .env`);
+    console.error(
+      `Set CONTRACT_ADDRESS (or BASE_CONTRACT_ADDRESS / PAID_CONTRACT_ADDRESS) in .env`
+    );
     process.exit(1);
   }
 

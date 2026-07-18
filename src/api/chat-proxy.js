@@ -23,6 +23,7 @@ import { finalizeEvent, getPublicKey, utils } from "nostr-tools";
 import url from "url";
 import { KIND_CHAT, TAG_ASSET, createRelay, safeClose } from "./nostr-relay.js";
 import { authorizeAssetAccess } from "./authorization.js";
+import { buildAssetTag } from "./asset-tag.js";
 import {
   NOSTR_RELAY_URL,
   NOSTR_SERVICE_PRIVATE_KEY,
@@ -50,24 +51,6 @@ const MAX_MSG_PER_MINUTE = 10;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const CLIENT_PING_INTERVAL_MS = 30000;
 const CLIENT_PONG_TIMEOUT_MS = 10000;
-
-/**
- * Build the canonical asset-level Nostr tag.
- * Each asset inside a collection has its own isolated thread.
- */
-/**
- * @param {string | number | null} chainId
- * @param {string | null} contractAddress
- * @param {string | number} tokenId
- * @param {string | string[] | null | undefined} [assetId]
- * @returns {string}
- */
-function buildAssetTag(chainId, contractAddress, tokenId, assetId) {
-  const cid = chainId ? Number(chainId) : 31415822;
-  const addr = (contractAddress || getContractAddress(cid) || "unknown").toLowerCase();
-  const id = assetId || "";
-  return `${cid}:${addr}:${tokenId}:${id}`;
-}
 
 // Global wallet-level sliding window: address -> [timestamps within window]
 const walletMessageTimestamps = new Map();

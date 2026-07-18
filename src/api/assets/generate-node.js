@@ -8,9 +8,10 @@ import { generateAssetSchema } from "../schemas.js";
 const Router = express.Router;
 
 /**
- * @param {import('../storage/index.js').StorageAdapter} [_storage]
+ * Generation route factory. No dependencies — the storage adapter is not
+ * needed here because the browser performs all IPFS writes itself.
  */
-export default function generateAssetNode(_storage) {
+export default function generateAssetNode() {
   const router = Router();
 
   /**
@@ -40,15 +41,6 @@ export default function generateAssetNode(_storage) {
         console.log(
           `[GEN] prompt="${prompt}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
         );
-        if (!prompt || !nodeId) {
-          console.log("[GEN] rejected - prompt and nodeId required");
-          return res.status(400).json({
-            error: {
-              code: "MISSING_PARAMS",
-              message: "prompt and nodeId are required",
-            },
-          });
-        }
 
         // BYOK (Bring Your Own Key): real providers require a user-supplied API
         // key. The user pays the provider directly, so the on-chain quota/payment
@@ -57,8 +49,7 @@ export default function generateAssetNode(_storage) {
         if (effectiveProvider !== "mock") {
           if (
             typeof providerKey !== "string" ||
-            providerKey.trim().length === 0 ||
-            providerKey.length > 200
+            providerKey.trim().length === 0
           ) {
             console.log(
               "[GEN] rejected - providerKey required for real provider",

@@ -366,17 +366,29 @@ Kubo:
 
 ### `POST /api/v1/ipfs/unpin`
 
-Unpins all IPFS CIDs owned by a manifest chain. Called after token burn or asset removal from a collection.
+Unpins all IPFS CIDs owned by a manifest chain. Called before token burn or after asset removal from a collection.
 
 Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs, thumbnail CIDs, comments archive CIDs, and optional `history` entry CIDs, then unpins them all so they become eligible for garbage collection.
+
+**Authorization:** the session wallet must own the token or be an editor (Merkle proof), verified on-chain via `checkAssetAccess` while the token is still live — clients must therefore unpin *before* burning. The requested `cid` must also belong to the claimed token: it is accepted when it equals the `tokenURI` CID, or appears in the `assets` map of the collection manifest at `tokenURI` or of up to 5 `prev_asset_manifest_cid` ancestors (the ancestor walk covers the delete-asset flow, where the orphaned asset manifest sits in the previous collection version).
 
 **Request Body**
 
 ```json
 {
-  "cid": "bafy..."
+  "cid": "bafy...",
+  "tokenId": "123",
+  "chainId": 31415822,
+  "contractAddress": "0x...",
+  "proof": ["0x<bytes32>", "..."]
 }
 ```
+
+- `cid` (string, required) — manifest CID to start unpinning from.
+- `tokenId` (string, required) — decimal token ID (uint256-safe; not a JS number).
+- `chainId` (number, optional) — defaults to the backend's configured chain.
+- `contractAddress` (string, optional) — must be one of the chain's configured contracts (free or paid tier); when omitted, both are tried in order.
+- `proof` (string[], optional) — Merkle editor proof, required for non-owners.
 
 **Response `200`**
 
@@ -401,8 +413,10 @@ If individual unpin attempts fail (e.g. CID was already unpinned), the response 
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | Missing `cid` |
+| 400 | Missing/invalid `cid` or `tokenId`; `contractAddress` not in the chain's configured contracts (`INVALID_CONTRACT`); `cid` not referenced by the token (`CID_NOT_IN_TOKEN`) |
 | 401 | Missing or invalid session |
+| 403 | Session wallet is not the token owner or an editor (`FORBIDDEN`) |
+| 502 | Token's collection manifest unreadable (`COLLECTION_UNREADABLE`) |
 | 500 | Unpin failed |
 
 ---

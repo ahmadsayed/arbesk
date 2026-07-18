@@ -1,13 +1,13 @@
 // @ts-check
 /**
- * Dummy/template format handler.
+ * Dummy/template format handler (test fixture).
  *
  * This handler is intentionally NOT imported by `formats/index.js`.
  * It exists as a copy-paste template for adding real formats (e.g. 3MF)
  * and is registered only inside its own test to prove the extension point.
  */
 
-/** @typedef {import("../registry.js").FormatHandler} FormatHandler */
+/** @typedef {import("../../../frontend/src/js/formats/registry.js").FormatHandler} FormatHandler */
 
 /**
  * Factory so tests can inject spies.
@@ -37,7 +37,7 @@ export function createExampleFormatHandler() {
      * Babylon-loadable form (e.g. glTF Blob), then call ctx.importFromBlob.
      *
      * @param {any} src
-     * @param {import("../registry.js").FormatLoadContext} ctx
+     * @param {import("../../../frontend/src/js/formats/registry.js").FormatLoadContext} ctx
      */
     async load(src, ctx) {
       console.log(`[EXAMPLE] load called for cid=${ctx.cid}`);
@@ -55,7 +55,7 @@ export function createExampleFormatHandler() {
      * The loader must then know how to load that stored form.
      *
      * @param {any} node
-     * @param {import("../registry.js").FormatSaveContext} ctx
+     * @param {import("../../../frontend/src/js/formats/registry.js").FormatSaveContext} ctx
      */
     async decomposeForSave(node, ctx) {
       console.log(

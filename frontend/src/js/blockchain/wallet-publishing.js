@@ -13,17 +13,13 @@ import { walletState } from "../state/wallet-state.js";
 import { getContractArtifact } from "../services/api.js";
 import { showToast } from "../ui/toasts.js";
 import { isIpfsCidReachable } from "../ipfs/remote-ipfs.js";
-import { web3, contract, getActiveConnectionSource } from "./wallet-core.js";
+import { web3, getActiveConnectionSource, getActiveContract } from "./wallet-core.js";
 import { isSmartWalletSupported } from "./smart-wallet-support.js";
 
 // ── Helpers ──
 
 function _getWeb3() {
   return web3 || window.web3 || null;
-}
-
-function _getContract() {
-  return contract || walletState.get().contract || null;
 }
 
 /**
@@ -73,7 +69,7 @@ function _canPublishWithCurrentWallet() {
 // ── Asset Publishing ──
 
 async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
-  const c = _getContract();
+  const c = getActiveContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
@@ -117,7 +113,7 @@ async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
 }
 
 async function updateAssetURI(tokenId, newTokenURI, proof) {
-  const c = _getContract();
+  const c = getActiveContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
@@ -184,7 +180,7 @@ async function updateEditors(
   callerRole,
   callerProof
 ) {
-  const c = _getContract();
+  const c = getActiveContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
@@ -211,7 +207,7 @@ async function updateEditors(
 // ── Token Burn ──
 
 async function burn(tokenId, proof) {
-  const c = _getContract();
+  const c = getActiveContract();
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
@@ -234,6 +230,40 @@ async function burn(tokenId, proof) {
     // Continue with burn even if resolution fails - unpin is best-effort
   }
 
+  // Unpin IPFS content BEFORE the burn tx: the backend /ipfs/unpin endpoint
+  // verifies ownership/editor rights on-chain, which requires the token to
+  // still be live. Strictly best-effort - any failure (including 403) only
+  // warns and never blocks or alters the burn.
+  if (manifestCid) {
+    try {
+      const reachable = await isIpfsCidReachable(manifestCid).catch(
+        () => false
+      );
+      if (!reachable) {
+        console.warn(
+          `[BURN] ${manifestCid} not reachable on IPFS, skipping unpin`
+        );
+      } else {
+        console.log(`[BURN] unpinning IPFS content for ${manifestCid}…`);
+        const { unpinAssetCids } = await import("../services/api.js");
+        const { chainId, contractAddress } = walletState.get();
+        const result = await unpinAssetCids(manifestCid, {
+          tokenId: String(tokenId),
+          chainId: Number(chainId),
+          contractAddress,
+          proof,
+        });
+        console.log(
+          `[BURN] unpinned ${result.count} CIDs for token ${tokenId}`
+        );
+        if (result.errors?.length)
+          console.warn(`[BURN] unpin errors:`, result.errors);
+      }
+    } catch (err) {
+      console.warn(`[BURN] unpin failed (non-fatal):`, err.message);
+    }
+  }
+
   try {
     const tx = c.methods["burn(uint256,bytes32[])"](tokenId, proof);
     const gas = await _resolveGas(tx, walletState.get().walletAddress);
@@ -246,36 +276,6 @@ async function burn(tokenId, proof) {
       tokenId,
       txHash: receipt.transactionHash,
     });
-
-    // Unpin IPFS content after burn - fully non-blocking, skipped if unreachable
-    if (manifestCid) {
-      const capturedCid = manifestCid;
-      const capturedWallet = walletState.get().walletAddress;
-      (async () => {
-        const reachable = await isIpfsCidReachable(capturedCid).catch(
-          () => false
-        );
-        if (!reachable) {
-          console.warn(
-            `[BURN] ${capturedCid} not reachable on IPFS, skipping unpin`
-          );
-          return;
-        }
-        console.log(`[BURN] unpinning IPFS content for ${capturedCid}…`);
-        const { unpinAssetCids } = await import("../services/api.js");
-        unpinAssetCids(capturedCid, capturedWallet)
-          .then((result) => {
-            console.log(
-              `[BURN] unpinned ${result.count} CIDs for token ${tokenId}`
-            );
-            if (result.errors?.length)
-              console.warn(`[BURN] unpin errors:`, result.errors);
-          })
-          .catch((err) =>
-            console.warn(`[BURN] unpin failed (non-fatal):`, err.message)
-          );
-      })();
-    }
 
     return receipt.transactionHash;
   } catch (error) {
@@ -300,6 +300,4 @@ export {
   updateEditors,
   burn,
   CollaboratorRole,
-  _getWeb3,
-  _getContract,
 };

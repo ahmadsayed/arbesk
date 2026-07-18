@@ -35,7 +35,6 @@ async function loadModule() {
       getRawArrayBufferFromRemoteIPFS: jest.fn(),
       getManifestChain: jest.fn(),
       isIpfsCidReachable: jest.fn(),
-      clearRemoteIPFSCache: jest.fn(),
     })
   );
 

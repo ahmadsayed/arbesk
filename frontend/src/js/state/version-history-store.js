@@ -28,7 +28,8 @@ export const _deps = {
     return loadAssetManifest(cid);
   },
   fetchPublishedCid: async (tokenId) => {
-    const { contract } = await import("../blockchain/wallet.js");
+    const { getActiveContract } = await import("../blockchain/wallet.js");
+    const contract = getActiveContract();
     if (!contract) return null;
     const cid = await contract.methods.tokenURI(tokenId).call();
     return cid || null;

@@ -86,6 +86,8 @@ async function loadModule() {
       walletState: {
         get: jest.fn(() => ({
           walletAddress: _walletAddress,
+          chainId: 31415822,
+          contractAddress: "0xContractAddress0000000000000000000000000001",
           contract: _mockContract(),
         })),
         _resetForTesting: jest.fn(),
@@ -110,6 +112,7 @@ async function loadModule() {
     "../../frontend/src/js/blockchain/wallet.js",
     () => ({
       contract: _mockContract(),
+      getActiveContract: () => _mockContract(),
       updateAssetURI: jest.fn().mockResolvedValue(_updateAssetURIResult),
       CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
       burn: jest.fn().mockResolvedValue(_burnResult),
@@ -247,7 +250,12 @@ describe("deleteAssetFromCollection", () => {
       NEW_COLLECTION_CID,
       EDITOR_PROOF
     );
-    expect(unpinAssetCids).toHaveBeenCalledWith(ASSET_CID, OWNER);
+    expect(unpinAssetCids).toHaveBeenCalledWith(ASSET_CID, {
+      tokenId: TOKEN_ID,
+      chainId: 31415822,
+      contractAddress: "0xContractAddress0000000000000000000000000001",
+      proof: EDITOR_PROOF,
+    });
     expect(emit).toHaveBeenCalledWith(EVENTS.ASSET_CLEARED);
   });
 

@@ -17,7 +17,6 @@ async function load() {
       getRawArrayBufferFromRemoteIPFS: jest.fn(),
       getManifestChain: jest.fn(),
       isIpfsCidReachable: jest.fn(),
-      clearRemoteIPFSCache: jest.fn(),
     })
   );
   jest.unstable_mockModule(
