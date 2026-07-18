@@ -140,7 +140,7 @@ html(lang="en")
                     polyline(points="15 18 9 12 15 6")
             .sidebar-content
               //- View: Settings
-              .sidebar-view(data-view="settings")
+              .sidebar-view(data-view="settings" hidden)
                 .sidebar-view-header
                   h3 Settings
                 .sidebar-view-body
@@ -165,7 +165,7 @@ html(lang="en")
                       p.team-help Open this collection in the Library to add or remove collaborators.
 
               //- View: AI Generation (data-view kept as "chat" for selector stability)
-              .sidebar-view(data-view="chat" hidden)
+              .sidebar-view(data-view="chat")
                 .sidebar-view-header
                   h3 AI Generation
                 .sidebar-view-body
