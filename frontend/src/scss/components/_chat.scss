@@ -1,11 +1,23 @@
 // ═══════════════════════════════════════════════════════════════════
-// Chat History — conversation log in Asset sidebar view
+// AI Generation Pane — conversation log + pinned composer (chat sidebar view)
 // ═══════════════════════════════════════════════════════════════════
 
+// The composer is pinned to the bottom of the view, so the view body stops
+// scrolling itself and becomes a vertical flex container.
+.sidebar-view[data-view="chat"] .sidebar-view-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
 #chatHistory {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow-y: auto;
+  padding: var(--size-3);
 }
 
 .chat-history-list {
@@ -74,5 +86,190 @@
 
   .chat-bubble-system & {
     color: var(--dim-fg);
+  }
+}
+
+// ─── Composer — provider controls + prompt input, pinned at pane bottom ───
+
+.chat-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  background-color: var(--card-bg);
+  border-top: var(--border-size-1) solid var(--border-hairline);
+  flex-shrink: 0;
+  transition: box-shadow var(--duration-quick) var(--ease-out-3);
+
+  // The whole composer lights up gently while composing a prompt.
+  &:focus-within {
+    box-shadow: var(--glow-accent);
+  }
+
+  // Composer rows are stacked via gap, not form-group margins.
+  .form-group {
+    margin-bottom: 0;
+  }
+}
+
+// Provider select + key configure button on one row.
+.provider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+
+  .form-select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.provider-key-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--dim-fg);
+  border-radius: var(--radius-3);
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--view-fg);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  // Tripo 3D selected but no key stored yet.
+  &.attention {
+    color: var(--yellow-4);
+  }
+}
+
+.provider-key-hint {
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--yellow-4);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// Input + submit sit on one row; the hint (when shown) drops below it.
+.messagebar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-2);
+}
+
+.messagebar-input {
+  flex: 1;
+  padding: var(--size-2) var(--size-3);
+  font-size: var(--font-size-1);
+  font-family: var(--font-family);
+  line-height: var(--font-lineheight-3);
+  color: var(--view-fg);
+  background-color: var(--view-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-3);
+  resize: none;
+  min-height: 24px;
+  max-height: 120px;
+
+  &::placeholder {
+    color: var(--dim-fg);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-bg);
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.messagebar-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: var(--accent-bg);
+  color: var(--accent-fg);
+  border-radius: var(--radius-round);
+  flex-shrink: 0;
+  transition: background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  // Spinner state (replaces icon during generation)
+  &.generating {
+    .messagebar-submit-icon { display: none; }
+    .messagebar-spinner { display: block; }
+  }
+}
+
+.messagebar-spinner {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent-fg);
+  border-top-color: transparent;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .messagebar-spinner {
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messagebar-spinner {
+    opacity: 0.6;
+  }
+}
+
+// Disconnected guidance — a calm centered caption under the input row,
+// not stray text beside the button. The submit button is disabled while
+// gated (see create-panel.js), so it reads muted rather than live.
+.messagebar-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-1);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+
+  .messagebar-hint-icon {
+    flex-shrink: 0;
+    opacity: 0.75;
+  }
+
+  &[hidden] {
+    display: none;
   }
 }
