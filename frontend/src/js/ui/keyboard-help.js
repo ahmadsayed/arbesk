@@ -16,7 +16,7 @@ const SECTIONS = [
     heading: "Navigation",
     rows: [
       [`${MOD}+B`, "Toggle sidebar"],
-      [`${MOD}+1 – 4`, "Switch sidebar panel"],
+      [`${MOD}+1 – 5`, "Switch sidebar panel"],
       ["Alt+←", "Go up to parent world"],
     ],
   },

@@ -1,9 +1,10 @@
 // @ts-nocheck
 /**
- * Arbesk Chat Studio UI Controller
+ * Arbesk AI Generation UI Controller
  *
- * Real PayGo generation flow: wallet payment → backend generation →
- * manifest load → scene graph registration.
+ * Generation flow: session auth → backend generation → manifest load →
+ * scene graph registration. Owns the AI Generation sidebar pane: chat
+ * history, prompt input, provider selection, and the BYOK key dialog.
  */
 
 import {
@@ -12,6 +13,7 @@ import {
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
 import { showToast } from "./toasts.js";
+import { showCustomDialog } from "./dialog.js";
 import {
   generateAsset,
   ApiError,
@@ -33,8 +35,9 @@ const assetNameDisplay = document.getElementById("assetNameDisplay");
 const providerSelect = document.getElementById("providerSelect");
 const tierSelect = document.getElementById("tierSelect");
 const collectionSelect = document.getElementById("collectionSelect");
-const providerKeyInput = document.getElementById("providerKeyInput");
-const providerKeyToggle = document.getElementById("providerKeyToggle");
+const providerKeyBtn = document.getElementById("providerKeyBtn");
+const providerKeyHint = document.getElementById("providerKeyHint");
+const bottomBarProvider = document.getElementById("bottomBarProvider");
 
 // BYOK (Bring Your Own Key): a user-supplied generation provider key. Real
 // providers require a key - the user pays the provider directly, bypassing the
@@ -48,7 +51,7 @@ const BYOK_KEY_STORAGE = "arbesk-byok-key";
  * @returns {string}
  */
 function getByokKey() {
-  return (providerKeyInput?.value || "").trim();
+  return (localStorage.getItem(BYOK_KEY_STORAGE) || "").trim();
 }
 
 /**
@@ -60,25 +63,105 @@ function isRealProvider() {
   return getProvider() !== "mock";
 }
 
-// Persist + hydrate the BYOK key. Saved on input so it survives reloads; loaded
-// on init so a returning user doesn't have to re-enter it.
-if (providerKeyInput) {
-  providerKeyInput.value = localStorage.getItem(BYOK_KEY_STORAGE) || "";
-  providerKeyInput.addEventListener("input", () => {
-    localStorage.setItem(BYOK_KEY_STORAGE, providerKeyInput.value);
+// ─── BYOK Key Dialog ───
+
+// Persist + hydrate the generation provider. A stored value that no longer
+// exists among the select options (e.g. a removed provider) is ignored, so
+// the markup default (mock) wins.
+const PROVIDER_STORAGE = "arbesk-provider";
+
+/**
+ * Sync provider-dependent UI for the current selection: the key configure
+ * button only applies to real providers, the hint + attention state flag a
+ * missing key, and the bottom bar mirrors the active selection.
+ */
+function syncProviderUI() {
+  const real = isRealProvider();
+  const missingKey = real && getByokKey().length === 0;
+  if (providerKeyBtn) {
+    providerKeyBtn.hidden = !real;
+    providerKeyBtn.classList.toggle("attention", missingKey);
+  }
+  if (providerKeyHint) providerKeyHint.hidden = !missingKey;
+  if (bottomBarProvider && providerSelect) {
+    const label = providerSelect.selectedOptions[0]?.textContent || "Mock";
+    bottomBarProvider.textContent = `Provider: ${label}`;
+  }
+}
+
+if (providerSelect) {
+  const storedProvider = localStorage.getItem(PROVIDER_STORAGE);
+  const knownProvider = Array.from(providerSelect.options).some(
+    (o) => o.value === storedProvider
+  );
+  if (storedProvider && knownProvider) {
+    providerSelect.value = storedProvider;
+  }
+  providerSelect.addEventListener("change", () => {
+    localStorage.setItem(PROVIDER_STORAGE, providerSelect.value);
+    syncProviderUI();
   });
 }
 
-// Show/hide toggle for the key field (type password ⇄ text).
-if (providerKeyToggle && providerKeyInput) {
-  providerKeyToggle.addEventListener("click", () => {
-    const hidden = providerKeyInput.type === "password";
-    providerKeyInput.type = hidden ? "text" : "password";
-    providerKeyToggle.setAttribute(
-      "aria-label",
-      hidden ? "Hide API key" : "Show API key"
-    );
-    providerKeyToggle.textContent = hidden ? "Hide" : "Show";
+/**
+ * Build the key dialog body: a password input (prefilled from localStorage,
+ * persisted on input), a show/hide toggle, and a Clear Key action. The input
+ * only exists while the dialog is open; the stored key lives in localStorage.
+ * All markup is static — no user content is injected.
+ * @returns {HTMLElement}
+ */
+function buildProviderKeyBody() {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `
+    <p style="margin:0 0 var(--size-2)">Bring your own Tripo 3D key to generate without the free-tier on-chain quota. The key is stored only in this browser and sent with each generation request.</p>
+    <div class="form-group">
+      <label class="form-label" for="providerKeyInput">Tripo 3D API Key</label>
+      <div class="byok-field">
+        <input id="providerKeyInput" class="form-control" type="password" placeholder="sk-…" autocomplete="off">
+        <button id="providerKeyToggle" class="byok-toggle" type="button" aria-label="Show API key">Show</button>
+      </div>
+    </div>
+    <button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear Key</button>`;
+
+  const input = /** @type {HTMLInputElement} */ (
+    wrap.querySelector("#providerKeyInput")
+  );
+  const toggle = /** @type {HTMLButtonElement} */ (
+    wrap.querySelector("#providerKeyToggle")
+  );
+  const clear = /** @type {HTMLButtonElement} */ (
+    wrap.querySelector("#providerKeyClear")
+  );
+
+  input.value = localStorage.getItem(BYOK_KEY_STORAGE) || "";
+  input.addEventListener("input", () => {
+    localStorage.setItem(BYOK_KEY_STORAGE, input.value);
+    syncProviderUI();
+  });
+
+  toggle.addEventListener("click", () => {
+    const hidden = input.type === "password";
+    input.type = hidden ? "text" : "password";
+    toggle.setAttribute("aria-label", hidden ? "Hide API key" : "Show API key");
+    toggle.textContent = hidden ? "Hide" : "Show";
+  });
+
+  clear.addEventListener("click", () => {
+    input.value = "";
+    localStorage.removeItem(BYOK_KEY_STORAGE);
+    syncProviderUI();
+  });
+
+  return wrap;
+}
+
+function showProviderKeyDialog() {
+  return showCustomDialog("Tripo 3D API Key", buildProviderKeyBody());
+}
+
+if (providerKeyBtn) {
+  providerKeyBtn.addEventListener("click", () => {
+    showProviderKeyDialog();
   });
 }
 
@@ -243,14 +326,10 @@ async function onGenerate() {
     const provider = getProvider();
     const providerKey = getByokKey();
 
-    // Real providers require a BYOK key; mock does not. The on-chain
-    // quota/payment gate is never used by the generation route.
+    // Real providers require a BYOK key; mock does not. A missing key opens
+    // the key dialog directly — a guided flow, not a dead-end toast.
     if (isRealProvider() && providerKey.length === 0) {
-      showToast({
-        type: "warning",
-        title: "Provider Key Required",
-        message: `Add your ${provider} API key in Settings to generate.`,
-      });
+      showProviderKeyDialog();
       setGenerating(false);
       return;
     }
@@ -349,6 +428,7 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 
 syncAssetNameDisplay();
 updateGenerateHint();
+syncProviderUI();
 
 // Initialize collection select on load if wallet is already connected
 if (walletState.get().walletAddress) {

@@ -1,13 +1,13 @@
 /**
  * Arbesk Unified Sidebar Controller
  *
- * Single sidebar with 4-view switcher replacing 3 separate panels.
- * Views: Create, Outline, Library, Ledger.
+ * Single sidebar with a 5-view switcher.
+ * Views: AI Generation (chat), Settings, Outline, Gallery, Ledger.
  */
 
 import { emit, EVENTS } from "../events/bus.js";
 
-const VIEWS = ["settings", "chat", "outline", "library", "ledger"];
+const VIEWS = ["chat", "settings", "outline", "library", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
 
 /** @type {HTMLElement|null} */
