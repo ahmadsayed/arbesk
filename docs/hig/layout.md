@@ -33,14 +33,12 @@ GNOME apps follow a consistent layout:
 │ [✦] Arbesk  [Library][Studio]  My World · 3 nodes  [Save][Besk] [Wallet] │ HDR
 ├──────────┬───────────────────────────────────────────────────────┬───────┤
 │          │                                                       │       │
-│ ⚙ Settings│            3D Viewport                                │       │
-│ 💬 Chat  │            (Babylon.js canvas)                        │ Insp  │
+│ ✦ AI Gen │            3D Viewport                                │       │
+│ ⚙ Settings│            (Babylon.js canvas)                        │ Insp  │
 │ 🌳 Outln │                                                       │ (coll)│
 │ 📚 Gallery│                                                       │       │
 │ 📋 Activity│          [Inspector — open by default]             │       │
 │          │                                                       │       │
-│          ├───────────────────────────────────────────────────────┤       │
-│          │ [Describe your 3D asset…                        ][✦]  │       │
 ├──────────┴───────────────────────────────────────────────────────┴───────┤
 │ Draft · 3 nodes · 1 child · Depth 0/5                       [?]          │ BAR
 └──────────────────────────────────────────────────────────────────────────┘
@@ -53,14 +51,12 @@ GNOME apps follow a consistent layout:
 │ [✦] [←] My World ▸ Living Room  · 2 nodes  [Save]                [Wallet]│ HDR
 ├──────────┬───────────────────────────────────────────────────────┬───────┤
 │          │                                                       │       │
-│ ⚙ Settings│            3D Viewport                                │       │
-│ 💬 Chat  │            (Living Room's canvas)                     │ Insp  │
+│ ✦ AI Gen │            3D Viewport                                │       │
+│ ⚙ Settings│            (Living Room's canvas)                     │ Insp  │
 │ 🌳 Outln │                                                       │ (coll)│
 │ 📚 Gallery│                                                       │       │
 │ 📋 Activity│          [Inspector — open by default]             │       │
 │          │                                                       │       │
-│          ├───────────────────────────────────────────────────────┤       │
-│          │ [Describe an object for this room…             ][✦]  │       │
 ├──────────┴───────────────────────────────────────────────────────┴───────┤
 │ Depth 1/5 · 2 nodes · Token #42 · Living Room               [?]          │ BAR
 └──────────────────────────────────────────────────────────────────────────┘
@@ -74,7 +70,7 @@ GNOME apps follow a consistent layout:
 |---|---|---|
 | **Header Bar** | Current `.arabesque-topbar` | Brand icon, page switcher (Library/Studio), back button (nested), breadcrumb path bar, document title, history timeline pill, Save/Besk it buttons, wallet button |
 | **Left Sidebar** | `.chat-sidebar` + `.asset-library-panel` + `.ledger-panel` | Unified sidebar with View Switcher (5 icons) |
-| **Content Area** | `.main-stage` + `.viewport` | 3D canvas + bottom message bar |
+| **Content Area** | `.main-stage` + `.viewport` | 3D canvas (prompt input lives in the AI Generation sidebar view) |
 | **Right Inspector** | Floating `#inspector` | Right sidebar. Open by default; content is contextual to the selected node. Collapsible via the X button. Modes: parametric color editor, token child info, asset comments. |
 | **Bottom Bar** | New | Document state, nesting depth, node/child counts, keyboard-shortcuts button |
 
@@ -86,8 +82,8 @@ The sidebar uses a vertical icon stack to switch between five views:
 
 | # | View | `data-view` | Content |
 |---|---|---|---|
-| 1 | **Settings** | `settings` | Asset settings (name, collection, provider, tier, BYOK key, collaborators) |
-| 2 | **Chat** | `chat` | Prompt/chat history and generation status |
+| 1 | **AI Generation** | `chat` | Prompt input, generation history/status, provider select (Mock (Local) / Tripo 3D) with API-key dialog via the key icon |
+| 2 | **Settings** | `settings` | Asset settings (name, collection, tier, collaborators) |
 | 3 | **Outline** | `outline` | Scene tree showing nodes and child worlds. Click to select, double-click to dive. |
 | 4 | **Gallery** | `library` | "My Assets" + "Shared Assets" with draggable asset cards |
 | 5 | **Activity** | `ledger` | Operation filter + stats + log entries derived from the manifest chain |
@@ -123,16 +119,18 @@ Dive/Ascend: Double-click child world → dive. Back button / `Alt+Left` / `Esca
 
 ---
 
-## Message Bar (Prompt Input)
+## Prompt Input (AI Generation View)
 
-Pinned to bottom of content area. Expands on multi-line input. Generate button inline.
+Lives at the bottom of the AI Generation sidebar view, co-located with the conversation it feeds. Expands on multi-line input. Generate button inline.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         3D Viewport                              │
-├─────────────────────────────────────────────────────────────────┤
-│ [Describe your 3D asset…                                 ][✦]   │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────┐
+│ AI Generation    │
+│                  │
+│ (chat history)   │
+│                  │
+│ [Describe…]  [✦] │
+└──────────────────┘
 ```
 
 ---
@@ -170,7 +168,7 @@ Shows document state, depth, node/child counts. Keyboard-shortcuts button lives 
 | `#assetStatus` block | Replaced by `#assetStatusName` / `#assetStatusMeta` in headerbar |
 | `#newAssetTopBtn` | Superseded by `#newAssetBtn` in headerbar (still `Ctrl+N`) |
 | Bootstrap 5 dependency | Replaced by token system |
-| `.chat-editor` wrapper | Replaced by message bar |
+| `.chat-editor` wrapper | Replaced by the AI Generation prompt input |
 | `.welcome-overlay` | Replaced by inline empty state |
 | `.waiting-overlay` | Replaced by inline spinner + status |
 | `.arabesque-spinner` | Replaced by inline spinner on button |

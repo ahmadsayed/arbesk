@@ -241,7 +241,6 @@ All component CSS uses ONLY these. Never reference `-light` or `-dark` variants 
   --headerbar-height: 48px;
   --sidebar-width: 340px;
   --inspector-width: 340px;
-  --messagebar-min-height: 52px;
   --bottombar-height: 32px;
 }
 ```
@@ -371,7 +370,6 @@ styles.scss              ← entry point, ~38 @use lines
 │   ├── _sidebar.scss
 │   ├── _viewport.scss
 │   ├── _inspector.scss
-│   ├── _messagebar.scss
 │   ├── _bottombar.scss
 │   ├── _buttons.scss
 │   ├── _forms.scss

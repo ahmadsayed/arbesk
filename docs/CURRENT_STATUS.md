@@ -157,7 +157,7 @@ frontend/src/js/
 │   ├── ledger-panel.js         # Activity feed derived from manifest chain
 │   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
-│   ├── sidebar.js              # 5-view switcher (Settings/Chat/Outline/Gallery/Activity)
+│   ├── sidebar.js              # 5-view switcher (AI Generation/Settings/Outline/Gallery/Activity)
 │   ├── library-controller.js   # Library view orchestration, data loading, and Studio handoff
 │   ├── library-grid.js         # Library grid/list rendering, selection, keyboard, rubber-band; minting/besked/wip status badges
 │   ├── library-toolbar.js      # Breadcrumb, search, sort, view toggle, New Collection, Upload

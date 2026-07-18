@@ -35,7 +35,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 │                            Browser Studio                           │
 │                                                                     │
 │  Pug/SCSS shell                                                      │
-│  ├─ Chat + asset definition panel                                    │
+│  ├─ AI Generation + asset definition panel                           │
 │  ├─ Babylon.js viewport                                              │
 │  ├─ Node inspector: color + scale                                    │
 │  ├─ History browser / manifest chain timeline (client-side walk)     │

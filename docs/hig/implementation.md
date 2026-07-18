@@ -22,7 +22,7 @@ frontend/src/scss/
 │   ├── _sidebar.scss
 │   ├── _viewport.scss
 │   ├── _inspector.scss
-│   ├── _messagebar.scss
+│   ├── _messagebar.scss        ← deleted 2026-07; composer styles moved into `_chat.scss`
 │   ├── _bottombar.scss
 │   ├── _buttons.scss
 │   ├── _forms.scss
@@ -83,7 +83,7 @@ frontend/src/scss/
 
 **Template:**
 - Merge the previous left chat/library panels and bottom ledger into one `<aside class="sidebar">`
-- Add View Switcher: 5 icon buttons (Settings, Chat, Outline, Gallery, Activity)
+- Add View Switcher: 5 icon buttons (Settings, Chat, Outline, Gallery, Activity) — Chat later relabeled **AI Generation** and reordered first (2026-07)
 - Content sections: `[data-view="settings"]`, `[data-view="chat"]`, `[data-view="outline"]`, `[data-view="library"]`, `[data-view="ledger"]`
 
 **Removed:**
@@ -114,7 +114,7 @@ frontend/src/scss/
 
 ### Phase E: Content Area + Nesting Navigation — 2 days (depends on B, D)
 
-- Move prompt input to bottom `.message-bar`
+- Move prompt input to bottom `.message-bar` (later relocated into the AI Generation sidebar view, 2026-07)
 - Add path bar to header for nesting breadcrumbs
 - Add back button (nested only)
 - Welcome overlay → inline empty state

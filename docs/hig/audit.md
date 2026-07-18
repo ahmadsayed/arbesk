@@ -12,15 +12,14 @@ The current studio (`app.pug` + `styles.scss` + ~27 UI modules) is a single-page
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ [✦] Arbesk  [Library][Studio]  My World · 3 nodes  [Save][Besk] [Wallet] │ ← Header Bar (48px)
 ├──────────────────────────────────────────────────────────────────────────┤
-│ ┌──────────┐ ┌──────────────────────────────┐ ┌────────────────────────┐ │
-│ │ Settings │ │                              │ │                        │ │
-│ │ Chat     │ │     3D Viewport              │ │     Inspector          │ │
-│ │ Outline  │ │     (Babylon.js canvas)      │ │     (collapsed)        │ │
-│ │ Gallery  │ │                              │ │                        │ │
-│ │ Activity │ │ [Prompt textarea        ][✦] │ │                        │ │
-│ │          │ ├──────────────────────────────┤ │                        │ │
-│ │          │ │ Message Bar                  │ │                        │ │
-│ └──────────┘ └──────────────────────────────┘ └────────────────────────┘ │
+│ ┌───────────────┐ ┌─────────────────────────┐ ┌────────────────────────┐ │
+│ │ AI Generation │ │                         │ │                        │ │
+│ │ Settings      │ │       3D Viewport       │ │       Inspector        │ │
+│ │ Outline       │ │   (Babylon.js canvas)   │ │      (collapsed)       │ │
+│ │ Gallery       │ │                         │ │                        │ │
+│ │ Activity      │ │                         │ │                        │ │
+│ │               │ │                         │ │                        │ │
+│ └───────────────┘ └─────────────────────────┘ └────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ Draft · 3 nodes · 1 child · Depth 0/5                    [?]             │ ← Bottom Bar
 └──────────────────────────────────────────────────────────────────────────┘
@@ -28,9 +27,8 @@ The current studio (`app.pug` + `styles.scss` + ~27 UI modules) is a single-page
 
 | Panel / Zone | Toggle Mechanism | Position |
 |---|---|---|
-| Left Sidebar (Settings/Chat/Outline/Gallery/Activity) | View-switcher tabs + collapse toggle | Left, 340px |
+| Left Sidebar (AI Generation/Settings/Outline/Gallery/Activity) | View-switcher tabs + collapse toggle | Left, 340px |
 | Inspector | `collapsed` class, toggled by node selection | Right, 340px |
-| Message Bar | Always visible | Bottom of viewport |
 | Bottom Bar | Always visible | Full-width bottom, 32px |
 | Header Bar | Always visible | Full-width top, 48px |
 | Drop overlay | Programmatic show/hide via CSS classes | Over the viewport |

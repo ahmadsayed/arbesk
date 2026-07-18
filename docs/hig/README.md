@@ -14,8 +14,8 @@
 | Zone | Content |
 |---|---|
 | **Header Bar** | Brand icon + page switcher (Library/Studio) + document title + history timeline pill + Save/Besk it + path bar (when nested). Wallet button lives here. |
-| **Left Sidebar** | View Switcher: Settings / Chat / Outline / Gallery / Activity |
-| **Content Center** | 3D viewport + prompt at bottom |
+| **Left Sidebar** | View Switcher: AI Generation / Settings / Outline / Gallery / Activity |
+| **Content Center** | 3D viewport (prompt input lives at the bottom of the AI Generation view) |
 | **Right Inspector** | Appears on node selection. Modes: parametric color editor, token child info, asset comments |
 | **Bottom Bar** | Status (draft/depth, counts) + keyboard-shortcuts button |
 
