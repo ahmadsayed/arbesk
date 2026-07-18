@@ -1,5 +1,5 @@
 // @ts-nocheck
-const SUPPORTED_EXTENSIONS = [".glb", ".gltf"];
+const SUPPORTED_EXTENSIONS = [".glb", ".gltf", ".3mf"];
 
 export function isSupportedFile(filename) {
   const lower = String(filename).toLowerCase();

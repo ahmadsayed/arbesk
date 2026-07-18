@@ -249,10 +249,12 @@ Validates the new Library toolbar flows for collection creation and desktop file
 3. Opens the new collection.
 4. Uses the **Upload** button to select `mock-gltf-assets/howdy.glb` from disk.
 5. Asserts the uploaded file appears as an asset named `howdy` inside the collection.
-6. Opens the uploaded asset in Studio and asserts it loads.
-7. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
+6. Resolves the on-chain collection manifest and asserts the uploaded asset manifest's source was **decomposed at upload** to `composite.gltf` / `format: "gltf"` — the canonical stored form a Studio save produces.
+7. Opens the uploaded asset in Studio and asserts it loads.
+8. Repeats the flow with `mock-gltf-assets/box.3mf`: asserts the asset manifest's source was decomposed to `composite.3mf.json` / `format: "3mf"`, and that it opens in Studio (compose-on-load).
+9. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
 
-**Why it matters:** These flows exercise `library-toolbar.js`, `library-ops.js`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads.
+**Why it matters:** These flows exercise `library-toolbar.js`, `library-ops.js`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads, and they pin the decompose-at-upload guarantee: every upload (GLB/glTF/3MF) lands in the collection in the same canonical decomposed stored form a Studio save would produce.
 
 ### 13. Editor collaboration (`e2e/specs/13-editor-collaboration.spec.js`)
 

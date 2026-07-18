@@ -5,6 +5,11 @@
  * These helpers run in the browser, reuse the existing IPFS writers, and
  * anchor changes on-chain via the wallet contract. They deliberately do not
  * import the Studio save module so the Library page stays lightweight.
+ *
+ * Every upload (glTF, GLB, 3MF) is decomposed into its canonical stored form
+ * at upload time — composite.gltf / composite.3mf.json — via the same format
+ * handlers the Studio save path uses (lazy-imported from formats/index.js),
+ * so Library uploads and Studio-saved assets are stored identically.
  */
 
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
@@ -27,7 +32,7 @@ function ts() {
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set(["glb", "gltf"]);
+const ALLOWED_EXTENSIONS = new Set(["glb", "gltf", "3mf"]);
 
 function editorListKey(tokenId) {
   return EDITOR_LIST_PREFIX + tokenId;
@@ -162,7 +167,7 @@ function validateUploadFile(file) {
   if (!file) throw new Error("No file selected");
   const ext = fileExtension(file.name);
   if (!ALLOWED_EXTENSIONS.has(ext)) {
-    throw new Error(`Unsupported file type .${ext}. Please upload .glb or .gltf.`);
+    throw new Error(`Unsupported file type .${ext}. Please upload .glb, .gltf, or .3mf.`);
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error(`File is too large. Maximum size is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
@@ -171,7 +176,42 @@ function validateUploadFile(file) {
 }
 
 /**
- * Upload a desktop glTF/GLB file into an existing collection.
+ * Decompose an uploaded source into its canonical stored form — the same
+ * transformation the Studio save/publish path runs via the format handlers
+ * (composite.gltf for glTF/GLB, composite.3mf.json for 3MF). Best-effort,
+ * mirroring Studio's save: on failure the raw upload is kept — every handler's
+ * load() accepts the raw form, and a later Studio save retries decompose.
+ *
+ * @param {object} assetManifest - Freshly built single-node upload manifest.
+ */
+async function decomposeUploadSource(assetManifest) {
+  const node = assetManifest.scene?.nodes?.[0];
+  if (!node?.source?.cid) return;
+  try {
+    // Lazy import: keeps the decompose chain (and its worker pool) out of the
+    // Library page's initial module graph — same pattern as the 3MF handler.
+    const { resolveFormatHandler } = await import("../formats/index.js");
+    const handler = resolveFormatHandler(node.source);
+    if (handler.isStoredForm(node)) return;
+    const result = await handler.decomposeForSave(node, {
+      assetName: assetManifest.name,
+      assetId: assetManifest.asset_id,
+    });
+    if (!result) return;
+    node.source.cid = result.cid;
+    node.source.path = result.path;
+    if (result.format) node.source.format = result.format;
+    log(`[LIBRARY-OPS] decomposed upload → ${result.cid} (${result.path})`);
+  } catch (err) {
+    warn(
+      `[LIBRARY-OPS] decompose at upload failed, keeping raw source: ${err.message}`
+    );
+  }
+}
+
+/**
+ * Upload a desktop glTF/GLB/3MF file into an existing collection. The source
+ * is decomposed to its canonical stored form before the manifest is written.
  *
  * @param {File} file
  * @param {string|number} collectionTokenId
@@ -221,6 +261,8 @@ export async function uploadFileToCollection(file, collectionTokenId) {
       ],
     },
   };
+
+  await decomposeUploadSource(assetManifest);
 
   const assetManifestCid = await writeJSONToIPFS(assetManifest, null, {
     type: "asset",

@@ -11,6 +11,8 @@ let _getFromRemoteIPFS = jest.fn();
 let _updateCollectionManifest = jest.fn().mockResolvedValue("bafyCollection");
 let _computeRoot = jest.fn().mockReturnValue("0xRoot");
 let _getProof = jest.fn().mockReturnValue({ proof: ["0xProof"], role: 2 });
+let _decomposeForSave = jest.fn();
+let _isStoredForm = jest.fn();
 
 let _walletAddress = "0xUser";
 let _contract = {
@@ -55,6 +57,12 @@ beforeEach(() => {
   _updateCollectionManifest = jest.fn().mockResolvedValue("bafyCollection");
   _computeRoot = jest.fn().mockReturnValue("0xRoot");
   _getProof = jest.fn().mockReturnValue({ proof: ["0xProof"], role: 2 });
+  _decomposeForSave = jest.fn().mockResolvedValue({
+    cid: "bafyComposite",
+    path: "composite.gltf",
+    format: "gltf",
+  });
+  _isStoredForm = jest.fn().mockReturnValue(false);
   _walletAddress = "0xUser";
   _contract = {
     methods: {
@@ -117,6 +125,16 @@ async function loadModule() {
     })
   );
 
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/formats/index.js",
+    () => ({
+      resolveFormatHandler: jest.fn(() => ({
+        isStoredForm: (...args) => _isStoredForm(...args),
+        decomposeForSave: (...args) => _decomposeForSave(...args),
+      })),
+    })
+  );
+
   const mod = await import("../../frontend/src/js/services/library-ops.js");
   return mod;
 }
@@ -171,9 +189,64 @@ describe("uploadFileToCollection", () => {
     const result = await uploadFileToCollection(file, "999");
 
     expect(_writeToIPFS).toHaveBeenCalledWith(expect.any(Uint8Array), "model.glb");
+    expect(_decomposeForSave).toHaveBeenCalled();
+    const writtenManifest = _writeJSONToIPFS.mock.calls[0][0];
+    expect(writtenManifest.scene.nodes[0].source).toEqual({
+      cid: "bafyComposite",
+      path: "composite.gltf",
+      format: "gltf",
+    });
     expect(_writeJSONToIPFS).toHaveBeenCalled();
     expect(_updateCollectionManifest).toHaveBeenCalledWith("999", expect.any(Function), { label: "upload asset" });
     expect(result.assetManifestCid).toBe("bafyAssetManifest");
+  });
+
+  test("uploads a 3MF file and stores it decomposed", async () => {
+    _decomposeForSave = jest.fn().mockResolvedValue({
+      cid: "bafyComposite3mf",
+      path: "composite.3mf.json",
+      format: "3mf",
+    });
+    const { uploadFileToCollection } = await loadModule();
+
+    const file = new File(["zipbytes"], "box.3mf", { type: "model/3mf" });
+    await uploadFileToCollection(file, "999");
+
+    expect(_writeToIPFS).toHaveBeenCalledWith(expect.any(Uint8Array), "box.3mf");
+    expect(_decomposeForSave).toHaveBeenCalled();
+    const writtenManifest = _writeJSONToIPFS.mock.calls[0][0];
+    expect(writtenManifest.scene.nodes[0].source).toEqual({
+      cid: "bafyComposite3mf",
+      path: "composite.3mf.json",
+      format: "3mf",
+    });
+    expect(_updateCollectionManifest).toHaveBeenCalledWith("999", expect.any(Function), { label: "upload asset" });
+  });
+
+  test("keeps the raw source when decompose fails", async () => {
+    _decomposeForSave = jest.fn().mockRejectedValue(new Error("boom"));
+    const { uploadFileToCollection } = await loadModule();
+
+    const file = new File(["binary"], "model.glb", { type: "model/gltf-binary" });
+    const result = await uploadFileToCollection(file, "999");
+
+    const writtenManifest = _writeJSONToIPFS.mock.calls[0][0];
+    expect(writtenManifest.scene.nodes[0].source).toEqual({
+      cid: "bafySource",
+      path: "model.glb",
+      format: "glb",
+    });
+    expect(result.assetManifestCid).toBe("bafyJson");
+  });
+
+  test("skips decompose when the handler reports stored form", async () => {
+    _isStoredForm = jest.fn().mockReturnValue(true);
+    const { uploadFileToCollection } = await loadModule();
+
+    const file = new File(["binary"], "model.glb", { type: "model/gltf-binary" });
+    await uploadFileToCollection(file, "999");
+
+    expect(_decomposeForSave).not.toHaveBeenCalled();
   });
 
   test("rejects unsupported extensions", async () => {

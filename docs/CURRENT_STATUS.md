@@ -201,7 +201,7 @@ frontend/src/js/
 └── services/
     ├── api.js                  # API client: sessions (SIWE), generate, comments archive, unpin, upload-url, paymaster
     ├── asset-save/             # manifest-builder.js, collection-publish.js, editor-publish.js
-    ├── library-ops.js          # Create named collection (with onPending hook), upload glTF/GLB
+    ├── library-ops.js          # Create named collection (with onPending hook), upload glTF/GLB/3MF (decomposed at upload)
     ├── team.js / asset-delete.js / url-utils.js
     └── ...
 ```
@@ -321,7 +321,7 @@ frontend/src/js/
 | Time-travel version slider | ✅ | ✅ |
 | Nested child world composition | ✅ | ✅ |
 | Collection create (optimistic) | ✅ instant card, auto-rollback | ✅ instant card, sponsored |
-| Upload GLB/glTF to collection | ✅ | ✅ |
+| Upload GLB/glTF/3MF to collection (decomposed at upload) | ✅ | ✅ |
 | Library page (grid/list/search) | ✅ | ✅ |
 | Asset-level Nostr comments | ✅ | ✅ |
 | Merkle editor collaboration | ✅ | ✅ |
