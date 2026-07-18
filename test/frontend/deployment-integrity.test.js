@@ -675,3 +675,64 @@ describe("Deployment Pipeline Integrity", () => {
     });
   });
 });
+
+describe("AI Generation sidebar", () => {
+  const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
+  const pug = () => readFileSync(STUDIO_PUG_PATH, "utf-8");
+
+  test("provider select offers only Mock and Tripo 3D", () => {
+    const content = pug();
+    expect(content).toContain('option(value="mock") Mock (Local)');
+    expect(content).toContain('option(value="tripo3d") Tripo 3D');
+    expect(content).not.toContain('value="meshy"');
+    expect(content).not.toContain('value="hunyuan3d"');
+  });
+
+  test("prompt input lives in the sidebar, before the main stage", () => {
+    const content = pug();
+    expect(content).toContain("textarea#promptInput");
+    expect(content.indexOf("textarea#promptInput")).toBeLessThan(
+      content.indexOf("main#mainStage"),
+    );
+  });
+
+  test("AI Generation is the first rail button with an explicit AI label", () => {
+    const content = pug();
+    expect(content).toContain('aria-label="AI Generation"');
+    expect(content.indexOf('data-view="chat"')).toBeLessThan(
+      content.indexOf('data-view="settings"'),
+    );
+  });
+
+  test("provider row has a configure-key button and a missing-key hint", () => {
+    const content = pug();
+    expect(content).toContain("button#providerKeyBtn");
+    expect(content).toContain("#providerKeyHint");
+  });
+
+  test("BYOK key input is not inlined (it lives in the key dialog)", () => {
+    expect(pug()).not.toContain("input#providerKeyInput");
+  });
+
+  test("bottom bar provider status is live-bindable", () => {
+    expect(pug()).toContain("span#bottomBarProvider");
+  });
+
+  test("sidebar view order puts chat first", () => {
+    const src = readFileSync(
+      resolve(ROOT_DIR, "frontend/src/js/ui/sidebar.js"),
+      "utf-8",
+    );
+    expect(src).toContain(
+      'const VIEWS = ["chat", "settings", "outline", "library", "ledger"]',
+    );
+  });
+
+  test("keyboard help lists all five sidebar shortcuts", () => {
+    const src = readFileSync(
+      resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.js"),
+      "utf-8",
+    );
+    expect(src).toContain("1 – 5");
+  });
+});
