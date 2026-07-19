@@ -3,12 +3,16 @@
  *
  * Single sidebar with a 5-view switcher.
  * Views: AI Generation (chat), Settings, Outline, Gallery, Ledger.
+ * The width is user-resizable (drag handle, persisted) on wide layouts.
  */
 
 import { emit, EVENTS } from "../events/bus.js";
 
 const VIEWS = ["chat", "settings", "outline", "library", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
+const WIDTH_STORAGE_KEY = "arbesk-sidebar-width";
+const MIN_SIDEBAR_WIDTH = 260;
+const MAX_SIDEBAR_WIDTH = 560;
 
 /** @type {HTMLElement|null} */
 let sidebar = null;
@@ -69,6 +73,14 @@ function initSidebar() {
   if (revealBtn) {
     revealBtn.addEventListener("click", expandSidebar);
   }
+
+  // Width: restore the user's width, wire the drag handle, and keep the
+  // feature in sync with the wide/overlay layout boundary.
+  applyStoredSidebarWidth();
+  initSidebarResizeHandle();
+  window
+    .matchMedia("(min-width: 901px)")
+    .addEventListener("change", applyStoredSidebarWidth);
 
   function isEditing() {
     const activeEl = /** @type {HTMLElement|null} */ (document.activeElement);
@@ -164,6 +176,123 @@ function expandSidebar() {
 
 function isCollapsed() {
   return collapsed;
+}
+
+// ─── Width Resizing ──────────────────────────────────────────────────
+
+/**
+ * @param {number} px
+ * @returns {number}
+ */
+function clampSidebarWidth(px) {
+  return Math.min(
+    MAX_SIDEBAR_WIDTH,
+    Math.max(MIN_SIDEBAR_WIDTH, Math.round(px))
+  );
+}
+
+// Resizing only applies to wide layouts; at ≤900px the sidebar is an overlay
+// pinned by the responsive tokens.
+function isWideLayout() {
+  return window.matchMedia("(min-width: 901px)").matches;
+}
+
+function applyStoredSidebarWidth() {
+  if (!sidebar) return;
+  if (!isWideLayout()) {
+    sidebar.style.removeProperty("--sidebar-width-user");
+    return;
+  }
+  const stored = parseInt(localStorage.getItem(WIDTH_STORAGE_KEY) || "", 10);
+  if (Number.isFinite(stored)) {
+    sidebar.style.setProperty(
+      "--sidebar-width-user",
+      `${clampSidebarWidth(stored)}px`
+    );
+  } else {
+    sidebar.style.removeProperty("--sidebar-width-user");
+  }
+}
+
+/**
+ * @param {number} px
+ */
+function setUserSidebarWidth(px) {
+  if (!sidebar) return;
+  sidebar.style.setProperty(
+    "--sidebar-width-user",
+    `${clampSidebarWidth(px)}px`
+  );
+}
+
+function persistUserSidebarWidth() {
+  if (!sidebar) return;
+  const width = parseInt(
+    sidebar.style.getPropertyValue("--sidebar-width-user"),
+    10
+  );
+  if (Number.isFinite(width)) {
+    localStorage.setItem(WIDTH_STORAGE_KEY, String(clampSidebarWidth(width)));
+  }
+}
+
+function resetSidebarWidth() {
+  if (!sidebar) return;
+  localStorage.removeItem(WIDTH_STORAGE_KEY);
+  sidebar.style.removeProperty("--sidebar-width-user");
+}
+
+function initSidebarResizeHandle() {
+  const handle = document.getElementById("sidebarResizeHandle");
+  if (!handle || !sidebar) return;
+  const sidebarEl = sidebar;
+
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartWidth = 0;
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (!isWideLayout() || collapsed) return;
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartWidth = sidebarEl.getBoundingClientRect().width;
+    handle.setPointerCapture(e.pointerId);
+    sidebarEl.classList.add("resizing");
+    document.body.classList.add("sidebar-resizing");
+    e.preventDefault();
+  });
+
+  handle.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    setUserSidebarWidth(dragStartWidth + (e.clientX - dragStartX));
+  });
+
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    sidebarEl.classList.remove("resizing");
+    document.body.classList.remove("sidebar-resizing");
+    persistUserSidebarWidth();
+  };
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+
+  // Double-click restores the default token width.
+  handle.addEventListener("dblclick", resetSidebarWidth);
+
+  // Keyboard: ←/→ steps 16px, Home restores the default.
+  handle.addEventListener("keydown", (e) => {
+    if (e.key === "Home") {
+      e.preventDefault();
+      resetSidebarWidth();
+      return;
+    }
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? 16 : -16;
+    setUserSidebarWidth(sidebarEl.getBoundingClientRect().width + delta);
+    persistUserSidebarWidth();
+  });
 }
 
 // ─── Responsive ──────────────────────────────────────────────────────

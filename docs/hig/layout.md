@@ -88,6 +88,8 @@ The sidebar uses a vertical icon stack to switch between five views:
 | 4 | **Gallery** | `library` | "My Assets" + "Shared Assets" with draggable asset cards |
 | 5 | **Activity** | `ledger` | Operation filter + stats + log entries derived from the manifest chain |
 
+**Sidebar width** — user-resizable on wide layouts (> 900px): drag the strip on the sidebar's right edge (or focus it and use ←/→, 16px steps), clamped 260–560px, persisted via `arbesk-sidebar-width`; double-click or Home restores the 340px token default. Hidden and inert at ≤900px where the sidebar is an overlay.
+
 ---
 
 ## Header Bar

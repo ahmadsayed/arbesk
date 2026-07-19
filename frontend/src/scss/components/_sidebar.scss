@@ -8,7 +8,8 @@
 .sidebar {
   display: flex;
   flex-shrink: 0;
-  width: var(--sidebar-width);
+  position: relative;
+  width: var(--sidebar-width-user, var(--sidebar-width));
   height: 100%;
   background: var(--gradient-sidebar);
   color: var(--sidebar-fg);
@@ -19,6 +20,12 @@
   &.collapsed {
     width: 0;
     border-right: none;
+  }
+
+  // Live drag sets --sidebar-width-user inline; the transition would lag
+  // behind the pointer, so it is suspended for the duration of the drag.
+  &.resizing {
+    transition: none;
   }
 }
 
@@ -243,5 +250,57 @@
   .sidebar.collapsed ~ & {
     opacity: 1;
     pointer-events: auto;
+  }
+}
+
+// ─── Resize handle ───
+// Drag strip on the sidebar's right edge. Wide layouts only — at ≤900px the
+// sidebar becomes an overlay with a fixed token width, so the handle hides.
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 10;
+
+  // Grip line, shown on hover/focus/drag.
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: transparent;
+    transition: background-color var(--duration-quick) var(--ease-out-3);
+  }
+
+  &:hover::after,
+  &:focus-visible::after,
+  .sidebar.resizing &::after {
+    background: var(--accent-bg);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+
+  .sidebar.collapsed & {
+    display: none;
+  }
+}
+
+// While dragging, keep the cursor consistent and prevent text selection.
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (max-width: 900px) {
+  .sidebar-resize-handle {
+    display: none;
   }
 }
