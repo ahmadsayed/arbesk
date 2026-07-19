@@ -236,13 +236,46 @@ async function startBackend(i) {
     const res = await fetch(`${ports.backendUrl}/studio`);
     if (res.ok) {
       backendAlreadyRunning = true;
-      log(`Worker ${i}: backend already running on ${ports.backendPort}; reusing it`);
     }
   } catch {
     // not running - start it
   }
 
   let backendPid = null;
+  if (backendAlreadyRunning) {
+    // Only reuse a backend that is actually E2E-compatible. A stray dev
+    // backend — e.g. start-dev.sh --testnet (Pinata + Base Sepolia) — would
+    // otherwise be reused silently and specs fail with confusing symptoms
+    // (IPFS 504s on gateway fetches, indexer returning no owned tokens).
+    let cfg = null;
+    try {
+      const cfgRes = await fetch(`${ports.backendUrl}/api/v1/config`);
+      cfg = cfgRes.ok ? await cfgRes.json() : null;
+    } catch {
+      cfg = null;
+    }
+    const mismatches = [];
+    if (!cfg) {
+      mismatches.push("no /api/v1/config");
+    } else {
+      if (cfg.ipfsBackend !== "kubo")
+        mismatches.push(`ipfsBackend=${cfg.ipfsBackend}`);
+      if (cfg.mockGeneration !== true) mismatches.push("mockGeneration off");
+      if (cfg.hardhatRpcUrl !== ports.hardhatRpc)
+        mismatches.push(`hardhatRpcUrl=${cfg.hardhatRpcUrl}`);
+    }
+    if (mismatches.length > 0) {
+      throw new Error(
+        `Worker ${i}: a foreign backend is occupying ${ports.backendUrl} ` +
+          `(${mismatches.join(", ")}). Stop it (e.g. the start-dev.sh dev ` +
+          `server) and re-run the E2E suite.`,
+      );
+    }
+    log(
+      `Worker ${i}: compatible backend already running on ${ports.backendPort}; reusing it`,
+    );
+  }
+
   if (!backendAlreadyRunning) {
     log(`Worker ${i}: starting backend on ${ports.backendPort}...`);
     const backendProcess = spawn("node", ["src/index.js"], {

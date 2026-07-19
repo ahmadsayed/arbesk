@@ -421,6 +421,7 @@ Use this when a spec fails and you need to inspect the browser state, DOM, netwo
 | Symptom | Likely cause |
 |---------|--------------|
 | `Backend not reachable on 9090` | Global setup failed to start the backend; check Docker/IPFS/Hardhat are healthy. |
+| `a foreign backend is occupying http://127.0.0.1:9090` | A dev server (e.g. `start-dev.sh` — especially `--testnet`, which runs Pinata + Base Sepolia) is already on the port. Global setup only reuses E2E-compatible backends (kubo IPFS, mock generation, this worker's Hardhat RPC). Stop the dev server and re-run. |
 | `Payment validation failed` | `CONTRACT_ADDRESS` in backend config points to the paid contract instead of `ArbeskAssetFree`; run setup again so configs are repatched. |
 | `locator('#chatHistoryList')` does not contain `Model carved via mock` | Generation failed; check backend logs for the actual error. |
 | Dialog `.dialog-input` not found | Save/publish flow changed or the dialog did not open; verify UI behavior manually. |
