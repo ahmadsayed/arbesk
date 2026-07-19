@@ -11,7 +11,9 @@ import {
   loadAssetManifest,
   clearScene,
   dismissCreatePulse,
+  initEngine,
 } from "../engine/scene-graph.js";
+import { ensureBabylon } from "../engine/babylon-loader.js";
 import { getActiveContract, web3 } from "../blockchain/wallet.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { deleteAssetFromCollection } from "../services/asset-delete.js";
@@ -346,6 +348,19 @@ async function openAssetEntry(entry) {
   }
 }
 
+/**
+ * Ensure the lazily-loaded Babylon engine is ready before rendering an asset.
+ * On a cold `/studio?asset=…` deep-link the WALLET_CONNECTED handler can fire
+ * before the router has finished `ensureBabylon()`, which otherwise makes
+ * `loadAssetManifest` fail with "BABYLON is not defined". A bare
+ * `?asset=<collectionTokenId>` link still skips the engine until an asset is
+ * actually opened.
+ */
+async function ensureEngineReady() {
+  await ensureBabylon();
+  initEngine();
+}
+
 export async function openAssetByTokenId(tokenId, assetId = null) {
   const contract = getActiveContract();
   if (!contract) {
@@ -413,6 +428,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       updateUrlAsset(tokenId, hasExplicitAssetId ? assetId : null);
 
       if (targetAssetCid) {
+        await ensureEngineReady();
         await loadAssetManifest(targetAssetCid);
       }
 
@@ -436,6 +452,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     });
     dismissCreatePulse();
     updateUrlAsset(tokenId, assetId);
+    await ensureEngineReady();
     await loadAssetManifest(cid);
 
     const { refreshTeamPanel } = await import("./collaborators.js");
