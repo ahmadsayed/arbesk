@@ -15,6 +15,15 @@
   overflow: hidden;
 }
 
+// Pre-router paint: js/app/initial-view.js (blocking, in <head>) marks
+// <html data-initial-view> from the URL so a cold /library entry never
+// flashes the Studio while deferred scripts and modules load. The router
+// deletes the attribute on init; from then on .hidden toggles govern.
+html[data-initial-view='library'] #studioView,
+html[data-initial-view='studio'] #libraryView {
+  display: none !important;
+}
+
 // Studio-only header widgets have no meaning in the Library view. Hide them
 // while Library is active (body[data-view] is set by the router).
 body[data-view='library'] {

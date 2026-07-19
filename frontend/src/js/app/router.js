@@ -18,6 +18,7 @@ import {
   pauseRenderLoop,
   resumeRenderLoop,
 } from "../engine/scene-graph.js";
+import { ensureBabylon } from "../engine/babylon-loader.js";
 import { refreshLibraryData } from "../ui/library-controller.js";
 import { walletState } from "../state/wallet-state.js";
 
@@ -34,7 +35,16 @@ export function pathToView(pathname) {
   return pathname.startsWith("/library") ? "library" : "studio";
 }
 
-function activateStudio() {
+async function activateStudio() {
+  // Babylon is fetched lazily (see babylon-loader.js) so Library boots and
+  // the sign-in modal never wait for a 3D engine they don't use. First
+  // Studio entry pays the CDN cost once; later entries are instant.
+  try {
+    await ensureBabylon();
+  } catch (err) {
+    console.error("[ENGINE] Failed to load Babylon.js:", err);
+    return;
+  }
   initEngine(); // idempotent — creates the engine on first Studio entry only
   resumeRenderLoop();
   // Load whatever the URL points at (Library → Studio handoff, or a cold
@@ -125,4 +135,7 @@ export function initRouter() {
   });
 
   setView(pathToView(location.pathname));
+  // The pre-paint marker from initial-view.js has done its job — from here
+  // the router's .hidden toggles govern which view is visible.
+  delete document.documentElement.dataset.initialView;
 }

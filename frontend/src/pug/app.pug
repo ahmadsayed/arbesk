@@ -9,17 +9,16 @@ html(lang="en")
     link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
     link(rel="stylesheet", href="/css/styles.css")
     script(src="/js/engine/theme-init.js")
+    script(src="/js/app/initial-view.js")
     //- All classic CDN scripts are deferred: our own code is type="module"
     //- (defer-by-definition) and deferred classic scripts run before module
     //- scripts in document order, so globals are ready without blocking paint.
     script(src="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.js" crossorigin="anonymous" defer)
     script(src="https://cdn.jsdelivr.net/npm/tabbable@6.2.0/dist/index.umd.min.js" crossorigin="anonymous" defer)
     script(src="https://cdn.jsdelivr.net/npm/focus-trap@7.6.2/dist/focus-trap.umd.min.js" crossorigin="anonymous" defer)
-    //- cdn.babylonjs.com only ships the unminified core at versioned paths;
-    //- jsDelivr hosts the minified build of the same version.
-    script(src="https://cdn.jsdelivr.net/npm/babylonjs@9.12.0/babylon.min.js" crossorigin="anonymous" defer)
-    script(src="https://cdn.babylonjs.com/v9.12.0/loaders/babylonjs.loaders.min.js" crossorigin="anonymous" defer)
-    script(src="https://cdn.babylonjs.com/v9.12.0/materialsLibrary/babylonjs.materials.min.js" crossorigin="anonymous" defer)
+    //- Babylon.js is NOT loaded here — it is fetched lazily on first Studio
+    //- entry by js/engine/babylon-loader.js, so the Library view and the
+    //- sign-in modal boot without waiting for a 3D engine they never use.
     script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" crossorigin="anonymous" defer)
     script(type="importmap").
       {

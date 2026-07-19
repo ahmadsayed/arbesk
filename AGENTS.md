@@ -201,7 +201,7 @@ docker compose run --rm hardhat sh
 ### CDN Script Tags — No SRI Hashes
 Pug templates must **not** include `integrity="sha384-…"` attributes. CDNs silently rebuild assets, breaking SRI and blocking scripts entirely (symptom: `BABYLON.Engine is not a constructor`). Pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"`.
 
-Current pinned versions live in `frontend/src/pug/app.pug` (script tags + import map) — update intentionally, never silently.
+Current pinned versions live in `frontend/src/pug/app.pug` (script tags + import map) and `frontend/src/js/engine/babylon-loader.js` (Babylon core/loaders/materials — fetched lazily on first Studio entry so the Library view and sign-in modal boot without waiting for the 3D engine) — update intentionally, never silently.
 
 ### Solidity
 - Version `^0.8.20`, OpenZeppelin v5 base; compiled with Solidity `0.8.24` (Cancun EVM)
