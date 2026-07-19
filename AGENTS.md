@@ -88,7 +88,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Comments archive | `src/api/comments-archive.js` |
 | Chat proxy (WebSocket) | `src/api/chat-proxy.js` |
 | Nostr relay primitives | `src/api/nostr-relay.js` |
-| Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `openapi.js`, `test-utils.js`) |
+| Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `openapi.js`, `test-utils.js`, `users.js`) |
 | Manifest utilities | `src/api/manifest-utils.js` |
 | Canonical asset-tag builder (`<chainId>:<contract>:<tokenId>:<assetId>`) | `src/api/asset-tag.js` |
 | IPFS utilities | `src/api/ipfs-utils.js` |
@@ -117,6 +117,7 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Asset save/publish | `frontend/src/js/ui/asset-save.js` |
 | Save/publish helpers | `frontend/src/js/services/asset-save/` (`manifest-builder.js`, `collection-publish.js`, `editor-publish.js`) |
 | Comments panel | `frontend/src/js/ui/comments-panel.js` |
+| Collaborators panel (Merkle editors; add by 0x address or CDP email) | `frontend/src/js/ui/collaborators-panel.js` + `frontend/src/js/services/team.js` |
 | Comment thread state | `frontend/src/js/state/comment-thread.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
 | Chat message builders (text + asset bubbles) | `frontend/src/js/ui/chat-messages.js` |
@@ -232,6 +233,7 @@ All logs use `[TAG]` prefixes. Log start + outcome of every async operation; inc
 | `[INDEXER]` / `[INDEXER-API]` | Token indexer backfill / `/indexer/owned` and `/indexer/shared` routes |
 | `[UNPIN]` | IPFS unpin |
 | `[BURN]` | Token burn |
+| `[USERS]` | CDP email → smart account resolution |
 
 Use `console.error()` for exceptions only; `console.log()` for operational flow.
 
@@ -301,7 +303,7 @@ The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't
 ## 8. Session Authentication
 
 - Header: `Authorization: Session <token>` (not Bearer)
-- `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, `POST /api/v1/assets/snapshot-comments`, and `POST /api/v1/paymaster` all require a valid session
+- `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, `POST /api/v1/assets/snapshot-comments`, `POST /api/v1/paymaster`, and `POST /api/v1/users/resolve-email` all require a valid session
 - `POST /api/v1/ipfs/unpin` additionally verifies on-chain that the session wallet owns (or edits, via Merkle proof) the token whose `tokenId` is passed in the body, and that the requested `cid` belongs to that token's collection (tokenURI CID or an asset CID in the current/previous collection manifests). The token must still be live, so the frontend unpins *before* burning.
 - The WebSocket chat proxy (`/api/v1/chat/ws`) receives the session token in the query string
 - **Single session creation path** — SIWE for all users — issuing an opaque token (24 h TTL, bound to wallet address):
@@ -335,7 +337,7 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
 
-**Unit / integration coverage: 1185 Jest tests across 93 suites (all passing).**
+**Unit / integration coverage: 1264 Jest tests across 98 suites (all passing).**
 
 **E2E coverage (17 specs, 37 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest + chat-bubble show-in-Studio flow · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload (GLB + 3MF, decompose-at-upload assertions) · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
 
@@ -418,7 +420,7 @@ Three `.env` files — all gitignored, **never commit**:
 | `.env` (root) | Backend + cloud adapters. `CONTRACT_ADDRESS` + `PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy | Copy from `.env.example` + set values |
 | `frontend/.env` | Build-time public vars (optional, not currently used) | — |
 
-Key backend variables (root `.env`): `CDP_PROJECT_ID` (served to frontend via `/api/v1/config` as `cdpProjectId`), `CDP_PAYMASTER_URL` (secret — used only by `src/api/routes/paymaster.js`), `CDP_EMAIL_DEV_MODE` (placeholder for future E2E mock bypass), `INDEXER_DISABLE_TESTNET` (optional kill-switch — skips the Base Sepolia token indexer). Removed: `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY`, `THIRDWB_AUTH_DEV_MODE`.
+Key backend variables (root `.env`): `CDP_PROJECT_ID` (served to frontend via `/api/v1/config` as `cdpProjectId`), `CDP_PAYMASTER_URL` (secret — used only by `src/api/routes/paymaster.js`), `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` (secret — CDP server SDK credentials used only by `src/api/routes/users.js` for email → smart account resolution), `CDP_EMAIL_DEV_MODE` (placeholder for future E2E mock bypass), `INDEXER_DISABLE_TESTNET` (optional kill-switch — skips the Base Sepolia token indexer). Removed: `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY`, `THIRDWB_AUTH_DEV_MODE`.
 
 Ops scripts: `scripts/run-ipfs-gc.mjs` is the IPFS garbage-collection CLI (unpins manifest chains no longer referenced by live tokens); `scripts/sync-deployed-addresses.mjs` patches deployed addresses into `src/config.js` / `network-config.js`.
 

@@ -21,6 +21,7 @@ import indexerRoutes from "./routes/indexer.js";
 import openapiRoutes from "./routes/openapi.js";
 import testUtilsRoutes from "./routes/test-utils.js";
 import paymasterRoutes from "./routes/paymaster.js";
+import usersRoutes from "./routes/users.js";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default () => {
@@ -72,6 +73,10 @@ export default () => {
   // ─── CDP Paymaster Proxy ───────────────────────────────────────────────────
 
   v1.use("/paymaster", paymasterRoutes());
+
+  // ─── Users (CDP email → smart account resolution) ──────────────────────────
+
+  v1.use("/users", usersRoutes());
 
   // ─── OpenAPI Specification ─────────────────────────────────────────────────
 

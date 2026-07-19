@@ -312,6 +312,38 @@ The raw JSON-RPC response from the CDP Paymaster.
 
 ---
 
+### `POST /api/v1/users/resolve-email`
+
+Resolves a CDP end-user email to its ERC-4337 smart account address — the address an owner adds to a token's Merkle editor list ("Add Editor via Email"). Need-to-know by design: the requester must supply the **full, exact email**; there is no listing, partial matching, or autocomplete. Uses the CDP server SDK (`CDP_API_KEY_ID` / `CDP_API_KEY_SECRET`) as the source of truth, so the backend stores no email→address mapping.
+
+**Auth:** Session token required. Rate-limited per wallet (default 10/min, `USER_RESOLVE_RATE_LIMIT_MAX`) to blunt email enumeration. The email is never logged.
+
+**Request Body**
+
+```json
+{ "email": "alice@example.com" }
+```
+
+**Response `200`**
+
+```json
+{ "exists": true, "address": "0x407EDfCFd16a5623012BbB778BD47A2bf861ed40" }
+```
+
+Minimal shape: `{ "exists": false }` for unknown emails; `{ "exists": true, "address": null }` when the user exists but has no smart account. Never returns the userId, EOA, or the email itself.
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 400 | Invalid email (`VALIDATION_ERROR`) |
+| 401 | Missing/invalid session |
+| 429 | Rate limit exceeded |
+| 502 | CDP API call failed (`CDP_LOOKUP_FAILED`) |
+| 503 | CDP server API key not configured (`CDP_NOT_CONFIGURED`) |
+
+---
+
 ### Manifests, Thumbnails, History, Tokens — Client-Side
 
 > **These backend routes do not exist.** The browser handles all manifest and thumbnail operations directly:
@@ -627,6 +659,7 @@ The following are planned backend routes not currently implemented. Note that Ph
 |---|---:|---:|---|
 | `POST /api/v1/generations` | 10 (1 000 in mock mode) | 1 hour | recovered wallet address |
 | `POST /api/v1/ipfs/upload-url` | 20 | 1 minute | recovered wallet address |
+| `POST /api/v1/users/resolve-email` | 10 (`USER_RESOLVE_RATE_LIMIT_MAX`) | 1 minute | session wallet address |
 
 The generation route currently emits:
 

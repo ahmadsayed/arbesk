@@ -13,6 +13,9 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "../gltf/merkle-editors.js";
 import { requireWallet } from "../blockchain/wallet-guard.js";
+import { resolveUserEmail } from "./api.js";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 export const CollaboratorRole = Object.freeze({
@@ -167,6 +170,47 @@ async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
     throw new Error("updateEditors transaction failed");
   }
   return txHash;
+}
+
+/**
+ * Resolve the "add collaborator" input to a wallet address.
+ *
+ * Accepts either a 0x address (returned as-is) or the full email of a CDP
+ * email-login user, resolved to their smart account address via the backend.
+ * Exact email match only — the backend never lists or autocompletes emails.
+ *
+ * @param {string} input - raw input field value
+ * @returns {Promise<string>} wallet/smart account address to add
+ * @throws {Error} user-friendly message when the input cannot be resolved
+ */
+export async function resolveCollaboratorInput(input) {
+  const value = (input || "").trim();
+  if (value.startsWith("0x")) return value;
+
+  if (EMAIL_RE.test(value)) {
+    let result;
+    try {
+      result = await resolveUserEmail(value);
+    } catch (err) {
+      if (err?.code === "CDP_NOT_CONFIGURED" || err?.status === 503) {
+        throw new Error("Email lookup is not available on this server");
+      }
+      throw err;
+    }
+    if (!result.exists) {
+      throw new Error(
+        "No Arbesk account found for this email — the user must sign in at least once before they can be added"
+      );
+    }
+    if (!result.address) {
+      throw new Error(
+        "This account has no smart wallet yet and cannot be added as a collaborator"
+      );
+    }
+    return result.address;
+  }
+
+  throw new Error("Enter a wallet address (0x…) or an email");
 }
 
 /**

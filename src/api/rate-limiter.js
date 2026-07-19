@@ -107,11 +107,17 @@ const paymasterLimiter = createLimiter({
   message: "Paymaster rate limit exceeded.",
 });
 
+const userResolveLimiter = createLimiter({
+  max: () => Number(process.env.USER_RESOLVE_RATE_LIMIT_MAX || 10),
+  message: "Email resolution rate limit exceeded.",
+});
+
 export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
 export const generationRateLimit = generationLimiter.middleware;
 export const unpinRateLimit = unpinLimiter.middleware;
 export const gcRateLimit = gcLimiter.middleware;
 export const paymasterRateLimit = paymasterLimiter.middleware;
+export const userResolveRateLimit = userResolveLimiter.middleware;
 
 /**
  * Reset all in-memory rate-limit stores. Used by test teardown.
@@ -122,4 +128,5 @@ export function _resetRateLimiters() {
   unpinLimiter.store.resetAll();
   gcLimiter.store.resetAll();
   paymasterLimiter.store.resetAll();
+  userResolveLimiter.store.resetAll();
 }

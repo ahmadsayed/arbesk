@@ -12,6 +12,7 @@ import {
   addTeamMember,
   removeTeamMember,
   changeTeamMemberRole,
+  resolveCollaboratorInput,
   isOwner,
   CollaboratorRole,
 } from "../services/team.js";
@@ -70,8 +71,8 @@ export function initCollaboratorPanel(container, tokenId, options = {}) {
   input.id = "collaboratorAddInput";
   input.type = "text";
   input.className = "form-control";
-  input.placeholder = "0x… wallet address";
-  input.setAttribute("aria-label", "Wallet address");
+  input.placeholder = "0x… address or email";
+  input.setAttribute("aria-label", "Wallet address or email");
 
   const roleSelect = document.createElement("select");
   roleSelect.id = "collaboratorRoleSelect";
@@ -101,9 +102,10 @@ export function initCollaboratorPanel(container, tokenId, options = {}) {
   addBtn.addEventListener(
     "click",
     async () => {
-      const addr = input.value.trim();
-      if (!addr) return;
+      const raw = input.value.trim();
+      if (!raw) return;
       try {
+        const addr = await resolveCollaboratorInput(raw);
         await addTeamMember(tokenId, addr);
         input.value = "";
         await refresh();

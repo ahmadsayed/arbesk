@@ -728,6 +728,60 @@
           "503": { "description": "CDP_PAYMASTER_URL not configured (PAYMASTER_NOT_CONFIGURED)" }
         }
       }
+    },
+    "/users/resolve-email": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Resolve a CDP end-user email to its smart account address",
+        "description": "Checks whether the given email belongs to a CDP end user of this project (exact full-email match only — no listing, partial matching, or autocomplete) and, when it does, returns the user's ERC-4337 smart account address, which is the address an owner adds to a token's Merkle editor list. The response is deliberately minimal: `{ exists: false }` for unknown emails, `{ exists: true, address }` for addable users, `{ exists: true, address: null }` for users without a smart account. Never returns the userId, EOA, or the email itself. Session-authenticated and wallet-keyed rate limited (default 10 requests/minute, `USER_RESOLVE_RATE_LIMIT_MAX`) to blunt email enumeration. Requires `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET`.",
+        "operationId": "resolveUserEmail",
+        "security": [{ "sessionAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254,
+                    "example": "alice@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resolution result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["exists"],
+                  "properties": {
+                    "exists": { "type": "boolean" },
+                    "address": {
+                      "type": ["string", "null"],
+                      "description": "Smart account address — present only when the email exists",
+                      "example": "0x407EDfCFd16a5623012BbB778BD47A2bf861ed40"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid email (VALIDATION_ERROR)" },
+          "401": { "description": "Missing or invalid session token" },
+          "429": { "description": "Rate limit exceeded" },
+          "502": { "description": "CDP API call failed (CDP_LOOKUP_FAILED)" },
+          "503": { "description": "CDP server API key not configured (CDP_NOT_CONFIGURED)" }
+        }
+      }
     }
   },
   "components": {

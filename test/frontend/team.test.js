@@ -15,6 +15,7 @@ const writeJSONToIPFSMock = jest.fn();
 const computeRootMock = jest.fn();
 const getProofMock = jest.fn();
 const requireWalletMock = jest.fn();
+const resolveUserEmailMock = jest.fn();
 const walletStateGetMock = jest.fn(() => ({ walletAddress: "0xOwnerAddress" }));
 
 jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
@@ -44,6 +45,10 @@ jest.unstable_mockModule("../../frontend/src/js/gltf/merkle-editors.js", () => (
 
 jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-guard.js", () => ({
   requireWallet: requireWalletMock,
+}));
+
+jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+  resolveUserEmail: resolveUserEmailMock,
 }));
 
 const team = await import("../../frontend/src/js/services/team.js");
@@ -191,6 +196,62 @@ describe("team service", () => {
 
       localStorage.setItem = original;
       warnSpy.mockRestore();
+    });
+  });
+
+  describe("resolveCollaboratorInput", () => {
+    it("returns a 0x address unchanged without calling the backend", async () => {
+      const addr = await team.resolveCollaboratorInput("  0xNewEditor  ");
+      expect(addr).toBe("0xNewEditor");
+      expect(resolveUserEmailMock).not.toHaveBeenCalled();
+    });
+
+    it("resolves an email to the smart account address", async () => {
+      resolveUserEmailMock.mockResolvedValue({
+        exists: true,
+        address: "0xSmartAccount",
+      });
+      const addr = await team.resolveCollaboratorInput("alice@example.com");
+      expect(addr).toBe("0xSmartAccount");
+      expect(resolveUserEmailMock).toHaveBeenCalledWith("alice@example.com");
+    });
+
+    it("throws when the email has no Arbesk account", async () => {
+      resolveUserEmailMock.mockResolvedValue({ exists: false });
+      await expect(
+        team.resolveCollaboratorInput("ghost@example.com"),
+      ).rejects.toThrow("No Arbesk account found");
+    });
+
+    it("throws when the account has no smart wallet", async () => {
+      resolveUserEmailMock.mockResolvedValue({ exists: true, address: null });
+      await expect(
+        team.resolveCollaboratorInput("alice@example.com"),
+      ).rejects.toThrow("no smart wallet");
+    });
+
+    it("throws a friendly error when email lookup is not configured", async () => {
+      const err = new Error("CDP server API key not configured");
+      err.status = 503;
+      err.code = "CDP_NOT_CONFIGURED";
+      resolveUserEmailMock.mockRejectedValue(err);
+      await expect(
+        team.resolveCollaboratorInput("alice@example.com"),
+      ).rejects.toThrow("not available");
+    });
+
+    it("rethrows other lookup failures", async () => {
+      resolveUserEmailMock.mockRejectedValue(new Error("network down"));
+      await expect(
+        team.resolveCollaboratorInput("alice@example.com"),
+      ).rejects.toThrow("network down");
+    });
+
+    it("throws for input that is neither an address nor an email", async () => {
+      await expect(team.resolveCollaboratorInput("alice")).rejects.toThrow(
+        "wallet address (0x…) or an email",
+      );
+      expect(resolveUserEmailMock).not.toHaveBeenCalled();
     });
   });
 

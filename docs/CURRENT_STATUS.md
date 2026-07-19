@@ -80,6 +80,7 @@ src/
 | GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag, cdpProjectId |
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361); `eoaAddress` body field enables CDP smart-account fallback |
 | POST | `/paymaster` | None | CDP Paymaster JSON-RPC proxy — forwards sponsorship requests, keeps `CDP_PAYMASTER_URL` secret |
+| POST | `/users/resolve-email` | Session | Resolves an exact full email to the CDP end user's smart account address (minimal `{exists, address?}` response, no listing/autocomplete); used by the Collaborators panel's Add-by-email flow |
 | DELETE | `/sessions` | Session | Invalidates session token |
 | POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes |
 | POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId`; returns empty archive if the relay is unreachable |

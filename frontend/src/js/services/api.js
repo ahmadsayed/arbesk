@@ -568,6 +568,32 @@ export async function snapshotCommentsArchive(publishContext) {
   return data;
 }
 
+// ─── Users (CDP email resolution) ────────────────────────────────────────────
+
+/**
+ * POST /api/v1/users/resolve-email
+ * Resolve a full email to the CDP end user's smart account address.
+ * Exact match only — the backend never lists or autocompletes emails.
+ * @param {string} email
+ * @returns {Promise<{exists: boolean, address?: string|null}>}
+ */
+export async function resolveUserEmail(email) {
+  const response = await fetchWithSession("/users/resolve-email", {
+    body: { email },
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Email resolution failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+  return data;
+}
+
 // ─── IPFS Upload Credential ───────────────────────────────────────────────────
 
 /**

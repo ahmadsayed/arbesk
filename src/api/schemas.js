@@ -65,6 +65,15 @@ export const uploadUrlsSchema = z.object({
   count: z.number().int().min(1).max(200).optional().default(1),
 });
 
+export const resolveEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("a valid email is required")
+    .max(254),
+});
+
 export const ownedQuerySchema = z.object({
   address: ethereumAddressSchema,
   chainId: chainIdSchema,
