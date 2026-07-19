@@ -323,6 +323,7 @@ describe("prepareManifestForWrite", () => {
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue([]),
+        waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
         getPendingPostProcessorEdits: jest
           .fn()
           .mockReturnValue(new Map([["n1", { color: "#ff0000" }]])),

@@ -70,6 +70,7 @@ export {
   loadCollectionManifest,
   loadNode,
   loadAsset,
+  waitForPendingLinkedDrops,
 } from "./scene-loader.js";
 export {
   deselectAll,

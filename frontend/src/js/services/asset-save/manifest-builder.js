@@ -13,6 +13,7 @@ import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.js";
 import { snapshotCommentsArchive } from "../api.js";
 import { getTokenURI } from "../token.js";
 import { getPendingChildRefs } from "../../engine/scene-graph.js";
+import { waitForPendingLinkedDrops } from "../../engine/scene-graph.js";
 import { resolveFormatHandler } from "../../formats/index.js";
 import { buildDedupMap } from "../../gltf/dedup.js";
 import {
@@ -272,6 +273,10 @@ async function buildDedupMapFromManifests(manifests) {
 
 export async function prepareManifestForWrite(assetName) {
   let manifest;
+  // A linked-asset drop is fire-and-forget: if the user hits Save/Publish
+  // while the drop is still resolving, its node is not in pendingChildRefs
+  // yet and would be silently lost. Wait for any in-flight drops first.
+  await waitForPendingLinkedDrops();
   const pendingRefs = getPendingChildRefs();
   const pendingPP = getPendingPostProcessorEdits();
   const pendingTransforms = getPendingTransformEdits();

@@ -49,6 +49,7 @@ async function load() {
   }));
   jest.unstable_mockModule("../../frontend/src/js/engine/scene-graph.js", () => ({
     getPendingChildRefs: mocks.getPendingChildRefs,
+    waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
     getPendingPostProcessorEdits: mocks.getPendingPostProcessorEdits,
     clearPendingPostProcessorEdits: jest.fn(),
     getPendingTransformEdits: mocks.getPendingTransformEdits,

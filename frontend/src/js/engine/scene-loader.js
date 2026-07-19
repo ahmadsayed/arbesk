@@ -478,7 +478,15 @@ function isSelfLinkedAssetDrop(collectionRef, assetID) {
   );
 }
 
-async function handleLinkedAssetDropped(event) {
+/**
+ * In-flight linked-asset drop operations. The ASSET_LINKED_DROPPED event is
+ * fire-and-forget, so a Save that happens right after "Add to Scene" could
+ * read pendingChildRefs before the drop handler pushed its node. Save/publish
+ * awaits waitForPendingLinkedDrops() to close that race.
+ */
+const _inFlightLinkedDrops = new Set();
+
+async function _handleLinkedAssetDropped(event) {
   const detail = event;
   if (!detail) return;
 
@@ -552,6 +560,31 @@ async function handleLinkedAssetDropped(event) {
   );
 }
 
+/**
+ * Event-bus entry point for ASSET_LINKED_DROPPED. Tracks the async work so
+ * save/publish can wait for it via waitForPendingLinkedDrops().
+ */
+function handleLinkedAssetDropped(event) {
+  const p = _handleLinkedAssetDropped(event)
+    .catch((err) => {
+      console.warn("[SCENE] linked asset drop failed:", err?.message || err);
+    })
+    .finally(() => {
+      _inFlightLinkedDrops.delete(p);
+    });
+  _inFlightLinkedDrops.add(p);
+  return p;
+}
+
+/**
+ * Resolve once every linked-asset drop started so far has finished (node
+ * pushed to pendingChildRefs and scene load settled). Awaited by the
+ * save/publish manifest builder before it snapshots pendingChildRefs.
+ */
+async function waitForPendingLinkedDrops() {
+  await Promise.all([..._inFlightLinkedDrops]);
+}
+
 export {
   loadAsset,
   loadNode,
@@ -559,4 +592,5 @@ export {
   loadCollectionManifest,
   buildForkOrLiveRefNode,
   handleLinkedAssetDropped,
+  waitForPendingLinkedDrops,
 };
