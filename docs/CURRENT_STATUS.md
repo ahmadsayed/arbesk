@@ -104,6 +104,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 ### 2.4 What Works
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
+- ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.js`, `pending-generations.js`)
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
 - ✅ Thumbnail capture + direct IPFS upload from browser
 - ✅ Manifest save/publish entirely client-side

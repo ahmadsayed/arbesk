@@ -7,7 +7,7 @@ import {
   fetchTokenManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
-import { assetCardLocator, connectStudio, ensureStudioConnected, uniqueAssetName } from "../helpers/flows.mjs";
+import { assetCardLocator, connectStudio, ensureStudioConnected, sendPendingGenerationToStudio, uniqueAssetName } from "../helpers/flows.mjs";
 
 const PROMPT_1 = "a wooden chair";
 const PROMPT_2 = "a small round table";
@@ -32,6 +32,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
@@ -69,6 +70,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
@@ -93,6 +95,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_2);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
@@ -135,6 +138,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
@@ -184,6 +188,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
@@ -213,6 +218,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_2);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );
@@ -244,6 +250,7 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );

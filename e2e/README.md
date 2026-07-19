@@ -110,7 +110,9 @@ Validates the full wallet-discovery and authentication path:
 Validates free-tier mock generation end-to-end:
 
 - Types `cowboy` into the prompt input and clicks **Generate asset**.
-- Confirms the chat history shows the prompt and `Model carved via mock`.
+- Confirms the result lands as an asset chat bubble (live 3D preview canvas + **Show in Studio** button) and that the Studio URL/scene stay untouched.
+- Clicks **Show in Studio**, then confirms the chat history shows `Model carved via mock` and the bubble collapses to the disabled "Shown in Studio" state.
+- Verifies multiple pending generations keep independent send buttons.
 - Extracts the manifest CID from `?manifest=baf...` in the URL. The exact CIDv1 prefix depends on the IPFS backend (e.g. `bafy...` for dag-pb, `bafkrei...` for raw JSON).
 - Fetches the manifest from the local IPFS gateway.
 - Validates the manifest structure (asset_id, version, timestamp, one `source_asset` node, source CID/format, 16-element transform matrix, node name contains the prompt).
@@ -334,6 +336,9 @@ export const SELECTORS = {
   promptInput: "#promptInput",
   generateBtn: "#generateBtn",
   chatHistoryList: "#chatHistoryList",
+  assetBubble: ".chat-bubble-asset",
+  assetBubbleSend: ".chat-bubble-asset .chat-asset-send",
+  assetBubbleCanvas: ".chat-bubble-asset .chat-asset-canvas",
   saveAssetBtn: "#saveAssetBtn",
   publishAssetBtn: "#publishAssetBtn",
   srStatus: "#srStatus",

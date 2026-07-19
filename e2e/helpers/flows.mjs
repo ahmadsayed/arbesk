@@ -155,17 +155,55 @@ function truncateAddress(address) {
 }
 
 /**
- * Generate a mock asset and return the resulting generation manifest CID. The
- * `?manifest=` URL is the durable completion signal - the screen-reader status
- * text is transient and gets overwritten.
+ * Click the Show-in-Studio button of the latest pending generation. Waits for
+ * an *enabled* button: bubbles already sent keep a disabled "Shown in Studio"
+ * button, and a plain `.last()` locator would latch onto one of those while
+ * the new bubble is still being generated.
+ *
+ * @param {Page} page
+ * @returns {Promise<void>}
+ */
+export async function sendPendingGenerationToStudio(page) {
+  const button = page
+    .locator(`${SELECTORS.assetBubbleSend}:not([disabled])`)
+    .last();
+  await expect(button).toBeVisible();
+  await button.click();
+}
+
+/**
+ * Generate a mock asset and stop at the chat bubble: the result stays out of
+ * the Studio viewport until the user clicks "Show in Studio". Returns the
+ * bubble's send button locator for the caller to act on.
+ *
+ * @param {Page} page
+ * @param {string} [prompt]
+ * @returns {Promise<Locator>}
+ */
+export async function generateToChatBubble(page, prompt = DEFAULT_PROMPT) {
+  // Pin the new bubble by index: a `.last()` locator re-resolves as later
+  // generations append more bubbles.
+  const sendButtons = page.locator(SELECTORS.assetBubbleSend);
+  const index = await sendButtons.count();
+  await page.fill(SELECTORS.promptInput, prompt);
+  await page.click(SELECTORS.generateBtn);
+  const sendButton = sendButtons.nth(index);
+  await expect(sendButton).toBeVisible();
+  return sendButton;
+}
+
+/**
+ * Generate a mock asset, send it to the Studio, and return the resulting
+ * generation manifest CID. The `?manifest=` URL is the durable completion
+ * signal - the screen-reader status text is transient and gets overwritten.
  *
  * @param {Page} page
  * @param {string} [prompt]
  * @returns {Promise<string>}
  */
 export async function generate(page, prompt = DEFAULT_PROMPT) {
-  await page.fill(SELECTORS.promptInput, prompt);
-  await page.click(SELECTORS.generateBtn);
+  const sendButton = await generateToChatBubble(page, prompt);
+  await sendButton.click();
   await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
     "Model carved via mock",
   );

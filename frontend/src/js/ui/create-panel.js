@@ -2,8 +2,9 @@
 /**
  * Arbesk AI Generation UI Controller
  *
- * Generation flow: session auth → backend generation → manifest load →
- * scene graph registration. Owns the AI Generation sidebar pane: chat
+ * Generation flow: session auth → backend generation → asset chat bubble
+ * with a live 3D preview → explicit "Show in Studio" (manifest load →
+ * scene graph registration). Owns the AI Generation sidebar pane: chat
  * history, prompt input, provider selection, and the BYOK key dialog.
  */
 
@@ -14,18 +15,27 @@ import {
 } from "../engine/scene-graph.js";
 import { showToast } from "./toasts.js";
 import { showCustomDialog } from "./dialog.js";
+import { addChatMessage, addAssetMessage, addWorkingMessage } from "./chat-messages.js";
 import {
   generateAsset,
   ApiError,
   getOrCreateSession,
 } from "../services/api.js";
+import {
+  createChatPreview,
+  disposeChatPreview,
+} from "../services/chat-preview.js";
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import {
+  addPendingGeneration,
+  getPendingGeneration,
+  updatePendingGeneration,
+} from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
 
 // ─── DOM References ───
-const chatHistoryList = document.getElementById("chatHistoryList");
 const promptInput = document.getElementById("promptInput");
 const generateBtn = document.getElementById("generateBtn");
 const generateHint = document.getElementById("generateHint");
@@ -206,31 +216,88 @@ function syncCollectionSelect() {
 
 // ─── Chat Messages ───
 
-function addChatMessage(role, text) {
-  // Hide welcome text on first real message
-  const welcome = chatHistoryList?.querySelector(".chat-welcome");
-  if (welcome) welcome.hidden = true;
+// addChatMessage / addAssetMessage live in ./chat-messages.js and are
+// imported above; addChatMessage is re-exported at the bottom of this file.
 
-  const bubble = document.createElement("div");
-  bubble.className = `chat-bubble chat-bubble-${role}`;
+/** Live asset-message handles keyed by pending-generation id. */
+const assetMessages = new Map();
 
-  const content = document.createElement("span");
-  content.className = "chat-bubble-content";
-  content.textContent = text;
-  bubble.appendChild(content);
+/**
+ * Attach a live 3D preview to an asset bubble. Falls back to a static
+ * format badge when the preview cannot be created.
+ * @param {string} generationId
+ * @param {import("./chat-messages.js").AssetMessageHandle} assetMessage
+ */
+async function attachChatPreview(generationId, assetMessage) {
+  const record = getPendingGeneration(generationId);
+  if (!record) {
+    assetMessage.markFallback();
+    return;
+  }
+  const handle = await createChatPreview(
+    generationId,
+    assetMessage.canvas,
+    { cid: record.sourceAssetCid, path: record.path, format: record.format },
+    {
+      onAutoCollapse: (collapsedId, snapshot) => {
+        assetMessages.get(collapsedId)?.collapsePreview(snapshot);
+      },
+    }
+  );
+  if (!handle) assetMessage.markFallback();
+}
 
-  const now = new Date();
-  const time = document.createElement("time");
-  time.className = "chat-bubble-time";
-  time.dateTime = now.toISOString();
-  time.textContent = now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  bubble.appendChild(time);
+/**
+ * Send a pending generation to the Studio viewport: runs the same
+ * clear → state → URL → load tail that generation used to run inline,
+ * then disposes the preview and collapses the bubble.
+ * @param {string} generationId
+ * @param {import("./chat-messages.js").AssetMessageHandle} assetMessage
+ */
+async function sendGenerationToStudio(generationId, assetMessage) {
+  const record = getPendingGeneration(generationId);
+  if (!record || record.status !== "pending") return;
 
-  chatHistoryList.appendChild(bubble);
-  chatHistoryList.scrollTop = chatHistoryList.scrollHeight;
+  updatePendingGeneration(generationId, { status: "sent" });
+  assetMessage.sendButton.disabled = true;
+
+  try {
+    if (record.prevAssetManifestCid) {
+      clearScene();
+    }
+
+    assetState.set({
+      activeAssetManifestCid: record.assetManifestCid,
+      latestAssetManifestCid: record.assetManifestCid,
+    });
+
+    const url = new URL(window.location);
+    const activeTokenId = assetState.get().activeAssetTokenId;
+    if (activeTokenId) {
+      url.searchParams.set("asset", activeTokenId);
+      url.searchParams.delete("manifest");
+    } else {
+      url.searchParams.set("manifest", record.assetManifestCid);
+    }
+    window.history.pushState({}, "", url);
+
+    await loadAssetManifest(record.assetManifestCid);
+
+    const snapshot = await disposeChatPreview(generationId, {
+      captureSnapshot: true,
+    });
+    assetMessage.markSent(snapshot);
+
+    addChatMessage("system", `Model carved via ${getProvider()}.`);
+  } catch (err) {
+    console.error("Show in Studio failed:", err);
+    updatePendingGeneration(generationId, { status: "pending" });
+    assetMessage.sendButton.disabled = false;
+    addChatMessage(
+      "system",
+      err.message || "Failed to load the model in the Studio."
+    );
+  }
 }
 
 // ─── Generate Button State ───
@@ -312,6 +379,7 @@ async function onGenerate() {
   promptInput.style.height = "auto";
 
   setGenerating(true);
+  const working = addWorkingMessage("Carving your model…");
 
   const assetName = getAssetName();
   const nodeId = `${assetName
@@ -345,29 +413,31 @@ async function onGenerate() {
       ...(isRealProvider() && { providerKey }),
     });
 
-    if (prevAssetManifestCid) {
-      clearScene();
-    }
-
-    assetState.set({
-      activeAssetManifestCid: result.assetManifestCid,
-      latestAssetManifestCid: result.assetManifestCid,
+    // Defer the Studio viewport load: register the result, show an asset
+    // bubble with a live preview, and let the user send it explicitly.
+    const generationId = addPendingGeneration({
+      assetManifestCid: result.assetManifestCid,
+      sourceAssetCid: result.sourceAssetCid,
+      prompt,
+      format: result.format,
+      path: result.path,
+      prevAssetManifestCid: prevAssetManifestCid || null,
+      transformMatrix,
+      ...(result.tier !== undefined && { tier: result.tier }),
     });
 
-    const url = new URL(window.location);
-    const activeTokenId = assetState.get().activeAssetTokenId;
-    if (activeTokenId) {
-      url.searchParams.set("asset", activeTokenId);
-      url.searchParams.delete("manifest");
-    } else {
-      url.searchParams.set("manifest", result.assetManifestCid);
+    const assetMessage = addAssetMessage({
+      prompt,
+      format: result.format,
+    });
+    if (assetMessage) {
+      assetMessages.set(generationId, assetMessage);
+      assetMessage.sendButton.addEventListener("click", () => {
+        void sendGenerationToStudio(generationId, assetMessage);
+      });
+      void attachChatPreview(generationId, assetMessage);
     }
-    window.history.pushState({}, "", url);
-
-    await loadAssetManifest(result.assetManifestCid);
     dismissCreatePulse();
-
-    addChatMessage("system", `Model carved via ${getProvider()}.`);
   } catch (err) {
     console.error("Generation failed:", err);
     let userMsg = "Generation failed. Please try again.";
@@ -388,6 +458,7 @@ async function onGenerate() {
 
     addChatMessage("system", userMsg);
   } finally {
+    working?.remove();
     setGenerating(false);
   }
 }

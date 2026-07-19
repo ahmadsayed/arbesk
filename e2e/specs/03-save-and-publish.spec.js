@@ -9,7 +9,7 @@ import {
   assertPublishedManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
-import { assetCardLocator, connectStudio } from "../helpers/flows.mjs";
+import { assetCardLocator, connectStudio, sendPendingGenerationToStudio } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
 const ASSET_NAME = "Cowboy Test";
@@ -30,6 +30,7 @@ test.describe("save and publish", () => {
     // 1. Generate
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );

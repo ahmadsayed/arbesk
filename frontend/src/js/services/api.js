@@ -404,7 +404,7 @@ export async function getSharedTokens(address, chainId, force = false) {
  * @param {string} [params.prevAssetManifestCid]
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
- * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string}>}
+ * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number}>}
  */
 export async function generateAsset({
   prompt,
@@ -529,6 +529,8 @@ export async function generateAsset({
   return {
     assetManifestCid,
     sourceAssetCid,
+    format: data.format,
+    path: data.path || `asset.${data.format}`,
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
   };
 }

@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { connectStudio } from "../helpers/flows.mjs";
+import { connectStudio, sendPendingGenerationToStudio } from "../helpers/flows.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 
 const PROMPT = "cowboy";
@@ -89,6 +89,7 @@ test.describe("resize regression", () => {
 
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
+    await sendPendingGenerationToStudio(page);
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );

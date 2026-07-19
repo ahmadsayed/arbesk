@@ -89,6 +89,97 @@
   }
 }
 
+// ─── Working indicator — transient spinner bubble during generation ───
+
+.chat-bubble-working {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  opacity: 0.85;
+}
+
+.chat-working-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--accent-bg);
+  border-top-color: transparent;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-working-spinner {
+    animation: spin 0.8s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-working-spinner {
+    opacity: 0.6;
+  }
+}
+
+// ─── Asset bubble — live 3D preview + Show in Studio action ───
+
+.chat-bubble-asset {
+  align-self: flex-start;
+  width: 100%;
+  background-color: var(--card-bg);
+  color: var(--sidebar-fg);
+  border: var(--border-size-1) solid var(--border-hairline);
+  border-bottom-left-radius: var(--size-1);
+}
+
+.chat-asset-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  background-color: var(--view-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-asset-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+}
+
+.chat-asset-snapshot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-asset-badge {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  letter-spacing: var(--font-letterspacing-1, 0.05em);
+  color: var(--dim-fg);
+  text-transform: uppercase;
+}
+
+.chat-asset-caption {
+  display: block;
+  margin-top: var(--size-2);
+  font-weight: var(--font-weight-6);
+}
+
+.chat-asset-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--size-2);
+}
+
+.chat-bubble-asset-sent .chat-asset-send {
+  opacity: 0.7;
+}
+
 // ─── Composer — provider controls + prompt input, pinned at pane bottom ───
 
 .chat-composer {

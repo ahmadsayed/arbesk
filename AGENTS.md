@@ -20,6 +20,7 @@ Conventions, key file references, and practical guidance for AI agents and devel
 - **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
 - **Hardhat**: Runs inside a Docker container (reproducible local EVM)
 - **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`, `mock-gltf-assets/box.3mf` — prompt keyword `3mf` returns the 3MF sample)
+- **Generation → Chat Preview**: Generation results land as chat bubbles with a live orbitable 3D preview (`frontend/src/js/services/chat-preview.js`, capped at 3 live previews, render-on-visibility) — the Studio scene is untouched until the user clicks "Show in Studio", which disposes the preview and collapses the bubble to a snapshot
 - **Parametric Versions**: Color + scale edits append new history entries client-side — no cloud generation
 - **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
 - **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
@@ -118,6 +119,9 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 | Comments panel | `frontend/src/js/ui/comments-panel.js` |
 | Comment thread state | `frontend/src/js/state/comment-thread.js` |
 | Create panel | `frontend/src/js/ui/create-panel.js` |
+| Chat message builders (text + asset bubbles) | `frontend/src/js/ui/chat-messages.js` |
+| Chat 3D preview (per-bubble engine, visibility-gated) | `frontend/src/js/services/chat-preview.js` |
+| Pending-generation store | `frontend/src/js/state/pending-generations.js` |
 | Activity panel | `frontend/src/js/ui/ledger-panel.js` |
 | Team / editor service | `frontend/src/js/services/team.js` |
 | Asset delete service | `frontend/src/js/services/asset-delete.js` |
@@ -333,7 +337,7 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 
 **Unit / integration coverage: 1185 Jest tests across 93 suites (all passing).**
 
-**E2E coverage (17 specs, 35 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload (GLB + 3MF, decompose-at-upload assertions) · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
+**E2E coverage (17 specs, 37 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest + chat-bubble show-in-Studio flow · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload (GLB + 3MF, decompose-at-upload assertions) · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **4 parallel workers by default** (each worker gets an isolated stack); override with `E2E_WORKERS=N`. Per-spec contract: `e2e/README.md`.
 
 Opt-in E2E coverage is collected via Chromium V8 and merged with Jest coverage:
 - `npm run test:e2e:coverage` — run E2E with coverage
@@ -365,7 +369,7 @@ E2E is isolated per git worktree: each checkout gets its own Docker Compose proj
 
 - Studio UI/UX (headerbar, chat, prompt input, dialogs, wallet controls, settings)
 - Wallet integration (`wallet.js`, `wallet-core.js`, `wallet-connect.js`, `wallet-discovery.js`, `wallet-cdp.js`, `smart-wallet-support.js`, `network-config.js`, `siwe.js`, session auth)
-- Generation flow (`create-panel.js`, generation API, transaction validation, mock adapter, provider/tier selection)
+- Generation flow (`create-panel.js`, `chat-messages.js`, `chat-preview.js`, `pending-generations.js`, generation API, transaction validation, mock adapter, provider/tier selection)
 - Save/publish/republish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture, `updateAssetURI`)
 - Parametric editing + version history (`parametric-preview.js`, `version-history-store.js`, `version-clock.js`, `scene-clock.js`, `model-clock-gizmo.js`)
 - Nesting / linked child worlds (`nesting.js`, `scene-graph.js` linked-asset handling, token resolver, `child_ref` / `transform_matrix`)
