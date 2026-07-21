@@ -2,6 +2,7 @@ import { jest } from "@jest/globals";
 import request from "supertest";
 import zlib from "zlib";
 import { _resetRateLimiters } from "../src/api/rate-limiter.js";
+import { _resetRegistry, registerTask } from "../src/api/generation-tasks.js";
 
 jest.setTimeout(30000);
 
@@ -275,6 +276,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     // between tests so Pinata/Kubo backend changes take effect cleanly.
     _resetStorage();
     _resetRateLimiters();
+    _resetRegistry();
     ipfsStorage.clear();
   });
 
@@ -440,27 +442,40 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "A chair",
           nodeId: "node_no_key",
-          provider: "meshy",
+          provider: "tripo3d",
         });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("MISSING_PROVIDER_KEY");
     });
 
-    it("BYOK: real provider with providerKey succeeds", async () => {
+    it("BYOK: tripo3d provider with providerKey creates a task", async () => {
+      const fetchSpy = jest
+        .spyOn(global, "fetch")
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_byok" } }),
+        });
+
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
         .send({
           prompt: "A BYOK lamp",
           nodeId: "node_byok_001",
-          provider: "meshy",
+          provider: "tripo3d",
           providerKey: "sk-byok-test-key-1234",
         });
 
-      expect(res.status).toBe(200);
-      expect(res.body.assetData).toBeDefined();
-      expect(res.body.format).toBeDefined();
+      expect(res.status).toBe(202);
+      expect(res.body).toMatchObject({
+        provider: "tripo3d",
+        status: "running",
+      });
+      expect(typeof res.body.taskId).toBe("string");
+      expect(JSON.stringify(res.body)).not.toContain("sk-byok-test-key-1234");
+
+      fetchSpy.mockRestore();
     });
 
     it("BYOK: empty/whitespace providerKey is rejected for real providers", async () => {
@@ -470,12 +485,256 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .send({
           prompt: "An empty-key asset",
           nodeId: "node_byok_empty",
-          provider: "meshy",
+          provider: "tripo3d",
           providerKey: "   ",
         });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("MISSING_PROVIDER_KEY");
+    });
+
+    describe("tripo3d provider", () => {
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      it("returns 202 with taskId on POST", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_abc" } }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A red cube",
+            nodeId: "node_tripo_001",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(res.status).toBe(202);
+        expect(res.body).toMatchObject({
+          taskId: expect.any(String),
+          provider: "tripo3d",
+          status: "running",
+        });
+        expect(JSON.stringify(res.body)).not.toContain("tsk_test_secret_key");
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+        fetchSpy.mockRestore();
+      });
+
+      it("GET returns progress while task is running", async () => {
+        jest
+          .spyOn(global, "fetch")
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_run" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_run",
+                status: "running",
+                progress: 37,
+              },
+            }),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A blue sphere",
+            nodeId: "node_tripo_run",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(post.status).toBe(202);
+        const taskId = post.body.taskId;
+
+        const res = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: "running", progress: 37 });
+      });
+
+      it("GET returns GLB base64 on success and evicts the task", async () => {
+        const glbBuf = Buffer.from("glb binary");
+        jest
+          .spyOn(global, "fetch")
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_suc" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_suc",
+                status: "success",
+                output: { pbr_model: "https://cdn/result.glb" },
+              },
+            }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            arrayBuffer: async () =>
+              glbBuf.buffer.slice(
+                glbBuf.byteOffset,
+                glbBuf.byteOffset + glbBuf.byteLength,
+              ),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A green cone",
+            nodeId: "node_tripo_suc",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(post.status).toBe(202);
+        const taskId = post.body.taskId;
+
+        const res = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+          status: "success",
+          format: "glb",
+          path: "asset.glb",
+          provider: "tripo3d",
+        });
+        expect(res.body.assetData).toBe(glbBuf.toString("base64"));
+        expect(JSON.stringify(res.body)).not.toContain("tsk_test_secret_key");
+
+        const second = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+        expect(second.status).toBe(404);
+        expect(second.body.error.code).toBe("GENERATION_TASK_NOT_FOUND");
+      });
+
+      it("GET returns 404 when task belongs to a different wallet", async () => {
+        const foreignId = registerTask({
+          tripoTaskId: "task_foreign",
+          providerKey: "tsk_foreign_key",
+          userAddress: "0x0000000000000000000000000000000000000001",
+        });
+
+        const res = await request(app)
+          .get(`/api/v1/generations/${foreignId}`)
+          .set("Authorization", await makeSessionHeader());
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe("GENERATION_TASK_NOT_FOUND");
+      });
+
+      it("GET returns failed status when Tripo reports failure", async () => {
+        jest
+          .spyOn(global, "fetch")
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_fail" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_fail",
+                status: "failed",
+                message: "boom",
+              },
+            }),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A doomed asset",
+            nodeId: "node_tripo_fail",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        const taskId = post.body.taskId;
+        const res = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+          status: "failed",
+          error: { code: "PROVIDER_TASK_FAILED", message: "boom" },
+        });
+      });
+
+      it("returns provider TripoApiError status on poll failure", async () => {
+        jest
+          .spyOn(global, "fetch")
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_err" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 1002,
+              message: "Authentication failed",
+            }),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "An auth error",
+            nodeId: "node_tripo_err",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        const taskId = post.body.taskId;
+        const res = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+
+        expect(res.status).toBe(401);
+        expect(res.body.error).toMatchObject({
+          code: 1002,
+          message: expect.stringContaining("Authentication failed"),
+        });
+      });
+    });
+
+    it("rejects unknown provider with 501", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({
+          prompt: "An unknown provider asset",
+          nodeId: "node_unknown",
+          provider: "meshy",
+          providerKey: "sk-byok-test-key-1234",
+        });
+
+      expect(res.status).toBe(501);
+      expect(res.body.error.code).toBe("NOT_IMPLEMENTED");
     });
   });
 
