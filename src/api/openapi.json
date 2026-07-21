@@ -73,7 +73,7 @@
       "post": {
         "tags": ["Generations"],
         "summary": "Generate a 3D asset from a text prompt",
-        "description": "Authenticated endpoint that checks session auth and rate limit, calls the configured 3D generation adapter, and returns the raw asset bytes to the browser. The browser uploads the asset to IPFS, constructs the manifest, and writes the manifest to IPFS directly — no server-side IPFS writes and no on-chain transaction validation.\n\n**Rate Limit:** 10 requests per hour per wallet address in production mode, 1000 in mock mode.\n\n**On-chain validation:** The backend does not validate transaction hashes. The UI calls the free- or paid-tier contract separately before/after calling this endpoint.",
+        "description": "Authenticated endpoint that checks session auth and rate limit, calls the configured 3D generation adapter, and either returns the raw asset bytes (mock/immediate providers) or starts an asynchronous task (Tripo3D). The browser uploads the asset to IPFS, constructs the manifest, and writes the manifest to IPFS directly — no server-side IPFS writes and no on-chain transaction validation.\n\n**Rate Limit:** 10 requests per hour per wallet address in production mode, 1000 in mock mode.\n\n**On-chain validation:** The backend does not validate transaction hashes. The UI calls the free- or paid-tier contract separately before/after calling this endpoint.\n\n**Task-based providers:** When `provider` is `tripo3d`, the response is `202` with a `taskId`. Poll `GET /generations/{taskId}` until `status` is `success` or `failed`.",
         "operationId": "generateAsset",
         "security": [
           {
@@ -92,11 +92,21 @@
         },
         "responses": {
           "200": {
-            "description": "Asset generated successfully",
+            "description": "Asset generated successfully (mock or immediate providers)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenerationResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Task started (Tripo3D and other async providers)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationTaskStart"
                 }
               }
             }
@@ -118,7 +128,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid Authorization header",
+            "description": "Missing or invalid session, or provider rejected the supplied `providerKey` (`PROVIDER_AUTH_FAILED`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -129,6 +139,16 @@
                     "code": "MISSING_AUTH",
                     "message": "Missing Authorization header"
                   }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Provider account has no generation credits left (`PROVIDER_CREDITS_EXHAUSTED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -189,8 +209,73 @@
               }
             }
           },
+          "502": {
+            "description": "Upstream provider returned an error or is unreachable (`PROVIDER_ERROR`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "501": {
-            "description": "Cloud adapters not implemented (only in production mode)",
+            "description": "Provider not supported or not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/generations/{taskId}": {
+      "get": {
+        "tags": ["Generations"],
+        "summary": "Get the status of an asynchronous generation task",
+        "description": "Polls a wallet-bound asynchronous generation task started by `POST /generations`. Returns the current status, and the final asset bytes once the task succeeds.",
+        "operationId": "getGenerationTask",
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status — running, succeeded, or failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task ID not found, expired, or belongs to another wallet (`GENERATION_TASK_NOT_FOUND`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -866,6 +951,104 @@
           "provider": {
             "type": "string",
             "description": "Provider that produced the asset"
+          }
+        }
+      },
+      "GenerationTaskStart": {
+        "type": "object",
+        "required": ["taskId", "provider", "status"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Wallet-bound async task identifier"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider running the task",
+            "example": "tripo3d"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running"],
+            "description": "Initial task status"
+          }
+        }
+      },
+      "GenerationTask": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GenerationTaskRunning"
+          },
+          {
+            "$ref": "#/components/schemas/GenerationTaskSuccess"
+          },
+          {
+            "$ref": "#/components/schemas/GenerationTaskFailed"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "status",
+          "mapping": {
+            "running": "#/components/schemas/GenerationTaskRunning",
+            "success": "#/components/schemas/GenerationTaskSuccess",
+            "failed": "#/components/schemas/GenerationTaskFailed"
+          }
+        }
+      },
+      "GenerationTaskRunning": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["running"]
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Estimated completion percentage"
+          }
+        }
+      },
+      "GenerationTaskSuccess": {
+        "type": "object",
+        "required": ["status", "assetData", "format", "path", "provider"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "assetData": {
+            "type": "string",
+            "description": "Base64-encoded generated asset bytes (GLB or glTF JSON)"
+          },
+          "format": {
+            "type": "string",
+            "description": "Asset format",
+            "enum": ["glb", "gltf"]
+          },
+          "path": {
+            "type": "string",
+            "description": "Suggested source file path"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider that produced the asset"
+          }
+        }
+      },
+      "GenerationTaskFailed": {
+        "type": "object",
+        "required": ["status", "error"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["failed"]
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable failure reason"
           }
         }
       },

@@ -75,7 +75,9 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 |------|-------|
 | Backend entry | `src/index.js` |
 | API routes | `src/api/index.js` |
-| Cloud generation route | `src/api/assets/generate-node.js` |
+| Cloud generation route | `src/api/assets/generate-node.js` (mock + Tripo3D task-based; exposes `POST /generations` and `GET /generations/:taskId`) |
+| Tripo3D adapter | `src/api/adapters/tripo3d-adapter.js` — Tripo v2 REST adapter |
+| Generation task registry | `src/api/generation-tasks.js` — in-memory wallet-bound task registry |
 | Storage backends | `src/api/storage/index.js` (adapters: `kubo-adapter.js`, `pinata-adapter.js`) |
 | Auth middleware | `src/api/authentication.js` |
 | Session store | `src/api/sessions.js` |

@@ -42,9 +42,10 @@ src/
 └── api/
     ├── index.js                # Main router — all v1 routes
     ├── assets/
-    │   └── generate-node.js    # 3D generation (mock-only)
+    │   └── generate-node.js    # 3D generation entrypoint (mock + Tripo3D task-based)
     ├── adapters/
-    │   └── mock-adapter.js     # Reads local .gltf files
+    │   ├── mock-adapter.js     # Reads local .gltf files
+    │   └── tripo3d-adapter.js  # Tripo3D v2 REST adapter (BYOK, async task polling)
     ├── storage/
     │   ├── index.js            # Storage backend factory (kubo/pinata)
     │   ├── kubo-adapter.js     # Local Kubo add/cat/pin/directory/unpin
@@ -82,7 +83,8 @@ src/
 | POST | `/paymaster` | None | CDP Paymaster JSON-RPC proxy — forwards sponsorship requests, keeps `CDP_PAYMASTER_URL` secret |
 | POST | `/users/resolve-email` | Session | Resolves an exact full email to the CDP end user's smart account address (minimal `{exists, address?}` response, no listing/autocomplete); used by the Collaborators panel's Add-by-email flow |
 | DELETE | `/sessions` | Session | Invalidates session token |
-| POST | `/generations` | Session | Validates session + rate limit, calls mock adapter, returns raw bytes |
+| POST | `/generations` | Session | Validates session + rate limit; mock returns raw bytes, `tripo3d` starts an async task |
+| GET | `/generations/:taskId` | Session | Polls an async generation task (running / success / failed) |
 | POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId`; returns empty archive if the relay is unreachable |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
 | POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
@@ -105,6 +107,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 ### 2.4 What Works
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
+- ✅ Tripo3D BYOK generation (task-based, v2.5 default) with `POST /generations` + `GET /generations/:taskId` polling
 - ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.js`, `pending-generations.js`)
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
 - ✅ Thumbnail capture + direct IPFS upload from browser
@@ -121,7 +124,6 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 
 ### 2.5 What Does NOT Work / Is Missing
 
-- ❌ **Cloud 3D adapters** — `generate-node.js` returns `501 NOT_IMPLEMENTED` when `MOCK_3D_GENERATION` is disabled.
 - ❌ No backend parametric, manifest, thumbnail, history, or token routes — all handled client-side.
 - ❌ `GET /api/health` — planned, not implemented.
 
@@ -328,13 +330,12 @@ frontend/src/js/
 | Asset-level Nostr comments | ✅ | ✅ |
 | Merkle editor collaboration | ✅ | ✅ |
 | Token burn | ✅ | ✅ |
-| Real 3D generation | ❌ 501 | ❌ 501 |
+| Real 3D generation (Tripo3D BYOK) | ✅ | ✅ |
 
 ### Beta blockers
 
 | Blocker | Impact | Notes |
 |---------|--------|-------|
-| **No real 3D generation** | Critical for core feature | Mock adapter works; cloud adapter returns 501. MVP feature gap. |
 | **CDP email login limited to Base Sepolia** | Medium — limits non-EOA users | CDP smart-wallet support is intentionally Base Sepolia only in this branch. |
 | **ArbeskAsset (paid tier) not deployed on any testnet** | Low for beta | Free tier is fully deployed on both testnets. |
 
@@ -342,7 +343,7 @@ frontend/src/js/
 
 **Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1185 unit tests green, 17 E2E specs cover the critical path.
 
-**Not ready for open beta** until real 3D generation is wired (501 is the first thing a new user hits). Everything else is beta-quality.
+**Ready for open beta** for the collaboration, publishing, and Tripo3D BYOK generation workflows. Everything else is beta-quality.
 
 ---
 
@@ -350,7 +351,6 @@ frontend/src/js/
 
 | Gap | Where | Priority |
 |-----|-------|----------|
-| Cloud 3D generation adapter | `src/api/assets/generate-node.js` | 🔴 Critical for MVP |
 | CDP email login on Hardhat | `smart-wallet-support.js` | 🟡 Smart wallets only supported on Base Sepolia |
 | Micro-ledger (`anchorManifest`) | `ledger-panel.js` | 🟡 Post-beta |
 | Health check endpoint | — | 🟢 Ops convenience |

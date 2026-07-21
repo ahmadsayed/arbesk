@@ -172,18 +172,18 @@ Invalidates the current session token (logout). Requires a valid `Authorization:
 
 ### `POST /api/v1/generations`
 
-Generates or mocks a 3D asset from a text prompt and returns the raw asset bytes. The browser handles IPFS upload and manifest construction.
+Generates or mocks a 3D asset from a text prompt. The browser handles IPFS upload and manifest construction.
 
 **Current behavior**
 
 - Requires Session auth (`Authorization: Session <token>`).
 - Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
 - Requires `prompt` and `nodeId`.
-- Accepts optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
-- If `MOCK_3D_GENERATION=true` or provider is `"mock"`, uses `src/api/adapters/mock-adapter.js`.
-- If mock mode is disabled and provider is not mock, responds `501` (cloud adapters not implemented yet).
+- Accepts optional `provider` (`"mock"` or `"tripo3d"`) and optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
+- If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses `src/api/adapters/mock-adapter.js` and returns the raw asset bytes immediately (`200`).
+- If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v2 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
-- **No IPFS writes** — returns raw asset bytes (base64). The browser (`api.js` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
+- **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.js` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
 **Request Body**
 
@@ -196,7 +196,7 @@ Generates or mocks a 3D asset from a text prompt and returns the raw asset bytes
 }
 ```
 
-**Response `200`**
+**Response `200` (mock / immediate providers)**
 
 ```json
 {
@@ -204,6 +204,16 @@ Generates or mocks a 3D asset from a text prompt and returns the raw asset bytes
   "format": "gltf",
   "path": "asset.gltf",
   "provider": "mock"
+}
+```
+
+**Response `202` (task-based providers, e.g. `tripo3d`)**
+
+```json
+{
+  "taskId": "task_01J3X...",
+  "provider": "tripo3d",
+  "status": "running"
 }
 ```
 
@@ -215,9 +225,57 @@ The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the ass
 |---:|---|
 | 400 | `prompt` or `nodeId` missing, or `providerKey` required for non-mock provider |
 | 401 | Missing, malformed, or invalid Session auth |
+| 401 | `PROVIDER_AUTH_FAILED` — provider rejected the supplied `providerKey` |
+| 402 | `PROVIDER_CREDITS_EXHAUSTED` — provider account has no generation credits left |
 | 429 | Generation rate limit exceeded |
-| 501 | Cloud adapters not implemented and mock mode disabled |
 | 500 | Unhandled generation/IPFS error |
+| 502 | `PROVIDER_ERROR` — upstream provider returned an error or unreachable |
+
+---
+
+### `GET /api/v1/generations/:taskId`
+
+Polls the status of an asynchronous generation task started by `POST /api/v1/generations`.
+
+- Requires Session auth (`Authorization: Session <token>`).
+- The task registry is wallet-bound and in-memory; only the wallet that started the task can query it.
+
+**Response `200` — running**
+
+```json
+{
+  "status": "running",
+  "progress": 42
+}
+```
+
+**Response `200` — success**
+
+```json
+{
+  "status": "success",
+  "assetData": "eyJhc3NldCI6eyJnZW5lcmF0b3IiOi...",
+  "format": "glb",
+  "path": "asset.glb",
+  "provider": "tripo3d"
+}
+```
+
+**Response `200` — failed**
+
+```json
+{
+  "status": "failed",
+  "error": "Upstream generation failed"
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 401 | Missing, malformed, or invalid Session auth |
+| 404 | `GENERATION_TASK_NOT_FOUND` — task ID unknown, expired, or belongs to another wallet |
 
 ---
 
