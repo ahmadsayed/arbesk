@@ -447,8 +447,12 @@ async function onGenerate() {
         userMsg = err.message || "Missing required generation parameter.";
       } else if (err.status === 429) {
         userMsg = "Rate limit reached. Please wait before generating again.";
-      } else if (err.status === 501) {
-        userMsg = "Cloud generation is not yet enabled. Switch to mock mode.";
+      } else if (err.status === 401) {
+        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
+      } else if (err.status === 402) {
+        userMsg = "Tripo3D account has insufficient credits.";
+      } else if (err.status === 504 || err.code === "GENERATION_TIMEOUT") {
+        userMsg = "Generation timed out. Try again later.";
       } else if (err.message) {
         userMsg = err.message;
       }
