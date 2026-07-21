@@ -92,7 +92,14 @@ async function loadApi(options = {}) {
   }));
 
   const mod = await import("../../frontend/src/js/services/api.js");
-  return { ...mod, fetchMock };
+
+  // Screen-reader status announcements write to #srStatus via rAF.
+  // Make rAF synchronous and expose the element so tests can inspect messages.
+  const statusEl = { textContent: "" };
+  document.getElementById = jest.fn((id) => (id === "srStatus" ? statusEl : null));
+  global.requestAnimationFrame = jest.fn((cb) => cb());
+
+  return { ...mod, fetchMock, statusEl };
 }
 
 describe("getCachedSession", () => {
@@ -696,5 +703,111 @@ describe("generateAsset", () => {
     const [, , [url, opts]] = fetchMock.mock.calls;
     expect(url).toMatch(/\/generations$/);
     expect(opts.headers.Authorization).toBe("Session fresh-token");
+  });
+
+  test("polls a Tripo3D task until success and returns a glb result", async () => {
+    const taskId = "task-abc-123";
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId, provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({ body: { status: "running", progress: 25 } })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({ body: { status: "running", progress: 75 } })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset, statusEl } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await generateAsset({
+      prompt: "a robot",
+      nodeId: "robot-node",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+    });
+
+    expect(result.format).toBe("glb");
+    expect(result.assetManifestCid).toBe("bafyAssetManifest");
+    expect(result.sourceAssetCid).toBe("bafySourceAsset");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    const [postUrl, postOpts] = fetchMock.mock.calls[0];
+    expect(postUrl).toMatch(/\/generations$/);
+    expect(postOpts.method).toBe("POST");
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "a robot",
+      nodeId: "robot-node",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      chainId: 1,
+    });
+
+    for (let i = 1; i <= 3; i++) {
+      const [url, opts] = fetchMock.mock.calls[i];
+      expect(url).toMatch(/\/generations\/task-abc-123$/);
+      expect(opts.method).toBe("GET");
+      expect(opts.headers.Authorization).toBe(`Session ${TEST_TOKEN}`);
+    }
+
+    // Last progress update before success + final success announcement.
+    expect(statusEl.textContent).toBe("Asset generated successfully.");
+  }, 15_000);
+
+  test("throws ApiError when a Tripo3D task fails", async () => {
+    const taskId = "task-fail-456";
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId, provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "failed",
+            error: { code: "PROVIDER_TASK_FAILED", message: "Tripo task failed" },
+          },
+        })
+      );
+    const { generateAsset, ApiError } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const err = await generateAsset({
+      prompt: "a robot",
+      nodeId: "robot-node",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+    }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({
+      status: 500,
+      code: "PROVIDER_TASK_FAILED",
+      message: "Tripo task failed",
+    });
   });
 });

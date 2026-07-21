@@ -388,6 +388,53 @@ export async function getSharedTokens(address, chainId, force = false) {
 
 // ─── Generations ─────────────────────────────────────────────────────────────
 
+const GENERATION_POLL_INTERVAL_MS = 3_000;
+const GENERATION_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
+
+/**
+ * Poll an async Tripo3D generation task until it succeeds, fails, or times out.
+ *
+ * @param {string} taskId
+ * @returns {Promise<{assetData: string, format: string, path: string}>}
+ */
+async function pollGeneration(taskId) {
+  const start = Date.now();
+
+  while (Date.now() - start < GENERATION_TIMEOUT_MS) {
+    const response = await fetchWithSession(`/generations/${taskId}`, {
+      method: "GET",
+    });
+    const pollData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const { message, code } = parseErrorBody(pollData);
+      throw new ApiError(
+        message || `Polling failed (HTTP ${response.status})`,
+        response.status,
+        code
+      );
+    }
+
+    if (pollData.status === "success") {
+      return pollData;
+    }
+
+    if (pollData.status === "failed") {
+      const { message, code } = parseErrorBody(pollData);
+      throw new ApiError(message || "Generation failed", 500, code);
+    }
+
+    // queued or running — surface progress to screen readers
+    const progress =
+      typeof pollData.progress === "number" ? pollData.progress : 0;
+    announceStatus(`Generating 3D asset on Tripo3D… ${progress}%`);
+
+    await new Promise((resolve) => setTimeout(resolve, GENERATION_POLL_INTERVAL_MS));
+  }
+
+  throw new ApiError("Generation timed out", 504, "GENERATION_TIMEOUT");
+}
+
 /**
  * POST /api/v1/generations
  *
@@ -447,6 +494,15 @@ export async function generateAsset({
       response.status,
       code
     );
+  }
+
+  // Async Tripo3D flow: the backend returned a task ID; poll until the
+  // provider finishes, then merge the final payload into `data` so the
+  // existing browser-side IPFS upload flow runs unchanged.
+  if (data.taskId) {
+    announceStatus("Generating 3D asset on Tripo3D…");
+    const final = await pollGeneration(data.taskId);
+    Object.assign(data, final);
   }
 
   // Browser uploads the asset bytes to IPFS, constructs the manifest,
