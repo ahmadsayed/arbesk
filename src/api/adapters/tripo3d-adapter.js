@@ -34,6 +34,17 @@ async function tripoFetch(path, apiKey, method = "GET", body) {
   if (body) opts.body = JSON.stringify(body);
 
   const res = await fetch(`${TRIPO_API_BASE}/${path}`, opts);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const preview = text.slice(0, 200);
+    const message = preview
+      ? `Tripo HTTP error: ${preview}`
+      : `Tripo HTTP error: status ${res.status}`;
+    const status = [400, 401, 402, 403, 404, 429].includes(res.status)
+      ? res.status
+      : 502;
+    throw new TripoApiError(message, 0, status);
+  }
   const json = /** @type {{code?: number, message?: string, data?: any}} */ (
     await res.json().catch(() => ({}))
   );
@@ -63,6 +74,13 @@ function mapTripoCodeToHttp(code) {
  * @returns {Promise<string>} task_id
  */
 export async function createTask(prompt, apiKey) {
+  if (!prompt || typeof prompt !== "string") {
+    throw new TripoApiError("prompt is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo createTask prompt_len=${prompt.length}`);
   const data = await tripoFetch("task", apiKey, "POST", {
     type: "text_to_model",
     prompt,
@@ -73,6 +91,7 @@ export async function createTask(prompt, apiKey) {
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
   }
+  console.log(`[GEN] Tripo task created task_id=${data.task_id}`);
   return data.task_id;
 }
 
@@ -83,8 +102,16 @@ export async function createTask(prompt, apiKey) {
  * @returns {Promise<{status: string, progress?: number, glbUrl?: string, error?: string}>}
  */
 export async function pollTask(taskId, apiKey) {
+  if (!taskId || typeof taskId !== "string") {
+    throw new TripoApiError("taskId is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo poll task_id=${taskId}`);
   const data = await tripoFetch(`task/${taskId}`, apiKey);
   const status = data.status;
+  console.log(`[GEN] Tripo poll status=${status}`);
   if (status === "queued" || status === "running") {
     return { status, progress: data.progress ?? 0 };
   }
@@ -107,6 +134,10 @@ export async function pollTask(taskId, apiKey) {
  * @returns {Promise<Buffer>}
  */
 export async function downloadModel(glbUrl) {
+  if (!glbUrl || typeof glbUrl !== "string") {
+    throw new TripoApiError("glbUrl is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo download url_len=${glbUrl.length}`);
   const res = await fetch(glbUrl);
   if (!res.ok) {
     throw new TripoApiError(`Model download failed: HTTP ${res.status}`, 0, 502);
@@ -115,5 +146,6 @@ export async function downloadModel(glbUrl) {
   if (!ab || ab.byteLength === 0) {
     throw new TripoApiError("Downloaded model is empty", 0, 502);
   }
+  console.log(`[GEN] Tripo download size=${ab.byteLength}`);
   return Buffer.from(ab);
 }

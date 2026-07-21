@@ -43,13 +43,10 @@ describe("tripo3d adapter", () => {
       ok: true,
       json: async () => ({ code: 1002, message: "Authentication failed" }),
     });
-    await expect(createTask("x", key)).rejects.toThrow(TripoApiError);
-    try {
-      await createTask("x", key);
-    } catch (e) {
-      expect(e.code).toBe(1002);
-      expect(e.status).toBe(401);
-    }
+    await expect(createTask("x", key)).rejects.toMatchObject({
+      code: 1002,
+      status: 401,
+    });
   });
 
   test("createTask throws TripoApiError 402 on insufficient credits", async () => {
@@ -60,12 +57,10 @@ describe("tripo3d adapter", () => {
         message: "You don't have enough credit",
       }),
     });
-    await expect(createTask("x", key)).rejects.toThrow(TripoApiError);
-    try {
-      await createTask("x", key);
-    } catch (e) {
-      expect(e.status).toBe(402);
-    }
+    await expect(createTask("x", key)).rejects.toMatchObject({
+      code: 2010,
+      status: 402,
+    });
   });
 
   test("unknown Tripo error code maps to HTTP 502 in TripoApiError", async () => {
@@ -73,13 +68,41 @@ describe("tripo3d adapter", () => {
       ok: true,
       json: async () => ({ code: 1234, message: "Unknown provider error" }),
     });
-    await expect(createTask("x", key)).rejects.toThrow(TripoApiError);
-    try {
-      await createTask("x", key);
-    } catch (e) {
-      expect(e.code).toBe(1234);
-      expect(e.status).toBe(502);
-    }
+    await expect(createTask("x", key)).rejects.toMatchObject({
+      code: 1234,
+      status: 502,
+    });
+  });
+
+  test("createTask maps HTTP 401 to TripoApiError status 401", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => "Unauthorized",
+    });
+    await expect(createTask("x", key)).rejects.toMatchObject({
+      code: 0,
+      status: 401,
+    });
+  });
+
+  test("createTask maps HTTP 500 to TripoApiError status 502", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => "Internal Server Error",
+    });
+    await expect(createTask("x", key)).rejects.toMatchObject({
+      code: 0,
+      status: 502,
+    });
+  });
+
+  test("createTask rejects empty prompt with status 400", async () => {
+    await expect(createTask("", key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
   });
 
   test("pollTask returns status and progress", async () => {
@@ -161,6 +184,13 @@ describe("tripo3d adapter", () => {
     expect(result).toEqual({ status: "failed", error: "user cancelled" });
   });
 
+  test("pollTask rejects empty taskId with status 400", async () => {
+    await expect(pollTask("", key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
   test("downloadModel returns Buffer", async () => {
     const buf = Buffer.from("glb binary");
     global.fetch = jest.fn().mockResolvedValue({
@@ -178,18 +208,20 @@ describe("tripo3d adapter", () => {
       ok: true,
       arrayBuffer: async () => new ArrayBuffer(0),
     });
-    await expect(downloadModel("https://cdn/empty.glb")).rejects.toThrow(
-      TripoApiError
-    );
+    await expect(downloadModel("https://cdn/empty.glb")).rejects.toMatchObject({
+      status: 502,
+      code: 0,
+    });
     await expect(downloadModel("https://cdn/empty.glb")).rejects.toThrow(
       "Downloaded model is empty"
     );
-    try {
-      await downloadModel("https://cdn/empty.glb");
-    } catch (e) {
-      expect(e.status).toBe(502);
-      expect(e.code).toBe(0);
-    }
+  });
+
+  test("downloadModel rejects empty glbUrl with status 400", async () => {
+    await expect(downloadModel("")).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
   });
 
   test("TRIPO_3D_MODEL env override changes submitted model_version", async () => {
