@@ -112,5 +112,8 @@ export async function downloadModel(glbUrl) {
     throw new TripoApiError(`Model download failed: HTTP ${res.status}`, 0, 502);
   }
   const ab = await res.arrayBuffer();
+  if (!ab || ab.byteLength === 0) {
+    throw new TripoApiError("Downloaded model is empty", 0, 502);
+  }
   return Buffer.from(ab);
 }

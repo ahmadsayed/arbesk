@@ -68,6 +68,20 @@ describe("tripo3d adapter", () => {
     }
   });
 
+  test("unknown Tripo error code maps to HTTP 502 in TripoApiError", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 1234, message: "Unknown provider error" }),
+    });
+    await expect(createTask("x", key)).rejects.toThrow(TripoApiError);
+    try {
+      await createTask("x", key);
+    } catch (e) {
+      expect(e.code).toBe(1234);
+      expect(e.status).toBe(502);
+    }
+  });
+
   test("pollTask returns status and progress", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -131,26 +145,126 @@ describe("tripo3d adapter", () => {
     expect(result.error).toContain("generation failed");
   });
 
+  test("pollTask maps cancelled status to failed with error", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: {
+          task_id: "task_abc",
+          status: "cancelled",
+          message: "user cancelled",
+        },
+      }),
+    });
+    const result = await pollTask("task_abc", key);
+    expect(result).toEqual({ status: "failed", error: "user cancelled" });
+  });
+
   test("downloadModel returns Buffer", async () => {
     const buf = Buffer.from("glb binary");
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+      arrayBuffer: async () =>
+        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
     });
     const out = await downloadModel("https://cdn/result.glb");
     expect(Buffer.isBuffer(out)).toBe(true);
     expect(out.toString()).toBe("glb binary");
   });
 
-  test("no function logs the provider key", async () => {
-    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+  test("downloadModel throws when body is empty", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ code: 0, data: { task_id: "task_abc" } }),
+      arrayBuffer: async () => new ArrayBuffer(0),
     });
+    await expect(downloadModel("https://cdn/empty.glb")).rejects.toThrow(
+      TripoApiError
+    );
+    await expect(downloadModel("https://cdn/empty.glb")).rejects.toThrow(
+      "Downloaded model is empty"
+    );
+    try {
+      await downloadModel("https://cdn/empty.glb");
+    } catch (e) {
+      expect(e.status).toBe(502);
+      expect(e.code).toBe(0);
+    }
+  });
+
+  test("TRIPO_3D_MODEL env override changes submitted model_version", async () => {
+    const original = process.env.TRIPO_3D_MODEL;
+    process.env.TRIPO_3D_MODEL = "v9.9-custom";
+    try {
+      await jest.isolateModulesAsync(async () => {
+        const { createTask, TRIPO_MODEL_VERSION } = await import(
+          "../../src/api/adapters/tripo3d-adapter.js"
+        );
+        expect(TRIPO_MODEL_VERSION).toBe("v9.9-custom");
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_xyz" } }),
+        });
+        await createTask("override test", key);
+        const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+        expect(body.model_version).toBe("v9.9-custom");
+      });
+    } finally {
+      if (original === undefined) {
+        delete process.env.TRIPO_3D_MODEL;
+      } else {
+        process.env.TRIPO_3D_MODEL = original;
+      }
+    }
+  });
+
+  test("no function logs the provider key", async () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    const buf = Buffer.from("glb binary");
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { task_id: "task_abc" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          code: 0,
+          data: {
+            task_id: "task_abc",
+            status: "success",
+            output: { pbr_model: "https://cdn/result.glb" },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () =>
+          buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 7777, message: "Unknown error" }),
+      });
+
     await createTask("x", key);
-    const logs = logSpy.mock.calls.flat().join(" ");
+    await pollTask("task_abc", key);
+    await downloadModel("https://cdn/result.glb");
+    await expect(createTask("x", key)).rejects.toThrow(TripoApiError);
+
+    const logs = [
+      ...logSpy.mock.calls.flat(),
+      ...errorSpy.mock.calls.flat(),
+      ...warnSpy.mock.calls.flat(),
+    ].join(" ");
     expect(logs).not.toContain(key);
+
     logSpy.mockRestore();
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });
