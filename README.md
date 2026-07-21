@@ -21,13 +21,14 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 - **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, history entries, token-based `child_ref` links, and optional thumbnails.
 - **Parametric versions** — color and scale edits append history entries without payment or SaaS generation.
 - **Babylon.js scene graph** — loads GLB/GLTF assets from IPFS, supports one-node-per-world replacement behavior, selection, lazy child anchors, and history scrubbing.
-- **On-demand browser IPFS cache** — memory + IndexedDB cache for IPFS JSON/blob payloads, populated only when content is opened (currently disabled by default).
+- **On-demand browser IPFS cache** — memory + IndexedDB cache for IPFS JSON/blob payloads, populated only when content is opened (currently disabled).
 - **Publish thumbnails** — publishing captures an optional `512x288` WebP snapshot, stores it on IPFS, and adds a lightweight `manifest.thumbnail` CID reference.
 - **Token ID-based child worlds** — drag/drop worlds from the gallery into other worlds; child refs resolve dynamically via `tokenURI()` with cycle/depth protection and external chain support.
 - **Gallery + team UI** — wallet-connected gallery renders asset names/thumbnails, expands collections, and loads worlds by token ID; team panel manages editors via Merkle updates.
 - **Session auth** — 24-hour reusable session tokens eliminate the per-generation wallet signature pop-up after the first use.
 - **CDP email-login smart accounts** — OTP email login creates an ERC-4337 smart account on Base Sepolia, gas-sponsored by CDP Paymaster.
-- **Standalone library page** — `/library.html` provides a two-level collection/asset browser with optimistic create, upload, burn, and Studio round-trip.
+- **Unified Studio + Library SPA** — `/studio` and `/library` are views of one SPA (`app.html`) with a Nautilus-style collection/asset browser, optimistic create, upload (GLB/glTF/3MF, decomposed at upload), burn, and Studio round-trip.
+- **3MF pipeline** — prompt keyword `3mf` returns a 3MF sample; 3MF packages are parsed, decomposed to composite form on save/upload, and converted to glTF for rendering.
 - **Asset-level Nostr comments** — per-asset comment threads scoped by `<chainId>:<contractAddress>:<tokenId>:<assetId>`, archived to IPFS on republish.
 - **Token indexer** — chunked `eth_getLogs` backfill discovers owned and shared collection tokens for the gallery and library.
 
@@ -43,23 +44,29 @@ arbesk/
 │   ├── index.js                  # Server entry point
 │   ├── config.js                 # Multi-network Web3 config
 │   └── api/
-│       ├── index.js              # API route registry + IPFS manifest helpers
+│       ├── index.js              # Main router — all v1 routes
 │       ├── assets/generate-node.js# PayGo-validated mock generation route
 │       ├── storage/              # kubo/pinata storage backends
 │       ├── authentication.js     # Session token auth
 │       ├── sessions.js           # 24h session store (SIWE)
+│       ├── siwe-verify.js        # EIP-4361 verification (incl. CDP smart-account fallback)
+│       ├── chat-proxy.js         # WebSocket bridge: browser ↔ Nostr relay
+│       ├── comments-archive.js   # Nostr comment thread → IPFS archive
+│       ├── token-indexer.js      # Chunked eth_getLogs ownership/editor backfill
+│       ├── routes/               # Per-domain route modules (ipfs, contracts, indexer, paymaster, …)
 │       ├── rate-limiter.js       # In-memory rate limits
 │       └── adapters/             # Mock/cloud generation adapters
-├── frontend/                     # Pug + SCSS + Bootstrap + Babylon.js frontend
-│   ├── src/pug/                  # Studio templates
-│   ├── src/scss/                 # Studio styles
+├── frontend/                     # Pug + custom SCSS design system + Babylon.js frontend
+│   ├── src/pug/                  # Unified SPA templates (app.pug → Studio + Library)
+│   ├── src/scss/                 # Custom SCSS design system (29 partials, no Bootstrap)
 │   ├── src/js/engine/            # Scene graph, time travel, parametric preview
-│   ├── src/js/blockchain/        # Web3.js wallet, token resolver, SIWE, explorer
+│   ├── src/js/blockchain/        # Web3.js wallet (EOA + CDP smart accounts), token resolver, SIWE
 │   ├── src/js/ipfs/              # Remote IPFS reader + browser cache + writes
 │   ├── src/js/gltf/              # glTF decompose/composer, material editor, CID URIs, merkle-editors
-│   ├── src/js/services/          # API/team/asset-delete services
-│   └── src/js/ui/                # Chat, gallery, history, save/publish, team UI,
-│                                 # outliner, asset drop zone, ledger panel
+│   ├── src/js/3mf/               # 3MF parser, glTF converter, composer/decomposer
+│   ├── src/js/services/          # API/team/asset-save/library/asset-delete services
+│   └── src/js/ui/                # Chat, gallery, library grid, comments, collaborators,
+│                                 # history clocks, save/publish, outliner, ledger panel
 ├── blockchain/                   # Hardhat + Solidity EVM target
 │   ├── contracts/ArbeskAssetFree.sol
 │   ├── contracts/ArbeskAsset.sol
@@ -96,16 +103,17 @@ arbesk/
 |---|---|
 | Backend | Node.js + Express ES modules |
 | Frontend templates | Pug |
-| Styling | SCSS + Bootstrap 5 |
+| Styling | Custom SCSS design system (no Bootstrap) |
 | 3D renderer | Babylon.js |
 | Frontend JS | Vanilla JavaScript ES modules |
-| Web3 | Web3.js + custom wallet picker (EIP-6963 + WalletConnect v2) |
+| Web3 | Web3.js + custom wallet picker (EIP-6963 + WalletConnect v2) + CDP embedded wallets |
 | Blockchain | EVM-compatible / local Hardhat / Base Sepolia Testnet |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
 | Blockchain dev | Dockerized Hardhat |
 | Storage | Private Dockerized Kubo/IPFS (local); Pinata (testnet) |
+| Comments | Local Nostr relay (dev) via WebSocket chat proxy |
 | Runtime cache | Browser memory cache + IndexedDB |
-| Testing | Jest + Supertest, Hardhat contract tests |
+| Testing | Jest + Supertest, Hardhat contract tests, Playwright E2E |
 | Build | Custom Node.js frontend scripts |
 | Editor/agent setup | Zed `.zed/tasks.json` + `AGENTS.md` |
 
@@ -123,7 +131,7 @@ cd frontend && npm install && cd ..
 # Optional host-side blockchain deps for editor intellisense
 cd blockchain && npm install && cd ..
 
-# 2. Start local infrastructure: private IPFS + Hardhat node
+# 2. Start local infrastructure: private IPFS + Hardhat node + Nostr relay
 docker compose up -d
 
 # 3. Build frontend assets into frontend/dist
@@ -133,30 +141,39 @@ npm run build:frontend
 npm start
 ```
 
+Or use the one-command dev stack (IPFS + Hardhat + Nostr + backend):
+
+```bash
+./scripts/start-dev.sh            # add --testnet for Base Sepolia + Pinata
+```
+
 Open the app at:
 
 ```text
-http://localhost:9090/studio.html
+http://localhost:9090/studio      # 3D Studio
+http://localhost:9090/library     # Collection/asset browser
 ```
 
 ### Tests
 
 ```bash
-# Backend API tests
-NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest
+# All Jest unit tests
+npm test
 
 # Current focused API regression suite
 NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
-
-# Token resolver + child_ref schema tests
-NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/token-resolver.test.js --silent
 
 # Frontend build validation
 npm run build:frontend
 
 # Contract tests inside Dockerized Hardhat
 docker compose run --rm hardhat npx hardhat test
+
+# Playwright E2E critical path (wallet → generate → save → publish → library)
+npm run test:e2e -- --project=chromium
 ```
+
+See `e2e/README.md` for the full E2E contract (17 specs, worktree isolation, selector map).
 
 ### Zed Tasks
 

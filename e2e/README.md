@@ -220,7 +220,7 @@ Validates the Nautilus-style collection browser on `/library`:
 5. Tests search filtering (matching and empty states).
 6. Tests grid/list view toggle and sort-by-name.
 
-**Why it matters:** `library.html` is a standalone page with its own state, routing, and selection model. Changes to `library-init.js`, `library-grid.js`, `library-toolbar.js`, or the wallet gate can break this.
+**Why it matters:** The library is a view inside the unified SPA (`app.html` served at `/library`) with its own state and selection model. Changes to `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, or the wallet gate can break this.
 
 ### 10. Library asset actions (`e2e/specs/10-library-asset-actions.spec.js`)
 
@@ -303,6 +303,12 @@ Validates the 3MF format path end to end:
 
 **Why it matters:** The only E2E coverage of the 3MF format path end to end — mock keyword routing, decompose-on-save into composite 3MF, and the composite → compose → render round-trip after a chain reload. A regression in the 3mf handler, the composer/decomposer, or the mock routing shows up here first.
 
+### 99. Viewport resize regression (`e2e/specs/99-resize-regression.spec.js`)
+
+Guards the Babylon engine resize pattern: the viewport must never stretch during window resize or sidebar collapse/expand. The engine resizes inside `runRenderLoop` immediately before `scene.render()` (see `frontend/src/js/engine/scene-graph.js`).
+
+**Why it matters:** Resize handled synchronously in the resize event (or a throttled render loop) causes visible viewport stretching. This spec is the only automated coverage for that regression.
+
 ---
 
 ## When you MUST run these tests
@@ -310,7 +316,7 @@ Validates the 3MF format path end to end:
 Run the E2E suite **before merging** any PR that changes:
 
 - **Studio UI/UX:** headerbar buttons, chat history, prompt input, settings panel, dialogs, wallet controls.
-- **Library page:** `library.html`, `library-init.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, collection/asset rendering, search/sort/view controls.
+- **Library page:** the `/library` SPA view, `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, collection/asset rendering, search/sort/view controls.
 - **Wallet integration:** EIP-1193/EIP-6963 discovery, `wallet.js`, `wallet-connect.js`, `wallet-discovery.js`, `siwe.js`, session auth.
 - **Generation flow:** `create-panel.js`, generation API, transaction validation, mock adapter, provider selection.
 - **Save/publish logic:** `asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture.

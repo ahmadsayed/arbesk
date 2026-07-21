@@ -26,7 +26,7 @@ curl -sL "https://esm.sh/node/buffer.mjs" \
 Then in the new `gltf-transform-core-<version>.js`, rewrite the first `import`
 line to point at `./node-buffer-polyfill.js`, update the filename references in
 `frontend/src/js/workers/gltf-worker.js` and the import map in
-`frontend/src/pug/studio.pug`, and bump `@gltf-transform/core` in
+`frontend/src/pug/app.pug`, and bump `@gltf-transform/core` in
 `frontend/package.json` to match.
 
 ## workerpool-10.0.2.js / workerpool-10.0.2.mjs
