@@ -23,13 +23,15 @@ export class TripoApiError extends Error {
  * @param {object} [body]
  */
 async function tripoFetch(path, apiKey, method = "GET", body) {
-  /** @type {{method: string, headers: Record<string, string>, body?: string}} */
+  /** @type {{method: string, headers: Record<string, string>, body?: string, signal: AbortSignal}} */
   const opts = {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
+    // A stalled upstream connection must not hang the Express request.
+    signal: AbortSignal.timeout(30_000),
   };
   if (body) opts.body = JSON.stringify(body);
 
@@ -40,9 +42,9 @@ async function tripoFetch(path, apiKey, method = "GET", body) {
     const message = preview
       ? `Tripo HTTP error: ${preview}`
       : `Tripo HTTP error: status ${res.status}`;
-    const status = [400, 401, 402, 403, 404, 429].includes(res.status)
-      ? res.status
-      : 502;
+    // Only 401/402 have intentional client mappings; everything else is a
+    // generic upstream failure (502).
+    const status = res.status === 401 || res.status === 402 ? res.status : 502;
     throw new TripoApiError(message, 0, status);
   }
   const json = /** @type {{code?: number, message?: string, data?: any}} */ (
@@ -138,7 +140,7 @@ export async function downloadModel(glbUrl) {
     throw new TripoApiError("glbUrl is required", 0, 400);
   }
   console.log(`[GEN] Tripo download url_len=${glbUrl.length}`);
-  const res = await fetch(glbUrl);
+  const res = await fetch(glbUrl, { signal: AbortSignal.timeout(120_000) });
   if (!res.ok) {
     throw new TripoApiError(`Model download failed: HTTP ${res.status}`, 0, 502);
   }

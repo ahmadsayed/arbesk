@@ -175,4 +175,24 @@ describe("generationRateLimit BYOK bypass", () => {
     expect(third.status).toBe(429);
     expect(third.body.error.code).toBe("RATE_LIMITED");
   });
+
+  test("whitespace-only providerKey does not bypass the limit", async () => {
+    const app = buildApp();
+
+    const first = await request(app)
+      .post("/generate")
+      .send({ provider: "tripo3d", providerKey: "   " });
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post("/generate")
+      .send({ provider: "tripo3d", providerKey: "   " });
+    expect(second.status).toBe(200);
+
+    const third = await request(app)
+      .post("/generate")
+      .send({ provider: "tripo3d", providerKey: "   " });
+    expect(third.status).toBe(429);
+    expect(third.body.error.code).toBe("RATE_LIMITED");
+  });
 });

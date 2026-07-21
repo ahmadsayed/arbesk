@@ -98,6 +98,18 @@ describe("tripo3d adapter", () => {
     });
   });
 
+  test("createTask collapses unexpected HTTP statuses (e.g. 429) to 502", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () => "Too Many Requests",
+    });
+    await expect(createTask("x", key)).rejects.toMatchObject({
+      code: 0,
+      status: 502,
+    });
+  });
+
   test("createTask rejects empty prompt with status 400", async () => {
     await expect(createTask("", key)).rejects.toMatchObject({
       code: 0,

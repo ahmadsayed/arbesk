@@ -19,6 +19,17 @@ import { generateAssetSchema } from "../schemas.js";
 const Router = express.Router;
 
 /**
+ * Map a Tripo adapter error status to the documented API error code.
+ * @param {number} status
+ * @returns {string}
+ */
+function providerErrorCode(status) {
+  if (status === 401) return "PROVIDER_AUTH_FAILED";
+  if (status === 402) return "PROVIDER_CREDITS_EXHAUSTED";
+  return "PROVIDER_ERROR";
+}
+
+/**
  * Generation route factory. No dependencies — the storage adapter is not
  * needed here because the browser performs all IPFS writes itself.
  */
@@ -151,7 +162,7 @@ export default function generateAssetNode() {
         if (err instanceof TripoApiError) {
           return res.status(err.status).json({
             error: {
-              code: err.code,
+              code: providerErrorCode(err.status),
               message: err.message,
             },
           });
@@ -231,9 +242,14 @@ export default function generateAssetNode() {
       const err = /** @type {Error} */ (error);
       console.error("[GEN] get error:", err.message);
       if (err instanceof TripoApiError) {
+        // Auth/credit failures are terminal for the task: evict the entry
+        // (and its transient BYOK key) instead of waiting for the TTL.
+        if (err.status === 401 || err.status === 402) {
+          evictTask(String(req.params.taskId));
+        }
         return res.status(err.status).json({
           error: {
-            code: err.code,
+            code: providerErrorCode(err.status),
             message: err.message,
           },
         });

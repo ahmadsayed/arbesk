@@ -684,7 +684,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
       });
 
-      it("returns provider TripoApiError status on poll failure", async () => {
+      it("returns provider auth error with documented code and evicts the task", async () => {
         jest
           .spyOn(global, "fetch")
           .mockResolvedValueOnce({
@@ -716,9 +716,38 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
         expect(res.status).toBe(401);
         expect(res.body.error).toMatchObject({
-          code: 1002,
+          code: "PROVIDER_AUTH_FAILED",
           message: expect.stringContaining("Authentication failed"),
         });
+
+        // Auth failure is terminal: the task entry must be evicted.
+        const again = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+        expect(again.status).toBe(404);
+      });
+
+      it("maps Tripo credit exhaustion to 402 PROVIDER_CREDITS_EXHAUSTED on POST", async () => {
+        jest.spyOn(global, "fetch").mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            code: 2010,
+            message: "You don't have enough credit",
+          }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A pricey asset",
+            nodeId: "node_tripo_credits",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(res.status).toBe(402);
+        expect(res.body.error.code).toBe("PROVIDER_CREDITS_EXHAUSTED");
       });
     });
 

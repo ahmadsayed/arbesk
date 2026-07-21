@@ -105,7 +105,7 @@ function isByok(req) {
     provider.length > 0 &&
     provider !== "mock" &&
     typeof providerKey === "string" &&
-    providerKey.length > 0
+    providerKey.trim().length > 0
   );
 }
 
