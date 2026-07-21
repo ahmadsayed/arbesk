@@ -91,6 +91,24 @@ const generationLimiter = createLimiter({
   message: "Generation rate limit exceeded.",
 });
 
+/**
+ * BYOK (Bring Your Own Key) requests bypass the server-side generation rate
+ * limit because the caller is consuming their own provider quota.
+ *
+ * @param {import('express').Request} req
+ */
+function isByok(req) {
+  const provider = req.body?.provider;
+  const providerKey = req.body?.providerKey;
+  return (
+    typeof provider === "string" &&
+    provider.length > 0 &&
+    provider !== "mock" &&
+    typeof providerKey === "string" &&
+    providerKey.length > 0
+  );
+}
+
 const unpinLimiter = createLimiter({
   max: () => Number(process.env.UNPIN_RATE_LIMIT_MAX || 30),
   message: "Unpin rate limit exceeded.",
@@ -113,11 +131,24 @@ const userResolveLimiter = createLimiter({
 });
 
 export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
-export const generationRateLimit = generationLimiter.middleware;
 export const unpinRateLimit = unpinLimiter.middleware;
 export const gcRateLimit = gcLimiter.middleware;
 export const paymasterRateLimit = paymasterLimiter.middleware;
 export const userResolveRateLimit = userResolveLimiter.middleware;
+
+/**
+ * Generation rate-limit middleware. BYOK requests skip the server-side limit
+ * and call next() directly; all other generation requests count toward the
+ * global generation limit.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
+export const generationRateLimit = (req, res, next) => {
+  if (isByok(req)) return next();
+  return generationLimiter.middleware(req, res, next);
+};
 
 /**
  * Reset all in-memory rate-limit stores. Used by test teardown.
