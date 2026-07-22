@@ -180,6 +180,7 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 - Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
 - Requires `prompt` and `nodeId`.
 - Accepts optional `provider` (`"mock"` or `"tripo3d"`) and optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
+- Accepts optional `refineTaskId` (`tripo3d` only): the `taskId` of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo `texture_model` (texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream) and the `202` response includes `"refined": true`. Unknown, incomplete, or foreign `refineTaskId` → `404 REFINE_SOURCE_NOT_FOUND`; the browser falls back to a fresh generation automatically.
 - If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses `src/api/adapters/mock-adapter.js` and returns the raw asset bytes immediately (`200`).
 - If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v2 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
@@ -211,11 +212,14 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 
 ```json
 {
-  "taskId": "task_01J3X...",
+  "taskId": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
   "provider": "tripo3d",
-  "status": "running"
+  "status": "running",
+  "refined": true
 }
 ```
+
+(`refined` is present only when the request included a valid `refineTaskId`.)
 
 The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the asset to IPFS, constructs the manifest, uploads the manifest, and returns `{ assetManifestCid, sourceAssetCid }` to the UI.
 
@@ -227,6 +231,7 @@ The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the ass
 | 401 | Missing, malformed, or invalid Session auth |
 | 401 | `PROVIDER_AUTH_FAILED` — provider rejected the supplied `providerKey` |
 | 402 | `PROVIDER_CREDITS_EXHAUSTED` — provider account has no generation credits left |
+| 404 | `REFINE_SOURCE_NOT_FOUND` — `refineTaskId` unknown, not completed, or owned by another wallet |
 | 429 | Generation rate limit exceeded |
 | 500 | Unhandled generation/IPFS error |
 | 502 | `PROVIDER_ERROR` — upstream provider returned an error or unreachable |

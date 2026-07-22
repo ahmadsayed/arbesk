@@ -153,6 +153,22 @@
               }
             }
           },
+          "404": {
+            "description": "`refineTaskId` unknown, not completed, or owned by another wallet (`REFINE_SOURCE_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "REFINE_SOURCE_NOT_FOUND",
+                    "message": "Refine source task not found or not completed"
+                  }
+                }
+              }
+            }
+          },
           "403": {
             "description": "Invalid/failed transaction, wrong contract, or missing payment event",
             "content": {
@@ -929,6 +945,12 @@
             "description": "Bring Your Own Key: user-supplied provider API key. When present, the on-chain payment/quota gate is bypassed. Never logged or persisted server-side. Max 200 chars.",
             "maxLength": 200,
             "example": "sk-..."
+          },
+          "refineTaskId": {
+            "type": "string",
+            "description": "Optional (tripo3d only): taskId of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo texture_model (texture/material only; geometry unchanged). Unknown/incomplete/foreign id → 404 REFINE_SOURCE_NOT_FOUND.",
+            "maxLength": 64,
+            "example": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d"
           }
         }
       },
@@ -971,6 +993,10 @@
             "type": "string",
             "enum": ["running"],
             "description": "Initial task status"
+          },
+          "refined": {
+            "type": "boolean",
+            "description": "Present and true when the request refined a previous task via refineTaskId"
           }
         }
       },
