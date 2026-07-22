@@ -8,6 +8,7 @@ const TTL_MS = 60 * 60 * 1000; // 1 hour
  * @property {string} providerKey
  * @property {string} userAddress
  * @property {number} createdAt
+ * @property {"running"|"complete"} status
  */
 
 /** @type {Map<string, TaskEntry>} */
@@ -34,13 +35,14 @@ export function registerTask({ tripoTaskId, providerKey, userAddress }) {
     providerKey,
     userAddress,
     createdAt: Date.now(),
+    status: "running",
   });
   return taskId;
 }
 
 /**
- * Look up a task entry. Returns undefined if expired, missing, or owned by a
- * different wallet address.
+ * Look up a running task entry. Returns undefined if expired, missing,
+ * already complete, or owned by a different wallet address.
  * @param {string} taskId
  * @param {string} userAddress
  * @returns {TaskEntry | undefined}
@@ -53,6 +55,39 @@ export function getTask(taskId, userAddress) {
     return undefined;
   }
   if (entry.userAddress !== userAddress) return undefined;
+  if (entry.status !== "running") return undefined;
+  return entry;
+}
+
+/**
+ * Mark a running task as complete. Refreshes the TTL window so the entry
+ * remains available as a refine source for a full TTL after completion.
+ * @param {string} taskId
+ * @param {string} userAddress
+ */
+export function markTaskComplete(taskId, userAddress) {
+  const entry = registry.get(taskId);
+  if (!entry || entry.userAddress !== userAddress) return;
+  entry.status = "complete";
+  entry.createdAt = Date.now();
+}
+
+/**
+ * Look up a completed task entry (refine source). Returns undefined if
+ * missing, expired, not complete, or owned by a different wallet.
+ * @param {string} taskId
+ * @param {string} userAddress
+ * @returns {TaskEntry | undefined}
+ */
+export function getCompletedTask(taskId, userAddress) {
+  const entry = registry.get(taskId);
+  if (!entry) return undefined;
+  if (Date.now() - entry.createdAt > TTL_MS) {
+    registry.delete(taskId);
+    return undefined;
+  }
+  if (entry.userAddress !== userAddress) return undefined;
+  if (entry.status !== "complete") return undefined;
   return entry;
 }
 

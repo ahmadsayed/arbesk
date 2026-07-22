@@ -2,6 +2,8 @@ import { jest } from "@jest/globals";
 import {
   registerTask,
   getTask,
+  getCompletedTask,
+  markTaskComplete,
   evictTask,
   _resetRegistry,
 } from "../../src/api/generation-tasks.js";
@@ -62,5 +64,44 @@ describe("generation-tasks registry", () => {
     // Indirect check: the module should not expose a save/load function.
     expect(mod.save).toBeUndefined();
     expect(mod.load).toBeUndefined();
+  });
+
+  test("new tasks are running; completed tasks are hidden from getTask", () => {
+    const id = registerTask({
+      tripoTaskId: "t",
+      providerKey: "k",
+      userAddress: "0xabc",
+    });
+    expect(getTask(id, "0xabc")).toBeDefined();
+    markTaskComplete(id, "0xabc");
+    expect(getTask(id, "0xabc")).toBeUndefined();
+    expect(getCompletedTask(id, "0xabc")).toMatchObject({
+      tripoTaskId: "t",
+      status: "complete",
+    });
+  });
+
+  test("getCompletedTask enforces wallet ownership", () => {
+    const id = registerTask({
+      tripoTaskId: "t",
+      providerKey: "k",
+      userAddress: "0xabc",
+    });
+    markTaskComplete(id, "0xabc");
+    expect(getCompletedTask(id, "0xother")).toBeUndefined();
+  });
+
+  test("markTaskComplete refreshes the TTL window", () => {
+    const id = registerTask({
+      tripoTaskId: "t",
+      providerKey: "k",
+      userAddress: "0xabc",
+    });
+    jest.advanceTimersByTime(50 * 60 * 1000); // 50 min old
+    markTaskComplete(id, "0xabc");
+    jest.advanceTimersByTime(59 * 60 * 1000); // 109 min since create, 59 since complete
+    expect(getCompletedTask(id, "0xabc")).toBeDefined();
+    jest.advanceTimersByTime(2 * 60 * 1000); // 61 min since complete
+    expect(getCompletedTask(id, "0xabc")).toBeUndefined();
   });
 });
