@@ -451,7 +451,8 @@ async function pollGeneration(taskId) {
  * @param {string} [params.prevAssetManifestCid]
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
- * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number}>}
+ * @param {string} [params.refineTaskId] - taskId of a completed Tripo3D generation to refine (texture/material only)
+ * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string}>}
  */
 export async function generateAsset({
   prompt,
@@ -463,6 +464,7 @@ export async function generateAsset({
   transformMatrix,
   tier,
   providerKey,
+  refineTaskId,
 }) {
   announceStatus("Authenticating…");
 
@@ -475,6 +477,7 @@ export async function generateAsset({
     provider,
     ...(chainId && { chainId }),
     ...(providerKey && { providerKey }),
+    ...(refineTaskId && { refineTaskId }),
   };
 
   announceStatus("Generating 3D asset…");
@@ -486,6 +489,21 @@ export async function generateAsset({
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
+    if (code === "REFINE_SOURCE_NOT_FOUND" && refineTaskId) {
+      // The refine source expired or was cleared — fall back to a fresh
+      // generation so the user's prompt is never lost.
+      announceStatus("Refine source expired — generating fresh model…");
+      return generateAsset({
+        prompt,
+        nodeId,
+        provider,
+        assetId,
+        prevAssetManifestCid,
+        transformMatrix,
+        tier,
+        providerKey,
+      });
+    }
     announceStatus(
       "Generation failed: " + (message || `HTTP ${response.status}`)
     );
@@ -588,6 +606,7 @@ export async function generateAsset({
     format: data.format,
     path: data.path || `asset.${data.format}`,
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
+    ...(data.taskId && { taskId: data.taskId }),
   };
 }
 

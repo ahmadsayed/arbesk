@@ -810,4 +810,99 @@ describe("generateAsset", () => {
       message: "Tripo task failed",
     });
   });
+
+  test("passes refineTaskId to the backend and returns taskId", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-refine-2", provider: "tripo3d", status: "running", refined: true },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await generateAsset({
+      prompt: "make it blue",
+      nodeId: "n2",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      refineTaskId: "task-gen-1",
+    });
+
+    expect(result.taskId).toBe("task-refine-2");
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "make it blue",
+      nodeId: "n2",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      refineTaskId: "task-gen-1",
+      chainId: 1,
+    });
+  }, 15_000);
+
+  test("falls back to fresh generation on REFINE_SOURCE_NOT_FOUND", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 404,
+          ok: false,
+          body: {
+            error: { code: "REFINE_SOURCE_NOT_FOUND", message: "gone" },
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-fresh-3", provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await generateAsset({
+      prompt: "make it blue",
+      nodeId: "n2",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      refineTaskId: "task-gen-1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retryBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(retryBody.refineTaskId).toBeUndefined();
+    expect(result.taskId).toBe("task-fresh-3");
+  }, 15_000);
 });
