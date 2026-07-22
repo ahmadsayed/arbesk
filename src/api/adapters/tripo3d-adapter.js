@@ -98,6 +98,40 @@ export async function createTask(prompt, apiKey) {
 }
 
 /**
+ * Refine an existing model's texture/material via a text prompt.
+ * NOTE: Tripo's refine_model endpoint is dead upstream (code 2006, verified
+ * 2026-07-22); this uses texture_model — geometry is unchanged.
+ * @param {string} prompt
+ * @param {string} originalTripoTaskId - Tripo task ID of the completed source generation
+ * @param {string} apiKey
+ * @returns {Promise<string>} task_id
+ */
+export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
+  if (!prompt || typeof prompt !== "string") {
+    throw new TripoApiError("prompt is required", 0, 400);
+  }
+  if (!originalTripoTaskId || typeof originalTripoTaskId !== "string") {
+    throw new TripoApiError("originalTripoTaskId is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo refine prompt_len=${prompt.length}`);
+  const data = await tripoFetch("task", apiKey, "POST", {
+    type: "texture_model",
+    original_model_task_id: originalTripoTaskId,
+    text_prompt: prompt,
+    texture: true,
+    pbr: true,
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  console.log(`[GEN] Tripo refine task created task_id=${data.task_id}`);
+  return data.task_id;
+}
+
+/**
  * Poll a task.
  * @param {string} taskId
  * @param {string} apiKey

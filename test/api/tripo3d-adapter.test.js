@@ -1,6 +1,7 @@
 import { jest } from "@jest/globals";
 import {
   createTask,
+  createRefineTask,
   pollTask,
   downloadModel,
   TripoApiError,
@@ -112,6 +113,32 @@ describe("tripo3d adapter", () => {
 
   test("createTask rejects empty prompt with status 400", async () => {
     await expect(createTask("", key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
+  test("createRefineTask submits texture_model with text_prompt", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_refine" } }),
+    });
+    const id = await createRefineTask("make it blue metallic", "tripo_orig_1", key);
+    expect(id).toBe("task_refine");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://api.tripo3d.ai/v2/openapi/task");
+    expect(opts.headers["Authorization"]).toBe(`Bearer ${key}`);
+    expect(JSON.parse(opts.body)).toEqual({
+      type: "texture_model",
+      original_model_task_id: "tripo_orig_1",
+      text_prompt: "make it blue metallic",
+      texture: true,
+      pbr: true,
+    });
+  });
+
+  test("createRefineTask rejects empty original task id with status 400", async () => {
+    await expect(createRefineTask("x", "", key)).rejects.toMatchObject({
       code: 0,
       status: 400,
     });
