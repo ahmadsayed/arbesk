@@ -56,7 +56,7 @@ Refine chain (provider=tripo3d only)
 
 ### 3.2 `src/api/adapters/tripo3d-adapter.js` (modified)
 
-- New `createRefineTask(prompt, originalTripoTaskId, apiKey) → taskId` — POST `{type:"texture_model", original_model_task_id, text_prompt: prompt, texture:true, pbr:true}`.
+- New `createRefineTask(prompt, originalTripoTaskId, apiKey) → taskId` — POST `{type:"texture_model", original_model_task_id, texture_prompt: {text: prompt}, texture:true, pbr:true}`. (The prompt **must** be wrapped in `texture_prompt.text`; a flat `text_prompt` field is silently ignored by the v2 API — verified live 2026-07-22.)
 - `pollTask` already falls back to `output.model` when `pbr_model` is absent (texture_model output) — no change needed.
 
 ### 3.3 `src/api/assets/generate-node.js` (modified)

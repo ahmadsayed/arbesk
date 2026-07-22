@@ -827,7 +827,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(JSON.parse(refineCall[1].body)).toMatchObject({
           type: "texture_model",
           original_model_task_id: "tripo_gen1",
-          text_prompt: "make it blue",
+          texture_prompt: { text: "make it blue" },
         });
       });
 

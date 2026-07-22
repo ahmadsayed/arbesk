@@ -118,7 +118,7 @@ describe("tripo3d adapter", () => {
     });
   });
 
-  test("createRefineTask submits texture_model with text_prompt", async () => {
+  test("createRefineTask submits texture_model with texture_prompt.text", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_refine" } }),
@@ -131,7 +131,7 @@ describe("tripo3d adapter", () => {
     expect(JSON.parse(opts.body)).toEqual({
       type: "texture_model",
       original_model_task_id: "tripo_orig_1",
-      text_prompt: "make it blue metallic",
+      texture_prompt: { text: "make it blue metallic" },
       texture: true,
       pbr: true,
     });

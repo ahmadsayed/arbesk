@@ -117,10 +117,13 @@ export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(`[GEN] Tripo refine prompt_len=${prompt.length}`);
+  // NOTE: the prompt must be wrapped in texture_prompt.text — a flat
+  // text_prompt field is silently ignored by the Tripo v2 API (verified
+  // 2026-07-22: the task input echo drops it and the texture is unchanged).
   const data = await tripoFetch("task", apiKey, "POST", {
     type: "texture_model",
     original_model_task_id: originalTripoTaskId,
-    text_prompt: prompt,
+    texture_prompt: { text: prompt },
     texture: true,
     pbr: true,
   });
