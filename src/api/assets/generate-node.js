@@ -2,6 +2,7 @@ import express from "express";
 import { mockGenerate } from "../adapters/mock-adapter.js";
 import {
   createTask,
+  createRefineTask,
   pollTask,
   downloadModel,
   TripoApiError,
@@ -9,6 +10,8 @@ import {
 import {
   registerTask,
   getTask,
+  getCompletedTask,
+  markTaskComplete,
   evictTask,
 } from "../generation-tasks.js";
 import authenticate from "../authentication.js";
@@ -53,7 +56,7 @@ export default function generateAssetNode() {
     validateBody(generateAssetSchema),
     async (req, res) => {
       try {
-        const { prompt, nodeId, provider, providerKey } = req.body;
+        const { prompt, nodeId, provider, providerKey, refineTaskId } = req.body;
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
@@ -132,8 +135,28 @@ export default function generateAssetNode() {
 
         if (effectiveProvider === "tripo3d") {
           const key = providerKey.trim();
-          console.log(`[GEN] using Tripo3D adapter for "${prompt}"`);
-          const tripoTaskId = await createTask(prompt, key);
+          let refineSource = null;
+          if (refineTaskId) {
+            refineSource = getCompletedTask(
+              refineTaskId,
+              res.locals.userAddress,
+            );
+            if (!refineSource) {
+              console.log(`[GEN] refine source not found taskId=${refineTaskId}`);
+              return res.status(404).json({
+                error: {
+                  code: "REFINE_SOURCE_NOT_FOUND",
+                  message: "Refine source task not found or not completed",
+                },
+              });
+            }
+          }
+          console.log(
+            `[GEN] using Tripo3D adapter for "${prompt}" refine=${Boolean(refineSource)}`,
+          );
+          const tripoTaskId = refineSource
+            ? await createRefineTask(prompt, refineSource.tripoTaskId, key)
+            : await createTask(prompt, key);
           const taskId = registerTask({
             tripoTaskId,
             providerKey: key,
@@ -146,6 +169,7 @@ export default function generateAssetNode() {
             taskId,
             provider: "tripo3d",
             status: "running",
+            ...(refineSource && { refined: true }),
           });
         }
 
@@ -215,7 +239,7 @@ export default function generateAssetNode() {
           throw new Error("Tripo success response missing model URL");
         }
         const buffer = await downloadModel(poll.glbUrl);
-        evictTask(taskId);
+        markTaskComplete(taskId, res.locals.userAddress);
         console.log(
           `[GEN] task complete taskId=${taskId} size=${buffer.length}`,
         );

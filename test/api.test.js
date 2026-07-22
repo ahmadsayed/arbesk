@@ -2,7 +2,11 @@ import { jest } from "@jest/globals";
 import request from "supertest";
 import zlib from "zlib";
 import { _resetRateLimiters } from "../src/api/rate-limiter.js";
-import { _resetRegistry, registerTask } from "../src/api/generation-tasks.js";
+import {
+  _resetRegistry,
+  registerTask,
+  markTaskComplete,
+} from "../src/api/generation-tasks.js";
 
 jest.setTimeout(30000);
 
@@ -748,6 +752,120 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
         expect(res.status).toBe(402);
         expect(res.body.error.code).toBe("PROVIDER_CREDITS_EXHAUSTED");
+      });
+
+      it("creates a refine task when refineTaskId references a completed task", async () => {
+        const glb = new TextEncoder().encode("glb1");
+        global.fetch = jest
+          .fn()
+          // gen1: create
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "tripo_gen1" } }),
+          })
+          // gen1: poll success
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "tripo_gen1",
+                status: "success",
+                output: { pbr_model: "https://cdn/a.glb" },
+              },
+            }),
+          })
+          // gen1: download
+          .mockResolvedValueOnce({
+            ok: true,
+            arrayBuffer: async () =>
+              glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength),
+          })
+          // gen2: refine create
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "tripo_refine1" } }),
+          });
+
+        const session = await makeSessionHeader();
+        const gen1 = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            prompt: "cube",
+            nodeId: "n1",
+            provider: "tripo3d",
+            providerKey: "k",
+          });
+        expect(gen1.status).toBe(202);
+
+        const poll = await request(app)
+          .get(`/api/v1/generations/${gen1.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.status).toBe("success");
+
+        // Completed entry is no longer pollable
+        const again = await request(app)
+          .get(`/api/v1/generations/${gen1.body.taskId}`)
+          .set("Authorization", session);
+        expect(again.status).toBe(404);
+
+        const gen2 = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            prompt: "make it blue",
+            nodeId: "n2",
+            provider: "tripo3d",
+            providerKey: "k",
+            refineTaskId: gen1.body.taskId,
+          });
+        expect(gen2.status).toBe(202);
+        expect(gen2.body.refined).toBe(true);
+
+        const refineCall = global.fetch.mock.calls[3];
+        expect(JSON.parse(refineCall[1].body)).toMatchObject({
+          type: "texture_model",
+          original_model_task_id: "tripo_gen1",
+          text_prompt: "make it blue",
+        });
+      });
+
+      it("returns 404 REFINE_SOURCE_NOT_FOUND for unknown refineTaskId", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "x",
+            nodeId: "n",
+            provider: "tripo3d",
+            providerKey: "k",
+            refineTaskId: "00000000-0000-0000-0000-000000000000",
+          });
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe("REFINE_SOURCE_NOT_FOUND");
+      });
+
+      it("returns 404 REFINE_SOURCE_NOT_FOUND for a task owned by another wallet", async () => {
+        const foreignTaskId = registerTask({
+          tripoTaskId: "tripo_foreign",
+          providerKey: "k",
+          userAddress: "0xotherwallet",
+        });
+        markTaskComplete(foreignTaskId, "0xotherwallet");
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "x",
+            nodeId: "n",
+            provider: "tripo3d",
+            providerKey: "k",
+            refineTaskId: foreignTaskId,
+          });
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe("REFINE_SOURCE_NOT_FOUND");
       });
     });
 

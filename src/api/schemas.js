@@ -37,6 +37,7 @@ export const generateAssetSchema = z.object({
   nodeId: z.string().min(1, "nodeId is required"),
   provider: z.string().optional(),
   providerKey: z.string().max(200).optional(),
+  refineTaskId: z.string().max(64).optional(),
 });
 
 export const snapshotCommentsSchema = z.object({
