@@ -12,15 +12,15 @@ import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 let addChatMessage;
 let addAssetMessage;
 let addWorkingMessage;
+let clearChatMessages;
 
 beforeAll(async () => {
   document.body.innerHTML =
     '<div id="chatHistoryList"><div class="chat-welcome"></div></div>';
   global.URL.createObjectURL = jest.fn(() => "blob:mock-url");
   global.URL.revokeObjectURL = jest.fn();
-  ({ addChatMessage, addAssetMessage, addWorkingMessage } = await import(
-    "../../frontend/src/js/ui/chat-messages.js"
-  ));
+  ({ addChatMessage, addAssetMessage, addWorkingMessage, clearChatMessages } =
+    await import("../../frontend/src/js/ui/chat-messages.js"));
 });
 
 beforeEach(() => {
@@ -91,4 +91,18 @@ test("addWorkingMessage shows a spinner bubble and removes it", () => {
 
   working.remove();
   expect(list.querySelector(".chat-bubble-working")).toBeNull();
+});
+
+test("clearChatMessages removes all bubbles and restores the welcome", () => {
+  const list = document.getElementById("chatHistoryList");
+  addChatMessage("user", "make me a chair");
+  addAssetMessage({ prompt: "p", format: "glb" });
+  expect(list.querySelectorAll(".chat-bubble").length).toBeGreaterThan(0);
+  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
+
+  clearChatMessages();
+
+  expect(list.querySelectorAll(".chat-bubble").length).toBe(0);
+  expect(list.querySelector(".chat-welcome")).not.toBeNull();
+  expect(list.querySelector(".chat-welcome").hidden).toBe(false);
 });

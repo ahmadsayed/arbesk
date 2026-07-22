@@ -64,6 +64,22 @@ export function addChatMessage(role, text) {
 }
 
 /**
+ * Remove all chat bubbles and restore the welcome placeholder. Used by the
+ * Clear Chat action; preview disposal and store resets live in the caller
+ * (create-panel) since it owns that state.
+ */
+export function clearChatMessages() {
+  if (!chatHistoryList) return;
+  chatHistoryList
+    .querySelectorAll(".chat-bubble")
+    .forEach((el) => el.remove());
+  const welcome = /** @type {HTMLElement | null} */ (
+    chatHistoryList.querySelector(".chat-welcome")
+  );
+  if (welcome) welcome.hidden = false;
+}
+
+/**
  * @typedef {Object} WorkingMessageHandle
  * @property {HTMLElement} bubble
  * @property {(text: string) => void} setText

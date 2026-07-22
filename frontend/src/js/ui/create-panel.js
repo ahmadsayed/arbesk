@@ -15,7 +15,7 @@ import {
 } from "../engine/scene-graph.js";
 import { showToast } from "./toasts.js";
 import { showCustomDialog } from "./dialog.js";
-import { addChatMessage, addAssetMessage, addWorkingMessage } from "./chat-messages.js";
+import { addChatMessage, addAssetMessage, addWorkingMessage, clearChatMessages } from "./chat-messages.js";
 import {
   generateAsset,
   ApiError,
@@ -24,6 +24,7 @@ import {
 import {
   createChatPreview,
   disposeChatPreview,
+  disposeAllChatPreviews,
 } from "../services/chat-preview.js";
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
@@ -32,6 +33,7 @@ import {
   addPendingGeneration,
   getPendingGeneration,
   updatePendingGeneration,
+  _resetPendingGenerations,
 } from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
 
@@ -39,6 +41,7 @@ import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.
 const promptInput = document.getElementById("promptInput");
 const generateBtn = document.getElementById("generateBtn");
 const generateHint = document.getElementById("generateHint");
+const clearChatBtn = document.getElementById("clearChatBtn");
 
 // Settings
 const assetNameDisplay = document.getElementById("assetNameDisplay");
@@ -223,6 +226,29 @@ function syncCollectionSelect() {
 const assetMessages = new Map();
 
 /**
+ * Public taskId of the most recent completed Tripo3D generation in this
+ * chat. When set, the next Generate refines that model (texture/material
+ * only — Tripo's refine_model endpoint is dead upstream, so refinement is
+ * texture_model via the backend). Reset by Clear Chat.
+ * @type {string | null}
+ */
+let lastTripoTaskId = null;
+
+/**
+ * Clear the chat: dispose all live previews, reset the pending-generation
+ * store and bubble handles, restore the welcome placeholder, and break the
+ * refine chain so the next generation starts a brand-new model.
+ */
+function clearChat() {
+  disposeAllChatPreviews();
+  _resetPendingGenerations();
+  assetMessages.clear();
+  lastTripoTaskId = null;
+  clearChatMessages();
+  addChatMessage("system", "Chat cleared. Start a new model.");
+}
+
+/**
  * Attach a live 3D preview to an asset bubble. Falls back to a static
  * format badge when the preview cannot be created.
  * @param {string} generationId
@@ -402,6 +428,18 @@ async function onGenerate() {
       return;
     }
 
+    // Refine chain: when the chat already has a completed Tripo3D model,
+    // the next generation refines it (texture/material only — geometry
+    // unchanged). Clear Chat resets the chain.
+    const refineTaskId =
+      provider === "tripo3d" && lastTripoTaskId ? lastTripoTaskId : undefined;
+    if (refineTaskId) {
+      addChatMessage(
+        "system",
+        "Refining previous model (texture/material only — geometry unchanged)…",
+      );
+    }
+
     const result = await generateAsset({
       prompt,
       nodeId,
@@ -411,7 +449,12 @@ async function onGenerate() {
       transformMatrix,
       tier,
       ...(isRealProvider() && { providerKey }),
+      ...(refineTaskId && { refineTaskId }),
     });
+
+    if (provider === "tripo3d" && result.taskId) {
+      lastTripoTaskId = result.taskId;
+    }
 
     // Defer the Studio viewport load: register the result, show an asset
     // bubble with a live preview, and let the user send it explicitly.
@@ -470,6 +513,8 @@ async function onGenerate() {
 // ─── Event Bindings ───
 
 generateBtn.addEventListener("click", onGenerate);
+
+clearChatBtn?.addEventListener("click", clearChat);
 
 promptInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {

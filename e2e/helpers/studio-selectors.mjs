@@ -10,6 +10,7 @@ export const SELECTORS = {
   walletModalTitle: "#wallet-modal-title",
   promptInput: "#promptInput",
   generateBtn: "#generateBtn",
+  clearChatBtn: "#clearChatBtn",
   generateHint: "#generateHint",
   chatHistoryList: "#chatHistoryList",
   // Asset chat bubble (generation result pending a "Show in Studio" decision)
