@@ -341,6 +341,7 @@ describe("prepareManifestForWrite", () => {
         deselectAll: jest.fn(),
         selectNodeById: jest.fn(),
         selectSubMesh: jest.fn(),
+        state: { selectedNodeIds: new Set() },
       })
     );
     const ctx = await load();

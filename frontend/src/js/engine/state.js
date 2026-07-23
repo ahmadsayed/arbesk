@@ -49,6 +49,13 @@ export const state = {
   highlightedNodeId: null,
   /** @type {string|null} Name of the currently selected sub-mesh within highlightedNodeId */
   highlightedSubMeshName: null,
+  /**
+   * The full multi-selection set. `highlightedNodeId` is the primary
+   * (last-added) member; single-node consumers (inspector, sub-mesh toggle,
+   * model clock) should only act when this set has exactly one entry.
+   * @type {Set<string>}
+   */
+  selectedNodeIds: new Set(),
   /** @type {BABYLON.ArcRotateCamera|null} */
   camera: null,
   /** @type {BABYLON.GizmoManager|null} */

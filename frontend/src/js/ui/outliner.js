@@ -17,6 +17,7 @@ import { getManifestNodes } from "../engine/transforms.js";
 let outlinerTree = null;
 let outlinerFooter = null;
 let selectedNodeId = null;
+const selectedNodeIds = new Set();
 const collapsedNodeIds = new Set();
 let renderedManifestCid = null;
 
@@ -50,6 +51,7 @@ function initOutliner() {
   on(EVENTS.ASSET_DRAFT_SAVED, () => refreshOutliner());
   on(EVENTS.SCENE_CLEARED, onSceneEmpty);
   on(EVENTS.NODE_DESELECTED, clearSelection);
+  on(EVENTS.SELECTION_CHANGED, syncFromEngine);
 
   // Drag-and-drop from library
   outlinerTree.addEventListener("dragover", (e) => {
@@ -288,10 +290,10 @@ function createNodeElement(node, isChildWorld, depth = 0) {
     el.appendChild(badge);
   }
 
-  // Click → select
+  // Click → select (Ctrl/Cmd+click toggles multi-selection)
   el.addEventListener("click", (e) => {
     e.stopPropagation();
-    selectNode(node.node_id);
+    selectNode(node.node_id, e.ctrlKey || e.metaKey);
   });
 
   // Double-click child → dive
@@ -326,34 +328,60 @@ function updateFooter(totalNodes, childCount) {
 
 // ─── Selection ────────────────────────────────────────────────────────
 
-function selectNode(nodeId) {
-  // Deselect previous
-  if (selectedNodeId) {
-    const prev = getOutlinerTree()?.querySelector(
-      `[data-node-id="${CSS.escape(selectedNodeId)}"]`
-    );
-    if (prev) prev.classList.remove("selected");
-  }
-
-  // Select new
-  selectedNodeId = nodeId;
-  const el = getOutlinerTree()?.querySelector(
+function _rowFor(nodeId) {
+  return getOutlinerTree()?.querySelector(
     `[data-node-id="${CSS.escape(nodeId)}"]`
   );
-  if (el) el.classList.add("selected");
+}
+
+function _syncRowSelectionClasses() {
+  const tree = getOutlinerTree();
+  if (!tree) return;
+  for (const el of tree.querySelectorAll(".outliner-node.selected")) {
+    el.classList.remove("selected");
+  }
+  for (const id of selectedNodeIds) {
+    _rowFor(id)?.classList.add("selected");
+  }
+}
+
+function selectNode(nodeId, additive = false) {
+  if (additive) {
+    if (selectedNodeIds.has(nodeId)) {
+      selectedNodeIds.delete(nodeId);
+    } else {
+      selectedNodeIds.add(nodeId);
+    }
+    selectedNodeId = selectedNodeIds.has(nodeId)
+      ? nodeId
+      : [...selectedNodeIds].at(-1) || null;
+  } else {
+    selectedNodeIds.clear();
+    selectedNodeIds.add(nodeId);
+    selectedNodeId = nodeId;
+  }
+  _syncRowSelectionClasses();
 
   // Dispatch for inspector / viewport sync
-  emit(EVENTS.OUTLINER_NODE_SELECTED, { nodeId });
+  emit(EVENTS.OUTLINER_NODE_SELECTED, { nodeId, additive });
 }
 
 function clearSelection() {
-  if (selectedNodeId) {
-    const el = getOutlinerTree()?.querySelector(
-      `[data-node-id="${CSS.escape(selectedNodeId)}"]`
-    );
-    if (el) el.classList.remove("selected");
-  }
+  selectedNodeIds.clear();
   selectedNodeId = null;
+  _syncRowSelectionClasses();
+}
+
+/**
+ * Mirror an engine-driven selection change (viewport pick, Ctrl+A, Escape)
+ * without re-emitting — the engine is the source of truth.
+ */
+function syncFromEngine(e) {
+  const ids = Array.isArray(e?.nodeIds) ? e.nodeIds : [];
+  selectedNodeIds.clear();
+  for (const id of ids) selectedNodeIds.add(id);
+  selectedNodeId = ids.at(-1) || null;
+  _syncRowSelectionClasses();
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────

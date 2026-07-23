@@ -27,6 +27,28 @@ describe("transform-gizmo toolbar", () => {
         }
         attachToNode() {}
       },
+      TransformNode: class {
+        constructor() {
+          this.position = { copyFrom: () => {} };
+          this.rotationQuaternion = { copyFrom: () => {} };
+          this.scaling = { copyFromFloats: () => {} };
+        }
+        isDisposed() {
+          return false;
+        }
+        computeWorldMatrix() {}
+        dispose() {}
+      },
+      Vector3: {
+        Zero: () => {
+          const chain = {
+            addInPlace: () => chain,
+            scaleInPlace: () => chain,
+          };
+          return chain;
+        },
+      },
+      Quaternion: { Identity: () => ({ copyFrom: () => {} }) },
     };
 
     viewport = document.createElement("div");
@@ -37,6 +59,7 @@ describe("transform-gizmo toolbar", () => {
     state.gizmoManager = null;
     state.transformMode = null;
     state.highlightedNodeId = null;
+    state.selectedNodeIds = new Set();
     state.nodeAnchors = new Map();
 
     initTransformGizmo({}, null);
@@ -44,6 +67,7 @@ describe("transform-gizmo toolbar", () => {
 
   afterEach(() => {
     viewport.remove();
+    state.selectedNodeIds = new Set();
     delete global.BABYLON;
   });
 
@@ -105,5 +129,46 @@ describe("transform-gizmo toolbar", () => {
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));
     expect(state.transformMode).toBe("time");
+  });
+
+  test("time mode is disabled for multi-selections", () => {
+    const mkAnchor = () => ({
+      isDisposed: () => false,
+      getAbsolutePosition: () => ({}),
+    });
+    state.nodeAnchors.set("node-1", mkAnchor());
+    state.nodeAnchors.set("node-2", mkAnchor());
+    state.highlightedNodeId = "node-2";
+    state.selectedNodeIds = new Set(["node-1", "node-2"]);
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-2", mesh: null });
+
+    const timeBtn = viewport.querySelector('.transform-tool[data-mode="time"]');
+    expect(timeBtn.disabled).toBe(true);
+    expect(
+      viewport.querySelector('.transform-tool[data-mode="translate"]').disabled
+    ).toBe(false);
+
+    // The keyboard shortcut is refused too.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));
+    expect(state.transformMode).toBe("translate");
+  });
+
+  test("growing the selection past one node leaves time mode", () => {
+    const mkAnchor = () => ({
+      isDisposed: () => false,
+      getAbsolutePosition: () => ({}),
+    });
+    state.nodeAnchors.set("node-1", mkAnchor());
+    state.nodeAnchors.set("node-2", mkAnchor());
+    state.highlightedNodeId = "node-1";
+    state.selectedNodeIds = new Set(["node-1"]);
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+
+    viewport.querySelector('.transform-tool[data-mode="time"]').click();
+    expect(state.transformMode).toBe("time");
+
+    state.selectedNodeIds = new Set(["node-1", "node-2"]);
+    emit(EVENTS.SELECTION_CHANGED, { nodeIds: ["node-1", "node-2"] });
+    expect(state.transformMode).toBe("translate");
   });
 });

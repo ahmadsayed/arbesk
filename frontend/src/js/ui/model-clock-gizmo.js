@@ -697,6 +697,8 @@ export function initModelClockGizmo(scene, camera) {
   function onSelect(e) {
     destroyCurrent();
     if (state.transformMode !== "time") return;
+    // Per-node time-travel is single-selection only.
+    if (state.selectedNodeIds.size > 1) return;
     const nodeId = e?.nodeId || state.highlightedNodeId;
     if (!nodeId) return;
     clockTargetNodeId = nodeId;

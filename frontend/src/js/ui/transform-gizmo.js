@@ -56,6 +56,12 @@ function initTransformGizmo(scene, _camera) {
   state.gizmoManager = gizmoManager;
   state.transformMode = null;
 
+  // Per-frame fan-out for group drags: the gizmo mutates the pivot; each
+  // selected anchor follows via its drag-start relative matrix.
+  scene.onBeforeRenderObservable?.add(() => {
+    if (state.isGizmoDragging && _groupSnapshot) _applyGroupDrag();
+  });
+
   createToolbar();
   wireEvents(gizmoManager);
   wireKeyboard(gizmoManager);
@@ -74,13 +80,10 @@ function matrixToManifestArray(matrix) {
 }
 
 /**
- * Read the selected anchor's current local transform and stage it for
+ * Read the current local transform of one anchor and stage it for
  * persistence in the manifest.
  */
-function captureSelectedTransform() {
-  const nodeId = state.highlightedNodeId;
-  if (!nodeId) return;
-
+function captureNodeTransform(nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   if (!anchor || anchor.isDisposed()) return;
 
@@ -95,6 +98,128 @@ function captureSelectedTransform() {
 
   state.pendingTransformEdits.set(nodeId, matrixArray);
   console.log(`[GIZMO] transform staged | nodeId=${nodeId}`);
+}
+
+/**
+ * Stage the transforms of every selected node (single or multi-selection).
+ */
+function captureSelectedTransform() {
+  const ids =
+    state.selectedNodeIds.size > 0
+      ? [...state.selectedNodeIds]
+      : state.highlightedNodeId
+        ? [state.highlightedNodeId]
+        : [];
+  for (const nodeId of ids) captureNodeTransform(nodeId);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Group pivot — multi-selection transforms
+//
+// With 2+ nodes selected the gizmo attaches to a synthetic pivot TransformNode
+// at the selection centroid instead of a node anchor. On drag start we
+// snapshot each anchor's world matrix relative to the pivot; every frame the
+// gizmo moves the pivot we re-derive each anchor's local TRS from the new
+// pivot world matrix, so the whole group moves/rotates/scales around the
+// shared centroid (Blender "median point" style).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** @type {BABYLON.TransformNode|null} */
+let _groupPivot = null;
+/**
+ * Per-drag snapshot: relative world matrices + parent-space inverses for each
+ * selected anchor. Null outside an active group drag.
+ * @type {Array<{nodeId: string, anchor: BABYLON.TransformNode, rel: BABYLON.Matrix, parentInv: BABYLON.Matrix}>|null}
+ */
+let _groupSnapshot = null;
+
+function _disposeGroupPivot() {
+  _groupSnapshot = null;
+  if (_groupPivot && !_groupPivot.isDisposed()) {
+    _groupPivot.dispose();
+  }
+  _groupPivot = null;
+}
+
+function _ensureGroupPivot() {
+  if (_groupPivot && !_groupPivot.isDisposed()) return _groupPivot;
+  _groupPivot = new BABYLON.TransformNode("groupTransformPivot", state.scene);
+  _groupPivot.rotationQuaternion = BABYLON.Quaternion.Identity();
+  return _groupPivot;
+}
+
+/**
+ * Place the pivot at the centroid of the selected anchors' world positions
+ * with identity rotation/scale, and attach the gizmo to it.
+ */
+function _attachToGroupPivot(gizmoManager) {
+  const anchors = [...state.selectedNodeIds]
+    .map((id) => state.nodeAnchors.get(id))
+    .filter((a) => a && !a.isDisposed());
+  if (anchors.length < 2) {
+    gizmoManager.attachToNode(null);
+    return;
+  }
+
+  const pivot = _ensureGroupPivot();
+  const centroid = anchors
+    .reduce((sum, a) => sum.addInPlace(a.getAbsolutePosition()), BABYLON.Vector3.Zero())
+    .scaleInPlace(1 / anchors.length);
+  pivot.position.copyFrom(centroid);
+  pivot.rotationQuaternion.copyFrom(BABYLON.Quaternion.Identity());
+  pivot.scaling.copyFromFloats(1, 1, 1);
+  pivot.computeWorldMatrix(true);
+
+  gizmoManager.attachToNode(pivot);
+}
+
+function _startGroupDrag() {
+  if (!_groupPivot || state.selectedNodeIds.size < 2) return;
+  _groupPivot.computeWorldMatrix(true);
+  const pivotInv = BABYLON.Matrix.Invert(_groupPivot.getWorldMatrix());
+  _groupSnapshot = [];
+  for (const id of state.selectedNodeIds) {
+    const anchor = state.nodeAnchors.get(id);
+    if (!anchor || anchor.isDisposed()) continue;
+    anchor.computeWorldMatrix(true);
+    const rel = pivotInv.multiply(anchor.getWorldMatrix());
+    const parentWorld = anchor.parent
+      ? anchor.parent.getWorldMatrix()
+      : BABYLON.Matrix.Identity();
+    _groupSnapshot.push({
+      nodeId: id,
+      anchor,
+      rel,
+      parentInv: BABYLON.Matrix.Invert(parentWorld),
+    });
+  }
+}
+
+/**
+ * Re-derive every grouped anchor's local TRS from the pivot's current world
+ * matrix. Called per frame while a group drag is active.
+ */
+function _applyGroupDrag() {
+  if (!_groupSnapshot || !_groupPivot) return;
+  _groupPivot.computeWorldMatrix(true);
+  const pivotWorld = _groupPivot.getWorldMatrix();
+  const scale = new BABYLON.Vector3();
+  const rotation = new BABYLON.Quaternion();
+  const position = new BABYLON.Vector3();
+  for (const entry of _groupSnapshot) {
+    if (entry.anchor.isDisposed()) continue;
+    const world = pivotWorld.multiply(entry.rel);
+    const local = world.multiply(entry.parentInv);
+    if (!local.decompose(scale, rotation, position)) continue;
+    entry.anchor.scaling.copyFrom(scale);
+    entry.anchor.rotationQuaternion = entry.anchor.rotationQuaternion || new BABYLON.Quaternion();
+    entry.anchor.rotationQuaternion.copyFrom(rotation);
+    entry.anchor.position.copyFrom(position);
+  }
+}
+
+function _endGroupDrag() {
+  _groupSnapshot = null;
 }
 
 function createToolbar() {
@@ -144,13 +269,26 @@ function wireEvents(gizmoManager) {
     }
   });
 
+  on(EVENTS.SELECTION_CHANGED, () => {
+    // Time mode is single-selection only: fall back to translate when the
+    // selection grows past one node.
+    if (state.transformMode === "time" && state.selectedNodeIds.size > 1) {
+      setMode("translate");
+    } else {
+      attachToSelected(gizmoManager);
+      updateToolbarUI();
+    }
+  });
+
   on(EVENTS.NODE_DESELECTED, () => {
     gizmoManager.attachToNode(null);
+    _disposeGroupPivot();
     updateToolbarUI();
   });
 
   on(EVENTS.SCENE_CLEARED, () => {
     gizmoManager.attachToNode(null);
+    _disposeGroupPivot();
     // Do not reset transformMode here: clearing the scene is part of version
     // navigation (loadVersion -> clearScene -> loadAssetManifest), and the user
     // should remain in Time mode so the model clock can rebuild on SCENE_READY.
@@ -199,6 +337,12 @@ function wireKeyboard(_gizmoManager) {
 function setMode(mode) {
   if (!state.gizmoManager) return;
 
+  // Per-node time-travel is a single-selection feature.
+  if (mode === "time" && state.selectedNodeIds.size > 1) {
+    console.log("[GIZMO] time mode ignored: multi-selection active");
+    return;
+  }
+
   // Toggling the same mode off is not implemented; users can press Esc to
   // deselect or click empty space to hide the gizmo.
   state.transformMode = mode;
@@ -225,12 +369,14 @@ function ensureDragEndSubscription(gizmo) {
   if (gizmo.onDragStartObservable) {
     gizmo.onDragStartObservable.add(() => {
       state.isGizmoDragging = true;
+      if (state.selectedNodeIds.size > 1) _startGroupDrag();
     });
     subscribed = true;
   }
   if (gizmo.onDragEndObservable) {
     gizmo.onDragEndObservable.add(() => {
       state.isGizmoDragging = false;
+      _endGroupDrag();
       captureSelectedTransform();
     });
     subscribed = true;
@@ -239,6 +385,11 @@ function ensureDragEndSubscription(gizmo) {
 }
 
 function attachToSelected(gizmoManager) {
+  if (state.selectedNodeIds.size > 1) {
+    _attachToGroupPivot(gizmoManager);
+    return;
+  }
+
   const nodeId = state.highlightedNodeId;
   if (!nodeId) {
     gizmoManager.attachToNode(null);
@@ -257,14 +408,22 @@ function updateToolbarUI() {
   const toolbar = document.getElementById(TOOLBAR_ID);
   if (!toolbar) return;
 
-  const hasSelection = !!state.highlightedNodeId;
+  const hasSelection =
+    state.selectedNodeIds.size > 0 || !!state.highlightedNodeId;
+  const isMulti = state.selectedNodeIds.size > 1;
   const activeMode = hasSelection ? state.transformMode : null;
 
   for (const btn of toolbar.querySelectorAll(".transform-tool")) {
     const isActive = btn.dataset.mode === activeMode;
     btn.classList.toggle("active", isActive);
     btn.setAttribute("aria-pressed", String(isActive));
-    btn.disabled = !hasSelection;
+    const isTime = btn.dataset.mode === "time";
+    btn.disabled = !hasSelection || (isTime && isMulti);
+    if (isTime) {
+      btn.title = isMulti
+        ? "Time travel is available for a single selected node"
+        : "Time (V)";
+    }
   }
 }
 

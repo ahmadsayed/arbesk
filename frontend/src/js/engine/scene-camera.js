@@ -78,13 +78,20 @@ function frameAll() {
 }
 
 /**
- * Frame the currently highlighted node (F key).
+ * Frame the current selection (F key). With a multi-selection, frames the
+ * combined bounds of every selected node.
  */
 function frameSelected() {
-  if (!state.highlightedNodeId) return;
+  const ids =
+    state.selectedNodeIds.size > 0
+      ? [...state.selectedNodeIds]
+      : state.highlightedNodeId
+        ? [state.highlightedNodeId]
+        : [];
+  if (ids.length === 0) return;
 
-  const meshes = state.nodeMeshes.get(state.highlightedNodeId);
-  if (!meshes) return;
+  const meshes = ids.flatMap((id) => state.nodeMeshes.get(id) || []);
+  if (meshes.length === 0) return;
 
   const renderable = getRenderableMeshes(meshes);
   if (renderable.length === 0) return;

@@ -188,4 +188,5 @@ export function clearScene() {
 
   // Clear selection highlight state
   state.highlightedNodeId = null;
+  state.selectedNodeIds.clear();
 }

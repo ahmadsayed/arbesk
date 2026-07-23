@@ -19,6 +19,7 @@ import {
   deselectAll,
   selectNodeById,
   selectSubMesh,
+  state,
 } from "./scene-graph.js";
 
 // DOM references
@@ -241,6 +242,41 @@ function restoreInspectorCollapsedState() {
 }
 restoreInspectorCollapsedState();
 
+// Multi-select summary element (created lazily; the inspector markup has no
+// dedicated container for it).
+/** @type {HTMLDivElement|null} */
+let multiSelectInfo = null;
+function _getMultiSelectInfoEl() {
+  if (multiSelectInfo) return multiSelectInfo;
+  multiSelectInfo = document.createElement("div");
+  multiSelectInfo.id = "multiSelectInfo";
+  multiSelectInfo.className = "inspector-section";
+  multiSelectInfo.hidden = true;
+  inspector?.appendChild(multiSelectInfo);
+  return multiSelectInfo;
+}
+
+/**
+ * Multi-selections get a summary instead of per-node material controls:
+ * group transforms happen in the viewport; time travel and material edits
+ * stay single-selection features.
+ *
+ * @param {number} count
+ */
+function showMultiSelectSummary(count) {
+  activeNodeId = null;
+  activeMeshName = null;
+  _clearUndoRedo();
+  if (parametricEditor) parametricEditor.hidden = true;
+  if (tokenChildInfo) tokenChildInfo.hidden = true;
+  if (componentEditor) componentEditor.hidden = true;
+  const el = _getMultiSelectInfoEl();
+  el.textContent =
+    `${count} nodes selected — move, rotate or scale them together. ` +
+    `Time travel and material edits need a single selection.`;
+  el.hidden = false;
+}
+
 /**
  * Show the parametric editor for a regular node.
  *
@@ -251,6 +287,7 @@ async function openInspector(nodeId) {
   activeMeshName = null;
   originalMaterialColors = {};
   _clearUndoRedo();
+  if (multiSelectInfo) multiSelectInfo.hidden = true;
 
   const childRef = getNodeChildRef(nodeId);
   if (childRef) {
@@ -393,6 +430,13 @@ export function clearPendingSourceColorEdit(nodeId) {
  * @param {{nodeId: string}} e
  */
 function onNodeSelected(e) {
+  // Multi-select: the inspector shows a summary instead of per-node controls.
+  if (state.selectedNodeIds.size > 1) {
+    if (inspector && !inspector.classList.contains("collapsed")) {
+      showMultiSelectSummary(state.selectedNodeIds.size);
+    }
+    return;
+  }
   selectNodeById(e.nodeId);
   // Single click updates the inspector content when the panel is open, but
   // does not expand it when the user has explicitly collapsed it.
@@ -405,6 +449,18 @@ function onNodeSelected(e) {
 }
 on(EVENTS.NODE_SELECTED, onNodeSelected);
 
+// Keep the summary count in sync as nodes are toggled in/out.
+on(EVENTS.SELECTION_CHANGED, (/** @type {{nodeIds?: string[]}} */ e) => {
+  const count = Array.isArray(e?.nodeIds) ? e.nodeIds.length : 0;
+  if (count > 1) {
+    if (inspector && !inspector.classList.contains("collapsed")) {
+      showMultiSelectSummary(count);
+    }
+  } else if (multiSelectInfo) {
+    multiSelectInfo.hidden = true;
+  }
+});
+
 /**
  * @param {{nodeId: string}} e
  */
@@ -415,9 +471,15 @@ function onNodeDoubleClicked(e) {
 on(EVENTS.NODE_DOUBLE_CLICKED, onNodeDoubleClicked);
 
 /**
- * @param {{nodeId: string}} e
+ * @param {{nodeId: string, additive?: boolean}} e
  */
 function onOutlinerNodeSelected(e) {
+  if (e?.additive) {
+    // Ctrl/Cmd+click in the outliner: multi-select summary. The matching
+    // SELECTION_CHANGED event keeps the count accurate.
+    showMultiSelectSummary(Math.max(state.selectedNodeIds.size, 2));
+    return;
+  }
   selectNodeById(e.nodeId);
   openInspector(e.nodeId);
 }

@@ -19,6 +19,8 @@ import {
   selectSubMesh,
   deselectAll,
   selectNodeById,
+  toggleNodeSelection,
+  selectAllNodes,
 } from "./scene-selection.js";
 import {
   frameAll,
@@ -410,6 +412,14 @@ export function initEngine() {
       lastClickTime = now;
 
       if (resolvedNodeId) {
+        // Ctrl/Cmd+click toggles the node in/out of the multi-selection;
+        // it never triggers sub-mesh toggle or double-click dive/inspector.
+        const domEvent = pointerInfo.event;
+        if (domEvent && (domEvent.ctrlKey || domEvent.metaKey)) {
+          toggleNodeSelection(resolvedNodeId, target);
+          return;
+        }
+
         if (isDoubleClick) {
           // Double-click opens the inspector; don't run the single-click
           // sub-mesh toggle on the second click.
@@ -418,8 +428,12 @@ export function initEngine() {
           return;
         }
 
-        if (resolvedNodeId === state.highlightedNodeId) {
-          // Sub-mesh toggle only applies to regular (non-child-world) nodes.
+        if (
+          resolvedNodeId === state.highlightedNodeId &&
+          state.selectedNodeIds.size === 1
+        ) {
+          // Sub-mesh toggle only applies to regular (non-child-world) nodes
+          // and is a single-selection feature.
           if (!isChildWorldNode && mesh.name) {
             if (state.highlightedSubMeshName === mesh.name) {
               selectNode(resolvedNodeId, target);
@@ -454,6 +468,24 @@ export function initEngine() {
   state.highlightLayer.blurVerticalSize = 0.4;
   state.highlightLayer.alpha = 0.7;
 
+  // Ctrl/Cmd+A — select all loaded scene nodes (multi-select).
+  document.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if (e.key.toLowerCase() !== "a") return;
+    const activeEl = /** @type {HTMLElement|null} */ (document.activeElement);
+    const tag = activeEl?.tagName?.toLowerCase();
+    const editable =
+      activeEl?.isContentEditable ||
+      tag === "input" ||
+      tag === "textarea" ||
+      tag === "select";
+    if (editable) return; // don't steal select-all from form fields
+    const ids = [...state.nodeAnchors.keys()];
+    if (ids.length === 0) return;
+    e.preventDefault();
+    selectAllNodes(ids);
+  });
+
   // Keyboard shortcuts — only fire when focus is on the canvas or body
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
@@ -468,7 +500,7 @@ export function initEngine() {
 
     switch (e.key) {
       case "Escape":
-        if (state.highlightedNodeId) {
+        if (state.selectedNodeIds.size > 0) {
           e.preventDefault();
           deselectAll();
         }
@@ -478,7 +510,7 @@ export function initEngine() {
         frameAll();
         break;
       case "f":
-        if (state.highlightedNodeId) {
+        if (state.selectedNodeIds.size > 0) {
           e.preventDefault();
           frameSelected();
         }
@@ -693,9 +725,16 @@ on(EVENTS.OUTLINER_REMOVE_REQUESTED, (/** @type {{nodeId?: string}} */ payload) 
 
 // Forward outliner clicks to the scene selection system so that
 // state.highlightedNodeId is updated and the transform gizmo attaches.
-on(EVENTS.OUTLINER_NODE_SELECTED, (/** @type {{nodeId?: string}} */ e) => {
+// `additive: true` (Ctrl/Cmd+click in the outliner) toggles membership in
+// the multi-selection instead of collapsing it to a single node.
+on(EVENTS.OUTLINER_NODE_SELECTED, (/** @type {{nodeId?: string, additive?: boolean}} */ e) => {
   const nodeId = e?.nodeId;
-  if (nodeId) selectNodeById(nodeId);
+  if (!nodeId) return;
+  if (e.additive) {
+    toggleNodeSelection(nodeId, null);
+  } else {
+    selectNodeById(nodeId);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

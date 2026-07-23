@@ -42,6 +42,7 @@ export const EVENTS = {
   SCENE_EMPTY:                "scene:empty",
   SCENE_READY:                "scene:ready",
   SCENE_TOKEN_CHILD_ADDED:    "scene:tokenChildAdded",
+  SELECTION_CHANGED:          "selection:changed",
   SIDEBAR_VIEW_CHANGED:       "sidebar:viewChanged",
   SUBMESH_SELECTED:           "submesh:selected",
   THEME_CHANGED:              "theme:changed",
