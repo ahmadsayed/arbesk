@@ -1054,10 +1054,24 @@ describe("Scene Graph - buildChildRefResolutionPlan", () => {
 });
 
 describe("Scene Graph - buildForkOrLiveRefNode", () => {
-  function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
-    const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
+  function nextLinkedNodeId(existingIds, tokenId, assetID) {
+    const base = `linked_${tokenId}_${assetID}`;
+    if (!existingIds.has(base)) return base;
+    const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const suffixRe = new RegExp(`^${escaped}_(\\d+)$`);
+    let max = 1;
+    for (const id of existingIds) {
+      const m = suffixRe.exec(id);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    return `${base}_${max + 1}`;
+  }
+
+  function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid, nodeId) {
+    const resolvedNodeId =
+      nodeId || `linked_${ref.collectionRef.tokenId}_${assetID}`;
     const baseNode = {
-      node_id: nodeId,
+      node_id: resolvedNodeId,
       transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
     };
     if (choice === "fork") {
@@ -1104,9 +1118,54 @@ describe("Scene Graph - buildForkOrLiveRefNode", () => {
     expect(node.source).toBeUndefined();
   });
 
+  it("honors an explicit per-instance nodeId", () => {
+    const node = buildForkOrLiveRefNode(
+      "live-ref",
+      ref,
+      "chair-01",
+      "bafyChairCid",
+      "linked_42_chair-01_2",
+    );
+    expect(node.node_id).toBe("linked_42_chair-01_2");
+  });
+
   it("throws on an unknown choice", () => {
     expect(() =>
       buildForkOrLiveRefNode("bogus", ref, "chair-01", "cid"),
     ).toThrow();
+  });
+
+  describe("nextLinkedNodeId", () => {
+    it("keeps the deterministic id for the first instance", () => {
+      expect(nextLinkedNodeId(new Set(), "42", "chair-01")).toBe(
+        "linked_42_chair-01",
+      );
+    });
+
+    it("suffixes repeat drops with _2, _3, …", () => {
+      const ids = new Set(["linked_42_chair-01"]);
+      expect(nextLinkedNodeId(ids, "42", "chair-01")).toBe(
+        "linked_42_chair-01_2",
+      );
+      ids.add("linked_42_chair-01_2");
+      expect(nextLinkedNodeId(ids, "42", "chair-01")).toBe(
+        "linked_42_chair-01_3",
+      );
+    });
+
+    it("continues from the max suffix after a middle instance is removed", () => {
+      const ids = new Set(["linked_42_chair-01", "linked_42_chair-01_3"]);
+      expect(nextLinkedNodeId(ids, "42", "chair-01")).toBe(
+        "linked_42_chair-01_4",
+      );
+    });
+
+    it("does not collide with ids from other tokens or assets", () => {
+      const ids = new Set(["linked_42_chair-01", "linked_7_chair-01_2"]);
+      expect(nextLinkedNodeId(ids, "7", "chair-01")).toBe("linked_7_chair-01");
+      expect(nextLinkedNodeId(ids, "42", "table-01")).toBe(
+        "linked_42_table-01",
+      );
+    });
   });
 });

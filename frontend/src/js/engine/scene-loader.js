@@ -27,7 +27,7 @@ import {
 } from "./transforms.js";
 import { createPlaceholder, disposePlaceholder } from "./placeholders.js";
 import { applyColor, applyScale } from "./time-travel.js";
-import { disposeNode, clearScene } from "./cleanup.js";
+import { clearScene } from "./cleanup.js";
 import { createAnchorNode } from "./scene-graph.js";
 import { identityMatrix } from "../utils/collections.js";
 
@@ -373,7 +373,11 @@ async function loadAssetManifest(
 
   await Promise.all(
     getManifestNodes(manifest).map((node) =>
-      loadNode(node, rootAnchor, depth, resolvingCids)
+      // Each sibling branch gets its own copy of the in-progress resolution
+      // set: cycle detection only cares about the root→node path, and a
+      // shared set would falsely flag two siblings referencing the same
+      // asset (duplicate live-ref instances) as circular.
+      loadNode(node, rootAnchor, depth, new Set(resolvingCids))
     )
   );
 
@@ -422,15 +426,37 @@ async function loadCollectionManifest(collectionCid, collectionRef) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Compute a unique node_id for a newly dropped linked asset. The first
+ * instance keeps the deterministic `linked_<tokenId>_<assetID>` id;
+ * subsequent drops of the same asset get `_2`, `_3`, … (max existing
+ * suffix + 1) so each placement is independently keyed in the state maps
+ * (anchors, meshes, transform edits) and can be moved on its own.
+ */
+function nextLinkedNodeId(existingIds, tokenId, assetID) {
+  const base = `linked_${tokenId}_${assetID}`;
+  if (!existingIds.has(base)) return base;
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const suffixRe = new RegExp(`^${escaped}_(\\d+)$`);
+  let max = 1;
+  for (const id of existingIds) {
+    const m = suffixRe.exec(id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `${base}_${max + 1}`;
+}
+
+/**
  * Build the scene node to add when a user pulls in another collection's
  * asset. "fork" freezes the asset's current CID into a plain source node;
  * "live-ref" embeds a child_ref pointing back at the original collection,
- * so future edits there propagate automatically.
+ * so future edits there propagate automatically. `nodeId` lets the caller
+ * pass a per-instance unique id (see nextLinkedNodeId) so the same asset
+ * can be referenced more than once.
  */
-function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid) {
-  const nodeId = `linked_${ref.collectionRef.tokenId}_${assetID}`;
+function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid, nodeId) {
+  const resolvedNodeId = nodeId || `linked_${ref.collectionRef.tokenId}_${assetID}`;
   const baseNode = {
-    node_id: nodeId,
+    node_id: resolvedNodeId,
     transform_matrix: identityMatrix(),
   };
   if (choice === "fork") {
@@ -534,14 +560,25 @@ async function _handleLinkedAssetDropped(event) {
       return;
     }
 
+    // Gather every node_id already in play (saved manifest, pending drops,
+    // loaded scene) so a repeat drop of the same asset gets its own id and
+    // becomes an independent instance instead of replacing the first one.
+    const currentManifest = assetState.get().currentManifest;
+    const existingIds = new Set([
+      ...(currentManifest
+        ? getManifestNodes(currentManifest).map((n) => n.node_id)
+        : []),
+      ...state.pendingChildRefs.map((n) => n.node_id),
+      ...state.nodeAnchors.keys(),
+    ]);
     const nodeEntry = buildForkOrLiveRefNode(
       choice,
       { collectionRef },
       detail.assetID,
-      resolution.manifestCid
+      resolution.manifestCid,
+      nextLinkedNodeId(existingIds, tokenId, detail.assetID)
     );
     state.pendingChildRefs.push(nodeEntry);
-    disposeNode(nodeEntry.node_id);
 
     const parentNode = state.rootSceneAnchor || state.scene;
     if (choice === "live-ref") {
@@ -591,6 +628,7 @@ export {
   loadAssetManifest,
   loadCollectionManifest,
   buildForkOrLiveRefNode,
+  nextLinkedNodeId,
   handleLinkedAssetDropped,
   waitForPendingLinkedDrops,
 };
