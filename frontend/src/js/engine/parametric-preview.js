@@ -12,6 +12,7 @@
 
 import { emit, on, EVENTS } from "../events/bus.js";
 import { applyColor } from "./time-travel.js";
+import { stageNodeTransform } from "./transforms.js";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -32,12 +33,11 @@ const tokenChildInfoDetails = tokenChildInfo?.querySelector("details");
 const parametricEditorDetails = parametricEditor?.querySelector("details");
 const nodeColorInput = document.getElementById("nodeColor");
 
+const scaleSection = document.getElementById("scaleSection");
 /** @type {HTMLInputElement|null} */
-const nodeScaleX = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleX"));
+const nodeScaleFactor = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleFactor"));
 /** @type {HTMLInputElement|null} */
-const nodeScaleY = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleY"));
-/** @type {HTMLInputElement|null} */
-const nodeScaleZ = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScaleZ"));
+const nodeScalePercent = /** @type {HTMLInputElement|null} */ (document.getElementById("nodeScalePercent"));
 const componentEditor = document.getElementById("componentEditor");
 const selectedComponentName = document.getElementById("selectedComponentName");
 const selectedComponentSwatch = document.getElementById(
@@ -154,6 +154,59 @@ function getMeshMaterialColor(mesh) {
   return null;
 }
 
+// ── Uniform scale fields ─────────────────────────────────────────────────────
+
+const MIN_SCALE = 0.01;
+
+/**
+ * @param {string|null} nodeId
+ * @returns {BABYLON.TransformNode|null}
+ */
+function _getLiveAnchor(nodeId) {
+  if (!nodeId) return null;
+  const anchor = state.nodeAnchors.get(nodeId);
+  return anchor && !anchor.isDisposed() ? anchor : null;
+}
+
+/**
+ * Sync the Scale section fields from the active node's anchor. Hides the
+ * section when no single selected node has a live anchor, and skips the
+ * refresh while a scale field has focus so typing is never clobbered.
+ */
+function _refreshScaleFields() {
+  if (!scaleSection || !nodeScaleFactor || !nodeScalePercent) return;
+  const anchor = _getLiveAnchor(activeNodeId);
+  if (!anchor) {
+    scaleSection.hidden = true;
+    return;
+  }
+  scaleSection.hidden = false;
+  const focused = document.activeElement;
+  if (focused === nodeScaleFactor || focused === nodeScalePercent) return;
+  const factor = anchor.scaling.x;
+  nodeScaleFactor.value = String(Math.round(factor * 1000) / 1000);
+  nodeScalePercent.value = String(Math.round(factor * 100));
+}
+
+/**
+ * Apply an absolute uniform scale factor to the active node and stage the
+ * transform for Save/Publish — the same path as the viewport scale gizmo.
+ * Keying the same factor into every copy of a model makes them identical
+ * in size.
+ *
+ * @param {number} factor
+ */
+function _applyUniformScale(factor) {
+  const anchor = _getLiveAnchor(activeNodeId);
+  if (!anchor || !Number.isFinite(factor) || factor < MIN_SCALE) {
+    _refreshScaleFields();
+    return;
+  }
+  anchor.scaling.setAll(factor);
+  if (activeNodeId) stageNodeTransform(activeNodeId);
+  _refreshScaleFields();
+}
+
 /**
  * Show the Token Child Info panel for a child_ref node.
  *
@@ -164,6 +217,7 @@ function showTokenChildInfo(nodeId) {
   if (tokenChildInfo) tokenChildInfo.hidden = false;
   if (tokenChildInfoDetails) tokenChildInfoDetails.open = true;
   if (componentEditor) componentEditor.hidden = true;
+  _refreshScaleFields();
 
   const childRef = getNodeChildRef(nodeId);
   // Support both legacy {tokenId, chainId, contractAddress, resolution} and
@@ -270,6 +324,7 @@ function showMultiSelectSummary(count) {
   if (parametricEditor) parametricEditor.hidden = true;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (componentEditor) componentEditor.hidden = true;
+  if (scaleSection) scaleSection.hidden = true;
   const el = _getMultiSelectInfoEl();
   el.textContent =
     `${count} nodes selected — move, rotate or scale them together. ` +
@@ -299,6 +354,7 @@ async function openInspector(nodeId) {
   if (parametricEditor) parametricEditor.hidden = false;
   if (parametricEditorDetails) parametricEditorDetails.open = false;
   if (tokenChildInfo) tokenChildInfo.hidden = true;
+  _refreshScaleFields();
 
   // Capture original material colors so close() can revert the preview.
   for (const { name, mesh } of getNodeSubMeshes(nodeId)) {
@@ -345,6 +401,7 @@ function closeInspector() {
   if (tokenChildInfo) tokenChildInfo.hidden = true;
   if (parametricEditor) parametricEditor.hidden = false;
   if (componentEditor) componentEditor.hidden = true;
+  if (scaleSection) scaleSection.hidden = true;
   deselectAll();
 }
 
@@ -518,9 +575,16 @@ on(EVENTS.ASSET_DRAFT_SAVED, () => {
 });
 
 if (nodeColorInput) nodeColorInput.addEventListener("input", () => {});
-if (nodeScaleX) nodeScaleX.addEventListener("input", () => {});
-if (nodeScaleY) nodeScaleY.addEventListener("input", () => {});
-if (nodeScaleZ) nodeScaleZ.addEventListener("input", () => {});
+if (nodeScaleFactor) {
+  nodeScaleFactor.addEventListener("change", () => {
+    _applyUniformScale(Number.parseFloat(nodeScaleFactor.value));
+  });
+}
+if (nodeScalePercent) {
+  nodeScalePercent.addEventListener("change", () => {
+    _applyUniformScale(Number.parseFloat(nodeScalePercent.value) / 100);
+  });
+}
 if (selectedComponentColor) {
   // Capture the color before the user starts dragging the picker
   selectedComponentColor.addEventListener("pointerdown", () => {
@@ -577,5 +641,12 @@ function onTokenChildAdded(e) {
 }
 on(EVENTS.SCENE_TOKEN_CHILD_ADDED, onTokenChildAdded);
 on(EVENTS.SCENE_CLEARED, closeInspector);
+
+// Keep the scale fields in sync after a viewport gizmo drag stages a new
+// transform for the node shown in the inspector.
+on(EVENTS.TRANSFORM_STAGED, (/** @type {{nodeIds?: string[]}} */ e) => {
+  if (!activeNodeId || !Array.isArray(e?.nodeIds)) return;
+  if (e.nodeIds.includes(activeNodeId)) _refreshScaleFields();
+});
 
 export { openInspector, closeInspector };

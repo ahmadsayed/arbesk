@@ -10,6 +10,7 @@
 
 import { on, emit, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
+import { stageNodeTransform } from "../engine/transforms.js";
 
 const TOOLBAR_ID = "transformToolbar";
 
@@ -71,37 +72,19 @@ function initTransformGizmo(scene, _camera) {
 }
 
 /**
- * Return a copy of the Babylon Matrix's `.m` array. Babylon stores matrices
- * column-major, which matches the glTF / Arbesk manifest `transform_matrix`
- * format consumed by `applyTransformMatrix()`.
- */
-function matrixToManifestArray(matrix) {
-  return Array.from(matrix.m);
-}
-
-/**
  * Read the current local transform of one anchor and stage it for
  * persistence in the manifest.
  */
 function captureNodeTransform(nodeId) {
-  const anchor = state.nodeAnchors.get(nodeId);
-  if (!anchor || anchor.isDisposed()) return;
-
-  const rotation =
-    anchor.rotationQuaternion || BABYLON.Quaternion.Identity();
-  const matrix = BABYLON.Matrix.Compose(
-    anchor.scaling,
-    rotation,
-    anchor.position
-  );
-  const matrixArray = matrixToManifestArray(matrix);
-
-  state.pendingTransformEdits.set(nodeId, matrixArray);
-  console.log(`[GIZMO] transform staged | nodeId=${nodeId}`);
+  if (stageNodeTransform(nodeId)) {
+    console.log(`[GIZMO] transform staged | nodeId=${nodeId}`);
+  }
 }
 
 /**
- * Stage the transforms of every selected node (single or multi-selection).
+ * Stage the transforms of every selected node (single or multi-selection)
+ * and notify listeners (e.g. the inspector scale fields) so they can
+ * refresh from the anchors.
  */
 function captureSelectedTransform() {
   const ids =
@@ -111,6 +94,7 @@ function captureSelectedTransform() {
         ? [state.highlightedNodeId]
         : [];
   for (const nodeId of ids) captureNodeTransform(nodeId);
+  if (ids.length > 0) emit(EVENTS.TRANSFORM_STAGED, { nodeIds: ids });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

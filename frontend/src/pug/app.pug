@@ -304,6 +304,18 @@ html(lang="en")
                         span#tokenChildCid.value(style="font-family:var(--font-mono);font-size:var(--font-size-0);word-break:break-all") —
                     .inspector-actions
                       button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open This World &rarr;
+              section#scaleSection.inspector-section.inspector-scale(hidden)
+                details
+                  summary.inspector-section-title Scale
+                  div
+                    .inspector-transform
+                      .inspector-transform-row
+                        label(for="nodeScaleFactor") Factor
+                        input#nodeScaleFactor.form-input(type="number" min="0.01" step="0.1" value="1" aria-label="Uniform scale factor")
+                      .inspector-transform-row
+                        label(for="nodeScalePercent") Percent
+                        input#nodeScalePercent.form-input(type="number" min="1" step="1" value="100" aria-label="Uniform scale percentage")
+                    p.inspector-hint Applies the same scale on all axes — enter the same value on each copy to make them identical in size.
               section#parametricEditor.inspector-section
                 details
                   summary.inspector-section-title Color

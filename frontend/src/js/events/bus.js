@@ -47,6 +47,7 @@ export const EVENTS = {
   SUBMESH_SELECTED:           "submesh:selected",
   THEME_CHANGED:              "theme:changed",
   TRANSFORM_MODE_CHANGED:     "transform:modeChanged",
+  TRANSFORM_STAGED:           "transform:staged",
   UI_STATE_CHANGED:           "ui:stateChanged",
   USER_AUTHENTICATED:         "user:authenticated",
   USER_AUTH_REQUIRED:         "user:auth-required",

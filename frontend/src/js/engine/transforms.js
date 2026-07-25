@@ -46,6 +46,31 @@ export function applyTransformMatrix(meshOrNode, matrixArray) {
 }
 
 /**
+ * Read the current local transform of one node anchor and stage it for
+ * persistence in the manifest (`transform_matrix`). Shared by the viewport
+ * gizmo (drag end) and the inspector scale fields.
+ *
+ * Babylon stores matrices column-major, which matches the glTF / Arbesk
+ * manifest `transform_matrix` format consumed by `applyTransformMatrix()`.
+ *
+ * Returns true when a transform was staged.
+ */
+export function stageNodeTransform(nodeId) {
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!anchor || anchor.isDisposed()) return false;
+
+  const rotation =
+    anchor.rotationQuaternion || BABYLON.Quaternion.Identity();
+  const matrix = BABYLON.Matrix.Compose(
+    anchor.scaling,
+    rotation,
+    anchor.position
+  );
+  state.pendingTransformEdits.set(nodeId, Array.from(matrix.m));
+  return true;
+}
+
+/**
  * Apply default light wooden material to meshes.
  */
 export function applyDefaultMaterial(meshes) {

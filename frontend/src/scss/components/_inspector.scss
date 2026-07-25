@@ -132,6 +132,12 @@
   }
 }
 
+.inspector-scale {
+  &[hidden] {
+    display: none;
+  }
+}
+
 .inspector-actions {
   display: flex;
   flex-direction: column;
