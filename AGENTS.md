@@ -1,139 +1,53 @@
 # AGENTS.md — Arbesk Developer Guide
 
-Conventions, key file references, and practical guidance for AI agents and developers.
+Conventions and practical guidance for AI agents and developers.
 
-> Deep reference: `docs/ARCHITECTURE.md` · `docs/CURRENT_STATUS.md` · `docs/API_SPEC.md`
-> Claude Code quick guide: `CLAUDE.md`
+> Deep reference: `docs/ARCHITECTURE.md` · `docs/CURRENT_STATUS.md` (definitive status snapshot — check before roadmap claims) · `docs/API_SPEC.md` · `CLAUDE.md`
+> Project skills (`.agents/skills/`): glTF pipeline, IPFS storage, worktrees, Babylon engine, CDP wallet, UI editing, HIG audit, Solidity, asset inspection — read the relevant skill before working in its area.
 
 ---
 
 ## 1. Project Identity
 
-**Name**: Arbesk
-**Type**: Cloud-Native 4D Fractal Version-Controlled 3D Asset Platform
-**Primary Languages**: JavaScript (Node + Browser), Solidity, Pug/SCSS
+**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. JavaScript (Node + browser), Solidity, Pug/SCSS. All phases 1–5.4 complete (see `docs/CURRENT_STATUS.md`).
 
 **Key Constraints**
 
-- **Blockchain**: EVM-compatible — Hardhat local dev (`31415822`), Base Sepolia Testnet (`84532`). Chain IDs live in `constants/chains.js`.
-- **Wallets**: EOA (MetaMask/Rabby) on all chains via SIWE; email login (OTP, no social) via CDP Embedded Wallets smart accounts — **Base Sepolia only** (`smart-wallet-support.js`)
-- **IPFS**: Private Dockerized Kubo node for local dev/E2E; Pinata backend for public testnet
-- **Hardhat**: Runs inside a Docker container (reproducible local EVM)
-- **3D Generation**: Mock adapter for dev/test (`mock-gltf-assets/intro.gltf`, `mock-gltf-assets/suka.gltf`, `mock-gltf-assets/suka.glb`, `mock-gltf-assets/howdy.glb`, `mock-gltf-assets/triangle.glb`, `mock-gltf-assets/box.3mf` — prompt keyword `3mf` returns the 3MF sample)
-- **Generation → Chat Preview**: Generation results land as chat bubbles with a live orbitable 3D preview (`frontend/src/js/services/chat-preview.js`, capped at 3 live previews, render-on-visibility) — the Studio scene is untouched until the user clicks "Show in Studio", which disposes the preview and collapses the bubble to a snapshot
-- **Parametric Versions**: Color + scale edits append new history entries client-side — no cloud generation
-- **Runtime Cache**: Browser IPFS reads use on-demand memory + IndexedDB — no prefetching unless explicitly requested
-- **Collections**: Every published token points to a collection manifest that maps `assetID`s to asset manifest CIDs
-- **Editor Authorization**: Off-chain Merkle editor lists; the contract stores only a Merkle root and version
-- **Token Discovery**: The asset library loads owned tokens from `GET /api/v1/indexer/owned` and editor-shared tokens from `GET /api/v1/indexer/shared`, both backed by the backend token indexer's chunked `eth_getLogs` backfill — not a genesis-walk in the browser
-
-**Phase Status**: All phases 1–5.4 are complete (including Merkle editor proofs and collection manifests). Asset-level Nostr comments, CDP email-login smart accounts (on Base Sepolia), and the token indexer are also implemented. See `docs/CURRENT_STATUS.md` for the definitive snapshot.
+- **Chains**: Hardhat local dev + Base Sepolia testnet. IDs, `DEPLOYMENT_BLOCKS`, `LOG_CHUNK_SIZES` in `constants/chains.js` — no magic numbers.
+- **Wallets**: EOA (MetaMask/Rabby) via SIWE on all chains; CDP email-login (OTP) smart accounts on **Base Sepolia only** (`smart-wallet-support.js`).
+- **IPFS**: private Dockerized Kubo for local/E2E; Pinata for testnet. **Hardhat**: runs inside Docker.
+- **3D generation**: mock adapter for dev/test, samples in `mock-gltf-assets/` (prompt keyword `3mf` → 3MF sample).
+- Generation results land as chat bubbles with live orbitable 3D preview (`chat-preview.js`, max 3 live, render-on-visibility); Studio scene untouched until "Show in Studio".
+- Parametric color/scale edits append history entries client-side — no cloud generation.
+- Collections: every published token's `tokenURI` → collection manifest mapping `assetID` → asset manifest CID.
+- Editor authorization: off-chain Merkle editor lists; contract stores only root + version.
+- Token discovery via backend indexer (`GET /api/v1/indexer/owned|shared`, chunked `eth_getLogs` backfill) — never a browser genesis-walk.
+- Browser IPFS reads: on-demand memory + IndexedDB cache — no prefetching unless explicitly requested.
 
 ---
 
 ## 2. Architecture Principles
 
 ### Client-Side First
+**Default: logic belongs in the browser.** The Express backend is a thin gatekeeper. Add a server route only if it: validates signatures/transactions/session tokens, enforces a global rate limit or replay guard, accesses secrets the browser can't see (`.env`, compiled ABIs), or performs a cross-user/admin action. Full split: `docs/ARCHITECTURE.md §1.5`.
 
-**Default: logic belongs in the browser.** The Express backend is a thin gatekeeper. Before adding a server route, confirm at least one of these is true:
+### Smart Contracts
+`ArbeskAssetFree` (`CONTRACT_ADDRESS`, **default** — 10 gen/day/wallet) and `ArbeskAsset` (`PAID_CONTRACT_ADDRESS` — USDC PayGo) share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn). 5000 editors/token, client-enforced in `merkle-editors.js`.
 
-- [ ] Validates signatures, transactions, or session tokens
-- [ ] Enforces a global rate limit or replay guard
-- [ ] Accesses files/secrets that cannot be exposed to the browser (`.env`, compiled ABIs)
-- [ ] Performs a cross-user or administrative action (unpin, admin config)
-
-If none apply, implement it in the browser. See `docs/ARCHITECTURE.md §1.5` for the full client/server split table.
-
-### Smart Contract Architecture
-
-Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base with Merkle editor authorization + burn):
-
-| Contract | File | Role | Limits |
-|----------|------|------|--------|
-| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, 5000 editors/token (client-enforced in `merkle-editors.js`; on-chain constant is documentation only) |
-| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, 5000 editors/token (client-enforced in `merkle-editors.js`; on-chain constant is documentation only) |
-
-The contract stores per token:
-- `tokenURI` → collection manifest CID
-- `editorRoot` → Merkle root of the editor set
-- `editorSetVersion` → monotonic version used in Merkle leaves
-
-The full editor list lives on IPFS and is updated through `updateEditors(...)` with a Merkle proof.
+Per token on-chain: `tokenURI` → collection manifest CID · `editorRoot` · `editorSetVersion`. Full editor list lives on IPFS, updated via `updateEditors(...)` with a Merkle proof.
 
 **Rules:**
-- `CONTRACT_ADDRESS` → `ArbeskAssetFree` (default); `PAID_CONTRACT_ADDRESS` → `ArbeskAsset`
-- Generation UI goes through `wallet-payments.js`, which dispatches via `isFreeTierContract()` (re-exported through `wallet.js`) — never hard-code the paid path in new generation UI code
-- Use `CHAIN_IDS` from `constants/chains.js` — no magic numbers (`31415822`, `84532`). Per-chain `DEPLOYMENT_BLOCKS` and `LOG_CHUNK_SIZES` also live there for the token indexer.
-- Contract `owner()` bypasses the free-tier daily generation quota in `recordGeneration()`; Merkle editor proof checks still apply (owner is not automatically an editor)
-- **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend`. Stale ABIs cause `c.methods.X is not a function`.
+- Generation UI goes through `wallet-payments.js` → `isFreeTierContract()` — never hard-code the paid path.
+- Contract `owner()` bypasses the free-tier daily quota; Merkle editor checks still apply (owner ≠ editor).
+- **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend` (+ E2E). Stale ABIs cause `c.methods.X is not a function`.
 
 ---
 
-## 3. Repository Layout
+## 3. Repository Layout (key entries)
 
-| What | Where |
-|------|-------|
-| Backend entry | `src/index.js` |
-| API routes | `src/api/index.js` |
-| Cloud generation route | `src/api/assets/generate-node.js` (mock + Tripo3D task-based; exposes `POST /generations` — fresh or `refineTaskId` refine via Tripo `texture_model` — and `GET /generations/:taskId`) |
-| Tripo3D adapter | `src/api/adapters/tripo3d-adapter.js` — Tripo v2 REST adapter (`createTask`, `createRefineTask` via `texture_model`; upstream `refine_model` is dead — code 2006) |
-| Generation task registry | `src/api/generation-tasks.js` — in-memory wallet-bound task registry (`running`/`complete` statuses; completed tasks feed the refine chain) |
-| Storage backends | `src/api/storage/index.js` (adapters: `kubo-adapter.js`, `pinata-adapter.js`) |
-| Auth middleware | `src/api/authentication.js` |
-| Session store | `src/api/sessions.js` |
-| SIWE verification | `src/api/siwe-verify.js` |
-| CDP Paymaster proxy | `src/api/routes/paymaster.js` |
-| Token indexer | `src/api/token-indexer.js` (chunked `eth_getLogs` ownership backfill) |
-| Rate limiter | `src/api/rate-limiter.js` |
-| ABI serving | `src/api/abi-router.js` |
-| Asset access checks | `src/api/authorization.js` |
-| Comments archive | `src/api/comments-archive.js` |
-| Chat proxy (WebSocket) | `src/api/chat-proxy.js` |
-| Nostr relay primitives | `src/api/nostr-relay.js` |
-| Route modules | `src/api/routes/` (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `openapi.js`, `test-utils.js`, `users.js`) |
-| Manifest utilities | `src/api/manifest-utils.js` |
-| Canonical asset-tag builder (`<chainId>:<contract>:<tokenId>:<assetId>`) | `src/api/asset-tag.js` |
-| IPFS utilities | `src/api/ipfs-utils.js` |
-| OpenAPI spec | `src/api/openapi.json` |
-| 3D engine | `frontend/src/js/engine/` |
-| Parametric preview | `frontend/src/js/engine/parametric-preview.js` |
-| Wallet / chain | `frontend/src/js/blockchain/` |
-| Wallet core (auto-restore / connect / state for CDP, EOA, and WalletConnect) | `frontend/src/js/blockchain/wallet-core.js` |
-| CDP email login (OTP + smart account + EIP-1193 shim) | `frontend/src/js/blockchain/wallet-cdp.js` |
-| Smart-wallet chain gating | `frontend/src/js/blockchain/smart-wallet-support.js` |
-| Per-network config | `frontend/src/js/blockchain/network-config.js` |
-| Token resolver | `frontend/src/js/blockchain/token-resolver.js` |
-| CDP email OTP modal | `frontend/src/js/ui/wallet-modal.js` |
-| Header wallet button (CDP email display; hides network selector) | `frontend/src/js/ui/header-wallet-button.js` |
-| IPFS read/write | `frontend/src/js/ipfs/` |
-| glTF pipeline | `frontend/src/js/gltf/` |
-| 3MF pipeline (parser, glTF converter, composer/decomposer) | `frontend/src/js/3mf/` |
-| Asset library (gallery) | `frontend/src/js/ui/asset-library.js` (owned + shared tokens, collection expansion, inaccessible-token cards with Burn) |
-| Library page (view inside the SPA) | `frontend/src/pug/app.pug` → `frontend/dist/app.html` (served for `/library`) |
-| Library page bootstrap | `frontend/src/js/app-init.js` + `frontend/src/js/ui/library-controller.js` |
-| Library grid / toolbar / context menu | `frontend/src/js/ui/library-grid.js`, `library-toolbar.js`, `library-context-menu.js` |
-| Optimistic collection-create flow | `frontend/src/js/ui/library-create.js` (shared by EOA + CDP email login) |
-| Library operations | `frontend/src/js/services/library-ops.js` (create collection, upload file) |
-| Library state / item helpers | `frontend/src/js/state/library-state.js`, `frontend/src/js/utils/library-items.js` |
-| Shared thumbnail helpers | `frontend/src/js/utils/thumbnail.js` |
-| Asset save/publish | `frontend/src/js/ui/asset-save.js` |
-| Save/publish helpers | `frontend/src/js/services/asset-save/` (`manifest-builder.js`, `collection-publish.js`, `editor-publish.js`) |
-| Comments panel | `frontend/src/js/ui/comments-panel.js` |
-| Collaborators panel (Merkle editors; add by 0x address or CDP email) | `frontend/src/js/ui/collaborators-panel.js` + `frontend/src/js/services/team.js` |
-| Comment thread state | `frontend/src/js/state/comment-thread.js` |
-| Create panel | `frontend/src/js/ui/create-panel.js` |
-| Chat message builders (text + asset bubbles) | `frontend/src/js/ui/chat-messages.js` |
-| Chat 3D preview (per-bubble engine, visibility-gated) | `frontend/src/js/services/chat-preview.js` |
-| Pending-generation store | `frontend/src/js/state/pending-generations.js` |
-| Activity panel | `frontend/src/js/ui/ledger-panel.js` |
-| Team / editor service | `frontend/src/js/services/team.js` |
-| Asset delete service | `frontend/src/js/services/asset-delete.js` |
-| API service layer | `frontend/src/js/services/api.js` |
-| Merkle editor library | `frontend/src/js/gltf/merkle-editors.js` |
-| Smart contracts | `blockchain/contracts/` |
-| Frontend templates | `frontend/src/pug/` |
-| Frontend styles | `frontend/src/scss/` |
-| Build scripts | `frontend/scripts/` |
+- **Backend** (`src/api/`): routes `index.js` + `routes/` · generation `assets/generate-node.js`, `generation-tasks.js`, `adapters/tripo3d-adapter.js` (upstream `refine_model` is dead — code 2006) · storage `storage/` (kubo/pinata adapters) · auth `authentication.js`, `sessions.js`, `siwe-verify.js` · `token-indexer.js` · `comments-archive.js` · `chat-proxy.js` (WebSocket) · `nostr-relay.js` · `manifest-utils.js` · `asset-tag.js` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
+- **Frontend** (`frontend/src/js/`): 3D `engine/` · wallet `blockchain/` (`wallet-core.js`, `wallet-cdp.js`, `smart-wallet-support.js`, `network-config.js`, `token-resolver.js`) · IPFS `ipfs/` · glTF `gltf/` (+ `merkle-editors.js`) · 3MF `3mf/` · UI `ui/` (asset-library, library-grid/toolbar/context-menu/create, asset-save, comments-panel, collaborators-panel, create-panel, chat-messages, wallet-modal, header-wallet-button) · services `services/` (api, team, chat-preview, library-ops, asset-delete, asset-save/) · state `state/` (library-state, comment-thread, pending-generations) · templates `frontend/src/pug/` · styles `frontend/src/scss/` · build scripts `frontend/scripts/`
+- **Contracts** `blockchain/contracts/` · **Tests** `test/`, `blockchain/test/`, `e2e/`
 
 ---
 
@@ -145,31 +59,25 @@ The full editor list lives on IPFS and is updated through `updateEditors(...)` w
 ./scripts/start-dev.sh --setup-only           # local IPFS + Hardhat + Nostr, no backend (E2E testing)
 ./scripts/start-dev.sh --testnet              # public testnet + Pinata + local Nostr
 docker compose up -d                          # lower-level: start IPFS + Hardhat + Nostr relay
-docker compose down
 docker compose logs -f ipfs                   # or: hardhat, nostr
 
 # ─── Dependencies ───
 npm install && cd frontend && npm install && cd ..
-# blockchain deps live inside the Hardhat container; for host-side IDE intellisense only:
-cd blockchain && npm install && cd ..
+cd blockchain && npm install && cd ..         # host-side IDE intellisense only (deps live in container)
 
-# ─── Frontend ───
+# ─── Frontend / Backend ───
 npm run build:frontend                        # Pug→HTML, SCSS→CSS, JS+assets copy
-
-# ─── Backend ───
-npm start                                     # port 9090
+npm start                                     # backend, port 9090
 npm run nodemon                               # with auto-rebuild
 
 # ─── Testing ───
 npm test                                      # Jest unit tests (excludes Hardhat & E2E)
-npm run test:all                              # full suite: lint → typecheck → frontend → api → contracts
+npm run test:all                              # lint → typecheck → frontend → api → contracts
 npm run test:api                              # Jest on test/api.test.js alone
 npm run test:frontend                         # Jest on test/frontend/ + deployment integrity
 npm run test:contracts                        # Hardhat tests inside Docker container
 npm run test:e2e -- --project=chromium        # Playwright E2E critical path
-npm run test:e2e:ui -- --project=chromium     # Playwright E2E with visible browser for debugging
-NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
-docker compose run --rm hardhat npx hardhat test
+npm run test:e2e:ui -- --project=chromium     # visible browser for debugging
 
 # ─── Contract workflow (MANDATORY after any .sol change) ───
 docker compose run --rm hardhat npx hardhat compile
@@ -177,14 +85,11 @@ docker compose up -d hardhat               # local node must be running (in-memo
 docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env   # copy to root .env
 npm run test:frontend                         # always verify last
-# NOTE: `run --rm hardhat ... --network hardhat` deploys to an ephemeral in-process chain
-# that vanishes with the container — always deploy with `--network localhost` against the
-# running node (same path as scripts/start-dev.sh).
+# NOTE: always deploy with `--network localhost` against the running node —
+# `--network hardhat` deploys to an ephemeral in-process chain that vanishes with the container.
 
-# ─── Deploy to testnet ───
+# ─── Testnet deploy / Hardhat shell ───
 docker compose run --rm hardhat npx hardhat run scripts/deploy.js --network baseSepolia
-
-# ─── Hardhat shell ───
 docker compose run --rm hardhat sh
 ```
 
@@ -193,140 +98,66 @@ docker compose run --rm hardhat sh
 ## 5. Coding Conventions
 
 ### JavaScript
-- **Modules**: ES modules (`import`/`export`) in root + frontend; CommonJS (`require`) in `blockchain/scripts/` only
-- **Frontend globals**: `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` are CDN-loaded — don't import them
-- **Naming**: camelCase variables/functions, PascalCase classes, UPPER_SNAKE module-level constants
-- **Pure JavaScript source, TypeScript-powered checking**: Source files remain `.js`. TypeScript is used only as a static type-checking layer via `allowJs`/`checkJs` (`npm run typecheck`, `npm run typecheck:frontend`). Both `tsconfig.json` and `frontend/tsconfig.json` run with `strict: true`; new code must type-check under that setting. Add JSDoc when documenting new public functions; cast catch variables to `Error` when logging `.message`; files that are too dynamic to type cleanly can use `// @ts-nocheck` with a TODO. Ambient declarations for runtime/CDN globals live in `src/types/modules.d.ts` and `frontend/src/js/types/globals.d.ts`.
-- **ESLint**: The project uses ESLint with `eslint.config.js`. Run `npm run lint` to check; `npm run lint:fix` to auto-fix. The gate is part of `npm run test:all`. Avoid unused imports/variables, prefer `const`, use `===`, and keep `var` out of new code.
-- **Runtime validation**: API route bodies/params and manifest shapes are validated with Zod (`src/api/schemas.js`, `src/api/validation.js`). Add schemas for new route inputs; use `validateBody`/`validateQuery` middleware. Existing endpoints return `VALIDATION_ERROR` (400) with structured `details.issues` on schema failure.
-- **Pre-commit hooks**: Husky runs `lint-staged` (ESLint on staged JS files) and both TypeScript typechecks before every commit. First commit after clone/install may be slower while hooks install; after that only changed files are linted.
+- **Modules**: ESM in root + frontend; CommonJS only in `blockchain/scripts/`.
+- **CDN globals**: `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` — never import them.
+- **Naming**: camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
+- **Type-checking**: `.js` source checked via `allowJs`/`checkJs`, `strict: true` (`npm run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging `.message`; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
+- **ESLint**: `npm run lint[:fix]`; gate is part of `test:all`. Husky pre-commit runs lint-staged + both typechecks.
+- **Validation**: Zod for API inputs and manifest shapes (`src/api/schemas.js`, `validation.js`); use `validateBody`/`validateQuery` middleware; failures return 400 `VALIDATION_ERROR` with `details.issues`.
 
 ### CDN Script Tags — No SRI Hashes
-Pug templates must **not** include `integrity="sha384-…"` attributes. CDNs silently rebuild assets, breaking SRI and blocking scripts entirely (symptom: `BABYLON.Engine is not a constructor`). Pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"`.
+Pug templates must **not** include `integrity="sha384-…"` — CDNs silently rebuild assets, breaking SRI (symptom: `BABYLON.Engine is not a constructor`). Pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"`. Pins live in `frontend/src/pug/app.pug` and `frontend/src/js/engine/babylon-loader.js` (Babylon lazy-loads on first Studio entry).
 
-Current pinned versions live in `frontend/src/pug/app.pug` (script tags + import map) and `frontend/src/js/engine/babylon-loader.js` (Babylon core/loaders/materials — fetched lazily on first Studio entry so the Library view and sign-in modal boot without waiting for the 3D engine) — update intentionally, never silently.
-
-### Solidity
-- Version `^0.8.20`, OpenZeppelin v5 base; compiled with Solidity `0.8.24` (Cancun EVM)
-- `require()` for validation, emit events for state changes, NatSpec (`@dev`, `@param`, `@return`)
-- Optimize for storage reads over writes
-
-### Pug / SCSS
-- Build via custom Node.js scripts in `frontend/scripts/` (not Webpack/Vite)
-- Pug templates in `frontend/src/pug/` (no `includes/` subdirectory)
-- Custom SCSS design system (`frontend/src/scss/styles.scss` entry) — Bootstrap was fully replaced; no Bootstrap dependency remains
+### Solidity / Pug / SCSS
+- Solidity `^0.8.20`, OpenZeppelin v5, compiled 0.8.24 (Cancun); `require()` validation, events for state changes, NatSpec; optimize storage reads over writes.
+- Pug/SCSS built by custom Node scripts in `frontend/scripts/` — no Webpack/Vite. Custom SCSS design system (`scss/styles.scss` entry); no Bootstrap.
 
 ### Backend Logging
-All logs use `[TAG]` prefixes. Log start + outcome of every async operation; include CID / txHash / nodeId.
-
-| Tag | Meaning |
-|-----|---------|
-| `[BOOT]` | Server startup |
-| `[OK]` / `[ERR]` | Request success / failure |
-| `[IPFS]` | IPFS add/cat |
-| `[SAVE]` | Manifest save |
-| `[CHAIN]` | Manifest chain walk |
-| `[GEN]` | Asset generation |
-| `[PARAM]` | Parametric version |
-| `[AUTH]` | Authentication |
-| `[ABI]` | ABI serving |
-| `[TOKEN]` | Token child ref resolution |
-| `[SESSION]` | Session auth |
-| `[INDEXER]` / `[INDEXER-API]` | Token indexer backfill / `/indexer/owned` and `/indexer/shared` routes |
-| `[UNPIN]` | IPFS unpin |
-| `[BURN]` | Token burn |
-| `[USERS]` | CDP email → smart account resolution |
-
-Use `console.error()` for exceptions only; `console.log()` for operational flow.
+`[TAG]` prefixes: `[BOOT] [OK] [ERR] [IPFS] [SAVE] [CHAIN] [GEN] [PARAM] [AUTH] [ABI] [TOKEN] [SESSION] [INDEXER] [INDEXER-API] [UNPIN] [BURN] [USERS]`. Log start + outcome of every async op with CID/txHash/nodeId; `console.error` for exceptions only.
 
 ### Viewport Resize Handling
-
-The 3D viewport must never stretch during window resize or sidebar collapse/expand. The only reliable pattern is to resize the Babylon engine **inside `runRenderLoop`, immediately before `scene.render()`** — never throttle the render loop or resize synchronously inside the resize event handler. See `frontend/src/js/engine/scene-graph.js` for the current implementation, and the `babylon-3d-engine` skill's [Scene Lifecycle reference](.agents/skills/babylon-3d-engine/references/scene-lifecycle.md) for the full pattern and pitfalls.
+The 3D viewport must never stretch on resize/sidebar toggle. Resize the Babylon engine **inside `runRenderLoop`, immediately before `scene.render()`** — never in the resize event handler. Implementation: `engine/scene-graph.js`; pitfalls: babylon-3d-engine skill's Scene Lifecycle reference.
 
 ---
 
 ## 6. Agent Decision-Making
 
-When a task has **multiple valid implementation options**, follow this protocol:
+When a task has **multiple valid implementation options**:
+1. **Enumerate all viable options** with concise trade-offs.
+2. **Mark one (Recommended)** based on existing conventions and maintainability.
+3. **Wait for explicit user choice** before writing code or running commands.
 
-1. **Enumerate all viable options** — list each with concise trade-offs (complexity, performance, maintenance, compatibility)
-2. **Mark one (Recommended)** — based on existing conventions, simplicity, and long-term maintainability
-3. **Wait for explicit user choice** — do not write code, modify files, or execute commands until the user has chosen
-
-Applies to: architectural changes, library choices, UI patterns, refactoring strategies, deployment targets, algorithm/data-structure selections.
-
-**Exceptions:** trivial naming/formatting, user-specified approach, single-viable-option emergencies.
+Applies to: architecture, library choices, UI patterns, refactoring strategies, deployment targets, algorithm/data-structure selection. Exceptions: trivial naming/formatting, user-specified approach, single-viable-option emergencies.
 
 ---
 
 ## 7. Key Data Concepts
 
 ### Fractal Manifest
-Every world is a content-addressed JSON manifest stored on IPFS. Each manifest links backward to the previous version via `prev_manifest_cid`, forming an immutable **manifest chain**. See `docs/ARCHITECTURE.md §4` for the full schema and chain mechanics.
+Every world is a content-addressed JSON manifest on IPFS, chained backward via `prev_manifest_cid` (immutable manifest chain). Golden rules: the world is the asset · fractal nesting ("dollhouse") · temporal isolation · parametric edits are first-class versions. Full schema: `docs/ARCHITECTURE.md §4`.
 
-**Golden Rules:**
-1. The World is the Asset — no structural difference between object, scene, or universe
-2. Fractal Nesting — assets recursively reference child manifests ("Dollhouse Architecture")
-3. Temporal Isolation — time-travel any node without re-rendering neighbors
-4. Parametric Coexistence — color/scale edits are first-class versions alongside AI-generated meshes
-
-**Token Child Nodes (`child_ref`):**
-- Each child world is referenced by `{ type, chainId, contractAddress, tokenId, standard, resolution }` — never a static manifest CID
-- Every token child node **must** have a `transform_matrix` (identity matrix as default)
-- Token child nodes have **no** local `history` array — history lives in the referenced token's manifest
-- `MAX_CHILD_WORLD_DEPTH = 5`; cycle protection enforced in `scene-graph.js`
-
-**Collection Manifests:**
-- Every published token's `tokenURI()` resolves to a collection manifest (`type: "collection"`)
-- The collection manifest contains an `assets` map: `{ assetID: assetManifestCid }`
-- Default collection token ID is deterministically derived from the wallet address; named collections derive from `keccak256(address, name)`
-- Gallery expands collection tokens into one card per `assets` entry
-- Publishing an asset update writes a new collection manifest and calls `updateAssetURI()`; no remint occurs
-
-**Thumbnail:** best-effort publish metadata — all code must tolerate missing thumbnails.
-
-**Comments Archive (`comments_archive_cid`):**
-- Comments are scoped to an **asset**, not the whole collection. The canonical Nostr tag is `<chainId>:<contractAddress>:<tokenId>:<assetId>`.
-- Republishing an existing asset snapshots that asset's Nostr thread to a JSON archive on IPFS and stores the archive CID in the asset manifest.
-- The archive is created by `src/api/comments-archive.js` via `POST /api/v1/assets/snapshot-comments` (requires `assetId` in the request body).
-- First-time publishes have no prior comments and therefore no archive CID.
-- On token burn, the archive CID is unpinned alongside the manifest chain.
-- The frontend loads the archive before subscribing to live relay events and deduplicates by `event.id`.
-
-### glTF Buffer URI Format
-```
-IPFS storage:  "uri": "ipfs://bafy..."
-Render time:   "uri": "data:application/octet-stream;base64,Z2xC..."
-```
-The `frontend/src/js/gltf/` composer/decomposer handles this transform — don't bypass it.
+- **`child_ref` token children**: `{ type, chainId, contractAddress, tokenId, standard, resolution }` — never a static CID. Always include `transform_matrix` (identity default); no local `history` (lives in the referenced token's manifest); `MAX_CHILD_WORLD_DEPTH = 5`, cycle protection in `scene-graph.js`.
+- **Collections**: `tokenURI()` → `type: "collection"` manifest with `assets: { assetID: cid }`. Default token ID derived from wallet address; named collections from `keccak256(address, name)`. Gallery expands one card per `assets` entry. Updates write a new collection manifest + `updateAssetURI()` — no remint.
+- **Thumbnails**: best-effort — all code must tolerate missing thumbnails.
+- **Comments archive** (`comments_archive_cid`): comments are asset-scoped (Nostr tag `<chainId>:<contract>:<tokenId>:<assetId>`). Republish snapshots the asset's thread via `POST /api/v1/assets/snapshot-comments`; frontend loads the archive before live relay events and dedups by `event.id`; archive unpinned on burn.
+- **glTF buffer URIs**: `ipfs://bafy...` in storage ↔ base64 data URI at render. Only the `frontend/src/js/gltf/` composer/decomposer performs this transform — don't bypass it.
 
 ---
 
 ## 8. Session Authentication
 
-- Header: `Authorization: Session <token>` (not Bearer)
-- `POST /api/v1/generations`, `POST /api/v1/ipfs/upload-url`, `POST /api/v1/ipfs/unpin`, `POST /api/v1/assets/snapshot-comments`, `POST /api/v1/paymaster`, and `POST /api/v1/users/resolve-email` all require a valid session
-- `POST /api/v1/ipfs/unpin` additionally verifies on-chain that the session wallet owns (or edits, via Merkle proof) the token whose `tokenId` is passed in the body, and that the requested `cid` belongs to that token's collection (tokenURI CID or an asset CID in the current/previous collection manifests). The token must still be live, so the frontend unpins *before* burning.
-- The WebSocket chat proxy (`/api/v1/chat/ws`) receives the session token in the query string
-- **Single session creation path** — SIWE for all users — issuing an opaque token (24 h TTL, bound to wallet address):
-  - **EOA (MetaMask/Rabby):** `POST /api/v1/sessions { message, signature }` — standard SIWE flow (`siwe-verify.js`)
-  - **CDP email login:** `POST /api/v1/sessions { message, signature, eoaAddress }` — the embedded EOA signs the SIWE message; `message.address` is the smart account address; `eoaAddress` triggers fallback verification in `siwe-verify.js`
-- `authentication.js` validates the issued token regardless of wallet type
-- Auto-cleared on wallet disconnect; entry point: `getOrCreateSession()` in `frontend/src/js/services/api.js`
-- **Auto-restore on page load applies to CDP, EOA, and WalletConnect wallets** when their underlying session/provider is still available. If no prior session is found, the user must explicitly click Login/Signup.
-
-Full auth flow: `docs/API_SPEC.md § Authentication`.
+- Header: `Authorization: Session <token>` (not Bearer). Opaque token, 24 h TTL, wallet-bound; auto-cleared on disconnect; entry point `getOrCreateSession()` in `services/api.js`.
+- **Single creation path** — SIWE via `POST /api/v1/sessions`: EOA sends `{ message, signature }`; CDP email login adds `eoaAddress` (embedded EOA signs; `message.address` is the smart account; `eoaAddress` triggers fallback verification in `siwe-verify.js`).
+- Session required: `POST /generations`, `/ipfs/upload-url`, `/ipfs/unpin`, `/assets/snapshot-comments`, `/paymaster`, `/users/resolve-email`; WS chat proxy takes the token in the query string.
+- `/ipfs/unpin` also verifies on-chain ownership (or editor Merkle proof) and that the CID belongs to that token's collection — frontend unpins **before** burning.
+- Auto-restore on page load for CDP, EOA, and WalletConnect when the underlying session/provider survives.
+- Full flow: `docs/API_SPEC.md § Authentication`.
 
 ---
 
 ## 9. Security Notes
 
-- **Never commit `.env` files** — they contain private keys and API keys
-- **API routes**: always validate `req.body` and `req.params`
-- **Smart contracts**: use `ReentrancyGuard` for any function that transfers value
-- **IPFS**: private node is loopback-only — do not expose ports beyond `127.0.0.1`
-- **Hardhat**: local network at `8545` is for development only
-- **Mock mode**: never deploy mock adapters to production — gate strictly on `MOCK_3D_GENERATION`
+Never commit `.env` files · validate all route bodies/params · `ReentrancyGuard` on any value transfer · IPFS node loopback-only · Hardhat 8545 is dev-only · mock adapters gated strictly on `MOCK_3D_GENERATION`, never in production.
 
 ---
 
@@ -337,144 +168,34 @@ Full auth flow: `docs/API_SPEC.md § Authentication`.
 | Backend API | Jest + Supertest | `test/api.test.js` |
 | Deployment integrity | Jest | `test/frontend/deployment-integrity.test.js` |
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
-| E2E (Studio critical path) | Playwright | `e2e/specs/*.spec.js` |
+| E2E | Playwright | `e2e/specs/*.spec.js` |
 
-**Unit / integration coverage: 1264 Jest tests across 98 suites (all passing).**
+~1264 Jest tests across 98 suites. E2E: 17 specs / 37 tests (`01` wallet/SIWE → `16` 3MF generation → publish, `99` viewport resize regression), 1 worker by default, `E2E_WORKERS=N` for parallel isolated stacks. Per-spec contract: `e2e/README.md`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`. `jest.config.js` excludes `/e2e/`.
 
-**E2E coverage (17 specs, 37 tests):** `01` wallet connect/SIWE · `02` free-tier generation + manifest + chat-bubble show-in-Studio flow · `03` save → publish → gallery · `04` parametric color version + time-travel slider · `05` republish existing token (`updateAssetURI`, no remint) · `06` nesting — link a token as a `child_ref` child world, then dive/ascend · `07` collection asset cards · `08` fork vs live reference · `09` library basics · `10` library asset actions · `11` library ↔ Studio round-trip · `12` library create collection + upload (GLB + 3MF, decompose-at-upload assertions) · `13` editor collaboration (Merkle proofs) · `14` collaborative comments across owner/editor · `15` asset-level comment isolation · `16` 3MF generation → save (composite 3MF decompose) → publish · `99` viewport resize regression. The suite runs with **1 worker by default** (lightest — matches CI and low-RAM machines); opt into parallel isolated stacks with `E2E_WORKERS=N` (each worker gets its own Docker stack and backend). Per-spec contract: `e2e/README.md`.
+**Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child worlds · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `npm test` is **not enough** for these — E2E is the only coverage of the full browser → wallet → backend → blockchain → IPFS chain.
 
-Opt-in E2E coverage is collected via Chromium V8 and merged with Jest coverage:
-- `npm run test:e2e:coverage` — run E2E with coverage
-- `npm run test:coverage:all` — merged Jest + E2E report
-
-### Running tests
-
-```bash
-# Unit / API / contract tests
-npm test
-
-# E2E critical path (wallet → generate → save → publish)
-npx playwright test --config=e2e/playwright.config.js --project=chromium
-
-# E2E with visible browser for debugging
-npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
-
-# Create an isolated worktree pre-seeded for the full test stack
-npm run worktree:create -- feature-xyz
-```
-
-`jest.config.js` excludes `/e2e/` so Playwright specs are not picked up by `npm test`.
-
-E2E is isolated per git worktree: each checkout gets its own Docker Compose project, backend port, and state file. The main checkout continues to use `127.0.0.1:9090`; linked worktrees use a deterministic port in the `30000–40000` range. Use `scripts/create-worktree.sh` (or `npm run worktree:create`) to create a ready-to-test worktree; see the `arbesk-worktree` skill and `e2e/README.md § Git worktrees` for the full workflow and port-conflict resolution.
-
-### When to run E2E tests
-
-**Run the E2E suite before merging any change that touches:**
-
-- Studio UI/UX (headerbar, chat, prompt input, dialogs, wallet controls, settings)
-- Wallet integration (`wallet.js`, `wallet-core.js`, `wallet-connect.js`, `wallet-discovery.js`, `wallet-cdp.js`, `smart-wallet-support.js`, `network-config.js`, `siwe.js`, session auth)
-- Generation flow (`create-panel.js`, `chat-messages.js`, `chat-preview.js`, `pending-generations.js`, generation API, transaction validation, mock adapter, provider/tier selection)
-- Save/publish/republish logic (`asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture, `updateAssetURI`)
-- Parametric editing + version history (`parametric-preview.js`, `version-history-store.js`, `version-clock.js`, `scene-clock.js`, `model-clock-gizmo.js`)
-- Nesting / linked child worlds (`nesting.js`, `scene-graph.js` linked-asset handling, token resolver, `child_ref` / `transform_matrix`)
-- Smart contracts, ABI, or deployment scripts
-- Manifest schema (`scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`)
-- IPFS storage format or CID handling
-- Asset-level comments (`comments-panel.js`, `comment-thread.js`, chat proxy, comments archive)
-
-`npm test` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
-
-### Keeping E2E tests in sync with UI changes
-
-The E2E specs depend on a stable selector map and a known user flow. See `e2e/README.md` for the full contract, and the `edit-ui` skill's [E2E Sync guide](.agents/skills/edit-ui/references/e2e-sync.md) for the UI-area → spec → selector map.
-
-**If you change the UI, you must:**
-
-1. Update `e2e/helpers/studio-selectors.mjs` when any referenced `id`, class, or button label changes.
-2. Update the spec assertions when chat/status text, dialog titles, or flow order changes.
-3. Update `e2e/helpers/manifest.mjs` when the manifest schema or version semantics change.
-4. Add or remove test steps when the save/publish flow gains or loses dialogs/confirmations.
-
-**After any `.sol` change:** run the contract workflow from §4, then also run the E2E suite (`npx playwright test --config=e2e/playwright.config.js --project=chromium`) — stale ABIs cause `c.methods.X is not a function`; stale contract addresses cause free-tier generation to fail with "Payment validation failed".
+**UI changes must sync E2E**: update `e2e/helpers/studio-selectors.mjs` (selectors/labels), spec assertions (chat/status text, dialog titles, flow order), `e2e/helpers/manifest.mjs` (schema/version semantics), and add/remove steps as the save/publish flow changes. See `e2e/README.md` and the edit-ui skill's E2E Sync guide.
 
 ---
 
-## 11. Infrastructure (Ports Reference)
+## 11. Infrastructure & Environment
 
-| Service | API | Gateway / RPC | Notes |
-|---------|-----|---------------|-------|
-| Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, no bootstrap, loopback swarm |
-| Hardhat local EVM | — | `127.0.0.1:8545` | Docker container, `./blockchain` volume-mounted |
-| Local Nostr relay | — | `ws://127.0.0.1:7777` | `scsibug/nostr-rs-relay`, SQLite-backed, dev-only |
-| Base Sepolia Testnet | — | `https://sepolia.base.org` (backend direct); `https://base-sepolia-rpc.publicnode.com` (CDP smart-wallet browser passthrough) | Testnet (EOA + CDP email login smart accounts) |
+| Service | API | Gateway / RPC |
+|---------|-----|---------------|
+| Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` (loopback, no DHT) |
+| Hardhat local EVM (Docker) | — | `127.0.0.1:8545` |
+| Local Nostr relay | — | `ws://127.0.0.1:7777` |
+| Base Sepolia | — | `https://sepolia.base.org` (backend); `https://base-sepolia-rpc.publicnode.com` (CDP browser passthrough) |
 
-Full container config: `docker-compose.yml`, `docker/Dockerfile`, `docker/hardhat.Dockerfile`, `docker/nostr-relay.toml`.
+Backend on port 9090. Hardhat network names: `hardhat` (local), `baseSepolia` (testnet; ETH gas, CDP smart accounts sponsored via Paymaster proxy `src/api/routes/paymaster.js`).
 
----
-
-## 12. Environment Files
-
-Three `.env` files — all gitignored, **never commit**:
-
-| File | Purpose | Bootstrap |
-|------|---------|-----------|
-| `blockchain/.env` | Hardhat scripts (keys, contract addresses, RPC) | `cp blockchain/.env.example blockchain/.env` |
-| `.env` (root) | Backend + cloud adapters. `CONTRACT_ADDRESS` + `PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy | Copy from `.env.example` + set values |
-| `frontend/.env` | Build-time public vars (optional, not currently used) | — |
-
-Key backend variables (root `.env`): `CDP_PROJECT_ID` (served to frontend via `/api/v1/config` as `cdpProjectId`), `CDP_PAYMASTER_URL` (secret — used only by `src/api/routes/paymaster.js`), `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` (secret — CDP server SDK credentials used only by `src/api/routes/users.js` for email → smart account resolution), `CDP_EMAIL_DEV_MODE` (placeholder for future E2E mock bypass), `INDEXER_DISABLE_TESTNET` (optional kill-switch — skips the Base Sepolia token indexer). Removed: `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY`, `THIRDWB_AUTH_DEV_MODE`.
-
-Ops scripts: `scripts/run-ipfs-gc.mjs` is the IPFS garbage-collection CLI (unpins manifest chains no longer referenced by live tokens); `scripts/sync-deployed-addresses.mjs` patches deployed addresses into `src/config.js` / `network-config.js`.
-
-Full variable reference: `docs/CURRENT_STATUS.md §8`.
+Env files (gitignored, never commit): `blockchain/.env` (deploy keys/addresses — bootstrap from `.env.example`), root `.env` (backend; `CONTRACT_ADDRESS`/`PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy; CDP keys: `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_API_KEY_ID`/`SECRET`; `INDEXER_DISABLE_TESTNET` kill-switch). Full reference: `docs/CURRENT_STATUS.md §8`. Ops: `scripts/run-ipfs-gc.mjs` (IPFS GC), `scripts/sync-deployed-addresses.mjs`.
 
 ---
 
-## 13. EVM Deployment Targets
+## 12. Worktrees, CDP Wallet, Misc
 
-| Environment | Network | RPC | Hardhat network name |
-|-------------|---------|-----|----------------------|
-| Local dev | Hardhat (Docker) | `http://127.0.0.1:8545` | `hardhat` |
-| Testnet (EOA + CDP email login) | Base Sepolia Testnet | `https://sepolia.base.org` | `baseSepolia` |
-
-Base Sepolia uses ETH for gas. CDP email-login smart accounts are supported on Base Sepolia only; gas is sponsored by the CDP Paymaster (`CDP_PAYMASTER_URL`, proxied by `src/api/routes/paymaster.js`).
-
----
-
-## 14. Zed AI Agent Setup
-
-| File | Purpose |
-|------|---------|
-| `.zed/tasks.json` | Repeatable Zed tasks for install/build/test/Docker/backend |
-| `.zed/settings.json` | Excludes heavy/generated folders from Zed project scanning |
-| `docs/ZED_AGENT_GUIDE.md` | Zed-specific onboarding |
-| `docs/CURRENT_STATUS.md` | Definitive implementation snapshot — check before making roadmap claims |
-
----
-
-## 15. Worktree Testing & Isolation
-
-For tasks that require a clean, isolated test environment — or when the main checkout's Docker containers/ports are already in use — use a git worktree:
-
-```bash
-npm run worktree:create -- feature-xyz
-```
-
-This seeds `.worktrees/feature-xyz` with current changes, env files, a built frontend, and compiled contracts, and forces `IPFS_BACKEND=kubo` for local E2E.
-
-See the `arbesk-worktree` skill for the full workflow (running tests inside the worktree, cleanup steps, troubleshooting) and file map.
-
----
-
-## 16. CDP Email Wallet (Base Sepolia)
-
-Email-login smart accounts are implemented via the `@coinbase/cdp-core` SDK (`frontend/src/js/blockchain/wallet-cdp.js`). They are intentionally supported on **Base Sepolia only**; EOA wallets (MetaMask/Rabby) handle all other chains. Required env: `CDP_PROJECT_ID` and `CDP_PAYMASTER_URL` (root `.env`).
-
-See the `cdp-base-wallet` skill for the full architecture diagram, required CDP Portal configuration, implementation rules, troubleshooting table, and key file map.
-
----
-
-## 17. Contact & Links
-
-- **Repository**: https://github.com/ahmadsayed/arbesk (private — always use the `gh` CLI for issue/PR access; public `https://` fetches return 404)
-- **Docs**: `docs/` directory in this repo
+- **Worktree isolation**: `npm run worktree:create -- feature-xyz` seeds `.worktrees/feature-xyz` with env files, built frontend, compiled contracts, own Docker stack + deterministic port (main checkout keeps 9090). Full workflow: arbesk-worktree skill, `e2e/README.md § Git worktrees`.
+- **CDP email wallet**: `@coinbase/cdp-core` SDK in `wallet-cdp.js`, Base Sepolia only; full architecture/config/troubleshooting in the cdp-base-wallet skill.
+- **Zed**: `.zed/tasks.json` (tasks), `.zed/settings.json` (scan excludes), `docs/ZED_AGENT_GUIDE.md`.
+- **Repository**: https://github.com/ahmadsayed/arbesk (private — always use the `gh` CLI; public fetches 404).
