@@ -13,7 +13,7 @@ test.describe("undo/redo", () => {
     await page.click(SELECTORS.outlinerSwitcherBtn);
     await page.locator(SELECTORS.outlinerNode).first().click();
     // The Scale inspector section starts collapsed — expand it to reveal the field.
-    await page.click("#scaleSection summary");
+    await page.click(SELECTORS.scaleSectionSummary);
     const scaleInput = page.locator(SELECTORS.scaleFactorInput);
     await expect(scaleInput).toBeVisible();
     const original = await scaleInput.inputValue();
