@@ -76,6 +76,12 @@ function createBabylonMock() {
       this.z = v.z;
       return this;
     }
+    setAll(v) {
+      this.x = v;
+      this.y = v;
+      this.z = v;
+      return this;
+    }
     subtract(v) {
       return new MockVector3(this.x - v.x, this.y - v.y, this.z - v.z);
     }
@@ -416,6 +422,37 @@ describe("model-clock-gizmo lifecycle", () => {
     expect(torus.material.alpha).toBeLessThan(1);
     expect(handle.material.alpha).toBe(1);
     expect(rim.material.alpha).toBe(1);
+  });
+
+  test("ring stays centered on the root when the anchor is offset from origin", async () => {
+    const anchor = new babylon.TransformNode("anchor", scene);
+    anchor.position.y = 1.27;
+
+    // Babylon's real setParent preserves the mesh's world transform: parenting
+    // a fresh mesh to an already-positioned root offsets the local position
+    // by the negative of the parent's. Mimic that in the mock so the
+    // regression (gray track ring split from the blue arc) is exercised.
+    const proto = Object.getPrototypeOf(anchor);
+    const original = proto.setParent;
+    proto.setParent = function (p) {
+      original.call(this, p);
+      if (p) this.position.y -= p.position.y;
+    };
+    try {
+      const { initModelClockGizmo } = await import(
+        "../../frontend/src/js/ui/model-clock-gizmo.js"
+      );
+      destroyGizmo = initModelClockGizmo(scene, camera);
+
+      state.highlightedNodeId = "node-a";
+      state.nodeAnchors.set("node-a", anchor);
+      emit(EVENTS.NODE_SELECTED, { nodeId: "node-a" });
+
+      const ring = babylon.createdMeshes.find((m) => m.name === "versionRing");
+      expect(ring.position.y).toBe(0);
+    } finally {
+      proto.setParent = original;
+    }
   });
 
   test("every tick gets an always-visible label showing its own version, active one highlighted", async () => {

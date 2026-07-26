@@ -309,6 +309,17 @@ function buildGizmoForNode(scene, nodeId) {
   const root = new BABYLON.TransformNode("modelClockRoot", uScene);
   gizmo.root = root;
 
+  // Babylon's setParent preserves the mesh's world transform: parenting a
+  // fresh mesh to the already-positioned root offsets its local TRS to
+  // compensate. Re-zero the local transform so every gizmo part starts at
+  // the root origin — otherwise the ring keeps -(anchor position) and the
+  // gray track splits from the blue arc for nodes away from the origin.
+  const parentToRoot = (node) => {
+    node.setParent(root);
+    node.position.setAll(0);
+    node.rotationQuaternion = null;
+  };
+
   // Compute radius from the node's world bounding box. Force world-matrix
   // updates first: after a version load the scene has not rendered yet, so
   // boundingBox.{minimum,maximum}World may still reflect pre-centering local
@@ -341,7 +352,7 @@ function buildGizmoForNode(scene, nodeId) {
     { radius: radius * FACE_RADIUS_FACTOR, tessellation: RING_TESSELLATION },
     uScene
   );
-  face.setParent(root);
+  parentToRoot(face);
   face.position = new BABYLON.Vector3(0, 0, -radius * FACE_Z_OFFSET_FACTOR);
   face.material = createGizmoMaterial(uScene, "faceMat", FACE_COLOR, FACE_ALPHA);
   face.isPickable = false;
@@ -353,7 +364,7 @@ function buildGizmoForNode(scene, nodeId) {
     { diameter: radius * 2, thickness: radius * TRACK_THICKNESS_FACTOR, tessellation: RING_TESSELLATION },
     uScene
   );
-  ring.setParent(root);
+  parentToRoot(ring);
   ring.material = createGizmoMaterial(uScene, "ringMat", COLOR_RING, CLOCK_ALPHA);
   // CreateTorus defaults to the XZ plane in this Babylon build; rotate to XY.
   ring.rotation.x = Math.PI / 2;
@@ -368,11 +379,13 @@ function buildGizmoForNode(scene, nodeId) {
     { diameter: radius * 2, thickness: radius * ARC_THICKNESS_FACTOR, tessellation: RING_TESSELLATION },
     uScene
   );
-  arc.setParent(root);
+  // Bake the XZ→XY rotation into the vertices BEFORE parenting:
+  // bakeCurrentTransformIntoVertices bakes the mesh's WORLD matrix, so it
+  // must run while the arc is still unparented (world == local rotation).
+  // Baking after setParent would double-apply the root's pose.
   arc.rotation.x = Math.PI / 2;
-  // Bake the XZ→XY rotation into the vertices so the shader's mesh-local
-  // position.xy is the ring plane and atan2(y, x) is the ring angle.
   arc.bakeCurrentTransformIntoVertices();
+  parentToRoot(arc);
   arc.position = new BABYLON.Vector3(0, 0, radius * ARC_Z_OFFSET_FACTOR);
   ensureArcShader();
   const arcMat = new BABYLON.ShaderMaterial("arcMat", uScene, ARC_SHADER_NAME, {
@@ -404,7 +417,7 @@ function buildGizmoForNode(scene, nodeId) {
       },
       uScene
     );
-    tick.setParent(root);
+    parentToRoot(tick);
     tick.position = new BABYLON.Vector3(
       Math.cos(angle) * radius,
       Math.sin(angle) * radius,
@@ -416,7 +429,7 @@ function buildGizmoForNode(scene, nodeId) {
     ticks.push(tick);
 
     const labelHost = new BABYLON.TransformNode(`versionTickLabelHost-${i}`, uScene);
-    labelHost.setParent(root);
+    parentToRoot(labelHost);
     const labelRadius = radius * LABEL_RADIUS_FACTOR;
     labelHost.position = new BABYLON.Vector3(
       Math.cos(angle) * labelRadius,
@@ -431,7 +444,7 @@ function buildGizmoForNode(scene, nodeId) {
   // Anchor for the DOM version badge; placeHandle keeps it just outside the
   // knob so the badge travels with the thing you drag.
   const badgeHost = new BABYLON.TransformNode("versionBadgeHost", uScene);
-  badgeHost.setParent(root);
+  parentToRoot(badgeHost);
   gizmo.badgeHost = badgeHost;
 
   // Knob: flat accent disc seated on the ring, facing the viewer, with a
@@ -446,7 +459,7 @@ function buildGizmoForNode(scene, nodeId) {
     },
     uScene
   );
-  handle.setParent(root);
+  parentToRoot(handle);
   handle.rotation.x = Math.PI / 2; // cylinder axis (local Y) → ring-plane normal
   gizmo.handleMat = createGizmoMaterial(uScene, "handleMat", COLOR_ACTIVE, HANDLE_ALPHA);
   gizmo.handleHoverMat = createGizmoMaterial(uScene, "handleHoverMat", COLOR_HOVER, HANDLE_ALPHA);
@@ -465,6 +478,7 @@ function buildGizmoForNode(scene, nodeId) {
     uScene
   );
   rim.setParent(handle);
+  rim.rotationQuaternion = null;
   rim.position = new BABYLON.Vector3(0, 0, 0);
   rim.material = createGizmoMaterial(uScene, "handleRimMat", COLOR_KNOB_RIM, HANDLE_ALPHA);
   rim.isPickable = false;
@@ -740,9 +754,12 @@ export function initModelClockGizmo(scene, camera) {
     if (current && currentNodeId) {
       const latest = store.getState().entries;
       if (latest.length !== current.filtered.length) {
+        const nodeId = currentNodeId; // destroyCurrent() clears it
         destroyCurrent();
-        current = buildGizmoForNode(scene, currentNodeId);
-        if (current) {
+        const rebuilt = buildGizmoForNode(scene, nodeId);
+        if (rebuilt) {
+          currentNodeId = nodeId;
+          current = rebuilt;
           wireDrag(current, scene, camera);
           createTickLabels(current);
           render();
