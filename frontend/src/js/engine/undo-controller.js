@@ -11,6 +11,7 @@
  */
 
 import { on, emit, EVENTS } from "../events/bus.js";
+import { MOD } from "../utils/platform.js";
 import { state } from "./state.js";
 import { applyTransformMatrix, stageNodeTransform } from "./transforms.js";
 import {
@@ -89,14 +90,14 @@ function _syncToolbarButtons() {
   if (undoBtn) {
     undoBtn.disabled = !canUndo();
     const label = peekUndoLabel();
-    undoBtn.title = label ? `Undo ${label} (Ctrl+Z)` : "Nothing to undo";
+    undoBtn.title = label ? `Undo ${label} (${MOD}+Z)` : "Nothing to undo";
   }
   const redoBtn = document.getElementById("redoBtn");
   if (redoBtn) {
     redoBtn.disabled = !canRedo();
     const label = peekRedoLabel();
     redoBtn.title = label
-      ? `Redo ${label} (Ctrl+Shift+Z / Ctrl+Y)`
+      ? `Redo ${label} (${MOD}+Shift+Z / ${MOD}+Y)`
       : "Nothing to redo";
   }
 }

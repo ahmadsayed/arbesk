@@ -251,6 +251,13 @@ frontend/src/js/
 **Inaccessible Token Cards**
 - Studio gallery (`asset-library.js`) and library page now show tokens the user owns on-chain but can't read (e.g. wrong network, IPFS unavailable) as card skeletons with a **Burn** action, rather than silently dropping them.
 
+**Studio Undo/Redo (`engine/undo-stack.js`, `engine/undo-controller.js`)**
+- Single chronological in-memory snapshot stack (cap 50) shared by all scene edits: gizmo move/rotate/scale (single + group), inspector scale fields, and parametric color edits (the old color-only private stack was folded in).
+- Capture per completed gesture: gizmo drag start/end matrix snapshots (unchanged drags and no-op inspector commits filtered via `matricesEqual`); color pushes on picker close.
+- `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` dispatcher + `#undoBtn`/`#redoBtn` in the viewport toolbar (disabled-state + label tooltips synced from the stack); shortcut is a silent no-op when stacks are empty and stays out of text fields.
+- Stacks survive Save Draft/Publish (undo past a save point is fine — the next Save serializes the restored state via re-staged `pendingTransformEdits`/`pendingSourceColorEdits`); cleared on `SCENE_CLEARED` (asset open, generate, nesting dive, time-travel `loadVersion()`).
+- Entry contract: `{ type: 'transform'|'color', label, items: [{ nodeId, meshName?, before, after }] }`; other edit types can hook in via `registerUndoApplier(type, fn)`.
+
 **3D Engine, Parametric, glTF Pipeline, Comments, Library** — unchanged from previous status; all fully implemented. See sections 3.2/3.3 of the 2026-06-28 snapshot for detail.
 
 ### 3.3 What Does NOT Work / Is Missing
