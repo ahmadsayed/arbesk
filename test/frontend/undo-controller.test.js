@@ -194,8 +194,8 @@ describe("undo-controller keyboard + lifecycle", () => {
 
   test("SCENE_CLEARED clears both stacks", () => {
     pushUndoEntry(transformEntry());
-    popToRedo();
-    pushUndoEntry(transformEntry());
+    popToRedo(); // entry now sits on the redo stack
+    expect(canRedo()).toBe(true);
     emit(EVENTS.SCENE_CLEARED, {});
     expect(canUndo()).toBe(false);
     expect(canRedo()).toBe(false);

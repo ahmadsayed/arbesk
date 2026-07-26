@@ -10,7 +10,12 @@
 
 import { on, emit, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
-import { stageNodeTransform } from "../engine/transforms.js";
+import {
+  stageNodeTransform,
+  readNodeTransformMatrix,
+} from "../engine/transforms.js";
+import { undo, redo } from "../engine/undo-controller.js";
+import { pushUndoEntry } from "../engine/undo-stack.js";
 
 const TOOLBAR_ID = "transformToolbar";
 
@@ -23,6 +28,10 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 9 15"/><path d="M12 3H3v18h18v-9"/><path d="M16 3h5v5"/><path d="M14 15l7 7"/></svg>',
   time:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  undo:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>',
+  redo:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg>',
 };
 
 /**
@@ -82,19 +91,70 @@ function captureNodeTransform(nodeId) {
 }
 
 /**
+ * Node ids the gizmo acts on: the multi-selection when present, otherwise the
+ * single highlighted node.
+ */
+function _selectedIds() {
+  return state.selectedNodeIds.size > 0
+    ? [...state.selectedNodeIds]
+    : state.highlightedNodeId
+      ? [state.highlightedNodeId]
+      : [];
+}
+
+/**
  * Stage the transforms of every selected node (single or multi-selection)
  * and notify listeners (e.g. the inspector scale fields) so they can
  * refresh from the anchors.
  */
 function captureSelectedTransform() {
-  const ids =
-    state.selectedNodeIds.size > 0
-      ? [...state.selectedNodeIds]
-      : state.highlightedNodeId
-        ? [state.highlightedNodeId]
-        : [];
+  const ids = _selectedIds();
   for (const nodeId of ids) captureNodeTransform(nodeId);
   if (ids.length > 0) emit(EVENTS.TRANSFORM_STAGED, { nodeIds: ids });
+}
+
+// ── Undo capture ──
+// Snapshot the selected anchors' matrices at drag start; at drag end push one
+// undo entry per drag gesture covering every node that actually moved.
+
+const _MODE_LABELS = { translate: "Move", rotate: "Rotate", scale: "Scale" };
+
+/** @type {Array<{nodeId: string, matrix: number[]}>|null} */
+let _dragBefore = null;
+
+function _snapshotSelectedMatrices() {
+  const out = [];
+  for (const nodeId of _selectedIds()) {
+    const matrix = readNodeTransformMatrix(nodeId);
+    if (matrix) out.push({ nodeId, matrix });
+  }
+  return out;
+}
+
+function _matricesEqual(a, b, eps = 1e-6) {
+  for (let i = 0; i < 16; i++) {
+    if (Math.abs(a[i] - b[i]) > eps) return false;
+  }
+  return true;
+}
+
+function _pushDragUndoEntry() {
+  const before = _dragBefore;
+  _dragBefore = null;
+  if (!before || before.length === 0) return;
+  const items = [];
+  for (const { nodeId, matrix } of before) {
+    const after = readNodeTransformMatrix(nodeId);
+    if (after && !_matricesEqual(matrix, after)) {
+      items.push({ nodeId, before: matrix, after });
+    }
+  }
+  if (items.length === 0) return; // click without drag
+  pushUndoEntry({
+    type: "transform",
+    label: _MODE_LABELS[state.transformMode] || "Transform",
+    items,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -248,6 +308,12 @@ function createToolbar() {
   toolbar.setAttribute("aria-label", "Transform tools");
 
   toolbar.innerHTML = `
+    <button id="undoBtn" class="btn btn-flat btn-sm" data-action="undo" aria-label="Undo" title="Nothing to undo" disabled>
+      ${ICONS.undo}
+    </button>
+    <button id="redoBtn" class="btn btn-flat btn-sm" data-action="redo" aria-label="Redo" title="Nothing to redo" disabled>
+      ${ICONS.redo}
+    </button>
     <button class="btn btn-flat btn-sm transform-tool" data-mode="translate" aria-label="Move (T)" title="Move (T)">
       ${ICONS.translate}
     </button>
@@ -265,6 +331,12 @@ function createToolbar() {
   viewport.appendChild(toolbar);
 
   toolbar.addEventListener("click", (e) => {
+    const actionBtn = e.target.closest("[data-action]");
+    if (actionBtn) {
+      if (actionBtn.dataset.action === "undo") undo();
+      else redo();
+      return;
+    }
     const btn = e.target.closest(".transform-tool");
     if (!btn) return;
     const mode = btn.dataset.mode;
@@ -383,6 +455,7 @@ function ensureDragEndSubscription(gizmo) {
   if (gizmo.onDragStartObservable) {
     gizmo.onDragStartObservable.add(() => {
       state.isGizmoDragging = true;
+      _dragBefore = _snapshotSelectedMatrices();
       if (state.selectedNodeIds.size > 1) _startGroupDrag();
     });
     subscribed = true;
@@ -392,6 +465,7 @@ function ensureDragEndSubscription(gizmo) {
       state.isGizmoDragging = false;
       _endGroupDrag();
       captureSelectedTransform();
+      _pushDragUndoEntry();
     });
     subscribed = true;
   }

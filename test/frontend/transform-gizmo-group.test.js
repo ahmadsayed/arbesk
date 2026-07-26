@@ -22,6 +22,12 @@ class MockMatrix {
   static Identity() {
     return new MockMatrix();
   }
+  static Compose(scale, _rotation, position) {
+    return new MockMatrix(
+      scale.x, scale.y, scale.z,
+      position.x, position.y, position.z
+    );
+  }
   static Invert(a) {
     const m = a.m;
     return new MockMatrix(
