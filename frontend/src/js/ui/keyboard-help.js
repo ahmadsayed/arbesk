@@ -25,8 +25,8 @@ const SECTIONS = [
     rows: [
       [`${MOD}+N`, "New asset"],
       [`${MOD}+S`, "Save draft"],
-      [`${MOD}+Z`, "Undo color edit"],
-      [`${MOD}+Shift+Z`, "Redo color edit"],
+      [`${MOD}+Z`, "Undo edit"],
+      [`${MOD}+Shift+Z / ${MOD}+Y`, "Redo edit"],
     ],
   },
   {

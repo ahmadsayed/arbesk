@@ -40,6 +40,7 @@ import { initCollaborators } from "./ui/collaborators.js";
 import { initCommentsPanel } from "./ui/comments-panel.js";
 import { rewriteShortcutTitles } from "./utils/platform.js";
 import "./ui/keyboard-help.js";
+import "./engine/undo-controller.js";
 
 // ── Library ──
 import { initLibraryGrid } from "./ui/library-grid.js";
