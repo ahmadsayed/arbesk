@@ -296,17 +296,13 @@ function restoreInspectorCollapsedState() {
 }
 restoreInspectorCollapsedState();
 
-// Multi-select summary element (created lazily; the inspector markup has no
-// dedicated container for it).
-/** @type {HTMLDivElement|null} */
+// Multi-select summary element — a subtle status item in the bottom bar
+// rather than a block of text in the inspector.
+/** @type {HTMLElement|null} */
 let multiSelectInfo = null;
 function _getMultiSelectInfoEl() {
   if (multiSelectInfo) return multiSelectInfo;
-  multiSelectInfo = document.createElement("div");
-  multiSelectInfo.id = "multiSelectInfo";
-  multiSelectInfo.className = "inspector-section";
-  multiSelectInfo.hidden = true;
-  inspector?.appendChild(multiSelectInfo);
+  multiSelectInfo = document.getElementById("bottomBarSelection");
   return multiSelectInfo;
 }
 
@@ -326,10 +322,10 @@ function showMultiSelectSummary(count) {
   if (componentEditor) componentEditor.hidden = true;
   if (scaleSection) scaleSection.hidden = true;
   const el = _getMultiSelectInfoEl();
-  el.textContent =
-    `${count} nodes selected — move, rotate or scale them together. ` +
-    `Time travel and material edits need a single selection.`;
-  el.hidden = false;
+  if (el) {
+    el.textContent = `${count} nodes selected — transform together; edits need single selection`;
+    el.hidden = false;
+  }
 }
 
 /**
@@ -489,9 +485,7 @@ export function clearPendingSourceColorEdit(nodeId) {
 function onNodeSelected(e) {
   // Multi-select: the inspector shows a summary instead of per-node controls.
   if (state.selectedNodeIds.size > 1) {
-    if (inspector && !inspector.classList.contains("collapsed")) {
-      showMultiSelectSummary(state.selectedNodeIds.size);
-    }
+    showMultiSelectSummary(state.selectedNodeIds.size);
     return;
   }
   selectNodeById(e.nodeId);
@@ -510,9 +504,7 @@ on(EVENTS.NODE_SELECTED, onNodeSelected);
 on(EVENTS.SELECTION_CHANGED, (/** @type {{nodeIds?: string[]}} */ e) => {
   const count = Array.isArray(e?.nodeIds) ? e.nodeIds.length : 0;
   if (count > 1) {
-    if (inspector && !inspector.classList.contains("collapsed")) {
-      showMultiSelectSummary(count);
-    }
+    showMultiSelectSummary(count);
   } else if (multiSelectInfo) {
     multiSelectInfo.hidden = true;
   }

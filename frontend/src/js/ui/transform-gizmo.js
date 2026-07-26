@@ -113,7 +113,7 @@ let _groupPivot = null;
 /**
  * Per-drag snapshot: relative world matrices + parent-space inverses for each
  * selected anchor. Null outside an active group drag.
- * @type {Array<{nodeId: string, anchor: BABYLON.TransformNode, rel: BABYLON.Matrix, parentInv: BABYLON.Matrix}>|null}
+ * @type {Array<{anchor: BABYLON.TransformNode, rel: BABYLON.Matrix, parentInv: BABYLON.Matrix}>|null}
  */
 let _groupSnapshot = null;
 
@@ -133,15 +133,40 @@ function _ensureGroupPivot() {
 }
 
 /**
+ * Selected anchors whose Babylon parent chain contains no other selected
+ * anchor. Ctrl+A selects child-world-internal anchors too; transforming both
+ * a parent and its nested child in the same group drag would move the child
+ * twice (once via the parent hierarchy, once directly), so only the top-most
+ * anchors are driven — nested ones ride along.
+ * @returns {BABYLON.TransformNode[]}
+ */
+function _topLevelSelectedAnchors() {
+  const anchors = [...state.selectedNodeIds]
+    .map((id) => state.nodeAnchors.get(id))
+    .filter((a) => a && !a.isDisposed());
+  const set = new Set(anchors);
+  return anchors.filter((a) => {
+    for (let p = a.parent; p; p = p.parent) {
+      if (set.has(p)) return false;
+    }
+    return true;
+  });
+}
+
+/**
  * Place the pivot at the centroid of the selected anchors' world positions
  * with identity rotation/scale, and attach the gizmo to it.
  */
 function _attachToGroupPivot(gizmoManager) {
-  const anchors = [...state.selectedNodeIds]
-    .map((id) => state.nodeAnchors.get(id))
-    .filter((a) => a && !a.isDisposed());
-  if (anchors.length < 2) {
+  const anchors = _topLevelSelectedAnchors();
+  if (anchors.length === 0) {
     gizmoManager.attachToNode(null);
+    return;
+  }
+  // Selection collapses to a single subtree (e.g. a model plus its own
+  // child-world node): drive that anchor directly, no pivot needed.
+  if (anchors.length === 1) {
+    gizmoManager.attachToNode(anchors[0]);
     return;
   }
 
@@ -159,19 +184,22 @@ function _attachToGroupPivot(gizmoManager) {
 
 function _startGroupDrag() {
   if (!_groupPivot || state.selectedNodeIds.size < 2) return;
+  const topAnchors = _topLevelSelectedAnchors();
+  if (topAnchors.length < 2) return; // gizmo is on the single anchor directly
   _groupPivot.computeWorldMatrix(true);
   const pivotInv = BABYLON.Matrix.Invert(_groupPivot.getWorldMatrix());
   _groupSnapshot = [];
-  for (const id of state.selectedNodeIds) {
-    const anchor = state.nodeAnchors.get(id);
-    if (!anchor || anchor.isDisposed()) continue;
+  for (const anchor of topAnchors) {
     anchor.computeWorldMatrix(true);
-    const rel = pivotInv.multiply(anchor.getWorldMatrix());
+    // Babylon row-vector convention: A.multiply(B) applies A first, so the
+    // anchor-in-pivot-space matrix is anchorWorld × pivotInv — not the reverse.
+    // The reversed order makes the pivot's offset pre-multiply the anchor's
+    // own scale/rotation (scaled anchors move faster/slower than the gizmo).
+    const rel = anchor.getWorldMatrix().multiply(pivotInv);
     const parentWorld = anchor.parent
       ? anchor.parent.getWorldMatrix()
       : BABYLON.Matrix.Identity();
     _groupSnapshot.push({
-      nodeId: id,
       anchor,
       rel,
       parentInv: BABYLON.Matrix.Invert(parentWorld),
@@ -192,7 +220,9 @@ function _applyGroupDrag() {
   const position = new BABYLON.Vector3();
   for (const entry of _groupSnapshot) {
     if (entry.anchor.isDisposed()) continue;
-    const world = pivotWorld.multiply(entry.rel);
+    // rel × pivotWorld (apply rel first, then the pivot's new world matrix)
+    // — the matching order to the drag-start snapshot above.
+    const world = entry.rel.multiply(pivotWorld);
     const local = world.multiply(entry.parentInv);
     if (!local.decompose(scale, rotation, position)) continue;
     entry.anchor.scaling.copyFrom(scale);

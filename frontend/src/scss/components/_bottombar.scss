@@ -39,6 +39,14 @@
   }
 }
 
+// Multi-selection hint — deliberately quieter than the other status items.
+.bottombar-selection {
+  opacity: 0.65;
+  font-size: var(--font-size-00, var(--font-size-0));
+  max-width: 40ch;
+  flex-shrink: 1;
+}
+
 .bottombar-actions {
   display: flex;
   align-items: center;
