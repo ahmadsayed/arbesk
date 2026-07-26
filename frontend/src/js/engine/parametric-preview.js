@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Parametric Preview & Token Child Inspector
  *
@@ -82,10 +81,12 @@ let _colorBeforeEdit = null;
 // pendingSourceColorEdits aligned so Save writes the undone/redone color.
 registerUndoApplier("color", (item, direction) => {
   const color = direction === "before" ? item.before : item.after;
+  // Color entries always carry a meshName (optional only for transforms).
+  const meshName = /** @type {string} */ (item.meshName);
   const meshes = getNodeMeshes(item.nodeId);
-  if (meshes) applyColor(meshes, null, { [item.meshName]: { color } });
+  if (meshes) applyColor(meshes, null, { [meshName]: { color } });
 
-  if (activeNodeId === item.nodeId && activeMeshName === item.meshName) {
+  if (activeNodeId === item.nodeId && activeMeshName === meshName) {
     if (selectedComponentColor) selectedComponentColor.value = color;
     if (selectedComponentSwatch)
       selectedComponentSwatch.style.backgroundColor = color;
@@ -96,7 +97,7 @@ registerUndoApplier("color", (item, direction) => {
     nodeEdits = new Map();
     pendingSourceColorEdits.set(item.nodeId, nodeEdits);
   }
-  nodeEdits.set(item.meshName, color);
+  nodeEdits.set(meshName, color);
 });
 
 /**

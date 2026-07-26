@@ -24,7 +24,15 @@ import {
   onUndoStackChange,
 } from "./undo-stack.js";
 
-/** @type {Map<string, (item: object, direction: 'before'|'after') => void>} */
+/**
+ * @typedef {Object} UndoApplierItem
+ * @property {string} nodeId
+ * @property {string} [meshName]
+ * @property {*} before
+ * @property {*} after
+ */
+
+/** @type {Map<string, (item: UndoApplierItem, direction: 'before'|'after') => void>} */
 const _appliers = new Map();
 
 /**
@@ -32,7 +40,7 @@ const _appliers = new Map();
  * being applied ("before" for undo, "after" for redo).
  *
  * @param {string} type - e.g. "transform", "color"
- * @param {(item: object, direction: 'before'|'after') => void} applier
+ * @param {(item: UndoApplierItem, direction: 'before'|'after') => void} applier
  */
 export function registerUndoApplier(type, applier) {
   _appliers.set(type, applier);
