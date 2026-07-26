@@ -121,6 +121,10 @@ const _MODE_LABELS = { translate: "Move", rotate: "Rotate", scale: "Scale" };
 
 /** @type {Array<{nodeId: string, matrix: number[]}>|null} */
 let _dragBefore = null;
+// Transform mode captured at drag start so a mid-drag T/R/S keypress can't
+// mislabel the undo entry.
+/** @type {string|null} */
+let _dragMode = null;
 
 function _snapshotSelectedMatrices() {
   const out = [];
@@ -141,6 +145,8 @@ function _matricesEqual(a, b, eps = 1e-6) {
 function _pushDragUndoEntry() {
   const before = _dragBefore;
   _dragBefore = null;
+  const mode = _dragMode;
+  _dragMode = null;
   if (!before || before.length === 0) return;
   const items = [];
   for (const { nodeId, matrix } of before) {
@@ -152,7 +158,7 @@ function _pushDragUndoEntry() {
   if (items.length === 0) return; // click without drag
   pushUndoEntry({
     type: "transform",
-    label: _MODE_LABELS[state.transformMode] || "Transform",
+    label: _MODE_LABELS[mode] || "Transform",
     items,
   });
 }
@@ -456,6 +462,7 @@ function ensureDragEndSubscription(gizmo) {
     gizmo.onDragStartObservable.add(() => {
       state.isGizmoDragging = true;
       _dragBefore = _snapshotSelectedMatrices();
+      _dragMode = state.transformMode;
       if (state.selectedNodeIds.size > 1) _startGroupDrag();
     });
     subscribed = true;

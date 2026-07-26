@@ -150,4 +150,61 @@ describe("gizmo drag undo capture", () => {
     expect(canUndo()).toBe(false);
     expect(canRedo()).toBe(true);
   });
+
+  test("group drag pushes one entry with only the moved top-level nodes", () => {
+    // Three selected anchors; n3 is nested under n1 and rides along via the
+    // parent chain, so its LOCAL matrix never changes and it must not get an
+    // undo item. The selection is set directly (no SELECTION_CHANGED) because
+    // attaching to the group pivot needs real Babylon world matrices.
+    const n1Anchor = state.nodeAnchors.get("n1");
+    const n2Anchor = {
+      scaling: {},
+      rotationQuaternion: null,
+      position: {},
+      parent: null,
+      isDisposed: () => false,
+    };
+    const n3Anchor = {
+      scaling: {},
+      rotationQuaternion: null,
+      position: {},
+      parent: n1Anchor, // nested under n1
+      isDisposed: () => false,
+    };
+    state.nodeAnchors.set("n2", n2Anchor);
+    state.nodeAnchors.set("n3", n3Anchor);
+    state.selectedNodeIds = new Set(["n1", "n2", "n3"]);
+
+    // Per-anchor Compose mock keyed by each anchor's scaling object: n1/n2
+    // move during the drag, n3's local matrix stays at identity.
+    const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4, 0, 0, 1];
+    const liveMatrices = new Map([
+      [n1Anchor.scaling, identity],
+      [n2Anchor.scaling, identity],
+      [n3Anchor.scaling, identity],
+    ]);
+    BABYLON.Matrix.Compose = (scaling) => ({
+      m: [...liveMatrices.get(scaling)],
+    });
+
+    positionGizmo.onDragStartObservable.fire();
+    liveMatrices.set(n1Anchor.scaling, moved);
+    liveMatrices.set(n2Anchor.scaling, moved);
+    // n3 unchanged — it rides along under n1.
+    positionGizmo.onDragEndObservable.fire();
+
+    expect(canUndo()).toBe(true);
+    const entry = popUndoEntry();
+    expect(entry.type).toBe("transform");
+    expect(entry.label).toBe("Move");
+    // One entry covers the whole gesture, with per-node before/after only for
+    // the nodes whose local matrix actually changed.
+    expect(entry.items.map((i) => i.nodeId).sort()).toEqual(["n1", "n2"]);
+    for (const item of entry.items) {
+      expect(item.before[12]).toBe(0);
+      expect(item.after[12]).toBe(4);
+    }
+    clearUndoStacks();
+  });
 });
