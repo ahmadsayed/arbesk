@@ -68,6 +68,17 @@ export function readNodeTransformMatrix(nodeId) {
 }
 
 /**
+ * Compare two 16-element transform matrices with an absolute epsilon, used to
+ * skip no-op undo entries (click-without-drag, unchanged inspector value).
+ */
+export function matricesEqual(a, b, eps = 1e-6) {
+  for (let i = 0; i < 16; i++) {
+    if (Math.abs(a[i] - b[i]) > eps) return false;
+  }
+  return true;
+}
+
+/**
  * Read the current local transform of one node anchor and stage it for
  * persistence in the manifest (`transform_matrix`). Shared by the viewport
  * gizmo (drag end) and the inspector scale fields.

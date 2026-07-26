@@ -126,6 +126,15 @@ describe("gizmo drag undo capture", () => {
     expect(canUndo()).toBe(false);
   });
 
+  test("label uses the mode captured at drag start, not at drag end", () => {
+    positionGizmo.onDragStartObservable.fire();
+    state.transformMode = "rotate"; // user pressed R mid-drag
+    dragMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4, 0, 0, 1];
+    positionGizmo.onDragEndObservable.fire();
+    expect(peekUndoLabel()).toBe("Move"); // drag started in translate mode
+    clearUndoStacks();
+  });
+
   test("toolbar has disabled undo/redo buttons that enable after a drag", () => {
     const undoBtn = document.getElementById("undoBtn");
     const redoBtn = document.getElementById("redoBtn");

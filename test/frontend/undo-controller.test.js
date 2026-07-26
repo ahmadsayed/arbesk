@@ -149,6 +149,28 @@ describe("undo-controller registered appliers", () => {
       ["n1", "after"],
     ]);
   });
+
+  test("color and transform entries unwind in reverse chronological order", () => {
+    state.nodeAnchors.set("n1", makeAnchor());
+    const colorCalls = [];
+    registerUndoApplier("color", (item, direction) =>
+      colorCalls.push(direction)
+    );
+    pushUndoEntry({
+      type: "color",
+      label: "Color",
+      items: [{ nodeId: "n1", meshName: "m", before: "#000000", after: "#ffffff" }],
+    });
+    pushUndoEntry(transformEntry()); // most recent
+    undo(); // transform undone first
+    expect(colorCalls).toEqual([]);
+    expect(canRedo()).toBe(true);
+    undo(); // then the color
+    expect(colorCalls).toEqual(["before"]);
+    redo();
+    redo(); // redo replays oldest-first
+    expect(colorCalls).toEqual(["before", "after"]);
+  });
 });
 
 describe("undo-controller keyboard + lifecycle", () => {

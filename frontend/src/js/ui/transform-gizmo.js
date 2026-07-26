@@ -13,6 +13,7 @@ import { state } from "../engine/state.js";
 import {
   stageNodeTransform,
   readNodeTransformMatrix,
+  matricesEqual,
 } from "../engine/transforms.js";
 import { undo, redo } from "../engine/undo-controller.js";
 import { pushUndoEntry } from "../engine/undo-stack.js";
@@ -135,13 +136,6 @@ function _snapshotSelectedMatrices() {
   return out;
 }
 
-function _matricesEqual(a, b, eps = 1e-6) {
-  for (let i = 0; i < 16; i++) {
-    if (Math.abs(a[i] - b[i]) > eps) return false;
-  }
-  return true;
-}
-
 function _pushDragUndoEntry() {
   const before = _dragBefore;
   _dragBefore = null;
@@ -151,7 +145,7 @@ function _pushDragUndoEntry() {
   const items = [];
   for (const { nodeId, matrix } of before) {
     const after = readNodeTransformMatrix(nodeId);
-    if (after && !_matricesEqual(matrix, after)) {
+    if (after && !matricesEqual(matrix, after)) {
       items.push({ nodeId, before: matrix, after });
     }
   }

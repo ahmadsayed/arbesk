@@ -12,7 +12,7 @@
 
 import { emit, on, EVENTS } from "../events/bus.js";
 import { applyColor } from "./time-travel.js";
-import { stageNodeTransform, readNodeTransformMatrix } from "./transforms.js";
+import { stageNodeTransform, readNodeTransformMatrix, matricesEqual } from "./transforms.js";
 import { pushUndoEntry } from "./undo-stack.js";
 import { registerUndoApplier } from "./undo-controller.js";
 import {
@@ -173,7 +173,7 @@ function _applyUniformScale(factor) {
   if (activeNodeId) {
     stageNodeTransform(activeNodeId);
     const after = readNodeTransformMatrix(activeNodeId);
-    if (before && after) {
+    if (before && after && !matricesEqual(before, after)) {
       pushUndoEntry({
         type: "transform",
         label: "Scale",

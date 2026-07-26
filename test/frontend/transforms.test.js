@@ -6,6 +6,7 @@ import { state } from "../../frontend/src/js/engine/state.js";
 import {
   readNodeTransformMatrix,
   stageNodeTransform,
+  matricesEqual,
 } from "../../frontend/src/js/engine/transforms.js";
 
 const FAKE_MATRIX = { m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 6, 7, 1] };
@@ -42,6 +43,16 @@ describe("readNodeTransformMatrix", () => {
     expect(readNodeTransformMatrix("nope")).toBe(null);
     state.nodeAnchors.set("n2", { isDisposed: () => true });
     expect(readNodeTransformMatrix("n2")).toBe(null);
+  });
+});
+
+describe("matricesEqual", () => {
+  test("true for identical matrices, false beyond epsilon", () => {
+    const a = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 6, 7, 1];
+    expect(matricesEqual(a, [...a])).toBe(true);
+    const b = [...a];
+    b[12] += 1e-5;
+    expect(matricesEqual(a, b)).toBe(false);
   });
 });
 
