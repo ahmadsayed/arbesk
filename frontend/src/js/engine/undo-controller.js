@@ -95,7 +95,9 @@ function _syncToolbarButtons() {
   if (redoBtn) {
     redoBtn.disabled = !canRedo();
     const label = peekRedoLabel();
-    redoBtn.title = label ? `Redo ${label} (Ctrl+Shift+Z)` : "Nothing to redo";
+    redoBtn.title = label
+      ? `Redo ${label} (Ctrl+Shift+Z / Ctrl+Y)`
+      : "Nothing to redo";
   }
 }
 onUndoStackChange(_syncToolbarButtons);
@@ -106,7 +108,7 @@ on(EVENTS.SCENE_CLEARED, () => clearUndoStacks());
 
 // Single Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y dispatcher.
 document.addEventListener("keydown", (e) => {
-  if (!(e.ctrlKey || e.metaKey)) return;
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   const key = e.key.toLowerCase();
   if (key !== "z" && key !== "y") return;
   const el = /** @type {HTMLElement|null} */ (document.activeElement);
@@ -122,7 +124,10 @@ document.addEventListener("keydown", (e) => {
       tag === "input";
     if (editing) return;
   }
+  const wantsRedo = (key === "z" && e.shiftKey) || key === "y";
+  if (wantsRedo && !canRedo()) return;
+  if (!wantsRedo && !canUndo()) return;
   e.preventDefault();
-  if ((key === "z" && e.shiftKey) || key === "y") redo();
+  if (wantsRedo) redo();
   else undo();
 });

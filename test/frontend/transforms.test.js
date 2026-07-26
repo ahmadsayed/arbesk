@@ -53,6 +53,9 @@ describe("matricesEqual", () => {
     const b = [...a];
     b[12] += 1e-5;
     expect(matricesEqual(a, b)).toBe(false);
+    const c = [...a];
+    c[12] += 1e-7; // within epsilon
+    expect(matricesEqual(a, c)).toBe(true);
   });
 });
 

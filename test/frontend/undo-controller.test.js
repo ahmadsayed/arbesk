@@ -202,6 +202,31 @@ describe("undo-controller keyboard + lifecycle", () => {
     input.remove();
   });
 
+  test("shortcut is a silent no-op (not consumed) when stacks are empty", () => {
+    const e = new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false); // nothing to undo: not swallowed
+    pushUndoEntry(transformEntry());
+    const e2 = new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(e2);
+    expect(e2.defaultPrevented).toBe(true); // entry exists: consumed
+  });
+
+  test("Ctrl+Alt+Z does not trigger undo", () => {
+    pushUndoEntry(transformEntry());
+    press("z", { ctrlKey: true, altKey: true });
+    expect(canUndo()).toBe(true); // not consumed
+    clearUndoStacks();
+  });
+
   test("shortcut works when a color input is focused", () => {
     pushUndoEntry(transformEntry());
     const input = document.createElement("input");
