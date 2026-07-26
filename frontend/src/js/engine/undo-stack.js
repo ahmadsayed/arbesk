@@ -36,7 +36,7 @@ function _notify() {
 
 /**
  * Push a completed edit. Clears the redo stack (standard invalidation).
- * @param {UndoEntry} entry
+ * @param {UndoEntry} entry - must not be mutated after push (stored by reference)
  */
 export function pushUndoEntry(entry) {
   if (!entry || !Array.isArray(entry.items) || entry.items.length === 0) return;

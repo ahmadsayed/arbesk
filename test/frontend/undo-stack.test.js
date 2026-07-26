@@ -92,4 +92,11 @@ describe("undo-stack", () => {
     pushUndoEntry(entry("Scale"));
     expect(calls).toBe(4);
   });
+
+  test("clearing already-empty stacks does not notify listeners", () => {
+    let calls = 0;
+    onUndoStackChange(() => calls++);
+    clearUndoStacks();
+    expect(calls).toBe(0);
+  });
 });
