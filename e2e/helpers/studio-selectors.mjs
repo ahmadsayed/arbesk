@@ -48,6 +48,10 @@ export const SELECTORS = {
   sceneClockBadge: "#sceneClock .vc-badge",
   modelClockBadge: "#modelClockBadge",
   timeModeButton: '#transformToolbar [data-mode="time"]',
+  // Undo/redo (viewport toolbar) + inspector scale field
+  undoButton: "#undoBtn",
+  redoButton: "#redoBtn",
+  scaleFactorInput: "#nodeScaleFactor",
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
   settingsSwitcherBtn: '[data-view="settings"]',
