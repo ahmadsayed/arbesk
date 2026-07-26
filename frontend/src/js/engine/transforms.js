@@ -46,18 +46,16 @@ export function applyTransformMatrix(meshOrNode, matrixArray) {
 }
 
 /**
- * Read the current local transform of one node anchor and stage it for
- * persistence in the manifest (`transform_matrix`). Shared by the viewport
- * gizmo (drag end) and the inspector scale fields.
+ * Read the current local transform of one node anchor as a 16-element
+ * column-major matrix — the same shape as the manifest `transform_matrix`
+ * consumed by `applyTransformMatrix()`. Used by `stageNodeTransform()` and by
+ * undo capture sites that snapshot a node's TRS before/after a gesture.
  *
- * Babylon stores matrices column-major, which matches the glTF / Arbesk
- * manifest `transform_matrix` format consumed by `applyTransformMatrix()`.
- *
- * Returns true when a transform was staged.
+ * Returns null when the anchor is missing or disposed.
  */
-export function stageNodeTransform(nodeId) {
+export function readNodeTransformMatrix(nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
-  if (!anchor || anchor.isDisposed()) return false;
+  if (!anchor || anchor.isDisposed()) return null;
 
   const rotation =
     anchor.rotationQuaternion || BABYLON.Quaternion.Identity();
@@ -66,7 +64,20 @@ export function stageNodeTransform(nodeId) {
     rotation,
     anchor.position
   );
-  state.pendingTransformEdits.set(nodeId, Array.from(matrix.m));
+  return Array.from(matrix.m);
+}
+
+/**
+ * Read the current local transform of one node anchor and stage it for
+ * persistence in the manifest (`transform_matrix`). Shared by the viewport
+ * gizmo (drag end) and the inspector scale fields.
+ *
+ * Returns true when a transform was staged.
+ */
+export function stageNodeTransform(nodeId) {
+  const matrix = readNodeTransformMatrix(nodeId);
+  if (!matrix) return false;
+  state.pendingTransformEdits.set(nodeId, matrix);
   return true;
 }
 
