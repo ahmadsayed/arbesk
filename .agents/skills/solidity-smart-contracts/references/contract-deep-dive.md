@@ -9,8 +9,8 @@ Full Arbesk contract reference: inheritance, storage layout, function inventory,
 **File:** `blockchain/contracts/ArbeskAsset.sol`
 **Solidity:** `^0.8.20` (compiled 0.8.24, Cancun EVM)
 **Dependencies:** OpenZeppelin v5 — ERC721, Ownable, ReentrancyGuard, Pausable
-**Test file:** `blockchain/test/ArbeskAsset.test.js`
-**Security audit:** `blockchain/SECURITY.md`
+**Test file:** `blockchain/test/ArbeskAsset.test.js` (~786 lines, 48 test cases; Merkle trees via `SimpleMerkleTree` from `@openzeppelin/merkle-tree`)
+**Security audit:** `blockchain/SECURITY.md` (6 documented findings)
 
 ### Inheritance Chain
 

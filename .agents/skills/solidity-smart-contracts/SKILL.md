@@ -1,120 +1,53 @@
 ---
 name: solidity-smart-contracts
-description: Expert guidance on Solidity smart contract architecture, deployment, debugging, and address alignment verification. Covers the two-tier contract system (ArbeskAssetFree / ArbeskAsset), ERC721 NFTs, PayGo USDC payment patterns, OpenZeppelin v5, Hardhat tooling, multi-network deployment, smart account (ERC-4337) proxy validation, session auth debugging, and the full compile→deploy→verify→integrate pipeline. Use when asked to "debug the contract", "check contract address alignment", "deploy contracts", "audit the contract", "add a function to the contract", "explain the payment flow", "free tier vs paid tier", "ArbeskAssetFree", "smart account", "proxy contract", "session auth", or any Solidity/blockchain/NFT question in this codebase. When you see a contract error, ABI mismatch, or transaction revert, invoke this skill immediately.
+description: Use for any Solidity/contract task in this repo — deploys, ABI mismatches, transaction reverts, address alignment checks, free vs paid tier (ArbeskAssetFree/ArbeskAsset), USDC PayGo, Merkle editor auth, OpenZeppelin v5, smart account proxy validation, or the compile→deploy→sync→test pipeline.
 ---
 
 # Solidity Smart Contract Expertise
 
-Use this skill for any task involving Solidity smart contracts: architecture review, function implementation, deployment, debugging, address alignment, event verification, smart account proxy handling, session authentication debugging, test coverage, or security audit.
+Two contracts share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn); OZ v5, Solidity `^0.8.20` (compiled 0.8.24, Cancun):
+
+| Contract | File | Env var | Role |
+|----------|------|---------|------|
+| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | `CONTRACT_ADDRESS` | **Default** — 10 gen/day/wallet |
+| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | `PAID_CONTRACT_ADDRESS` | USDC PayGo, unlimited gen |
 
 ## Quick Decision
 
-| Question | Action |
-|----------|--------|
-| `c.methods.X is not a function`? | Stale ABI. Recompile: `docker compose run --rm hardhat npx hardhat compile`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| `Transaction reverted` / `WRONG_CONTRACT`? | Address mismatch. Check root `.env` vs `blockchain/.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| `WRONG_CONTRACT` with MetaMask? | Smart account proxy. Validate events, not `receipt.to`. See [→ Smart Accounts](./references/smart-accounts.md) |
-| Session signing every request? | Case-sensitive address bug in localStorage. See [→ Session Auth](./references/session-auth.md) |
-| Need to add a contract function? | Write Solidity → add tests → add to `REQUIRED_PAID_ABI_FUNCTIONS` / `REQUIRED_FREE_ABI_FUNCTIONS` → recompile → redeploy → sync `.env`. See [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| Debugging a failed generation tx? | Check `[GEN]` logs, validate receipt, decode events. See [→ Debugging](./references/debugging.md) |
+| Symptom | Action |
+|---------|--------|
+| `c.methods.X is not a function` | Stale ABI → `docker compose run --rm hardhat npx hardhat compile` |
+| `Transaction reverted` / `WRONG_CONTRACT` | Address mismatch → root `.env` vs `blockchain/.env` |
+| `WRONG_CONTRACT` with MetaMask | Smart-account proxy → validate events, not `receipt.to` |
+| Session signing every request | Case-sensitive address bug in localStorage |
+| Adding a contract function | Solidity → tests → `REQUIRED_*_ABI_FUNCTIONS` → recompile → redeploy → sync `.env` |
+| Failed generation tx | `[GEN]` logs, validate receipt, decode events |
 
-## Contract Overview
+## Networks
 
-Two production contracts share `ArbeskAssetBase.sol` (abstract ERC-721 base):
+| Network | Chain ID | Hardhat name | Wallets |
+|---------|----------|--------------|---------|
+| Hardhat Local | 31415822 | `hardhat` / `localhost` | EOA |
+| Base Sepolia | 84532 | `baseSepolia` | EOA + CDP smart accounts |
 
-| Contract | File | Role | Limits |
-|----------|------|------|--------|
-| `ArbeskAssetFree` | `blockchain/contracts/ArbeskAssetFree.sol` | **Default** — free tier | 10 gen/day/wallet, ~5000 editors/token (safety net) |
-| `ArbeskAsset` | `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo | Unlimited paid gen, ~5000 editors/token (safety net) |
+## Hard Rules
 
-**`CONTRACT_ADDRESS`** → `ArbeskAssetFree` (default); **`PAID_CONTRACT_ADDRESS`** → `ArbeskAsset`
+1. Lowercase ALL addresses in storage and comparison — case mismatch breaks sessions.
+2. Every state-changing function emits an event — required for smart-account proxy validation.
+3. Validate `log.address`, never `receipt.to` — proxies route through bundlers.
+4. After any `.sol` change: compile → deploy → sync `CONTRACT_ADDRESS` `blockchain/.env` → root `.env` → `npm run test:frontend`. Deploy with `--network localhost`; bare `--network hardhat` targets an ephemeral chain that vanishes.
+5. OZ v5: override `_update`, not `_beforeTokenTransfer`.
+6. USDC only, 6 decimals — no native-token payment path (`receive()`/`fallback()` revert).
+7. Gas: `immutable` for constructor values, `calldata` params, pack storage slots.
+8. Smart wallets (CDP ERC-4337) on Base Sepolia only; generation UI via `wallet-payments.js` → `isFreeTierContract()` — never hard-code the paid path.
 
-**Solidity:** `^0.8.20` (compiled 0.8.24, Cancun EVM)
-**Dependencies:** OpenZeppelin v5 — ERC721, Ownable, ReentrancyGuard, Pausable
-**Test file:** `blockchain/test/ArbeskAsset.test.js` (~786 lines, 48 test cases, Merkle trees via `SimpleMerkleTree` from `@openzeppelin/merkle-tree`)
-**Security audit:** `blockchain/SECURITY.md` (6 documented findings)
+## References (read on demand)
 
-### Storage Layout (key variables)
-
-| Variable | Type | Notes |
-|----------|------|-------|
-| `tierCosts` | `mapping(Tier => uint256)` | 4 tiers, 6-decimal USDC (public getter) |
-| `usdcToken` | `IERC20` | address(0) = disabled |
-| `developerTreasuryWallet` | `address` | All payments go here |
-
-### Function Categories
-
-- **Payment — USDC only:** `payForGenerationWithUSDC(bytes32,string,uint8)` — tiered ERC-20 (no native-token path)
-- **NFT Minting:** `publishAsset(string,uint256,bytes32,string)`, `tokenURI(uint256)`
-- **Collaboration:** `updateAssetURI`, `updateEditors`, `burn`
-- **Admin:** `setTreasury`, `setUsdcToken`, `setTierCost`, `withdrawUSDC`, `pause`, `unpause`
-
-### Tier Pricing (6-decimal USDC)
-
-| Tier | Value | Default Cost | USD |
-|------|-------|-------------|-----|
-| Basic | 0 | 750,000 | $0.75 |
-| Standard | 1 | 1,250,000 | $1.25 |
-| Premium | 2 | 1,750,000 | $1.75 |
-| Pro | 3 | 2,500,000 | $2.50 |
-
-### Event Signatures (keccak256 topic[0])
-
-```
-AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)
-AssetPublished(address,uint256,string)
-EditorSetChanged(uint256,bytes32,uint256)
-AssetBurned(uint256,address)
-AssetURIUpdated(uint256,string)
-```
-
-## Deployment Targets
-
-Arbesk deploys to two EVM networks (chain IDs centralized in `constants/chains.js`).
-
-| Network | Chain ID | RPC | Hardhat name | Wallets |
-|---------|----------|-----|--------------|---------|
-| Hardhat Local | 31415822 | `http://127.0.0.1:8545` | `hardhat` / `localhost` | EOA |
-| Base Sepolia Testnet | 84532 | `https://sepolia.base.org` | `baseSepolia` | EOA + CDP email-login smart accounts |
-
-**Smart wallets (CDP ERC-4337) are supported on Base Sepolia only.** Deploy `ArbeskAssetFree` to each target and sync `CONTRACT_ADDRESS` (per-network) accordingly.
-
-## Key Rules
-
-1. **Lowercase ALL addresses** in storage and comparison — prevents case-mismatch session bugs.
-2. **Every state-changing function emits an event** — required for smart account proxy validation.
-3. **Validate `log.address`, not `receipt.to`** — proxy transactions route through bundlers.
-4. **Always run `npm run test:frontend`** after any `.sol` change — catches ABI staleness and address misalignment.
-5. **Sync `CONTRACT_ADDRESS`** from `blockchain/.env` → root `.env` after every deploy.
-6. **OZ v5 breaking change:** override `_update`, not `_beforeTokenTransfer`.
-7. **Gas:** use `immutable` for constructor values, `calldata` for params, pack storage slots.
-
-## File Map
-
-| File | Role | Details |
-|------|------|---------|
-| `blockchain/contracts/ArbeskAssetBase.sol` | Abstract base — ERC-721, collaboration, burn | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
-| `blockchain/contracts/ArbeskAssetFree.sol` | Free tier — 10 gen/day quota, no payment | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
-| `blockchain/contracts/ArbeskAsset.sol` | Paid tier — USDC PayGo, unlimited gen | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
-| `blockchain/contracts/mock/MockUSDC.sol` | Local testing USDC | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
-| `blockchain/hardhat.config.js` | Hardhat config | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| `blockchain/scripts/deploy.js` | Deploy script | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| `blockchain/scripts/verify.js` | Block explorer verify | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| `blockchain/test/ArbeskAsset.test.js` | Contract test suite | [→ Debugging](./references/debugging.md) |
-| `test/frontend/deployment-integrity.test.js` | Address + ABI integrity | [→ Checklists](./references/checklists.md) |
-| `src/api/assets/generate-node.js` | Tx validation backend | [→ Smart Accounts](./references/smart-accounts.md) |
-| `src/api/sessions.js` | Session store | [→ Session Auth](./references/session-auth.md) |
-| `frontend/src/js/blockchain/wallet.js` | Web3Modal, contract init | [→ Session Auth](./references/session-auth.md) |
-
-## Deep Reference
-
-| Topic | File |
-|-------|------|
-| General Solidity, OZ v5, Patterns, Gas | [→ Deep Dive](./references/deep-dive.md) |
-| Arbesk Contract: Storage, Functions, Events, Tiers | [→ Contract Deep Dive](./references/contract-deep-dive.md) |
-| Compile → Deploy → Address Sync → Multi-Network | [→ Deployment Pipeline](./references/deployment-pipeline.md) |
-| Hardhat Console, Event Decoding, Common Scenarios | [→ Debugging](./references/debugging.md) |
-| 5-Phase Integration Verification | [→ Checklists](./references/checklists.md) |
-| ERC-4337 Proxy / Smart Account Validation | [→ Smart Accounts](./references/smart-accounts.md) |
-| SIWE Sessions, Case-Sensitive Address Bug | [→ Session Auth](./references/session-auth.md) |
-| ASCII Quick Reference Card | [→ Quick Reference](./references/quick-reference.md) |
+- Read `references/contract-deep-dive.md` when you need storage layout, full function inventory, event signatures, tier pricing, or MockUSDC.
+- Read `references/deployment-pipeline.md` when deploying, syncing addresses, or adding a function or network.
+- Read `references/debugging.md` when a tx reverts or tests fail — Hardhat console, event decoding, scenario table, integrity suite.
+- Read `references/checklists.md` when verifying a deployment end-to-end (5-phase checklist).
+- Read `references/smart-accounts.md` when ERC-4337 / MetaMask Smart Transactions cause `WRONG_CONTRACT`.
+- Read `references/session-auth.md` when debugging SIWE sessions or address-case bugs.
+- Read `references/deep-dive.md` when writing new Solidity — patterns, OZ v5 breaking changes, gas checklist.
+- Read `references/quick-reference.md` for the ASCII cheat sheet (constants, commands, endpoints).

@@ -75,10 +75,9 @@ arbesk/
 │   ├── scripts/verify.js
 │   └── test/ArbeskAsset.test.js
 ├── docker/                       # Private IPFS + Hardhat Dockerfiles
-├── docs/                         # Architecture, API, current status, Zed guide
-├── .zed/                         # Zed project tasks/settings
+├── docs/                         # Architecture, API, current status
 ├── test/                         # Jest + Supertest backend tests
-└── AGENTS.md                     # Zed/AI agent coding guide
+└── AGENTS.md                     # AI agent coding guide
 ```
 
 ---
@@ -92,7 +91,6 @@ arbesk/
 | [`docs/API_SPEC.md`](docs/API_SPEC.md) | Implemented Express API routes and response shapes |
 | [`docs/MEGAETH_ANALYSIS.md`](docs/MEGAETH_ANALYSIS.md) | MegaETH gas model and cost projections |
 | [`docs/MERKLE_IMPLEMENTATION.md`](docs/MERKLE_IMPLEMENTATION.md) | Merkle editor architecture |
-| [`docs/ZED_AGENT_GUIDE.md`](docs/ZED_AGENT_GUIDE.md) | Zed task/agent onboarding |
 | [`AGENTS.md`](AGENTS.md) | AI agent conventions, commands, file map, safety rules |
 
 ---
@@ -115,7 +113,7 @@ arbesk/
 | Runtime cache | Browser memory cache + IndexedDB |
 | Testing | Jest + Supertest, Hardhat contract tests, Playwright E2E |
 | Build | Custom Node.js frontend scripts |
-| Editor/agent setup | Zed `.zed/tasks.json` + `AGENTS.md` |
+| Agent setup | `AGENTS.md` |
 
 ---
 
@@ -174,18 +172,6 @@ npm run test:e2e -- --project=chromium
 ```
 
 See `e2e/README.md` for the full E2E contract (17 specs, worktree isolation, selector map).
-
-### Zed Tasks
-
-This repo includes `.zed/tasks.json`. In Zed, use the task palette for:
-
-- `Start Docker infrastructure`
-- `Build frontend`
-- `Run backend tests`
-- `Run API tests only`
-- `Run contract tests in Docker`
-- `Start backend`
-- `Start full dev stack`
 
 ---
 

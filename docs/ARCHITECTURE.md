@@ -812,16 +812,7 @@ The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives act
 
 ---
 
-## 11. Zed Agent Integration
-
-- `AGENTS.md` is the primary instruction file for Zed AI agents.
-- `.zed/tasks.json` defines repeatable project tasks.
-- `.zed/settings.json` excludes generated/heavy folders from Zed project scanning.
-- `docs/ZED_AGENT_GUIDE.md` summarizes agent entry points and safe workflows.
-
----
-
-## 12. Known Gaps
+## 11. Known Gaps
 
 - Production cloud 3D adapters are not implemented (mock-only, returns 501 when disabled).
 - OpenSCAD WASM integration is schema-compatible but deferred.
