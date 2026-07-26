@@ -31,7 +31,6 @@ const storeMock = {
     return () => {};
   }),
   loadVersion: jest.fn(async () => {}),
-  versionsForNode: jest.fn(() => ENTRIES),
   _deps: {},
 };
 
@@ -348,7 +347,6 @@ describe("model-clock-gizmo lifecycle", () => {
     state.nodeAnchors = new Map();
     state.transformMode = "time";
 
-    storeMock.versionsForNode.mockReturnValue(ENTRIES);
     storeMock.loadVersion.mockClear();
     storeMock.getState.mockImplementation(() => ({
       entries: ENTRIES,

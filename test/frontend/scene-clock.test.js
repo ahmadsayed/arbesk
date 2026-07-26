@@ -18,7 +18,6 @@ const storeMock = {
   }),
   activeIndex: jest.fn(() => -1),
   loadVersion: jest.fn(async () => {}),
-  versionsForNode: jest.fn(() => []),
   _deps: {},
 };
 jest.unstable_mockModule(

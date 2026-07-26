@@ -25,13 +25,7 @@ import {
   onUndoStackChange,
 } from "./undo-stack.js";
 
-/**
- * @typedef {Object} UndoApplierItem
- * @property {string} nodeId
- * @property {string} [meshName]
- * @property {*} before
- * @property {*} after
- */
+/** @typedef {import("./undo-stack.js").UndoItem} UndoApplierItem */
 
 /** @type {Map<string, (item: UndoApplierItem, direction: 'before'|'after') => void>} */
 const _appliers = new Map();

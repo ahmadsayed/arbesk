@@ -122,7 +122,7 @@ const LABEL_RADIUS_FACTOR = 1.12;
 const BADGE_RADIUS_FACTOR = 1.22;
 
 // Translucent analog-clock styling.
-const CLOCK_ALPHA = 0.5; // alpha for track/face accents
+const CLOCK_ALPHA = 0.5; // alpha for the ring track
 const TICK_ALPHA = 0.85; // ticks stay opaque-ish so they don't wash out under the arc/track
 const FACE_ALPHA = 0.30; // slightly darker face
 const HANDLE_ALPHA = 1.0; // knob stays prominent
@@ -592,7 +592,7 @@ function wireDrag(gizmo, mainScene, camera) {
             try {
               canvas.releasePointerCapture(pi.event.pointerId);
             } catch {
-              // Capture may already been released if the pointer left
+              // Capture may have already been released if the pointer left
               // the canvas; releasing the camera is what matters here.
             }
           }

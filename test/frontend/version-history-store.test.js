@@ -104,17 +104,4 @@ describe("version-history-store", () => {
     expect(store.getState().activeCid).toBe("cid-v3");
     expect(store.getState().isLoading).toBe(false);
   });
-
-  test("versionsForNode: first appearance + changes only", async () => {
-    assetState.set({ activeAssetManifestCid: "cid-v3" });
-    emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
-    await flush();
-
-    // node-a: appears v1, unchanged v2, changed v3 → [v1, v3]
-    expect(store.versionsForNode("node-a").map((e) => e.version)).toEqual([1, 3]);
-    // node-b: appears v2, unchanged v3 → [v2]
-    expect(store.versionsForNode("node-b").map((e) => e.version)).toEqual([2]);
-    // unknown node → []
-    expect(store.versionsForNode("nope")).toEqual([]);
-  });
 });

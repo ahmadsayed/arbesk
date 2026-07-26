@@ -71,22 +71,6 @@ export function activeIndex() {
   return i === -1 ? entries.length - 1 : i;
 }
 
-/**
- * Versions relevant to one node: where it first appears, and every version
- * whose snapshot differs from the previous version's. Versions where the
- * node is absent are never included.
- */
-export function versionsForNode(nodeId) {
-  const out = [];
-  let prev; // undefined = node absent in previous version
-  for (const entry of entries) {
-    const snap = entry.nodes ? entry.nodes[nodeId] : undefined;
-    if (snap !== undefined && snap !== prev) out.push(entry);
-    prev = snap;
-  }
-  return out;
-}
-
 export async function loadVersion(cid) {
   if (isLoading || cid === activeCid) return;
   const prevCid = activeCid;
