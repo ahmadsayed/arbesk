@@ -132,33 +132,30 @@ function extractActivities(chain) {
       });
     }
 
-    // Node-level history entries (generation, parametric)
-    for (const node of manifest.nodes || []) {
-      for (const h of node.history || []) {
-        const key = `${node.node_id}-v${h.v}-${h.timestamp}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+    // Chat provenance entries. metadata.chat is version-scoped and the walk
+    // covers every version, so each prompt appears exactly once. Entry
+    // timestamps are unix seconds; normalize to ms for sorting.
+    for (const h of manifest.metadata?.chat || []) {
+      const key = `chat-${manifestCid}-${h.timestamp}-${h.prompt}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-        entries.push({
-          id: key,
-          timestamp: h.timestamp || 0,
-          opType: h.type?.toUpperCase() || "GENERATION",
-          manifestId: manifest.asset_id || manifest.manifest_id || "-",
-          cid: h.src?.cid || manifestCid,
-          prevCid: null,
-          actorType: "USER",
-          actorAddress: h.txHash
-            ? walletState.get().walletAddress || "system"
-            : "system",
-          payload: {
-            prompt: h.prompt,
-            provider: h.provider,
-            txHash: h.txHash,
-            nodeId: node.node_id,
-            params: h.params,
-          },
-        });
-      }
+      entries.push({
+        id: key,
+        timestamp: (h.timestamp || 0) * 1000,
+        opType: "AI",
+        manifestId: manifest.asset_id || manifest.manifest_id || "-",
+        cid: manifestCid,
+        prevCid: null,
+        actorType: "USER",
+        actorAddress: walletState.get().walletAddress || "system",
+        payload: {
+          prompt: h.prompt,
+          provider: h.provider,
+          task: h.task,
+          taskId: h.taskId,
+        },
+      });
     }
   }
 
