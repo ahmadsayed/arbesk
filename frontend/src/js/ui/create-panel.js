@@ -541,6 +541,16 @@ on(EVENTS.SCENE_READY, (event) => {
   if (manifestCid) void renderChatProvenance(manifestCid);
 });
 
+on(EVENTS.ASSET_DRAFT_SAVED, () => {
+  const manifestCid = assetState.get().activeAssetManifestCid;
+  if (manifestCid) void renderChatProvenance(manifestCid);
+});
+
+on(EVENTS.ASSET_PUBLISHED, () => {
+  const manifestCid = assetState.get().activeAssetManifestCid;
+  if (manifestCid) void renderChatProvenance(manifestCid);
+});
+
 on(EVENTS.SCENE_EMPTY, () => {
   syncAssetNameDisplay();
   clearHistoryBubbles();

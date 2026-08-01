@@ -50,9 +50,8 @@ test.describe("chat provenance", () => {
     const gen = await fetchManifest(genCid);
     expect(gen.metadata?.chat).toBeUndefined();
 
-    // History renders on asset open (SCENE_READY); save does not reload the
-    // scene, so it appears after the next open.
-    await expect(page.locator(SELECTORS.chatHistoryBubbles)).toHaveCount(0);
+    // Saving fires ASSET_DRAFT_SAVED for the new tip: history renders live.
+    await expect(page.locator(SELECTORS.chatHistoryBubbles)).toHaveCount(4); // header + 2 prompts + divider
 
     // Cold reopen: boot's loadFromParams() reads ?manifest= and the chain
     // walk renders the history again.
