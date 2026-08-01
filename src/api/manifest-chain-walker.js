@@ -166,7 +166,7 @@ async function walkSingleChain(startCid, ctx) {
         ctx.allReachable.add(commentsArchiveCid);
       }
 
-      // Source asset CIDs (current + history) are potentially shared via dedup.
+      // Source asset CIDs are potentially shared via dedup.
       const nodes = getSceneNodes(manifest);
       for (const node of nodes) {
         if (node?.source?.cid && typeof node.source.cid === "string") {
@@ -186,29 +186,6 @@ async function walkSingleChain(startCid, ctx) {
         ) {
           ctx.shared.add(node.source.bundleCid);
           ctx.allReachable.add(node.source.bundleCid);
-        }
-
-        if (Array.isArray(node?.history)) {
-          for (const entry of node.history) {
-            if (entry?.src?.cid && typeof entry.src.cid === "string") {
-              ctx.shared.add(entry.src.cid);
-              ctx.allReachable.add(entry.src.cid);
-              if (ctx.recurseIntoSources) {
-                await collectEmbeddedIpfsCids(
-                  entry.src.cid,
-                  ctx.allReachable,
-                  ctx.errors,
-                );
-              }
-            }
-            if (
-              entry?.src?.bundleCid &&
-              typeof entry.src.bundleCid === "string"
-            ) {
-              ctx.shared.add(entry.src.bundleCid);
-              ctx.allReachable.add(entry.src.bundleCid);
-            }
-          }
         }
       }
     }

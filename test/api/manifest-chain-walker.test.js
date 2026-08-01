@@ -126,26 +126,6 @@ describe("walkManifestChain", () => {
     expect(Array.from(allReachable).sort()).toEqual(["bafyBundle", "bafySource", cid]);
   });
 
-  it("marks history src.cid and src.bundleCid as shared", async () => {
-    const cid = putManifest({
-      version: 1,
-      scene: {
-        nodes: [
-          {
-            node_id: "n1",
-            history: [
-              { src: { cid: "bafyHistSource", bundleCid: "bafyHistBundle" } },
-            ],
-          },
-        ],
-      },
-    });
-
-    const { shared } = await walkManifestChain(cid);
-
-    expect(Array.from(shared).sort()).toEqual(["bafyHistBundle", "bafyHistSource"]);
-  });
-
   it("collects thumbnail.cid and comments_archive_cid as assetUnique", async () => {
     const cid = putManifest({
       version: 1,
@@ -346,7 +326,7 @@ describe("walkManifestChain", () => {
     expect(Array.from(allReachable).sort()).toEqual(["bafySource", cid]);
   });
 
-  it("ignores non-string source/history CIDs gracefully", async () => {
+  it("ignores non-string source CIDs gracefully", async () => {
     const cid = putManifest({
       version: 1,
       scene: {
@@ -354,7 +334,6 @@ describe("walkManifestChain", () => {
           {
             node_id: "n",
             source: { cid: 123, bundleCid: null },
-            history: [{ src: { cid: true, bundleCid: undefined } }],
           },
         ],
       },
