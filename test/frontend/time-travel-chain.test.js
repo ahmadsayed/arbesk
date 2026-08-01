@@ -76,3 +76,32 @@ describe("walkManifestChain per-node snapshots", () => {
     expect(chain[0].nodes).toEqual({});
   });
 });
+
+describe("walkManifestChain chat provenance", () => {
+  test("entries carry metadata.chat (null when absent)", async () => {
+    const manifests = {
+      "cid-chat-v2": {
+        version: 2,
+        prev_asset_manifest_cid: "cid-chat-v1",
+        scene: { nodes: [] },
+        metadata: {
+          chat: [
+            { prompt: "a cabin", provider: "mock", task: "model", timestamp: 1780000000 },
+          ],
+        },
+      },
+      "cid-chat-v1": {
+        version: 1,
+        prev_asset_manifest_cid: null,
+        scene: { nodes: [] },
+      },
+    };
+    getFromRemoteIPFS.mockImplementation(async (cid) => manifests[cid]);
+    const chain = await walkManifestChain("cid-chat-v2");
+
+    expect(chain).toHaveLength(2);
+    expect(chain[0].chat).toBeNull();
+    expect(chain[1].chat).toHaveLength(1);
+    expect(chain[1].chat[0].prompt).toBe("a cabin");
+  });
+});

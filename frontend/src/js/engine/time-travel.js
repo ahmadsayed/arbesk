@@ -117,7 +117,7 @@ function applyScale(meshes, scale) {
  *
  * @param {string} startCid - The latest manifest CID to start walking from
  * @param {number} maxDepth - Maximum chain depth to traverse
- * @returns {Promise<Array<{cid: string, version: number, color: string|null, scale: object, sourceCid: string|null, nodes: Record<string, string>}>>}
+ * @returns {Promise<Array<{cid: string, version: number, color: string|null, scale: object, sourceCid: string|null, nodes: Record<string, string>, chat: Array|null}>>}
  */
 async function walkManifestChain(startCid, maxDepth = 50) {
   // Check cache first
@@ -152,6 +152,7 @@ async function walkManifestChain(startCid, maxDepth = 50) {
         name: manifest.name || null,
         nodeCount: (manifest.scene?.nodes || []).length,
         timestamp: manifest.timestamp || null,
+        chat: manifest.metadata?.chat || null,
         color: firstNode.post_processor?.color || null,
         scale: firstNode.post_processor?.scale || { x: 1, y: 1, z: 1 },
         sourceCid: firstNode.source?.cid || null,
