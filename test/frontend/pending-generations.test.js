@@ -56,6 +56,25 @@ test("list returns records in insertion order", () => {
   expect(listPendingGenerations().map((r) => r.prompt)).toEqual(["one", "two"]);
 });
 
+test("provenance fields round-trip through add/update", () => {
+  const id = addPendingGeneration({
+    assetManifestCid: "cid",
+    sourceAssetCid: "src",
+    prompt: "a cabin",
+    prevAssetManifestCid: null,
+    provider: "tripo3d",
+    task: "model",
+    taskId: "tripo-task-1",
+  });
+  const rec = getPendingGeneration(id);
+  expect(rec.provider).toBe("tripo3d");
+  expect(rec.task).toBe("model");
+  expect(rec.taskId).toBe("tripo-task-1");
+  expect(rec.recorded).toBeUndefined();
+  updatePendingGeneration(id, { recorded: true });
+  expect(getPendingGeneration(id).recorded).toBe(true);
+});
+
 test("reset clears records and id sequence", () => {
   addPendingGeneration({ assetManifestCid: "1", sourceAssetCid: "1", prompt: "one", prevAssetManifestCid: null });
   _resetPendingGenerations();

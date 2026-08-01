@@ -19,6 +19,10 @@
  * @property {string|null} prevAssetManifestCid
  * @property {number[]} [transformMatrix]
  * @property {number} [tier]
+ * @property {string} [provider] - generation provider ("mock", "tripo3d")
+ * @property {string} [task] - AI task kind ("model", "texture")
+ * @property {string} [taskId] - provider-side task id (e.g. Tripo); chat provenance only
+ * @property {boolean} [recorded] - true once written into a saved manifest version
  * @property {"pending"|"sent"|"discarded"} status
  */
 
