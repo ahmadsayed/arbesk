@@ -68,21 +68,21 @@ Zod: add `metadata.chat` to `manifestSchema` in `src/api/schemas.js`. Non-strict
 
 ```
 Chat prompt → POST /generations → poll → success payload gains providerTaskId
-  → generateAsset() returns {..., taskId: providerTaskId}   (services/api.js)
+  → generateAsset() returns {..., taskId, providerTaskId}    (services/api.js)
   → pending record gains {taskId, provider, task}           (state/pending-generations.js)
   → "Show in Studio" / apply consumes record into scene
   → save/publish: manifest builder collects records consumed since previous
-    version (+ parametric edits applied since last save)
+    version
   → metadata.chat written into new manifest version          (manifest-builder.js / asset-save)
 ```
 
 Concrete changes:
 
 1. **Backend surfaces the provider task ID** — `src/api/assets/generate-node.js` poll-success response (currently `generate-node.js:246`) gains `providerTaskId: entry.tripoTaskId`. This amends decision #3 of `2026-07-22-clear-chat-refine-design.md` ("the Tripo task ID never reaches the browser") for this field only: the ID is tied to the user's own BYOK Tripo account, so exposing it to that user's browser is low-risk, and cross-session enhance flows require it. The internal registry `taskId` remains the polling handle and is never stored.
-2. **`services/api.js` `generateAsset()`** — prefer `data.providerTaskId` over `data.taskId` when populating the returned `taskId` (line ~609).
-3. **`state/pending-generations.js`** — pending records gain `taskId`, `provider`, `task` fields.
-4. **`create-panel.js`** — passes the new fields through when registering the pending record.
-5. **Manifest build** (`manifest-builder.js` / `services/asset-save/`) — at save time, append the consumed records as `metadata.chat` entries; parametric edits applied since last save append `{provider: "parametric", ...}` entries.
+2. **`services/api.js` `generateAsset()`** — return `providerTaskId` **alongside** the existing registry `taskId`. The registry ID must stay unchanged: the in-session refine chain (`refineTaskId`) looks it up in the backend task registry (`getCompletedTask`). Only `providerTaskId` is persisted in manifests.
+3. **`state/pending-generations.js`** — pending records gain `taskId` (provider task ID), `provider`, `task`, and a `recorded` flag (set once written into a saved version).
+4. **`create-panel.js`** — passes the new fields through when registering the pending record; `task` is `"texture"` when the generation was a refine, else `"model"`.
+5. **Manifest build** (`manifest-builder.js` / `services/asset-save/`) — at save time, append the consumed records as `metadata.chat` entries. Parametric `{provider: "parametric"}` entries are supported by the schema but no current UI path produces chat-prompt parametric commands, so none are written this phase.
 
 ## 4. Read Path
 
