@@ -41,12 +41,20 @@ export async function renderChatProvenance(manifestCid) {
       return null;
     }
   );
-  if (!chain) return;
+  if (!chain) {
+    renderedForCid = null;
+    return;
+  }
+  if (manifestCid !== renderedForCid) return; // superseded by a newer open
 
   /** @type {Array<{prompt: string, task?: string, timestamp?: number}>} */
   const entries = [];
   for (const item of chain) {
-    for (const entry of item.chat || []) entries.push(entry);
+    for (const entry of item.chat || []) {
+      if (typeof entry?.prompt === "string" && entry.prompt.length > 0) {
+        entries.push(entry);
+      }
+    }
   }
   if (entries.length === 0) return;
 
@@ -64,4 +72,15 @@ export async function renderChatProvenance(manifestCid) {
   addChatMessage("system", "— New session —", {
     extraClass: "chat-bubble-history",
   });
+
+  // History belongs above the live session chat: move the freshly rendered
+  // block before the first live bubble (addChatMessage appends at the end).
+  const firstLive = chatHistoryList?.querySelector(
+    ".chat-bubble:not(.chat-bubble-history)"
+  );
+  if (firstLive && chatHistoryList) {
+    chatHistoryList
+      .querySelectorAll(".chat-bubble-history")
+      .forEach((el) => chatHistoryList.insertBefore(el, firstLive));
+  }
 }

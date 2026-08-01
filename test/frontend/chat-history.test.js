@@ -59,3 +59,88 @@ test("renders nothing when the chain has no chat records", async () => {
   await mod.renderChatProvenance("v1");
   expect(document.querySelectorAll(".chat-bubble-history")).toHaveLength(0);
 });
+
+test("a superseded walk does not render into the newer asset's view", async () => {
+  const { mod, walkManifestChain } = await load();
+  /** @type {(value: any) => void} */
+  let resolveA;
+  const walkA = new Promise((resolve) => {
+    resolveA = resolve;
+  });
+  walkManifestChain.mockImplementation((cid) =>
+    cid === "A"
+      ? walkA
+      : Promise.resolve([
+          { cid: "B", chat: [{ prompt: "B prompt", provider: "mock", task: "model", timestamp: 1 }] },
+        ])
+  );
+
+  const renderA = mod.renderChatProvenance("A");
+  await mod.renderChatProvenance("B");
+  resolveA([
+    { cid: "A", chat: [{ prompt: "A prompt", provider: "mock", task: "model", timestamp: 1 }] },
+  ]);
+  await renderA;
+
+  const text = document.getElementById("chatHistoryList").textContent;
+  expect(text).toContain("B prompt");
+  expect(text).not.toContain("A prompt");
+});
+
+test("a failed walk renders nothing and recovers on the next call", async () => {
+  const { mod, walkManifestChain } = await load();
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  walkManifestChain.mockRejectedValueOnce(new Error("ipfs down"));
+
+  await mod.renderChatProvenance("v1");
+  expect(document.querySelectorAll(".chat-bubble-history")).toHaveLength(0);
+
+  walkManifestChain.mockResolvedValueOnce([
+    { cid: "v1", chat: [{ prompt: "recovered", provider: "mock", task: "model", timestamp: 1 }] },
+  ]);
+  await mod.renderChatProvenance("v1");
+  expect(document.getElementById("chatHistoryList").textContent).toContain("recovered");
+  warn.mockRestore();
+});
+
+test("history renders above pre-existing live chat", async () => {
+  const { mod, walkManifestChain } = await load();
+  const list = document.getElementById("chatHistoryList");
+  const live = document.createElement("div");
+  live.className = "chat-bubble chat-bubble-user";
+  live.textContent = "live message";
+  list.appendChild(live);
+
+  walkManifestChain.mockResolvedValue([
+    { cid: "v1", chat: [{ prompt: "saved prompt", provider: "mock", task: "model", timestamp: 1 }] },
+  ]);
+  await mod.renderChatProvenance("v1");
+
+  const bubbles = [...list.querySelectorAll(".chat-bubble")];
+  const liveIndex = bubbles.findIndex((b) => b.textContent.includes("live message"));
+  const historyIndexes = bubbles
+    .map((b, i) => (b.classList.contains("chat-bubble-history") ? i : -1))
+    .filter((i) => i >= 0);
+  expect(historyIndexes.length).toBeGreaterThan(0);
+  expect(Math.max(...historyIndexes)).toBeLessThan(liveIndex);
+});
+
+test("malformed metadata.chat entries are skipped", async () => {
+  const { mod, walkManifestChain } = await load();
+  walkManifestChain.mockResolvedValue([
+    {
+      cid: "v1",
+      chat: [
+        { prompt: "" },
+        { task: "model" },
+        null,
+        { prompt: "ok", task: "model", timestamp: 1 },
+      ],
+    },
+  ]);
+  await mod.renderChatProvenance("v1");
+
+  const bubbles = document.querySelectorAll(".chat-bubble-history");
+  expect(bubbles).toHaveLength(3); // header + 1 prompt + divider
+  expect(bubbles[1].textContent).toContain("ok");
+});
