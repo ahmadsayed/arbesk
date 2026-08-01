@@ -452,7 +452,7 @@ async function pollGeneration(taskId) {
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
  * @param {string} [params.refineTaskId] - taskId of a completed Tripo3D generation to refine (texture/material only)
- * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string}>}
+ * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
  */
 export async function generateAsset({
   prompt,
@@ -607,6 +607,7 @@ export async function generateAsset({
     path: data.path || `asset.${data.format}`,
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
     ...(data.taskId && { taskId: data.taskId }),
+    ...(data.providerTaskId && { providerTaskId: data.providerTaskId }),
   };
 }
 

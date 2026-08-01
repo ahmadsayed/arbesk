@@ -772,6 +772,45 @@ describe("generateAsset", () => {
     expect(statusEl.textContent).toBe("Asset generated successfully.");
   }, 15_000);
 
+  test("returns providerTaskId from the Tripo3D poll success payload", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-abc-123", provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+            providerTaskId: "tripo-task-xyz",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await generateAsset({
+      prompt: "a robot",
+      nodeId: "robot-node",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+    });
+
+    // Registry taskId unchanged (refine chain depends on it); providerTaskId is new.
+    expect(result.taskId).toBe("task-abc-123");
+    expect(result.providerTaskId).toBe("tripo-task-xyz");
+  }, 15_000);
+
   test("throws ApiError when a Tripo3D task fails", async () => {
     const taskId = "task-fail-456";
     const fetchMock = jest
