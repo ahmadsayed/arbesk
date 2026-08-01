@@ -181,12 +181,12 @@ Manifest v1 (CID: bafyXXX...)
 **When unpinning a chain starting from v3:**
 - Unpin `bafyZZZ`, `bafyYYY`, `bafyXXX` (manifests)
 - Unpin `bafyTTT`, `bafyUUU` (thumbnails)
-- Unpin `bafyAAA`, `bafyBBB`, `bafyCCC` (source assets from `source.cid` and `history[].src.cid`)
+- Unpin `bafyAAA`, `bafyBBB`, `bafyCCC` (source assets from `source.cid`)
 - Do NOT unpin `child_ref` token CIDs (they belong to other tokens)
 
 ### CID Deduplication
 
-The unpin endpoint uses a `Set` to deduplicate CIDs. The same source asset CID may appear in both a history entry and a future version's current source — we only unpin it once.
+The unpin endpoint uses a `Set` to deduplicate CIDs. The same source asset CID may appear in more than one version of the chain — we only unpin it once.
 
 ## 14. Content Addressing vs. Deletion
 

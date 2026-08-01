@@ -1061,6 +1061,10 @@
           "provider": {
             "type": "string",
             "description": "Provider that produced the asset"
+          },
+          "providerTaskId": {
+            "type": "string",
+            "description": "Provider-side task ID (e.g. Tripo), present for tripo3d success responses. Stored in the manifest's metadata.chat for future cross-session enhance flows."
           }
         }
       },

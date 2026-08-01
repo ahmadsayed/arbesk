@@ -262,9 +262,12 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
   "assetData": "eyJhc3NldCI6eyJnZW5lcmF0b3IiOi...",
   "format": "glb",
   "path": "asset.glb",
-  "provider": "tripo3d"
+  "provider": "tripo3d",
+  "providerTaskId": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d"
 }
 ```
+
+- `providerTaskId` — provider-side task ID (e.g. Tripo), present for `tripo3d` success responses. Stored in the manifest's `metadata.chat` for future cross-session enhance flows.
 
 **Response `200` — failed**
 

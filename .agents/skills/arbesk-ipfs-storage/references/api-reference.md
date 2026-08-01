@@ -56,7 +56,7 @@ Session-gated. Unpins all IPFS CIDs owned by a manifest chain. Called after toke
 ### Behavior
 - Walks `prev_asset_manifest_cid` up to 100 entries deep
 - Handles circular links (stops and logs)
-- Collects manifest CIDs, `thumbnail.cid`, `comments_archive_cid`, `source.cid`, `source.bundleCid`, and `history[].src.cid` plus embedded buffer/image CIDs
+- Collects manifest CIDs, `thumbnail.cid`, `comments_archive_cid`, `source.cid`, and `source.bundleCid` plus embedded buffer/image CIDs
 - "not pinned" errors are treated as success (content already eligible for GC)
 - All unpin attempts continue even if individual ones fail
 

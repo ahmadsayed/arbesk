@@ -27,6 +27,7 @@
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
+| Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.js`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
 | Phase 5: Micro-Ledger | ❌ Not implemented / client-side only | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---

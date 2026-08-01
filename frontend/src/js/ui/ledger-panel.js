@@ -135,8 +135,8 @@ function extractActivities(chain) {
     // Chat provenance entries. metadata.chat is version-scoped and the walk
     // covers every version, so each prompt appears exactly once. Entry
     // timestamps are unix seconds; normalize to ms for sorting.
-    for (const h of manifest.metadata?.chat || []) {
-      const key = `chat-${manifestCid}-${h.timestamp}-${h.prompt}`;
+    for (const [index, h] of (manifest.metadata?.chat || []).entries()) {
+      const key = `chat-${manifestCid}-${h.timestamp}-${index}-${h.prompt}`;
       if (seen.has(key)) continue;
       seen.add(key);
 
