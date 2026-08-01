@@ -68,7 +68,7 @@ export function listPendingGenerations() {
   return [...records.values()];
 }
 
-/** Reset the store. Used only by tests. */
+/** Reset the store. Used by Clear Chat and tests. */
 export function _resetPendingGenerations() {
   records.clear();
   nextId = 1;

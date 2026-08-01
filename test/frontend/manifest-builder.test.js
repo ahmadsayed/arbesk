@@ -319,12 +319,13 @@ describe("prepareManifestForWrite", () => {
     );
     pg._resetPendingGenerations();
     const sentId = pg.addPendingGeneration({
-      assetManifestCid: "cid-gen",
+      assetManifestCid: "bafyManifest",
       sourceAssetCid: "src-gen",
       prompt: "a low-poly cabin",
       prevAssetManifestCid: null,
       provider: "mock",
       task: "model",
+      taskId: "tripo-task-9",
     });
     pg.updatePendingGeneration(sentId, { status: "sent" });
     // Stays "pending" — must NOT be recorded.
@@ -336,6 +337,16 @@ describe("prepareManifestForWrite", () => {
       provider: "mock",
       task: "model",
     });
+    // Sent, but belongs to a different asset's chain — must NOT be recorded.
+    const otherId = pg.addPendingGeneration({
+      assetManifestCid: "bafyOtherAsset",
+      sourceAssetCid: "src-other",
+      prompt: "prompt for another asset",
+      prevAssetManifestCid: null,
+      provider: "mock",
+      task: "model",
+    });
+    pg.updatePendingGeneration(otherId, { status: "sent" });
 
     const manifest = makeManifest([
       makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
@@ -356,9 +367,10 @@ describe("prepareManifestForWrite", () => {
     expect(entry.prompt).toBe("a low-poly cabin");
     expect(entry.provider).toBe("mock");
     expect(entry.task).toBe("model");
-    expect(entry.taskId).toBeUndefined();
+    expect(entry.taskId).toBe("tripo-task-9");
     expect(typeof entry.timestamp).toBe("number");
     expect(pg.getPendingGeneration(sentId).recorded).toBe(true);
+    expect(pg.getPendingGeneration(otherId).recorded).toBeUndefined();
   });
 
   it("omits metadata when no prompts were consumed", async () => {

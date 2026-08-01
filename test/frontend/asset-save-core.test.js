@@ -200,6 +200,69 @@ describe("saveAssetDraftCore", () => {
     expect(ctx.mocks.snapshotCommentsArchive).not.toHaveBeenCalled();
   });
 
+  it("treats a no-change save after a chat-recording version as no-changes", async () => {
+    const ctx = await load();
+    const manifest = makeManifest();
+    // Version N carried chat provenance. The prepared manifest drops those
+    // entries (version-scoped); the prev-side diff must strip them too, or the
+    // drop alone would look like a change and mint a spurious version.
+    manifest.metadata = {
+      chat: [
+        { prompt: "old prompt", provider: "mock", task: "model", timestamp: 1 },
+      ],
+    };
+    ctx.assetState.set({
+      activeAssetManifestCid: "bafyActive",
+      latestAssetManifestCid: "bafyActive",
+      currentManifest: { ...manifest, _manifestCid: "bafyActive" },
+    });
+
+    const result = await ctx.mod.saveAssetDraftCore("Test Asset");
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no-changes");
+    expect(ctx.mocks.writeJSONToIPFS).not.toHaveBeenCalled();
+    // The no-op result manifest still carries the previous version's chat.
+    expect(result.manifest.metadata.chat).toHaveLength(1);
+  });
+
+  it("writes a new version when a new sent prompt exists even with no other edits", async () => {
+    const ctx = await load();
+    const pg = await import(
+      "../../frontend/src/js/state/pending-generations.js"
+    );
+    const sentId = pg.addPendingGeneration({
+      assetManifestCid: "bafyActive",
+      sourceAssetCid: "src-gen",
+      prompt: "a fresh prompt",
+      prevAssetManifestCid: null,
+      provider: "mock",
+      task: "model",
+    });
+    pg.updatePendingGeneration(sentId, { status: "sent" });
+
+    const manifest = makeManifest();
+    manifest.metadata = {
+      chat: [
+        { prompt: "old prompt", provider: "mock", task: "model", timestamp: 1 },
+      ],
+    };
+    ctx.assetState.set({
+      activeAssetManifestCid: "bafyActive",
+      latestAssetManifestCid: "bafyActive",
+      currentManifest: { ...manifest, _manifestCid: "bafyActive" },
+    });
+    ctx.mocks.writeJSONToIPFS.mockResolvedValue("bafyNewManifest");
+
+    const result = await ctx.mod.saveAssetDraftCore("Test Asset");
+
+    expect(result.ok).toBe(true);
+    expect(ctx.mocks.writeJSONToIPFS).toHaveBeenCalledTimes(1);
+    const writtenManifest = ctx.mocks.writeJSONToIPFS.mock.calls[0][0];
+    expect(writtenManifest.metadata.chat).toHaveLength(1);
+    expect(writtenManifest.metadata.chat[0].prompt).toBe("a fresh prompt");
+  });
+
   it("starts thumbnail capture concurrently with manifest preparation", async () => {
     const ctx = await load();
     const manifest = makeManifest();

@@ -278,14 +278,47 @@ async function buildDedupMapFromManifests(manifests) {
 /**
  * Collect chat provenance entries from pending-generation records sent to the
  * Studio since the last saved version, and mark them recorded so each prompt
- * lands in exactly one manifest version.
+ * lands in exactly one manifest version. Only records belonging to the active
+ * manifest chain are consumed: sent records form a contiguous tail ending at
+ * activeCid (a sent record's assetManifestCid becomes the active CID, and
+ * later generations link back via prevAssetManifestCid).
+ * @param {string|null|undefined} activeCid
  * @returns {Array<{prompt: string, provider: string, task: string, taskId?: string, timestamp: number}>}
  */
-function collectChatProvenanceEntries() {
+function collectChatProvenanceEntries(activeCid) {
+  const candidates = listPendingGenerations().filter(
+    (record) => record.status === "sent" && !record.recorded
+  );
+
+  // Walk the records' own/prev links outward from the active CID to find the
+  // chain tail that belongs to this asset.
+  const reachable = new Set(activeCid ? [activeCid] : []);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const record of candidates) {
+      if (reachable.has(record.assetManifestCid)) {
+        if (
+          record.prevAssetManifestCid &&
+          !reachable.has(record.prevAssetManifestCid)
+        ) {
+          reachable.add(record.prevAssetManifestCid);
+          grew = true;
+        }
+      } else if (
+        record.prevAssetManifestCid &&
+        reachable.has(record.prevAssetManifestCid)
+      ) {
+        reachable.add(record.assetManifestCid);
+        grew = true;
+      }
+    }
+  }
+
   const entries = [];
   const nowSec = Math.floor(Date.now() / 1000);
-  for (const record of listPendingGenerations()) {
-    if (record.status !== "sent" || record.recorded) continue;
+  for (const record of candidates) {
+    if (!reachable.has(record.assetManifestCid)) continue;
     entries.push({
       prompt: record.prompt,
       provider: record.provider || "mock",
@@ -592,7 +625,7 @@ export async function prepareManifestForWrite(assetName) {
   // Chat provenance is version-scoped: drop entries carried over from the
   // previous version, then record prompts consumed since that version.
   if (manifest.metadata) delete manifest.metadata.chat;
-  const chatEntries = collectChatProvenanceEntries();
+  const chatEntries = collectChatProvenanceEntries(activeCid);
   if (chatEntries.length > 0) {
     manifest.metadata = { ...(manifest.metadata || {}), chat: chatEntries };
   } else if (manifest.metadata && Object.keys(manifest.metadata).length === 0) {
@@ -633,9 +666,26 @@ export async function saveAssetDraftCore(
     }
   }
 
+  // metadata.chat is version-scoped: prepareManifestForWrite drops the
+  // previous version's entries from the prepared manifest while prevManifest
+  // (snapshotted before the drop) still carries them. Strip chat on the prev
+  // side too — on a clone, since prevManifest is returned to the UI as the
+  // no-op result manifest — so a no-change save after a chat-recording save
+  // is not mistaken for a change. The prepared side is left intact: fresh
+  // metadata.chat is precisely what forces the first save after "Show in
+  // Studio" to write.
+  const prevForDiff = prepared.prevManifest
+    ? JSON.parse(JSON.stringify(prepared.prevManifest))
+    : null;
+  if (prevForDiff?.metadata) {
+    delete prevForDiff.metadata.chat;
+    if (Object.keys(prevForDiff.metadata).length === 0)
+      delete prevForDiff.metadata;
+  }
+
   if (
-    prepared.prevManifest &&
-    manifestsSemanticallyEqual(prepared.manifest, prepared.prevManifest)
+    prevForDiff &&
+    manifestsSemanticallyEqual(prepared.manifest, prevForDiff)
   ) {
     // Pending edits are already reflected in the prepared manifest (otherwise
     // it would differ from the previous one). Clear them so the UI doesn't
