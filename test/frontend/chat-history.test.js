@@ -144,3 +144,34 @@ test("malformed metadata.chat entries are skipped", async () => {
   expect(bubbles).toHaveLength(3); // header + 1 prompt + divider
   expect(bubbles[1].textContent).toContain("ok");
 });
+
+test("a failed stale walk does not suppress a newer in-flight render", async () => {
+  const { mod, walkManifestChain } = await load();
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  /** @type {(reason?: any) => void} */
+  let rejectA;
+  const walkA = new Promise((_, reject) => {
+    rejectA = reject;
+  });
+  // B's walk is deferred too so A's rejection lands BEFORE B resolves —
+  // reproducing the interleaving where an unconditional reset of
+  // renderedForCid would make B's staleness check fail.
+  /** @type {(value: any) => void} */
+  let resolveB;
+  const walkB = new Promise((resolve) => {
+    resolveB = resolve;
+  });
+  walkManifestChain.mockImplementation((cid) => (cid === "A" ? walkA : walkB));
+
+  const renderA = mod.renderChatProvenance("A");
+  const renderB = mod.renderChatProvenance("B");
+  rejectA(new Error("ipfs down"));
+  await renderA;
+  resolveB([
+    { cid: "B", chat: [{ prompt: "B prompt", provider: "mock", task: "model", timestamp: 1 }] },
+  ]);
+  await renderB;
+
+  expect(document.getElementById("chatHistoryList").textContent).toContain("B prompt");
+  warn.mockRestore();
+});

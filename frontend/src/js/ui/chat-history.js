@@ -42,7 +42,7 @@ export async function renderChatProvenance(manifestCid) {
     }
   );
   if (!chain) {
-    renderedForCid = null;
+    if (renderedForCid === manifestCid) renderedForCid = null;
     return;
   }
   if (manifestCid !== renderedForCid) return; // superseded by a newer open
