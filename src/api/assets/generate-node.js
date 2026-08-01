@@ -249,6 +249,7 @@ export default function generateAssetNode() {
           format: "glb",
           path: "asset.glb",
           provider: "tripo3d",
+          providerTaskId: entry.tripoTaskId,
         });
       }
 
