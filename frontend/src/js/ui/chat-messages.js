@@ -28,14 +28,14 @@ function appendBubble(bubble) {
 }
 
 /**
+ * @param {Date} [date]
  * @returns {HTMLElement}
  */
-function buildTimestamp() {
-  const now = new Date();
+function buildTimestamp(date = new Date()) {
   const time = document.createElement("time");
   time.className = "chat-bubble-time";
-  time.dateTime = now.toISOString();
-  time.textContent = now.toLocaleTimeString([], {
+  time.dateTime = date.toISOString();
+  time.textContent = date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -46,20 +46,23 @@ function buildTimestamp() {
  * Append a plain text chat message.
  * @param {"user"|"system"} role
  * @param {string} text
+ * @param {Object} [options]
+ * @param {Date} [options.timestamp] - defaults to now
+ * @param {string} [options.extraClass] - extra CSS class on the bubble
  */
-export function addChatMessage(role, text) {
+export function addChatMessage(role, text, options = {}) {
   if (!chatHistoryList) return;
   hideWelcome();
 
   const bubble = document.createElement("div");
-  bubble.className = `chat-bubble chat-bubble-${role}`;
+  bubble.className = `chat-bubble chat-bubble-${role}${options.extraClass ? ` ${options.extraClass}` : ""}`;
 
   const content = document.createElement("span");
   content.className = "chat-bubble-content";
   content.textContent = text;
   bubble.appendChild(content);
 
-  bubble.appendChild(buildTimestamp());
+  bubble.appendChild(buildTimestamp(options.timestamp));
   appendBubble(bubble);
 }
 

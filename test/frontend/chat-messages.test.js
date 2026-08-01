@@ -106,3 +106,15 @@ test("clearChatMessages removes all bubbles and restores the welcome", () => {
   expect(list.querySelector(".chat-welcome")).not.toBeNull();
   expect(list.querySelector(".chat-welcome").hidden).toBe(false);
 });
+
+test("addChatMessage honors timestamp and extraClass options", () => {
+  const when = new Date("2026-08-02T10:20:00Z");
+  addChatMessage("user", "old prompt", {
+    timestamp: when,
+    extraClass: "chat-bubble-history",
+  });
+  const bubble = document.querySelector(".chat-bubble-history");
+  expect(bubble).not.toBeNull();
+  expect(bubble.classList.contains("chat-bubble-user")).toBe(true);
+  expect(bubble.querySelector("time").dateTime).toBe(when.toISOString());
+});
