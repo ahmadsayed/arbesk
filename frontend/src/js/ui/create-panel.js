@@ -466,6 +466,9 @@ async function onGenerate() {
       path: result.path,
       prevAssetManifestCid: prevAssetManifestCid || null,
       transformMatrix,
+      provider,
+      task: refineTaskId ? "texture" : "model",
+      ...(result.providerTaskId && { taskId: result.providerTaskId }),
       ...(result.tier !== undefined && { tier: result.tier }),
     });
 
