@@ -364,3 +364,13 @@
     display: none;
   }
 }
+
+// Read-only prompt-history bubbles (manifest provenance) — visually muted so
+// they recede behind live session messages.
+.chat-bubble-history {
+  opacity: 0.65;
+
+  .chat-bubble-content {
+    font-style: italic;
+  }
+}

@@ -16,6 +16,7 @@ import {
 import { showToast } from "./toasts.js";
 import { showCustomDialog } from "./dialog.js";
 import { addChatMessage, addAssetMessage, addWorkingMessage, clearChatMessages } from "./chat-messages.js";
+import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
   generateAsset,
   ApiError,
@@ -245,6 +246,7 @@ function clearChat() {
   assetMessages.clear();
   lastTripoTaskId = null;
   clearChatMessages();
+  clearHistoryBubbles();
   addChatMessage("system", "Chat cleared. Start a new model.");
 }
 
@@ -534,10 +536,14 @@ promptInput.addEventListener("input", () => {
 on(EVENTS.SCENE_READY, (event) => {
   const name = event?.manifest?.name || assetState.get().activeAssetName;
   if (name) syncAssetNameDisplay(name);
+  const manifestCid =
+    event?.manifestCid || assetState.get().activeAssetManifestCid;
+  if (manifestCid) void renderChatProvenance(manifestCid);
 });
 
 on(EVENTS.SCENE_EMPTY, () => {
   syncAssetNameDisplay();
+  clearHistoryBubbles();
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {
