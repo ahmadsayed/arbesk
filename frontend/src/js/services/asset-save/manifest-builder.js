@@ -29,6 +29,10 @@ import {
   captureAssetThumbnail,
 } from "../../engine/scene-graph.js";
 import { assetState, tagManifestCid } from "../../state/asset-state.js";
+import {
+  listPendingGenerations,
+  updatePendingGeneration,
+} from "../../state/pending-generations.js";
 import { log, warn } from "../../utils/log.js";
 
 function isRateLimitError(err) {
@@ -269,6 +273,29 @@ async function buildDedupMapFromManifests(manifests) {
     }
   }
   return buildDedupMap(composites);
+}
+
+/**
+ * Collect chat provenance entries from pending-generation records sent to the
+ * Studio since the last saved version, and mark them recorded so each prompt
+ * lands in exactly one manifest version.
+ * @returns {Array<{prompt: string, provider: string, task: string, taskId?: string, timestamp: number}>}
+ */
+function collectChatProvenanceEntries() {
+  const entries = [];
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (const record of listPendingGenerations()) {
+    if (record.status !== "sent" || record.recorded) continue;
+    entries.push({
+      prompt: record.prompt,
+      provider: record.provider || "mock",
+      task: record.task || "model",
+      ...(record.taskId && { taskId: record.taskId }),
+      timestamp: nowSec,
+    });
+    updatePendingGeneration(record.id, { recorded: true });
+  }
+  return entries;
 }
 
 export async function prepareManifestForWrite(assetName) {
@@ -560,6 +587,16 @@ export async function prepareManifestForWrite(assetName) {
     manifest.prev_asset_manifest_cid = latestCid;
   } else if (latestCid) {
     advanceManifestVersion(manifest, latestCid);
+  }
+
+  // Chat provenance is version-scoped: drop entries carried over from the
+  // previous version, then record prompts consumed since that version.
+  if (manifest.metadata) delete manifest.metadata.chat;
+  const chatEntries = collectChatProvenanceEntries();
+  if (chatEntries.length > 0) {
+    manifest.metadata = { ...(manifest.metadata || {}), chat: chatEntries };
+  } else if (manifest.metadata && Object.keys(manifest.metadata).length === 0) {
+    delete manifest.metadata;
   }
 
   return {

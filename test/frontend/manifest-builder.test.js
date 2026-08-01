@@ -313,6 +313,76 @@ describe("prepareManifestForWrite", () => {
     ).toBe(false);
   });
 
+  it("records sent pending generations as version-scoped metadata.chat", async () => {
+    const pg = await import(
+      "../../frontend/src/js/state/pending-generations.js"
+    );
+    pg._resetPendingGenerations();
+    const sentId = pg.addPendingGeneration({
+      assetManifestCid: "cid-gen",
+      sourceAssetCid: "src-gen",
+      prompt: "a low-poly cabin",
+      prevAssetManifestCid: null,
+      provider: "mock",
+      task: "model",
+    });
+    pg.updatePendingGeneration(sentId, { status: "sent" });
+    // Stays "pending" — must NOT be recorded.
+    pg.addPendingGeneration({
+      assetManifestCid: "cid-draft",
+      sourceAssetCid: "src-draft",
+      prompt: "discarded draft",
+      prevAssetManifestCid: null,
+      provider: "mock",
+      task: "model",
+    });
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    // Stale entries from the previous version must be dropped (version-scoped).
+    manifest.metadata = {
+      chat: [{ prompt: "old version prompt", provider: "mock", task: "model", timestamp: 1 }],
+    };
+    assetState.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Chat Asset");
+
+    expect(result.manifest.metadata.chat).toHaveLength(1);
+    const entry = result.manifest.metadata.chat[0];
+    expect(entry.prompt).toBe("a low-poly cabin");
+    expect(entry.provider).toBe("mock");
+    expect(entry.task).toBe("model");
+    expect(entry.taskId).toBeUndefined();
+    expect(typeof entry.timestamp).toBe("number");
+    expect(pg.getPendingGeneration(sentId).recorded).toBe(true);
+  });
+
+  it("omits metadata when no prompts were consumed", async () => {
+    const pg = await import(
+      "../../frontend/src/js/state/pending-generations.js"
+    );
+    pg._resetPendingGenerations();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    manifest.metadata = {
+      chat: [{ prompt: "old", provider: "mock", task: "model", timestamp: 1 }],
+    };
+    assetState.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("No Chat Asset");
+
+    expect(result.manifest.metadata).toBeUndefined();
+  });
+
   // Regression: stored-form 3MF nodes have no editCompositeColors hook —
   // color edits must stay post_processor overlays, not be sent to the bake
   // branch where the null result silently drops them.
