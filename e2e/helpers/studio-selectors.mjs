@@ -13,6 +13,7 @@ export const SELECTORS = {
   clearChatBtn: "#clearChatBtn",
   generateHint: "#generateHint",
   chatHistoryList: "#chatHistoryList",
+  chatHistoryBubbles: ".chat-bubble-history",
   // Asset chat bubble (generation result pending a "Show in Studio" decision)
   assetBubble: ".chat-bubble-asset",
   assetBubbleSend: ".chat-bubble-asset .chat-asset-send",
