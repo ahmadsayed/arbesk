@@ -10,7 +10,7 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 - **Wallets**: EOA (MetaMask/Rabby) via SIWE everywhere; CDP email-login smart accounts on **Base Sepolia only** (`smart-wallet-support.js`).
 - **IPFS**: private Docker Kubo local/E2E; Pinata testnet. Hardhat runs in Docker.
 - **3D generation**: mock adapter for dev/test, samples in `mock-gltf-assets/` (prompt keyword `3mf` → 3MF sample). Results land as chat bubbles with live orbitable preview (`chat-preview.js`, max 3); Studio scene untouched until "Show in Studio".
-- Parametric color/scale edits append history entries client-side — no cloud regeneration.
+- Parametric color/scale edits are applied client-side — no cloud regeneration.
 - Collections: token `tokenURI` → collection manifest mapping `assetID` → asset manifest CID.
 - Editor auth: off-chain Merkle editor lists; contract stores only root + version.
 - Token discovery via backend indexer (`GET /api/v1/indexer/owned|shared`) — never a browser genesis-walk.
@@ -96,6 +96,7 @@ Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the world is the asset ·
 - **Collections**: `tokenURI()` → `type: "collection"` manifest with `assets: { assetID: cid }`. Default token ID from wallet address; named collections from `keccak256(address, name)`. Updates write a new collection manifest + `updateAssetURI()` — no remint.
 - **Thumbnails**: best-effort — all code must tolerate missing thumbnails.
 - **Comments archive** (`comments_archive_cid`): asset-scoped (Nostr tag = asset tag). Republish snapshots via `POST /api/v1/assets/snapshot-comments`; frontend loads archive before live relay events, dedups by `event.id`; archive unpinned on burn.
+- **Chat provenance** (`metadata.chat`): each manifest version records the AI prompts that produced it — `{prompt, provider, task, taskId?, timestamp}`, version-scoped (not cumulative); the chain walk reconstructs the full conversation. Unsaved chat is ephemeral (Nostr-based preservation is a future phase).
 - **glTF buffer URIs**: `ipfs://bafy...` in storage ↔ base64 data URI at render. Only the `frontend/src/js/gltf/` composer/decomposer performs this transform — don't bypass it.
 
 ## 8. Session Auth

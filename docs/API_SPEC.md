@@ -297,7 +297,7 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
    - stores scale/color overlays in `node.post_processor` for monolithic assets.
 4. The browser writes the full updated manifest directly to IPFS via `writeJSONToIPFS()`.
 
-The manifest schema reserves an optional `scene.nodes[].history` array for provenance, but current write paths do not populate it.
+AI chat provenance is recorded per manifest version in the top-level `metadata.chat` array (see `docs/ARCHITECTURE.md` §4.1); there is no per-node history log.
 
 ---
 
@@ -463,7 +463,7 @@ Kubo:
 
 Unpins all IPFS CIDs owned by a manifest chain. Called before token burn or after asset removal from a collection.
 
-Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs, thumbnail CIDs, comments archive CIDs, and optional `history` entry CIDs, then unpins them all so they become eligible for garbage collection.
+Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs, thumbnail CIDs, and comments archive CIDs, then unpins them all so they become eligible for garbage collection.
 
 **Authorization:** the session wallet must own the token or be an editor (Merkle proof), verified on-chain via `checkAssetAccess` while the token is still live — clients must therefore unpin *before* burning. The requested `cid` must also belong to the claimed token: it is accepted when it equals the `tokenURI` CID, or appears in the `assets` map of the collection manifest at `tokenURI` or of up to 5 `prev_asset_manifest_cid` ancestors (the ancestor walk covers the delete-asset flow, where the orphaned asset manifest sits in the previous collection version).
 

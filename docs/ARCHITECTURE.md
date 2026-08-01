@@ -7,7 +7,7 @@
 
 ## 1. Vision
 
-Arbesk is a local-first 3D world studio built around **fractal manifests**: every world is a content-addressed JSON document whose nodes point to 3D assets, transforms, optional per-node history entries, child manifests, and optional publish thumbnails. The manifest is agnostic to the underlying asset data — it only references content-addressed sources; the asset bytes themselves (glTF/GLB) carry their own revision state.
+Arbesk is a local-first 3D world studio built around **fractal manifests**: every world is a content-addressed JSON document whose nodes point to 3D assets, transforms, child manifests, and optional publish thumbnails. The manifest is agnostic to the underlying asset data — it only references content-addressed sources; the asset bytes themselves (glTF/GLB) carry their own revision state.
 
 The system currently combines:
 
@@ -261,6 +261,17 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
   "timestamp": 1780000000,
   "prev_asset_manifest_cid": "bafyPreviousManifest...",
   "comments_archive_cid": "bafyCommentsArchiveCid...",
+  "metadata": {
+    "chat": [
+      {
+        "prompt": "A wooden house",
+        "provider": "mock",
+        "task": "model",
+        "taskId": "tripo-task-abc123",
+        "timestamp": 1780000000
+      }
+    ]
+  },
   "thumbnail": {
     "type": "snapshot",
     "cid": "bafyThumbnailCid...",
@@ -284,37 +295,6 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
           "bundleCid": "bafyBundleRoot..."
         },
         "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-        "history": [
-          {
-            "v": 1,
-            "timestamp": 1780000000,
-            "type": "generation",
-            "provider": "mock",
-            "prompt": "A wooden house",
-            "txHash": "0x...",
-            "src": {
-              "cid": "bafyAssetCid...",
-              "path": "asset.glb",
-              "format": "glb"
-            }
-          },
-          {
-            "v": 2,
-            "timestamp": 1780000100,
-            "type": "parametric",
-            "provider": "parametric",
-            "prompt": "Scale 1.5x,1.5x,1.5x, Color #FF5733",
-            "src": {
-              "cid": "bafyAssetCid...",
-              "path": "asset.glb",
-              "format": "glb"
-            },
-            "params": {
-              "scale": { "x": 1.5, "y": 1.5, "z": 1.5 },
-              "color": "#FF5733"
-            }
-          }
-        ],
         "child_ref": {
           "type": "token",
           "chainId": 31415822,
@@ -337,7 +317,9 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 
 **`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `state/comment-thread.js` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
 
-**Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides world-level history. The optional `scene.nodes[].history` array can carry a per-node provenance log (generation events, parametric edits); it is consumed by the activity ledger and burn cleanup, but current generation and save paths do not populate it.
+**Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides world-level history.
+
+**Chat provenance (`metadata.chat`).** Each manifest version produced by AI chat activity carries a top-level `metadata.chat` array holding the prompts consumed since the previous version: `{prompt, provider, task, taskId?, timestamp}`. Entries are version-scoped — the full conversation is reconstructed by walking `prev_asset_manifest_cid` and concatenating each version's array, oldest to newest. Records are written at save/publish time only (save-anchored); unaccepted generations stay ephemeral. `taskId` holds the provider-side task ID (e.g. Tripo) for future cross-session enhance flows. Versions with no AI activity omit the field.
 
 ### 4.2 Collection Manifest
 
@@ -391,8 +373,8 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 | Consumer | Description |
 |---|---|
 | Version clock UI | Frontend (`time-travel.js` / `state/version-history-store.js` / `ui/scene-clock.js` / `ui/model-clock.js`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
-| Activity ledger | Frontend (`ledger-panel.js`) walks the chain and also reads `node.history` entries when present |
-| Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` and `node.history` |
+| Activity ledger | Frontend (`ledger-panel.js`) walks the chain to render the activity feed |
+| Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |
 | Micro-ledger (Phase 5) | **Not implemented.** No append-only log or `anchorManifest()` anchoring exists; the ledger panel derives activity from this same chain walk client-side |
 
@@ -733,7 +715,7 @@ This means a bare collection URL is a "collection overview" state: the user sees
 
 | Content | Stored as | Referenced by |
 |---|---|---|
-| GLB/GLTF asset | raw bytes or JSON | `node.source.cid`, `history[].src.cid` |
+| GLB/GLTF asset | raw bytes or JSON | `node.source.cid` |
 | Asset manifest | JSON | collection manifest `assets` map |
 | Collection manifest | JSON | token URI |
 | Publish thumbnail | WebP bytes | `manifest.thumbnail.cid` |
@@ -808,7 +790,7 @@ Key constraints still in force:
 
 The server-side micro-ledger described in earlier roadmaps is **not implemented**. The contract's `anchorManifest()` is stubbed and unavailable, and there is no append-only JSONL store, ledger query API, or on-chain manifest anchoring.
 
-The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives activity entirely from the client-side manifest chain walk. It reads `prev_asset_manifest_cid` links and any populated `scene.nodes[].history` entries to render the activity feed. Future durable auditability would require implementing the ledger as a display-agnostic layer independent from Babylon.js and DOM state so XR clients can consume the same trail.
+The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives activity entirely from the client-side manifest chain walk. It reads `prev_asset_manifest_cid` links to render the activity feed. Future durable auditability would require implementing the ledger as a display-agnostic layer independent from Babylon.js and DOM state so XR clients can consume the same trail.
 
 ---
 
@@ -822,4 +804,3 @@ The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives act
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.
 - Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`). Chain IDs are consolidated in `constants/chains.js`.
 - Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).
-- `scene.nodes[].history` is defined in the manifest schema and is read by the ledger panel and burn cleanup, but current generation/save paths do not populate it; the manifest chain is the effective source of version history.
