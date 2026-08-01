@@ -271,27 +271,6 @@ describe("validateManifest", () => {
     expect(result.valid).toBe(false);
   });
 
-  it("accepts a history entry with a src snapshot", () => {
-    const result = validateManifest({
-      version: 1,
-      scene: {
-        nodes: [
-          {
-            node_id: "n1",
-            history: [
-              {
-                timestamp: 1720000000000,
-                operation: "generate",
-                src: { cid: "bafyHistSource", bundleCid: "bafyHistBundle" },
-              },
-            ],
-          },
-        ],
-      },
-    });
-    expect(result.valid).toBe(true);
-  });
-
   it("rejects an invalid Ethereum address in child_ref", () => {
     const result = validateManifest({
       version: 1,
@@ -311,6 +290,53 @@ describe("validateManifest", () => {
           },
         ],
       },
+    });
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe("manifest metadata.chat provenance", () => {
+  const baseManifest = {
+    version: 1,
+    type: "asset",
+    scene: { nodes: [] },
+  };
+
+  it("accepts a manifest with valid metadata.chat entries", () => {
+    const result = validateManifest({
+      ...baseManifest,
+      metadata: {
+        chat: [
+          { prompt: "a cabin", provider: "mock", task: "model", timestamp: 1780000100 },
+          {
+            prompt: "mossy texture",
+            provider: "tripo3d",
+            task: "texture",
+            taskId: "tripo-task-1",
+            timestamp: 1780000200,
+          },
+        ],
+      },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts a manifest without metadata", () => {
+    expect(validateManifest(baseManifest).valid).toBe(true);
+  });
+
+  it("rejects chat entries missing required fields", () => {
+    const result = validateManifest({
+      ...baseManifest,
+      metadata: { chat: [{ provider: "mock", task: "model", timestamp: 1 }] },
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("rejects chat entries with an empty prompt", () => {
+    const result = validateManifest({
+      ...baseManifest,
+      metadata: { chat: [{ prompt: "", provider: "mock", task: "model", timestamp: 1 }] },
     });
     expect(result.valid).toBe(false);
   });

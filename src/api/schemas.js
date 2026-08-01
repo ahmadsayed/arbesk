@@ -120,19 +120,12 @@ const thumbnailSchema = z.object({
   timestamp: z.number().optional(),
 });
 
-const historyEntrySchema = z.object({
-  timestamp: z.union([z.string(), z.number()]),
-  node_id: z.string().optional(),
-  operation: z.string(),
-  params: z.record(z.unknown()).optional(),
-  // Per-version source snapshot (see manifest-chain-walker.js): the glTF CID
-  // is required, the UnixFS bundle directory CID is optional metadata.
-  src: z
-    .object({
-      cid: z.string().min(1),
-      bundleCid: z.string().min(1).optional(),
-    })
-    .optional(),
+const chatProvenanceEntrySchema = z.object({
+  prompt: z.string().min(1),
+  provider: z.string().min(1),
+  task: z.string().min(1),
+  taskId: z.string().min(1).optional(),
+  timestamp: z.number(),
 });
 
 const sourceSchema = z.object({
@@ -154,7 +147,6 @@ const nodeSchema = z.object({
   transform_matrix: transformMatrixSchema,
   source: sourceSchema.optional(),
   child_ref: childRefSchema.optional(),
-  history: z.array(historyEntrySchema).optional(),
 });
 
 export const manifestSchema = z.object({
@@ -173,6 +165,11 @@ export const manifestSchema = z.object({
   prev_asset_manifest_cid: z.union([z.string().min(1), z.null()]).optional(),
   thumbnail: thumbnailSchema.optional(),
   comments_archive_cid: z.string().min(1).optional(),
+  metadata: z
+    .object({
+      chat: z.array(chatProvenanceEntrySchema).optional(),
+    })
+    .optional(),
 });
 
 /**
