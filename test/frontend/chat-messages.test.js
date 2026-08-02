@@ -12,6 +12,8 @@ import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 let addChatMessage;
 let addAssetMessage;
 let addWorkingMessage;
+let addChoiceMessage;
+let addImageMessage;
 let clearChatMessages;
 
 beforeAll(async () => {
@@ -19,7 +21,7 @@ beforeAll(async () => {
     '<div id="chatHistoryList"><div class="chat-welcome"></div></div>';
   global.URL.createObjectURL = jest.fn(() => "blob:mock-url");
   global.URL.revokeObjectURL = jest.fn();
-  ({ addChatMessage, addAssetMessage, addWorkingMessage, clearChatMessages } =
+  ({ addChatMessage, addAssetMessage, addWorkingMessage, addChoiceMessage, addImageMessage, clearChatMessages } =
     await import("../../frontend/src/js/ui/chat-messages.js"));
 });
 
@@ -75,6 +77,43 @@ test("markFallback replaces the canvas with an uppercase format badge", () => {
   expect(badge).not.toBeNull();
   expect(badge.textContent).toBe("3MF");
   expect(handle.sendButton.disabled).toBe(false);
+});
+
+test("addChoiceMessage renders choice buttons; picking disables the row", () => {
+  const picked = [];
+  addChoiceMessage(
+    "Rig & animate this model?",
+    [
+      { label: "Idle + Walk", value: ["preset:idle", "preset:walk"] },
+      { label: "Jump", value: ["preset:jump"] },
+    ],
+    (value) => picked.push(value)
+  );
+  const list = document.getElementById("chatHistoryList");
+  const bubble = list.querySelector(".chat-bubble-choices");
+  expect(bubble).not.toBeNull();
+  expect(bubble.textContent).toContain("Rig & animate this model?");
+  const buttons = bubble.querySelectorAll(".chat-choice-btn");
+  expect(buttons.length).toBe(2);
+
+  buttons[0].click();
+  expect(picked).toEqual([["preset:idle", "preset:walk"]]);
+  expect([...buttons].every((b) => b.disabled)).toBe(true);
+  expect(buttons[0].classList.contains("picked")).toBe(true);
+});
+
+test("addImageMessage renders an image bubble with a caption", () => {
+  addImageMessage("user", "data:image/png;base64,AAAA", "Image: chair.png");
+  const list = document.getElementById("chatHistoryList");
+  const bubble = list.querySelector(".chat-bubble-image");
+  expect(bubble).not.toBeNull();
+  const img = bubble.querySelector("img.chat-image-thumb");
+  expect(img).not.toBeNull();
+  expect(img.src).toContain("data:image/png;base64,AAAA");
+  expect(bubble.querySelector(".chat-bubble-content").textContent).toBe(
+    "Image: chair.png"
+  );
+  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
 });
 
 test("addWorkingMessage shows a spinner bubble and removes it", () => {

@@ -174,3 +174,14 @@ Shows document state, depth, node/child counts. Keyboard-shortcuts button lives 
 | `.welcome-overlay` | Replaced by inline empty state |
 | `.waiting-overlay` | Replaced by inline spinner + status |
 | `.arabesque-spinner` | Replaced by inline spinner on button |
+
+---
+
+## Progress Feedback (Save / Besk)
+
+Long-running save/publish operations show a **viewport-top progress banner** (`#taskProgress`, `ui/task-progress.js`) — the GNOME infobar pattern applied to the 3D viewport.
+
+- **Placement: top of the viewport, not the bottom bar.** GNOME HIG places transient operation feedback in infobars/banners at the top of the content area; the bottom bar is reserved for persistent state (Draft · node count · depth). Web3 convention likewise keeps staged transaction feedback (sign → confirm → finalize) persistently visible and non-blocking — a top banner survives the user's attention leaving the action button.
+- **Non-blocking:** `pointer-events: none`; the scene stays interactive.
+- **Stage hints:** each orchestrator stage advances the stepped fill with a plain-language label ("saving new version to IPFS…", "confirm the transaction in your wallet…"). No fake indeterminate animation — the bar only moves at real stage boundaries.
+- **Outcome:** success fades out after ~2 s; failures switch to destructive red and linger ~4 s. Screen-reader announcements stay on the existing `srStatus` live region (`announceStatus`) — the banner itself is `aria-hidden` to avoid double-speech.

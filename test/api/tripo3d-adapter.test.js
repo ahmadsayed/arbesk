@@ -1,7 +1,13 @@
 import { jest } from "@jest/globals";
 import {
   createTask,
+  createImageTask,
   createRefineTask,
+  uploadImage,
+  getBalance,
+  rigCheckTask,
+  rigModelTask,
+  retargetTask,
   pollTask,
   downloadModel,
   TripoApiError,
@@ -18,7 +24,7 @@ describe("tripo3d adapter", () => {
     jest.restoreAllMocks();
   });
 
-  test("createTask submits text_to_model with v2.5 defaults", async () => {
+  test("createTask submits text-to-model with v3 defaults", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_abc" } }),
@@ -27,13 +33,12 @@ describe("tripo3d adapter", () => {
     expect(id).toBe("task_abc");
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, opts] = global.fetch.mock.calls[0];
-    expect(url).toBe("https://api.tripo3d.ai/v2/openapi/task");
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/generation/text-to-model");
     expect(opts.headers["Authorization"]).toBe(`Bearer ${key}`);
     const body = JSON.parse(opts.body);
     expect(body).toMatchObject({
-      type: "text_to_model",
       prompt: "a red cube",
-      model_version: "v2.5-20250123",
+      model: "v3.1-20260211",
       texture: true,
       pbr: true,
     });
@@ -118,7 +123,160 @@ describe("tripo3d adapter", () => {
     });
   });
 
-  test("createRefineTask submits texture_model with texture_prompt.text", async () => {
+  test("uploadImage posts multipart form to /files and returns file_token", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { file_token: "ftok_123" } }),
+    });
+    const token = await uploadImage(Buffer.from("png-bytes"), "image/png", key);
+    expect(token).toBe("ftok_123");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/files");
+    expect(opts.method).toBe("POST");
+    expect(opts.headers["Authorization"]).toBe(`Bearer ${key}`);
+    // Multipart: no manual Content-Type (fetch sets the boundary).
+    expect(opts.headers["Content-Type"]).toBeUndefined();
+    expect(opts.body).toBeInstanceOf(FormData);
+  });
+
+  test("uploadImage rejects empty buffer with status 400", async () => {
+    await expect(uploadImage(Buffer.alloc(0), "image/png", key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
+  test("createImageTask submits generation/image-to-model with the file token", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_img" } }),
+    });
+    const id = await createImageTask("ftok_123", key);
+    expect(id).toBe("task_img");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/generation/image-to-model");
+    expect(JSON.parse(opts.body)).toEqual({
+      file: { file_token: "ftok_123" },
+      model: "v3.1-20260211",
+      texture: true,
+      pbr: true,
+    });
+  });
+
+  test("createImageTask rejects empty fileToken with status 400", async () => {
+    await expect(createImageTask("", key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
+  test("pollTask returns output on success", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: {
+          task_id: "task_abc",
+          status: "success",
+          output: { riggable: true, rig_type: "biped" },
+        },
+      }),
+    });
+    const result = await pollTask("task_abc", key);
+    expect(result.status).toBe("success");
+    expect(result.output).toEqual({ riggable: true, rig_type: "biped" });
+  });
+
+  test("rigCheckTask submits animations/rig-check", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rc" } }),
+    });
+    const id = await rigCheckTask("tripo_gen_1", key);
+    expect(id).toBe("task_rc");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/animations/rig-check");
+    expect(JSON.parse(opts.body)).toEqual({ input: "tripo_gen_1" });
+  });
+
+  test("rigModelTask submits animations/rig with mixamo spec and rig model", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rig" } }),
+    });
+    const id = await rigModelTask("tripo_gen_1", "biped", key);
+    expect(id).toBe("task_rig");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/animations/rig");
+    expect(JSON.parse(opts.body)).toEqual({
+      input: "tripo_gen_1",
+      rig_type: "biped",
+      spec: "mixamo",
+      model: "v2.5-20260210",
+    });
+  });
+
+  test("retargetTask submits animations/retarget with presets", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rt" } }),
+    });
+    const id = await retargetTask("task_rig", ["preset:idle", "preset:walk"], key);
+    expect(id).toBe("task_rt");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/animations/retarget");
+    expect(JSON.parse(opts.body)).toEqual({
+      input: "task_rig",
+      animations: ["preset:idle", "preset:walk"],
+      out_format: "glb",
+    });
+  });
+
+  test("retargetTask rejects an empty animations array with status 400", async () => {
+    await expect(retargetTask("task_rig", [], key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
+  test("rigModelTask rejects empty rigType with status 400", async () => {
+    await expect(rigModelTask("tripo_gen_1", "", key)).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
+  test("getBalance returns balance and frozen", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { balance: 630, frozen: 0 } }),
+    });
+    const result = await getBalance(key);
+    expect(result).toEqual({ balance: 630, frozen: 0 });
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/account/balance");
+    expect(opts.headers["Authorization"]).toBe(`Bearer ${key}`);
+  });
+
+  test("getBalance maps auth failure to 401", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 1002, message: "Authentication failed" }),
+    });
+    await expect(getBalance(key)).rejects.toMatchObject({
+      code: 1002,
+      status: 401,
+    });
+  });
+
+  test("getBalance rejects empty apiKey with status 400", async () => {
+    await expect(getBalance("")).rejects.toMatchObject({
+      code: 0,
+      status: 400,
+    });
+  });
+
+  test("createRefineTask submits models/texture with text_prompt", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_refine" } }),
@@ -126,12 +284,11 @@ describe("tripo3d adapter", () => {
     const id = await createRefineTask("make it blue metallic", "tripo_orig_1", key);
     expect(id).toBe("task_refine");
     const [url, opts] = global.fetch.mock.calls[0];
-    expect(url).toBe("https://api.tripo3d.ai/v2/openapi/task");
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/models/texture");
     expect(opts.headers["Authorization"]).toBe(`Bearer ${key}`);
     expect(JSON.parse(opts.body)).toEqual({
-      type: "texture_model",
-      original_model_task_id: "tripo_orig_1",
-      texture_prompt: { text: "make it blue metallic" },
+      input: "tripo_orig_1",
+      text_prompt: "make it blue metallic",
       texture: true,
       pbr: true,
     });
@@ -156,7 +313,7 @@ describe("tripo3d adapter", () => {
     expect(result).toEqual({ status: "running", progress: 42 });
   });
 
-  test("pollTask returns glbUrl on success using pbr_model", async () => {
+  test("pollTask returns glbUrl on success preferring model_url", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -165,7 +322,10 @@ describe("tripo3d adapter", () => {
           task_id: "task_abc",
           status: "success",
           progress: 100,
-          output: { pbr_model: "https://cdn/result.glb" },
+          output: {
+            model_url: "https://cdn/result.glb",
+            pbr_model: "https://cdn/other.glb",
+          },
         },
       }),
     });
@@ -174,7 +334,21 @@ describe("tripo3d adapter", () => {
     expect(result.glbUrl).toBe("https://cdn/result.glb");
   });
 
-  test("pollTask falls back to output.model if pbr_model missing", async () => {
+  test("pollTask falls back to output.pbr_model then output.model", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: {
+          task_id: "task_abc",
+          status: "success",
+          output: { pbr_model: "https://cdn/pbr.glb" },
+        },
+      }),
+    });
+    let result = await pollTask("task_abc", key);
+    expect(result.glbUrl).toBe("https://cdn/pbr.glb");
+
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -186,11 +360,11 @@ describe("tripo3d adapter", () => {
         },
       }),
     });
-    const result = await pollTask("task_abc", key);
+    result = await pollTask("task_abc", key);
     expect(result.glbUrl).toBe("https://cdn/model.glb");
   });
 
-  test("pollTask returns failed on Tripo failure", async () => {
+  test("pollTask returns failed on Tripo failure using error_msg", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -198,7 +372,7 @@ describe("tripo3d adapter", () => {
         data: {
           task_id: "task_abc",
           status: "failed",
-          message: "generation failed",
+          error_msg: "generation failed",
         },
       }),
     });
@@ -215,13 +389,29 @@ describe("tripo3d adapter", () => {
         data: {
           task_id: "task_abc",
           status: "cancelled",
-          message: "user cancelled",
+          error_msg: "user cancelled",
         },
       }),
     });
     const result = await pollTask("task_abc", key);
     expect(result).toEqual({ status: "failed", error: "user cancelled" });
   });
+
+  test.each(["banned", "expired"])(
+    "pollTask maps v3 terminal %s status to failed",
+    async (status) => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          code: 0,
+          data: { task_id: "task_abc", status },
+        }),
+      });
+      const result = await pollTask("task_abc", key);
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe(`Task ${status}`);
+    },
+  );
 
   test("pollTask rejects empty taskId with status 400", async () => {
     await expect(pollTask("", key)).rejects.toMatchObject({
@@ -263,7 +453,7 @@ describe("tripo3d adapter", () => {
     });
   });
 
-  test("TRIPO_3D_MODEL env override changes submitted model_version", async () => {
+  test("TRIPO_3D_MODEL env override changes submitted model", async () => {
     const original = process.env.TRIPO_3D_MODEL;
     process.env.TRIPO_3D_MODEL = "v9.9-custom";
     try {
@@ -278,7 +468,7 @@ describe("tripo3d adapter", () => {
         });
         await createTask("override test", key);
         const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-        expect(body.model_version).toBe("v9.9-custom");
+        expect(body.model).toBe("v9.9-custom");
       });
     } finally {
       if (original === undefined) {

@@ -67,6 +67,39 @@ export function addChatMessage(role, text, options = {}) {
 }
 
 /**
+ * Append a chat message containing an image (e.g. a reference photo attached
+ * for image-to-3D), with an optional caption below it.
+ * @param {"user"|"system"} role
+ * @param {string} src - image URL or data URI
+ * @param {string} [caption]
+ * @param {Object} [options]
+ * @param {Date} [options.timestamp] - defaults to now
+ */
+export function addImageMessage(role, src, caption, options = {}) {
+  if (!chatHistoryList) return;
+  hideWelcome();
+
+  const bubble = document.createElement("div");
+  bubble.className = `chat-bubble chat-bubble-${role} chat-bubble-image`;
+
+  const img = document.createElement("img");
+  img.className = "chat-image-thumb";
+  img.src = src;
+  img.alt = caption || "Attached image";
+  bubble.appendChild(img);
+
+  if (caption) {
+    const content = document.createElement("span");
+    content.className = "chat-bubble-content";
+    content.textContent = caption;
+    bubble.appendChild(content);
+  }
+
+  bubble.appendChild(buildTimestamp(options.timestamp));
+  appendBubble(bubble);
+}
+
+/**
  * Remove all chat bubbles and restore the welcome placeholder. Used by the
  * Clear Chat action; preview disposal and store resets live in the caller
  * (create-panel) since it owns that state.
@@ -80,6 +113,49 @@ export function clearChatMessages() {
     chatHistoryList.querySelector(".chat-welcome")
   );
   if (welcome) welcome.hidden = false;
+}
+
+/**
+ * Append a system message with a row of single-use choice buttons. Clicking
+ * a choice disables the whole row and invokes onPick with the choice value.
+ * Used for in-chat follow-up actions (e.g. rig & animate presets).
+ * @param {string} text
+ * @param {Array<{label: string, value: any}>} choices
+ * @param {(value: any) => void} onPick
+ * @returns {{bubble: HTMLElement} | null}
+ */
+export function addChoiceMessage(text, choices, onPick) {
+  if (!chatHistoryList) return null;
+  hideWelcome();
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble chat-bubble-system chat-bubble-choices";
+
+  const content = document.createElement("span");
+  content.className = "chat-bubble-content";
+  content.textContent = text;
+  bubble.appendChild(content);
+
+  const row = document.createElement("div");
+  row.className = "chat-choices";
+  for (const choice of choices) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary chat-choice-btn";
+    btn.textContent = choice.label;
+    btn.addEventListener("click", () => {
+      row
+        .querySelectorAll("button")
+        .forEach((b) => (b.disabled = true));
+      btn.classList.add("picked");
+      onPick(choice.value);
+    });
+    row.appendChild(btn);
+  }
+  bubble.appendChild(row);
+  bubble.appendChild(buildTimestamp());
+  appendBubble(bubble);
+  return { bubble };
 }
 
 /**

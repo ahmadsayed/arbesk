@@ -35,6 +35,72 @@
   }
 }
 
+// Task progress (save/publish) — GNOME infobar-style banner pinned to the
+// top edge of the viewport: visible without blocking interaction, with a
+// stage label telling the user what is happening right now.
+.task-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  pointer-events: none;
+  padding: var(--size-2) var(--size-3);
+  background-color: var(--view-bg);
+  border-bottom: var(--border-size-1) solid var(--border-color);
+  opacity: 1;
+  transition: opacity var(--duration-quick) var(--ease-out-3);
+
+  &[hidden] {
+    display: none;
+  }
+
+  &.fade {
+    opacity: 0;
+  }
+}
+
+.task-progress-label {
+  display: block;
+  margin-bottom: var(--size-1);
+  font-size: var(--font-size-0);
+  color: var(--view-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-progress-track {
+  height: 4px;
+  border-radius: var(--radius-round);
+  background-color: var(--border-color);
+  overflow: hidden;
+}
+
+.task-progress-fill {
+  height: 100%;
+  width: 0%;
+  background-color: var(--accent-bg);
+  border-radius: var(--radius-round);
+  transition: width 300ms var(--ease-out-3);
+}
+
+.task-progress.error {
+  .task-progress-label {
+    color: var(--red-3);
+  }
+
+  .task-progress-fill {
+    background-color: var(--red-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-progress-fill {
+    transition: none;
+  }
+}
+
 // Generation spinner (inline, in bottom bar area)
 .viewport-generating {
   display: flex;

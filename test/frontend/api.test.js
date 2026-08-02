@@ -896,6 +896,165 @@ describe("generateAsset", () => {
     });
   }, 15_000);
 
+  test("passes imageData/imageMime to the backend for image-to-3D", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-img-1", provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const imageData = Buffer.from("png-bytes").toString("base64");
+    const result = await generateAsset({
+      prompt: "Image: chair.png",
+      nodeId: "n-img",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      imageData,
+      imageMime: "image/png",
+      imageName: "chair.png",
+    });
+
+    expect(result.taskId).toBe("task-img-1");
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "Image: chair.png",
+      nodeId: "n-img",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      imageData,
+      imageMime: "image/png",
+      chainId: 1,
+    });
+
+    // The reference image is uploaded to IPFS alongside the model and
+    // recorded in the manifest node.
+    const { writeToIPFS, writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    expect(writeToIPFS).toHaveBeenCalledTimes(2);
+    expect(writeToIPFS.mock.calls[1][1]).toBe("chair.png");
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.scene.nodes[0].reference_image).toEqual({
+      cid: "bafySourceAsset",
+      mime: "image/png",
+      name: "chair.png",
+    });
+  }, 15_000);
+
+  test("passes animateTaskId/animations to the backend for rig & animate", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-anim-1", provider: "tripo3d", status: "running", animating: true },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await generateAsset({
+      prompt: "Animate: idle, walk",
+      nodeId: "n-anim",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      animateTaskId: "task-gen-1",
+      animations: ["preset:idle", "preset:walk"],
+    });
+
+    expect(result.taskId).toBe("task-anim-1");
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "Animate: idle, walk",
+      nodeId: "n-anim",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      animateTaskId: "task-gen-1",
+      animations: ["preset:idle", "preset:walk"],
+      chainId: 1,
+    });
+  }, 15_000);
+
+  test("passes rigOnly to the backend", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-rig-1", provider: "tripo3d", status: "running", animating: true },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "Rig only",
+      nodeId: "n-rig",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      animateTaskId: "task-gen-1",
+      rigOnly: true,
+    });
+
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "Rig only",
+      nodeId: "n-rig",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      animateTaskId: "task-gen-1",
+      rigOnly: true,
+      chainId: 1,
+    });
+  }, 15_000);
+
   test("falls back to fresh generation on REFINE_SOURCE_NOT_FOUND", async () => {
     const fetchMock = jest
       .fn()
@@ -944,4 +1103,45 @@ describe("generateAsset", () => {
     expect(retryBody.refineTaskId).toBeUndefined();
     expect(result.taskId).toBe("task-fresh-3");
   }, 15_000);
+});
+
+describe("getProviderBalance", () => {
+  test("posts the key and returns the balance", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({ body: { balance: 630, frozen: 0 } })
+    );
+    const { getProviderBalance } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await getProviderBalance("tripo-key");
+
+    expect(result).toEqual({ balance: 630, frozen: 0 });
+    const [url, postOpts] = fetchMock.mock.calls[0];
+    expect(url).toContain("/generations/balance");
+    expect(JSON.parse(postOpts.body)).toEqual({ providerKey: "tripo-key" });
+  });
+
+  test("throws ApiError on provider failure", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({
+        status: 402,
+        ok: false,
+        body: {
+          error: { code: "PROVIDER_CREDITS_EXHAUSTED", message: "No credit" },
+        },
+      })
+    );
+    const { getProviderBalance, ApiError } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const err = await getProviderBalance("bad-key").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 402, code: "PROVIDER_CREDITS_EXHAUSTED" });
+  });
 });

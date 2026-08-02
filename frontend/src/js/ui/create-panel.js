@@ -14,13 +14,14 @@ import {
   dismissCreatePulse,
 } from "../engine/scene-graph.js";
 import { showToast } from "./toasts.js";
-import { showCustomDialog } from "./dialog.js";
-import { addChatMessage, addAssetMessage, addWorkingMessage, clearChatMessages } from "./chat-messages.js";
+import { showCustomDialog, showCheckboxDialog } from "./dialog.js";
+import { addChatMessage, addAssetMessage, addWorkingMessage, addChoiceMessage, addImageMessage, clearChatMessages } from "./chat-messages.js";
 import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
   generateAsset,
   ApiError,
   getOrCreateSession,
+  getProviderBalance,
 } from "../services/api.js";
 import {
   createChatPreview,
@@ -43,6 +44,20 @@ const promptInput = document.getElementById("promptInput");
 const generateBtn = document.getElementById("generateBtn");
 const generateHint = document.getElementById("generateHint");
 const clearChatBtn = document.getElementById("clearChatBtn");
+
+// Image-to-3D attach (Tripo3D only)
+const imageAttachBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById("imageAttachBtn")
+);
+const imageAttachInput = /** @type {HTMLInputElement|null} */ (
+  document.getElementById("imageAttachInput")
+);
+const imageAttachChip = document.getElementById("imageAttachChip");
+const imageAttachThumb = /** @type {HTMLImageElement|null} */ (
+  document.getElementById("imageAttachThumb")
+);
+const imageAttachName = document.getElementById("imageAttachName");
+const imageAttachRemove = document.getElementById("imageAttachRemove");
 
 // Settings
 const assetNameDisplay = document.getElementById("assetNameDisplay");
@@ -77,6 +92,163 @@ function isRealProvider() {
   return getProvider() !== "mock";
 }
 
+// ─── Provider Balance (BYOK) ───
+
+const providerBalance = document.getElementById("providerBalance");
+
+/** @type {string|null} key the latest balance fetch was issued for */
+let balanceFetchKey = null;
+/** @type {ReturnType<typeof setTimeout>|null} */
+let balanceFetchTimer = null;
+
+/**
+ * Update the balance line inside the BYOK key dialog (when open).
+ * @param {string|null} text
+ */
+function updateDialogBalance(text) {
+  const el = document.getElementById("providerKeyBalance");
+  if (el) el.textContent = text || "";
+}
+
+/**
+ * Fetch the Tripo3D credit balance and update the caption(s). Stale
+ * responses (key changed mid-flight) are dropped.
+ * @param {string} key
+ */
+async function fetchProviderBalance(key) {
+  if (providerBalance) {
+    providerBalance.hidden = false;
+    providerBalance.textContent = "Tripo 3D credits: …";
+  }
+  try {
+    const { balance } = await getProviderBalance(key);
+    if (balanceFetchKey !== key) return;
+    const text = `Tripo 3D credits: ${balance}`;
+    if (providerBalance) providerBalance.textContent = text;
+    updateDialogBalance(text);
+  } catch (err) {
+    if (balanceFetchKey !== key) return;
+    balanceFetchKey = null; // allow a retry on the next sync
+    const text =
+      err instanceof ApiError && err.status === 401
+        ? "Tripo 3D credits: invalid key"
+        : "Tripo 3D credits: unavailable";
+    if (providerBalance) providerBalance.textContent = text;
+    updateDialogBalance(text);
+  }
+}
+
+/**
+ * Refresh the Tripo3D credit-balance caption for the registered BYOK key.
+ * Debounced (the key dialog persists on every keystroke) and cached per key
+ * value. Hidden for the mock provider, when no key is set, or when no wallet
+ * is connected (fetching would trigger a sign-in prompt).
+ * @param {{force?: boolean}} [opts]
+ */
+function refreshProviderBalance({ force = false } = {}) {
+  const key = getByokKey();
+  const show =
+    getProvider() === "tripo3d" &&
+    key.length > 0 &&
+    !!walletState.get().walletAddress;
+  if (!show) {
+    balanceFetchKey = null;
+    if (balanceFetchTimer) {
+      clearTimeout(balanceFetchTimer);
+      balanceFetchTimer = null;
+    }
+    if (providerBalance) providerBalance.hidden = true;
+    updateDialogBalance(null);
+    return;
+  }
+  if (!force && balanceFetchKey === key) return;
+  balanceFetchKey = key;
+  if (balanceFetchTimer) clearTimeout(balanceFetchTimer);
+  balanceFetchTimer = setTimeout(
+    () => {
+      balanceFetchTimer = null;
+      void fetchProviderBalance(key);
+    },
+    force ? 0 : 600,
+  );
+}
+
+// ─── Image-to-3D Attach (Tripo3D only) ───
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** @type {{base64: string, mime: string, name: string} | null} */
+let attachedImage = null;
+
+/**
+ * Drop the attached image and hide the preview chip.
+ */
+function clearAttachedImage() {
+  attachedImage = null;
+  if (imageAttachInput) imageAttachInput.value = "";
+  if (imageAttachChip) imageAttachChip.hidden = true;
+}
+
+/**
+ * The attach button only applies to Tripo3D (image-to-3D). Switching back to
+ * the mock provider hides it and discards any attached image.
+ */
+function syncImageAttachUI() {
+  const enabled = getProvider() === "tripo3d";
+  if (imageAttachBtn) imageAttachBtn.hidden = !enabled;
+  if (!enabled) clearAttachedImage();
+}
+
+/**
+ * Read and validate an image file selected via the attach input, then show
+ * the preview chip. Invalid files are rejected with a toast and cleared.
+ * @param {File} file
+ */
+function attachImageFile(file) {
+  if (!IMAGE_MIMES.has(file.type)) {
+    showToast({
+      type: "warning",
+      title: "Unsupported Image",
+      message: "Attach a JPEG, PNG, or WebP image.",
+    });
+    clearAttachedImage();
+    return;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    showToast({
+      type: "warning",
+      title: "Image Too Large",
+      message: "Images are limited to 10 MB.",
+    });
+    clearAttachedImage();
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = String(reader.result || "");
+    const base64 = dataUrl.split(",")[1] || "";
+    if (!base64) {
+      clearAttachedImage();
+      return;
+    }
+    attachedImage = { base64, mime: file.type, name: file.name };
+    if (imageAttachThumb) imageAttachThumb.src = dataUrl;
+    if (imageAttachName) imageAttachName.textContent = file.name;
+    if (imageAttachChip) imageAttachChip.hidden = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+if (imageAttachBtn && imageAttachInput) {
+  imageAttachBtn.addEventListener("click", () => imageAttachInput.click());
+  imageAttachInput.addEventListener("change", () => {
+    const file = imageAttachInput.files?.[0];
+    if (file) attachImageFile(file);
+  });
+}
+imageAttachRemove?.addEventListener("click", clearAttachedImage);
+
 // ─── BYOK Key Dialog ───
 
 // Persist + hydrate the generation provider. A stored value that no longer
@@ -101,6 +273,7 @@ function syncProviderUI() {
     const label = providerSelect.selectedOptions[0]?.textContent || "Mock";
     bottomBarProvider.textContent = `Provider: ${label}`;
   }
+  refreshProviderBalance();
 }
 
 if (providerSelect) {
@@ -114,6 +287,7 @@ if (providerSelect) {
   providerSelect.addEventListener("change", () => {
     localStorage.setItem(PROVIDER_STORAGE, providerSelect.value);
     syncProviderUI();
+    syncImageAttachUI();
   });
 }
 
@@ -135,7 +309,8 @@ function buildProviderKeyBody() {
         <button id="providerKeyToggle" class="byok-toggle" type="button" aria-label="Show API key">Show</button>
       </div>
     </div>
-    <button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear Key</button>`;
+    <button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear Key</button>
+    <p id="providerKeyBalance" class="provider-balance" style="margin-top:var(--size-2)"></p>`;
 
   const input = /** @type {HTMLInputElement} */ (
     wrap.querySelector("#providerKeyInput")
@@ -146,6 +321,13 @@ function buildProviderKeyBody() {
   const clear = /** @type {HTMLButtonElement} */ (
     wrap.querySelector("#providerKeyClear")
   );
+
+  // Prefill the balance line from the provider-row caption (when a fresh
+  // fetch is already cached there).
+  const dialogBalance = wrap.querySelector("#providerKeyBalance");
+  if (dialogBalance && providerBalance && !providerBalance.hidden) {
+    dialogBalance.textContent = providerBalance.textContent;
+  }
 
   input.value = localStorage.getItem(BYOK_KEY_STORAGE) || "";
   input.addEventListener("input", () => {
@@ -170,6 +352,7 @@ function buildProviderKeyBody() {
 }
 
 function showProviderKeyDialog() {
+  refreshProviderBalance({ force: true });
   return showCustomDialog("Tripo 3D API Key", buildProviderKeyBody());
 }
 
@@ -245,6 +428,7 @@ function clearChat() {
   _resetPendingGenerations();
   assetMessages.clear();
   lastTripoTaskId = null;
+  clearAttachedImage();
   clearChatMessages();
   clearHistoryBubbles();
   addChatMessage("system", "Chat cleared. Start a new model.");
@@ -339,6 +523,7 @@ function setGenerating(active) {
     generateBtn.classList.remove("generating");
     generateBtn.disabled = false;
   }
+  if (imageAttachBtn) imageAttachBtn.disabled = active;
 }
 
 function updateGenerateHint() {
@@ -379,11 +564,235 @@ function buildTransformMatrix() {
   return identityMatrix();
 }
 
+// ─── Rig & Animate (Tripo3D) ───
+
+// Quick-pick combos shown as in-chat choices after a Tripo3D generation.
+// "rig-only" stops after the rig step; "custom" opens the full preset dialog.
+const ANIMATE_CHOICES = [
+  { label: "Idle + Walk", value: ["preset:idle", "preset:walk"] },
+  { label: "Idle", value: ["preset:idle"] },
+  { label: "Walk + Run", value: ["preset:walk", "preset:run"] },
+  { label: "Jump", value: ["preset:jump"] },
+  { label: "Rig only (no animation)", value: "rig-only" },
+  { label: "More…", value: "custom" },
+];
+
+const ANIMATE_PRESETS = [
+  { value: "preset:idle", label: "Idle", checked: true },
+  { value: "preset:walk", label: "Walk", checked: true },
+  { value: "preset:run", label: "Run" },
+  { value: "preset:jump", label: "Jump" },
+  { value: "preset:slash", label: "Slash" },
+];
+
+/**
+ * Register a finished generation as a pending record and present it as an
+ * asset chat bubble with live preview, Show-in-Studio, and (for riggable
+ * Tripo3D models) an Animate action.
+ * @returns {string} the pending generation id
+ */
+function presentGenerationResult(
+  result,
+  { prompt, provider, task, prevAssetManifestCid, transformMatrix },
+) {
+  const generationId = addPendingGeneration({
+    assetManifestCid: result.assetManifestCid,
+    sourceAssetCid: result.sourceAssetCid,
+    prompt,
+    format: result.format,
+    path: result.path,
+    prevAssetManifestCid: prevAssetManifestCid || null,
+    transformMatrix,
+    provider,
+    task,
+    ...(result.taskId && { backendTaskId: result.taskId }),
+    ...(result.providerTaskId && { taskId: result.providerTaskId }),
+    ...(result.tier !== undefined && { tier: result.tier }),
+  });
+
+  const assetMessage = addAssetMessage({ prompt, format: result.format });
+  if (assetMessage) {
+    assetMessages.set(generationId, assetMessage);
+    assetMessage.sendButton.addEventListener("click", () => {
+      void sendGenerationToStudio(generationId, assetMessage);
+    });
+    void attachChatPreview(generationId, assetMessage);
+    // Animated GLBs can't be re-rigged — offer animate choices only on
+    // model/texture results from Tripo3D.
+    if (provider === "tripo3d" && task !== "animate") {
+      addAnimateChoices(generationId);
+    }
+  }
+  return generationId;
+}
+
+/**
+ * Offer rig & animate follow-ups as in-chat choice chips after a Tripo3D
+ * generation. T-pose models rig best — the hint rides along in the prompt.
+ */
+function addAnimateChoices(generationId) {
+  addChoiceMessage(
+    "Rig & animate this model? (full-body T-pose rigs best)",
+    ANIMATE_CHOICES,
+    (value) => {
+      void onAnimate(generationId, value === "custom" ? null : value);
+    },
+  );
+}
+
+/**
+ * Rig & animate a completed Tripo3D generation: presets (from chat choices
+ * or the full picker) → backend animate chain (rig-check → rig → retarget)
+ * → animated GLB chat bubble.
+ * @param {string} generationId
+ * @param {string[]|"rig-only"|null} presets - "rig-only" stops after rigging;
+ *   null opens the full preset dialog
+ */
+async function onAnimate(generationId, presets) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.backendTaskId) return;
+
+  const rigOnly = presets === "rig-only";
+  if (!presets) {
+    presets = await showCheckboxDialog(
+      "Rig & Animate",
+      "Pick up to 5 animations to bake into the model. Rigging works best on full-body humanoids or creatures (T-pose).",
+      ANIMATE_PRESETS,
+      { max: 5 },
+    );
+  }
+  if (!rigOnly && (!presets || presets.length === 0)) return;
+
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return;
+  }
+  try {
+    await getOrCreateSession();
+  } catch {
+    showToast({
+      type: "warning",
+      title: "Sign In Required",
+      message: "Sign in to animate assets.",
+    });
+    return;
+  }
+
+  const labels = rigOnly
+    ? "rig only"
+    : presets.map((p) => p.replace("preset:", "")).join(", ");
+  const prompt = rigOnly ? "Rig only" : `Animate: ${labels}`;
+  addChatMessage("user", prompt);
+  const working = addWorkingMessage(
+    "Rigging and animating — this chains three Tripo tasks and takes a few minutes…",
+  );
+
+  const assetName = getAssetName();
+  const nodeId = `${assetName
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
+  const prevAssetManifestCid =
+    assetState.get().activeAssetManifestCid || undefined;
+  const transformMatrix = buildTransformMatrix();
+
+  try {
+    const result = await generateAsset({
+      prompt,
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      animateTaskId: record.backendTaskId,
+      ...(rigOnly ? { rigOnly: true } : { animations: presets }),
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+    });
+
+    presentGenerationResult(result, {
+      prompt,
+      provider: "tripo3d",
+      task: "animate",
+      prevAssetManifestCid,
+      transformMatrix,
+    });
+    dismissCreatePulse();
+    // Rig + retarget consumed credits — refresh the caption.
+    refreshProviderBalance({ force: true });
+
+    // Recovery path: if the rigging/retargeting wrecked the mesh, the user
+    // can re-send the original pre-rig model to the Studio from chat.
+    addChoiceMessage(
+      "If the result looks off, you can go back:",
+      [{ label: "Back to the original model", value: generationId }],
+      (sourceGenerationId) => {
+        void restoreGeneration(sourceGenerationId);
+      },
+    );
+  } catch (err) {
+    console.error("Animate failed:", err);
+    let userMsg = "Animation failed. Please try again.";
+    if (err instanceof ApiError) {
+      if (err.code === "ANIMATE_SOURCE_NOT_FOUND") {
+        userMsg =
+          "The source generation expired — animate within an hour of generating.";
+      } else if (err.code === "MODEL_NOT_RIGGABLE") {
+        userMsg =
+          "This model isn't riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.";
+      } else if (err.status === 401) {
+        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
+      } else if (err.status === 402) {
+        userMsg = "Tripo3D account has insufficient credits.";
+      } else if (err.code === "GENERATION_TIMEOUT") {
+        userMsg = "Animation timed out. Try again later.";
+      } else if (err.message) {
+        userMsg = err.message;
+      }
+    } else if (err.message) {
+      userMsg = err.message;
+    }
+    addChatMessage("system", userMsg);
+  } finally {
+    working?.remove();
+  }
+}
+
+/**
+ * Re-send an older generation to the Studio — the recovery path when a
+ * rig/retarget result wrecked the mesh. Resets the record to pending so the
+ * send path accepts it again, then runs the normal Show-in-Studio tail.
+ * @param {string} generationId
+ */
+async function restoreGeneration(generationId) {
+  const assetMessage = assetMessages.get(generationId);
+  const record = getPendingGeneration(generationId);
+  if (!assetMessage || !record) {
+    addChatMessage(
+      "system",
+      "The original model is no longer available in this chat.",
+    );
+    return;
+  }
+  updatePendingGeneration(generationId, { status: "pending" });
+  await sendGenerationToStudio(generationId, assetMessage);
+}
+
 // ─── Generation Flow ───
 
 async function onGenerate() {
   const prompt = promptInput.value.trim();
-  if (!prompt) return;
+  if (!prompt && !attachedImage) return;
+
+  // Image-only generations get a synthesized prompt so chat history,
+  // manifest provenance, and display names all carry meaningful text.
+  const effectivePrompt =
+    prompt || (attachedImage ? `Image: ${attachedImage.name}` : "");
+  const imagePayload = attachedImage
+    ? {
+        imageData: attachedImage.base64,
+        imageMime: attachedImage.mime,
+        imageName: attachedImage.name,
+      }
+    : null;
 
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
@@ -402,9 +811,19 @@ async function onGenerate() {
     return;
   }
 
-  addChatMessage("user", prompt);
+  if (imagePayload) {
+    // Show the reference image itself in the chat, not just its filename.
+    addImageMessage(
+      "user",
+      `data:${imagePayload.imageMime};base64,${imagePayload.imageData}`,
+      effectivePrompt,
+    );
+  } else {
+    addChatMessage("user", effectivePrompt);
+  }
   promptInput.value = "";
   promptInput.style.height = "auto";
+  clearAttachedImage();
 
   setGenerating(true);
   const working = addWorkingMessage("Carving your model…");
@@ -432,9 +851,12 @@ async function onGenerate() {
 
     // Refine chain: when the chat already has a completed Tripo3D model,
     // the next generation refines it (texture/material only — geometry
-    // unchanged). Clear Chat resets the chain.
+    // unchanged). Clear Chat resets the chain. An attached image always
+    // starts a fresh model (image-to-3D), skipping the chain.
     const refineTaskId =
-      provider === "tripo3d" && lastTripoTaskId ? lastTripoTaskId : undefined;
+      provider === "tripo3d" && lastTripoTaskId && !imagePayload
+        ? lastTripoTaskId
+        : undefined;
     if (refineTaskId) {
       addChatMessage(
         "system",
@@ -443,7 +865,7 @@ async function onGenerate() {
     }
 
     const result = await generateAsset({
-      prompt,
+      prompt: effectivePrompt,
       nodeId,
       txHash: null,
       provider,
@@ -452,6 +874,7 @@ async function onGenerate() {
       tier,
       ...(isRealProvider() && { providerKey }),
       ...(refineTaskId && { refineTaskId }),
+      ...(imagePayload && imagePayload),
     });
 
     if (provider === "tripo3d" && result.taskId) {
@@ -460,32 +883,16 @@ async function onGenerate() {
 
     // Defer the Studio viewport load: register the result, show an asset
     // bubble with a live preview, and let the user send it explicitly.
-    const generationId = addPendingGeneration({
-      assetManifestCid: result.assetManifestCid,
-      sourceAssetCid: result.sourceAssetCid,
-      prompt,
-      format: result.format,
-      path: result.path,
-      prevAssetManifestCid: prevAssetManifestCid || null,
-      transformMatrix,
+    presentGenerationResult(result, {
+      prompt: effectivePrompt,
       provider,
       task: refineTaskId ? "texture" : "model",
-      ...(result.providerTaskId && { taskId: result.providerTaskId }),
-      ...(result.tier !== undefined && { tier: result.tier }),
+      prevAssetManifestCid,
+      transformMatrix,
     });
-
-    const assetMessage = addAssetMessage({
-      prompt,
-      format: result.format,
-    });
-    if (assetMessage) {
-      assetMessages.set(generationId, assetMessage);
-      assetMessage.sendButton.addEventListener("click", () => {
-        void sendGenerationToStudio(generationId, assetMessage);
-      });
-      void attachChatPreview(generationId, assetMessage);
-    }
     dismissCreatePulse();
+    // A completed generation consumed credits — refresh the caption.
+    refreshProviderBalance({ force: true });
   } catch (err) {
     console.error("Generation failed:", err);
     let userMsg = "Generation failed. Please try again.";
@@ -533,11 +940,21 @@ promptInput.addEventListener("input", () => {
   promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + "px";
 });
 
+// Asset identity (manifest asset_id) of the currently open scene. The AI
+// chat fully resets when the open asset changes — generations, refine
+// chains, animate choices, and attached images never leak across assets.
+let openAssetIdentity = null;
+
 on(EVENTS.SCENE_READY, (event) => {
   const name = event?.manifest?.name || assetState.get().activeAssetName;
   if (name) syncAssetNameDisplay(name);
   const manifestCid =
     event?.manifestCid || assetState.get().activeAssetManifestCid;
+  const identity = event?.manifest?.asset_id || manifestCid || null;
+  if (identity && openAssetIdentity && identity !== openAssetIdentity) {
+    clearChat();
+  }
+  if (identity) openAssetIdentity = identity;
   if (manifestCid) void renderChatProvenance(manifestCid);
 });
 
@@ -553,21 +970,31 @@ on(EVENTS.ASSET_PUBLISHED, () => {
 
 on(EVENTS.SCENE_EMPTY, () => {
   syncAssetNameDisplay();
-  clearHistoryBubbles();
+  openAssetIdentity = null;
+  // Full reset on new asset — but stay quiet when there is no live session
+  // to clear (e.g. initial page load on an empty scene).
+  const hasLiveChat = !!document.querySelector(
+    "#chatHistoryList .chat-bubble:not(.chat-bubble-history)",
+  );
+  if (hasLiveChat) clearChat();
+  else clearHistoryBubbles();
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {
   updateGenerateHint();
   syncCollectionSelect();
+  refreshProviderBalance();
 });
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
   updateGenerateHint();
+  refreshProviderBalance();
 });
 
 syncAssetNameDisplay();
 updateGenerateHint();
 syncProviderUI();
+syncImageAttachUI();
 
 // Initialize collection select on load if wallet is already connected
 if (walletState.get().walletAddress) {

@@ -303,6 +303,90 @@
         }
       }
     },
+    "/generations/balance": {
+      "post": {
+        "tags": ["Generations"],
+        "summary": "Get the Tripo3D credit balance for a BYOK key",
+        "description": "Fetches the Tripo3D account balance using a user-supplied BYOK key. The key is used transiently for the single upstream call — never logged or persisted. Session-gated; not rate-limited (balance checks do not consume generation quota).",
+        "operationId": "getProviderBalance",
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["providerKey"],
+                "properties": {
+                  "providerKey": {
+                    "type": "string",
+                    "description": "User-supplied Tripo3D API key. Max 200 chars.",
+                    "maxLength": 200,
+                    "example": "tsk_..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tripo3D credit balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "balance": {
+                      "type": "number",
+                      "description": "Available credits"
+                    },
+                    "frozen": {
+                      "type": "number",
+                      "description": "Credits frozen by in-flight tasks"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid providerKey (`VALIDATION_ERROR`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session, or Tripo rejected the key (`PROVIDER_AUTH_FAILED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream Tripo failure (`PROVIDER_ERROR`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions": {
       "post": {
         "tags": ["Sessions"],
@@ -922,11 +1006,11 @@
       },
       "GenerationRequest": {
         "type": "object",
-        "required": ["prompt", "nodeId"],
+        "required": ["nodeId"],
         "properties": {
           "prompt": {
             "type": "string",
-            "description": "Text description of the 3D asset to generate",
+            "description": "Text description of the 3D asset to generate. Required unless imageData is present.",
             "example": "A modern minimalist workbench"
           },
           "nodeId": {
@@ -948,9 +1032,39 @@
           },
           "refineTaskId": {
             "type": "string",
-            "description": "Optional (tripo3d only): taskId of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo texture_model (texture/material only; geometry unchanged). Unknown/incomplete/foreign id → 404 REFINE_SOURCE_NOT_FOUND.",
+            "description": "Optional (tripo3d only): taskId of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo's v3 re-texture endpoint (texture/material only; geometry unchanged). Unknown/incomplete/foreign id → 404 REFINE_SOURCE_NOT_FOUND. Ignored when imageData is present.",
             "maxLength": 64,
             "example": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d"
+          },
+          "imageData": {
+            "type": "string",
+            "description": "Optional (tripo3d only): base64-encoded source image for image-to-3D (max ~10 MB raw). Starts a fresh image-to-model task; refineTaskId is ignored. Required together with imageMime.",
+            "format": "byte"
+          },
+          "imageMime": {
+            "type": "string",
+            "description": "MIME type of imageData. Required when imageData is present.",
+            "enum": ["image/jpeg", "image/png", "image/webp"]
+          },
+          "animateTaskId": {
+            "type": "string",
+            "description": "Optional (tripo3d only): taskId of a completed generation owned by the same wallet to rig & animate. Starts a rig-check → rig → retarget chain; the 202 response includes \"animating\": true. Unknown/incomplete/foreign id → 404 ANIMATE_SOURCE_NOT_FOUND. Requires animations.",
+            "maxLength": 64,
+            "example": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d"
+          },
+          "animations": {
+            "type": "array",
+            "description": "Retarget presets to bake (max 5). Required when animateTaskId is present and rigOnly is not set.",
+            "items": {
+              "type": "string",
+              "enum": ["preset:idle", "preset:walk", "preset:run", "preset:dive", "preset:climb", "preset:jump", "preset:slash", "preset:shoot", "preset:hurt", "preset:fall", "preset:turn"]
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "rigOnly": {
+            "type": "boolean",
+            "description": "Optional (tripo3d only, with animateTaskId): stop the chain after the rig step — returns the Mixamo-ready rigged GLB with no baked animation."
           }
         }
       },

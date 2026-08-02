@@ -1,5 +1,11 @@
-export const TRIPO_API_BASE = "https://api.tripo3d.ai/v2/openapi";
-export const TRIPO_MODEL_VERSION = process.env.TRIPO_3D_MODEL || "v2.5-20250123";
+// Tripo3D v3 REST API (global region; China region is openapi.tripo3d.com).
+// Tripo retires the v2 API on 2026-11-01 — do not revert to /v2/openapi.
+export const TRIPO_API_BASE = "https://openapi.tripo3d.ai/v3";
+export const TRIPO_MODEL_VERSION = process.env.TRIPO_3D_MODEL || "v3.1-20260211";
+// The rig endpoint has its own model line — its default is a retired version
+// (rejected with code 1004, verified 2026-08-02). Allowed: v1.0-20240301,
+// v2.5-20260210.
+export const TRIPO_RIG_MODEL = process.env.TRIPO_3D_RIG_MODEL || "v2.5-20260210";
 
 export class TripoApiError extends Error {
   /**
@@ -16,24 +22,26 @@ export class TripoApiError extends Error {
 }
 
 /**
- * Low-level fetch wrapper for Tripo v2.
- * @param {string} path - path after base, e.g. "task"
+ * Low-level fetch wrapper for the Tripo v3 API.
+ * @param {string} path - path after base, e.g. "generation/text-to-model"
  * @param {string} apiKey
  * @param {"GET"|"POST"} method
- * @param {object} [body]
+ * @param {object|FormData} [body] - plain object (JSON) or FormData (multipart)
  */
 async function tripoFetch(path, apiKey, method = "GET", body) {
-  /** @type {{method: string, headers: Record<string, string>, body?: string, signal: AbortSignal}} */
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  /** @type {{method: string, headers: Record<string, string>, body?: string|FormData, signal: AbortSignal}} */
   const opts = {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+      // Multipart bodies must not set Content-Type — fetch adds the boundary.
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
     },
     // A stalled upstream connection must not hang the Express request.
     signal: AbortSignal.timeout(30_000),
   };
-  if (body) opts.body = JSON.stringify(body);
+  if (body) opts.body = isForm ? body : JSON.stringify(body);
 
   const res = await fetch(`${TRIPO_API_BASE}/${path}`, opts);
   if (!res.ok) {
@@ -83,10 +91,9 @@ export async function createTask(prompt, apiKey) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(`[GEN] Tripo createTask prompt_len=${prompt.length}`);
-  const data = await tripoFetch("task", apiKey, "POST", {
-    type: "text_to_model",
+  const data = await tripoFetch("generation/text-to-model", apiKey, "POST", {
     prompt,
-    model_version: TRIPO_MODEL_VERSION,
+    model: TRIPO_MODEL_VERSION,
     texture: true,
     pbr: true,
   });
@@ -98,9 +105,86 @@ export async function createTask(prompt, apiKey) {
 }
 
 /**
+ * Fetch the credit balance for a BYOK key (GET /account/balance).
+ * @param {string} apiKey
+ * @returns {Promise<{balance: number, frozen: number}>}
+ */
+export async function getBalance(apiKey) {
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  const data = await tripoFetch("account/balance", apiKey);
+  if (typeof data?.balance !== "number") {
+    throw new TripoApiError("Tripo did not return a balance", 0, 502);
+  }
+  console.log(`[GEN] Tripo balance=${data.balance} frozen=${data.frozen ?? 0}`);
+  return { balance: data.balance, frozen: data.frozen ?? 0 };
+}
+
+/**
+ * Upload a source image to Tripo (POST /files) and return its file_token.
+ * @param {Buffer} imageBuffer - raw image bytes (jpeg/png/webp)
+ * @param {string} mime - image MIME type, e.g. "image/png"
+ * @param {string} apiKey
+ * @returns {Promise<string>} file_token
+ */
+export async function uploadImage(imageBuffer, mime, apiKey) {
+  if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
+    throw new TripoApiError("imageBuffer is required", 0, 400);
+  }
+  if (!mime || typeof mime !== "string") {
+    throw new TripoApiError("mime is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  const ext = mime.split("/")[1] || "png";
+  console.log(`[GEN] Tripo uploadImage size=${imageBuffer.length} mime=${mime}`);
+  const form = new FormData();
+  // Copy into a plain ArrayBuffer-backed view — Buffer's ArrayBufferLike
+  // (possibly shared) backing store is not a valid BlobPart.
+  const bytes = new Uint8Array(imageBuffer);
+  form.append("file", new Blob([bytes], { type: mime }), `upload.${ext}`);
+  const data = await tripoFetch("files", apiKey, "POST", form);
+  if (typeof data?.file_token !== "string") {
+    throw new TripoApiError("Tripo did not return a file token", 0, 502);
+  }
+  console.log(`[GEN] Tripo image uploaded file_token=${data.file_token}`);
+  return data.file_token;
+}
+
+/**
+ * Create an image-to-3D task from a previously uploaded image.
+ * @param {string} fileToken - file_token from uploadImage()
+ * @param {string} apiKey
+ * @returns {Promise<string>} task_id
+ */
+export async function createImageTask(fileToken, apiKey) {
+  if (!fileToken || typeof fileToken !== "string") {
+    throw new TripoApiError("fileToken is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo createImageTask file_token=${fileToken}`);
+  const data = await tripoFetch("generation/image-to-model", apiKey, "POST", {
+    file: { file_token: fileToken },
+    model: TRIPO_MODEL_VERSION,
+    texture: true,
+    pbr: true,
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  console.log(`[GEN] Tripo image task created task_id=${data.task_id}`);
+  return data.task_id;
+}
+
+/**
  * Refine an existing model's texture/material via a text prompt.
- * NOTE: Tripo's refine_model endpoint is dead upstream (code 2006, verified
- * 2026-07-22); this uses texture_model — geometry is unchanged.
+ * Uses the v3 re-texture endpoint (POST /models/texture) — geometry is
+ * unchanged. (Tripo's refine_model endpoint is dead upstream, code 2006,
+ * verified 2026-07-22.)
  * @param {string} prompt
  * @param {string} originalTripoTaskId - Tripo task ID of the completed source generation
  * @param {string} apiKey
@@ -117,13 +201,9 @@ export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(`[GEN] Tripo refine prompt_len=${prompt.length}`);
-  // NOTE: the prompt must be wrapped in texture_prompt.text — a flat
-  // text_prompt field is silently ignored by the Tripo v2 API (verified
-  // 2026-07-22: the task input echo drops it and the texture is unchanged).
-  const data = await tripoFetch("task", apiKey, "POST", {
-    type: "texture_model",
-    original_model_task_id: originalTripoTaskId,
-    texture_prompt: { text: prompt },
+  const data = await tripoFetch("models/texture", apiKey, "POST", {
+    input: originalTripoTaskId,
+    text_prompt: prompt,
     texture: true,
     pbr: true,
   });
@@ -135,10 +215,94 @@ export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
 }
 
 /**
+ * Create a rig-check task: is the model riggable, and which skeleton type?
+ * @param {string} inputTaskId - completed generation task ID
+ * @param {string} apiKey
+ * @returns {Promise<string>} task_id
+ */
+export async function rigCheckTask(inputTaskId, apiKey) {
+  if (!inputTaskId || typeof inputTaskId !== "string") {
+    throw new TripoApiError("inputTaskId is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo rigCheckTask input=${inputTaskId}`);
+  const data = await tripoFetch("animations/rig-check", apiKey, "POST", {
+    input: inputTaskId,
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  return data.task_id;
+}
+
+/**
+ * Create a rig task: attach a Mixamo-compatible skeleton to a model.
+ * @param {string} inputTaskId - completed generation task ID
+ * @param {string} rigType - from rig-check output, e.g. "biped"
+ * @param {string} apiKey
+ * @returns {Promise<string>} task_id
+ */
+export async function rigModelTask(inputTaskId, rigType, apiKey) {
+  if (!inputTaskId || typeof inputTaskId !== "string") {
+    throw new TripoApiError("inputTaskId is required", 0, 400);
+  }
+  if (!rigType || typeof rigType !== "string") {
+    throw new TripoApiError("rigType is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo rigModelTask input=${inputTaskId} rig_type=${rigType}`);
+  const data = await tripoFetch("animations/rig", apiKey, "POST", {
+    input: inputTaskId,
+    rig_type: rigType,
+    spec: "mixamo",
+    model: TRIPO_RIG_MODEL,
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  return data.task_id;
+}
+
+/**
+ * Create a retarget task: bake preset animations into an animated GLB.
+ * @param {string} rigTaskId - completed rig task ID
+ * @param {string[]} animations - preset IDs, e.g. ["preset:idle"], max 5
+ * @param {string} apiKey
+ * @returns {Promise<string>} task_id
+ */
+export async function retargetTask(rigTaskId, animations, apiKey) {
+  if (!rigTaskId || typeof rigTaskId !== "string") {
+    throw new TripoApiError("rigTaskId is required", 0, 400);
+  }
+  if (!Array.isArray(animations) || animations.length === 0) {
+    throw new TripoApiError("animations is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(
+    `[GEN] Tripo retargetTask input=${rigTaskId} animations=${animations.join(",")}`,
+  );
+  const data = await tripoFetch("animations/retarget", apiKey, "POST", {
+    input: rigTaskId,
+    animations,
+    out_format: "glb",
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  return data.task_id;
+}
+
+/**
  * Poll a task.
  * @param {string} taskId
  * @param {string} apiKey
- * @returns {Promise<{status: string, progress?: number, glbUrl?: string, error?: string}>}
+ * @returns {Promise<{status: string, progress?: number, glbUrl?: string, output?: object, error?: string}>}
  */
 export async function pollTask(taskId, apiKey) {
   if (!taskId || typeof taskId !== "string") {
@@ -148,21 +312,33 @@ export async function pollTask(taskId, apiKey) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(`[GEN] Tripo poll task_id=${taskId}`);
-  const data = await tripoFetch(`task/${taskId}`, apiKey);
+  const data = await tripoFetch(`tasks/${taskId}`, apiKey);
   const status = data.status;
   console.log(`[GEN] Tripo poll status=${status}`);
   if (status === "queued" || status === "running") {
     return { status, progress: data.progress ?? 0 };
   }
   if (status === "success") {
-    const glbUrl = data.output?.pbr_model || data.output?.model;
-    if (!glbUrl) {
-      throw new TripoApiError("Tripo success response missing model URL", 0, 502);
-    }
-    return { status, glbUrl };
+    const glbUrl =
+      data.output?.model_url ||
+      data.output?.pbr_model ||
+      data.output?.model ||
+      data.output?.base_model;
+    // Rig-check tasks carry flags instead of a model — output is returned
+    // either way so chain callers can inspect it.
+    return { status, glbUrl: glbUrl || undefined, output: data.output };
   }
-  if (status === "failed" || status === "cancelled") {
-    return { status: "failed", error: data.message || `Task ${status}` };
+  // v3 terminal failures: failed, cancelled, banned, expired
+  if (
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "banned" ||
+    status === "expired"
+  ) {
+    return {
+      status: "failed",
+      error: data.error_msg || data.message || `Task ${status}`,
+    };
   }
   throw new TripoApiError(`Unknown Tripo status: ${status}`, 0, 502);
 }

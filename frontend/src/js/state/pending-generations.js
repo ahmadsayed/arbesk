@@ -20,8 +20,9 @@
  * @property {number[]} [transformMatrix]
  * @property {number} [tier]
  * @property {string} [provider] - generation provider ("mock", "tripo3d")
- * @property {string} [task] - AI task kind ("model", "texture")
+ * @property {string} [task] - AI task kind ("model", "texture", "animate")
  * @property {string} [taskId] - provider-side task id (e.g. Tripo); chat provenance only
+ * @property {string} [backendTaskId] - backend registry task id; animate-chain source
  * @property {boolean} [recorded] - true once written into a saved manifest version
  * @property {"pending"|"sent"|"discarded"} status
  */

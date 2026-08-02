@@ -530,6 +530,452 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         fetchSpy.mockRestore();
       });
 
+      it("returns 202 on image-to-3D POST (upload then image task, no prompt)", async () => {
+        const fetchSpy = jest
+          .spyOn(global, "fetch")
+          // 1: image upload → file_token
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { file_token: "ftok_1" } }),
+          })
+          // 2: image-to-model task
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_img" } }),
+          });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_tripo_img",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+            imageData: Buffer.from("png-bytes").toString("base64"),
+            imageMime: "image/png",
+          });
+
+        expect(res.status).toBe(202);
+        expect(res.body).toMatchObject({
+          taskId: expect.any(String),
+          provider: "tripo3d",
+          status: "running",
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/files",
+        );
+        expect(fetchSpy.mock.calls[1][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/generation/image-to-model",
+        );
+        expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toMatchObject({
+          file: { file_token: "ftok_1" },
+        });
+
+        fetchSpy.mockRestore();
+      });
+
+      it("image generation ignores refineTaskId (fresh model, no refine lookup)", async () => {
+        const fetchSpy = jest
+          .spyOn(global, "fetch")
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { file_token: "ftok_2" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_img2" } }),
+          });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_tripo_imgref",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+            imageData: Buffer.from("png-bytes").toString("base64"),
+            imageMime: "image/png",
+            // Unknown refine id would 404 on the text path; the image path
+            // must skip the refine lookup entirely.
+            refineTaskId: "00000000-0000-0000-0000-000000000000",
+          });
+
+        expect(res.status).toBe(202);
+        expect(res.body.refined).toBeUndefined();
+        fetchSpy.mockRestore();
+      });
+
+      it("returns 400 VALIDATION_ERROR when neither prompt nor imageData is sent", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_tripo_empty",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("POST /generations/balance returns the Tripo credit balance", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { balance: 630, frozen: 0 } }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations/balance")
+          .set("Authorization", await makeSessionHeader())
+          .send({ providerKey: "tsk_test_secret_key" });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ balance: 630, frozen: 0 });
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/account/balance",
+        );
+        expect(JSON.stringify(res.body)).not.toContain("tsk_test_secret_key");
+        fetchSpy.mockRestore();
+      });
+
+      it("POST /generations/balance maps an invalid key to 401 PROVIDER_AUTH_FAILED", async () => {
+        jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 1002, message: "Authentication failed" }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations/balance")
+          .set("Authorization", await makeSessionHeader())
+          .send({ providerKey: "tsk_bad_key" });
+
+        expect(res.status).toBe(401);
+        expect(res.body.error.code).toBe("PROVIDER_AUTH_FAILED");
+      });
+
+      it("POST /generations/balance rejects a missing providerKey", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations/balance")
+          .set("Authorization", await makeSessionHeader())
+          .send({});
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("POST /generations/balance requires a session", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations/balance")
+          .send({ providerKey: "tsk_test_secret_key" });
+
+        expect(res.status).toBe(401);
+      });
+
+      it("POST animate starts a rig-check chain for a completed task", async () => {
+        const sourceId = registerTask({
+          tripoTaskId: "tripo_src_1",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+        });
+        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
+
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_rc_1" } }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_anim_1",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: sourceId,
+            animations: ["preset:idle", "preset:walk"],
+          });
+
+        expect(res.status).toBe(202);
+        expect(res.body).toMatchObject({
+          provider: "tripo3d",
+          status: "running",
+          animating: true,
+        });
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/animations/rig-check",
+        );
+        fetchSpy.mockRestore();
+      });
+
+      it("POST animate returns 404 ANIMATE_SOURCE_NOT_FOUND for unknown source", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_anim_404",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: "00000000-0000-0000-0000-000000000000",
+            animations: ["preset:idle"],
+          });
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe("ANIMATE_SOURCE_NOT_FOUND");
+      });
+
+      it("GET advances the animate chain rig-check → rig → retarget → GLB", async () => {
+        const glb = new TextEncoder().encode("animated-glb");
+        const session = await makeSessionHeader();
+
+        // Seed a completed source generation.
+        const sourceId = registerTask({
+          tripoTaskId: "tripo_src_2",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+        });
+        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
+
+        global.fetch = jest
+          .fn()
+          // 1: POST → rig-check created
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_rc_2" } }),
+          })
+          // 2: GET poll → rig-check success (riggable biped)
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_rc_2",
+                status: "success",
+                output: { riggable: true, rig_type: "biped" },
+              },
+            }),
+          })
+          // 3: chain → rig created
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_rig_2" } }),
+          })
+          // 4: GET poll → rig success
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: { task_id: "task_rig_2", status: "success", output: {} },
+            }),
+          })
+          // 5: chain → retarget created
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_rt_2" } }),
+          })
+          // 6: GET poll → retarget success with model_url
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_rt_2",
+                status: "success",
+                output: { model_url: "https://cdn/animated.glb" },
+              },
+            }),
+          })
+          // 7: download
+          .mockResolvedValueOnce({
+            ok: true,
+            arrayBuffer: async () =>
+              glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            nodeId: "node_anim_2",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: sourceId,
+            animations: ["preset:idle"],
+          });
+        expect(post.status).toBe(202);
+        const taskId = post.body.taskId;
+
+        // Poll 1: rig-check done → rig started
+        const poll1 = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", session);
+        expect(poll1.body).toEqual({
+          status: "running",
+          progress: 40,
+          stage: "Rigging skeleton",
+        });
+        // Rig input must be the ORIGINAL generation task id
+        expect(JSON.parse(global.fetch.mock.calls[2][1].body)).toMatchObject({
+          input: "tripo_src_2",
+          rig_type: "biped",
+        });
+
+        // Poll 2: rig done → retarget started
+        const poll2 = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", session);
+        expect(poll2.body).toEqual({
+          status: "running",
+          progress: 75,
+          stage: "Baking animations",
+        });
+        // Retarget input must be the rig task id with the requested presets
+        expect(JSON.parse(global.fetch.mock.calls[4][1].body)).toEqual({
+          input: "task_rig_2",
+          animations: ["preset:idle"],
+          out_format: "glb",
+        });
+
+        // Poll 3: retarget done → animated GLB
+        const poll3 = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", session);
+        expect(poll3.body.status).toBe("success");
+        expect(poll3.body.assetData).toBe(
+          Buffer.from("animated-glb").toString("base64"),
+        );
+      });
+
+      it("rigOnly chain stops after rig — no retarget call, rig GLB returned", async () => {
+        const glb = new TextEncoder().encode("rigged-glb");
+        const session = await makeSessionHeader();
+        const sourceId = registerTask({
+          tripoTaskId: "tripo_src_rigonly",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+        });
+        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
+
+        global.fetch = jest
+          .fn()
+          // 1: POST → rig-check created
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_rc_ro" } }),
+          })
+          // 2: poll → rig-check success
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_rc_ro",
+                status: "success",
+                output: { riggable: true, rig_type: "biped" },
+              },
+            }),
+          })
+          // 3: chain → rig created
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_rig_ro" } }),
+          })
+          // 4: poll → rig success with rigged model URL
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_rig_ro",
+                status: "success",
+                output: { model_url: "https://cdn/rigged.glb" },
+              },
+            }),
+          })
+          // 5: download
+          .mockResolvedValueOnce({
+            ok: true,
+            arrayBuffer: async () =>
+              glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            nodeId: "node_anim_rigonly",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: sourceId,
+            rigOnly: true,
+          });
+        expect(post.status).toBe(202);
+        const taskId = post.body.taskId;
+
+        const poll1 = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", session);
+        expect(poll1.body.stage).toBe("Rigging skeleton");
+
+        const poll2 = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", session);
+        expect(poll2.body.status).toBe("success");
+        expect(poll2.body.assetData).toBe(
+          Buffer.from("rigged-glb").toString("base64"),
+        );
+
+        // 5 upstream calls total — no animations/retarget among them.
+        expect(global.fetch).toHaveBeenCalledTimes(5);
+        const urls = global.fetch.mock.calls.map((c) => c[0]);
+        expect(urls.some((u) => u.includes("animations/retarget"))).toBe(false);
+      });
+
+      it("GET fails the chain with MODEL_NOT_RIGGABLE when Tripo says no", async () => {
+        const session = await makeSessionHeader();
+        const sourceId = registerTask({
+          tripoTaskId: "tripo_src_3",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+        });
+        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
+
+        global.fetch = jest
+          .fn()
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_rc_3" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: {
+                task_id: "task_rc_3",
+                status: "success",
+                output: { riggable: false },
+              },
+            }),
+          });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            nodeId: "node_anim_3",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: sourceId,
+            animations: ["preset:idle"],
+          });
+        const poll = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.status).toBe("failed");
+        expect(poll.body.error.code).toBe("MODEL_NOT_RIGGABLE");
+      });
+
       it("GET returns progress while task is running", async () => {
         jest
           .spyOn(global, "fetch")
@@ -824,10 +1270,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(gen2.body.refined).toBe(true);
 
         const refineCall = global.fetch.mock.calls[3];
+        expect(refineCall[0]).toBe(
+          "https://openapi.tripo3d.ai/v3/models/texture",
+        );
         expect(JSON.parse(refineCall[1].body)).toMatchObject({
-          type: "texture_model",
-          original_model_task_id: "tripo_gen1",
-          texture_prompt: { text: "make it blue" },
+          input: "tripo_gen1",
+          text_prompt: "make it blue",
         });
       });
 

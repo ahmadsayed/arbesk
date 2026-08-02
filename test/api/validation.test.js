@@ -94,6 +94,112 @@ describe("API schemas", () => {
         generateAssetSchema.safeParse({ prompt: "cowboy", nodeId: "n1" }).success,
       ).toBe(true);
     });
+
+    it("accepts an image payload without a prompt", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          provider: "tripo3d",
+          imageData: Buffer.from("png").toString("base64"),
+          imageMime: "image/png",
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects when neither prompt nor imageData is present", () => {
+      const result = generateAssetSchema.safeParse({ nodeId: "n1" });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const paths = result.error.issues.map((i) => i.path);
+        expect(paths).toEqual(expect.arrayContaining([["prompt"]]));
+      }
+    });
+
+    it("rejects imageData without imageMime", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          imageData: Buffer.from("png").toString("base64"),
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects an unsupported image MIME type", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          imageData: Buffer.from("gif").toString("base64"),
+          imageMime: "image/gif",
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects non-base64 imageData", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          imageData: "not base64!!!",
+          imageMime: "image/png",
+        }).success,
+      ).toBe(false);
+    });
+
+    it("accepts an animate payload without a prompt", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          provider: "tripo3d",
+          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          animations: ["preset:idle", "preset:walk"],
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects animateTaskId without animations", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+        }).success,
+      ).toBe(false);
+    });
+
+    it("accepts animateTaskId with rigOnly and no animations", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          rigOnly: true,
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects unknown animation presets", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          animations: ["preset:fly"],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects more than 5 animations", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          animations: [
+            "preset:idle",
+            "preset:walk",
+            "preset:run",
+            "preset:jump",
+            "preset:slash",
+            "preset:shoot",
+          ],
+        }).success,
+      ).toBe(false);
+    });
   });
 
   describe("snapshotCommentsSchema", () => {
@@ -244,6 +350,41 @@ describe("validateManifest", () => {
       version: 1,
       scene: {
         nodes: [{}],
+      },
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("accepts a node with a reference_image (image-to-3D provenance)", () => {
+    const result = validateManifest({
+      version: 1,
+      scene: {
+        nodes: [
+          {
+            node_id: "n1",
+            source: { cid: "bafyModel" },
+            reference_image: {
+              cid: "bafyRefImage",
+              mime: "image/png",
+              name: "chair.png",
+            },
+          },
+        ],
+      },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects a reference_image without a cid", () => {
+    const result = validateManifest({
+      version: 1,
+      scene: {
+        nodes: [
+          {
+            node_id: "n1",
+            reference_image: { mime: "image/png" },
+          },
+        ],
       },
     });
     expect(result.valid).toBe(false);

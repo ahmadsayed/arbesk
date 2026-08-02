@@ -32,12 +32,64 @@ export const createSessionSchema = z.object({
   eoaAddress: ethereumAddressSchema.optional(),
 });
 
-export const generateAssetSchema = z.object({
-  prompt: z.string().min(1, "prompt is required"),
-  nodeId: z.string().min(1, "nodeId is required"),
-  provider: z.string().optional(),
-  providerKey: z.string().max(200).optional(),
-  refineTaskId: z.string().max(64).optional(),
+// ~10 MB raw image → ~14 MB base64. Keeps generation requests well under the
+// 50 MB JSON body limit while accepting any reasonable source photo.
+const MAX_IMAGE_BASE64_LENGTH = 14 * 1024 * 1024;
+
+// Biped retarget presets accepted by Tripo POST /animations/retarget.
+export const ANIMATION_PRESETS = /** @type {[string, ...string[]]} */ ([
+  "preset:idle",
+  "preset:walk",
+  "preset:run",
+  "preset:dive",
+  "preset:climb",
+  "preset:jump",
+  "preset:slash",
+  "preset:shoot",
+  "preset:hurt",
+  "preset:fall",
+  "preset:turn",
+]);
+
+export const generateAssetSchema = z
+  .object({
+    prompt: z.string().min(1, "prompt is required").optional(),
+    nodeId: z.string().min(1, "nodeId is required"),
+    provider: z.string().optional(),
+    providerKey: z.string().max(200).optional(),
+    refineTaskId: z.string().max(64).optional(),
+    // Image-to-3D (tripo3d only): base64 image bytes + MIME type.
+    imageData: z
+      .string()
+      .max(MAX_IMAGE_BASE64_LENGTH, "imageData exceeds the 10 MB image limit")
+      .regex(/^[A-Za-z0-9+/=\r\n]+$/, "imageData must be base64")
+      .optional(),
+    imageMime: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
+    // Rig & animate (tripo3d only): taskId of a completed generation +
+    // retarget presets (max 5 per Tripo call), or rigOnly to stop after
+    // the rig step (Mixamo-ready model, no baked animation).
+    animateTaskId: z.string().max(64).optional(),
+    rigOnly: z.boolean().optional(),
+    animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
+  })
+  .refine((v) => v.prompt || v.imageData || v.animateTaskId, {
+    message: "prompt, imageData, or animateTaskId is required",
+    path: ["prompt"],
+  })
+  .refine((v) => !v.imageData || v.imageMime, {
+    message: "imageMime is required when imageData is present",
+    path: ["imageMime"],
+  })
+  .refine(
+    (v) => !v.animateTaskId || v.rigOnly || (v.animations?.length ?? 0) > 0,
+    {
+      message: "animations is required when animateTaskId is present",
+      path: ["animations"],
+    },
+  );
+
+export const providerBalanceSchema = z.object({
+  providerKey: z.string().min(1, "providerKey is required").max(200),
 });
 
 export const snapshotCommentsSchema = z.object({
@@ -146,6 +198,14 @@ const nodeSchema = z.object({
   node_id: z.string().min(1),
   transform_matrix: transformMatrixSchema,
   source: sourceSchema.optional(),
+  // Reference image a model was generated from (image-to-3D provenance).
+  reference_image: z
+    .object({
+      cid: z.string().min(1),
+      mime: z.string().optional(),
+      name: z.string().optional(),
+    })
+    .optional(),
   child_ref: childRefSchema.optional(),
 });
 

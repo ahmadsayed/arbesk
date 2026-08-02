@@ -9,7 +9,7 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 - **Chains**: Hardhat local + Base Sepolia. IDs, `DEPLOYMENT_BLOCKS`, `LOG_CHUNK_SIZES` in `constants/chains.js` — no magic numbers.
 - **Wallets**: EOA (MetaMask/Rabby) via SIWE everywhere; CDP email-login smart accounts on **Base Sepolia only** (`smart-wallet-support.js`).
 - **IPFS**: private Docker Kubo local/E2E; Pinata testnet. Hardhat runs in Docker.
-- **3D generation**: mock adapter for dev/test, samples in `mock-gltf-assets/` (prompt keyword `3mf` → 3MF sample). Results land as chat bubbles with live orbitable preview (`chat-preview.js`, max 3); Studio scene untouched until "Show in Studio".
+- **3D generation**: mock adapter for dev/test, samples in `mock-gltf-assets/` (prompt keyword `3mf` → 3MF sample). Tripo3D **v3** adapter (`src/api/adapters/tripo3d-adapter.js`, BYOK): text-to-3D, image-to-3D (JPEG/PNG/WebP attach in the create panel — fresh model, skips the refine chain), texture-only refine, and rig & animate (`rig-check → rig → retarget` chain off a completed generation; rig endpoint needs its own model version `TRIPO_3D_RIG_MODEL`, default `v2.5-20260210`). Results land as chat bubbles with live orbitable preview (`chat-preview.js`, max 3); Studio scene untouched until "Show in Studio".
 - Parametric color/scale edits are applied client-side — no cloud regeneration.
 - Collections: token `tokenURI` → collection manifest mapping `assetID` → asset manifest CID.
 - Editor auth: off-chain Merkle editor lists; contract stores only root + version.

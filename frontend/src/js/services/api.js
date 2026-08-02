@@ -427,12 +427,43 @@ async function pollGeneration(taskId) {
     // queued or running — surface progress to screen readers
     const progress =
       typeof pollData.progress === "number" ? pollData.progress : 0;
-    announceStatus(`Generating 3D asset on Tripo3D… ${progress}%`);
+    announceStatus(
+      pollData.stage
+        ? `${pollData.stage}… ${progress}%`
+        : `Generating 3D asset on Tripo3D… ${progress}%`
+    );
 
     await new Promise((resolve) => setTimeout(resolve, GENERATION_POLL_INTERVAL_MS));
   }
 
   throw new ApiError("Generation timed out", 504, "GENERATION_TIMEOUT");
+}
+
+// ─── Provider Balance (BYOK) ───
+
+/**
+ * POST /api/v1/generations/balance
+ *
+ * Fetches the Tripo3D credit balance for the user's BYOK key. The key is
+ * sent per-request and never persisted server-side.
+ *
+ * @param {string} providerKey
+ * @returns {Promise<{balance: number, frozen: number}>}
+ */
+export async function getProviderBalance(providerKey) {
+  const response = await fetchWithSession("/generations/balance", {
+    body: { providerKey },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Balance check failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+  return data;
 }
 
 /**
@@ -452,6 +483,12 @@ async function pollGeneration(taskId) {
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
  * @param {string} [params.refineTaskId] - taskId of a completed Tripo3D generation to refine (texture/material only)
+ * @param {string} [params.imageData] - base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine)
+ * @param {string} [params.imageMime] - MIME type of imageData (image/jpeg, image/png, image/webp)
+ * @param {string} [params.imageName] - original filename of imageData; the reference image is uploaded to IPFS and recorded in the manifest
+ * @param {string} [params.animateTaskId] - taskId of a completed Tripo3D generation to rig & animate (skips refine/image)
+ * @param {string[]} [params.animations] - retarget presets (e.g. ["preset:idle"]), max 5; required with animateTaskId unless rigOnly
+ * @param {boolean} [params.rigOnly] - stop after the rig step (Mixamo-ready model, no baked animation)
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
  */
 export async function generateAsset({
@@ -465,6 +502,12 @@ export async function generateAsset({
   tier,
   providerKey,
   refineTaskId,
+  imageData,
+  imageMime,
+  imageName,
+  animateTaskId,
+  animations,
+  rigOnly,
 }) {
   announceStatus("Authenticating…");
 
@@ -478,6 +521,8 @@ export async function generateAsset({
     ...(chainId && { chainId }),
     ...(providerKey && { providerKey }),
     ...(refineTaskId && { refineTaskId }),
+    ...(imageData && { imageData, imageMime }),
+    ...(animateTaskId && { animateTaskId, animations, ...(rigOnly && { rigOnly }) }),
   };
 
   announceStatus("Generating 3D asset…");
@@ -539,6 +584,24 @@ export async function generateAsset({
   );
   log(`[GEN] browser uploaded source asset → ${sourceAssetCid}`);
 
+  // Reference image (image-to-3D): pin it on IPFS and record it in the
+  // manifest so the provenance chain keeps what the model was made from.
+  let referenceImage = null;
+  if (imageData) {
+    const imageBytes = base64ToBytes(imageData);
+    const imageExt = (imageMime || "image/png").split("/")[1] || "png";
+    const referenceImageCid = await writeToIPFS(
+      imageBytes,
+      imageName || `reference.${imageExt}`
+    );
+    log(`[GEN] browser uploaded reference image → ${referenceImageCid}`);
+    referenceImage = {
+      cid: referenceImageCid,
+      mime: imageMime,
+      name: imageName || `reference.${imageExt}`,
+    };
+  }
+
   // Build the manifest (same logic previously done server-side)
   const displayName = prompt
     ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
@@ -585,6 +648,8 @@ export async function generateAsset({
         path: data.path || `asset.${data.format}`,
         format: data.format,
       },
+      // Reference image the model was generated from (image-to-3D only).
+      ...(referenceImage && { reference_image: referenceImage }),
       transform_matrix:
         Array.isArray(transformMatrix) && transformMatrix.length === 16
           ? transformMatrix

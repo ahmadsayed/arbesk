@@ -46,7 +46,7 @@ src/
     │   └── generate-node.js    # 3D generation entrypoint (mock + Tripo3D task-based)
     ├── adapters/
     │   ├── mock-adapter.js     # Reads local .gltf files
-    │   └── tripo3d-adapter.js  # Tripo3D v2 REST adapter (BYOK, async task polling)
+    │   └── tripo3d-adapter.js  # Tripo3D v3 REST adapter (BYOK, async task polling)
     ├── storage/
     │   ├── index.js            # Storage backend factory (kubo/pinata)
     │   ├── kubo-adapter.js     # Local Kubo add/cat/pin/directory/unpin
@@ -86,6 +86,7 @@ src/
 | DELETE | `/sessions` | Session | Invalidates session token |
 | POST | `/generations` | Session | Validates session + rate limit; mock returns raw bytes, `tripo3d` starts an async task |
 | GET | `/generations/:taskId` | Session | Polls an async generation task (running / success / failed) |
+| POST | `/generations/balance` | Session | Returns the Tripo3D credit balance for a BYOK key (transient use, no rate limit) |
 | POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId`; returns empty archive if the relay is unreachable |
 | POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
 | POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
@@ -108,7 +109,11 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 ### 2.4 What Works
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
-- ✅ Tripo3D BYOK generation (task-based, v2.5 default) with `POST /generations` + `GET /generations/:taskId` polling
+- ✅ Tripo3D BYOK generation (task-based, v3 API, v3.1 default) with `POST /generations` + `GET /generations/:taskId` polling
+- ✅ Tripo3D image-to-3D: attach a JPEG/PNG/WebP in the create panel (image attach button, Tripo3D provider only) → backend uploads via `POST /files` → image-to-model task; same polling flow, starts a fresh model (skips the refine chain). The reference image shows as an image bubble in chat and is pinned to IPFS with its CID recorded in the manifest node (`reference_image`)
+- ✅ Tripo3D credit balance display: `POST /generations/balance` (BYOK key, session-gated) powers the "Tripo 3D credits" caption under the provider select + in the BYOK key dialog; refreshes on key change, wallet connect, and after each generation
+- ✅ Model download: header download button in Studio (active asset) + per-card Download action in the Library; GLB downloads raw from IPFS, composite glTF is inlined (data URIs) first so the file is self-contained — no wallet/session needed (read-only)
+- ✅ Tripo3D rig & animate: in-chat choice chips after a Tripo3D generation ("Idle + Walk", "Walk + Run", "Jump", "Rig only" (stops after the Mixamo rig — no retarget), "More…" → full preset dialog) → backend chains rig-check → rig → retarget (`animateTaskId` + `animations`/`rigOnly` on `POST /generations`); poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Animated/rigged GLB lands as a new chat bubble (task kind `animate`), followed by a "Back to the original model" recovery chip that re-sends the pre-rig model to Studio
 - ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.js`, `pending-generations.js`)
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
 - ✅ Thumbnail capture + direct IPFS upload from browser

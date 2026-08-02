@@ -9,6 +9,11 @@ const TTL_MS = 60 * 60 * 1000; // 1 hour
  * @property {string} userAddress
  * @property {number} createdAt
  * @property {"running"|"complete"} status
+ * @property {"generate"|"animate"} [kind] - animate entries run a rig chain
+ * @property {"rig-check"|"rig"|"retarget"} [phase] - current chain phase
+ * @property {string[]} [animations] - requested retarget presets
+ * @property {boolean} [rigOnly] - stop after the rig step (no retarget)
+ * @property {string} [sourceTripoTaskId] - original generation task (animate)
  */
 
 /** @type {Map<string, TaskEntry>} */
@@ -25,10 +30,19 @@ if (sweep.unref) sweep.unref();
 
 /**
  * Register a new in-flight generation task.
- * @param {{ tripoTaskId: string; providerKey: string; userAddress: string }} entry
+ * @param {{ tripoTaskId: string; providerKey: string; userAddress: string; kind?: "generate"|"animate"; phase?: "rig-check"|"rig"|"retarget"; animations?: string[]; rigOnly?: boolean; sourceTripoTaskId?: string }} entry
  * @returns {string} public taskId
  */
-export function registerTask({ tripoTaskId, providerKey, userAddress }) {
+export function registerTask({
+  tripoTaskId,
+  providerKey,
+  userAddress,
+  kind,
+  phase,
+  animations,
+  rigOnly,
+  sourceTripoTaskId,
+}) {
   const taskId = randomUUID();
   registry.set(taskId, {
     tripoTaskId,
@@ -36,8 +50,26 @@ export function registerTask({ tripoTaskId, providerKey, userAddress }) {
     userAddress,
     createdAt: Date.now(),
     status: "running",
+    ...(kind && { kind }),
+    ...(phase && { phase }),
+    ...(animations && { animations }),
+    ...(rigOnly && { rigOnly }),
+    ...(sourceTripoTaskId && { sourceTripoTaskId }),
   });
   return taskId;
+}
+
+/**
+ * Patch a running task entry (e.g. advance an animate chain to its next
+ * phase). No-op when the entry is missing or owned by another wallet.
+ * @param {string} taskId
+ * @param {string} userAddress
+ * @param {Partial<TaskEntry>} patch
+ */
+export function updateTaskEntry(taskId, userAddress, patch) {
+  const entry = registry.get(taskId);
+  if (!entry || entry.userAddress !== userAddress) return;
+  Object.assign(entry, patch);
 }
 
 /**

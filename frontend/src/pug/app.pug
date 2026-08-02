@@ -69,6 +69,11 @@ html(lang="en")
               path(d="M12.00,2.00 L21.51,15.09 L6.12,20.09 L6.12,3.91 L21.51,8.91 L12.00,22.00 L2.49,8.91 L17.88,3.91 L17.88,20.09 L2.49,15.09 Z")
               path(d="M12.00,7.50 L16.28,13.39 L9.35,15.64 L9.35,8.36 L16.28,10.61 L12.00,16.50 L7.72,10.61 L14.65,8.36 L14.65,15.64 L7.72,13.39 Z")
             span#publishAssetBtnText Besk it
+          button#downloadAssetBtn.btn.btn-icon.btn-flat(hidden type="button" aria-label="Download model file" title="Download the model file (GLB/glTF)")
+            svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              path(d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4")
+              polyline(points="7 10 12 15 17 10")
+              line(x1="12" y1="15" x2="12" y2="3")
 
         .headerbar-actions
           button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
@@ -190,12 +195,24 @@ html(lang="en")
                           svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                             path(d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4")
                       p#providerKeyHint.provider-key-hint(hidden) API key required — select the key icon to add it.
+                      p#providerBalance.provider-balance(hidden)
+                    #imageAttachChip.image-attach-chip(hidden)
+                      img#imageAttachThumb.image-attach-thumb(alt="Attached source image")
+                      span#imageAttachName.image-attach-name
+                      button#imageAttachRemove.image-attach-remove(type="button" aria-label="Remove attached image") &times;
                     .messagebar-row
                       textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="3" aria-label="Asset generation prompt")
-                      button#generateBtn.messagebar-submit(aria-label="Generate asset")
-                        svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                          polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
-                        .messagebar-spinner
+                      input#imageAttachInput(type="file" accept="image/jpeg,image/png,image/webp" hidden)
+                      .messagebar-actions
+                        button#imageAttachBtn.messagebar-attach(type="button" hidden aria-label="Attach image for image-to-3D" title="Attach an image (Tripo 3D image-to-3D)")
+                          svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                            rect(x="3" y="3" width="18" height="18" rx="2" ry="2")
+                            circle(cx="8.5" cy="8.5" r="1.5")
+                            polyline(points="21 15 16 10 5 21")
+                        button#generateBtn.messagebar-submit(aria-label="Generate asset")
+                          svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
+                            polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
+                          .messagebar-spinner
                     p#generateHint.messagebar-hint(hidden)
                       svg.messagebar-hint-icon(width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                         rect(x="3" y="11" width="18" height="11" rx="2" ry="2")
@@ -271,6 +288,11 @@ html(lang="en")
             #viewport.viewport
               canvas#renderCanvas(aria-label="3D viewport" role="img")
               canvas#viewportGizmo(aria-label="Viewport orientation gizmo" title="X Y Z orientation")
+
+              #taskProgress.task-progress(hidden aria-hidden="true")
+                span#taskProgressLabel.task-progress-label
+                .task-progress-track
+                  #taskProgressFill.task-progress-fill
 
               #assetDropOverlay.viewport-drop-indicator
                 div(style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--accent-bg);font-weight:600")

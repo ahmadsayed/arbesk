@@ -748,6 +748,43 @@ function createAssetCard(entry) {
     emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry));
   });
 
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "btn btn-outline btn-sm";
+  downloadBtn.title = "Download the model file (GLB/glTF)";
+  downloadBtn.setAttribute("aria-label", `Download asset ${entry.name}`);
+  downloadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg><span>Download</span>`;
+  downloadBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (downloadBtn.disabled) return;
+    downloadBtn.disabled = true;
+    try {
+      const { downloadAssetByManifestCid } = await import(
+        "../services/asset-download.js"
+      );
+      const filename = await downloadAssetByManifestCid(
+        entry.manifestCid,
+        entry.name
+      );
+      showToast({
+        type: "success",
+        title: "Download Started",
+        message: filename,
+      });
+    } catch (err) {
+      showToast({
+        type: "error",
+        title: "Download Failed",
+        message: err.message || "Could not download the model.",
+      });
+    } finally {
+      downloadBtn.disabled = false;
+    }
+  });
+
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "btn btn-outline btn-danger btn-sm asset-card-delete";
   deleteBtn.title = "Remove this asset from its collection";
@@ -766,6 +803,7 @@ function createAssetCard(entry) {
   const actions = document.createElement("div");
   actions.className = "asset-card-actions";
   actions.appendChild(addBtn);
+  actions.appendChild(downloadBtn);
   actions.appendChild(deleteBtn);
 
   item.appendChild(thumbnailEl);

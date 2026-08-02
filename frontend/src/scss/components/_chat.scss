@@ -180,6 +180,39 @@
   opacity: 0.7;
 }
 
+// In-chat choice chips (e.g. rig & animate presets) — single-use; the row
+// mutes once a choice is picked, with the chosen chip staying accented.
+.chat-bubble-image {
+  .chat-image-thumb {
+    display: block;
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: var(--radius-2);
+    margin-bottom: var(--size-1);
+    object-fit: contain;
+  }
+}
+
+.chat-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-1);
+  margin-top: var(--size-2);
+}
+
+.chat-choice-btn {
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  &.picked {
+    border-color: var(--accent-bg);
+    color: var(--accent-bg);
+    opacity: 1;
+  }
+}
+
 // ─── Composer — provider controls + prompt input, pinned at pane bottom ───
 
 .chat-composer {
@@ -250,11 +283,32 @@
   }
 }
 
+// Remaining Tripo3D credits for the registered BYOK key — a quiet dim
+// caption, hidden for the mock provider or when no key is set.
+.provider-balance {
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
 // Input + submit sit on one row; the hint (when shown) drops below it.
 .messagebar-row {
   display: flex;
   align-items: flex-end;
   gap: var(--size-2);
+}
+
+// Right-side action column: image attach stacked above the send button.
+.messagebar-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-1);
+  flex-shrink: 0;
 }
 
 .messagebar-input {
@@ -344,11 +398,96 @@
   }
 }
 
+// Image-to-3D attach: ghost icon button on the input row (Tripo3D only —
+// hidden for the mock provider) plus a removable preview chip above it.
+.messagebar-attach {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--dim-fg);
+  border-radius: var(--radius-round);
+  flex-shrink: 0;
+  transition: color var(--duration-quick) var(--ease-out-3);
+
+  &:hover:not(:disabled) {
+    color: var(--view-fg);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.image-attach-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-1) var(--size-2);
+  margin-bottom: var(--size-2);
+  background-color: var(--view-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-3);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.image-attach-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-2);
+  flex-shrink: 0;
+}
+
+.image-attach-name {
+  flex: 1;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-attach-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--font-size-1);
+  line-height: 1;
+  color: var(--dim-fg);
+  border-radius: var(--radius-round);
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--view-fg);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
 // Disconnected guidance — a calm centered caption under the input row,
 // not stray text beside the button. The submit button is disabled while
 // gated (see create-panel.js), so it reads muted rather than live.
-.messagebar-hint {
-  display: flex;
+.messagebar-hint {  display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--size-1);

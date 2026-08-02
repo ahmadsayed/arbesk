@@ -178,11 +178,13 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 
 - Requires Session auth (`Authorization: Session <token>`).
 - Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
-- Requires `prompt` and `nodeId`.
+- Requires `nodeId` and either `prompt` or `imageData`.
 - Accepts optional `provider` (`"mock"` or `"tripo3d"`) and optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
-- Accepts optional `refineTaskId` (`tripo3d` only): the `taskId` of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo `texture_model` (texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream) and the `202` response includes `"refined": true`. Unknown, incomplete, or foreign `refineTaskId` → `404 REFINE_SOURCE_NOT_FOUND`; the browser falls back to a fresh generation automatically.
+- Accepts optional `imageData` + `imageMime` (`tripo3d` only): a base64-encoded JPEG/PNG/WebP image (max ~10 MB raw) for image-to-3D. The backend uploads the image to Tripo (`POST /files`), starts an image-to-model task, and returns `202` — the polling flow is identical to text-to-3D. An image always starts a fresh model: `refineTaskId` is ignored when `imageData` is present. The browser also pins the reference image to IPFS and records it in the manifest node as `reference_image: {cid, mime, name}` — the provenance chain keeps what the model was made from.
+- Accepts optional `animateTaskId` + `animations` (`tripo3d` only): the `taskId` of a previously completed generation owned by the same wallet, plus 1–5 retarget presets (`preset:idle`, `preset:walk`, `preset:run`, `preset:dive`, `preset:climb`, `preset:jump`, `preset:slash`, `preset:shoot`, `preset:hurt`, `preset:fall`, `preset:turn`). With `"rigOnly": true` instead of `animations`, the chain stops after the rig step and returns the Mixamo-ready rigged GLB with no baked animation. The backend starts a rig chain (rig-check → rig → retarget) and returns `202` with `"animating": true`. Unknown/incomplete/foreign `animateTaskId` → `404 ANIMATE_SOURCE_NOT_FOUND`. While polling, `GET /generations/:taskId` returns a `stage` label ("Checking rig compatibility" / "Rigging skeleton" / "Baking animations"); if Tripo reports the model is not riggable, the task fails with `MODEL_NOT_RIGGABLE`. The final success payload is the animated (or rigged) GLB.
+- Accepts optional `refineTaskId` (`tripo3d` only): the `taskId` of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo's v3 re-texture endpoint (`POST /models/texture`; texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream) and the `202` response includes `"refined": true`. Unknown, incomplete, or foreign `refineTaskId` → `404 REFINE_SOURCE_NOT_FOUND`; the browser falls back to a fresh generation automatically.
 - If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses `src/api/adapters/mock-adapter.js` and returns the raw asset bytes immediately (`200`).
-- If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v2 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
+- If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v3 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
 - **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.js` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
@@ -284,6 +286,41 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
 |---:|---|
 | 401 | Missing, malformed, or invalid Session auth |
 | 404 | `GENERATION_TASK_NOT_FOUND` — task ID unknown, expired, or belongs to another wallet |
+
+---
+
+### `POST /api/v1/generations/balance`
+
+Returns the Tripo3D credit balance for a user-supplied BYOK key.
+
+- Requires Session auth (`Authorization: Session <token>`).
+- No rate limit — balance checks do not consume generation quota.
+- The `providerKey` is used transiently for the single upstream call; it is never logged or persisted.
+
+**Request Body**
+
+```json
+{
+  "providerKey": "tsk_..."
+}
+```
+
+**Response `200`**
+
+```json
+{
+  "balance": 630,
+  "frozen": 0
+}
+```
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 400 | `VALIDATION_ERROR` — missing/invalid `providerKey` |
+| 401 | Missing Session auth, or `PROVIDER_AUTH_FAILED` — Tripo rejected the key |
+| 502 | `PROVIDER_ERROR` — upstream Tripo failure |
 
 ---
 

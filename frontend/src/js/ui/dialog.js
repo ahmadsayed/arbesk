@@ -282,6 +282,78 @@ export function showInfoDialog(title, bodyHtml) {
 }
 
 /**
+ * Show a dialog with a checkbox group and Confirm/Cancel actions.
+ *
+ * @param {string} title
+ * @param {string} body - instructional text (plain text, escaped)
+ * @param {Array<{value: string, label: string, checked?: boolean}>} options
+ * @param {{max?: number}} [opts] - max selectable; extra checks are refused
+ * @returns {Promise<string[]|null>} selected values, or null if cancelled
+ */
+export function showCheckboxDialog(title, body, options, { max = Infinity } = {}) {
+  return new Promise((resolve) => {
+    try {
+      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
+        title,
+        resolve
+      );
+
+      const bodyDiv = document.createElement("div");
+      bodyDiv.className = "dialog-body";
+
+      const hint = document.createElement("p");
+      hint.style.margin = "0 0 var(--size-2)";
+      hint.textContent = body;
+      bodyDiv.appendChild(hint);
+
+      const boxes = options.map((opt) => {
+        const label = document.createElement("label");
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        label.style.gap = "var(--size-2)";
+        label.style.padding = "var(--size-1) 0";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = opt.value;
+        input.checked = !!opt.checked;
+        input.addEventListener("change", () => {
+          const checkedCount = boxes.filter((b) => b.input.checked).length;
+          if (checkedCount > max) input.checked = false;
+        });
+        const text = document.createElement("span");
+        text.textContent = opt.label;
+        label.appendChild(input);
+        label.appendChild(text);
+        bodyDiv.appendChild(label);
+        return { input, value: opt.value };
+      });
+
+      const actionsDiv = document.createElement("div");
+      actionsDiv.className = "dialog-actions";
+      actionsDiv.innerHTML =
+        `<button class="btn btn-secondary dialog-action-btn" type="button" data-value="cancel">Cancel</button>` +
+        `<button class="btn btn-primary dialog-confirm-btn" type="button">Confirm</button>`;
+      dialog.appendChild(bodyDiv);
+      dialog.appendChild(actionsDiv);
+
+      actionsDiv
+        .querySelector('.dialog-action-btn[data-value="cancel"]')
+        .addEventListener("click", () => closeDialog(null));
+      const confirmBtn = actionsDiv.querySelector(".dialog-confirm-btn");
+      confirmBtn.addEventListener("click", () => {
+        const selected = boxes.filter((b) => b.input.checked).map((b) => b.value);
+        closeDialog(selected);
+      });
+
+      setRemoveTrap(_trapFocus(dialog, confirmBtn));
+    } catch (err) {
+      console.error("[DIALOG] error creating checkbox dialog:", err);
+      resolve(null);
+    }
+  });
+}
+
+/**
  * Show a dialog whose body is a caller-supplied DOM element.
  *
  * Useful when the body needs its own internal state and event handling.

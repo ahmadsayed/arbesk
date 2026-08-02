@@ -23,12 +23,20 @@ import { log, error } from "../utils/log.js";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.js";
 import { verifyCanEdit } from "../services/asset-save/editor-publish.js";
 import { publishCollectionForAsset } from "../services/asset-save/collection-publish.js";
+import { downloadActiveAsset } from "../services/asset-download.js";
 import { announceStatus } from "../services/api.js";
+import {
+  startTaskProgress,
+  setTaskProgress,
+  finishTaskProgress,
+  failTaskProgress,
+} from "./task-progress.js";
 
 const saveBtn = document.getElementById("saveAssetBtn");
 const saveBtnText = document.getElementById("saveAssetBtnText");
 const publishBtn = document.getElementById("publishAssetBtn");
 const publishBtnText = document.getElementById("publishAssetBtnText");
+const downloadBtn = document.getElementById("downloadAssetBtn");
 const assetStatusName = document.getElementById("assetStatusName");
 const assetStatusMeta = document.getElementById("assetStatusMeta");
 
@@ -68,6 +76,8 @@ function updateButtonState() {
 
   if (saveBtn) saveBtn.hidden = !visible;
   if (publishBtn) publishBtn.hidden = !visible;
+  // Downloads are read-only — no wallet/session required.
+  if (downloadBtn) downloadBtn.hidden = !hasAsset;
 
   if (saveBtnText) saveBtnText.textContent = "Save";
   if (saveBtn) saveBtn.title = "Save Draft (Ctrl+S)";
@@ -76,6 +86,28 @@ function updateButtonState() {
   }
   if (publishBtn) {
     publishBtn.title = "Besk it: publish this asset";
+  }
+}
+
+async function onDownloadAsset() {
+  if (downloadBtn?.disabled) return;
+  if (downloadBtn) downloadBtn.disabled = true;
+  try {
+    const filename = await downloadActiveAsset();
+    showToast({
+      type: "success",
+      title: "Download Started",
+      message: filename,
+    });
+  } catch (err) {
+    error("Download asset failed:", err);
+    showToast({
+      type: "error",
+      title: "Download Failed",
+      message: err.message || "Could not download the model.",
+    });
+  } finally {
+    if (downloadBtn) downloadBtn.disabled = false;
   }
 }
 
@@ -144,6 +176,10 @@ async function onSaveAssetDraft() {
   }
   if (saveBtnText) saveBtnText.textContent = "Saving…";
   announceStatus("Saving draft…");
+  startTaskProgress(
+    "Saving draft — building manifest and uploading to IPFS…",
+    0.15
+  );
 
   try {
     const assetName = await resolveAssetName();
@@ -152,12 +188,14 @@ async function onSaveAssetDraft() {
     if (!result.ok) {
       if (result.reason === "empty") {
         announceStatus("No asset data to save.");
+        finishTaskProgress("Nothing to save.");
         showToast({
           type: "warning",
           title: "Nothing to Save",
           message: "Generate an asset or add linked worlds first.",
         });
       } else if (result.reason === "no-changes") {
+        finishTaskProgress("No changes to save.");
         showToast({
           type: "info",
           title: "No Changes",
@@ -182,6 +220,7 @@ async function onSaveAssetDraft() {
       assetState.get().activeAssetTokenId ? "Published" : "Draft Scene"
     );
     announceStatus("Draft saved.");
+    finishTaskProgress("Draft saved.");
   } catch (err) {
     error("Save asset draft failed:", err);
     const rateLimited = isRateLimitError(err);
@@ -189,6 +228,9 @@ async function onSaveAssetDraft() {
       rateLimited
         ? "Upload rate limit hit. Save aborted."
         : "Save failed: " + err.message
+    );
+    failTaskProgress(
+      rateLimited ? "Save failed — upload rate limit hit." : "Save failed."
     );
     showToast({
       type: "error",
@@ -223,6 +265,7 @@ async function onPublishAsset() {
       ? "Republishing asset…"
       : "Publishing asset…"
   );
+  startTaskProgress("Besking — preparing asset…", 0.1);
 
   try {
     const assetName = await ensureExplicitName();
@@ -230,6 +273,7 @@ async function onPublishAsset() {
       isPublishing = false;
       if (publishBtn) publishBtn.disabled = false;
       updateButtonState();
+      finishTaskProgress("Besking cancelled.");
       return;
     }
 
@@ -253,6 +297,7 @@ async function onPublishAsset() {
       : null;
 
     // Save first: every Besk creates a new draft version, then publishes it.
+    setTaskProgress(0.3, "Besking — saving new version to IPFS…");
     const result = await saveAssetDraftCore(assetName, {
       captureThumbnail: true,
       publishContext,
@@ -261,6 +306,7 @@ async function onPublishAsset() {
     if (!result.ok) {
       if (result.reason === "empty") {
         announceStatus("No asset data to publish.");
+        finishTaskProgress("Nothing to publish.");
         showToast({
           type: "warning",
           title: "Nothing to Publish",
@@ -292,6 +338,7 @@ async function onPublishAsset() {
     assetState.set({ activeAssetId: assetID });
 
     announceStatus("Confirm transaction in MetaMask…");
+    setTaskProgress(0.6, "Besking — confirm the transaction in your wallet…");
 
     const { tokenId, isNew } = await publishCollectionForAsset(
       assetCid,
@@ -299,6 +346,7 @@ async function onPublishAsset() {
       walletAddr
     );
 
+    setTaskProgress(0.9, "Besking — finalizing…");
     assetState.set({
       activeCollectionTokenId: String(tokenId),
       activeAssetTokenId: String(tokenId),
@@ -308,6 +356,9 @@ async function onPublishAsset() {
       isNew
         ? "Default collection published and minted."
         : "Collection republished successfully."
+    );
+    finishTaskProgress(
+      isNew ? "Published — collection minted on-chain." : "Republished."
     );
 
     if (isNew) {
@@ -327,6 +378,9 @@ async function onPublishAsset() {
       rateLimited
         ? "Upload rate limit hit. Publish aborted."
         : "Publish failed: " + err.message
+    );
+    failTaskProgress(
+      rateLimited ? "Publish failed — upload rate limit hit." : "Publish failed."
     );
     showToast({
       type: "error",
@@ -350,6 +404,7 @@ export { onSaveAssetDraft, onPublishAsset };
 
 saveBtn?.addEventListener("click", onSaveAssetDraft);
 publishBtn?.addEventListener("click", onPublishAsset);
+downloadBtn?.addEventListener("click", () => void onDownloadAsset());
 
 document.addEventListener("keydown", (e) => {
   if (!((e.ctrlKey || e.metaKey) && e.key === "s")) return;
@@ -387,6 +442,7 @@ on(EVENTS.SCENE_READY, (e) => {
 on(EVENTS.SCENE_EMPTY, () => {
   if (saveBtn) saveBtn.hidden = true;
   if (publishBtn) publishBtn.hidden = true;
+  if (downloadBtn) downloadBtn.hidden = true;
   updateAssetStatus("No asset open", "Create or open an asset");
 });
 on(EVENTS.WALLET_CONNECTED, updateButtonState);
