@@ -77,6 +77,39 @@ describe("buildCdpEip1193Provider eth_sendTransaction — UserOperation confirma
     await expect(resultPromise).resolves.toBe(TX_HASH);
   });
 
+  test("emits ASSET_PUBLISH_PENDING at UserOperation submission, before mining", async () => {
+    // The op never mines in this test — the pending event must fire anyway.
+    _getUserOperationImpl = async () => ({ status: "broadcast" });
+
+    const { buildCdpEip1193Provider } = await loadModule();
+    const { on, EVENTS } = await import("../../frontend/src/js/events/bus.js");
+    const pending = jest.fn();
+    const off = on(EVENTS.ASSET_PUBLISH_PENDING, pending);
+
+    const provider = buildCdpEip1193Provider(
+      { address: EOA_ADDRESS },
+      SMART_ACCOUNT_ADDRESS
+    );
+
+    const resultPromise = provider.request({
+      method: "eth_sendTransaction",
+      params: [{ to: "0xTarget", value: "0x0", data: "0x" }],
+    });
+    resultPromise.catch(() => {});
+
+    await jest.advanceTimersByTimeAsync(0); // flush the sendUserOperation microtasks
+    expect(pending).toHaveBeenCalledWith({ txHash: USER_OP_HASH });
+    off();
+
+    // Settle the dangling promise so the test can end cleanly.
+    _getUserOperationImpl = async () => ({
+      status: "failed",
+      receipts: [{ revert: { message: "boom" } }],
+    });
+    await jest.advanceTimersByTimeAsync(2000);
+    await expect(resultPromise).rejects.toThrow("boom");
+  });
+
   test("rejects with the revert message when the UserOperation fails", async () => {
     _getUserOperationImpl = async () => ({
       status: "failed",

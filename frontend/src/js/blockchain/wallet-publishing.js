@@ -68,6 +68,24 @@ function _canPublishWithCurrentWallet() {
 
 // ── Asset Publishing ──
 
+/**
+ * Send a contract transaction optimistically: emit ASSET_PUBLISH_PENDING as
+ * soon as the wallet broadcasts a transaction hash (EOA PromiEvent), then
+ * still await the mined receipt for the authoritative result. Callers keep
+ * their receipt-based flow unchanged.
+ * @param {*} promiEvent - web3 tx.send() PromiEvent
+ * @param {object} payload - pending-event payload (tokenId, …)
+ * @returns {Promise<*>} the mined receipt
+ */
+function _awaitReceiptWithPendingEvent(promiEvent, payload) {
+  if (typeof promiEvent.once === "function") {
+    promiEvent.once("transactionHash", (hash) => {
+      emit(EVENTS.ASSET_PUBLISH_PENDING, { ...payload, txHash: hash });
+    });
+  }
+  return promiEvent;
+}
+
 async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
   const c = getActiveContract();
   const w3 = _getWeb3();
@@ -85,10 +103,13 @@ async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
       editorListUri
     );
     const gas = await _resolveGas(tx, walletState.get().walletAddress);
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas,
-    });
+    const receipt = await _awaitReceiptWithPendingEvent(
+      tx.send({
+        from: walletState.get().walletAddress,
+        gas,
+      }),
+      { tokenId, tokenURI }
+    );
 
     emit(EVENTS.ASSET_PUBLISHED, {
       tokenId,
@@ -128,10 +149,13 @@ async function updateAssetURI(tokenId, newTokenURI, proof) {
       proof
     );
     const gas = await _resolveGas(tx, walletState.get().walletAddress);
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas,
-    });
+    const receipt = await _awaitReceiptWithPendingEvent(
+      tx.send({
+        from: walletState.get().walletAddress,
+        gas,
+      }),
+      { tokenId, tokenURI: newTokenURI }
+    );
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateAssetURI failed:", error);

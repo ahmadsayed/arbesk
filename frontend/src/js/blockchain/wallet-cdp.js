@@ -11,6 +11,7 @@
 
 import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut } from "@coinbase/cdp-core";
 import { log, error, warn } from "../utils/log.js";
+import { emit, EVENTS } from "../events/bus.js";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import {
   isSmartWalletSupported,
@@ -481,6 +482,12 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
 
           const userOpHash = result.userOperationHash;
           log("CDP:EIP1193", "UserOperation submitted, hash:", userOpHash);
+
+          // Optimistic UI: the UserOperation is accepted by the bundler, so
+          // listeners (library card, save flow) can update immediately instead
+          // of waiting for block inclusion. The authoritative confirmation
+          // still comes from the mined tx below + ASSET_PUBLISHED.
+          emit(EVENTS.ASSET_PUBLISH_PENDING, { txHash: userOpHash });
 
           // CDP returns a UserOperation hash, but Web3.js expects an EVM transaction
           // hash so it can poll eth_getTransactionReceipt. Poll CDP until the

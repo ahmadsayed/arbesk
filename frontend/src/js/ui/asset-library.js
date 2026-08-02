@@ -986,7 +986,13 @@ function initAssetLibrary() {
 }
 
 on(EVENTS.SCENE_READY, highlightActiveAsset);
-on(EVENTS.ASSET_PUBLISHED, async () => {
+
+/**
+ * Refresh the gallery after a publish signal. Fires on ASSET_PUBLISH_PENDING
+ * (tx broadcast — optimistic update) and again on ASSET_PUBLISHED (mined —
+ * authoritative). The update is idempotent, so running it twice is harmless.
+ */
+async function handlePublishUpdate() {
   // Only pay for a gallery update if the library pane is currently visible.
   // Otherwise mark it dirty and refresh when the user switches back.
   if (getActiveView() !== "library") {
@@ -1001,7 +1007,10 @@ on(EVENTS.ASSET_PUBLISHED, async () => {
     await refreshAssetLibrary();
   }
   highlightActiveAsset();
-});
+}
+
+on(EVENTS.ASSET_PUBLISHED, handlePublishUpdate);
+on(EVENTS.ASSET_PUBLISH_PENDING, handlePublishUpdate);
 
 on(EVENTS.SIDEBAR_VIEW_CHANGED, async ({ view }) => {
   if (view !== "library" || !_libraryDirty) return;

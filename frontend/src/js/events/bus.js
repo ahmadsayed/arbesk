@@ -25,6 +25,7 @@ export const EVENTS = {
   ASSET_LINKED_DROPPED:       "asset:linkedDropped",
   ASSET_OPEN_BY_TOKEN_ID:     "asset:openByTokenId",
   ASSET_PUBLISHED:            "asset:published",
+  ASSET_PUBLISH_PENDING:      "asset:publishPending",
   ASSET_STATE_CHANGED:        "asset:stateChanged",
   COMMENT_THREAD_CHANGE:      "commentThread:change",
   COMMENT_THREAD_STATUS:      "commentThread:status",
