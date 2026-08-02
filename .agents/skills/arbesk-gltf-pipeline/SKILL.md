@@ -31,8 +31,9 @@ All row details: `references/deep-dive.md`.
 
 | File | Role |
 |------|------|
-| `frontend/src/js/gltf/composer.js` | `ipfs://` URIs → base64 for Babylon.js |
-| `frontend/src/js/gltf/decomposer.js` | data URIs → IPFS |
+| `frontend/src/js/gltf/gltf-core.js` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
+| `frontend/src/js/gltf/composer.js` | Main-thread compose wrapper (IPFS fetch + cache injection) |
+| `frontend/src/js/gltf/decomposer.js` | Main-thread decompose wrapper (IPFS upload + dedup injection) |
 | `frontend/src/js/gltf/material-editor.js` | PBR prop edits, commits new CID |
 | `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatcher, `loadNode()` orchestration |
 | `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` runtime overlays |

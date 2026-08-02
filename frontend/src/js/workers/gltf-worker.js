@@ -8,10 +8,10 @@
  *   - GLB parsing/decomposition
  *   - source color baking (per-node material color mutation)
  *
- * This worker is intentionally self-contained: it does NOT import project
- * modules that rely on the DOM, session state, or import maps. Web Workers
- * don't inherit the page's import map, so @gltf-transform/core is loaded
- * from the same vendored bundle the main thread's import map points at
+ * The worker runs in a separate context without the page's import map, DOM,
+ * or session state, so it only imports pure project modules (gltf-core.js,
+ * utils, cache-aware-fetch). @gltf-transform/core is loaded from the same
+ * vendored bundle the main thread's import map points at
  * (see frontend/src/js/vendor/README.md) via a relative path instead.
  */
 
@@ -25,6 +25,14 @@ import {
   uploadBatchToIPFSWithCredential,
   uploadToIPFSWithCredential,
 } from "../ipfs/upload-with-credential.js";
+import {
+  IPFS_URI_PREFIX,
+  isComposite,
+  ipfsUriFromCid,
+  attachDedupMeta,
+  composeGltfJson,
+  decomposeGltfJson,
+} from "../gltf/gltf-core.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
 
@@ -32,18 +40,9 @@ const _inflightRawDownloads = new Map();
 
 console.log("[WORKER-INIT] gltf-worker module evaluating");
 
-const IPFS_URI_PREFIX = "ipfs://";
 const HASH_ALGORITHM = DEFAULT_HASH_ALGORITHM;
 const WORKER_BUFFER_PLACEHOLDER = (i) => `__worker_buffer_${i}__`;
 const WORKER_IMAGE_PLACEHOLDER = (i) => `__worker_image_${i}__`;
-
-function ipfsUriFromCid(cid) {
-  return IPFS_URI_PREFIX + cid;
-}
-
-function attachDedupMeta(item, meta) {
-  return { ...item, _arbesk: meta };
-}
 
 let io = null;
 function getIO() {
@@ -192,17 +191,6 @@ async function fetchCIDAsBase64(cid, arbeskMeta, gatewayBase) {
   });
 }
 
-function isComposite(gltf) {
-  if (!gltf) return false;
-  for (const buf of gltf.buffers || []) {
-    if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) return true;
-  }
-  for (const img of gltf.images || []) {
-    if (img.uri && img.uri.startsWith(IPFS_URI_PREFIX)) return true;
-  }
-  return false;
-}
-
 // ─── Operations ─────────────────────────────────────────────────────────────
 
 async function compose(payload) {
@@ -210,43 +198,10 @@ async function compose(payload) {
   if (!compositeJson) throw new Error("compose: gltfJson is null");
   if (!gatewayBase) throw new Error("compose: gatewayBase is required");
 
-  const composed = JSON.parse(JSON.stringify(compositeJson));
-
-  if (composed.buffers) {
-    await Promise.all(
-      composed.buffers.map(async (buf, i) => {
-        const uri = buf.uri;
-        if (uri && uri.startsWith(IPFS_URI_PREFIX)) {
-          const cid = uri.replace(IPFS_URI_PREFIX, "");
-          const base64 = await fetchCIDAsBase64(cid, buf._arbesk, gatewayBase);
-          composed.buffers[i] = {
-            ...buf,
-            uri: `data:application/octet-stream;base64,${base64}`,
-          };
-        }
-      })
-    );
-  }
-
-  if (composed.images) {
-    await Promise.all(
-      composed.images.map(async (img, i) => {
-        if (!img.uri) return;
-
-        if (img.uri.startsWith(IPFS_URI_PREFIX)) {
-          const cid = img.uri.replace(IPFS_URI_PREFIX, "");
-          const mimeType = img.mimeType || "image/png";
-          const base64 = await fetchCIDAsBase64(cid, img._arbesk, gatewayBase);
-          composed.images[i] = {
-            ...img,
-            uri: `data:${mimeType};base64,${base64}`,
-          };
-        }
-      })
-    );
-  }
-
-  return { composedJson: composed };
+  const composedJson = await composeGltfJson(compositeJson, (cid, meta) =>
+    fetchCIDAsBase64(cid, meta, gatewayBase)
+  );
+  return { composedJson };
 }
 
 /**
@@ -262,72 +217,35 @@ async function composeToBytes(payload) {
   return new Transfer({ composedBytes }, [composedBytes.buffer]);
 }
 
-function decomposeGltf(payload) {
+async function decomposeGltf(payload) {
   const { gltfJson } = payload || {};
   if (!gltfJson) throw new Error("decomposeGltf: gltf is null");
   if (isComposite(gltfJson)) {
     return { composite: gltfJson, buffers: [], images: [] };
   }
 
-  const composite = JSON.parse(JSON.stringify(gltfJson));
   const buffers = [];
   const images = [];
-
-  if (composite.buffers) {
-    for (let i = 0; i < composite.buffers.length; i++) {
-      const buf = composite.buffers[i];
-      if (!buf.uri) continue;
-      if (buf.uri.startsWith(IPFS_URI_PREFIX)) continue;
-
-      const extracted = extractDataURI(buf.uri);
-      if (!extracted) {
-        console.warn(
-          `[WORKER-DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(
-            0,
-            80
-          )}...`
-        );
-        continue;
-      }
-
-      const name = `buffer_${i}.bin`;
-      buffers.push({ name, bytes: extracted.bytes, mime: extracted.mimeType });
-      composite.buffers[i] = {
-        ...buf,
-        uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1),
-      };
-    }
-  }
-
-  if (composite.images) {
-    for (let i = 0; i < composite.images.length; i++) {
-      const img = composite.images[i];
-      if (!img.uri) continue;
-      if (img.uri.startsWith(IPFS_URI_PREFIX)) continue;
-      if (!img.uri.startsWith("data:")) {
-        console.log(
-          `[WORKER-DECOMPOSE] image[${i}] external URI, keeping as-is`
-        );
-        continue;
-      }
-
-      const extracted = extractDataURI(img.uri);
-      if (!extracted) {
-        console.warn(
-          `[WORKER-DECOMPOSE] image[${i}] failed to extract data URI`
-        );
-        continue;
-      }
-
+  const composite = await decomposeGltfJson(gltfJson, {
+    logPrefix: "[WORKER-DECOMPOSE]",
+    onBuffer: (i, buf, extracted) => {
+      buffers.push({
+        name: `buffer_${i}.bin`,
+        bytes: extracted.bytes,
+        mime: extracted.mimeType,
+      });
+      return { ...buf, uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1) };
+    },
+    onImage: (i, img, extracted) => {
       const ext = extFromMimeType(extracted.mimeType);
-      const name = `texture_${i}.${ext}`;
-      images.push({ name, bytes: extracted.bytes, mime: extracted.mimeType });
-      composite.images[i] = {
-        ...img,
-        uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1),
-      };
-    }
-  }
+      images.push({
+        name: `texture_${i}.${ext}`,
+        bytes: extracted.bytes,
+        mime: extracted.mimeType,
+      });
+      return { ...img, uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1) };
+    },
+  });
 
   return { composite, buffers, images };
 }
@@ -693,7 +611,7 @@ async function decomposeAndUploadGltf(payload) {
     throw new Error("decomposeAndUploadGltf: credential is required");
   }
 
-  const { composite, buffers, images } = decomposeGltf({ gltfJson });
+  const { composite, buffers, images } = await decomposeGltf({ gltfJson });
   await Promise.all([
     uploadExtractedItems(
       buffers,

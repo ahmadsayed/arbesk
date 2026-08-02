@@ -16,33 +16,17 @@
  * buffers and images stay at their original CIDs (IPFS deduplication).
  */
 
-import { sanitizeFileName, extractDataURI } from "../utils/uri.js";
+import { sanitizeFileName } from "../utils/uri.js";
+import { uploadWithDedup } from "./dedup.js";
 import {
-  uploadWithDedup,
-  attachDedupMeta,
+  IPFS_URI_PREFIX,
+  isComposite,
   ipfsUriFromCid,
-} from "./dedup.js";
+  attachDedupMeta,
+  decomposeGltfJson,
+} from "./gltf-core.js";
 
-const IPFS_URI_PREFIX = "ipfs://";
-
-/**
- * Check if a glTF JSON is already in composite format.
- */
-export function isComposite(gltf) {
-  if (!gltf) return false;
-
-  // Check buffers for ipfs:// URIs
-  for (const buf of gltf.buffers || []) {
-    if (buf.uri && buf.uri.startsWith(IPFS_URI_PREFIX)) return true;
-  }
-
-  // Check images for ipfs:// URIs
-  for (const img of gltf.images || []) {
-    if (img.uri && img.uri.startsWith(IPFS_URI_PREFIX)) return true;
-  }
-
-  return false;
-}
+export { isComposite };
 
 /**
  * Decompose a standard glTF JSON: extract buffers and images, store each
@@ -67,113 +51,61 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
     return gltf;
   }
 
-  const composite = structuredClone(gltf);
   const stats = {
     buffers: 0,
     images: 0,
     bytesTotal: 0,
     skipped: 0,
   };
-
-  // --- Decompose buffers ---
-  // Upload all extracted buffers concurrently. Each promise mutates its own
-  // index in composite.buffers, so there is no cross-index race.
-  if (composite.buffers) {
-    await Promise.all(
-      composite.buffers.map(async (buf, i) => {
-        if (!buf.uri) return;
-
-        // Already an ipfs:// URI
-        if (buf.uri.startsWith(IPFS_URI_PREFIX)) {
-          stats.buffers++;
-          return;
-        }
-
-        // Extract and store binary buffer
-        const extracted = extractDataURI(buf.uri);
-        if (!extracted) {
-          console.warn(
-            `[DECOMPOSE] buffer[${i}] unrecognized URI: ${buf.uri.substring(
-              0,
-              80
-            )}...`
-          );
-          return;
-        }
-
-        const filename = `${baseName}_buffer_${i}.bin`;
-        const { cid, meta, skipped } = await uploadWithDedup(
-          extracted.bytes,
-          filename,
-          credential,
-          { compress },
-          dedupMap
-        );
-        composite.buffers[i] = attachDedupMeta(
-          { ...buf, uri: ipfsUriFromCid(cid) },
-          meta
-        );
-        stats.buffers++;
-        stats.bytesTotal += extracted.bytes.length;
-        if (skipped) stats.skipped++;
-        console.log(
-          `[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)${
-            skipped ? " [dedup]" : ""
-          }`
-        );
-      })
-    );
+  // Pre-count already-decomposed refs in mixed composites.
+  for (const buf of gltf.buffers || []) {
+    if (buf.uri?.startsWith(IPFS_URI_PREFIX)) stats.buffers++;
+  }
+  for (const img of gltf.images || []) {
+    if (img.uri?.startsWith(IPFS_URI_PREFIX)) stats.images++;
   }
 
-  // --- Decompose images ---
-  // Upload all extracted images concurrently.
-  if (composite.images) {
-    await Promise.all(
-      composite.images.map(async (img, i) => {
-        if (!img.uri) return;
-
-        // Already an ipfs:// URI
-        if (img.uri.startsWith(IPFS_URI_PREFIX)) {
-          stats.images++;
-          return;
-        }
-
-        // External URI or bufferView reference - skip
-        if (!img.uri.startsWith("data:")) {
-          console.log(`[DECOMPOSE] image[${i}] external URI, keeping as-is`);
-          return;
-        }
-
-        const extracted = extractDataURI(img.uri);
-        if (!extracted) {
-          console.warn(`[DECOMPOSE] image[${i}] failed to extract data URI`);
-          return;
-        }
-
-        const ext = extracted.mimeType.split("/")[1] || "bin";
-        const filename = `${baseName}_texture_${i}.${ext}`;
-        const { cid, meta, skipped } = await uploadWithDedup(
-          extracted.bytes,
-          filename,
-          credential,
-          { compress },
-          dedupMap
-        );
-        composite.images[i] = attachDedupMeta(
-          { ...img, uri: ipfsUriFromCid(cid) },
-          meta
-        );
-        stats.images++;
-        stats.bytesTotal += extracted.bytes.length;
-        if (skipped) stats.skipped++;
-        console.log(
-          `[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)${
-            skipped ? " [dedup]" : ""
-          }`
-        );
-      })
-    );
-  }
+  const composite = await decomposeGltfJson(gltf, {
+    onBuffer: async (i, buf, extracted) => {
+      const filename = `${baseName}_buffer_${i}.bin`;
+      const { cid, meta, skipped } = await uploadWithDedup(
+        extracted.bytes,
+        filename,
+        credential,
+        { compress },
+        dedupMap
+      );
+      stats.buffers++;
+      stats.bytesTotal += extracted.bytes.length;
+      if (skipped) stats.skipped++;
+      console.log(
+        `[DECOMPOSE] buffer[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)${
+          skipped ? " [dedup]" : ""
+        }`
+      );
+      return attachDedupMeta({ ...buf, uri: ipfsUriFromCid(cid) }, meta);
+    },
+    onImage: async (i, img, extracted) => {
+      const ext = extracted.mimeType.split("/")[1] || "bin";
+      const filename = `${baseName}_texture_${i}.${ext}`;
+      const { cid, meta, skipped } = await uploadWithDedup(
+        extracted.bytes,
+        filename,
+        credential,
+        { compress },
+        dedupMap
+      );
+      stats.images++;
+      stats.bytesTotal += extracted.bytes.length;
+      if (skipped) stats.skipped++;
+      console.log(
+        `[DECOMPOSE] image[${i}] → ipfs://${cid} (${extracted.bytes.length} bytes)${
+          skipped ? " [dedup]" : ""
+        }`
+      );
+      return attachDedupMeta({ ...img, uri: ipfsUriFromCid(cid) }, meta);
+    },
+  });
 
   console.log(
     `[DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} skipped=${stats.skipped} totalBytes=${stats.bytesTotal}`

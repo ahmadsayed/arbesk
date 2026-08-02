@@ -15,9 +15,19 @@ import {
 } from "../utils/hash.js";
 import { compress } from "../utils/compression.js";
 import { writeToIPFS } from "../ipfs/write-to-ipfs.js";
+import {
+  IPFS_URI_PREFIX,
+  cidFromIpfsUri,
+  ipfsUriFromCid,
+  attachDedupMeta,
+  stripDedupMeta,
+} from "./gltf-core.js";
+
+// The pure helpers live in gltf-core.js (shared with the glTF worker);
+// re-exported here so existing import sites keep working.
+export { cidFromIpfsUri, ipfsUriFromCid, attachDedupMeta, stripDedupMeta };
 
 const HASH_ALGORITHM = DEFAULT_HASH_ALGORITHM;
-const IPFS_URI_PREFIX = "ipfs://";
 
 // Coalesce concurrent uploads of identical payloads so two parallel callers
 // that hash to the same value share one in-flight writeToIPFS promise instead
@@ -124,55 +134,4 @@ export async function uploadWithDedup(
 
   _inflightUploads.set(inflightKey, uploadPromise);
   return uploadPromise;
-}
-
-/**
- * Attach Arbesk dedup metadata to a glTF buffer or image entry.
- *
- * @param {object} item
- * @param {object} meta
- * @returns {object}
- */
-export function attachDedupMeta(item, meta) {
-  return { ...item, _arbesk: meta };
-}
-
-/**
- * Remove Arbesk dedup metadata from all buffers/images in a composite glTF.
- *
- * This produces a clean glTF JSON suitable for Babylon.js or serialization.
- *
- * @param {object} composite
- * @returns {object}
- */
-export function stripDedupMeta(composite) {
-  const cleaned = JSON.parse(JSON.stringify(composite));
-  for (const item of [
-    ...(cleaned.buffers || []),
-    ...(cleaned.images || []),
-  ]) {
-    delete item._arbesk;
-  }
-  return cleaned;
-}
-
-/**
- * Convert an ipfs:// URI to a bare CID string.
- *
- * @param {string} uri
- * @returns {string|null}
- */
-export function cidFromIpfsUri(uri) {
-  if (!uri || !uri.startsWith(IPFS_URI_PREFIX)) return null;
-  return uri.slice(IPFS_URI_PREFIX.length);
-}
-
-/**
- * Convert a bare CID string to an ipfs:// URI.
- *
- * @param {string} cid
- * @returns {string}
- */
-export function ipfsUriFromCid(cid) {
-  return IPFS_URI_PREFIX + cid;
 }

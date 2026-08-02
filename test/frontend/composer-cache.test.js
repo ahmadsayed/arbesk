@@ -197,4 +197,27 @@ describe("composeGlTF content-cache integration", () => {
     expect(cachePut).not.toHaveBeenCalled();
     expect(composed.images[0].uri.startsWith("data:image/png;base64,")).toBe(true);
   });
+
+  it("drops bufferView when an image also has a uri (glTF XOR rule)", async () => {
+    // Storage form carries both bufferView (into the shared buffer) and uri
+    // (dedup'd IPFS image); the composed output must keep only the uri or
+    // strict importers like Blender reject the file.
+    const { composeGlTF } = await loadComposer();
+
+    const composite = {
+      asset: { version: "2.0" },
+      buffers: [{ uri: "data:application/octet-stream;base64,AAAA", byteLength: 2 }],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 2 }],
+      images: [
+        { bufferView: 0, mimeType: "image/png", uri: "data:image/png;base64,iVBORw0KGgo=" },
+        { bufferView: 0, mimeType: "image/png" }, // bufferView-only: untouched
+      ],
+    };
+    const composed = await composeGlTF(composite);
+
+    expect(composed.images[0].uri).toBe("data:image/png;base64,iVBORw0KGgo=");
+    expect(composed.images[0].bufferView).toBeUndefined();
+    expect(composed.images[1].bufferView).toBe(0);
+    expect(composed.images[1].uri).toBeUndefined();
+  });
 });
