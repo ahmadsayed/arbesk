@@ -95,6 +95,8 @@ function isRealProvider() {
 // ─── Provider Balance (BYOK) ───
 
 const providerBalance = document.getElementById("providerBalance");
+const highQualityRow = document.getElementById("highQualityRow");
+const highQualityInput = document.getElementById("highQualityInput");
 
 /** @type {string|null} key the latest balance fetch was issued for */
 let balanceFetchKey = null;
@@ -273,6 +275,8 @@ function syncProviderUI() {
     const label = providerSelect.selectedOptions[0]?.textContent || "Mock";
     bottomBarProvider.textContent = `Provider: ${label}`;
   }
+  // HD texture toggle applies to Tripo3D only.
+  if (highQualityRow) highQualityRow.hidden = getProvider() !== "tripo3d";
   refreshProviderBalance();
 }
 
@@ -573,6 +577,7 @@ const ANIMATE_CHOICES = [
   { label: "Idle", value: ["preset:idle"] },
   { label: "Walk + Run", value: ["preset:walk", "preset:run"] },
   { label: "Jump", value: ["preset:jump"] },
+  { label: "Retopo for animation", value: "retopo" },
   { label: "Rig only (no animation)", value: "rig-only" },
   { label: "More…", value: "custom" },
 ];
@@ -618,7 +623,8 @@ function presentGenerationResult(
     });
     void attachChatPreview(generationId, assetMessage);
     // Animated GLBs can't be re-rigged — offer animate choices only on
-    // model/texture results from Tripo3D.
+    // model/texture results and on rig-only results (which just need the
+    // retarget step to become animated).
     if (provider === "tripo3d" && task !== "animate") {
       addAnimateChoices(generationId);
     }
@@ -631,13 +637,114 @@ function presentGenerationResult(
  * generation. T-pose models rig best — the hint rides along in the prompt.
  */
 function addAnimateChoices(generationId) {
+  // On an already-rigged (rig-only) bubble: re-rigging is pointless (the
+  // backend retargets directly) and retopo would strip the skeleton — hide
+  // both chips there.
+  const record = getPendingGeneration(generationId);
+  const choices =
+    record?.task === "rig"
+      ? ANIMATE_CHOICES.filter(
+          (c) => c.value !== "rig-only" && c.value !== "retopo",
+        )
+      : ANIMATE_CHOICES;
   addChoiceMessage(
     "Rig & animate this model? (full-body T-pose rigs best)",
-    ANIMATE_CHOICES,
+    choices,
     (value) => {
+      if (value === "retopo") {
+        void onRetopo(generationId);
+        return;
+      }
       void onAnimate(generationId, value === "custom" ? null : value);
     },
   );
+}
+
+/**
+ * Smart retopology: rebuild a completed Tripo3D generation with clean
+ * topology and baked textures (Tripo mesh/decimate v2.0). The retopo'd model
+ * lands as a new chat bubble and can itself be rigged & animated — clean
+ * topology deforms far better than raw generation output.
+ * @param {string} generationId
+ */
+async function onRetopo(generationId) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.backendTaskId) return;
+
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return;
+  }
+  try {
+    await getOrCreateSession();
+  } catch {
+    showToast({
+      type: "warning",
+      title: "Sign In Required",
+      message: "Sign in to retopo assets.",
+    });
+    return;
+  }
+
+  const prompt = "Retopo for animation";
+  addChatMessage("user", prompt);
+  const working = addWorkingMessage(
+    "Rebuilding topology — this takes a minute or two…",
+  );
+
+  const assetName = getAssetName();
+  const nodeId = `${assetName
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "_")}_retopo_${Date.now()}`;
+  const prevAssetManifestCid =
+    assetState.get().activeAssetManifestCid || undefined;
+  const transformMatrix = buildTransformMatrix();
+
+  try {
+    const result = await generateAsset({
+      prompt,
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      retopoTaskId: record.backendTaskId,
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+    });
+
+    presentGenerationResult(result, {
+      prompt,
+      provider: "tripo3d",
+      task: "retopo",
+      prevAssetManifestCid,
+      transformMatrix,
+    });
+    dismissCreatePulse();
+    // Retopo consumed credits — refresh the caption.
+    refreshProviderBalance({ force: true });
+  } catch (err) {
+    console.error("Retopo failed:", err);
+    let userMsg = "Retopo failed. Please try again.";
+    if (err instanceof ApiError) {
+      if (err.code === "RETOPO_SOURCE_NOT_FOUND") {
+        userMsg =
+          "The source generation expired — retopo within an hour of generating.";
+      } else if (err.status === 401) {
+        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
+      } else if (err.status === 402) {
+        userMsg = "Tripo3D account has insufficient credits.";
+      } else if (err.code === "GENERATION_TIMEOUT") {
+        userMsg = "Retopo timed out. Try again later.";
+      } else if (err.message) {
+        userMsg = err.message;
+      }
+    } else if (err.message) {
+      userMsg = err.message;
+    }
+    addChatMessage("system", userMsg);
+  } finally {
+    working?.remove();
+  }
 }
 
 /**
@@ -711,7 +818,9 @@ async function onAnimate(generationId, presets) {
     presentGenerationResult(result, {
       prompt,
       provider: "tripo3d",
-      task: "animate",
+      // Rig-only results are tagged "rig" so they keep the animate choices
+      // (retarget-only) instead of being treated as final animated models.
+      task: rigOnly ? "rig" : "animate",
       prevAssetManifestCid,
       transformMatrix,
     });
@@ -875,6 +984,8 @@ async function onGenerate() {
       ...(isRealProvider() && { providerKey }),
       ...(refineTaskId && { refineTaskId }),
       ...(imagePayload && imagePayload),
+      ...(provider === "tripo3d" &&
+        highQualityInput?.checked && { highQuality: true }),
     });
 
     if (provider === "tripo3d" && result.taskId) {

@@ -1055,6 +1055,92 @@ describe("generateAsset", () => {
     });
   }, 15_000);
 
+  test("passes retopoTaskId/faceLimit to the backend for smart retopology", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-retopo-1", provider: "tripo3d", status: "running", retopo: true },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await generateAsset({
+      prompt: "Retopo for animation",
+      nodeId: "n-retopo",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      retopoTaskId: "task-gen-1",
+      faceLimit: 5000,
+    });
+
+    expect(result.taskId).toBe("task-retopo-1");
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "Retopo for animation",
+      nodeId: "n-retopo",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      retopoTaskId: "task-gen-1",
+      faceLimit: 5000,
+      chainId: 1,
+    });
+  }, 15_000);
+
+  test("passes highQuality to the backend", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-hq-1", provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "A detailed statue",
+      nodeId: "n-hq",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      highQuality: true,
+    });
+
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toMatchObject({ highQuality: true });
+  }, 15_000);
+
   test("falls back to fresh generation on REFINE_SOURCE_NOT_FOUND", async () => {
     const fetchMock = jest
       .fn()

@@ -81,21 +81,29 @@ function mapTripoCodeToHttp(code) {
  * Create a text-to-3D task.
  * @param {string} prompt
  * @param {string} apiKey
+ * @param {object} [options]
+ * @param {boolean} [options.highQuality=false] - detailed (HD) textures
  * @returns {Promise<string>} task_id
  */
-export async function createTask(prompt, apiKey) {
+export async function createTask(prompt, apiKey, options = {}) {
   if (!prompt || typeof prompt !== "string") {
     throw new TripoApiError("prompt is required", 0, 400);
   }
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
-  console.log(`[GEN] Tripo createTask prompt_len=${prompt.length}`);
+  console.log(
+    `[GEN] Tripo createTask prompt_len=${prompt.length} hq=${Boolean(options.highQuality)}`,
+  );
   const data = await tripoFetch("generation/text-to-model", apiKey, "POST", {
     prompt,
     model: TRIPO_MODEL_VERSION,
     texture: true,
     pbr: true,
+    // Scale to estimated real-world meters — without this Tripo models often
+    // arrive tiny and the Studio camera has to hunt for them.
+    auto_size: true,
+    ...(options.highQuality && { texture_quality: "detailed" }),
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
@@ -157,21 +165,27 @@ export async function uploadImage(imageBuffer, mime, apiKey) {
  * Create an image-to-3D task from a previously uploaded image.
  * @param {string} fileToken - file_token from uploadImage()
  * @param {string} apiKey
+ * @param {object} [options]
+ * @param {boolean} [options.highQuality=false] - detailed (HD) textures
  * @returns {Promise<string>} task_id
  */
-export async function createImageTask(fileToken, apiKey) {
+export async function createImageTask(fileToken, apiKey, options = {}) {
   if (!fileToken || typeof fileToken !== "string") {
     throw new TripoApiError("fileToken is required", 0, 400);
   }
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
-  console.log(`[GEN] Tripo createImageTask file_token=${fileToken}`);
+  console.log(
+    `[GEN] Tripo createImageTask file_token=${fileToken} hq=${Boolean(options.highQuality)}`,
+  );
   const data = await tripoFetch("generation/image-to-model", apiKey, "POST", {
     file: { file_token: fileToken },
     model: TRIPO_MODEL_VERSION,
     texture: true,
     pbr: true,
+    auto_size: true,
+    ...(options.highQuality && { texture_quality: "detailed" }),
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
@@ -211,6 +225,47 @@ export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
   }
   console.log(`[GEN] Tripo refine task created task_id=${data.task_id}`);
+  return data.task_id;
+}
+
+/**
+ * Create a smart-retopology task (POST /mesh/decimate, model v2.0): rebuilds
+ * the model with clean topology and textures baked onto the low-poly.
+ * Intended as the "animation-ready" step between generation and the rig
+ * chain. Costs 30 credits per call.
+ *
+ * NOTE: quad defaults to false on purpose — glTF only stores triangles, so
+ * Tripo forces FBX output when quad=true, and the frontend cannot load FBX.
+ * The triangulated smart-retopo mesh is what the glTF pipeline needs.
+ * @param {string} inputTaskId - completed generation task ID
+ * @param {string} apiKey
+ * @param {object} [options]
+ * @param {number} [options.faceLimit] - target faces (500–20,000); adaptive when omitted
+ * @param {boolean} [options.quad=false] - quad mesh (forces FBX output!)
+ * @returns {Promise<string>} task_id
+ */
+export async function decimateTask(inputTaskId, apiKey, options = {}) {
+  if (!inputTaskId || typeof inputTaskId !== "string") {
+    throw new TripoApiError("inputTaskId is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  const { faceLimit, quad = false } = options;
+  console.log(
+    `[GEN] Tripo decimateTask input=${inputTaskId} quad=${quad} face_limit=${faceLimit ?? "adaptive"}`,
+  );
+  const data = await tripoFetch("mesh/decimate", apiKey, "POST", {
+    input: inputTaskId,
+    model: "v2.0",
+    quad,
+    bake: true,
+    ...(faceLimit && { face_limit: faceLimit }),
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  console.log(`[GEN] Tripo decimate task created task_id=${data.task_id}`);
   return data.task_id;
 }
 

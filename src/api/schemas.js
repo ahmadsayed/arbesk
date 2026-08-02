@@ -71,9 +71,15 @@ export const generateAssetSchema = z
     animateTaskId: z.string().max(64).optional(),
     rigOnly: z.boolean().optional(),
     animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
+    // High-quality generation (tripo3d only): detailed (HD) textures.
+    highQuality: z.boolean().optional(),
+    // Smart retopology (tripo3d only): taskId of a completed generation to
+    // rebuild with clean quad topology + baked textures (animation-ready).
+    retopoTaskId: z.string().max(64).optional(),
+    faceLimit: z.number().int().min(500).max(20000).optional(),
   })
-  .refine((v) => v.prompt || v.imageData || v.animateTaskId, {
-    message: "prompt, imageData, or animateTaskId is required",
+  .refine((v) => v.prompt || v.imageData || v.animateTaskId || v.retopoTaskId, {
+    message: "prompt, imageData, animateTaskId, or retopoTaskId is required",
     path: ["prompt"],
   })
   .refine((v) => !v.imageData || v.imageMime, {

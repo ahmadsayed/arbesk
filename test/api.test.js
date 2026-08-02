@@ -709,6 +709,80 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         fetchSpy.mockRestore();
       });
 
+      it("POST animate on a completed rig-only task retargets directly (no rig-check)", async () => {
+        const rigSourceId = registerTask({
+          tripoTaskId: "task_rig_done",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+          kind: "animate",
+          phase: "rig",
+          rigOnly: true,
+        });
+        markTaskComplete(rigSourceId, "0x1234567890123456789012345678901234567890");
+
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_rt_direct" } }),
+        });
+        fetchSpy.mockClear();
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_anim_direct",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: rigSourceId,
+            animations: ["preset:idle", "preset:walk"],
+          });
+
+        expect(res.status).toBe(202);
+        expect(res.body).toMatchObject({
+          provider: "tripo3d",
+          status: "running",
+          animating: true,
+        });
+        // Exactly one upstream call: the retarget on the rig task — no
+        // rig-check, no rig.
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/animations/retarget",
+        );
+        expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({
+          input: "task_rig_done",
+          animations: ["preset:idle", "preset:walk"],
+          out_format: "glb",
+        });
+        fetchSpy.mockRestore();
+      });
+
+      it("POST animate with rigOnly on an already-rigged task returns 400", async () => {
+        const rigSourceId = registerTask({
+          tripoTaskId: "task_rig_done_2",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+          kind: "animate",
+          phase: "rig",
+          rigOnly: true,
+        });
+        markTaskComplete(rigSourceId, "0x1234567890123456789012345678901234567890");
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_anim_already",
+            provider: "tripo3d",
+            providerKey: "k",
+            animateTaskId: rigSourceId,
+            rigOnly: true,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("ALREADY_RIGGED");
+      });
+
       it("POST animate returns 404 ANIMATE_SOURCE_NOT_FOUND for unknown source", async () => {
         const res = await request(app)
           .post("/api/v1/generations")
@@ -974,6 +1048,187 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           .set("Authorization", session);
         expect(poll.body.status).toBe("failed");
         expect(poll.body.error.code).toBe("MODEL_NOT_RIGGABLE");
+      });
+
+      it("POST with highQuality passes texture_quality=detailed to Tripo", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_hq" } }),
+        });
+        // Earlier tests assign global.fetch directly; spyOn reuses that mock
+        // including its call history — start from a clean slate.
+        fetchSpy.mockClear();
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A detailed statue",
+            nodeId: "node_tripo_hq",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+            highQuality: true,
+          });
+
+        expect(res.status).toBe(202);
+        expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+          texture_quality: "detailed",
+        });
+        fetchSpy.mockRestore();
+      });
+
+      it("POST without highQuality omits texture_quality", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_std" } }),
+        });
+        fetchSpy.mockClear();
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A plain cube",
+            nodeId: "node_tripo_std",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(res.status).toBe(202);
+        expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).not.toHaveProperty(
+          "texture_quality",
+        );
+        fetchSpy.mockRestore();
+      });
+
+      describe("retopo (smart retopology)", () => {
+        const WALLET = "0x1234567890123456789012345678901234567890";
+
+        async function seedCompletedSource(tripoTaskId) {
+          const sourceId = registerTask({
+            tripoTaskId,
+            providerKey: "k",
+            userAddress: WALLET,
+          });
+          markTaskComplete(sourceId, WALLET);
+          return sourceId;
+        }
+
+        it("POST retopo creates a decimate task with GLB-safe defaults", async () => {
+          const sourceId = await seedCompletedSource("tripo_src_retopo");
+          const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_dec_1" } }),
+          });
+
+          const res = await request(app)
+            .post("/api/v1/generations")
+            .set("Authorization", await makeSessionHeader())
+            .send({
+              nodeId: "node_retopo_1",
+              provider: "tripo3d",
+              providerKey: "k",
+              retopoTaskId: sourceId,
+            });
+
+          expect(res.status).toBe(202);
+          expect(res.body).toMatchObject({
+            provider: "tripo3d",
+            status: "running",
+            retopo: true,
+          });
+          expect(fetchSpy.mock.calls[0][0]).toBe(
+            "https://openapi.tripo3d.ai/v3/mesh/decimate",
+          );
+          expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({
+            input: "tripo_src_retopo",
+            model: "v2.0",
+            quad: false,
+            bake: true,
+          });
+          fetchSpy.mockRestore();
+        });
+
+        it("POST retopo with faceLimit forwards face_limit", async () => {
+          const sourceId = await seedCompletedSource("tripo_src_retopo_fl");
+          const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_dec_2" } }),
+          });
+
+          const res = await request(app)
+            .post("/api/v1/generations")
+            .set("Authorization", await makeSessionHeader())
+            .send({
+              nodeId: "node_retopo_2",
+              provider: "tripo3d",
+              providerKey: "k",
+              retopoTaskId: sourceId,
+              faceLimit: 5000,
+            });
+
+          expect(res.status).toBe(202);
+          expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+            face_limit: 5000,
+          });
+          fetchSpy.mockRestore();
+        });
+
+        it("POST retopo returns 404 RETOPO_SOURCE_NOT_FOUND for unknown source", async () => {
+          const res = await request(app)
+            .post("/api/v1/generations")
+            .set("Authorization", await makeSessionHeader())
+            .send({
+              nodeId: "node_retopo_404",
+              provider: "tripo3d",
+              providerKey: "k",
+              retopoTaskId: "00000000-0000-0000-0000-000000000000",
+            });
+
+          expect(res.status).toBe(404);
+          expect(res.body.error.code).toBe("RETOPO_SOURCE_NOT_FOUND");
+        });
+
+        it("GET poll completes a decimate task and returns the retopo GLB", async () => {
+          const glb = new TextEncoder().encode("retopo-glb");
+          const session = await makeSessionHeader();
+          const taskId = registerTask({
+            tripoTaskId: "task_dec_3",
+            providerKey: "k",
+            userAddress: WALLET,
+          });
+
+          global.fetch = jest
+            .fn()
+            // 1: poll → success with model_url
+            .mockResolvedValueOnce({
+              ok: true,
+              json: async () => ({
+                code: 0,
+                data: {
+                  task_id: "task_dec_3",
+                  status: "success",
+                  output: { model_url: "https://cdn/retopo.glb" },
+                },
+              }),
+            })
+            // 2: download
+            .mockResolvedValueOnce({
+              ok: true,
+              arrayBuffer: async () =>
+                glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength),
+            });
+
+          const res = await request(app)
+            .get(`/api/v1/generations/${taskId}`)
+            .set("Authorization", session);
+
+          expect(res.body.status).toBe("success");
+          expect(res.body.format).toBe("glb");
+          expect(Buffer.from(res.body.assetData, "base64").toString()).toBe(
+            "retopo-glb",
+          );
+        });
       });
 
       it("GET returns progress while task is running", async () => {

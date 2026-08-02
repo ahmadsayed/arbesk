@@ -6,6 +6,7 @@ import {
   createRefineTask,
   uploadImage,
   getBalance,
+  decimateTask,
   rigCheckTask,
   rigModelTask,
   retargetTask,
@@ -63,7 +64,7 @@ export default function generateAssetNode() {
     validateBody(generateAssetSchema),
     async (req, res) => {
       try {
-        const { prompt, nodeId, provider, providerKey, refineTaskId, imageData, imageMime, animateTaskId, animations, rigOnly } = req.body;
+        const { prompt, nodeId, provider, providerKey, refineTaskId, imageData, imageMime, animateTaskId, animations, rigOnly, highQuality, retopoTaskId, faceLimit } = req.body;
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
@@ -165,6 +166,43 @@ export default function generateAssetNode() {
                 },
               });
             }
+
+            // Retarget-only path: the source is itself a completed rig
+            // (rig-only chain). The skeleton already exists — skip rig-check
+            // and rig, and bake the requested presets straight onto it.
+            if (animateSource.kind === "animate" && animateSource.phase === "rig") {
+              if (rigOnly) {
+                return res.status(400).json({
+                  error: {
+                    code: "ALREADY_RIGGED",
+                    message: "This model is already rigged — pick animations to bake.",
+                  },
+                });
+              }
+              console.log(
+                `[GEN] retarget-only: source rig=${animateSource.tripoTaskId} animations=${(animations || []).join(",")}`,
+              );
+              const retargetId = await retargetTask(
+                animateSource.tripoTaskId,
+                animations,
+                key,
+              );
+              const taskId = registerTask({
+                tripoTaskId: retargetId,
+                providerKey: key,
+                userAddress: res.locals.userAddress,
+                kind: "animate",
+                phase: "retarget",
+                animations,
+              });
+              return res.status(202).json({
+                taskId,
+                provider: "tripo3d",
+                status: "running",
+                animating: true,
+              });
+            }
+
             console.log(
               `[GEN] starting animate chain source=${animateSource.tripoTaskId} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)}`,
             );
@@ -208,6 +246,44 @@ export default function generateAssetNode() {
               });
             }
           }
+
+          // Smart retopology: rebuild a completed generation with clean quad
+          // topology + baked textures. The result is a normal completed task,
+          // so it can itself become an animate-chain source afterwards.
+          if (retopoTaskId) {
+            const retopoSource = getCompletedTask(
+              retopoTaskId,
+              res.locals.userAddress,
+            );
+            if (!retopoSource) {
+              console.log(`[GEN] retopo source not found taskId=${retopoTaskId}`);
+              return res.status(404).json({
+                error: {
+                  code: "RETOPO_SOURCE_NOT_FOUND",
+                  message: "Retopo source task not found or not completed",
+                },
+              });
+            }
+            console.log(
+              `[GEN] starting retopo source=${retopoSource.tripoTaskId} faceLimit=${faceLimit ?? "adaptive"}`,
+            );
+            const decimateId = await decimateTask(
+              retopoSource.tripoTaskId,
+              key,
+              { faceLimit },
+            );
+            const taskId = registerTask({
+              tripoTaskId: decimateId,
+              providerKey: key,
+              userAddress: res.locals.userAddress,
+            });
+            return res.status(202).json({
+              taskId,
+              provider: "tripo3d",
+              status: "running",
+              retopo: true,
+            });
+          }
           console.log(
             `[GEN] using Tripo3D adapter for "${prompt || "(image)"}" refine=${Boolean(refineSource)} image=${Boolean(imageData)}`,
           );
@@ -219,10 +295,13 @@ export default function generateAssetNode() {
                   key,
                 ),
                 key,
+                { highQuality: Boolean(highQuality) },
               )
             : refineSource
               ? await createRefineTask(prompt, refineSource.tripoTaskId, key)
-              : await createTask(prompt, key);
+              : await createTask(prompt, key, {
+                  highQuality: Boolean(highQuality),
+                });
           const taskId = registerTask({
             tripoTaskId,
             providerKey: key,

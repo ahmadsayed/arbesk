@@ -160,6 +160,7 @@ describe("tripo3d adapter", () => {
       model: "v3.1-20260211",
       texture: true,
       pbr: true,
+      auto_size: true,
     });
   });
 

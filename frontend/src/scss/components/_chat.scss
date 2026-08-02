@@ -295,6 +295,21 @@
   }
 }
 
+// High-quality texture toggle — Tripo3D only, same quiet caption styling.
+.high-quality-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  cursor: pointer;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
 // Input + submit sit on one row; the hint (when shown) drops below it.
 .messagebar-row {
   display: flex;

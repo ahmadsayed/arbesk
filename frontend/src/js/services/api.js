@@ -489,6 +489,9 @@ export async function getProviderBalance(providerKey) {
  * @param {string} [params.animateTaskId] - taskId of a completed Tripo3D generation to rig & animate (skips refine/image)
  * @param {string[]} [params.animations] - retarget presets (e.g. ["preset:idle"]), max 5; required with animateTaskId unless rigOnly
  * @param {boolean} [params.rigOnly] - stop after the rig step (Mixamo-ready model, no baked animation)
+ * @param {boolean} [params.highQuality] - detailed (HD) textures at generation (tripo3d)
+ * @param {string} [params.retopoTaskId] - taskId of a completed generation to rebuild with clean quad topology (tripo3d)
+ * @param {number} [params.faceLimit] - target quads for retopo (adaptive when omitted)
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
  */
 export async function generateAsset({
@@ -508,6 +511,9 @@ export async function generateAsset({
   animateTaskId,
   animations,
   rigOnly,
+  highQuality,
+  retopoTaskId,
+  faceLimit,
 }) {
   announceStatus("Authenticating…");
 
@@ -523,6 +529,8 @@ export async function generateAsset({
     ...(refineTaskId && { refineTaskId }),
     ...(imageData && { imageData, imageMime }),
     ...(animateTaskId && { animateTaskId, animations, ...(rigOnly && { rigOnly }) }),
+    ...(highQuality && { highQuality }),
+    ...(retopoTaskId && { retopoTaskId, ...(faceLimit && { faceLimit }) }),
   };
 
   announceStatus("Generating 3D asset…");
