@@ -252,15 +252,6 @@ function createBabylonMock() {
 }
 
 describe("model-clock-gizmo math", () => {
-  test("_ringRadiusFromBounds clamps and scales", async () => {
-    const { _ringRadiusFromBounds } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
-    );
-    expect(_ringRadiusFromBounds({ x: -1, y: 0, z: -1 }, { x: 1, y: 2, z: 1 })).toBeCloseTo(1.15, 5);
-    expect(_ringRadiusFromBounds({ x: 0, y: 0, z: 0 }, { x: 0.1, y: 0.1, z: 0.1 })).toBe(0.5);
-    expect(_ringRadiusFromBounds({ x: -10, y: 0, z: -10 }, { x: 10, y: 20, z: 10 })).toBe(8.0);
-  });
-
   test("_angleForIndex places versions clockwise from newest to oldest", async () => {
     const { _angleForIndex } = await import(
       "../../frontend/src/js/ui/model-clock-gizmo.js"
@@ -492,7 +483,7 @@ describe("model-clock-gizmo lifecycle", () => {
 
     // Ray hits the ring plane at the oldest version's position (180° for n=3
     // → world (-radius, 0, 0); root sits at the origin in this test).
-    const radius = 0.5; // MIN_RING_RADIUS: no meshes registered → fallback
+    const radius = 1.5; // RING_RADIUS: fixed, independent of meshes
     scene.createPickingRay.mockReturnValue({
       origin: new babylon.Vector3(-radius, 0, -10),
       direction: new babylon.Vector3(0, 0, 1),
@@ -526,7 +517,7 @@ describe("model-clock-gizmo lifecycle", () => {
     pointerCb({ type: PET.POINTERDOWN, pickInfo: { pickedMesh: handle } });
 
     // Drag toward the oldest version's position (180° for n=3) without releasing.
-    const radius = 0.5;
+    const radius = 1.5;
     scene.createPickingRay.mockReturnValue({
       origin: new babylon.Vector3(-radius, 0, -10),
       direction: new babylon.Vector3(0, 0, 1),

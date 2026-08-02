@@ -8,28 +8,9 @@ import * as store from "../state/version-history-store.js";
 import { on, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 
-const RING_RADIUS_FACTOR = 1.15;
-const MIN_RING_RADIUS = 0.5;
-const MAX_RING_RADIUS = 8.0;
-
-/**
- * Compute world-space ring radius from a node bounding box so the ring
- * always encircles the model without dominating the view.
- *
- * The ring lies in the XY plane, so the radius is driven by the larger of
- * the X and Y extents (Z is ignored).
- *
- * @param {BABYLON.Vector3} min
- * @param {BABYLON.Vector3} max
- */
-export function _ringRadiusFromBounds(min, max) {
-  const dx = max.x - min.x;
-  const dy = max.y - min.y;
-  return Math.min(
-    MAX_RING_RADIUS,
-    Math.max(MIN_RING_RADIUS, (Math.max(dx, dy) / 2) * RING_RADIUS_FACTOR)
-  );
-}
+// Fixed world-space ring radius: the clock is a UI gizmo, so it stays the
+// same size regardless of the model's bounding box.
+const RING_RADIUS = 1.5;
 
 /** Angle in degrees for entry index i of n. Newest runs clockwise into past.
  * @param {number} i
@@ -262,40 +243,8 @@ function syncRootToCamera(root, anchor, camera, offset) {
   );
 }
 
-/** Compute the radius of the model's silhouette on the billboarded ring plane.
- * This measures how far the bounding box extends from the anchor center when
- * projected onto the plane perpendicular to the camera, so the ring can keep a
- * consistent padding around the visible model regardless of viewport aspect.
- * @param {any} gizmo
- * @returns {number}
- */
-function silhouetteRadiusOnClockPlane(gizmo) {
-  const min = gizmo.boundsMin;
-  const max = gizmo.boundsMax;
-  if (!min || !max) return gizmo.radius;
-
-  const rootPos = gizmo.root.getAbsolutePosition();
-  const rot = gizmo.root.rotationQuaternion;
-  const invRot = rot ? BABYLON.Quaternion.Inverse(rot) : null;
-
-  let maxDistSq = 0;
-  for (const x of [min.x, max.x]) {
-    for (const y of [min.y, max.y]) {
-      for (const z of [min.z, max.z]) {
-        const corner = new BABYLON.Vector3(x, y, z);
-        const local = corner.subtract(rootPos);
-        if (invRot) local.applyRotationQuaternion(invRot);
-        const distSq = local.x * local.x + local.y * local.y;
-        if (distSq > maxDistSq) maxDistSq = distSq;
-      }
-    }
-  }
-  return Math.sqrt(maxDistSq);
-}
-
 function buildGizmoForNode(scene, nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
-  const meshes = state.nodeMeshes.get(nodeId) || [];
   // Show the full asset version chain on the model clock so the active
   // version always has a tick and the scene/model clocks stay in sync.
   const filtered = store.getState().entries;
@@ -320,28 +269,9 @@ function buildGizmoForNode(scene, nodeId) {
     node.rotationQuaternion = null;
   };
 
-  // Compute radius from the node's world bounding box. Force world-matrix
-  // updates first: after a version load the scene has not rendered yet, so
-  // boundingBox.{minimum,maximum}World may still reflect pre-centering local
-  // bounds and produce an oversized ring.
-  let min = null;
-  let max = null;
-  for (const mesh of meshes) {
-    if (!mesh || mesh.isDisposed()) continue;
-    mesh.computeWorldMatrix(true);
-    if (typeof mesh.refreshBoundingInfo === "function") {
-      mesh.refreshBoundingInfo();
-    }
-    const bi = mesh.getBoundingInfo();
-    if (!bi || !bi.boundingBox) continue;
-    const bb = bi.boundingBox;
-    min = min ? BABYLON.Vector3.Minimize(min, bb.minimumWorld) : bb.minimumWorld.clone();
-    max = max ? BABYLON.Vector3.Maximize(max, bb.maximumWorld) : bb.maximumWorld.clone();
-  }
-  const radius = min && max ? _ringRadiusFromBounds(min, max) : MIN_RING_RADIUS;
+  // Fixed ring radius — the clock is a UI gizmo, not model-fitted geometry.
+  const radius = RING_RADIUS;
   gizmo.radius = radius;
-  gizmo.boundsMin = min;
-  gizmo.boundsMax = max;
   gizmo.filtered = filtered;
 
   syncRootToAnchor(root, anchor);
@@ -672,15 +602,6 @@ export function initModelClockGizmo(scene, camera) {
       camera,
       current.radius * CLOCK_DEPTH_OFFSET_FACTOR
     );
-    // Scale the ring so it always keeps the same padding around the model's
-    // projected silhouette, even when the side panel changes the viewport/camera
-    // framing.
-    const silhouetteR = silhouetteRadiusOnClockPlane(current);
-    const targetR = silhouetteR * RING_RADIUS_FACTOR;
-    const scale = targetR / current.radius;
-    if (Number.isFinite(scale) && scale > 0) {
-      current.root.scaling = new BABYLON.Vector3(scale, scale, scale);
-    }
     syncVisuals(current);
     if (!current.tickLabelEls) return;
 
