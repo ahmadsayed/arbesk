@@ -6,7 +6,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
-- Current status: Phases 1–5.4 are complete, including Phase 5.1 (token child worlds), Phase 5.2 (free-tier contract), Phase 5.3 (Merkle editor proofs), and Phase 5.4 (collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, and token indexer are also implemented. Server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
+- Current status: Phases 1–5.4 are complete, including Phase 5.1 (token child worlds), Phase 5.2 (free-tier contract), Phase 5.3 (Merkle editor proofs), and Phase 5.4 (collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented. Server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
 
 ---
 
@@ -17,6 +17,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 - **EVM PayGo contracts** — `ArbeskAssetFree.sol` (free tier) and `ArbeskAsset.sol` (paid tier) support generation payments/quotas, ERC721 collection minting, token URI updates, and Merkle-proof editor authorization.
 - **Collection manifests** — every published token is a collection manifest that maps `assetID`s to asset manifest CIDs; galleries expand collections into per-asset cards.
 - **Merkle editor proofs** — editor sets are stored on IPFS; the contract stores only a Merkle root and version. URI updates, editor set changes, and burns require a valid Merkle proof.
+- **Real 3D generation (Tripo3D v3, BYOK)** — text-to-3D and image-to-3D (JPEG/PNG/WebP attach) as async tasks with live polling; HD texture toggle; texture-only refine; smart retopology (`mesh/decimate` v2.0) for animation-ready topology; rig & animate chain (`rig-check → rig → retarget`, plus retarget-only re-animation of rigged models); credit balance display. Results land as chat bubbles with live orbitable previews and load into Studio on demand.
 - **Mock 3D generation** — backend mock adapter returns local GLTF/GLB-style assets for deterministic development.
 - **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, history entries, token-based `child_ref` links, and optional thumbnails.
 - **Parametric versions** — color and scale edits append history entries without payment or SaaS generation.
@@ -45,7 +46,7 @@ arbesk/
 │   ├── config.js                 # Multi-network Web3 config
 │   └── api/
 │       ├── index.js              # Main router — all v1 routes
-│       ├── assets/generate-node.js# PayGo-validated mock generation route
+│       ├── assets/generate-node.js# PayGo-validated generation route (mock + Tripo3D task chains)
 │       ├── storage/              # kubo/pinata storage backends
 │       ├── authentication.js     # Session token auth
 │       ├── sessions.js           # 24h session store (SIWE)
@@ -108,6 +109,7 @@ arbesk/
 | Blockchain | EVM-compatible / local Hardhat / Base Sepolia Testnet |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
 | Blockchain dev | Dockerized Hardhat |
+| 3D generation | Tripo3D v3 API (BYOK: text/image-to-3D, retopology, rig & animate) + mock adapter |
 | Storage | Private Dockerized Kubo/IPFS (local); Pinata (testnet) |
 | Comments | Local Nostr relay (dev) via WebSocket chat proxy |
 | Runtime cache | Browser memory cache + IndexedDB |
@@ -262,6 +264,7 @@ The gallery expands collection tokens into one card per `assets` entry.
 | 5.4+ | Standalone library page with optimistic create and token indexer |
 | 5.4+ | Asset-level Nostr comments with IPFS archive snapshot |
 | 5.4+ | Token indexer — chunked `eth_getLogs` ownership backfill |
+| 5.4+ | Tripo3D v3 BYOK generation — text/image-to-3D, HD texture, refine, smart retopology, rig & animate |
 
 The server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
 

@@ -1,6 +1,6 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-07-15
+> **Generated:** 2026-08-03
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
@@ -28,6 +28,7 @@
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
 | Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.js`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
+| Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.js` (v3 REST, BYOK), `src/api/generation-tasks.js` (wallet-bound task registry), `src/api/assets/generate-node.js` (refine/animate/retopo chains), `frontend/src/js/ui/create-panel.js` (provider select, BYOK dialog, choice chips), E2E selectors synced |
 | Phase 5: Micro-Ledger | ❌ Not implemented / client-side only | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
@@ -43,7 +44,8 @@ src/
 └── api/
     ├── index.js                # Main router — all v1 routes
     ├── assets/
-    │   └── generate-node.js    # 3D generation entrypoint (mock + Tripo3D task-based)
+    │   └── generate-node.js    # 3D generation entrypoint (mock + Tripo3D task-based; refine/animate/retopo chains)
+    ├── generation-tasks.js     # In-memory wallet-bound generation task registry (TTL, phase tracking)
     ├── adapters/
     │   ├── mock-adapter.js     # Reads local .gltf files
     │   └── tripo3d-adapter.js  # Tripo3D v3 REST adapter (BYOK, async task polling)
@@ -109,12 +111,16 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 ### 2.4 What Works
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
-- ✅ Tripo3D BYOK generation (task-based, v3 API, v3.1 default) with `POST /generations` + `GET /generations/:taskId` polling
+- ✅ Tripo3D BYOK generation (task-based, v3 API, default model `v3.1-20260211`) with `POST /generations` + `GET /generations/:taskId` polling; `auto_size` is passed so models arrive at estimated real-world meter scale; "High quality texture" checkbox sends `texture_quality: detailed`
+- ✅ Tripo3D texture-only refine chain: `refineTaskId` on `POST /generations` re-textures a completed generation via `models/texture` (prompt wrapped in `texture_prompt.text` — flat `text_prompt` is silently ignored upstream); falls back to a fresh generation when the source task is unknown
 - ✅ Tripo3D image-to-3D: attach a JPEG/PNG/WebP in the create panel (image attach button, Tripo3D provider only) → backend uploads via `POST /files` → image-to-model task; same polling flow, starts a fresh model (skips the refine chain). The reference image shows as an image bubble in chat and is pinned to IPFS with its CID recorded in the manifest node (`reference_image`)
 - ✅ Tripo3D credit balance display: `POST /generations/balance` (BYOK key, session-gated) powers the "Tripo 3D credits" caption under the provider select + in the BYOK key dialog; refreshes on key change, wallet connect, and after each generation
 - ✅ Model download: header download button in Studio (active asset) + per-card Download action in the Library; GLB downloads raw from IPFS, composite glTF is inlined (data URIs) first so the file is self-contained — no wallet/session needed (read-only)
-- ✅ Tripo3D rig & animate: in-chat choice chips after a Tripo3D generation ("Idle + Walk", "Walk + Run", "Jump", "Rig only" (stops after the Mixamo rig — no retarget), "More…" → full preset dialog) → backend chains rig-check → rig → retarget (`animateTaskId` + `animations`/`rigOnly` on `POST /generations`); poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Animated/rigged GLB lands as a new chat bubble (task kind `animate`), followed by a "Back to the original model" recovery chip that re-sends the pre-rig model to Studio
-- ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.js`, `pending-generations.js`)
+- ✅ Tripo3D rig & animate: in-chat choice chips after a Tripo3D generation ("Idle + Walk", "Walk + Run", "Jump", "Rig only" (stops after the Mixamo rig — no retarget), "More…" → full preset dialog) → backend chains rig-check → rig → retarget (`animateTaskId` + `animations`/`rigOnly` on `POST /generations`); poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Animated/rigged GLB lands as a new chat bubble (task kind `animate`), followed by a "Back to the original model" recovery chip that re-sends the pre-rig model to Studio. Rig endpoint uses its own model version (`TRIPO_3D_RIG_MODEL`, default `v2.5-20260210`)
+- ✅ Retarget-only animate: rig-only results keep the animate chips — animating an already-rigged task skips rig-check/rig and goes straight to retarget; re-rigging is rejected with `ALREADY_RIGGED`
+- ✅ Tripo3D smart retopology: "Retopo for animation" chat chip on a completed generation → `POST /mesh/decimate` (model v2.0, clean triangulated topology + baked textures, GLB output, optional `faceLimit`); `quad` stays `false` on purpose — quad output forces FBX, which the frontend cannot load. The retopo result can itself enter the rig chain
+- ✅ Generation task progress: GNOME infobar-style banner on the viewport top (`ui/task-progress.js`) for Save/Besk and generation tasks, with stage hints, success fade, and error state
+- ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.js`, `pending-generations.js`); chat session resets on asset switch (keyed on manifest `asset_id`) while history bubbles still render per asset
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
 - ✅ Thumbnail capture + direct IPFS upload from browser
 - ✅ Manifest save/publish entirely client-side
@@ -299,8 +305,8 @@ frontend/src/js/
 
 | Suite | Count | Status |
 |-------|-------|--------|
-| Jest unit (all) | 1185 across 93 suites | ✅ All passing |
-| E2E Playwright specs | 17 specs / 35 tests | ✅ Chromium (manual run against local stack) |
+| Jest unit (all) | 1468 across 110 suites | ✅ All passing (verified 2026-08-03) |
+| E2E Playwright specs | 19 specs / 39 tests | ✅ Chromium (manual run against local stack) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**
@@ -313,6 +319,9 @@ frontend/src/js/
 - `test/frontend/library-ops.test.js` — `onPending` hook, `createNamedCollection` options
 - `test/token-indexer-shared.test.js` — editor-shared token indexing from `EditorSetChanged` events
 - `test/api/indexer-shared.test.js` — `GET /indexer/shared` route validation and response shape
+- `test/api/tripo3d-adapter.test.js` — v3 endpoints, refine/decimate/rig/retarget task creation, error mapping
+- `test/frontend/asset-download.test.js` — GLB raw download + composite glTF inlining
+- `test/frontend/task-progress.test.js` — viewport infobar banner states (stage hints, success fade, error)
 
 ### Test Gaps
 
@@ -343,7 +352,7 @@ frontend/src/js/
 | Asset-level Nostr comments | ✅ | ✅ |
 | Merkle editor collaboration | ✅ | ✅ |
 | Token burn | ✅ | ✅ |
-| Real 3D generation (Tripo3D BYOK) | ✅ | ✅ |
+| Real 3D generation (Tripo3D BYOK) | ✅ text + image-to-3D, HD texture, retopo, rig & animate | ✅ |
 
 ### Beta blockers
 
@@ -354,9 +363,9 @@ frontend/src/js/
 
 ### Verdict
 
-**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1185 unit tests green, 17 E2E specs cover the critical path.
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1468 unit tests green, 19 E2E specs cover the critical path.
 
-**Ready for open beta** for the collaboration, publishing, and Tripo3D BYOK generation workflows. Everything else is beta-quality.
+**Ready for open beta** for the collaboration, publishing, and Tripo3D BYOK generation workflows (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — all live-verified against the v3 API). Everything else is beta-quality.
 
 ---
 

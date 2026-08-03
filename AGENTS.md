@@ -120,7 +120,7 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E | Playwright | `e2e/specs/*.spec.js` |
 
-~1264 Jest tests / 98 suites; E2E 17 specs / 37 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
+~1468 Jest tests / 110 suites; E2E 19 specs / 39 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
 
 **Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child worlds · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `npm test` is **not enough** for these.
 
