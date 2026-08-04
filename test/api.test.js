@@ -497,6 +497,62 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.body.error.code).toBe("MISSING_PROVIDER_KEY");
     });
 
+    it("rejects sourceAssetCid without an action flag", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource" });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("rejects sourceAssetCid with two action flags", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", retopo: true, animate: true, animations: ["preset:idle"] });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects retexture without a prompt", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", retexture: true });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects animate without animations unless rigOnly", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", animate: true });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects an invalid textureQuality", async () => {
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", textureQuality: "ultra" });
+      expect(res.status).toBe(400);
+    });
+
+    it("accepts auto-rig (animate + rigOnly, no animations)", async () => {
+      const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+        ok: true,
+        json: async () => ({ code: 0, data: { task_id: "task_rc" }, }),
+      });
+      // GLB fetch from storage + Tripo upload are mocked in Task 3; this test
+      // only asserts validation passes (any non-400 status).
+      const res = await request(app)
+        .post("/api/v1/generations")
+        .set("Authorization", await makeSessionHeader())
+        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", animate: true, rigOnly: true });
+      expect(res.status).not.toBe(400);
+      fetchSpy.mockRestore();
+    });
+
     describe("tripo3d provider", () => {
       afterEach(() => {
         jest.restoreAllMocks();

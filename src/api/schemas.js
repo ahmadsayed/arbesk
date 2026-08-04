@@ -57,7 +57,22 @@ export const generateAssetSchema = z
     nodeId: z.string().min(1, "nodeId is required"),
     provider: z.string().optional(),
     providerKey: z.string().max(200).optional(),
-    refineTaskId: z.string().max(64).optional(),
+    // Follow-up actions (tripo3d only): the source model is referenced by
+    // its IPFS GLB CID — the backend fetches the bytes and uploads them to
+    // Tripo (POST /files → file_token). Exactly one action flag per request.
+    sourceAssetCid: z.string().min(1).max(128).optional(),
+    retexture: z.boolean().optional(),
+    retopo: z.boolean().optional(),
+    animate: z.boolean().optional(),
+    // Retarget-only shortcut: backend registry id of a completed rig-only
+    // task. Optional — the GLB chain is the canonical path.
+    sourceTaskId: z.string().max(64).optional(),
+    rigOnly: z.boolean().optional(),
+    animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
+    // Texture quality (tripo3d only): generation + retexture.
+    textureQuality: z.enum(["standard", "detailed", "extreme"]).optional(),
+    // Smart retopology polygon budget (tripo3d only): adaptive when omitted.
+    faceLimit: z.number().int().min(500).max(20000).optional(),
     // Image-to-3D (tripo3d only): base64 image bytes + MIME type.
     imageData: z
       .string()
@@ -65,21 +80,9 @@ export const generateAssetSchema = z
       .regex(/^[A-Za-z0-9+/=\r\n]+$/, "imageData must be base64")
       .optional(),
     imageMime: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
-    // Rig & animate (tripo3d only): taskId of a completed generation +
-    // retarget presets (max 5 per Tripo call), or rigOnly to stop after
-    // the rig step (Mixamo-ready model, no baked animation).
-    animateTaskId: z.string().max(64).optional(),
-    rigOnly: z.boolean().optional(),
-    animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
-    // High-quality generation (tripo3d only): detailed (HD) textures.
-    highQuality: z.boolean().optional(),
-    // Smart retopology (tripo3d only): taskId of a completed generation to
-    // rebuild with clean quad topology + baked textures (animation-ready).
-    retopoTaskId: z.string().max(64).optional(),
-    faceLimit: z.number().int().min(500).max(20000).optional(),
   })
-  .refine((v) => v.prompt || v.imageData || v.animateTaskId || v.retopoTaskId, {
-    message: "prompt, imageData, animateTaskId, or retopoTaskId is required",
+  .refine((v) => v.prompt || v.imageData || v.sourceAssetCid, {
+    message: "prompt, imageData, or sourceAssetCid is required",
     path: ["prompt"],
   })
   .refine((v) => !v.imageData || v.imageMime, {
@@ -87,12 +90,30 @@ export const generateAssetSchema = z
     path: ["imageMime"],
   })
   .refine(
-    (v) => !v.animateTaskId || v.rigOnly || (v.animations?.length ?? 0) > 0,
+    (v) =>
+      !v.sourceAssetCid ||
+      [v.retexture, v.retopo, v.animate].filter(Boolean).length === 1,
     {
-      message: "animations is required when animateTaskId is present",
+      message:
+        "sourceAssetCid requires exactly one of retexture, retopo, or animate",
+      path: ["sourceAssetCid"],
+    },
+  )
+  .refine((v) => !v.retexture || v.prompt, {
+    message: "prompt (texture description) is required when retexture is set",
+    path: ["prompt"],
+  })
+  .refine(
+    (v) => !v.animate || v.rigOnly || (v.animations?.length ?? 0) > 0,
+    {
+      message: "animations is required when animate is set (unless rigOnly)",
       path: ["animations"],
     },
-  );
+  )
+  .refine((v) => !v.rigOnly || v.animate, {
+    message: "rigOnly is only valid with animate",
+    path: ["rigOnly"],
+  });
 
 export const providerBalanceSchema = z.object({
   providerKey: z.string().min(1, "providerKey is required").max(200),
