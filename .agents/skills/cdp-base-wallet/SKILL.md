@@ -15,6 +15,8 @@ CDP email-login smart wallets: sign-in failures, transaction submission, EIP-119
 | `must be a valid HTTP or HTTPS URL with at least 11 characters` | `paymasterUrl` relative/malformed; must be absolute | `useCdpPaymaster: true` for local dev; production custom paymasters need the backend proxy on a public HTTPS URL |
 | `POST https://sepolia.base.org/ 403` | blocks browser-origin RPC requests | Use `https://base-sepolia-rpc.publicnode.com` for RPC passthrough (already in CSP) |
 | Transaction spinner never resolves after UserOperation submit | CDP returns a UserOperation hash; Web3.js expects an EVM txHash | Poll `getUserOperation()`; return `transactionHash` as soon as set — before `status` reaches `"complete"` |
+| UserOperation polling times out with no error | Prepared ops expire (`expiresAt`); status enum is `pending/signed/broadcast/complete/dropped/failed` | Our poller already treats `failed`/`dropped` as terminal. On timeout, re-check `getUserOperation()` before retrying — the op may still land; blind resubmission can double-execute |
+| OTP verification rejects the code | `otp_verification_expired` / `otp_verification_code_invalid` / `otp_verification_destination_mismatch` | Codes are single-use and flow-bound — restart with `signInWithEmail`; full OTP error list in `reference.md` |
 | `User is already authenticated` | Stale CDP session (localStorage/IndexedDB/cookies) | Clear CDP/coinbase keys + `disconnectCdpWallet()` before a new OTP flow |
 | Network Error / CORS on `api.cdp.coinbase.com` | Origin not allowed in CDP Portal | Add origin under Non-custodial Wallet → Clients |
 
