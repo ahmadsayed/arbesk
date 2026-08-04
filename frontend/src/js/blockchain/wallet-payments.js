@@ -16,8 +16,8 @@ import { emit, EVENTS } from "../events/bus.js";
 import { walletState } from "../state/wallet-state.js";
 import { showToast } from "../ui/toasts.js";
 import { getUsdcToken as getNetworkUsdcToken } from "./network-config.js";
-import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { web3, getActiveContract } from "./wallet-core.js";
+import { resolveGas } from "./wallet-gas.js";
 
 // ─── Tier constants ──────────────────────────────────────────────────────────
 
@@ -117,16 +117,10 @@ async function recordGeneration(nodeId, prompt) {
     const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
     const tx = c.methods.recordGeneration(nodeIdBytes32, prompt);
 
-    let gas;
-    try {
-      gas = await tx.estimateGas({ from: walletState.get().walletAddress });
-    } catch {
-      gas = 120000;
-    }
-
+    const gas = await resolveGas(tx, walletState.get().walletAddress, 120000);
     const receipt = await tx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(gas) * 1.2),
+      gas,
     });
     console.log("[FREE-GEN] recorded! txHash =", receipt.transactionHash);
 
@@ -288,17 +282,14 @@ async function payWithUSDC(nodeId, prompt, tier) {
         "USDC → 0"
       );
       const resetTx = usdcContract.methods.approve(contractAddress, "0");
-      let resetGas;
-      try {
-        resetGas = await resetTx.estimateGas({
-          from: walletState.get().walletAddress,
-        });
-      } catch {
-        resetGas = 80000;
-      }
+      const resetGas = await resolveGas(
+        resetTx,
+        walletState.get().walletAddress,
+        80000
+      );
       await resetTx.send({
         from: walletState.get().walletAddress,
-        gas: Math.floor(Number(resetGas) * 1.2),
+        gas: resetGas,
       });
       console.log("[USDC] allowance reset to 0");
     }
@@ -308,18 +299,15 @@ async function payWithUSDC(nodeId, prompt, tier) {
       tierCostWei
     );
 
-    let approveGas;
-    try {
-      approveGas = await approveTx.estimateGas({
-        from: walletState.get().walletAddress,
-      });
-    } catch {
-      approveGas = 100000;
-    }
+    const approveGas = await resolveGas(
+      approveTx,
+      walletState.get().walletAddress,
+      100000
+    );
 
     await approveTx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(approveGas) * 1.2),
+      gas: approveGas,
     });
     console.log("[USDC] approval confirmed");
 
@@ -356,34 +344,17 @@ async function payWithUSDC(nodeId, prompt, tier) {
       tier
     );
 
-    // Public networks (Optimism L2, SEI testnet) need higher gas defaults
-    // because external calls (safeTransferFrom) consume more gas, and
-    // estimateGas may fail on public RPCs due to stale sequencer state.
-    let payGas;
-    try {
-      payGas = await payTx.estimateGas({
-        from: walletState.get().walletAddress,
-      });
-      console.log("[USDC] estimated pay gas:", payGas);
-    } catch (estErr) {
-      // On public networks, estimateGas often fails when the approval tx hasn't
-      // been indexed by the RPC's simulation state. Use a generous default.
-      const needsGenerousGas = [
-        CHAIN_IDS.OPTIMISM_SEPOLIA,
-        CHAIN_IDS.OPTIMISM_MAINNET,
-        CHAIN_IDS.SEI_TESTNET,
-      ].includes(chainId);
-      payGas = needsGenerousGas ? 500000 : 300000;
-      console.log(
-        `[USDC] pay estimateGas failed (${
-          estErr.message || "unknown"
-        }), using default ${payGas}`
-      );
-    }
+    // estimateGas may fail when the approval tx hasn't been indexed by the
+    // RPC's simulation state; resolveGas falls back to a generous default.
+    const payGas = await resolveGas(
+      payTx,
+      walletState.get().walletAddress,
+      300000
+    );
 
     const receipt = await payTx.send({
       from: walletState.get().walletAddress,
-      gas: Math.floor(Number(payGas) * 1.2),
+      gas: payGas,
     });
     console.log("[USDC] payment confirmed! txHash =", receipt.transactionHash);
 
