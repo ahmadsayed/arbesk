@@ -850,7 +850,7 @@ describe("generateAsset", () => {
     });
   });
 
-  test("passes refineTaskId to the backend and returns taskId", async () => {
+  test("passes sourceAssetCid/retexture/textureQuality to the backend and returns taskId", async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
@@ -881,19 +881,28 @@ describe("generateAsset", () => {
       nodeId: "n2",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      refineTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      sourceTaskId: "task-gen-1",
+      retexture: true,
+      textureQuality: "detailed",
     });
 
     expect(result.taskId).toBe("task-refine-2");
     const [, postOpts] = fetchMock.mock.calls[0];
-    expect(JSON.parse(postOpts.body)).toEqual({
+    const body = JSON.parse(postOpts.body);
+    expect(body).toEqual({
       prompt: "make it blue",
       nodeId: "n2",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      refineTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      sourceTaskId: "task-gen-1",
+      retexture: true,
+      textureQuality: "detailed",
       chainId: 1,
     });
+    expect(body.refineTaskId).toBeUndefined();
+    expect(body.highQuality).toBeUndefined();
   }, 15_000);
 
   test("passes imageData/imageMime to the backend for image-to-3D", async () => {
@@ -960,7 +969,7 @@ describe("generateAsset", () => {
     });
   }, 15_000);
 
-  test("passes animateTaskId/animations to the backend for rig & animate", async () => {
+  test("passes sourceAssetCid/animate/animations to the backend for rig & animate", async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
@@ -991,21 +1000,25 @@ describe("generateAsset", () => {
       nodeId: "n-anim",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      animateTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      animate: true,
       animations: ["preset:idle", "preset:walk"],
     });
 
     expect(result.taskId).toBe("task-anim-1");
     const [, postOpts] = fetchMock.mock.calls[0];
-    expect(JSON.parse(postOpts.body)).toEqual({
+    const body = JSON.parse(postOpts.body);
+    expect(body).toEqual({
       prompt: "Animate: idle, walk",
       nodeId: "n-anim",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      animateTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      animate: true,
       animations: ["preset:idle", "preset:walk"],
       chainId: 1,
     });
+    expect(body.animateTaskId).toBeUndefined();
   }, 15_000);
 
   test("passes rigOnly to the backend", async () => {
@@ -1039,7 +1052,8 @@ describe("generateAsset", () => {
       nodeId: "n-rig",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      animateTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      animate: true,
       rigOnly: true,
     });
 
@@ -1049,13 +1063,14 @@ describe("generateAsset", () => {
       nodeId: "n-rig",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      animateTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      animate: true,
       rigOnly: true,
       chainId: 1,
     });
   }, 15_000);
 
-  test("passes retopoTaskId/faceLimit to the backend for smart retopology", async () => {
+  test("passes sourceAssetCid/retopo/faceLimit to the backend for smart retopology", async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
@@ -1086,24 +1101,28 @@ describe("generateAsset", () => {
       nodeId: "n-retopo",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      retopoTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      retopo: true,
       faceLimit: 5000,
     });
 
     expect(result.taskId).toBe("task-retopo-1");
     const [, postOpts] = fetchMock.mock.calls[0];
-    expect(JSON.parse(postOpts.body)).toEqual({
+    const body = JSON.parse(postOpts.body);
+    expect(body).toEqual({
       prompt: "Retopo for animation",
       nodeId: "n-retopo",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      retopoTaskId: "task-gen-1",
+      sourceAssetCid: "bafySource",
+      retopo: true,
       faceLimit: 5000,
       chainId: 1,
     });
+    expect(body.retopoTaskId).toBeUndefined();
   }, 15_000);
 
-  test("passes highQuality to the backend", async () => {
+  test("passes textureQuality to the backend", async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
@@ -1134,60 +1153,44 @@ describe("generateAsset", () => {
       nodeId: "n-hq",
       provider: "tripo3d",
       providerKey: "tripo-key",
-      highQuality: true,
+      textureQuality: "detailed",
     });
 
     const [, postOpts] = fetchMock.mock.calls[0];
-    expect(JSON.parse(postOpts.body)).toMatchObject({ highQuality: true });
+    const body = JSON.parse(postOpts.body);
+    expect(body).toMatchObject({ textureQuality: "detailed" });
+    expect(body.highQuality).toBeUndefined();
   }, 15_000);
 
-  test("falls back to fresh generation on REFINE_SOURCE_NOT_FOUND", async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        buildResponse({
-          status: 404,
-          ok: false,
-          body: {
-            error: { code: "REFINE_SOURCE_NOT_FOUND", message: "gone" },
+  test("propagates provider errors without retrying", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({
+        status: 400,
+        body: {
+          error: {
+            code: "SOURCE_ASSET_UNAVAILABLE",
+            message: "Source asset unavailable in IPFS",
           },
-        })
-      )
-      .mockResolvedValueOnce(
-        buildResponse({
-          status: 202,
-          body: { taskId: "task-fresh-3", provider: "tripo3d", status: "running" },
-        })
-      )
-      .mockResolvedValueOnce(
-        buildResponse({
-          body: {
-            status: "success",
-            assetData: Buffer.from("glb-bytes").toString("base64"),
-            format: "glb",
-            path: "asset.glb",
-            provider: "tripo3d",
-          },
-        })
-      );
+        },
+      })
+    );
     const { generateAsset } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    const result = await generateAsset({
-      prompt: "make it blue",
-      nodeId: "n2",
-      provider: "tripo3d",
-      providerKey: "tripo-key",
-      refineTaskId: "task-gen-1",
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    const retryBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(retryBody.refineTaskId).toBeUndefined();
-    expect(result.taskId).toBe("task-fresh-3");
+    await expect(
+      generateAsset({
+        prompt: "rusty",
+        nodeId: "n1",
+        provider: "tripo3d",
+        providerKey: "bad",
+        sourceAssetCid: "bafySource",
+        retexture: true,
+      })
+    ).rejects.toMatchObject({ status: 400, code: "SOURCE_ASSET_UNAVAILABLE" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   }, 15_000);
 });
 

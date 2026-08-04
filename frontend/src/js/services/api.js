@@ -482,16 +482,18 @@ export async function getProviderBalance(providerKey) {
  * @param {string} [params.prevAssetManifestCid]
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
- * @param {string} [params.refineTaskId] - taskId of a completed Tripo3D generation to refine (texture/material only)
+ * @param {string} [params.sourceAssetCid] - CID of a completed generation's GLB; the source for retexture/retopo/animate follow-ups
+ * @param {string} [params.sourceTaskId] - provider task ID that produced sourceAssetCid (provenance only)
+ * @param {boolean} [params.retexture] - texture/material-only refine of sourceAssetCid (tripo3d)
+ * @param {boolean} [params.retopo] - rebuild sourceAssetCid with clean triangulated topology (quad output forces FBX, unusable in-app) (tripo3d)
+ * @param {number} [params.faceLimit] - target faces for retopo (adaptive when omitted)
+ * @param {boolean} [params.animate] - rig & animate sourceAssetCid (tripo3d)
+ * @param {string[]} [params.animations] - retarget presets (e.g. ["preset:idle"]), max 5; required with animate unless rigOnly
+ * @param {boolean} [params.rigOnly] - stop after the rig step (Mixamo-ready model, no baked animation)
+ * @param {string} [params.textureQuality] - "detailed" for HD textures (tripo3d)
  * @param {string} [params.imageData] - base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine)
  * @param {string} [params.imageMime] - MIME type of imageData (image/jpeg, image/png, image/webp)
  * @param {string} [params.imageName] - original filename of imageData; the reference image is uploaded to IPFS and recorded in the manifest
- * @param {string} [params.animateTaskId] - taskId of a completed Tripo3D generation to rig & animate (skips refine/image)
- * @param {string[]} [params.animations] - retarget presets (e.g. ["preset:idle"]), max 5; required with animateTaskId unless rigOnly
- * @param {boolean} [params.rigOnly] - stop after the rig step (Mixamo-ready model, no baked animation)
- * @param {boolean} [params.highQuality] - detailed (HD) textures at generation (tripo3d)
- * @param {string} [params.retopoTaskId] - taskId of a completed generation to rebuild with clean quad topology (tripo3d)
- * @param {number} [params.faceLimit] - target quads for retopo (adaptive when omitted)
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
  */
 export async function generateAsset({
@@ -504,16 +506,18 @@ export async function generateAsset({
   transformMatrix,
   tier,
   providerKey,
-  refineTaskId,
+  sourceAssetCid,
+  sourceTaskId,
+  retexture,
+  retopo,
+  animate,
+  rigOnly,
+  animations,
+  faceLimit,
+  textureQuality,
   imageData,
   imageMime,
   imageName,
-  animateTaskId,
-  animations,
-  rigOnly,
-  highQuality,
-  retopoTaskId,
-  faceLimit,
 }) {
   announceStatus("Authenticating…");
 
@@ -526,11 +530,15 @@ export async function generateAsset({
     provider,
     ...(chainId && { chainId }),
     ...(providerKey && { providerKey }),
-    ...(refineTaskId && { refineTaskId }),
+    ...(sourceAssetCid && {
+      sourceAssetCid,
+      ...(sourceTaskId && { sourceTaskId }),
+      ...(retexture && { retexture: true }),
+      ...(retopo && { retopo: true, ...(faceLimit && { faceLimit }) }),
+      ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations }) }),
+    }),
+    ...(textureQuality && { textureQuality }),
     ...(imageData && { imageData, imageMime }),
-    ...(animateTaskId && { animateTaskId, animations, ...(rigOnly && { rigOnly }) }),
-    ...(highQuality && { highQuality }),
-    ...(retopoTaskId && { retopoTaskId, ...(faceLimit && { faceLimit }) }),
   };
 
   announceStatus("Generating 3D asset…");
@@ -542,21 +550,6 @@ export async function generateAsset({
 
   if (!response.ok) {
     const { message, code } = parseErrorBody(data);
-    if (code === "REFINE_SOURCE_NOT_FOUND" && refineTaskId) {
-      // The refine source expired or was cleared — fall back to a fresh
-      // generation so the user's prompt is never lost.
-      announceStatus("Refine source expired — generating fresh model…");
-      return generateAsset({
-        prompt,
-        nodeId,
-        provider,
-        assetId,
-        prevAssetManifestCid,
-        transformMatrix,
-        tier,
-        providerKey,
-      });
-    }
     announceStatus(
       "Generation failed: " + (message || `HTTP ${response.status}`)
     );
@@ -586,11 +579,11 @@ export async function generateAsset({
 
   // Decode base64 asset data from the backend response
   const assetBytes = base64ToBytes(data.assetData);
-  const sourceAssetCid = await writeToIPFS(
+  const assetCid = await writeToIPFS(
     assetBytes,
     data.path || `asset.${data.format}`
   );
-  log(`[GEN] browser uploaded source asset → ${sourceAssetCid}`);
+  log(`[GEN] browser uploaded source asset → ${assetCid}`);
 
   // Reference image (image-to-3D): pin it on IPFS and record it in the
   // manifest so the provenance chain keeps what the model was made from.
@@ -652,7 +645,7 @@ export async function generateAsset({
       type: "source_asset",
       name: displayName,
       source: {
-        cid: sourceAssetCid,
+        cid: assetCid,
         path: data.path || `asset.${data.format}`,
         format: data.format,
       },
@@ -675,7 +668,7 @@ export async function generateAsset({
   announceStatus("Asset generated successfully.");
   return {
     assetManifestCid,
-    sourceAssetCid,
+    sourceAssetCid: assetCid,
     format: data.format,
     path: data.path || `asset.${data.format}`,
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
