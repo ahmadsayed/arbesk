@@ -149,26 +149,29 @@ describe("API schemas", () => {
         generateAssetSchema.safeParse({
           nodeId: "n1",
           provider: "tripo3d",
-          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          sourceAssetCid: "bafySource",
+          animate: true,
           animations: ["preset:idle", "preset:walk"],
         }).success,
       ).toBe(true);
     });
 
-    it("rejects animateTaskId without animations", () => {
+    it("rejects animate without animations unless rigOnly", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
-          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          sourceAssetCid: "bafySource",
+          animate: true,
         }).success,
       ).toBe(false);
     });
 
-    it("accepts animateTaskId with rigOnly and no animations", () => {
+    it("accepts animate with rigOnly and no animations", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
-          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          sourceAssetCid: "bafySource",
+          animate: true,
           rigOnly: true,
         }).success,
       ).toBe(true);
@@ -178,7 +181,8 @@ describe("API schemas", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
-          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          sourceAssetCid: "bafySource",
+          animate: true,
           animations: ["preset:fly"],
         }).success,
       ).toBe(false);
@@ -188,7 +192,8 @@ describe("API schemas", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
-          animateTaskId: "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+          sourceAssetCid: "bafySource",
+          animate: true,
           animations: [
             "preset:idle",
             "preset:walk",
