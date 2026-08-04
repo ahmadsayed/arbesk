@@ -357,11 +357,14 @@ export function showCheckboxDialog(title, body, options, { max = Infinity } = {}
  * Show a dialog whose body is a caller-supplied DOM element.
  *
  * Useful when the body needs its own internal state and event handling.
- * The dialog resolves with `null` when closed.
+ * The dialog resolves with `null` when closed via the Close button, Escape,
+ * or a backdrop click. A body-internal action button can instead close the
+ * dialog early with a value by calling `bodyEl.closeDialog(value)` (attached
+ * before the dialog opens; idempotent — a later Close/Escape is a no-op).
  *
  * @param {string} title
  * @param {HTMLElement} bodyEl
- * @returns {Promise<null>}
+ * @returns {Promise<*>} the value passed to bodyEl.closeDialog, or null
  */
 export function showCustomDialog(title, bodyEl) {
   return new Promise((resolve) => {
@@ -370,6 +373,9 @@ export function showCustomDialog(title, bodyEl) {
         title,
         resolve
       );
+
+      // Let body-internal action buttons close the dialog with a result.
+      bodyEl.closeDialog = closeDialog;
 
       const bodyDiv = document.createElement("div");
       bodyDiv.className = "dialog-body collaborator-dialog-body";

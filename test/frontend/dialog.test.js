@@ -14,7 +14,7 @@
  */
 
 import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
-import { showDialog, showConfirmDialog, showInfoDialog, showForkOrLiveRefDialog } from "../../frontend/src/js/ui/dialog.js";
+import { showDialog, showConfirmDialog, showInfoDialog, showForkOrLiveRefDialog, showCustomDialog } from "../../frontend/src/js/ui/dialog.js";
 
 // ─── MockFocusTrap ────────────────────────────────────────────────────────────
 // Minimal stand-in for window.focusTrap (loaded via CDN in studio.pug).
@@ -236,4 +236,49 @@ test("showForkOrLiveRefDialog fork-only mode still resolves 'fork'", async () =>
     .find((b) => b.textContent.trim() === "Fork (copy)")
     .click();
   expect(await p).toBe("fork");
+});
+
+// ─── showCustomDialog ─────────────────────────────────────────────────────────
+
+test("showCustomDialog renders the caller-supplied body element", () => {
+  const body = document.createElement("div");
+  body.textContent = "custom body content";
+  showCustomDialog("Custom", body);
+  expect(document.body.textContent).toContain("custom body content");
+});
+
+test("showCustomDialog resolves null when Close is clicked", async () => {
+  const body = document.createElement("div");
+  const p = showCustomDialog("Custom", body);
+  document.querySelector(".dialog-close-btn").click();
+  expect(await p).toBeNull();
+});
+
+test("showCustomDialog resolves null when Escape is pressed", async () => {
+  const body = document.createElement("div");
+  const p = showCustomDialog("Custom", body);
+  pressKey(document, "Escape");
+  expect(await p).toBeNull();
+});
+
+test("showCustomDialog body can close the dialog early with a value via bodyEl.closeDialog", async () => {
+  const body = document.createElement("div");
+  body.innerHTML = `<button id="go" type="button">Go</button>`;
+  const p = showCustomDialog("Custom", body);
+  body.querySelector("#go").addEventListener("click", () => body.closeDialog(42));
+  body.querySelector("#go").click();
+  expect(await p).toBe(42);
+  // Dialog is removed from the DOM immediately — no lingering modal.
+  expect(document.querySelector(".dialog-backdrop")).toBeNull();
+});
+
+test("showCustomDialog body-close is idempotent against a later Close/Escape", async () => {
+  let calls = 0;
+  const body = document.createElement("div");
+  const p = showCustomDialog("Custom", body).then((v) => { calls++; return v; });
+  body.closeDialog("first");
+  document.querySelector(".dialog-close-btn")?.click(); // backdrop already removed
+  pressKey(document, "Escape");
+  expect(await p).toBe("first");
+  expect(calls).toBe(1);
 });

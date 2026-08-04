@@ -683,11 +683,11 @@ function showFaceLimitDialog() {
     const input = /** @type {HTMLInputElement} */ (wrap.querySelector("#faceLimitInput"));
     wrap.querySelector("#faceLimitGo").addEventListener("click", () => {
       const raw = input.value.trim();
-      if (raw === "") { resolve(undefined); return; }
+      if (raw === "") { wrap.closeDialog(undefined); return; } // adaptive
       const n = Number(raw);
-      resolve(Number.isInteger(n) && n >= 500 && n <= 20000 ? n : 20000);
+      wrap.closeDialog(Number.isInteger(n) && n >= 500 && n <= 20000 ? n : 20000);
     });
-    showCustomDialog("Retopo — polygon budget", wrap).then(() => resolve(null));
+    showCustomDialog("Retopo — polygon budget", wrap).then(resolve);
   });
 }
 
@@ -708,9 +708,9 @@ function showTexturePromptDialog() {
       <button id="texturePromptGo" class="btn btn-primary" type="button" style="margin-top:var(--size-2)">Retexture</button>`;
     const input = /** @type {HTMLTextAreaElement} */ (wrap.querySelector("#texturePromptInput"));
     wrap.querySelector("#texturePromptGo").addEventListener("click", () => {
-      resolve(input.value.trim() || null);
+      wrap.closeDialog(input.value.trim() || null);
     });
-    showCustomDialog("Retexture — texture prompt", wrap).then(() => resolve(null));
+    showCustomDialog("Retexture — texture prompt", wrap).then(resolve);
   });
 }
 
