@@ -529,3 +529,25 @@
     font-style: italic;
   }
 }
+
+// Clickable history bubbles restore that version of the asset.
+.chat-bubble-version {
+  cursor: pointer;
+}
+
+// Active-version refine indicator above the prompt input: signals that the
+// next typed prompt retextures the named version instead of starting fresh.
+.refine-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin-bottom: var(--size-1);
+  font-size: 0.85em;
+  color: var(--dim-fg);
+}
+.refine-indicator-detach {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}

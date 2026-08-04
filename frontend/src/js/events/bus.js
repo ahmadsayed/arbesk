@@ -30,6 +30,7 @@ export const EVENTS = {
   COMMENT_THREAD_CHANGE:      "commentThread:change",
   COMMENT_THREAD_STATUS:      "commentThread:status",
   COLLECTION_OPENED:          "collection:opened",
+  HISTORY_VERSION_SELECTED:   "asset:historyVersionSelected",
   LIBRARY_STATE_CHANGED:      "library:stateChanged",
   NESTING_DID_ASCEND:         "nesting:didAscend",
   NESTING_DID_DIVE:           "nesting:didDive",

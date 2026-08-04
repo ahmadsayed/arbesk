@@ -13,12 +13,17 @@ async function load() {
   document.body.innerHTML =
     '<div id="chatHistoryList"><div class="chat-welcome" hidden></div></div>';
   const walkManifestChain = jest.fn();
+  const emit = jest.fn();
   jest.unstable_mockModule(
     "../../frontend/src/js/engine/time-travel.js",
     () => ({ walkManifestChain })
   );
+  jest.unstable_mockModule("../../frontend/src/js/events/bus.js", () => ({
+    emit,
+    EVENTS: { HISTORY_VERSION_SELECTED: "asset:historyVersionSelected" },
+  }));
   const mod = await import("../../frontend/src/js/ui/chat-history.js");
-  return { mod, walkManifestChain };
+  return { mod, walkManifestChain, emit };
 }
 
 test("renders chain metadata.chat entries oldest-first as history bubbles", async () => {
@@ -174,4 +179,77 @@ test("a failed stale walk does not suppress a newer in-flight render", async () 
 
   expect(document.getElementById("chatHistoryList").textContent).toContain("B prompt");
   warn.mockRestore();
+});
+
+test("history bubbles carry data-manifest-cid and clicking one emits HISTORY_VERSION_SELECTED", async () => {
+  const { mod, walkManifestChain, emit } = await load();
+  walkManifestChain.mockResolvedValue([
+    {
+      cid: "v1",
+      sourceCid: "glb-v1",
+      chat: [{ prompt: "first cabin", provider: "tripo3d", task: "model", timestamp: 1780000000 }],
+    },
+    { cid: "v2", sourceCid: null, chat: null },
+    {
+      cid: "v3",
+      sourceCid: "glb-v3",
+      chat: [{ prompt: "red roof", provider: "tripo3d", task: "texture", timestamp: 1780000100 }],
+    },
+  ]);
+
+  await mod.renderChatProvenance("v3");
+
+  const versionBubbles = document.querySelectorAll(".chat-bubble-version");
+  expect(versionBubbles).toHaveLength(2);
+  const first = /** @type {HTMLElement} */ (versionBubbles[0]);
+  const second = /** @type {HTMLElement} */ (versionBubbles[1]);
+  expect(first.dataset.manifestCid).toBe("v1");
+  expect(first.dataset.sourceCid).toBe("glb-v1");
+  expect(second.dataset.manifestCid).toBe("v3");
+  expect(second.dataset.sourceCid).toBe("glb-v3");
+  // Header and divider bubbles are not restore targets.
+  expect(document.querySelectorAll(".chat-bubble-history")).toHaveLength(4);
+  expect(
+    document.querySelector(".chat-bubble-history:not(.chat-bubble-version)")
+  ).not.toBeNull();
+
+  first.click();
+  expect(emit).toHaveBeenCalledWith("asset:historyVersionSelected", {
+    cid: "v1",
+    sourceCid: "glb-v1",
+    name: "first cabin",
+  });
+
+  second.click();
+  expect(emit).toHaveBeenCalledWith("asset:historyVersionSelected", {
+    cid: "v3",
+    sourceCid: "glb-v3",
+    name: "red roof",
+  });
+});
+
+test("a version bubble without a sourceCid omits data-source-cid and emits null", async () => {
+  const { mod, walkManifestChain, emit } = await load();
+  walkManifestChain.mockResolvedValue([
+    {
+      cid: "v1",
+      sourceCid: null,
+      chat: [{ prompt: "parametric tweak", provider: "parametric", task: "parametric", timestamp: 1 }],
+    },
+  ]);
+
+  await mod.renderChatProvenance("v1");
+
+  const bubble = /** @type {HTMLElement} */ (
+    document.querySelector(".chat-bubble-version")
+  );
+  expect(bubble.dataset.manifestCid).toBe("v1");
+  expect(bubble.dataset.sourceCid).toBeUndefined();
+
+  bubble.click();
+  expect(emit).toHaveBeenCalledWith("asset:historyVersionSelected", {
+    cid: "v1",
+    sourceCid: null,
+    name: "parametric tweak",
+  });
 });

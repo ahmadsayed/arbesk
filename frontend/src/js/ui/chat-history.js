@@ -1,15 +1,17 @@
 /**
  * Chat provenance history.
  *
- * Renders metadata.chat records from the asset's manifest chain as read-only
- * bubbles in the AI Generation pane when an asset is opened. The full
- * conversation is the concatenation of each version's metadata.chat, oldest
- * to newest; live session chat is unaffected. Records are save-anchored:
- * prompts only appear once their result was saved into a manifest version.
+ * Renders metadata.chat records from the asset's manifest chain as bubbles
+ * in the AI Generation pane when an asset is opened. The full conversation
+ * is the concatenation of each version's metadata.chat, oldest to newest;
+ * live session chat is unaffected. Records are save-anchored: prompts only
+ * appear once their result was saved into a manifest version. Each bubble
+ * carries its version's manifest CID and restores that version on click.
  */
 
 import { walkManifestChain } from "../engine/time-travel.js";
 import { addChatMessage } from "./chat-messages.js";
+import { emit, EVENTS } from "../events/bus.js";
 
 const chatHistoryList = document.getElementById("chatHistoryList");
 
@@ -47,12 +49,22 @@ export async function renderChatProvenance(manifestCid) {
   }
   if (manifestCid !== renderedForCid) return; // superseded by a newer open
 
-  /** @type {Array<{prompt: string, task?: string, timestamp?: number}>} */
+  /**
+   * Flattened chat records, oldest first, each carrying its version's
+   * identity so the rendered bubble can restore that version on click.
+   * @type {Array<{prompt: string, task?: string, timestamp?: number, cid: string, sourceCid: string|null}>}
+   */
   const entries = [];
   for (const item of chain) {
     for (const entry of item.chat || []) {
       if (typeof entry?.prompt === "string" && entry.prompt.length > 0) {
-        entries.push(entry);
+        entries.push({
+          prompt: entry.prompt,
+          task: entry.task,
+          timestamp: entry.timestamp,
+          cid: item.cid,
+          sourceCid: item.sourceCid || null,
+        });
       }
     }
   }
@@ -66,8 +78,24 @@ export async function renderChatProvenance(manifestCid) {
       entry.task && entry.task !== "model" ? ` (${entry.task})` : "";
     addChatMessage("user", `${entry.prompt}${label}`, {
       timestamp: new Date((entry.timestamp || 0) * 1000),
-      extraClass: "chat-bubble-history",
+      extraClass: "chat-bubble-history chat-bubble-version",
     });
+    // addChatMessage returns void — the bubble just appended is the click
+    // target that restores this version via the event bus.
+    const target = /** @type {HTMLElement|null} */ (
+      chatHistoryList?.lastElementChild ?? null
+    );
+    if (target) {
+      target.dataset.manifestCid = entry.cid;
+      if (entry.sourceCid) target.dataset.sourceCid = entry.sourceCid;
+      target.addEventListener("click", () => {
+        emit(EVENTS.HISTORY_VERSION_SELECTED, {
+          cid: entry.cid,
+          sourceCid: entry.sourceCid,
+          name: entry.prompt,
+        });
+      });
+    }
   }
   addChatMessage("system", "— New session —", {
     extraClass: "chat-bubble-history",

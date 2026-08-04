@@ -206,6 +206,9 @@ html(lang="en")
                       img#imageAttachThumb.image-attach-thumb(alt="Attached source image")
                       span#imageAttachName.image-attach-name
                       button#imageAttachRemove.image-attach-remove(type="button" aria-label="Remove attached image") &times;
+                    #refineIndicator.refine-indicator(hidden)
+                      span#refineIndicatorText.refine-indicator-text
+                      button#refineIndicatorDetach.refine-indicator-detach(type="button" aria-label="Detach — next prompt starts a new model") &times;
                     .messagebar-row
                       textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="3" aria-label="Asset generation prompt")
                       input#imageAttachInput(type="file" accept="image/jpeg,image/png,image/webp" hidden)

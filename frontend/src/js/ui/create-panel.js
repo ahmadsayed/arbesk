@@ -437,13 +437,28 @@ function syncCollectionSelect() {
 const assetMessages = new Map();
 
 /**
- * Public taskId of the most recent completed Tripo3D generation in this
- * chat. When set, the next Generate refines that model (texture/material
- * only — Tripo's refine_model endpoint is dead upstream, so refinement is
- * texture_model via the backend). Reset by Clear Chat.
- * @type {string | null}
+ * Active version for typed-prompt retexture. Set on generation result,
+ * Show-in-Studio, and bubble/history restore; cleared by detach, Clear
+ * Chat, and asset switch. The GLB CID is the durable reference — no expiry.
+ * @type {{sourceAssetCid: string, manifestCid: string|null, name: string} | null}
  */
-let lastTripoTaskId = null;
+let activeVersion = null;
+
+const refineIndicator = document.getElementById("refineIndicator");
+const refineIndicatorText = document.getElementById("refineIndicatorText");
+const refineIndicatorDetach = document.getElementById("refineIndicatorDetach");
+
+/**
+ * @param {{sourceAssetCid: string, manifestCid: string|null, name: string} | null} version
+ */
+function setActiveVersion(version) {
+  activeVersion = version;
+  if (!refineIndicator || !refineIndicatorText) return;
+  refineIndicator.hidden = !version;
+  if (version) refineIndicatorText.textContent = `Refining: ${version.name}`;
+}
+
+refineIndicatorDetach?.addEventListener("click", () => setActiveVersion(null));
 
 /**
  * Clear the chat: dispose all live previews, reset the pending-generation
@@ -454,7 +469,7 @@ function clearChat() {
   disposeAllChatPreviews();
   _resetPendingGenerations();
   assetMessages.clear();
-  lastTripoTaskId = null;
+  setActiveVersion(null);
   clearAttachedImage();
   clearChatMessages();
   clearHistoryBubbles();
@@ -521,6 +536,16 @@ async function sendGenerationToStudio(generationId, assetMessage) {
     window.history.pushState({}, "", url);
 
     await loadAssetManifest(record.assetManifestCid);
+
+    // The restored/sent version becomes the active version for typed
+    // retexture follow-ups (Tripo3D only).
+    if (record.provider === "tripo3d") {
+      setActiveVersion({
+        sourceAssetCid: record.sourceAssetCid,
+        manifestCid: record.assetManifestCid,
+        name: record.prompt,
+      });
+    }
 
     const snapshot = await disposeChatPreview(generationId, {
       captureSnapshot: true,
@@ -627,12 +652,28 @@ function presentGenerationResult(
     ...(result.tier !== undefined && { tier: result.tier }),
   });
 
+  // A fresh Tripo3D result is the active version for typed retexture
+  // follow-ups until detached, cleared, or replaced.
+  if (provider === "tripo3d") {
+    setActiveVersion({
+      sourceAssetCid: result.sourceAssetCid,
+      manifestCid: result.assetManifestCid,
+      name: prompt,
+    });
+  }
+
   const assetMessage = addAssetMessage({ prompt, format: result.format });
   if (assetMessage) {
     assetMessages.set(generationId, assetMessage);
     assetMessage.sendButton.addEventListener("click", () => {
       void sendGenerationToStudio(generationId, assetMessage);
     });
+    // Clicking the preview restores that version to the Studio.
+    assetMessage.bubble
+      .querySelector(".chat-asset-preview")
+      ?.addEventListener("click", () => {
+        void restoreGeneration(generationId);
+      });
     void attachChatPreview(generationId, assetMessage);
     // The helper gates by provider/task: animated results are terminal,
     // rig-only results keep only Animate, mock gets nothing.
@@ -1008,6 +1049,27 @@ async function onAnimate(generationId) {
   }
 }
 
+/**
+ * Re-send an older generation to the Studio — the click-to-restore path for
+ * version-card bubbles. Resets the record to pending so the send path
+ * accepts it again, then runs the normal Show-in-Studio tail (which also
+ * makes the restored version the active version).
+ * @param {string} generationId
+ */
+async function restoreGeneration(generationId) {
+  const assetMessage = assetMessages.get(generationId);
+  const record = getPendingGeneration(generationId);
+  if (!assetMessage || !record) {
+    addChatMessage(
+      "system",
+      "That model is no longer available in this chat.",
+    );
+    return;
+  }
+  updatePendingGeneration(generationId, { status: "pending" });
+  await sendGenerationToStudio(generationId, assetMessage);
+}
+
 // ─── Generation Flow ───
 
 async function onGenerate() {
@@ -1081,19 +1143,14 @@ async function onGenerate() {
       return;
     }
 
-    // Refine chain: when the chat already has a completed Tripo3D model,
-    // the next generation refines it (texture/material only — geometry
-    // unchanged). Clear Chat resets the chain. An attached image always
-    // starts a fresh model (image-to-3D), skipping the chain.
-    const refineTaskId =
-      provider === "tripo3d" && lastTripoTaskId && !imagePayload
-        ? lastTripoTaskId
-        : undefined;
-    if (refineTaskId) {
-      addChatMessage(
-        "system",
-        "Refining previous model (texture/material only — geometry unchanged)…",
-      );
+    // Typed follow-ups retexture the active version (texture/material only —
+    // geometry unchanged). Detach, Clear Chat, or an attached image starts fresh.
+    const retextureSource =
+      provider === "tripo3d" && activeVersion && !imagePayload
+        ? activeVersion
+        : null;
+    if (retextureSource) {
+      addChatMessage("system", `Refining "${retextureSource.name}" (texture/material only — geometry unchanged)…`);
     }
 
     const result = await generateAsset({
@@ -1105,21 +1162,17 @@ async function onGenerate() {
       transformMatrix,
       tier,
       ...(isRealProvider() && { providerKey }),
-      ...(refineTaskId && { refineTaskId }),
+      ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
       ...(imagePayload && imagePayload),
       ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
     });
-
-    if (provider === "tripo3d" && result.taskId) {
-      lastTripoTaskId = result.taskId;
-    }
 
     // Defer the Studio viewport load: register the result, show an asset
     // bubble with a live preview, and let the user send it explicitly.
     presentGenerationResult(result, {
       prompt: effectivePrompt,
       provider,
-      task: refineTaskId ? "texture" : "model",
+      task: retextureSource ? "texture" : "model",
       prevAssetManifestCid,
       transformMatrix,
     });
@@ -1204,6 +1257,7 @@ on(EVENTS.ASSET_PUBLISHED, () => {
 on(EVENTS.SCENE_EMPTY, () => {
   syncAssetNameDisplay();
   openAssetIdentity = null;
+  setActiveVersion(null);
   // Full reset on new asset — but stay quiet when there is no live session
   // to clear (e.g. initial page load on an empty scene).
   const hasLiveChat = !!document.querySelector(
@@ -1211,6 +1265,19 @@ on(EVENTS.SCENE_EMPTY, () => {
   );
   if (hasLiveChat) clearChat();
   else clearHistoryBubbles();
+});
+
+// History-version bubble clicked: load that version of the current asset
+// from the manifest chain and make it the active version for retexture.
+on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }) => {
+  try {
+    assetState.set({ activeAssetManifestCid: cid, latestAssetManifestCid: cid });
+    await loadAssetManifest(cid);
+    if (sourceCid) setActiveVersion({ sourceAssetCid: sourceCid, manifestCid: cid, name });
+  } catch (err) {
+    console.error("Version restore failed:", err);
+    addChatMessage("system", "Could not load that version.");
+  }
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {
