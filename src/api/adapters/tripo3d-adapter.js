@@ -7,6 +7,9 @@ export const TRIPO_MODEL_VERSION = process.env.TRIPO_3D_MODEL || "v3.1-20260211"
 // v2.5-20260210.
 export const TRIPO_RIG_MODEL = process.env.TRIPO_3D_RIG_MODEL || "v2.5-20260210";
 
+/** Valid Tripo texture_quality levels (generation ≥ v3.0 and models/texture). */
+export const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
+
 export class TripoApiError extends Error {
   /**
    * @param {string} message
@@ -78,11 +81,24 @@ function mapTripoCodeToHttp(code) {
 }
 
 /**
+ * Map the textureQuality option to Tripo's texture_quality field.
+ * "standard" is Tripo's default — omitting the field keeps payloads minimal.
+ * @param {{textureQuality?: string}} options
+ * @returns {object}
+ */
+function textureQualityField(options) {
+  const q = options.textureQuality;
+  return q && q !== "standard" && TEXTURE_QUALITIES.includes(q)
+    ? { texture_quality: q }
+    : {};
+}
+
+/**
  * Create a text-to-3D task.
  * @param {string} prompt
  * @param {string} apiKey
  * @param {object} [options]
- * @param {boolean} [options.highQuality=false] - detailed (HD) textures
+ * @param {string} [options.textureQuality="standard"] - one of TEXTURE_QUALITIES
  * @returns {Promise<string>} task_id
  */
 export async function createTask(prompt, apiKey, options = {}) {
@@ -93,7 +109,7 @@ export async function createTask(prompt, apiKey, options = {}) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(
-    `[GEN] Tripo createTask prompt_len=${prompt.length} hq=${Boolean(options.highQuality)}`,
+    `[GEN] Tripo createTask prompt_len=${prompt.length} tq=${options.textureQuality || "standard"}`,
   );
   const data = await tripoFetch("generation/text-to-model", apiKey, "POST", {
     prompt,
@@ -103,7 +119,7 @@ export async function createTask(prompt, apiKey, options = {}) {
     // Scale to estimated real-world meters — without this Tripo models often
     // arrive tiny and the Studio camera has to hunt for them.
     auto_size: true,
-    ...(options.highQuality && { texture_quality: "detailed" }),
+    ...textureQualityField(options),
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
@@ -162,11 +178,40 @@ export async function uploadImage(imageBuffer, mime, apiKey) {
 }
 
 /**
+ * Upload a source 3D model (GLB) to Tripo (POST /files) and return its
+ * file_token. Follow-up endpoints (models/texture, mesh/decimate,
+ * animations/rig-check, animations/rig) accept the token as `input`.
+ * @param {Buffer} glbBuffer - raw GLB bytes
+ * @param {string} apiKey
+ * @returns {Promise<string>} file_token
+ */
+export async function uploadModel(glbBuffer, apiKey) {
+  if (!Buffer.isBuffer(glbBuffer) || glbBuffer.length === 0) {
+    throw new TripoApiError("glbBuffer is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo uploadModel size=${glbBuffer.length}`);
+  const form = new FormData();
+  // Copy into a plain ArrayBuffer-backed view — Buffer's ArrayBufferLike
+  // (possibly shared) backing store is not a valid BlobPart.
+  const bytes = new Uint8Array(glbBuffer);
+  form.append("file", new Blob([bytes], { type: "model/gltf-binary" }), "model.glb");
+  const data = await tripoFetch("files", apiKey, "POST", form);
+  if (typeof data?.file_token !== "string") {
+    throw new TripoApiError("Tripo did not return a file token", 0, 502);
+  }
+  console.log(`[GEN] Tripo model uploaded file_token=${data.file_token}`);
+  return data.file_token;
+}
+
+/**
  * Create an image-to-3D task from a previously uploaded image.
  * @param {string} fileToken - file_token from uploadImage()
  * @param {string} apiKey
  * @param {object} [options]
- * @param {boolean} [options.highQuality=false] - detailed (HD) textures
+ * @param {string} [options.textureQuality="standard"] - one of TEXTURE_QUALITIES
  * @returns {Promise<string>} task_id
  */
 export async function createImageTask(fileToken, apiKey, options = {}) {
@@ -177,7 +222,7 @@ export async function createImageTask(fileToken, apiKey, options = {}) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(
-    `[GEN] Tripo createImageTask file_token=${fileToken} hq=${Boolean(options.highQuality)}`,
+    `[GEN] Tripo createImageTask file_token=${fileToken} tq=${options.textureQuality || "standard"}`,
   );
   const data = await tripoFetch("generation/image-to-model", apiKey, "POST", {
     file: { file_token: fileToken },
@@ -185,7 +230,7 @@ export async function createImageTask(fileToken, apiKey, options = {}) {
     texture: true,
     pbr: true,
     auto_size: true,
-    ...(options.highQuality && { texture_quality: "detailed" }),
+    ...textureQualityField(options),
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
@@ -200,26 +245,29 @@ export async function createImageTask(fileToken, apiKey, options = {}) {
  * unchanged. (Tripo's refine_model endpoint is dead upstream, code 2006,
  * verified 2026-07-22.)
  * @param {string} prompt
- * @param {string} originalTripoTaskId - Tripo task ID of the completed source generation
+ * @param {string} fileToken - file_token from uploadModel()
  * @param {string} apiKey
+ * @param {object} [options]
+ * @param {string} [options.textureQuality="standard"] - one of TEXTURE_QUALITIES
  * @returns {Promise<string>} task_id
  */
-export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
+export async function createRefineTask(prompt, fileToken, apiKey, options = {}) {
   if (!prompt || typeof prompt !== "string") {
     throw new TripoApiError("prompt is required", 0, 400);
   }
-  if (!originalTripoTaskId || typeof originalTripoTaskId !== "string") {
-    throw new TripoApiError("originalTripoTaskId is required", 0, 400);
+  if (!fileToken || typeof fileToken !== "string") {
+    throw new TripoApiError("fileToken is required", 0, 400);
   }
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(`[GEN] Tripo refine prompt_len=${prompt.length}`);
   const data = await tripoFetch("models/texture", apiKey, "POST", {
-    input: originalTripoTaskId,
+    input: fileToken,
     text_prompt: prompt,
     texture: true,
     pbr: true,
+    ...textureQualityField(options),
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
@@ -237,26 +285,26 @@ export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
  * NOTE: quad defaults to false on purpose — glTF only stores triangles, so
  * Tripo forces FBX output when quad=true, and the frontend cannot load FBX.
  * The triangulated smart-retopo mesh is what the glTF pipeline needs.
- * @param {string} inputTaskId - completed generation task ID
+ * @param {string} fileToken - file_token from uploadModel()
  * @param {string} apiKey
  * @param {object} [options]
  * @param {number} [options.faceLimit] - target faces (500–20,000); adaptive when omitted
  * @param {boolean} [options.quad=false] - quad mesh (forces FBX output!)
  * @returns {Promise<string>} task_id
  */
-export async function decimateTask(inputTaskId, apiKey, options = {}) {
-  if (!inputTaskId || typeof inputTaskId !== "string") {
-    throw new TripoApiError("inputTaskId is required", 0, 400);
+export async function decimateTask(fileToken, apiKey, options = {}) {
+  if (!fileToken || typeof fileToken !== "string") {
+    throw new TripoApiError("fileToken is required", 0, 400);
   }
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   const { faceLimit, quad = false } = options;
   console.log(
-    `[GEN] Tripo decimateTask input=${inputTaskId} quad=${quad} face_limit=${faceLimit ?? "adaptive"}`,
+    `[GEN] Tripo decimateTask input=${fileToken} quad=${quad} face_limit=${faceLimit ?? "adaptive"}`,
   );
   const data = await tripoFetch("mesh/decimate", apiKey, "POST", {
-    input: inputTaskId,
+    input: fileToken,
     model: "v2.0",
     quad,
     bake: true,
@@ -271,20 +319,20 @@ export async function decimateTask(inputTaskId, apiKey, options = {}) {
 
 /**
  * Create a rig-check task: is the model riggable, and which skeleton type?
- * @param {string} inputTaskId - completed generation task ID
+ * @param {string} fileToken - file_token from uploadModel()
  * @param {string} apiKey
  * @returns {Promise<string>} task_id
  */
-export async function rigCheckTask(inputTaskId, apiKey) {
-  if (!inputTaskId || typeof inputTaskId !== "string") {
-    throw new TripoApiError("inputTaskId is required", 0, 400);
+export async function rigCheckTask(fileToken, apiKey) {
+  if (!fileToken || typeof fileToken !== "string") {
+    throw new TripoApiError("fileToken is required", 0, 400);
   }
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
-  console.log(`[GEN] Tripo rigCheckTask input=${inputTaskId}`);
+  console.log(`[GEN] Tripo rigCheckTask input=${fileToken}`);
   const data = await tripoFetch("animations/rig-check", apiKey, "POST", {
-    input: inputTaskId,
+    input: fileToken,
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
@@ -294,14 +342,14 @@ export async function rigCheckTask(inputTaskId, apiKey) {
 
 /**
  * Create a rig task: attach a Mixamo-compatible skeleton to a model.
- * @param {string} inputTaskId - completed generation task ID
+ * @param {string} fileToken - file_token from uploadModel()
  * @param {string} rigType - from rig-check output, e.g. "biped"
  * @param {string} apiKey
  * @returns {Promise<string>} task_id
  */
-export async function rigModelTask(inputTaskId, rigType, apiKey) {
-  if (!inputTaskId || typeof inputTaskId !== "string") {
-    throw new TripoApiError("inputTaskId is required", 0, 400);
+export async function rigModelTask(fileToken, rigType, apiKey) {
+  if (!fileToken || typeof fileToken !== "string") {
+    throw new TripoApiError("fileToken is required", 0, 400);
   }
   if (!rigType || typeof rigType !== "string") {
     throw new TripoApiError("rigType is required", 0, 400);
@@ -309,9 +357,9 @@ export async function rigModelTask(inputTaskId, rigType, apiKey) {
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
-  console.log(`[GEN] Tripo rigModelTask input=${inputTaskId} rig_type=${rigType}`);
+  console.log(`[GEN] Tripo rigModelTask input=${fileToken} rig_type=${rigType}`);
   const data = await tripoFetch("animations/rig", apiKey, "POST", {
-    input: inputTaskId,
+    input: fileToken,
     rig_type: rigType,
     spec: "mixamo",
     model: TRIPO_RIG_MODEL,

@@ -4,7 +4,9 @@ import {
   createImageTask,
   createRefineTask,
   uploadImage,
+  uploadModel,
   getBalance,
+  decimateTask,
   rigCheckTask,
   rigModelTask,
   retargetTask,
@@ -193,11 +195,11 @@ describe("tripo3d adapter", () => {
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_rc" } }),
     });
-    const id = await rigCheckTask("tripo_gen_1", key);
+    const id = await rigCheckTask("file_glb_1", key);
     expect(id).toBe("task_rc");
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe("https://openapi.tripo3d.ai/v3/animations/rig-check");
-    expect(JSON.parse(opts.body)).toEqual({ input: "tripo_gen_1" });
+    expect(JSON.parse(opts.body)).toEqual({ input: "file_glb_1" });
   });
 
   test("rigModelTask submits animations/rig with mixamo spec and rig model", async () => {
@@ -205,12 +207,12 @@ describe("tripo3d adapter", () => {
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_rig" } }),
     });
-    const id = await rigModelTask("tripo_gen_1", "biped", key);
+    const id = await rigModelTask("file_glb_1", "biped", key);
     expect(id).toBe("task_rig");
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe("https://openapi.tripo3d.ai/v3/animations/rig");
     expect(JSON.parse(opts.body)).toEqual({
-      input: "tripo_gen_1",
+      input: "file_glb_1",
       rig_type: "biped",
       spec: "mixamo",
       model: "v2.5-20260210",
@@ -241,7 +243,7 @@ describe("tripo3d adapter", () => {
   });
 
   test("rigModelTask rejects empty rigType with status 400", async () => {
-    await expect(rigModelTask("tripo_gen_1", "", key)).rejects.toMatchObject({
+    await expect(rigModelTask("file_glb_1", "", key)).rejects.toMatchObject({
       code: 0,
       status: 400,
     });
@@ -282,20 +284,20 @@ describe("tripo3d adapter", () => {
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_refine" } }),
     });
-    const id = await createRefineTask("make it blue metallic", "tripo_orig_1", key);
+    const id = await createRefineTask("make it blue metallic", "file_glb_1", key);
     expect(id).toBe("task_refine");
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe("https://openapi.tripo3d.ai/v3/models/texture");
     expect(opts.headers["Authorization"]).toBe(`Bearer ${key}`);
     expect(JSON.parse(opts.body)).toEqual({
-      input: "tripo_orig_1",
+      input: "file_glb_1",
       text_prompt: "make it blue metallic",
       texture: true,
       pbr: true,
     });
   });
 
-  test("createRefineTask rejects empty original task id with status 400", async () => {
+  test("createRefineTask rejects empty file token with status 400", async () => {
     await expect(createRefineTask("x", "", key)).rejects.toMatchObject({
       code: 0,
       status: 400,
@@ -528,5 +530,79 @@ describe("tripo3d adapter", () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     warnSpy.mockRestore();
+  });
+});
+
+describe("uploadModel", () => {
+  it("POSTs the GLB to /files as multipart and returns file_token", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { file_token: "file_glb_1" } }),
+    });
+    const token = await uploadModel(Buffer.from("glb-bytes"), "key");
+    expect(token).toBe("file_glb_1");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/files");
+    expect(opts.method).toBe("POST");
+    expect(opts.body).toBeInstanceOf(FormData);
+    expect(opts.headers["Content-Type"]).toBeUndefined();
+  });
+
+  it("rejects an empty buffer", async () => {
+    await expect(uploadModel(Buffer.alloc(0), "key")).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("file_token inputs", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_1" } }),
+    });
+  });
+
+  it("createRefineTask sends the file token as input", async () => {
+    await createRefineTask("rusty bronze", "file_glb_1", "key");
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(global.fetch.mock.calls[0][0]).toBe("https://openapi.tripo3d.ai/v3/models/texture");
+    expect(body).toMatchObject({ input: "file_glb_1", text_prompt: "rusty bronze", texture: true, pbr: true });
+  });
+
+  it("decimateTask sends the file token and keeps quad=false", async () => {
+    await decimateTask("file_glb_1", "key", { faceLimit: 20000 });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body).toMatchObject({ input: "file_glb_1", model: "v2.0", quad: false, bake: true, face_limit: 20000 });
+  });
+
+  it("rigCheckTask and rigModelTask send the file token", async () => {
+    await rigCheckTask("file_glb_1", "key");
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({ input: "file_glb_1" });
+    await rigModelTask("file_glb_1", "biped", "key");
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ input: "file_glb_1", rig_type: "biped", spec: "mixamo" });
+  });
+});
+
+describe("textureQuality", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_1" } }),
+    });
+  });
+
+  it("omits texture_quality for standard", async () => {
+    await createTask("a knight", "key", { textureQuality: "standard" });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.texture_quality).toBeUndefined();
+  });
+
+  it("passes extreme through", async () => {
+    await createTask("a knight", "key", { textureQuality: "extreme" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("extreme");
+  });
+
+  it("createRefineTask passes texture_quality through", async () => {
+    await createRefineTask("rusty", "file_glb_1", "key", { textureQuality: "detailed" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("detailed");
   });
 });
