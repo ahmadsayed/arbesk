@@ -539,18 +539,21 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("accepts auto-rig (animate + rigOnly, no animations)", async () => {
+      ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
       const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
         ok: true,
-        json: async () => ({ code: 0, data: { task_id: "task_rc" }, }),
+        json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_rc" } }),
       });
-      // GLB fetch from storage + Tripo upload are mocked in Task 3; this test
-      // only asserts validation passes (any non-400 status).
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", animate: true, rigOnly: true });
-      expect(res.status).not.toBe(400);
-      fetchSpy.mockRestore();
+      try {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", animate: true, rigOnly: true });
+        expect(res.status).toBe(202);
+        expect(res.body.animating).toBe(true);
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
 
     describe("tripo3d provider", () => {
@@ -631,35 +634,30 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         fetchSpy.mockRestore();
       });
 
-      it("image generation ignores refineTaskId (fresh model, no refine lookup)", async () => {
-        const fetchSpy = jest
-          .spyOn(global, "fetch")
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ code: 0, data: { file_token: "ftok_2" } }),
-          })
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ code: 0, data: { task_id: "task_img2" } }),
-          });
+      it("ignores action flags without sourceAssetCid (fresh generation)", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_fresh" } }),
+        });
 
         const res = await request(app)
           .post("/api/v1/generations")
           .set("Authorization", await makeSessionHeader())
           .send({
-            nodeId: "node_tripo_imgref",
+            prompt: "A fresh model",
+            nodeId: "node_tripo_flag_no_source",
             provider: "tripo3d",
             providerKey: "tsk_test_secret_key",
-            imageData: Buffer.from("png-bytes").toString("base64"),
-            imageMime: "image/png",
-            // Unknown refine id would 404 on the text path; the image path
-            // must skip the refine lookup entirely.
-            refineTaskId: "00000000-0000-0000-0000-000000000000",
+            // The schema permits action flags without sourceAssetCid; the
+            // route must ignore them and run a fresh generation, not crash.
+            retopo: true,
           });
 
         expect(res.status).toBe(202);
-        expect(res.body.refined).toBeUndefined();
-        fetchSpy.mockRestore();
+        expect(res.body.retopo).toBeUndefined();
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/generation/text-to-model",
+        );
       });
 
       it("returns 400 VALIDATION_ERROR when neither prompt nor imageData is sent", async () => {
@@ -729,43 +727,27 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(res.status).toBe(401);
       });
 
-      it("POST animate starts a rig-check chain for a completed task", async () => {
-        const sourceId = registerTask({
-          tripoTaskId: "tripo_src_1",
-          providerKey: "k",
-          userAddress: "0x1234567890123456789012345678901234567890",
+      it("POST animate uploads the GLB and starts rig-check with the file token", async () => {
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        const calls = [];
+        const bodies = [];
+        jest.spyOn(global, "fetch").mockImplementation(async (url, opts) => {
+          calls.push(url);
+          if (opts?.body && !(opts.body instanceof FormData)) bodies.push(JSON.parse(opts.body));
+          return { ok: true, json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_rc" } }) };
         });
-        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
-
-        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ code: 0, data: { task_id: "task_rc_1" } }),
-        });
-
         const res = await request(app)
           .post("/api/v1/generations")
           .set("Authorization", await makeSessionHeader())
-          .send({
-            nodeId: "node_anim_1",
-            provider: "tripo3d",
-            providerKey: "k",
-            animateTaskId: sourceId,
-            animations: ["preset:idle", "preset:walk"],
-          });
-
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", animate: true, animations: ["preset:idle"] });
         expect(res.status).toBe(202);
-        expect(res.body).toMatchObject({
-          provider: "tripo3d",
-          status: "running",
-          animating: true,
-        });
-        expect(fetchSpy.mock.calls[0][0]).toBe(
-          "https://openapi.tripo3d.ai/v3/animations/rig-check",
-        );
-        fetchSpy.mockRestore();
+        expect(res.body.animating).toBe(true);
+        expect(calls[0]).toBe("https://openapi.tripo3d.ai/v3/files");
+        expect(calls[1]).toBe("https://openapi.tripo3d.ai/v3/animations/rig-check");
+        expect(bodies[0]).toMatchObject({ input: "file_1" });
       });
 
-      it("POST animate on a completed rig-only task retargets directly (no rig-check)", async () => {
+      it("POST animate with sourceTaskId of a completed rig-only task retargets directly (no rig-check)", async () => {
         const rigSourceId = registerTask({
           tripoTaskId: "task_rig_done",
           providerKey: "k",
@@ -780,7 +762,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           ok: true,
           json: async () => ({ code: 0, data: { task_id: "task_rt_direct" } }),
         });
-        fetchSpy.mockClear();
 
         const res = await request(app)
           .post("/api/v1/generations")
@@ -789,7 +770,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             nodeId: "node_anim_direct",
             provider: "tripo3d",
             providerKey: "k",
-            animateTaskId: rigSourceId,
+            sourceAssetCid: "bafySource",
+            animate: true,
+            sourceTaskId: rigSourceId,
             animations: ["preset:idle", "preset:walk"],
           });
 
@@ -799,8 +782,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           status: "running",
           animating: true,
         });
-        // Exactly one upstream call: the retarget on the rig task — no
-        // rig-check, no rig.
+        // Exactly one upstream call: the retarget on the rig task — no GLB
+        // upload, no rig-check, no rig.
         expect(fetchSpy).toHaveBeenCalledTimes(1);
         expect(fetchSpy.mock.calls[0][0]).toBe(
           "https://openapi.tripo3d.ai/v3/animations/retarget",
@@ -810,10 +793,10 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           animations: ["preset:idle", "preset:walk"],
           out_format: "glb",
         });
-        fetchSpy.mockRestore();
       });
 
-      it("POST animate with rigOnly on an already-rigged task returns 400", async () => {
+      it("POST animate with rigOnly and a sourceTaskId falls through to a fresh rig-only chain", async () => {
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
         const rigSourceId = registerTask({
           tripoTaskId: "task_rig_done_2",
           providerKey: "k",
@@ -824,57 +807,84 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
         markTaskComplete(rigSourceId, "0x1234567890123456789012345678901234567890");
 
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_rc_rerig" } }),
+        });
+
         const res = await request(app)
           .post("/api/v1/generations")
           .set("Authorization", await makeSessionHeader())
           .send({
-            nodeId: "node_anim_already",
+            nodeId: "node_anim_rerig",
             provider: "tripo3d",
             providerKey: "k",
-            animateTaskId: rigSourceId,
+            sourceAssetCid: "bafySource",
+            animate: true,
             rigOnly: true,
+            sourceTaskId: rigSourceId,
           });
 
-        expect(res.status).toBe(400);
-        expect(res.body.error.code).toBe("ALREADY_RIGGED");
+        // No retarget shortcut with rigOnly — the GLB starts a fresh
+        // rig-only chain (upload + rig-check).
+        expect(res.status).toBe(202);
+        expect(res.body.animating).toBe(true);
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/files",
+        );
+        expect(fetchSpy.mock.calls[1][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/animations/rig-check",
+        );
       });
 
-      it("POST animate returns 404 ANIMATE_SOURCE_NOT_FOUND for unknown source", async () => {
+      it("POST animate with an unknown sourceTaskId falls back to the GLB chain", async () => {
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_rc_fb" } }),
+        });
+
         const res = await request(app)
           .post("/api/v1/generations")
           .set("Authorization", await makeSessionHeader())
           .send({
-            nodeId: "node_anim_404",
+            nodeId: "node_anim_fallback",
             provider: "tripo3d",
             providerKey: "k",
-            animateTaskId: "00000000-0000-0000-0000-000000000000",
+            sourceAssetCid: "bafySource",
+            animate: true,
+            sourceTaskId: "00000000-0000-0000-0000-000000000000",
             animations: ["preset:idle"],
           });
 
-        expect(res.status).toBe(404);
-        expect(res.body.error.code).toBe("ANIMATE_SOURCE_NOT_FOUND");
+        // The registry entry may have expired (TTL) — the GLB is the
+        // canonical source, so the chain still starts normally.
+        expect(res.status).toBe(202);
+        expect(res.body.animating).toBe(true);
+        expect(fetchSpy.mock.calls[1][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/animations/rig-check",
+        );
       });
 
       it("GET advances the animate chain rig-check → rig → retarget → GLB", async () => {
         const glb = new TextEncoder().encode("animated-glb");
         const session = await makeSessionHeader();
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
 
-        // Seed a completed source generation.
-        const sourceId = registerTask({
-          tripoTaskId: "tripo_src_2",
-          providerKey: "k",
-          userAddress: "0x1234567890123456789012345678901234567890",
-        });
-        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
-
-        global.fetch = jest
-          .fn()
-          // 1: POST → rig-check created
+        const fetchSpy = jest.spyOn(global, "fetch");
+        fetchSpy.mockReset();
+        fetchSpy
+          // 1: POST → source GLB uploaded to Tripo
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { file_token: "file_1" } }),
+          })
+          // 2: POST → rig-check created
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({ code: 0, data: { task_id: "task_rc_2" } }),
           })
-          // 2: GET poll → rig-check success (riggable biped)
+          // 3: GET poll → rig-check success (riggable biped)
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({
@@ -886,12 +896,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               },
             }),
           })
-          // 3: chain → rig created
+          // 4: chain → rig created
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({ code: 0, data: { task_id: "task_rig_2" } }),
           })
-          // 4: GET poll → rig success
+          // 5: GET poll → rig success
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({
@@ -899,12 +909,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               data: { task_id: "task_rig_2", status: "success", output: {} },
             }),
           })
-          // 5: chain → retarget created
+          // 6: chain → retarget created
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({ code: 0, data: { task_id: "task_rt_2" } }),
           })
-          // 6: GET poll → retarget success with model_url
+          // 7: GET poll → retarget success with model_url
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({
@@ -916,7 +926,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               },
             }),
           })
-          // 7: download
+          // 8: download
           .mockResolvedValueOnce({
             ok: true,
             arrayBuffer: async () =>
@@ -930,7 +940,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             nodeId: "node_anim_2",
             provider: "tripo3d",
             providerKey: "k",
-            animateTaskId: sourceId,
+            sourceAssetCid: "bafySource",
+            animate: true,
             animations: ["preset:idle"],
           });
         expect(post.status).toBe(202);
@@ -945,9 +956,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           progress: 40,
           stage: "Rigging skeleton",
         });
-        // Rig input must be the ORIGINAL generation task id
-        expect(JSON.parse(global.fetch.mock.calls[2][1].body)).toMatchObject({
-          input: "tripo_src_2",
+        // Rig input must be the uploaded file token (the entry's sourceFileToken)
+        expect(JSON.parse(fetchSpy.mock.calls[3][1].body)).toMatchObject({
+          input: "file_1",
           rig_type: "biped",
         });
 
@@ -961,7 +972,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           stage: "Baking animations",
         });
         // Retarget input must be the rig task id with the requested presets
-        expect(JSON.parse(global.fetch.mock.calls[4][1].body)).toEqual({
+        expect(JSON.parse(fetchSpy.mock.calls[5][1].body)).toEqual({
           input: "task_rig_2",
           animations: ["preset:idle"],
           out_format: "glb",
@@ -980,21 +991,22 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       it("rigOnly chain stops after rig — no retarget call, rig GLB returned", async () => {
         const glb = new TextEncoder().encode("rigged-glb");
         const session = await makeSessionHeader();
-        const sourceId = registerTask({
-          tripoTaskId: "tripo_src_rigonly",
-          providerKey: "k",
-          userAddress: "0x1234567890123456789012345678901234567890",
-        });
-        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
 
-        global.fetch = jest
-          .fn()
-          // 1: POST → rig-check created
+        const fetchSpy = jest.spyOn(global, "fetch");
+        fetchSpy.mockReset();
+        fetchSpy
+          // 1: POST → source GLB uploaded to Tripo
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { file_token: "file_1" } }),
+          })
+          // 2: POST → rig-check created
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({ code: 0, data: { task_id: "task_rc_ro" } }),
           })
-          // 2: poll → rig-check success
+          // 3: poll → rig-check success
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({
@@ -1006,12 +1018,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               },
             }),
           })
-          // 3: chain → rig created
+          // 4: chain → rig created
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({ code: 0, data: { task_id: "task_rig_ro" } }),
           })
-          // 4: poll → rig success with rigged model URL
+          // 5: poll → rig success with rigged model URL
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({
@@ -1023,7 +1035,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               },
             }),
           })
-          // 5: download
+          // 6: download
           .mockResolvedValueOnce({
             ok: true,
             arrayBuffer: async () =>
@@ -1037,7 +1049,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             nodeId: "node_anim_rigonly",
             provider: "tripo3d",
             providerKey: "k",
-            animateTaskId: sourceId,
+            sourceAssetCid: "bafySource",
+            animate: true,
             rigOnly: true,
           });
         expect(post.status).toBe(202);
@@ -1056,27 +1069,30 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           Buffer.from("rigged-glb").toString("base64"),
         );
 
-        // 5 upstream calls total — no animations/retarget among them.
-        expect(global.fetch).toHaveBeenCalledTimes(5);
-        const urls = global.fetch.mock.calls.map((c) => c[0]);
+        // 6 upstream calls total — no animations/retarget among them.
+        expect(fetchSpy).toHaveBeenCalledTimes(6);
+        const urls = fetchSpy.mock.calls.map((c) => c[0]);
         expect(urls.some((u) => u.includes("animations/retarget"))).toBe(false);
       });
 
       it("GET fails the chain with MODEL_NOT_RIGGABLE when Tripo says no", async () => {
         const session = await makeSessionHeader();
-        const sourceId = registerTask({
-          tripoTaskId: "tripo_src_3",
-          providerKey: "k",
-          userAddress: "0x1234567890123456789012345678901234567890",
-        });
-        markTaskComplete(sourceId, "0x1234567890123456789012345678901234567890");
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
 
-        global.fetch = jest
-          .fn()
+        const fetchSpy = jest.spyOn(global, "fetch");
+        fetchSpy.mockReset();
+        fetchSpy
+          // 1: POST → source GLB uploaded to Tripo
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { file_token: "file_1" } }),
+          })
+          // 2: POST → rig-check created
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({ code: 0, data: { task_id: "task_rc_3" } }),
           })
+          // 3: poll → rig-check says not riggable
           .mockResolvedValueOnce({
             ok: true,
             json: async () => ({
@@ -1096,7 +1112,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             nodeId: "node_anim_3",
             provider: "tripo3d",
             providerKey: "k",
-            animateTaskId: sourceId,
+            sourceAssetCid: "bafySource",
+            animate: true,
             animations: ["preset:idle"],
           });
         const poll = await request(app)
@@ -1106,13 +1123,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(poll.body.error.code).toBe("MODEL_NOT_RIGGABLE");
       });
 
-      it("POST with highQuality passes texture_quality=detailed to Tripo", async () => {
+      it("POST with textureQuality=detailed passes texture_quality=detailed to Tripo", async () => {
         const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
           ok: true,
           json: async () => ({ code: 0, data: { task_id: "task_hq" } }),
         });
-        // Earlier tests assign global.fetch directly; spyOn reuses that mock
-        // including its call history — start from a clean slate.
         fetchSpy.mockClear();
 
         const res = await request(app)
@@ -1123,17 +1138,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             nodeId: "node_tripo_hq",
             provider: "tripo3d",
             providerKey: "tsk_test_secret_key",
-            highQuality: true,
+            textureQuality: "detailed",
           });
 
         expect(res.status).toBe(202);
         expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
           texture_quality: "detailed",
         });
-        fetchSpy.mockRestore();
       });
 
-      it("POST without highQuality omits texture_quality", async () => {
+      it("POST without textureQuality omits texture_quality", async () => {
         const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
           ok: true,
           json: async () => ({ code: 0, data: { task_id: "task_std" } }),
@@ -1154,27 +1168,16 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).not.toHaveProperty(
           "texture_quality",
         );
-        fetchSpy.mockRestore();
       });
 
       describe("retopo (smart retopology)", () => {
         const WALLET = "0x1234567890123456789012345678901234567890";
 
-        async function seedCompletedSource(tripoTaskId) {
-          const sourceId = registerTask({
-            tripoTaskId,
-            providerKey: "k",
-            userAddress: WALLET,
-          });
-          markTaskComplete(sourceId, WALLET);
-          return sourceId;
-        }
-
-        it("POST retopo creates a decimate task with GLB-safe defaults", async () => {
-          const sourceId = await seedCompletedSource("tripo_src_retopo");
+        it("POST retopo uploads the source GLB and creates a decimate task with GLB-safe defaults", async () => {
+          ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
           const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
             ok: true,
-            json: async () => ({ code: 0, data: { task_id: "task_dec_1" } }),
+            json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_dec_1" } }),
           });
 
           const res = await request(app)
@@ -1184,7 +1187,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               nodeId: "node_retopo_1",
               provider: "tripo3d",
               providerKey: "k",
-              retopoTaskId: sourceId,
+              sourceAssetCid: "bafySource",
+              retopo: true,
             });
 
           expect(res.status).toBe(202);
@@ -1194,22 +1198,24 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
             retopo: true,
           });
           expect(fetchSpy.mock.calls[0][0]).toBe(
+            "https://openapi.tripo3d.ai/v3/files",
+          );
+          expect(fetchSpy.mock.calls[1][0]).toBe(
             "https://openapi.tripo3d.ai/v3/mesh/decimate",
           );
-          expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({
-            input: "tripo_src_retopo",
+          expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toEqual({
+            input: "file_1",
             model: "v2.0",
             quad: false,
             bake: true,
           });
-          fetchSpy.mockRestore();
         });
 
         it("POST retopo with faceLimit forwards face_limit", async () => {
-          const sourceId = await seedCompletedSource("tripo_src_retopo_fl");
+          ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
           const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
             ok: true,
-            json: async () => ({ code: 0, data: { task_id: "task_dec_2" } }),
+            json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_dec_2" } }),
           });
 
           const res = await request(app)
@@ -1219,30 +1225,15 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
               nodeId: "node_retopo_2",
               provider: "tripo3d",
               providerKey: "k",
-              retopoTaskId: sourceId,
+              sourceAssetCid: "bafySource",
+              retopo: true,
               faceLimit: 5000,
             });
 
           expect(res.status).toBe(202);
-          expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+          expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toMatchObject({
             face_limit: 5000,
           });
-          fetchSpy.mockRestore();
-        });
-
-        it("POST retopo returns 404 RETOPO_SOURCE_NOT_FOUND for unknown source", async () => {
-          const res = await request(app)
-            .post("/api/v1/generations")
-            .set("Authorization", await makeSessionHeader())
-            .send({
-              nodeId: "node_retopo_404",
-              provider: "tripo3d",
-              providerKey: "k",
-              retopoTaskId: "00000000-0000-0000-0000-000000000000",
-            });
-
-          expect(res.status).toBe(404);
-          expect(res.body.error.code).toBe("RETOPO_SOURCE_NOT_FOUND");
         });
 
         it("GET poll completes a decimate task and returns the retopo GLB", async () => {
@@ -1511,120 +1502,42 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(res.body.error.code).toBe("PROVIDER_CREDITS_EXHAUSTED");
       });
 
-      it("creates a refine task when refineTaskId references a completed task", async () => {
-        const glb = new TextEncoder().encode("glb1");
-        global.fetch = jest
-          .fn()
-          // gen1: create
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ code: 0, data: { task_id: "tripo_gen1" } }),
-          })
-          // gen1: poll success
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({
-              code: 0,
-              data: {
-                task_id: "tripo_gen1",
-                status: "success",
-                output: { pbr_model: "https://cdn/a.glb" },
-              },
-            }),
-          })
-          // gen1: download
-          .mockResolvedValueOnce({
-            ok: true,
-            arrayBuffer: async () =>
-              glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength),
-          })
-          // gen2: refine create
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ code: 0, data: { task_id: "tripo_refine1" } }),
-          });
-
-        const session = await makeSessionHeader();
-        const gen1 = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", session)
-          .send({
-            prompt: "cube",
-            nodeId: "n1",
-            provider: "tripo3d",
-            providerKey: "k",
-          });
-        expect(gen1.status).toBe(202);
-
-        const poll = await request(app)
-          .get(`/api/v1/generations/${gen1.body.taskId}`)
-          .set("Authorization", session);
-        expect(poll.body.status).toBe("success");
-
-        // Completed entry is no longer pollable
-        const again = await request(app)
-          .get(`/api/v1/generations/${gen1.body.taskId}`)
-          .set("Authorization", session);
-        expect(again.status).toBe(404);
-
-        const gen2 = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", session)
-          .send({
-            prompt: "make it blue",
-            nodeId: "n2",
-            provider: "tripo3d",
-            providerKey: "k",
-            refineTaskId: gen1.body.taskId,
-          });
-        expect(gen2.status).toBe(202);
-        expect(gen2.body.refined).toBe(true);
-
-        const refineCall = global.fetch.mock.calls[3];
-        expect(refineCall[0]).toBe(
-          "https://openapi.tripo3d.ai/v3/models/texture",
-        );
-        expect(JSON.parse(refineCall[1].body)).toMatchObject({
-          input: "tripo_gen1",
-          text_prompt: "make it blue",
+      it("POST retexture uploads the source GLB and starts a texture task", async () => {
+        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        const calls = [];
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async (url) => {
+          calls.push(url);
+          return { ok: true, json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_tex" } }) };
         });
-      });
-
-      it("returns 404 REFINE_SOURCE_NOT_FOUND for unknown refineTaskId", async () => {
+        // An earlier test assigns global.fetch directly; spyOn reuses that
+        // mock including its call history — start from a clean slate.
+        fetchSpy.mockClear();
         const res = await request(app)
           .post("/api/v1/generations")
           .set("Authorization", await makeSessionHeader())
-          .send({
-            prompt: "x",
-            nodeId: "n",
-            provider: "tripo3d",
-            providerKey: "k",
-            refineTaskId: "00000000-0000-0000-0000-000000000000",
-          });
-        expect(res.status).toBe(404);
-        expect(res.body.error.code).toBe("REFINE_SOURCE_NOT_FOUND");
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "rusty bronze", sourceAssetCid: "bafySource", retexture: true, textureQuality: "detailed" });
+        expect(res.status).toBe(202);
+        expect(res.body).toMatchObject({ provider: "tripo3d", status: "running", refined: true });
+        expect(calls[0]).toBe("https://openapi.tripo3d.ai/v3/files");
+        expect(calls[1]).toBe("https://openapi.tripo3d.ai/v3/models/texture");
+        expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toMatchObject({
+          input: "file_1",
+          text_prompt: "rusty bronze",
+          texture_quality: "detailed",
+        });
       });
 
-      it("returns 404 REFINE_SOURCE_NOT_FOUND for a task owned by another wallet", async () => {
-        const foreignTaskId = registerTask({
-          tripoTaskId: "tripo_foreign",
-          providerKey: "k",
-          userAddress: "0xotherwallet",
+      it("returns 400 SOURCE_ASSET_UNAVAILABLE when the GLB cannot be fetched", async () => {
+        // The mocked ipfs client's cat throws for this test only.
+        mockIPFS.cat.mockImplementationOnce(async function* () {
+          yield await Promise.reject(new Error("no such file"));
         });
-        markTaskComplete(foreignTaskId, "0xotherwallet");
-
         const res = await request(app)
           .post("/api/v1/generations")
           .set("Authorization", await makeSessionHeader())
-          .send({
-            prompt: "x",
-            nodeId: "n",
-            provider: "tripo3d",
-            providerKey: "k",
-            refineTaskId: foreignTaskId,
-          });
-        expect(res.status).toBe(404);
-        expect(res.body.error.code).toBe("REFINE_SOURCE_NOT_FOUND");
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyMissing", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_UNAVAILABLE");
       });
     });
 

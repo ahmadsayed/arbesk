@@ -5,6 +5,7 @@ import {
   createImageTask,
   createRefineTask,
   uploadImage,
+  uploadModel,
   getBalance,
   decimateTask,
   rigCheckTask,
@@ -22,6 +23,7 @@ import {
   updateTaskEntry,
   evictTask,
 } from "../generation-tasks.js";
+import { getStorage } from "../storage/index.js";
 import authenticate from "../authentication.js";
 import { generationRateLimit } from "../rate-limiter.js";
 import { validateBody } from "../validation.js";
@@ -38,6 +40,26 @@ function providerErrorCode(status) {
   if (status === 401) return "PROVIDER_AUTH_FAILED";
   if (status === 402) return "PROVIDER_CREDITS_EXHAUSTED";
   return "PROVIDER_ERROR";
+}
+
+/**
+ * Fetch a source GLB from IPFS and upload it to Tripo, returning the
+ * file_token. Throws TripoApiError(400, SOURCE_ASSET_UNAVAILABLE-shaped)
+ * when the CID cannot be read.
+ * @param {string} cid
+ * @param {string} apiKey
+ * @returns {Promise<string>} file_token
+ */
+async function uploadSourceGlb(cid, apiKey) {
+  let glb;
+  try {
+    glb = await getStorage().catBytes(cid);
+  } catch (e) {
+    const err = /** @type {Error} */ (e);
+    console.log(`[GEN] source GLB fetch failed cid=${cid}: ${err.message}`);
+    throw new TripoApiError("Source asset unavailable in IPFS", 0, 400);
+  }
+  return uploadModel(glb, apiKey);
 }
 
 /**
@@ -64,7 +86,7 @@ export default function generateAssetNode() {
     validateBody(generateAssetSchema),
     async (req, res) => {
       try {
-        const { prompt, nodeId, provider, providerKey, refineTaskId, imageData, imageMime, animateTaskId, animations, rigOnly, highQuality, retopoTaskId, faceLimit } = req.body;
+        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, animations, faceLimit, textureQuality, imageData, imageMime } = req.body;
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
@@ -148,144 +170,52 @@ export default function generateAssetNode() {
         if (effectiveProvider === "tripo3d") {
           const key = providerKey.trim();
 
-          // Rig & animate: chain rig-check → rig → retarget off a completed
-          // generation. The chain advances in the GET poll handler.
-          if (animateTaskId) {
-            const animateSource = getCompletedTask(
-              animateTaskId,
-              res.locals.userAddress,
-            );
-            if (!animateSource) {
-              console.log(
-                `[GEN] animate source not found taskId=${animateTaskId}`,
-              );
-              return res.status(404).json({
-                error: {
-                  code: "ANIMATE_SOURCE_NOT_FOUND",
-                  message: "Animate source task not found or not completed",
-                },
-              });
-            }
-
-            // Retarget-only path: the source is itself a completed rig
-            // (rig-only chain). The skeleton already exists — skip rig-check
-            // and rig, and bake the requested presets straight onto it.
-            if (animateSource.kind === "animate" && animateSource.phase === "rig") {
-              if (rigOnly) {
-                return res.status(400).json({
-                  error: {
-                    code: "ALREADY_RIGGED",
-                    message: "This model is already rigged — pick animations to bake.",
-                  },
-                });
+          if (sourceAssetCid) {
+            // Retarget-only shortcut: the caller references a completed rig-only
+            // registry entry whose skeleton still lives Tripo-side (registry TTL).
+            // Everything else goes through the GLB — the canonical, expiry-free path.
+            if (animate && sourceTaskId) {
+              const rigSource = getCompletedTask(sourceTaskId, res.locals.userAddress);
+              if (rigSource && rigSource.kind === "animate" && rigSource.phase === "rig" && !rigOnly) {
+                console.log(`[GEN] retarget-only: source rig=${rigSource.tripoTaskId} animations=${(animations || []).join(",")}`);
+                const retargetId = await retargetTask(rigSource.tripoTaskId, animations, key);
+                const taskId = registerTask({ tripoTaskId: retargetId, providerKey: key, userAddress: res.locals.userAddress, kind: "animate", phase: "retarget", animations });
+                return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
               }
-              console.log(
-                `[GEN] retarget-only: source rig=${animateSource.tripoTaskId} animations=${(animations || []).join(",")}`,
-              );
-              const retargetId = await retargetTask(
-                animateSource.tripoTaskId,
-                animations,
-                key,
-              );
+            }
+
+            const fileToken = await uploadSourceGlb(sourceAssetCid, key);
+
+            if (animate) {
+              console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)}`);
+              const rigCheckId = await rigCheckTask(fileToken, key);
               const taskId = registerTask({
-                tripoTaskId: retargetId,
-                providerKey: key,
-                userAddress: res.locals.userAddress,
-                kind: "animate",
-                phase: "retarget",
-                animations,
+                tripoTaskId: rigCheckId, providerKey: key, userAddress: res.locals.userAddress,
+                kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), sourceFileToken: fileToken,
               });
-              return res.status(202).json({
-                taskId,
-                provider: "tripo3d",
-                status: "running",
-                animating: true,
-              });
+              return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
             }
 
-            console.log(
-              `[GEN] starting animate chain source=${animateSource.tripoTaskId} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)}`,
-            );
-            const rigCheckId = await rigCheckTask(
-              animateSource.tripoTaskId,
-              key,
-            );
-            const taskId = registerTask({
-              tripoTaskId: rigCheckId,
-              providerKey: key,
-              userAddress: res.locals.userAddress,
-              kind: "animate",
-              phase: "rig-check",
-              animations,
-              rigOnly: Boolean(rigOnly),
-              sourceTripoTaskId: animateSource.tripoTaskId,
-            });
-            return res.status(202).json({
-              taskId,
-              provider: "tripo3d",
-              status: "running",
-              animating: true,
-            });
-          }
+            if (retopo) {
+              console.log(`[GEN] starting retopo source=${sourceAssetCid} faceLimit=${faceLimit ?? "adaptive"}`);
+              const decimateId = await decimateTask(fileToken, key, { faceLimit });
+              const taskId = registerTask({ tripoTaskId: decimateId, providerKey: key, userAddress: res.locals.userAddress });
+              return res.status(202).json({ taskId, provider: "tripo3d", status: "running", retopo: true });
+            }
 
-          let refineSource = null;
-          // Image-to-3D always starts a fresh model — the refine chain
-          // (texture-only) does not apply.
-          if (refineTaskId && !imageData) {
-            refineSource = getCompletedTask(
-              refineTaskId,
-              res.locals.userAddress,
-            );
-            if (!refineSource) {
-              console.log(`[GEN] refine source not found taskId=${refineTaskId}`);
-              return res.status(404).json({
-                error: {
-                  code: "REFINE_SOURCE_NOT_FOUND",
-                  message: "Refine source task not found or not completed",
-                },
-              });
+            // retexture (schema guarantees exactly one action flag)
+            if (retexture) {
+              console.log(`[GEN] starting retexture source=${sourceAssetCid}`);
+              const refineId = await createRefineTask(prompt, fileToken, key, { textureQuality });
+              const taskId = registerTask({ tripoTaskId: refineId, providerKey: key, userAddress: res.locals.userAddress });
+              return res.status(202).json({ taskId, provider: "tripo3d", status: "running", refined: true });
             }
           }
 
-          // Smart retopology: rebuild a completed generation with clean quad
-          // topology + baked textures. The result is a normal completed task,
-          // so it can itself become an animate-chain source afterwards.
-          if (retopoTaskId) {
-            const retopoSource = getCompletedTask(
-              retopoTaskId,
-              res.locals.userAddress,
-            );
-            if (!retopoSource) {
-              console.log(`[GEN] retopo source not found taskId=${retopoTaskId}`);
-              return res.status(404).json({
-                error: {
-                  code: "RETOPO_SOURCE_NOT_FOUND",
-                  message: "Retopo source task not found or not completed",
-                },
-              });
-            }
-            console.log(
-              `[GEN] starting retopo source=${retopoSource.tripoTaskId} faceLimit=${faceLimit ?? "adaptive"}`,
-            );
-            const decimateId = await decimateTask(
-              retopoSource.tripoTaskId,
-              key,
-              { faceLimit },
-            );
-            const taskId = registerTask({
-              tripoTaskId: decimateId,
-              providerKey: key,
-              userAddress: res.locals.userAddress,
-            });
-            return res.status(202).json({
-              taskId,
-              provider: "tripo3d",
-              status: "running",
-              retopo: true,
-            });
-          }
+          // Fresh generation. Action flags without sourceAssetCid are
+          // ignored here — the prompt/image starts a new model.
           console.log(
-            `[GEN] using Tripo3D adapter for "${prompt || "(image)"}" refine=${Boolean(refineSource)} image=${Boolean(imageData)}`,
+            `[GEN] using Tripo3D adapter for "${prompt || "(image)"}" image=${Boolean(imageData)}`,
           );
           const tripoTaskId = imageData
             ? await createImageTask(
@@ -295,13 +225,9 @@ export default function generateAssetNode() {
                   key,
                 ),
                 key,
-                { highQuality: Boolean(highQuality) },
+                { textureQuality },
               )
-            : refineSource
-              ? await createRefineTask(prompt, refineSource.tripoTaskId, key)
-              : await createTask(prompt, key, {
-                  highQuality: Boolean(highQuality),
-                });
+            : await createTask(prompt, key, { textureQuality });
           const taskId = registerTask({
             tripoTaskId,
             providerKey: key,
@@ -314,7 +240,6 @@ export default function generateAssetNode() {
             taskId,
             provider: "tripo3d",
             status: "running",
-            ...(refineSource && { refined: true }),
           });
         }
 
@@ -328,6 +253,14 @@ export default function generateAssetNode() {
       } catch (error) {
         const err = /** @type {Error} */ (error);
         console.error("[GEN] error:", err.message);
+        if (err instanceof TripoApiError && err.status === 400 && err.message === "Source asset unavailable in IPFS") {
+          return res.status(400).json({
+            error: {
+              code: "SOURCE_ASSET_UNAVAILABLE",
+              message: err.message,
+            },
+          });
+        }
         if (err instanceof TripoApiError) {
           return res.status(err.status).json({
             error: {
@@ -454,7 +387,7 @@ export default function generateAssetNode() {
             });
           }
           const rigTaskId = await rigModelTask(
-            entry.sourceTripoTaskId || "",
+            entry.sourceFileToken || "",
             rigOutput.rig_type || "biped",
             entry.providerKey,
           );
