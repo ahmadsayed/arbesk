@@ -15,7 +15,8 @@ import {
 } from "../engine/scene-graph.js";
 import { showToast } from "./toasts.js";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.js";
-import { addChatMessage, addAssetMessage, addWorkingMessage, addChoiceMessage, addImageMessage, clearChatMessages } from "./chat-messages.js";
+import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow } from "./chat-messages.js";
+import { followupActionsFor } from "../state/generation-actions.js";
 import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
   generateAsset,
@@ -592,18 +593,7 @@ function buildTransformMatrix() {
 
 // ─── Rig & Animate (Tripo3D) ───
 
-// Quick-pick combos shown as in-chat choices after a Tripo3D generation.
-// "rig-only" stops after the rig step; "custom" opens the full preset dialog.
-const ANIMATE_CHOICES = [
-  { label: "Idle + Walk", value: ["preset:idle", "preset:walk"] },
-  { label: "Idle", value: ["preset:idle"] },
-  { label: "Walk + Run", value: ["preset:walk", "preset:run"] },
-  { label: "Jump", value: ["preset:jump"] },
-  { label: "Retopo for animation", value: "retopo" },
-  { label: "Rig only (no animation)", value: "rig-only" },
-  { label: "More…", value: "custom" },
-];
-
+// Animation presets offered by the Animate follow-up's checkbox picker.
 const ANIMATE_PRESETS = [
   { value: "preset:idle", label: "Idle", checked: true },
   { value: "preset:walk", label: "Walk", checked: true },
@@ -614,8 +604,8 @@ const ANIMATE_PRESETS = [
 
 /**
  * Register a finished generation as a pending record and present it as an
- * asset chat bubble with live preview, Show-in-Studio, and (for riggable
- * Tripo3D models) an Animate action.
+ * asset chat bubble with live preview, Show-in-Studio, and (per
+ * followupActionsFor) a follow-up action row.
  * @returns {string} the pending generation id
  */
 function presentGenerationResult(
@@ -644,42 +634,129 @@ function presentGenerationResult(
       void sendGenerationToStudio(generationId, assetMessage);
     });
     void attachChatPreview(generationId, assetMessage);
-    // Animated GLBs can't be re-rigged — offer animate choices only on
-    // model/texture results and on rig-only results (which just need the
-    // retarget step to become animated).
-    if (provider === "tripo3d" && task !== "animate") {
-      addAnimateChoices(generationId);
-    }
+    // The helper gates by provider/task: animated results are terminal,
+    // rig-only results keep only Animate, mock gets nothing.
+    addFollowupActions(generationId);
   }
   return generationId;
 }
 
 /**
- * Offer rig & animate follow-ups as in-chat choice chips after a Tripo3D
- * generation. T-pose models rig best — the hint rides along in the prompt.
+ * Attach the version-card action row to a generation bubble. Availability
+ * comes from followupActionsFor; each action runs against the bubble's own
+ * GLB (sourceAssetCid), so any bubble stays actionable indefinitely.
+ * @param {string} generationId
  */
-function addAnimateChoices(generationId) {
-  // On an already-rigged (rig-only) bubble: re-rigging is pointless (the
-  // backend retargets directly) and retopo would strip the skeleton — hide
-  // both chips there.
+function addFollowupActions(generationId) {
   const record = getPendingGeneration(generationId);
-  const choices =
-    record?.task === "rig"
-      ? ANIMATE_CHOICES.filter(
-          (c) => c.value !== "rig-only" && c.value !== "retopo",
-        )
-      : ANIMATE_CHOICES;
-  addChoiceMessage(
-    "Rig & animate this model? (full-body T-pose rigs best)",
-    choices,
-    (value) => {
-      if (value === "retopo") {
-        void onRetopo(generationId);
-        return;
-      }
-      void onAnimate(generationId, value === "custom" ? null : value);
-    },
-  );
+  const assetMessage = assetMessages.get(generationId);
+  if (!record || !assetMessage) return;
+  const ACTION_DEFS = {
+    retexture: { label: "Retexture", run: () => void onRetexture(generationId) },
+    retopo: { label: "Retopo", run: () => void onRetopo(generationId) },
+    "auto-rig": { label: "Auto-rig", run: () => void onAutoRig(generationId) },
+    animate: { label: "Animate…", run: () => void onAnimate(generationId) },
+  };
+  const actions = followupActionsFor(record).map((id) => ({
+    id,
+    label: ACTION_DEFS[id].label,
+    onPick: ACTION_DEFS[id].run,
+  }));
+  addAssetActionRow(assetMessage, actions);
+}
+
+/**
+ * Polygon-budget dialog for retopo. Returns the face limit, undefined for
+ * adaptive, or null when cancelled.
+ * @returns {Promise<number|undefined|null>}
+ */
+function showFaceLimitDialog() {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+      <p style="margin:0 0 var(--size-2)">Target polygon count (500–20,000 triangles). Leave empty for adaptive — adaptive is aggressive and can melt faces.</p>
+      <div class="form-group">
+        <label class="form-label" for="faceLimitInput">Polygon budget</label>
+        <input id="faceLimitInput" class="form-control" type="number" min="500" max="20000" step="100" value="20000">
+      </div>
+      <button id="faceLimitGo" class="btn btn-primary" type="button" style="margin-top:var(--size-2)">Retopo</button>`;
+    const input = /** @type {HTMLInputElement} */ (wrap.querySelector("#faceLimitInput"));
+    wrap.querySelector("#faceLimitGo").addEventListener("click", () => {
+      const raw = input.value.trim();
+      if (raw === "") { resolve(undefined); return; }
+      const n = Number(raw);
+      resolve(Number.isInteger(n) && n >= 500 && n <= 20000 ? n : 20000);
+    });
+    showCustomDialog("Retopo — polygon budget", wrap).then(() => resolve(null));
+  });
+}
+
+/**
+ * Texture prompt dialog for retexture. Returns the trimmed prompt, or null
+ * when cancelled or left empty.
+ * @returns {Promise<string|null>}
+ */
+function showTexturePromptDialog() {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+      <p style="margin:0 0 var(--size-2)">Describe the new texture/material. Geometry stays unchanged.</p>
+      <div class="form-group">
+        <label class="form-label" for="texturePromptInput">Texture prompt</label>
+        <textarea id="texturePromptInput" class="form-control" rows="3" placeholder="weathered bronze with a verdigris patina"></textarea>
+      </div>
+      <button id="texturePromptGo" class="btn btn-primary" type="button" style="margin-top:var(--size-2)">Retexture</button>`;
+    const input = /** @type {HTMLTextAreaElement} */ (wrap.querySelector("#texturePromptInput"));
+    wrap.querySelector("#texturePromptGo").addEventListener("click", () => {
+      resolve(input.value.trim() || null);
+    });
+    showCustomDialog("Retexture — texture prompt", wrap).then(() => resolve(null));
+  });
+}
+
+/**
+ * Retexture a generation bubble: texture prompt dialog → texture-only
+ * refine of the bubble's GLB → new chat bubble.
+ * @param {string} generationId
+ */
+async function onRetexture(generationId) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.sourceAssetCid) return;
+  const texturePrompt = await showTexturePromptDialog();
+  if (!texturePrompt) return;
+  if (!walletState.get().walletAddress) { alert("Please log in or sign up first."); return; }
+  try { await getOrCreateSession(); } catch {
+    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to retexture assets." });
+    return;
+  }
+  addChatMessage("user", `Retexture: ${texturePrompt}`);
+  const working = addWorkingMessage("Retexturing — this takes a minute or two…");
+  const assetName = getAssetName();
+  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_retex_${Date.now()}`;
+  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const transformMatrix = buildTransformMatrix();
+  try {
+    const result = await generateAsset({
+      prompt: texturePrompt,
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      sourceAssetCid: record.sourceAssetCid,
+      retexture: true,
+      textureQuality: getTextureQuality(),
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+    });
+    presentGenerationResult(result, { prompt: `Retexture: ${texturePrompt}`, provider: "tripo3d", task: "texture", prevAssetManifestCid, transformMatrix });
+    dismissCreatePulse();
+    refreshProviderBalance({ force: true });
+  } catch (err) {
+    console.error("Retexture failed:", err);
+    addChatMessage("system", err instanceof ApiError && err.message ? err.message : "Retexture failed. Please try again.");
+  } finally {
+    working?.remove();
+  }
 }
 
 /**
@@ -691,7 +768,10 @@ function addAnimateChoices(generationId) {
  */
 async function onRetopo(generationId) {
   const record = getPendingGeneration(generationId);
-  if (!record?.backendTaskId) return;
+  if (!record?.sourceAssetCid) return;
+
+  const faceLimit = await showFaceLimitDialog();
+  if (faceLimit === null) return; // cancelled
 
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
@@ -728,7 +808,9 @@ async function onRetopo(generationId) {
       nodeId,
       provider: "tripo3d",
       providerKey: getByokKey(),
-      retopoTaskId: record.backendTaskId,
+      sourceAssetCid: record.sourceAssetCid,
+      retopo: true,
+      ...(faceLimit && { faceLimit }),
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
@@ -748,10 +830,7 @@ async function onRetopo(generationId) {
     console.error("Retopo failed:", err);
     let userMsg = "Retopo failed. Please try again.";
     if (err instanceof ApiError) {
-      if (err.code === "RETOPO_SOURCE_NOT_FOUND") {
-        userMsg =
-          "The source generation expired — retopo within an hour of generating.";
-      } else if (err.status === 401) {
+      if (err.status === 401) {
         userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
       } else if (err.status === 402) {
         userMsg = "Tripo3D account has insufficient credits.";
@@ -770,27 +849,84 @@ async function onRetopo(generationId) {
 }
 
 /**
- * Rig & animate a completed Tripo3D generation: presets (from chat choices
- * or the full picker) → backend animate chain (rig-check → rig → retarget)
- * → animated GLB chat bubble.
+ * Auto-rig a generation bubble (no animation): backend rig-check → rig →
+ * Mixamo-ready GLB chat bubble. The rigged result keeps the Animate action,
+ * which then takes the retarget-only path.
  * @param {string} generationId
- * @param {string[]|"rig-only"|null} presets - "rig-only" stops after rigging;
- *   null opens the full preset dialog
  */
-async function onAnimate(generationId, presets) {
+async function onAutoRig(generationId) {
   const record = getPendingGeneration(generationId);
-  if (!record?.backendTaskId) return;
-
-  const rigOnly = presets === "rig-only";
-  if (!presets) {
-    presets = await showCheckboxDialog(
-      "Rig & Animate",
-      "Pick up to 5 animations to bake into the model. Rigging works best on full-body humanoids or creatures (T-pose).",
-      ANIMATE_PRESETS,
-      { max: 5 },
-    );
+  if (!record?.sourceAssetCid) return;
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return;
   }
-  if (!rigOnly && (!presets || presets.length === 0)) return;
+  try {
+    await getOrCreateSession();
+  } catch {
+    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to rig assets." });
+    return;
+  }
+  const prompt = "Auto-rig";
+  addChatMessage("user", prompt);
+  const working = addWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
+  const assetName = getAssetName();
+  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
+  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const transformMatrix = buildTransformMatrix();
+  try {
+    const result = await generateAsset({
+      prompt,
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      sourceAssetCid: record.sourceAssetCid,
+      animate: true,
+      rigOnly: true,
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+    });
+    presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix });
+    dismissCreatePulse();
+    refreshProviderBalance({ force: true });
+  } catch (err) {
+    console.error("Auto-rig failed:", err);
+    let userMsg = "Rigging failed. Please try again.";
+    if (err instanceof ApiError) {
+      if (err.code === "MODEL_NOT_RIGGABLE") {
+        userMsg = "This model isn't riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.";
+      } else if (err.status === 401) {
+        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
+      } else if (err.status === 402) {
+        userMsg = "Tripo3D account has insufficient credits.";
+      } else if (err.message) {
+        userMsg = err.message;
+      }
+    }
+    addChatMessage("system", userMsg);
+  } finally {
+    working?.remove();
+  }
+}
+
+/**
+ * Rig & animate a generation bubble: preset picker → backend animate chain
+ * (rig-check → rig → retarget, or retarget-only on an already-rigged bubble
+ * via sourceTaskId) → animated GLB chat bubble.
+ * @param {string} generationId
+ */
+async function onAnimate(generationId) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.sourceAssetCid) return;
+
+  const presets = await showCheckboxDialog(
+    "Rig & Animate",
+    "Pick up to 5 animations to bake into the model. Rigging works best on full-body humanoids or creatures (T-pose).",
+    ANIMATE_PRESETS,
+    { max: 5 },
+  );
+  if (!presets || presets.length === 0) return;
 
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
@@ -807,10 +943,8 @@ async function onAnimate(generationId, presets) {
     return;
   }
 
-  const labels = rigOnly
-    ? "rig only"
-    : presets.map((p) => p.replace("preset:", "")).join(", ");
-  const prompt = rigOnly ? "Rig only" : `Animate: ${labels}`;
+  const labels = presets.map((p) => p.replace("preset:", "")).join(", ");
+  const prompt = `Animate: ${labels}`;
   addChatMessage("user", prompt);
   const working = addWorkingMessage(
     "Rigging and animating — this chains three Tripo tasks and takes a few minutes…",
@@ -830,8 +964,10 @@ async function onAnimate(generationId, presets) {
       nodeId,
       provider: "tripo3d",
       providerKey: getByokKey(),
-      animateTaskId: record.backendTaskId,
-      ...(rigOnly ? { rigOnly: true } : { animations: presets }),
+      sourceAssetCid: record.sourceAssetCid,
+      sourceTaskId: record.backendTaskId,
+      animate: true,
+      animations: presets,
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
@@ -840,33 +976,18 @@ async function onAnimate(generationId, presets) {
     presentGenerationResult(result, {
       prompt,
       provider: "tripo3d",
-      // Rig-only results are tagged "rig" so they keep the animate choices
-      // (retarget-only) instead of being treated as final animated models.
-      task: rigOnly ? "rig" : "animate",
+      task: "animate",
       prevAssetManifestCid,
       transformMatrix,
     });
     dismissCreatePulse();
     // Rig + retarget consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
-
-    // Recovery path: if the rigging/retargeting wrecked the mesh, the user
-    // can re-send the original pre-rig model to the Studio from chat.
-    addChoiceMessage(
-      "If the result looks off, you can go back:",
-      [{ label: "Back to the original model", value: generationId }],
-      (sourceGenerationId) => {
-        void restoreGeneration(sourceGenerationId);
-      },
-    );
   } catch (err) {
     console.error("Animate failed:", err);
     let userMsg = "Animation failed. Please try again.";
     if (err instanceof ApiError) {
-      if (err.code === "ANIMATE_SOURCE_NOT_FOUND") {
-        userMsg =
-          "The source generation expired — animate within an hour of generating.";
-      } else if (err.code === "MODEL_NOT_RIGGABLE") {
+      if (err.code === "MODEL_NOT_RIGGABLE") {
         userMsg =
           "This model isn't riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.";
       } else if (err.status === 401) {
@@ -885,26 +1006,6 @@ async function onAnimate(generationId, presets) {
   } finally {
     working?.remove();
   }
-}
-
-/**
- * Re-send an older generation to the Studio — the recovery path when a
- * rig/retarget result wrecked the mesh. Resets the record to pending so the
- * send path accepts it again, then runs the normal Show-in-Studio tail.
- * @param {string} generationId
- */
-async function restoreGeneration(generationId) {
-  const assetMessage = assetMessages.get(generationId);
-  const record = getPendingGeneration(generationId);
-  if (!assetMessage || !record) {
-    addChatMessage(
-      "system",
-      "The original model is no longer available in this chat.",
-    );
-    return;
-  }
-  updatePendingGeneration(generationId, { status: "pending" });
-  await sendGenerationToStudio(generationId, assetMessage);
 }
 
 // ─── Generation Flow ───
