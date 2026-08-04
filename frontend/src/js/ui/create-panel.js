@@ -95,8 +95,20 @@ function isRealProvider() {
 // ─── Provider Balance (BYOK) ───
 
 const providerBalance = document.getElementById("providerBalance");
-const highQualityRow = document.getElementById("highQualityRow");
-const highQualityInput = document.getElementById("highQualityInput");
+const textureQualityRow = document.getElementById("textureQualityRow");
+const textureQualitySelect = /** @type {HTMLSelectElement|null} */ (
+  document.getElementById("textureQualitySelect")
+);
+const TEXTURE_QUALITY_STORAGE = "arbesk-texture-quality";
+
+/**
+ * Current panel texture quality for Tripo3D calls.
+ * @returns {"standard"|"detailed"|"extreme"}
+ */
+function getTextureQuality() {
+  const v = textureQualitySelect?.value;
+  return v === "detailed" || v === "extreme" ? v : "standard";
+}
 
 /** @type {string|null} key the latest balance fetch was issued for */
 let balanceFetchKey = null;
@@ -275,8 +287,8 @@ function syncProviderUI() {
     const label = providerSelect.selectedOptions[0]?.textContent || "Mock";
     bottomBarProvider.textContent = `Provider: ${label}`;
   }
-  // HD texture toggle applies to Tripo3D only.
-  if (highQualityRow) highQualityRow.hidden = getProvider() !== "tripo3d";
+  // Texture quality selector applies to Tripo3D only.
+  if (textureQualityRow) textureQualityRow.hidden = getProvider() !== "tripo3d";
   refreshProviderBalance();
 }
 
@@ -292,6 +304,16 @@ if (providerSelect) {
     localStorage.setItem(PROVIDER_STORAGE, providerSelect.value);
     syncProviderUI();
     syncImageAttachUI();
+  });
+}
+
+if (textureQualitySelect) {
+  const stored = localStorage.getItem(TEXTURE_QUALITY_STORAGE);
+  if (stored && ["standard", "detailed", "extreme"].includes(stored)) {
+    textureQualitySelect.value = stored;
+  }
+  textureQualitySelect.addEventListener("change", () => {
+    localStorage.setItem(TEXTURE_QUALITY_STORAGE, textureQualitySelect.value);
   });
 }
 
@@ -984,8 +1006,7 @@ async function onGenerate() {
       ...(isRealProvider() && { providerKey }),
       ...(refineTaskId && { refineTaskId }),
       ...(imagePayload && imagePayload),
-      ...(provider === "tripo3d" &&
-        highQualityInput?.checked && { highQuality: true }),
+      ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
     });
 
     if (provider === "tripo3d" && result.taskId) {
