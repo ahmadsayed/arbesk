@@ -176,6 +176,22 @@
   margin-top: var(--size-2);
 }
 
+.chat-asset-followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-1);
+  margin-top: var(--size-1);
+}
+
+.chat-asset-saved-pill {
+  margin-left: var(--size-2);
+  padding: 0 var(--size-1);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--success-bg, #2e7d32);
+  color: #fff;
+  font-size: 0.75em;
+}
+
 .chat-bubble-asset-sent .chat-asset-send {
   opacity: 0.7;
 }
@@ -289,21 +305,6 @@
   margin: 0;
   font-size: var(--font-size-0);
   color: var(--dim-fg);
-
-  &[hidden] {
-    display: none;
-  }
-}
-
-// High-quality texture toggle — Tripo3D only, same quiet caption styling.
-.high-quality-row {
-  display: flex;
-  align-items: center;
-  gap: var(--size-1);
-  margin: 0;
-  font-size: var(--font-size-0);
-  color: var(--dim-fg);
-  cursor: pointer;
 
   &[hidden] {
     display: none;

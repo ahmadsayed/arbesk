@@ -214,6 +214,8 @@ export function addWorkingMessage(text) {
  *   and disable the action with a "Shown in Studio" caption
  * @property {() => void} markFallback - replace the canvas with a static
  *   format badge when no live preview is available
+ * @property {() => void} markSaved - annotate the bubble with a "Saved" pill
+ *   once the asset has been saved to the library
  */
 
 /**
@@ -292,5 +294,36 @@ export function addAssetMessage({ prompt, format }) {
     markFallback() {
       swapPreview(null);
     },
+    markSaved() {
+      if (bubble.classList.contains("chat-bubble-asset-saved")) return;
+      bubble.classList.add("chat-bubble-asset-saved");
+      const pill = document.createElement("span");
+      pill.className = "chat-asset-saved-pill";
+      pill.textContent = "Saved";
+      caption.appendChild(pill);
+    },
   };
+}
+
+/**
+ * Append a compact follow-up action row (Retexture · Retopo · Auto-rig ·
+ * Animate…) to an asset bubble's action area.
+ * @param {AssetMessageHandle} handle
+ * @param {Array<{id: string, label: string, onPick: () => void}>} actions
+ */
+export function addAssetActionRow(handle, actions) {
+  const actionsEl = handle.bubble.querySelector(".chat-asset-actions");
+  if (!actionsEl || actions.length === 0) return;
+  const row = document.createElement("div");
+  row.className = "chat-asset-followups";
+  for (const action of actions) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary chat-asset-followup-btn";
+    btn.dataset.action = action.id;
+    btn.textContent = action.label;
+    btn.addEventListener("click", action.onPick);
+    row.appendChild(btn);
+  }
+  actionsEl.appendChild(row);
 }

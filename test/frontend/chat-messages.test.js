@@ -11,6 +11,7 @@ import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 
 let addChatMessage;
 let addAssetMessage;
+let addAssetActionRow;
 let addWorkingMessage;
 let addChoiceMessage;
 let addImageMessage;
@@ -21,7 +22,7 @@ beforeAll(async () => {
     '<div id="chatHistoryList"><div class="chat-welcome"></div></div>';
   global.URL.createObjectURL = jest.fn(() => "blob:mock-url");
   global.URL.revokeObjectURL = jest.fn();
-  ({ addChatMessage, addAssetMessage, addWorkingMessage, addChoiceMessage, addImageMessage, clearChatMessages } =
+  ({ addChatMessage, addAssetMessage, addAssetActionRow, addWorkingMessage, addChoiceMessage, addImageMessage, clearChatMessages } =
     await import("../../frontend/src/js/ui/chat-messages.js"));
 });
 
@@ -144,6 +145,26 @@ test("clearChatMessages removes all bubbles and restores the welcome", () => {
   expect(list.querySelectorAll(".chat-bubble").length).toBe(0);
   expect(list.querySelector(".chat-welcome")).not.toBeNull();
   expect(list.querySelector(".chat-welcome").hidden).toBe(false);
+});
+
+test("addAssetActionRow renders one button per action with data-action", () => {
+  const handle = addAssetMessage({ prompt: "a knight", format: "glb" });
+  const picks = [];
+  addAssetActionRow(handle, [
+    { id: "retexture", label: "Retexture", onPick: () => picks.push("retexture") },
+    { id: "animate", label: "Animate…", onPick: () => picks.push("animate") },
+  ]);
+  const btns = handle.bubble.querySelectorAll(".chat-asset-followups [data-action]");
+  expect([...btns].map((b) => b.dataset.action)).toEqual(["retexture", "animate"]);
+  btns[0].click();
+  expect(picks).toEqual(["retexture"]);
+});
+
+test("markSaved annotates the bubble", () => {
+  const handle = addAssetMessage({ prompt: "a knight", format: "glb" });
+  handle.markSaved();
+  expect(handle.bubble.classList.contains("chat-bubble-asset-saved")).toBe(true);
+  expect(handle.bubble.querySelector(".chat-asset-saved-pill")?.textContent).toBe("Saved");
 });
 
 test("addChatMessage honors timestamp and extraClass options", () => {
