@@ -27,8 +27,12 @@ test.describe("parametric versioning + time-travel", () => {
   }) => {
     await connectStudio(page);
 
-    // 1. Generate (version 1).
-    const genCid = await generate(page, PROMPT);
+    // 1. Generate (v1) → Show in Studio auto-saves the draft (v2). The URL
+    // CID is the auto-saved version; the raw generation manifest is its prev.
+    const autoSaveCid = await generate(page, PROMPT);
+    const autoSaveManifest = await fetchManifest(autoSaveCid);
+    expect(autoSaveManifest.version).toBe(2);
+    const genCid = autoSaveManifest.prev_asset_manifest_cid;
     const genManifest = await fetchManifest(genCid);
     assertGenerationManifest(genManifest, { prompt: PROMPT, provider: "mock" });
     expect(genManifest.version).toBe(1);
@@ -36,18 +40,18 @@ test.describe("parametric versioning + time-travel", () => {
     // 2-3. Select the node and change its component colour.
     await editFirstNodeColor(page, EDIT_COLOR);
 
-    // 4. Save - the pending colour edit is baked into a NEW version (v2).
-    const saveCid = await saveDraft(page, genCid);
+    // 4. Save - the pending colour edit is baked into a NEW version (v3).
+    const saveCid = await saveDraft(page, autoSaveCid);
     const savedManifest = await fetchManifest(saveCid);
-    expect(savedManifest.version).toBe(2);
-    expect(savedManifest.prev_asset_manifest_cid).toBe(genCid);
+    expect(savedManifest.version).toBe(3);
+    expect(savedManifest.prev_asset_manifest_cid).toBe(autoSaveCid);
 
-    // 5. The scene clock now spans two versions and sits on the newest.
+    // 5. The scene clock now spans three versions and sits on the newest.
     await expect(page.locator(SELECTORS.sceneClock)).toBeVisible();
-    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v2");
+    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v3");
     await expect(page.locator(SELECTORS.sceneClockDial)).toHaveAttribute(
       "aria-valuemax",
-      "1",
+      "2",
     );
 
     // Record scene:ready per loaded version. The badge updates from the slider
@@ -75,13 +79,13 @@ test.describe("parametric versioning + time-travel", () => {
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(genCid);
 
-    // 7. Scrub forward to v2 and confirm the EDITED version actually re-renders.
+    // 7. Scrub forward to v3 and confirm the EDITED version actually re-renders.
     // The source was a GLB (cowboy → howdy.glb) decomposed to composite glTF on
     // edit; if its node still claimed format:"glb" while holding glTF JSON,
     // loadAssetManifest would throw in the binary-GLB loader and scene:ready
-    // would never fire for v2.
+    // would never fire for v3.
     await scrubSceneClock(page, "newest");
-    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v2");
+    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v3");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);
@@ -92,7 +96,7 @@ test.describe("parametric versioning + time-travel", () => {
     await page.locator(SELECTORS.outlinerNode).first().click();
     await page.click(SELECTORS.timeModeButton);
     await expect(page.locator(SELECTORS.modelClockBadge)).toBeVisible();
-    await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v2");
+    await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v3");
 
     // Step the gizmo to its oldest entry via keyboard → whole scene reloads v1.
     // The model clock gizmo persists across the reload and lands on v1.
@@ -125,9 +129,9 @@ test.describe("parametric versioning + time-travel", () => {
     const assetManifest = await fetchManifest(assetCid);
     expect(assetManifest.type).toBe("asset");
     assertPublishedManifest(assetManifest);
-    // Publish saves one more version (v3) with the captured thumbnail.
+    // Publish saves one more version (v4) with the captured thumbnail.
     expect(assetManifest.name).toBe(ASSET_NAME);
-    expect(assetManifest.version).toBe(3);
+    expect(assetManifest.version).toBe(4);
     expect(assetManifest.prev_asset_manifest_cid).toBe(saveCid);
   });
 });

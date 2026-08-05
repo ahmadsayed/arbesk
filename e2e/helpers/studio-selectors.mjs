@@ -22,6 +22,15 @@ export const SELECTORS = {
   assetBubble: ".chat-bubble-asset",
   assetBubbleSend: ".chat-bubble-asset .chat-asset-send",
   assetBubbleCanvas: ".chat-bubble-asset .chat-asset-canvas",
+  assetBubbleFollowups: ".chat-bubble-asset .chat-asset-followups",
+  /**
+   * @param {string} action
+   * @returns {string}
+   */
+  assetBubbleAction: (action) => `.chat-bubble-asset [data-action="${action}"]`,
+  assetBubbleSaved: ".chat-bubble-asset.chat-bubble-asset-saved",
+  refineIndicator: "#refineIndicator",
+  versionBubble: ".chat-bubble-version",
   choiceBubble: ".chat-bubble-choices",
   choiceBtn: ".chat-choice-btn",
   saveAssetBtn: "#saveAssetBtn",

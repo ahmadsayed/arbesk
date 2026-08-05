@@ -52,15 +52,23 @@ export async function renderChatProvenance(manifestCid) {
   /**
    * Flattened chat records, oldest first, each carrying its version's
    * identity so the rendered bubble can restore that version on click.
+   * Generation manifests inherit the previous version's metadata.chat
+   * (history preservation on branch/restore), so the same entry can appear
+   * in several chain manifests verbatim — dedupe by prompt+timestamp,
+   * keeping the oldest (save-anchored) occurrence.
    * @type {Array<{prompt: string, task?: string, timestamp?: number, cid: string, sourceCid: string|null}>}
    */
   const entries = [];
+  const seen = new Set();
   for (const item of chain) {
     // metadata.chat is version-scoped and normally an array, but tolerate a
     // single-object shape instead of throwing on a non-iterable.
     const chats = Array.isArray(item.chat) ? item.chat : item.chat ? [item.chat] : [];
     for (const entry of chats) {
       if (typeof entry?.prompt === "string" && entry.prompt.length > 0) {
+        const key = `${entry.prompt}${entry.timestamp ?? ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         entries.push({
           prompt: entry.prompt,
           task: entry.task,

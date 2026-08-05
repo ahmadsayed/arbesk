@@ -27,7 +27,7 @@ test.describe("save and publish", () => {
       "Sign In",
     );
 
-    // 1. Generate
+    // 1. Generate → Show in Studio (auto-saves the draft).
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -36,24 +36,18 @@ test.describe("save and publish", () => {
     );
 
     await page.waitForURL(MANIFEST_URL_REGEX);
-    const genCid = manifestCidFromUrl(page.url());
+    const saveCid = manifestCidFromUrl(page.url());
+    expect(saveCid).toBeTruthy();
+
+    // 2. Show in Studio auto-saved the draft: the URL CID is the saved v2 and
+    // the raw generation manifest (v1) is its prev. A manual Save here would
+    // be a no-op ("no changes"), so the flow goes straight to publish.
+    const savedManifest = await fetchManifest(saveCid);
+    const genCid = savedManifest.prev_asset_manifest_cid;
     expect(genCid).toBeTruthy();
 
     const genManifest = await fetchManifest(genCid);
     assertGenerationManifest(genManifest, { prompt: PROMPT, provider: "mock" });
-
-    // 2. Save draft (no rename dialog - draft keeps current name). Wait on the
-    // URL flipping to a new manifest CID, which is the durable signal that the
-    // save completed (the screen-reader status text is transient/overwritten).
-    await page.click(SELECTORS.saveAssetBtn);
-    await page.waitForURL((url) => {
-      const cid = manifestCidFromUrl(url.toString());
-      return Boolean(cid) && cid !== genCid;
-    });
-    const saveCid = manifestCidFromUrl(page.url());
-    expect(saveCid).not.toBe(genCid);
-
-    const savedManifest = await fetchManifest(saveCid);
     assertSavedManifest(savedManifest, genCid);
 
     // 3. Publish - first-time publish prompts for an explicit name.

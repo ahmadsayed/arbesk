@@ -8,7 +8,6 @@ import {
   connectStudio,
   ensureStudioConnected,
   generate,
-  saveDraft,
   publishWithName,
   uniqueAssetName,
 } from "../helpers/flows.mjs";
@@ -22,16 +21,18 @@ test.describe("3mf generation", () => {
   }) => {
     await connectStudio(page);
 
-    const genCid = await generate(page, PROMPT);
+    // Show in Studio auto-saves the draft, and that save already decomposes
+    // the raw .3mf package into composite 3MF form. The URL CID is the saved
+    // v2; the raw generation manifest (v1) is its prev.
+    const savedCid = await generate(page, PROMPT);
+    const savedManifest = await fetchManifest(savedCid);
+    const genCid = savedManifest.prev_asset_manifest_cid;
     const genManifest = await fetchManifest(genCid);
     assertGenerationManifest(genManifest, { prompt: PROMPT });
     const genNode = genManifest.scene.nodes[0];
     expect(genNode.source.format).toBe("3mf");
     expect(genNode.source.path).toBe("asset.3mf");
 
-    // Save decomposes the raw .3mf package into composite 3MF form.
-    const savedCid = await saveDraft(page, genCid);
-    const savedManifest = await fetchManifest(savedCid);
     const savedNode = savedManifest.scene.nodes[0];
     expect(savedNode.source.format).toBe("3mf");
     expect(savedNode.source.path).toBe("composite.3mf.json");

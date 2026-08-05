@@ -39,6 +39,7 @@ import {
   _resetPendingGenerations,
 } from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
+import { onSaveAssetDraft } from "./asset-save.js";
 
 // ─── DOM References ───
 const promptInput = document.getElementById("promptInput");
@@ -551,6 +552,16 @@ async function sendGenerationToStudio(generationId, assetMessage) {
       captureSnapshot: true,
     });
     assetMessage.markSent(snapshot);
+
+    // Show in Studio is an explicit "keep this version" — save a draft so the
+    // bubble stays restorable. Publish remains a separate, manual action.
+    try {
+      await onSaveAssetDraft();
+      assetMessage.markSaved();
+    } catch (err) {
+      console.error("Auto-save after Show in Studio failed:", err);
+      addChatMessage("system", "Auto-save failed — use the Save button to retry.");
+    }
 
     addChatMessage("system", `Model carved via ${getProvider()}.`);
   } catch (err) {

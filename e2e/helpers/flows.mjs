@@ -194,7 +194,9 @@ export async function generateToChatBubble(page, prompt = DEFAULT_PROMPT) {
 
 /**
  * Generate a mock asset, send it to the Studio, and return the resulting
- * generation manifest CID. The `?manifest=` URL is the durable completion
+ * manifest CID. Show in Studio auto-saves a draft, so the returned CID is the
+ * auto-saved version (v2); the raw generation manifest (v1) is its
+ * `prev_asset_manifest_cid`. The `?manifest=` URL is the durable completion
  * signal - the screen-reader status text is transient and gets overwritten.
  *
  * @param {Page} page
@@ -249,7 +251,9 @@ export async function publishWithName(page, name) {
 }
 
 /**
- * Run the proven generate → save → publish path and return the token id (hex).
+ * Run the proven generate → publish path and return the token id (hex).
+ * The draft save is implicit: Show in Studio auto-saves, so a separate
+ * saveDraft here would be a no-op ("no changes").
  *
  * @param {Page} page
  * @param {string} name
@@ -261,8 +265,7 @@ export async function generateSaveAndPublish(
   name,
   prompt = DEFAULT_PROMPT,
 ) {
-  const genCid = await generate(page, prompt);
-  await saveDraft(page, genCid);
+  await generate(page, prompt);
   return publishWithName(page, name);
 }
 

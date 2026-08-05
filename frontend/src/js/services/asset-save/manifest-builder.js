@@ -380,12 +380,6 @@ export async function prepareManifestForWrite(assetName) {
   manifest.scene ||= { nodes: [] };
   manifest.scene.nodes ||= [];
 
-  for (const pendingNode of pendingRefs) {
-    if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
-      manifest.scene.nodes.push(pendingNode);
-    }
-  }
-
   // Resolve the previous manifest(s) for versioning and, when needed, build a
   // hash→CID map for component deduplication. Reuse the already-loaded active
   // manifest as the base; only fetch the latest chain tip when it differs.
@@ -400,8 +394,9 @@ export async function prepareManifestForWrite(assetName) {
 
   const baseManifest = manifest;
   // prevManifest is the versioning + no-op-detection baseline. It MUST be a
-  // snapshot of the manifest as it is now — before decomposeManifestNodes()
-  // mutates `manifest` in place below. Aliasing the live manifest here makes the
+  // snapshot of the manifest as it is now — before pending child refs are
+  // baked in below and before decomposeManifestNodes() mutates `manifest` in
+  // place. Aliasing the live manifest here makes the
   // later manifestsSemanticallyEqual() check compare the manifest against
   // itself, so every first save of a fresh draft (latestCid === activeCid) is
   // wrongly reported as "no changes" and never written. Fetch the distinct chain
@@ -411,6 +406,16 @@ export async function prepareManifestForWrite(assetName) {
       ? (await getFromRemoteIPFS(latestCid).catch(() => null)) ||
         JSON.parse(JSON.stringify(baseManifest))
       : JSON.parse(JSON.stringify(baseManifest));
+
+  // Bake pending linked-child refs into the manifest. This MUST happen after
+  // the prevManifest snapshot above: pushing them earlier makes the no-op
+  // baseline already contain the child, so "link a child → Save" on an
+  // otherwise unchanged draft is wrongly reported as "no changes".
+  for (const pendingNode of pendingRefs) {
+    if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
+      manifest.scene.nodes.push(pendingNode);
+    }
+  }
 
   const sourceNodes = manifest.scene.nodes.filter(
     (n) => n.source?.cid && !n.child_ref
