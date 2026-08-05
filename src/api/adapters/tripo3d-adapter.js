@@ -503,10 +503,11 @@ export async function pollTask(taskId, apiKey) {
   console.log(`[GEN] Tripo poll task_id=${taskId}`);
   const data = await tripoFetch(`tasks/${taskId}`, apiKey);
   const status = data.status;
-  console.log(`[GEN] Tripo poll status=${status}`);
   if (status === "queued" || status === "running") {
+    console.log(`[GEN] Tripo poll status=${status} progress=${data.progress ?? 0}`);
     return { status, progress: data.progress ?? 0 };
   }
+  console.log(`[GEN] Tripo poll status=${status}`);
   if (status === "success") {
     const glbUrl =
       data.output?.model_url ||
@@ -517,16 +518,26 @@ export async function pollTask(taskId, apiKey) {
     // either way so chain callers can inspect it.
     return { status, glbUrl: glbUrl || undefined, output: data.output };
   }
-  // v3 terminal failures: failed, cancelled, banned, expired
+  // v3 terminal failures: failed, cancelled, banned, expired. Tripo reports
+  // error_code + error_message on these — surface both; falling back to the
+  // bare status loses the entire diagnosis.
   if (
     status === "failed" ||
     status === "cancelled" ||
     status === "banned" ||
     status === "expired"
   ) {
+    const errorCode =
+      typeof data.error_code === "number" ? data.error_code : null;
+    const errorMessage =
+      data.error_message || data.error_msg || data.message || null;
+    console.log(
+      `[GEN] Tripo poll status=${status} error_code=${errorCode ?? "-"} message=${errorMessage ?? "-"}`,
+    );
+    const detail = errorMessage || `Task ${status}`;
     return {
       status: "failed",
-      error: data.error_msg || data.message || `Task ${status}`,
+      error: errorCode !== null ? `${detail} (Tripo error ${errorCode})` : detail,
     };
   }
   throw new TripoApiError(`Unknown Tripo status: ${status}`, 0, 502);

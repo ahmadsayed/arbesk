@@ -443,6 +443,38 @@ describe("tripo3d adapter", () => {
     expect(result.error).toContain("generation failed");
   });
 
+  test("pollTask surfaces error_code and error_message from Tripo failures", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: {
+          task_id: "task_abc",
+          status: "failed",
+          error_code: 2010,
+          error_message: "insufficient credits",
+        },
+      }),
+    });
+    const result = await pollTask("task_abc", key);
+    expect(result).toEqual({
+      status: "failed",
+      error: "insufficient credits (Tripo error 2010)",
+    });
+  });
+
+  test("pollTask falls back to the bare status when Tripo sends no error fields", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: { task_id: "task_abc", status: "failed" },
+      }),
+    });
+    const result = await pollTask("task_abc", key);
+    expect(result).toEqual({ status: "failed", error: "Task failed" });
+  });
+
   test("pollTask maps cancelled status to failed with error", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

@@ -1439,6 +1439,43 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
       });
 
+      it("GET failure message includes the animate chain stage and Tripo error code", async () => {
+        const taskId = registerTask({
+          tripoTaskId: "task_rc_fail",
+          providerKey: "k",
+          userAddress: "0x1234567890123456789012345678901234567890",
+          kind: "animate",
+          phase: "rig-check",
+          animations: ["preset:idle"],
+          sourceFileToken: "file_1",
+        });
+        jest.spyOn(global, "fetch").mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            code: 0,
+            data: {
+              task_id: "task_rc_fail",
+              status: "failed",
+              error_code: 2001,
+              error_message: "mesh analysis failed",
+            },
+          }),
+        });
+
+        const res = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+
+        expect(res.body).toEqual({
+          status: "failed",
+          error: {
+            code: "PROVIDER_TASK_FAILED",
+            message:
+              "Rig compatibility check failed — mesh analysis failed (Tripo error 2001)",
+          },
+        });
+      });
+
       it("returns provider auth error with documented code and evicts the task", async () => {
         jest
           .spyOn(global, "fetch")

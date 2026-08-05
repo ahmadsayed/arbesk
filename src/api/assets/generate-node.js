@@ -498,14 +498,26 @@ export default function generateAssetNode() {
         });
       }
 
-      // failed or cancelled
+      // failed or cancelled — include the chain stage so the user knows
+      // which step died (the upstream message alone says "Task failed").
       evictTask(taskId);
-      console.log(`[GEN] task failed taskId=${taskId} error=${poll.error}`);
+      const failStage =
+        entry.kind === "animate"
+          ? {
+              "rig-check": "Rig compatibility check",
+              rig: "Rigging",
+              retarget: "Animation bake",
+            }[entry.phase || "rig-check"]
+          : null;
+      const failMessage = poll.error || "Task failed";
+      console.log(
+        `[GEN] task failed taskId=${taskId} stage=${failStage || "generate"} error=${failMessage}`,
+      );
       return res.json({
         status: "failed",
         error: {
           code: "PROVIDER_TASK_FAILED",
-          message: poll.error || "Task failed",
+          message: failStage ? `${failStage} failed — ${failMessage}` : failMessage,
         },
       });
     } catch (error) {
