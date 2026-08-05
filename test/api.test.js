@@ -956,10 +956,12 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           progress: 40,
           stage: "Rigging skeleton",
         });
-        // Rig input must be the uploaded file token (the entry's sourceFileToken)
+        // Rig input must be the uploaded file token (the entry's sourceFileToken);
+        // bipeds go to the v1.0 rig line.
         expect(JSON.parse(fetchSpy.mock.calls[3][1].body)).toMatchObject({
           input: "file_1",
           rig_type: "biped",
+          model: "v1.0-20240301",
         });
 
         // Poll 2: rig done → retarget started
@@ -971,10 +973,11 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
           progress: 75,
           stage: "Baking animations",
         });
-        // Retarget input must be the rig task id with the requested presets
+        // Retarget input must be the rig task id; presets map to the v1.0
+        // biped namespace for v1.0 rigs.
         expect(JSON.parse(fetchSpy.mock.calls[5][1].body)).toEqual({
           input: "task_rig_2",
-          animations: ["preset:idle"],
+          animations: ["preset:biped:idle"],
           out_format: "glb",
         });
 

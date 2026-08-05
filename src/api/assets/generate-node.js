@@ -100,7 +100,7 @@ export default function generateAssetNode() {
     validateBody(generateAssetSchema),
     async (req, res) => {
       try {
-        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, animations, faceLimit, textureQuality, imageData, imageMime } = req.body;
+        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, animateInPlace, animations, faceLimit, textureQuality, imageData, imageMime } = req.body;
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
@@ -192,7 +192,10 @@ export default function generateAssetNode() {
               const rigSource = getCompletedTask(sourceTaskId, res.locals.userAddress);
               if (rigSource && rigSource.kind === "animate" && rigSource.phase === "rig" && !rigOnly) {
                 console.log(`[GEN] retarget-only: source rig=${rigSource.tripoTaskId} animations=${(animations || []).join(",")}`);
-                const retargetId = await retargetTask(rigSource.tripoTaskId, animations, key);
+                const retargetId = await retargetTask(rigSource.tripoTaskId, animations, key, {
+                  animateInPlace: Boolean(animateInPlace),
+                  rigModel: rigSource.rigModel,
+                });
                 const taskId = registerTask({ tripoTaskId: retargetId, providerKey: key, userAddress: res.locals.userAddress, kind: "animate", phase: "retarget", animations });
                 return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
               }
@@ -201,11 +204,11 @@ export default function generateAssetNode() {
             const fileToken = await uploadSourceGlb(sourceAssetCid, key);
 
             if (animate) {
-              console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)}`);
+              console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)} inPlace=${Boolean(animateInPlace)}`);
               const rigCheckId = await rigCheckTask(fileToken, key);
               const taskId = registerTask({
                 tripoTaskId: rigCheckId, providerKey: key, userAddress: res.locals.userAddress,
-                kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), sourceFileToken: fileToken,
+                kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken,
               });
               return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
             }
@@ -433,17 +436,18 @@ export default function generateAssetNode() {
               },
             });
           }
-          const rigTaskId = await rigModelTask(
+          const rig = await rigModelTask(
             entry.sourceFileToken || "",
             rigOutput.rig_type || "biped",
             entry.providerKey,
           );
           updateTaskEntry(taskId, res.locals.userAddress, {
-            tripoTaskId: rigTaskId,
+            tripoTaskId: rig.taskId,
             phase: "rig",
+            rigModel: rig.model,
           });
           console.log(
-            `[GEN] animate chain: rig started taskId=${taskId} tripo=${rigTaskId} rig_type=${rigOutput.rig_type}`,
+            `[GEN] animate chain: rig started taskId=${taskId} tripo=${rig.taskId} rig_type=${rigOutput.rig_type} model=${rig.model}`,
           );
           return res.json({
             status: "running",
@@ -456,6 +460,10 @@ export default function generateAssetNode() {
           entry.tripoTaskId,
           entry.animations || [],
           entry.providerKey,
+          {
+            animateInPlace: Boolean(entry.animateInPlace),
+            rigModel: entry.rigModel,
+          },
         );
         updateTaskEntry(taskId, res.locals.userAddress, {
           tripoTaskId: retargetId,

@@ -203,21 +203,59 @@ describe("tripo3d adapter", () => {
     expect(JSON.parse(opts.body)).toEqual({ input: "file_glb_1" });
   });
 
-  test("rigModelTask submits animations/rig with mixamo spec and rig model", async () => {
+  test("rigModelTask prefers the v1.0 biped rig line for bipeds", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ code: 0, data: { task_id: "task_rig" } }),
     });
-    const id = await rigModelTask("file_glb_1", "biped", key);
-    expect(id).toBe("task_rig");
+    const result = await rigModelTask("file_glb_1", "biped", key);
+    expect(result).toEqual({ taskId: "task_rig", model: "v1.0-20240301" });
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe("https://openapi.tripo3d.ai/v3/animations/rig");
     expect(JSON.parse(opts.body)).toEqual({
       input: "file_glb_1",
       rig_type: "biped",
       spec: "mixamo",
-      model: "v2.5-20260210",
+      model: "v1.0-20240301",
     });
+  });
+
+  test("rigModelTask falls back to the generic rig line when biped v1.0 is rejected (1004)", async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 1004, message: "model retired" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { task_id: "task_rig_fb" } }),
+      });
+    const result = await rigModelTask("file_glb_1", "biped", key);
+    expect(result).toEqual({ taskId: "task_rig_fb", model: "v2.5-20260210" });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body).model).toBe("v2.5-20260210");
+  });
+
+  test("rigModelTask uses the generic rig line for creatures (no v1.0 attempt)", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rig_q" } }),
+    });
+    const result = await rigModelTask("file_glb_1", "quadruped", key);
+    expect(result).toEqual({ taskId: "task_rig_q", model: "v2.5-20260210" });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("rigModelTask rethrows non-1004 errors without falling back", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 2010, message: "insufficient credits" }),
+    });
+    await expect(rigModelTask("file_glb_1", "biped", key)).rejects.toMatchObject({
+      status: 402,
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   test("retargetTask submits animations/retarget with presets", async () => {
@@ -234,6 +272,26 @@ describe("tripo3d adapter", () => {
       animations: ["preset:idle", "preset:walk"],
       out_format: "glb",
     });
+  });
+
+  test("retargetTask maps presets to preset:biped:* for v1.0 biped rigs", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rt" } }),
+    });
+    await retargetTask("task_rig", ["preset:idle"], key, { rigModel: "v1.0-20240301" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).animations).toEqual([
+      "preset:biped:idle",
+    ]);
+  });
+
+  test("retargetTask passes animate_in_place when requested", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rt" } }),
+    });
+    await retargetTask("task_rig", ["preset:idle"], key, { animateInPlace: true });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).animate_in_place).toBe(true);
   });
 
   test("retargetTask rejects an empty animations array with status 400", async () => {

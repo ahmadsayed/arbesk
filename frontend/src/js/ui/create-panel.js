@@ -732,12 +732,18 @@ function addStoppableWorkingMessage(workingText) {
 // ─── Rig & Animate (Tripo3D) ───
 
 // Animation presets offered by the Animate follow-up's checkbox picker.
+// Pseudo-option value for the Animate dialog's in-place toggle — filtered
+// out before presets go to the backend, and doesn't count toward Tripo's
+// 5-animation cap (see showCheckboxDialog's countsTowardMax).
+const IN_PLACE_OPTION = "option:in-place";
+
 const ANIMATE_PRESETS = [
   { value: "preset:idle", label: "Idle", checked: true },
   { value: "preset:walk", label: "Walk", checked: true },
   { value: "preset:run", label: "Run" },
   { value: "preset:jump", label: "Jump" },
   { value: "preset:slash", label: "Slash" },
+  { value: IN_PLACE_OPTION, label: "In place (no root motion)", countsTowardMax: false },
 ];
 
 /**
@@ -1092,13 +1098,16 @@ async function onAnimate(generationId) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
 
-  const presets = await showCheckboxDialog(
+  const picked = await showCheckboxDialog(
     "Rig & Animate",
     "Pick up to 5 animations to bake into the model. Rigging works best on full-body humanoids or creatures (T-pose).",
     ANIMATE_PRESETS,
     { max: 5 },
   );
-  if (!presets || presets.length === 0) return;
+  if (!picked) return;
+  const animateInPlace = picked.includes(IN_PLACE_OPTION);
+  const presets = picked.filter((p) => p !== IN_PLACE_OPTION);
+  if (presets.length === 0) return;
 
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
@@ -1140,6 +1149,7 @@ async function onAnimate(generationId) {
       sourceTaskId: record.backendTaskId,
       animate: true,
       animations: presets,
+      ...(animateInPlace && { animateInPlace: true }),
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),

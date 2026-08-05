@@ -13,6 +13,8 @@ const TTL_MS = 60 * 60 * 1000; // 1 hour
  * @property {"rig-check"|"rig"|"retarget"} [phase] - current chain phase
  * @property {string[]} [animations] - requested retarget presets
  * @property {boolean} [rigOnly] - stop after the rig step (no retarget)
+ * @property {boolean} [animateInPlace] - retarget with animate_in_place
+ * @property {string} [rigModel] - Tripo rig model used for the rig step (v1.0 biped rigs take preset:biped:* retarget IDs)
  * @property {string} [sourceFileToken] - Tripo file_token of the source GLB (animate chain)
  */
 
@@ -30,7 +32,7 @@ if (sweep.unref) sweep.unref();
 
 /**
  * Register a new in-flight generation task.
- * @param {{ tripoTaskId: string; providerKey: string; userAddress: string; kind?: "generate"|"animate"; phase?: "rig-check"|"rig"|"retarget"; animations?: string[]; rigOnly?: boolean; sourceFileToken?: string }} entry
+ * @param {{ tripoTaskId: string; providerKey: string; userAddress: string; kind?: "generate"|"animate"; phase?: "rig-check"|"rig"|"retarget"; animations?: string[]; rigOnly?: boolean; animateInPlace?: boolean; rigModel?: string; sourceFileToken?: string }} entry
  * @returns {string} public taskId
  */
 export function registerTask({
@@ -41,6 +43,8 @@ export function registerTask({
   phase,
   animations,
   rigOnly,
+  animateInPlace,
+  rigModel,
   sourceFileToken,
 }) {
   const taskId = randomUUID();
@@ -54,6 +58,8 @@ export function registerTask({
     ...(phase && { phase }),
     ...(animations && { animations }),
     ...(rigOnly && { rigOnly }),
+    ...(animateInPlace && { animateInPlace }),
+    ...(rigModel && { rigModel }),
     ...(sourceFileToken && { sourceFileToken }),
   });
   return taskId;

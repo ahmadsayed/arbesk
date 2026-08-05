@@ -6,6 +6,12 @@ export const TRIPO_MODEL_VERSION = process.env.TRIPO_3D_MODEL || "v3.1-20260211"
 // (rejected with code 1004, verified 2026-08-02). Allowed: v1.0-20240301,
 // v2.5-20260210.
 export const TRIPO_RIG_MODEL = process.env.TRIPO_3D_RIG_MODEL || "v2.5-20260210";
+// Biped (humanoid) rig line. v1.0-20240301 is the docs-recommended humanoid
+// rig (90+ biped presets) but was rejected with code 1004 on 2026-08-02 —
+// rigModelTask tries it first for bipeds and falls back to TRIPO_RIG_MODEL,
+// so the better rig kicks in automatically when Tripo re-enables it.
+export const TRIPO_RIG_BIPED_MODEL =
+  process.env.TRIPO_3D_RIG_BIPED_MODEL || "v1.0-20240301";
 
 /** Valid Tripo texture_quality levels (generation ≥ v3.0 and models/texture). */
 export const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
@@ -342,10 +348,15 @@ export async function rigCheckTask(fileToken, apiKey) {
 
 /**
  * Create a rig task: attach a Mixamo-compatible skeleton to a model.
+ * Bipeds try the humanoid rig line (TRIPO_RIG_BIPED_MODEL) first and fall
+ * back to the generic line (TRIPO_RIG_MODEL) when Tripo rejects it (code
+ * 1004 — the biped line was retired once before). Creatures always use the
+ * generic line. The returned model tells the retarget step which preset
+ * namespace the rig accepts (v1.0 biped rigs need `preset:biped:*`).
  * @param {string} fileToken - file_token from uploadModel()
  * @param {string} rigType - from rig-check output, e.g. "biped"
  * @param {string} apiKey
- * @returns {Promise<string>} task_id
+ * @returns {Promise<{taskId: string, model: string}>} task_id + rig model used
  */
 export async function rigModelTask(fileToken, rigType, apiKey) {
   if (!fileToken || typeof fileToken !== "string") {
@@ -357,17 +368,38 @@ export async function rigModelTask(fileToken, rigType, apiKey) {
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
-  console.log(`[GEN] Tripo rigModelTask input=${fileToken} rig_type=${rigType}`);
-  const data = await tripoFetch("animations/rig", apiKey, "POST", {
-    input: fileToken,
-    rig_type: rigType,
-    spec: "mixamo",
-    model: TRIPO_RIG_MODEL,
-  });
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  const preferred = rigType === "biped" ? TRIPO_RIG_BIPED_MODEL : TRIPO_RIG_MODEL;
+  const candidates =
+    preferred === TRIPO_RIG_MODEL ? [preferred] : [preferred, TRIPO_RIG_MODEL];
+  let lastError = null;
+  for (const model of candidates) {
+    try {
+      console.log(
+        `[GEN] Tripo rigModelTask input=${fileToken} rig_type=${rigType} model=${model}`,
+      );
+      const data = await tripoFetch("animations/rig", apiKey, "POST", {
+        input: fileToken,
+        rig_type: rigType,
+        spec: "mixamo",
+        model,
+      });
+      if (typeof data.task_id !== "string") {
+        throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+      }
+      return { taskId: data.task_id, model };
+    } catch (e) {
+      const err = /** @type {TripoApiError} */ (e);
+      // 1004 = model version rejected/retired — try the next candidate.
+      if (err.code !== 1004 || model === candidates[candidates.length - 1]) {
+        throw err;
+      }
+      console.log(
+        `[GEN] Tripo rig model ${model} rejected (1004) - falling back to ${TRIPO_RIG_MODEL}`,
+      );
+      lastError = err;
+    }
   }
-  return data.task_id;
+  throw lastError;
 }
 
 /**
@@ -375,9 +407,13 @@ export async function rigModelTask(fileToken, rigType, apiKey) {
  * @param {string} rigTaskId - completed rig task ID
  * @param {string[]} animations - preset IDs, e.g. ["preset:idle"], max 5
  * @param {string} apiKey
+ * @param {object} [options]
+ * @param {boolean} [options.animateInPlace=false] - play in place, no root displacement
+ * @param {string} [options.rigModel] - rig model that produced rigTaskId;
+ *   v1.0 biped rigs take `preset:biped:*` IDs, so generic presets are mapped
  * @returns {Promise<string>} task_id
  */
-export async function retargetTask(rigTaskId, animations, apiKey) {
+export async function retargetTask(rigTaskId, animations, apiKey, options = {}) {
   if (!rigTaskId || typeof rigTaskId !== "string") {
     throw new TripoApiError("rigTaskId is required", 0, 400);
   }
@@ -387,13 +423,22 @@ export async function retargetTask(rigTaskId, animations, apiKey) {
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
+  // v1.0 biped rigs use the preset:biped:* namespace; generic (v2.5) rigs
+  // take the short form. Map only the short form, never double-prefix.
+  const isBipedV1 = options.rigModel === TRIPO_RIG_BIPED_MODEL;
+  const presets = isBipedV1
+    ? animations.map((a) =>
+        a.startsWith("preset:biped:") ? a : a.replace(/^preset:/, "preset:biped:"),
+      )
+    : animations;
   console.log(
-    `[GEN] Tripo retargetTask input=${rigTaskId} animations=${animations.join(",")}`,
+    `[GEN] Tripo retargetTask input=${rigTaskId} animations=${presets.join(",")} inPlace=${Boolean(options.animateInPlace)}`,
   );
   const data = await tripoFetch("animations/retarget", apiKey, "POST", {
     input: rigTaskId,
-    animations,
+    animations: presets,
     out_format: "glb",
+    ...(options.animateInPlace && { animate_in_place: true }),
   });
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);

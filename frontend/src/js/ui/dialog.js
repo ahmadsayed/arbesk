@@ -316,8 +316,10 @@ export function showCheckboxDialog(title, body, options, { max = Infinity } = {}
         input.type = "checkbox";
         input.value = opt.value;
         input.checked = !!opt.checked;
+        // Non-answer toggles (e.g. "in place") don't consume the max slots.
+        const counts = opt.countsTowardMax !== false;
         input.addEventListener("change", () => {
-          const checkedCount = boxes.filter((b) => b.input.checked).length;
+          const checkedCount = boxes.filter((b) => b.input.checked && b.counts).length;
           if (checkedCount > max) input.checked = false;
         });
         const text = document.createElement("span");
@@ -325,7 +327,7 @@ export function showCheckboxDialog(title, body, options, { max = Infinity } = {}
         label.appendChild(input);
         label.appendChild(text);
         bodyDiv.appendChild(label);
-        return { input, value: opt.value };
+        return { input, value: opt.value, counts };
       });
 
       const actionsDiv = document.createElement("div");

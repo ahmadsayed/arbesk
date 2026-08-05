@@ -68,6 +68,9 @@ export const generateAssetSchema = z
     // task. Optional — the GLB chain is the canonical path.
     sourceTaskId: z.string().max(64).optional(),
     rigOnly: z.boolean().optional(),
+    // Retarget option (tripo3d only): play the animation in place, without
+    // root displacement.
+    animateInPlace: z.boolean().optional(),
     animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
     // Texture quality (tripo3d only): generation + retexture.
     textureQuality: z.enum(["standard", "detailed", "extreme"]).optional(),
@@ -113,6 +116,10 @@ export const generateAssetSchema = z
   .refine((v) => !v.rigOnly || v.animate, {
     message: "rigOnly is only valid with animate",
     path: ["rigOnly"],
+  })
+  .refine((v) => !v.animateInPlace || (v.animate && !v.rigOnly), {
+    message: "animateInPlace is only valid with animate (not rigOnly)",
+    path: ["animateInPlace"],
   });
 
 export const providerBalanceSchema = z.object({
