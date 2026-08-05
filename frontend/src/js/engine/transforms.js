@@ -154,7 +154,15 @@ export function getWorldBounds(meshes) {
   for (const mesh of meshes) {
     mesh.computeWorldMatrix(true);
     if (typeof mesh.refreshBoundingInfo === "function") {
-      mesh.refreshBoundingInfo();
+      // Skinned meshes: the mesh node's transform can diverge from where the
+      // skeleton actually renders the geometry (Tripo rigged GLBs parent the
+      // mesh under a half-height Armature offset), so raw geometry bounds
+      // land half a body above the visible model. Apply the skeleton (and
+      // morphs) so bounds track the rendered pose.
+      mesh.refreshBoundingInfo(
+        Boolean(mesh.skeleton),
+        Boolean(mesh.morphTargetManager)
+      );
     }
 
     const boundingInfo = mesh.getBoundingInfo?.();
