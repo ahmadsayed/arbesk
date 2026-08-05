@@ -556,8 +556,17 @@ async function sendGenerationToStudio(generationId, assetMessage) {
     // Show in Studio is an explicit "keep this version" — save a draft so the
     // bubble stays restorable. Publish remains a separate, manual action.
     try {
-      await onSaveAssetDraft();
-      assetMessage.markSaved();
+      const saveResult = await onSaveAssetDraft();
+      // "no-changes" means this version is already durably saved — the pill
+      // is honest in both cases. Any other outcome already surfaced a toast.
+      if (saveResult && (saveResult.ok || saveResult.reason === "no-changes")) {
+        assetMessage.markSaved();
+      } else {
+        addChatMessage(
+          "system",
+          "Auto-save failed — use the Save button to retry."
+        );
+      }
     } catch (err) {
       console.error("Auto-save after Show in Studio failed:", err);
       addChatMessage("system", "Auto-save failed — use the Save button to retry.");

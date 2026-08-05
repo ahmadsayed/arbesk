@@ -449,4 +449,75 @@ describe("prepareManifestForWrite", () => {
       result.manifest.scene.nodes[0].post_processor?.color
     ).toBe("#ff0000");
   });
+
+  // Regression: pending linked-child refs must be baked into the manifest
+  // AFTER the prevManifest no-op baseline snapshot. When the bake happened
+  // before the snapshot, the baseline already contained the child, so
+  // "link a child → Save" on an otherwise unedited (e.g. auto-saved) draft
+  // was wrongly reported as "no changes" and the child was never written.
+  // NOTE: keep this test LAST in the describe — the scene-graph mock below
+  // survives jest.resetModules() and would leak into later tests.
+  it("treats a pending linked child as a change on an otherwise unedited draft", async () => {
+    const childRefNode = {
+      node_id: "linked_child_1",
+      type: "child_ref",
+      child_ref: {
+        collection: {
+          chainId: 31337,
+          contractAddress: "0xabc",
+          tokenId: "1",
+        },
+        assetID: "asset_child",
+      },
+      transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    };
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/scene-graph.js",
+      () => ({
+        getPendingChildRefs: jest.fn().mockReturnValue([childRefNode]),
+        waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
+        getPendingPostProcessorEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingPostProcessorEdits: jest.fn(),
+        getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingTransformEdits: jest.fn(),
+        clearPendingChildRefs: jest.fn(),
+        captureAssetThumbnail: jest.fn(),
+        // See the 3MF test above: transitively imported named exports must
+        // all exist on the mocked module for ESM linking.
+        getNodeMeshes: jest.fn(),
+        getNodeSubMeshes: jest.fn(),
+        getNodeChildRef: jest.fn(),
+        deselectAll: jest.fn(),
+        selectNodeById: jest.fn(),
+        selectSubMesh: jest.fn(),
+        state: { selectedNodeIds: new Set() },
+      })
+    );
+    const ctx = await load();
+    const stateMod = await import("../../frontend/src/js/state/asset-state.js");
+    stateMod._resetForTesting();
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    writeJSONToIPFS.mockResolvedValue("bafyNewVersion");
+
+    // Auto-saved baseline: one stored composite node, no pending edits —
+    // without the child ref this save would be a no-op.
+    const manifest = makeManifest([makeNode()]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    stateMod.assetState.set({
+      activeAssetManifestCid: "bafyManifest",
+      latestAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.saveAssetDraftCore("Draft");
+
+    expect(result.ok).toBe(true);
+    expect(result.cid).toBe("bafyNewVersion");
+    const written = writeJSONToIPFS.mock.calls[0][0];
+    expect(
+      written.scene.nodes.some((n) => n.node_id === "linked_child_1")
+    ).toBe(true);
+  });
 });

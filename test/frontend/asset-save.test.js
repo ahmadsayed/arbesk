@@ -93,6 +93,46 @@ async function loadModule() {
   return mod;
 }
 
+describe("onSaveAssetDraft", () => {
+  test("returns the core result on success (callers may show a Saved pill)", async () => {
+    const { onSaveAssetDraft } = await loadModule();
+    const result = await onSaveAssetDraft();
+    expect(result).toEqual(
+      expect.objectContaining({ ok: true, cid: "bafyAsset" })
+    );
+  });
+
+  test("returns the no-changes result (the version is already durably saved)", async () => {
+    _saveResult = {
+      ok: false,
+      reason: "no-changes",
+      cid: "bafyExistingAsset",
+      manifest: { asset_id: "asset_1", version: 3 },
+    };
+    const { onSaveAssetDraft } = await loadModule();
+    const result = await onSaveAssetDraft();
+    expect(result).toEqual(
+      expect.objectContaining({ ok: false, reason: "no-changes" })
+    );
+  });
+
+  test("returns undefined on failure — the error is already toasted, no Saved pill", async () => {
+    const { onSaveAssetDraft } = await loadModule();
+    const { saveAssetDraftCore } = await import(
+      "../../frontend/src/js/services/asset-save/manifest-builder.js"
+    );
+    saveAssetDraftCore.mockRejectedValueOnce(new Error("ipfs down"));
+    const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
+
+    const result = await onSaveAssetDraft();
+
+    expect(result).toBeUndefined();
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Save Failed" })
+    );
+  });
+});
+
 describe("onPublishAsset", () => {
   test("publishes normally when saveAssetDraftCore succeeds", async () => {
     const { onPublishAsset } = await loadModule();

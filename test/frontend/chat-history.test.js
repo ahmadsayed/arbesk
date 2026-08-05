@@ -254,6 +254,41 @@ test("a version bubble without a sourceCid omits data-source-cid and emits null"
   });
 });
 
+test("dedupes chat entries inherited verbatim by later generation manifests", async () => {
+  const { mod, walkManifestChain } = await load();
+  walkManifestChain.mockResolvedValue([
+    { cid: "v1", chat: null },
+    { cid: "v2", chat: [{ prompt: "cabin", provider: "mock", task: "model", timestamp: 1780000000 }] },
+    // Generation manifest that inherited v2's chat (history preservation on
+    // branch/restore) — same prompt AND timestamp, rendered only once.
+    { cid: "v3", chat: [{ prompt: "cabin", provider: "mock", task: "model", timestamp: 1780000000 }] },
+    { cid: "v4", chat: [{ prompt: "tower", provider: "mock", task: "model", timestamp: 1780000100 }] },
+  ]);
+
+  await mod.renderChatProvenance("v4");
+
+  const versionBubbles = document.querySelectorAll(".chat-bubble-version");
+  expect(versionBubbles).toHaveLength(2); // cabin once + tower
+  expect(document.querySelectorAll(".chat-bubble-history")).toHaveLength(4); // header + 2 prompts + divider
+  // The surviving cabin bubble restores the oldest (save-anchored) version.
+  const first = /** @type {HTMLElement} */ (versionBubbles[0]);
+  expect(first.dataset.manifestCid).toBe("v2");
+});
+
+test("the same prompt saved at different times is not deduped", async () => {
+  const { mod, walkManifestChain } = await load();
+  walkManifestChain.mockResolvedValue([
+    { cid: "v1", chat: [{ prompt: "cabin", provider: "mock", task: "model", timestamp: 1780000000 }] },
+    { cid: "v2", chat: [{ prompt: "cabin", provider: "mock", task: "model", timestamp: 1780000200 }] },
+  ]);
+
+  await mod.renderChatProvenance("v2");
+
+  const versionBubbles = document.querySelectorAll(".chat-bubble-version");
+  expect(versionBubbles).toHaveLength(2);
+  expect(document.querySelectorAll(".chat-bubble-history")).toHaveLength(4); // header + 2 prompts + divider
+});
+
 test("a chain entry whose chat is a single object (not an array) still renders", async () => {
   const { mod, walkManifestChain, emit } = await load();
   walkManifestChain.mockResolvedValue([

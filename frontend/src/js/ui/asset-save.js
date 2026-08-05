@@ -165,6 +165,15 @@ async function ensureExplicitName() {
   return "Untitled Asset";
 }
 
+/**
+ * Save the current draft. Surfaces all failures itself (toast + status); the
+ * return value lets callers distinguish outcomes without re-toasting.
+ * @returns {Promise<{ok: boolean, cid?: string, reason?: string}|undefined>}
+ *   The `saveAssetDraftCore` result when the save ran to completion
+ *   (`ok: true`, or `ok: false` with `reason` "no-changes"/"empty");
+ *   `undefined` when the save never ran (busy, no wallet) or threw (the
+ *   failure toast has already been shown).
+ */
 async function onSaveAssetDraft() {
   if (isSaving) return;
   if (!requireWallet()) return;
@@ -202,7 +211,7 @@ async function onSaveAssetDraft() {
           message: "Nothing new to save.",
         });
       }
-      return;
+      return result;
     }
 
     const { cid } = result;
@@ -221,6 +230,7 @@ async function onSaveAssetDraft() {
     );
     announceStatus("Draft saved.");
     finishTaskProgress("Draft saved.");
+    return result;
   } catch (err) {
     error("Save asset draft failed:", err);
     const rateLimited = isRateLimitError(err);
