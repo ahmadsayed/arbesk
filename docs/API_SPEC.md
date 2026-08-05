@@ -289,6 +289,33 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
 
 ---
 
+### `DELETE /api/v1/generations/:taskId`
+
+Stops an in-flight generation task. The registry entry is evicted (further polls return `404`) and a best-effort cancel is sent upstream — Tripo documents the `cancelled` status but no public cancel endpoint, so the upstream attempt may be a no-op.
+
+- Requires Session auth (`Authorization: Session <token>`); only the wallet that started the task can cancel it.
+- Provider credits already consumed are **not** refunded — the frontend warns the user before calling this.
+
+**Response `200`**
+
+```json
+{
+  "status": "cancelled",
+  "upstreamCancelled": true
+}
+```
+
+- `upstreamCancelled` — whether the provider accepted the cancel; `false` when the provider has no cancel endpoint (the task may still complete upstream, but the result is discarded).
+
+**Errors**
+
+| HTTP | Meaning |
+|---:|---|
+| 401 | Missing, malformed, or invalid Session auth |
+| 404 | `GENERATION_TASK_NOT_FOUND` — task ID unknown, expired, already completed, or belongs to another wallet |
+
+---
+
 ### `POST /api/v1/generations/balance`
 
 Returns the Tripo3D credit balance for a user-supplied BYOK key.

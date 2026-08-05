@@ -1578,6 +1578,95 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
   });
 
+  describe("DELETE /api/v1/generations/:taskId", () => {
+    const SESSION_ADDRESS = "0x1234567890123456789012345678901234567890";
+
+    it("evicts an in-flight task and best-effort cancels upstream", async () => {
+      const taskId = registerTask({
+        tripoTaskId: "tripo_cancel_1",
+        providerKey: "k",
+        userAddress: SESSION_ADDRESS,
+      });
+      const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+        ok: true,
+        json: async () => ({ code: 0, data: {} }),
+      });
+      // Older tests assign global.fetch directly, leaving stale call history.
+      fetchSpy.mockClear();
+      try {
+        const res = await request(app)
+          .delete(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+          status: "cancelled",
+          upstreamCancelled: true,
+        });
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/tasks/tripo_cancel_1/cancel",
+        );
+
+        // The entry is gone — polling it now 404s.
+        const poll = await request(app)
+          .get(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+        expect(poll.status).toBe(404);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("still cancels locally when the upstream cancel is unsupported", async () => {
+      const taskId = registerTask({
+        tripoTaskId: "tripo_cancel_2",
+        providerKey: "k",
+        userAddress: SESSION_ADDRESS,
+      });
+      const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => "not found",
+      });
+      try {
+        const res = await request(app)
+          .delete(`/api/v1/generations/${taskId}`)
+          .set("Authorization", await makeSessionHeader());
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+          status: "cancelled",
+          upstreamCancelled: false,
+        });
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("404s for an unknown task", async () => {
+      const res = await request(app)
+        .delete("/api/v1/generations/does-not-exist")
+        .set("Authorization", await makeSessionHeader());
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("GENERATION_TASK_NOT_FOUND");
+    });
+
+    it("404s for a task owned by another wallet", async () => {
+      const taskId = registerTask({
+        tripoTaskId: "tripo_cancel_3",
+        providerKey: "k",
+        userAddress: "0x9999999999999999999999999999999999999999",
+      });
+      const res = await request(app)
+        .delete(`/api/v1/generations/${taskId}`)
+        .set("Authorization", await makeSessionHeader());
+      expect(res.status).toBe(404);
+    });
+
+    it("rejects without a session (401)", async () => {
+      const res = await request(app).delete("/api/v1/generations/whatever");
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("POST /api/v1/assets/snapshot-comments", () => {
     it("rejects without a session (401)", async () => {
       const res = await request(app)

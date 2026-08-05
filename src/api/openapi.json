@@ -285,6 +285,66 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["Generations"],
+        "summary": "Stop an in-flight generation task",
+        "description": "Evicts the wallet-bound task from the registry (further polls return 404) and sends a best-effort upstream cancel. Provider credits already consumed are not refunded.",
+        "operationId": "cancelGenerationTask",
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task cancelled locally",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["cancelled"] },
+                    "upstreamCancelled": {
+                      "type": "boolean",
+                      "description": "Whether the provider accepted the cancel (best effort — Tripo may not expose a cancel endpoint)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task ID not found, expired, or belongs to another wallet (`GENERATION_TASK_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/generations/balance": {

@@ -13,6 +13,7 @@ import {
   retargetTask,
   pollTask,
   downloadModel,
+  cancelTask,
   TripoApiError,
 } from "../adapters/tripo3d-adapter.js";
 import {
@@ -339,6 +340,31 @@ export default function generateAssetNode() {
       }
     },
   );
+
+  /**
+   * DELETE /api/v1/generations/:taskId
+   *
+   * Stop an in-flight task: the registry entry is evicted (the GET poll then
+   * 404s, so the browser stops waiting) and a best-effort cancel is sent
+   * upstream. Provider credits already consumed are not refunded — the
+   * frontend warns the user before calling this.
+   */
+  router.delete("/:taskId", authenticate, async (req, res) => {
+    const taskId = String(req.params.taskId);
+    const entry = getTask(taskId, res.locals.userAddress);
+    if (!entry) {
+      return res.status(404).json({
+        error: {
+          code: "GENERATION_TASK_NOT_FOUND",
+          message: "Generation task not found",
+        },
+      });
+    }
+    evictTask(taskId);
+    console.log(`[GEN] task cancelled taskId=${taskId} tripo=${entry.tripoTaskId}`);
+    const upstreamCancelled = await cancelTask(entry.tripoTaskId, entry.providerKey);
+    return res.json({ status: "cancelled", upstreamCancelled });
+  });
 
   /**
    * GET /api/v1/generations/:taskId

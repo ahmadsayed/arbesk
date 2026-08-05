@@ -402,6 +402,36 @@ export async function retargetTask(rigTaskId, animations, apiKey) {
 }
 
 /**
+ * Best-effort cancel of a running Tripo task. Tripo documents the
+ * `cancelled` task status but (as of 2026-08) no public cancel endpoint —
+ * the POST is tolerated to fail; callers must treat cancellation as
+ * local-only (stop polling, discard the result).
+ * @param {string} taskId
+ * @param {string} apiKey
+ * @returns {Promise<boolean>} true when Tripo accepted the cancel
+ */
+export async function cancelTask(taskId, apiKey) {
+  if (!taskId || typeof taskId !== "string") {
+    throw new TripoApiError("taskId is required", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(`[GEN] Tripo cancel task_id=${taskId}`);
+  try {
+    await tripoFetch(`tasks/${taskId}/cancel`, apiKey, "POST");
+    console.log(`[GEN] Tripo cancel accepted task_id=${taskId}`);
+    return true;
+  } catch (e) {
+    const err = /** @type {Error} */ (e);
+    console.log(
+      `[GEN] Tripo cancel unsupported/failed task_id=${taskId}: ${err.message}`,
+    );
+    return false;
+  }
+}
+
+/**
  * Poll a task.
  * @param {string} taskId
  * @param {string} apiKey

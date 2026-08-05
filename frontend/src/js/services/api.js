@@ -392,15 +392,21 @@ const GENERATION_POLL_INTERVAL_MS = 3_000;
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
 
 /**
- * Poll an async Tripo3D generation task until it succeeds, fails, or times out.
+ * Poll an async Tripo3D generation task until it succeeds, fails, is
+ * cancelled via the signal, or times out.
  *
  * @param {string} taskId
+ * @param {AbortSignal} [signal] - aborts the wait (the upstream task may
+ *   still finish; the result is discarded)
  * @returns {Promise<{assetData: string, format: string, path: string}>}
  */
-async function pollGeneration(taskId) {
+async function pollGeneration(taskId, signal) {
   const start = Date.now();
 
   while (Date.now() - start < GENERATION_TIMEOUT_MS) {
+    if (signal?.aborted) {
+      throw new ApiError("Generation cancelled", 0, "GENERATION_CANCELLED");
+    }
     const response = await fetchWithSession(`/generations/${taskId}`, {
       method: "GET",
     });
@@ -436,7 +442,36 @@ async function pollGeneration(taskId) {
     await new Promise((resolve) => setTimeout(resolve, GENERATION_POLL_INTERVAL_MS));
   }
 
+  if (signal?.aborted) {
+    throw new ApiError("Generation cancelled", 0, "GENERATION_CANCELLED");
+  }
   throw new ApiError("Generation timed out", 504, "GENERATION_TIMEOUT");
+}
+
+/**
+ * DELETE /api/v1/generations/:taskId
+ *
+ * Stop tracking an in-flight generation task: the backend evicts the
+ * registry entry (further polls 404) and sends a best-effort upstream
+ * cancel. Provider credits already consumed are not refunded.
+ *
+ * @param {string} taskId
+ * @returns {Promise<{status: string, upstreamCancelled: boolean}>}
+ */
+export async function cancelGenerationTask(taskId) {
+  const response = await fetchWithSession(`/generations/${taskId}`, {
+    method: "DELETE",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `Cancel failed (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+  return data;
 }
 
 // ─── Provider Balance (BYOK) ───
@@ -494,6 +529,8 @@ export async function getProviderBalance(providerKey) {
  * @param {string} [params.imageData] - base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine)
  * @param {string} [params.imageMime] - MIME type of imageData (image/jpeg, image/png, image/webp)
  * @param {string} [params.imageName] - original filename of imageData; the reference image is uploaded to IPFS and recorded in the manifest
+ * @param {AbortSignal} [params.signal] - aborts polling (GENERATION_CANCELLED); the upstream task may still finish
+ * @param {(taskId: string) => void} [params.onTaskId] - called with the backend task id once the provider task starts (used for cancel)
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
  */
 export async function generateAsset({
@@ -518,6 +555,8 @@ export async function generateAsset({
   imageData,
   imageMime,
   imageName,
+  signal,
+  onTaskId,
 }) {
   announceStatus("Authenticating…");
 
@@ -564,8 +603,9 @@ export async function generateAsset({
   // provider finishes, then merge the final payload into `data` so the
   // existing browser-side IPFS upload flow runs unchanged.
   if (data.taskId) {
+    onTaskId?.(data.taskId);
     announceStatus("Generating 3D asset on Tripo3D…");
-    const final = await pollGeneration(data.taskId);
+    const final = await pollGeneration(data.taskId, signal);
     Object.assign(data, final);
   }
 

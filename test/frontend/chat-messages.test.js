@@ -178,3 +178,23 @@ test("addChatMessage honors timestamp and extraClass options", () => {
   expect(bubble.classList.contains("chat-bubble-user")).toBe(true);
   expect(bubble.querySelector("time").dateTime).toBe(when.toISOString());
 });
+
+test("addWorkingMessage renders a Stop button when onCancel is given", () => {
+  let cancelled = 0;
+  const handle = addWorkingMessage("Carving…", {
+    onCancel: () => {
+      cancelled++;
+    },
+  });
+  const btn = handle.bubble.querySelector(".chat-working-cancel");
+  expect(btn).not.toBeNull();
+  expect(btn.textContent).toBe("Stop");
+  btn.click();
+  expect(cancelled).toBe(1);
+  expect(btn.disabled).toBe(true);
+});
+
+test("addWorkingMessage without onCancel has no Stop button", () => {
+  const handle = addWorkingMessage("Carving…");
+  expect(handle.bubble.querySelector(".chat-working-cancel")).toBeNull();
+});

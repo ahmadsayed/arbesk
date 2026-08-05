@@ -20,6 +20,7 @@ import { followupActionsFor } from "../state/generation-actions.js";
 import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
   generateAsset,
+  cancelGenerationTask,
   ApiError,
   getOrCreateSession,
   getProviderBalance,
@@ -655,6 +656,79 @@ function buildTransformMatrix() {
   return identityMatrix();
 }
 
+// ─── Stoppable Generation Tasks ───
+
+/**
+ * True for a user-initiated cancel — call sites surface a neutral message
+ * instead of the error mapping.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isGenerationCancelled(err) {
+  return err instanceof ApiError && err.code === "GENERATION_CANCELLED";
+}
+
+/**
+ * Stop confirmation dialog: resolves true only via the Stop button.
+ * Credits spent with the provider are not refunded — the warning is the
+ * point of the dialog.
+ * @returns {Promise<boolean>}
+ */
+function showStopTaskDialog() {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+      <p style="margin:0 0 var(--size-2)">Stop this task? Credits already spent with Tripo 3D are <strong>not</strong> refunded — you will lose them, and the partial result is discarded.</p>
+      <button id="stopTaskConfirm" class="btn btn-danger" type="button">Stop task — lose the credits</button>`;
+    wrap.querySelector("#stopTaskConfirm").addEventListener("click", () => {
+      if (typeof wrap.closeDialog === "function") wrap.closeDialog(true);
+    });
+    showCustomDialog("Stop generation?", wrap).then((v) => resolve(v === true));
+  });
+}
+
+/**
+ * Confirm stopping an in-flight generation, then abort polling and evict
+ * the backend task (best-effort upstream cancel; the registry TTL sweeps
+ * the entry regardless).
+ * @param {AbortController} controller
+ * @param {() => string | null} getTaskId
+ */
+async function confirmStopTask(controller, getTaskId) {
+  const stop = await showStopTaskDialog();
+  if (!stop) return;
+  controller.abort();
+  const taskId = getTaskId();
+  if (taskId) {
+    try {
+      await cancelGenerationTask(taskId);
+    } catch {
+      // Best effort — the backend entry expires on its own.
+    }
+  }
+}
+
+/**
+ * A working message with a Stop button, plus the AbortSignal / onTaskId
+ * wiring generateAsset needs to make the task stoppable.
+ * @param {string} workingText
+ * @returns {{working: import("./chat-messages.js").WorkingMessageHandle | null, signal: AbortSignal, onTaskId: (id: string) => void}}
+ */
+function addStoppableWorkingMessage(workingText) {
+  const controller = new AbortController();
+  let taskId = null;
+  const working = addWorkingMessage(workingText, {
+    onCancel: () => void confirmStopTask(controller, () => taskId),
+  });
+  return {
+    working,
+    signal: controller.signal,
+    onTaskId: (id) => {
+      taskId = id;
+    },
+  };
+}
+
 // ─── Rig & Animate (Tripo3D) ───
 
 // Animation presets offered by the Animate follow-up's checkbox picker.
@@ -810,7 +884,7 @@ async function onRetexture(generationId) {
     return;
   }
   addChatMessage("user", `Retexture: ${texturePrompt}`);
-  const working = addWorkingMessage("Retexturing — this takes a minute or two…");
+  const { working, signal, onTaskId } = addStoppableWorkingMessage("Retexturing — this takes a minute or two…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_retex_${Date.now()}`;
   const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
@@ -827,13 +901,19 @@ async function onRetexture(generationId) {
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
+      signal,
+      onTaskId,
     });
     presentGenerationResult(result, { prompt: `Retexture: ${texturePrompt}`, provider: "tripo3d", task: "texture", prevAssetManifestCid, transformMatrix });
     dismissCreatePulse();
     refreshProviderBalance({ force: true });
   } catch (err) {
-    console.error("Retexture failed:", err);
-    addChatMessage("system", err instanceof ApiError && err.message ? err.message : "Retexture failed. Please try again.");
+    if (isGenerationCancelled(err)) {
+      addChatMessage("system", "Retexture stopped.");
+    } else {
+      console.error("Retexture failed:", err);
+      addChatMessage("system", err instanceof ApiError && err.message ? err.message : "Retexture failed. Please try again.");
+    }
   } finally {
     working?.remove();
   }
@@ -870,7 +950,7 @@ async function onRetopo(generationId) {
 
   const prompt = "Retopo for animation";
   addChatMessage("user", prompt);
-  const working = addWorkingMessage(
+  const { working, signal, onTaskId } = addStoppableWorkingMessage(
     "Rebuilding topology — this takes a minute or two…",
   );
 
@@ -894,6 +974,8 @@ async function onRetopo(generationId) {
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
+      signal,
+      onTaskId,
     });
 
     presentGenerationResult(result, {
@@ -907,6 +989,10 @@ async function onRetopo(generationId) {
     // Retopo consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
   } catch (err) {
+    if (isGenerationCancelled(err)) {
+      addChatMessage("system", "Retopo stopped.");
+      return;
+    }
     console.error("Retopo failed:", err);
     let userMsg = "Retopo failed. Please try again.";
     if (err instanceof ApiError) {
@@ -949,7 +1035,7 @@ async function onAutoRig(generationId) {
   }
   const prompt = "Auto-rig";
   addChatMessage("user", prompt);
-  const working = addWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
+  const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
   const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
@@ -966,11 +1052,17 @@ async function onAutoRig(generationId) {
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
+      signal,
+      onTaskId,
     });
     presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix });
     dismissCreatePulse();
     refreshProviderBalance({ force: true });
   } catch (err) {
+    if (isGenerationCancelled(err)) {
+      addChatMessage("system", "Auto-rig stopped.");
+      return;
+    }
     console.error("Auto-rig failed:", err);
     let userMsg = "Rigging failed. Please try again.";
     if (err instanceof ApiError) {
@@ -1026,7 +1118,7 @@ async function onAnimate(generationId) {
   const labels = presets.map((p) => p.replace("preset:", "")).join(", ");
   const prompt = `Animate: ${labels}`;
   addChatMessage("user", prompt);
-  const working = addWorkingMessage(
+  const { working, signal, onTaskId } = addStoppableWorkingMessage(
     "Rigging and animating — this chains three Tripo tasks and takes a few minutes…",
   );
 
@@ -1051,6 +1143,8 @@ async function onAnimate(generationId) {
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
+      signal,
+      onTaskId,
     });
 
     presentGenerationResult(result, {
@@ -1064,6 +1158,10 @@ async function onAnimate(generationId) {
     // Rig + retarget consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
   } catch (err) {
+    if (isGenerationCancelled(err)) {
+      addChatMessage("system", "Animation stopped.");
+      return;
+    }
     console.error("Animate failed:", err);
     let userMsg = "Animation failed. Please try again.";
     if (err instanceof ApiError) {
@@ -1159,7 +1257,12 @@ async function onGenerate() {
   clearAttachedImage();
 
   setGenerating(true);
-  const working = addWorkingMessage("Carving your model…");
+  // Stop button only makes sense for async providers — the mock returns
+  // synchronously, so there is nothing to cancel.
+  const stoppable = isRealProvider()
+    ? addStoppableWorkingMessage("Carving your model…")
+    : null;
+  const working = stoppable?.working ?? addWorkingMessage("Carving your model…");
 
   const assetName = getAssetName();
   const nodeId = `${assetName
@@ -1204,6 +1307,7 @@ async function onGenerate() {
       ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
       ...(imagePayload && imagePayload),
       ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
+      ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId }),
     });
 
     // Defer the Studio viewport load: register the result, show an asset
@@ -1219,6 +1323,10 @@ async function onGenerate() {
     // A completed generation consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
   } catch (err) {
+    if (isGenerationCancelled(err)) {
+      addChatMessage("system", "Generation stopped.");
+      return;
+    }
     console.error("Generation failed:", err);
     let userMsg = "Generation failed. Please try again.";
 

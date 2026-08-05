@@ -772,6 +772,54 @@ describe("generateAsset", () => {
     expect(statusEl.textContent).toBe("Asset generated successfully.");
   }, 15_000);
 
+  test("aborts polling with GENERATION_CANCELLED when the signal is aborted", async () => {
+    const taskId = "task-cancel-1";
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({
+        status: 202,
+        body: { taskId, provider: "tripo3d", status: "running" },
+      })
+    );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const controller = new AbortController();
+    await expect(
+      generateAsset({
+        prompt: "a robot",
+        nodeId: "robot-node",
+        provider: "tripo3d",
+        providerKey: "tripo-key",
+        signal: controller.signal,
+        onTaskId: () => controller.abort(),
+      })
+    ).rejects.toMatchObject({ code: "GENERATION_CANCELLED" });
+
+    // Only the POST happened — the poll loop exited before any GET.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("cancelGenerationTask issues DELETE and surfaces upstreamCancelled", async () => {
+    const taskId = "task-cancel-2";
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({ body: { status: "cancelled", upstreamCancelled: true } })
+    );
+    const { cancelGenerationTask } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const result = await cancelGenerationTask(taskId);
+    expect(result).toEqual({ status: "cancelled", upstreamCancelled: true });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toMatch(new RegExp(`/generations/${taskId}$`));
+    expect(opts.method).toBe("DELETE");
+  });
+
   test("returns providerTaskId from the Tripo3D poll success payload", async () => {
     const fetchMock = jest
       .fn()

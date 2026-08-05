@@ -167,11 +167,15 @@ export function addChoiceMessage(text, choices, onPick) {
 
 /**
  * Append a transient work-in-progress indicator (spinner + status text).
- * The caller removes it when the operation settles.
+ * The caller removes it when the operation settles. When `onCancel` is
+ * given, a Stop button rides along; clicking it disables itself and invokes
+ * the callback (which owns confirm + teardown).
  * @param {string} text
+ * @param {Object} [options]
+ * @param {() => void} [options.onCancel]
  * @returns {WorkingMessageHandle | null}
  */
-export function addWorkingMessage(text) {
+export function addWorkingMessage(text, options = {}) {
   if (!chatHistoryList) return null;
   hideWelcome();
 
@@ -189,6 +193,20 @@ export function addWorkingMessage(text) {
 
   bubble.appendChild(spinner);
   bubble.appendChild(content);
+
+  const onCancel = options.onCancel;
+  if (typeof onCancel === "function") {
+    const stopBtn = document.createElement("button");
+    stopBtn.type = "button";
+    stopBtn.className = "btn btn-secondary chat-working-cancel";
+    stopBtn.textContent = "Stop";
+    stopBtn.addEventListener("click", () => {
+      stopBtn.disabled = true;
+      onCancel();
+    });
+    bubble.appendChild(stopBtn);
+  }
+
   appendBubble(bubble);
 
   return {

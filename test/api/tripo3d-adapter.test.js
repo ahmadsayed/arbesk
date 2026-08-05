@@ -12,6 +12,7 @@ import {
   retargetTask,
   pollTask,
   downloadModel,
+  cancelTask,
   TripoApiError,
 } from "../../src/api/adapters/tripo3d-adapter.js";
 
@@ -604,5 +605,40 @@ describe("textureQuality", () => {
   it("createRefineTask passes texture_quality through", async () => {
     await createRefineTask("rusty", "file_glb_1", "key", { textureQuality: "detailed" });
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("detailed");
+  });
+});
+
+describe("cancelTask", () => {
+  beforeEach(() => {
+    jest.spyOn(global, "fetch").mockReset();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("POSTs to tasks/{id}/cancel and returns true on success", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: {} }),
+    });
+    const ok = await cancelTask("task_1", key);
+    expect(ok).toBe(true);
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/tasks/task_1/cancel");
+    expect(opts.method).toBe("POST");
+  });
+
+  it("returns false when the upstream cancel fails", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: async () => "not found",
+    });
+    await expect(cancelTask("task_1", key)).resolves.toBe(false);
+  });
+
+  it("validates arguments", async () => {
+    await expect(cancelTask("", key)).rejects.toMatchObject({ status: 400 });
   });
 });

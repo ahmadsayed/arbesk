@@ -103,7 +103,7 @@ Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the world is the asset ·
 
 - Header `Authorization: Session <token>` (not Bearer); opaque, 24h TTL, wallet-bound, auto-cleared on disconnect; entry point `getOrCreateSession()` in `services/api.js`.
 - **Single creation path** — SIWE via `POST /api/v1/sessions`: EOA sends `{ message, signature }`; CDP adds `eoaAddress` (embedded EOA signs; `message.address` is the smart account; fallback verification in `siwe-verify.js`).
-- Required for: `POST /generations`, `/ipfs/upload-url`, `/ipfs/unpin`, `/assets/snapshot-comments`, `/paymaster`, `/users/resolve-email`; WS chat proxy takes the token in the query string.
+- Required for: `POST /generations`, `DELETE /generations/:taskId` (stop an in-flight task — credits lost), `/ipfs/upload-url`, `/ipfs/unpin`, `/assets/snapshot-comments`, `/paymaster`, `/users/resolve-email`; WS chat proxy takes the token in the query string.
 - `/ipfs/unpin` also verifies on-chain ownership (or editor Merkle proof) and CID membership in the token's collection — frontend unpins **before** burning.
 - Auto-restore on page load for CDP, EOA, WalletConnect. Full flow: `docs/API_SPEC.md § Authentication`.
 
