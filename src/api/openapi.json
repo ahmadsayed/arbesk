@@ -112,7 +112,7 @@
             }
           },
           "400": {
-            "description": "Missing required parameters",
+            "description": "Missing/invalid parameters, or the follow-up source GLB referenced by `sourceAssetCid` could not be fetched from IPFS (`SOURCE_ASSET_UNAVAILABLE`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -149,22 +149,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`refineTaskId` unknown, not completed, or owned by another wallet (`REFINE_SOURCE_NOT_FOUND`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "REFINE_SOURCE_NOT_FOUND",
-                    "message": "Refine source task not found or not completed"
-                  }
                 }
               }
             }
@@ -1030,15 +1014,44 @@
             "maxLength": 200,
             "example": "sk-..."
           },
-          "refineTaskId": {
+          "sourceAssetCid": {
             "type": "string",
-            "description": "Optional (tripo3d only): taskId of a previously completed generation owned by the same wallet. When present, the backend refines that model via Tripo's v3 re-texture endpoint (texture/material only; geometry unchanged). Unknown/incomplete/foreign id → 404 REFINE_SOURCE_NOT_FOUND. Ignored when imageData is present.",
+            "description": "Optional (tripo3d only): IPFS CID of a previously generated GLB to run a follow-up action on. The backend fetches the bytes and uploads them to Tripo (POST /files → file_token), so the reference never expires. Requires exactly one of retexture, retopo, or animate. Unfetchable CID → 400 SOURCE_ASSET_UNAVAILABLE.",
+            "maxLength": 128,
+            "example": "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
+          },
+          "retexture": {
+            "type": "boolean",
+            "description": "Optional (tripo3d only, with sourceAssetCid): re-texture the source model via Tripo's v3 re-texture endpoint (texture/material only; geometry unchanged). Requires prompt as the texture description. The 202 response includes \"refined\": true."
+          },
+          "retopo": {
+            "type": "boolean",
+            "description": "Optional (tripo3d only, with sourceAssetCid): smart retopology via mesh/decimate v2.0 — clean triangulated topology with baked textures, GLB output. The 202 response includes \"retopo\": true."
+          },
+          "animate": {
+            "type": "boolean",
+            "description": "Optional (tripo3d only, with sourceAssetCid): rig & animate the source model (rig-check → rig → retarget chain). The 202 response includes \"animating\": true. Requires animations unless rigOnly is set."
+          },
+          "sourceTaskId": {
+            "type": "string",
+            "description": "Optional (tripo3d only, with animate): backend registry id of a completed rig-only task — takes the retarget-only path, skipping rig-check/rig (Tripo retarget requires a rig task id and cannot take a mesh input).",
             "maxLength": 64,
             "example": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d"
           },
+          "textureQuality": {
+            "type": "string",
+            "description": "Optional (tripo3d only): texture quality for generation and retexture. Defaults to standard.",
+            "enum": ["standard", "detailed", "extreme"]
+          },
+          "faceLimit": {
+            "type": "integer",
+            "description": "Optional (tripo3d only, with retopo): polygon budget for smart retopology (500–20000). Adaptive when omitted.",
+            "minimum": 500,
+            "maximum": 20000
+          },
           "imageData": {
             "type": "string",
-            "description": "Optional (tripo3d only): base64-encoded source image for image-to-3D (max ~10 MB raw). Starts a fresh image-to-model task; refineTaskId is ignored. Required together with imageMime.",
+            "description": "Optional (tripo3d only): base64-encoded source image for image-to-3D (max ~10 MB raw). Starts a fresh image-to-model task. Required together with imageMime.",
             "format": "byte"
           },
           "imageMime": {
@@ -1046,15 +1059,9 @@
             "description": "MIME type of imageData. Required when imageData is present.",
             "enum": ["image/jpeg", "image/png", "image/webp"]
           },
-          "animateTaskId": {
-            "type": "string",
-            "description": "Optional (tripo3d only): taskId of a completed generation owned by the same wallet to rig & animate. Starts a rig-check → rig → retarget chain; the 202 response includes \"animating\": true. Unknown/incomplete/foreign id → 404 ANIMATE_SOURCE_NOT_FOUND. Requires animations.",
-            "maxLength": 64,
-            "example": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d"
-          },
           "animations": {
             "type": "array",
-            "description": "Retarget presets to bake (max 5). Required when animateTaskId is present and rigOnly is not set.",
+            "description": "Retarget presets to bake (max 5). Required when animate is set and rigOnly is not set.",
             "items": {
               "type": "string",
               "enum": ["preset:idle", "preset:walk", "preset:run", "preset:dive", "preset:climb", "preset:jump", "preset:slash", "preset:shoot", "preset:hurt", "preset:fall", "preset:turn"]
@@ -1064,7 +1071,7 @@
           },
           "rigOnly": {
             "type": "boolean",
-            "description": "Optional (tripo3d only, with animateTaskId): stop the chain after the rig step — returns the Mixamo-ready rigged GLB with no baked animation."
+            "description": "Optional (tripo3d only, with animate): stop the chain after the rig step — returns the Mixamo-ready rigged GLB with no baked animation."
           }
         }
       },
@@ -1110,7 +1117,15 @@
           },
           "refined": {
             "type": "boolean",
-            "description": "Present and true when the request refined a previous task via refineTaskId"
+            "description": "Present and true when the request retextured a source model via sourceAssetCid + retexture"
+          },
+          "retopo": {
+            "type": "boolean",
+            "description": "Present and true when the request started a smart-retopology task via sourceAssetCid + retopo"
+          },
+          "animating": {
+            "type": "boolean",
+            "description": "Present and true when the request started a rig/animate chain via sourceAssetCid + animate"
           }
         }
       },
