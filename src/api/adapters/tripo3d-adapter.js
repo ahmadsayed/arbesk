@@ -16,6 +16,14 @@ export const TRIPO_RIG_BIPED_MODEL =
 /** Valid Tripo texture_quality levels (generation ≥ v3.0 and models/texture). */
 export const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
 
+/**
+ * Upstream timeout for calls that make Tripo ingest an uploaded model
+ * server-side (file upload, texture, decimate, rig-check, rig). On a large
+ * GLB (tens of MB) the task-creation response itself can exceed the default
+ * 30s — observed live with a 41 MB rig-check source (2026-08-06).
+ */
+const TRIPO_INGEST_TIMEOUT_MS = 120_000;
+
 export class TripoApiError extends Error {
   /**
    * @param {string} message
@@ -36,8 +44,11 @@ export class TripoApiError extends Error {
  * @param {string} apiKey
  * @param {"GET"|"POST"} method
  * @param {object|FormData} [body] - plain object (JSON) or FormData (multipart)
+ * @param {number} [timeoutMs=30_000] - upstream timeout; file-ingesting
+ *   task-creation endpoints (rig-check, rig, decimate, texture) pass more,
+ *   because Tripo ingests the uploaded model before answering
  */
-async function tripoFetch(path, apiKey, method = "GET", body) {
+async function tripoFetch(path, apiKey, method = "GET", body, timeoutMs = 30_000) {
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   /** @type {{method: string, headers: Record<string, string>, body?: string|FormData, signal: AbortSignal}} */
   const opts = {
@@ -48,7 +59,7 @@ async function tripoFetch(path, apiKey, method = "GET", body) {
       ...(isForm ? {} : { "Content-Type": "application/json" }),
     },
     // A stalled upstream connection must not hang the Express request.
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
   };
   if (body) opts.body = isForm ? body : JSON.stringify(body);
 
@@ -175,7 +186,7 @@ export async function uploadImage(imageBuffer, mime, apiKey) {
   // (possibly shared) backing store is not a valid BlobPart.
   const bytes = new Uint8Array(imageBuffer);
   form.append("file", new Blob([bytes], { type: mime }), `upload.${ext}`);
-  const data = await tripoFetch("files", apiKey, "POST", form);
+  const data = await tripoFetch("files", apiKey, "POST", form, TRIPO_INGEST_TIMEOUT_MS);
   if (typeof data?.file_token !== "string") {
     throw new TripoApiError("Tripo did not return a file token", 0, 502);
   }
@@ -204,7 +215,7 @@ export async function uploadModel(glbBuffer, apiKey) {
   // (possibly shared) backing store is not a valid BlobPart.
   const bytes = new Uint8Array(glbBuffer);
   form.append("file", new Blob([bytes], { type: "model/gltf-binary" }), "model.glb");
-  const data = await tripoFetch("files", apiKey, "POST", form);
+  const data = await tripoFetch("files", apiKey, "POST", form, TRIPO_INGEST_TIMEOUT_MS);
   if (typeof data?.file_token !== "string") {
     throw new TripoApiError("Tripo did not return a file token", 0, 502);
   }
@@ -274,7 +285,7 @@ export async function createRefineTask(prompt, fileToken, apiKey, options = {}) 
     texture: true,
     pbr: true,
     ...textureQualityField(options),
-  });
+  }, TRIPO_INGEST_TIMEOUT_MS);
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
   }
@@ -315,7 +326,7 @@ export async function decimateTask(fileToken, apiKey, options = {}) {
     quad,
     bake: true,
     ...(faceLimit && { face_limit: faceLimit }),
-  });
+  }, TRIPO_INGEST_TIMEOUT_MS);
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
   }
@@ -339,7 +350,7 @@ export async function rigCheckTask(fileToken, apiKey) {
   console.log(`[GEN] Tripo rigCheckTask input=${fileToken}`);
   const data = await tripoFetch("animations/rig-check", apiKey, "POST", {
     input: fileToken,
-  });
+  }, TRIPO_INGEST_TIMEOUT_MS);
   if (typeof data.task_id !== "string") {
     throw new TripoApiError("Tripo did not return a task ID", 0, 502);
   }
@@ -382,7 +393,7 @@ export async function rigModelTask(fileToken, rigType, apiKey) {
         rig_type: rigType,
         spec: "mixamo",
         model,
-      });
+      }, TRIPO_INGEST_TIMEOUT_MS);
       if (typeof data.task_id !== "string") {
         throw new TripoApiError("Tripo did not return a task ID", 0, 502);
       }
