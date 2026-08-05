@@ -325,13 +325,19 @@ export function addAssetMessage({ prompt, format }) {
 
 /**
  * Append a compact follow-up action row (Retexture · Retopo · Auto-rig ·
- * Animate…) to an asset bubble's action area.
- * @param {AssetMessageHandle} handle
+ * Animate…) to an asset bubble's action area. History bubbles have no
+ * actions container — one is created so the same row works there.
+ * @param {AssetMessageHandle | {bubble: HTMLElement}} handle
  * @param {Array<{id: string, label: string, onPick: () => void}>} actions
  */
 export function addAssetActionRow(handle, actions) {
-  const actionsEl = handle.bubble.querySelector(".chat-asset-actions");
-  if (!actionsEl || actions.length === 0) return;
+  if (actions.length === 0) return;
+  let actionsEl = handle.bubble.querySelector(".chat-asset-actions");
+  if (!actionsEl) {
+    actionsEl = document.createElement("div");
+    actionsEl.className = "chat-asset-actions";
+    handle.bubble.appendChild(actionsEl);
+  }
   const row = document.createElement("div");
   row.className = "chat-asset-followups";
   for (const action of actions) {

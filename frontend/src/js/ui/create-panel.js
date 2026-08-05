@@ -807,10 +807,11 @@ function presentGenerationResult(
  * GLB (sourceAssetCid), so any bubble stays actionable indefinitely.
  * @param {string} generationId
  */
-function addFollowupActions(generationId) {
+function addFollowupActions(generationId, bubbleEl = null) {
   const record = getPendingGeneration(generationId);
   const assetMessage = assetMessages.get(generationId);
-  if (!record || !assetMessage) return;
+  const bubble = bubbleEl || assetMessage?.bubble || null;
+  if (!record || !bubble) return;
   const ACTION_DEFS = {
     retexture: { label: "Retexture", run: () => void onRetexture(generationId) },
     retopo: { label: "Retopo", run: () => void onRetopo(generationId) },
@@ -822,7 +823,7 @@ function addFollowupActions(generationId) {
     label: ACTION_DEFS[id].label,
     onPick: ACTION_DEFS[id].run,
   }));
-  addAssetActionRow(assetMessage, actions);
+  addAssetActionRow(assetMessage || { bubble }, actions);
 }
 
 /**
@@ -1445,6 +1446,16 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }) => {
     console.error("Version restore failed:", err);
     addChatMessage("system", "Could not load that version.");
   }
+});
+
+// A history bubble backed by a Tripo3D GLB version gets the same follow-up
+// action row as a live generation bubble. chat-history registered the
+// pending-generation record and tagged the bubble with data-generation-id.
+on(EVENTS.HISTORY_VERSION_ACTIONABLE, ({ generationId }) => {
+  const bubble = document.querySelector(
+    `.chat-bubble-version[data-generation-id="${generationId}"]`,
+  );
+  if (bubble) addFollowupActions(generationId, /** @type {HTMLElement} */ (bubble));
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {

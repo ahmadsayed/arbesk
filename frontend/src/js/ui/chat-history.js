@@ -12,6 +12,7 @@
 import { walkManifestChain } from "../engine/time-travel.js";
 import { addChatMessage } from "./chat-messages.js";
 import { emit, EVENTS } from "../events/bus.js";
+import { addPendingGeneration } from "../state/pending-generations.js";
 
 const chatHistoryList = document.getElementById("chatHistoryList");
 
@@ -56,7 +57,7 @@ export async function renderChatProvenance(manifestCid) {
    * (history preservation on branch/restore), so the same entry can appear
    * in several chain manifests verbatim — dedupe by prompt+timestamp,
    * keeping the oldest (save-anchored) occurrence.
-   * @type {Array<{prompt: string, task?: string, timestamp?: number, cid: string, sourceCid: string|null}>}
+   * @type {Array<{prompt: string, task?: string, provider?: string, timestamp?: number, cid: string, sourceCid: string|null}>}
    */
   const entries = [];
   const seen = new Set();
@@ -72,6 +73,7 @@ export async function renderChatProvenance(manifestCid) {
         entries.push({
           prompt: entry.prompt,
           task: entry.task,
+          provider: entry.provider,
           timestamp: entry.timestamp,
           cid: item.cid,
           sourceCid: item.sourceCid || null,
@@ -84,6 +86,9 @@ export async function renderChatProvenance(manifestCid) {
   addChatMessage("system", "Prompt history", {
     extraClass: "chat-bubble-history",
   });
+  // One action row per version, on the first bubble that carries it — a
+  // version with several prompts should not sprout duplicate rows.
+  const actionableCids = new Set();
   for (const entry of entries) {
     const label =
       entry.task && entry.task !== "model" ? ` (${entry.task})` : "";
@@ -106,6 +111,28 @@ export async function renderChatProvenance(manifestCid) {
           name: entry.prompt,
         });
       });
+
+      // Tripo3D versions with a GLB are fully actionable: register a
+      // pending-generation record (sourceAssetCid is the durable reference)
+      // and let the create panel attach the follow-up action row. No
+      // backendTaskId exists for history — animate takes the full GLB chain.
+      if (
+        entry.sourceCid &&
+        entry.provider === "tripo3d" &&
+        !actionableCids.has(entry.cid)
+      ) {
+        actionableCids.add(entry.cid);
+        const generationId = addPendingGeneration({
+          assetManifestCid: entry.cid,
+          sourceAssetCid: entry.sourceCid,
+          prompt: entry.prompt,
+          prevAssetManifestCid: null,
+          provider: "tripo3d",
+          task: entry.task,
+        });
+        target.dataset.generationId = generationId;
+        emit(EVENTS.HISTORY_VERSION_ACTIONABLE, { generationId });
+      }
     }
   }
   addChatMessage("system", "— New session —", {

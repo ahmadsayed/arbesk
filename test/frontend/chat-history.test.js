@@ -20,7 +20,10 @@ async function load() {
   );
   jest.unstable_mockModule("../../frontend/src/js/events/bus.js", () => ({
     emit,
-    EVENTS: { HISTORY_VERSION_SELECTED: "asset:historyVersionSelected" },
+    EVENTS: {
+      HISTORY_VERSION_SELECTED: "asset:historyVersionSelected",
+      HISTORY_VERSION_ACTIONABLE: "asset:historyVersionActionable",
+    },
   }));
   const mod = await import("../../frontend/src/js/ui/chat-history.js");
   return { mod, walkManifestChain, emit };
@@ -315,4 +318,75 @@ test("a chain entry whose chat is a single object (not an array) still renders",
     sourceCid: "glb-v1",
     name: "lone prompt",
   });
+});
+
+test("tripo3d versions with a GLB become actionable: record registered, event emitted, bubble tagged", async () => {
+  const { mod, walkManifestChain, emit } = await load();
+  walkManifestChain.mockResolvedValue([
+    {
+      cid: "v1",
+      sourceCid: "glb-v1",
+      chat: [{ prompt: "a knight", provider: "tripo3d", task: "model", timestamp: 1780000000 }],
+    },
+    {
+      cid: "v2",
+      sourceCid: "glb-v2",
+      chat: [{ prompt: "rusty bronze", provider: "tripo3d", task: "texture", timestamp: 1780000100 }],
+    },
+  ]);
+
+  await mod.renderChatProvenance("v2");
+
+  const { listPendingGenerations } = await import("../../frontend/src/js/state/pending-generations.js");
+  const records = listPendingGenerations();
+  expect(records).toHaveLength(2);
+  expect(records[0]).toMatchObject({
+    assetManifestCid: "v1",
+    sourceAssetCid: "glb-v1",
+    provider: "tripo3d",
+    task: "model",
+  });
+  expect(records[1]).toMatchObject({
+    assetManifestCid: "v2",
+    sourceAssetCid: "glb-v2",
+    provider: "tripo3d",
+    task: "texture",
+  });
+
+  const bubbles = /** @type {NodeListOf<HTMLElement>} */ (
+    document.querySelectorAll(".chat-bubble-version")
+  );
+  expect(bubbles[0].dataset.generationId).toBe(records[0].id);
+  expect(bubbles[1].dataset.generationId).toBe(records[1].id);
+
+  const actionableCalls = emit.mock.calls.filter(
+    ([event]) => event === "asset:historyVersionActionable"
+  );
+  expect(actionableCalls).toHaveLength(2);
+  expect(actionableCalls[0][1]).toEqual({ generationId: records[0].id });
+});
+
+test("non-tripo3d or GLB-less versions stay restore-only (no action event)", async () => {
+  const { mod, walkManifestChain, emit } = await load();
+  walkManifestChain.mockResolvedValue([
+    {
+      cid: "v1",
+      sourceCid: "glb-v1",
+      chat: [{ prompt: "a chair", provider: "mock", task: "model", timestamp: 1780000000 }],
+    },
+    {
+      cid: "v2",
+      sourceCid: null,
+      chat: [{ prompt: "make it red", provider: "tripo3d", task: "parametric", timestamp: 1780000100 }],
+    },
+  ]);
+
+  await mod.renderChatProvenance("v2");
+
+  const { listPendingGenerations } = await import("../../frontend/src/js/state/pending-generations.js");
+  expect(listPendingGenerations()).toHaveLength(0);
+  expect(
+    emit.mock.calls.filter(([event]) => event === "asset:historyVersionActionable")
+  ).toHaveLength(0);
+  expect(document.querySelector("[data-generation-id]")).toBeNull();
 });

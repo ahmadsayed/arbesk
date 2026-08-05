@@ -198,3 +198,19 @@ test("addWorkingMessage without onCancel has no Stop button", () => {
   const handle = addWorkingMessage("Carving…");
   expect(handle.bubble.querySelector(".chat-working-cancel")).toBeNull();
 });
+
+test("addAssetActionRow creates the actions container on bubbles that lack one", () => {
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble chat-bubble-history chat-bubble-version";
+  const picks = [];
+  addAssetActionRow({ bubble }, [
+    { id: "retopo", label: "Retopo", onPick: () => picks.push("retopo") },
+  ]);
+  const container = bubble.querySelector(".chat-asset-actions");
+  expect(container).not.toBeNull();
+  const btn = /** @type {HTMLButtonElement} */ (
+    container.querySelector('[data-action="retopo"]')
+  );
+  btn.click();
+  expect(picks).toEqual(["retopo"]);
+});
