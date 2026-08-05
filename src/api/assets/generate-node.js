@@ -31,6 +31,9 @@ import { generateAssetSchema, providerBalanceSchema } from "../schemas.js";
 
 const Router = express.Router;
 
+/** Tripo's file upload limit for source GLBs (file_token flow). */
+const TRIPO_SOURCE_GLB_LIMIT_BYTES = 150 * 1024 * 1024;
+
 /**
  * Map a Tripo adapter error status to the documented API error code.
  * @param {number} status
@@ -45,7 +48,9 @@ function providerErrorCode(status) {
 /**
  * Fetch a source GLB from IPFS and upload it to Tripo, returning the
  * file_token. Throws TripoApiError(400, SOURCE_ASSET_UNAVAILABLE-shaped)
- * when the CID cannot be read.
+ * when the CID cannot be read or yields an empty buffer, and
+ * TripoApiError(400, SOURCE_ASSET_TOO_LARGE-shaped) when the GLB exceeds
+ * Tripo's 150 MB file limit.
  * @param {string} cid
  * @param {string} apiKey
  * @returns {Promise<string>} file_token
@@ -58,6 +63,14 @@ async function uploadSourceGlb(cid, apiKey) {
     const err = /** @type {Error} */ (e);
     console.log(`[GEN] source GLB fetch failed cid=${cid}: ${err.message}`);
     throw new TripoApiError("Source asset unavailable in IPFS", 0, 400);
+  }
+  if (!glb || glb.length === 0) {
+    console.log(`[GEN] source GLB empty cid=${cid}`);
+    throw new TripoApiError("Source asset unavailable in IPFS", 0, 400);
+  }
+  if (glb.length > TRIPO_SOURCE_GLB_LIMIT_BYTES) {
+    console.log(`[GEN] source GLB too large cid=${cid} bytes=${glb.length}`);
+    throw new TripoApiError("Source asset exceeds the 150 MB upload limit", 0, 400);
   }
   return uploadModel(glb, apiKey);
 }
@@ -257,6 +270,14 @@ export default function generateAssetNode() {
           return res.status(400).json({
             error: {
               code: "SOURCE_ASSET_UNAVAILABLE",
+              message: err.message,
+            },
+          });
+        }
+        if (err instanceof TripoApiError && err.status === 400 && err.message === "Source asset exceeds the 150 MB upload limit") {
+          return res.status(400).json({
+            error: {
+              code: "SOURCE_ASSET_TOO_LARGE",
               message: err.message,
             },
           });

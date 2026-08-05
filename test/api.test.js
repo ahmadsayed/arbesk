@@ -1539,6 +1539,27 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe("SOURCE_ASSET_UNAVAILABLE");
       });
+
+      it("returns 400 SOURCE_ASSET_UNAVAILABLE when the GLB is empty", async () => {
+        ipfsStorage.set("bafyEmpty", Buffer.alloc(0));
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyEmpty", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_UNAVAILABLE");
+      });
+
+      it("returns 400 SOURCE_ASSET_TOO_LARGE when the GLB exceeds 150 MB", async () => {
+        ipfsStorage.set("bafyHuge", Buffer.alloc(150 * 1024 * 1024 + 1));
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyHuge", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_TOO_LARGE");
+        expect(res.body.error.message).toContain("150 MB");
+      });
     });
 
     it("rejects unknown provider with 501", async () => {

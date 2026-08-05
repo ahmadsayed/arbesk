@@ -508,13 +508,20 @@ async function attachChatPreview(generationId, assetMessage) {
  * then disposes the preview and collapses the bubble.
  * @param {string} generationId
  * @param {import("./chat-messages.js").AssetMessageHandle} assetMessage
+ * @param {{restore?: boolean}} [options] - restore=true preserves the
+ *   manifest-chain tip across the load so the auto-save chains onto the
+ *   prior tip instead of forking at the restored (older) version.
  */
-async function sendGenerationToStudio(generationId, assetMessage) {
+async function sendGenerationToStudio(generationId, assetMessage, { restore = false } = {}) {
   const record = getPendingGeneration(generationId);
   if (!record || record.status !== "pending") return;
 
   updatePendingGeneration(generationId, { status: "sent" });
   assetMessage.sendButton.disabled = true;
+
+  // Capture the chain tip before the state set re-roots it at the record's
+  // manifest — restoring an older bubble must not fork the chain.
+  const previousLatestCid = assetState.get().latestAssetManifestCid;
 
   try {
     if (record.prevAssetManifestCid) {
@@ -537,6 +544,18 @@ async function sendGenerationToStudio(generationId, assetMessage) {
     window.history.pushState({}, "", url);
 
     await loadAssetManifest(record.assetManifestCid);
+
+    // Restore of an OLDER version: put the chain tip back (SCENE_READY
+    // listeners re-asserted it from the loaded manifest during the await)
+    // so the auto-save below chains onto the prior tip, not the old version.
+    if (
+      restore &&
+      previousLatestCid &&
+      previousLatestCid !== record.assetManifestCid
+    ) {
+      assetState.set({ latestAssetManifestCid: previousLatestCid });
+      await renderChatProvenance(previousLatestCid);
+    }
 
     // The restored/sent version becomes the active version for typed
     // retexture follow-ups (Tripo3D only).
@@ -1087,7 +1106,7 @@ async function restoreGeneration(generationId) {
     return;
   }
   updatePendingGeneration(generationId, { status: "pending" });
-  await sendGenerationToStudio(generationId, assetMessage);
+  await sendGenerationToStudio(generationId, assetMessage, { restore: true });
 }
 
 // ─── Generation Flow ───
@@ -1303,6 +1322,7 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }) => {
     assetState.set({ latestAssetManifestCid: previousLatestCid });
     await renderChatProvenance(previousLatestCid);
     if (sourceCid) setActiveVersion({ sourceAssetCid: sourceCid, manifestCid: cid, name });
+    else setActiveVersion(null); // chat-less version (e.g. parametric edit) — no retexture target
   } catch (err) {
     console.error("Version restore failed:", err);
     addChatMessage("system", "Could not load that version.");

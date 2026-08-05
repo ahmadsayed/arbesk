@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { MANIFEST_URL_REGEX } from "../helpers/manifest.mjs";
+import { MANIFEST_URL_REGEX, fetchManifest } from "../helpers/manifest.mjs";
 import { connectStudio, generateToChatBubble } from "../helpers/flows.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 
@@ -47,6 +47,25 @@ test.describe("chat version cards", () => {
       },
       { timeout: 30000 },
     );
+    const restoredCid = manifestCidFromUrl(page.url());
+    expect(restoredCid).toBeTruthy();
+
+    // Chain continuity: the restore auto-save must chain onto the
+    // pre-restore tip, not fork at the restored (older) version. Wait for
+    // the URL to move past the restored CID — the "Saved" pill/message
+    // assertions can't gate this (both were already satisfied by the two
+    // earlier sends).
+    await page.waitForURL(
+      (url) => {
+        const cid = manifestCidFromUrl(url.toString());
+        return Boolean(cid) && cid !== secondCid && cid !== restoredCid;
+      },
+      { timeout: 30000 },
+    );
+    const newTipCid = manifestCidFromUrl(page.url());
+    const newTip = await fetchManifest(newTipCid);
+    expect(newTip.prev_asset_manifest_cid).toBe(secondCid);
+
     await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
       "Model carved via mock",
     );

@@ -483,7 +483,7 @@ export async function getProviderBalance(providerKey) {
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
  * @param {string} [params.sourceAssetCid] - CID of a completed generation's GLB; the source for retexture/retopo/animate follow-ups
- * @param {string} [params.sourceTaskId] - provider task ID that produced sourceAssetCid (provenance only)
+ * @param {string} [params.sourceTaskId] - backend registry task id of the task that produced sourceAssetCid; drives the retarget-only shortcut for animating an already-rigged result
  * @param {boolean} [params.retexture] - texture/material-only refine of sourceAssetCid (tripo3d)
  * @param {boolean} [params.retopo] - rebuild sourceAssetCid with clean triangulated topology (quad output forces FBX, unusable in-app) (tripo3d)
  * @param {number} [params.faceLimit] - target faces for retopo (adaptive when omitted)
