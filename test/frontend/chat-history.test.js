@@ -253,3 +253,31 @@ test("a version bubble without a sourceCid omits data-source-cid and emits null"
     name: "parametric tweak",
   });
 });
+
+test("a chain entry whose chat is a single object (not an array) still renders", async () => {
+  const { mod, walkManifestChain, emit } = await load();
+  walkManifestChain.mockResolvedValue([
+    {
+      cid: "v1",
+      sourceCid: "glb-v1",
+      chat: { prompt: "lone prompt", provider: "tripo3d", task: "model", timestamp: 1780000000 },
+    },
+  ]);
+
+  await mod.renderChatProvenance("v1");
+
+  const bubble = /** @type {HTMLElement} */ (
+    document.querySelector(".chat-bubble-version")
+  );
+  expect(bubble).not.toBeNull();
+  expect(bubble.textContent).toContain("lone prompt");
+  expect(bubble.dataset.manifestCid).toBe("v1");
+  expect(bubble.dataset.sourceCid).toBe("glb-v1");
+
+  bubble.click();
+  expect(emit).toHaveBeenCalledWith("asset:historyVersionSelected", {
+    cid: "v1",
+    sourceCid: "glb-v1",
+    name: "lone prompt",
+  });
+});

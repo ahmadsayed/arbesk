@@ -56,7 +56,10 @@ export async function renderChatProvenance(manifestCid) {
    */
   const entries = [];
   for (const item of chain) {
-    for (const entry of item.chat || []) {
+    // metadata.chat is version-scoped and normally an array, but tolerate a
+    // single-object shape instead of throwing on a non-iterable.
+    const chats = Array.isArray(item.chat) ? item.chat : item.chat ? [item.chat] : [];
+    for (const entry of chats) {
       if (typeof entry?.prompt === "string" && entry.prompt.length > 0) {
         entries.push({
           prompt: entry.prompt,

@@ -1270,9 +1270,18 @@ on(EVENTS.SCENE_EMPTY, () => {
 // History-version bubble clicked: load that version of the current asset
 // from the manifest chain and make it the active version for retexture.
 on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }) => {
+  // The chat IS the version history: restoring an older version must not
+  // truncate it. loadAssetManifest(oldCid) triggers SCENE_READY, whose
+  // listeners re-root both the chat provenance (renderChatProvenance) and
+  // latestAssetManifestCid (version-history-store) at the OLD cid — hiding
+  // every newer prompt and breaking repeated restores. Capture the chain
+  // root up front and put both back once the load lands.
+  const previousLatestCid = assetState.get().latestAssetManifestCid || cid;
   try {
-    assetState.set({ activeAssetManifestCid: cid, latestAssetManifestCid: cid });
+    assetState.set({ activeAssetManifestCid: cid });
     await loadAssetManifest(cid);
+    assetState.set({ latestAssetManifestCid: previousLatestCid });
+    await renderChatProvenance(previousLatestCid);
     if (sourceCid) setActiveVersion({ sourceAssetCid: sourceCid, manifestCid: cid, name });
   } catch (err) {
     console.error("Version restore failed:", err);
