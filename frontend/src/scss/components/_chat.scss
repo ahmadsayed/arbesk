@@ -172,11 +172,14 @@
 
 .chat-asset-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: flex-start;
   margin-top: var(--size-2);
 }
 
 .chat-asset-followups {
+  flex-basis: 100%;
   display: flex;
   flex-wrap: wrap;
   gap: var(--size-1);
