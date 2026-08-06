@@ -8,9 +8,39 @@ import * as store from "../state/version-history-store.js";
 import { on, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 
-// Fixed world-space ring radius: the clock is a UI gizmo, so it stays the
-// same size regardless of the model's bounding box.
+// Local ring radius the clock geometry is authored at. The root is scaled
+// per frame (render()) so the dial keeps a constant on-screen size — like
+// the transform gizmos' scaleRatio — instead of a fixed world size that
+// dwarfs small models and vanishes on huge ones.
 const RING_RADIUS = 1.5;
+
+// Target on-screen size: ring diameter as a fraction of the viewport height.
+const CLOCK_SCREEN_HEIGHT_FACTOR = 1 / 3;
+
+/**
+ * Root scaling that keeps the clock a constant on-screen size for the
+ * current camera. Perspective: visible frustum height at the anchor's
+ * distance. Ortho: the ortho frustum height (duck-typed via orthoTop/
+ * orthoBottom, so no BABYLON.Camera dependency). Returns 1 when the camera
+ * shape is unrecognized.
+ * @param {any} camera
+ * @param {{x:number,y:number,z:number}} anchorPos
+ * @returns {number}
+ */
+export function _computeClockScale(camera, anchorPos) {
+  let viewHeight;
+  if (camera.orthoTop != null && camera.orthoBottom != null) {
+    viewHeight = camera.orthoTop - camera.orthoBottom;
+  } else {
+    const dx = anchorPos.x - camera.position.x;
+    const dy = anchorPos.y - camera.position.y;
+    const dz = anchorPos.z - camera.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    viewHeight = 2 * dist * Math.tan((camera.fov ?? 0) / 2);
+  }
+  if (!Number.isFinite(viewHeight) || viewHeight <= 0) return 1;
+  return (viewHeight * CLOCK_SCREEN_HEIGHT_FACTOR) / (RING_RADIUS * 2);
+}
 
 /** Angle in degrees for entry index i of n. Newest runs clockwise into past.
  * @param {number} i
@@ -202,8 +232,8 @@ function placeHandle(g, angleRad) {
 }
 
 /** Copy the anchor's world position/rotation to the unparented gizmo root.
- * Scale is intentionally NOT copied: the radius is already computed from
- * world-space bounds, so inheriting anchor scale would double-scale the ring.
+ * Scale is intentionally NOT copied: the root's scale is managed per frame
+ * for constant screen size, and inheriting anchor scale would fight it.
  * @param {any} root
  * @param {any} anchor
  */
@@ -269,7 +299,8 @@ function buildGizmoForNode(scene, nodeId) {
     node.rotationQuaternion = null;
   };
 
-  // Fixed ring radius — the clock is a UI gizmo, not model-fitted geometry.
+  // Authoring radius — render() scales the root per frame so the dial keeps
+  // a constant on-screen size at any zoom and for any model size.
   const radius = RING_RADIUS;
   gizmo.radius = radius;
   gizmo.filtered = filtered;
@@ -596,11 +627,16 @@ export function initModelClockGizmo(scene, camera) {
 
   function render() {
     if (!current) return;
+    if (current.anchor.isDisposed?.()) return;
+    // Constant on-screen size: scale the root with camera distance/frustum
+    // and push the dial behind the anchor by the SCALED radius.
+    const scale = _computeClockScale(camera, current.anchor.getAbsolutePosition());
+    current.root.scaling.setAll(scale);
     syncRootToCamera(
       current.root,
       current.anchor,
       camera,
-      current.radius * CLOCK_DEPTH_OFFSET_FACTOR
+      current.radius * scale * CLOCK_DEPTH_OFFSET_FACTOR
     );
     syncVisuals(current);
     if (!current.tickLabelEls) return;

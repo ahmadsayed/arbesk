@@ -317,6 +317,45 @@ describe("model-clock-gizmo math", () => {
     expect(_lerpAngle(from, to, 0.5)).toBeCloseTo((180 * Math.PI) / 180, 5);
     expect(_lerpAngle(1.2, 1.2, 0.5)).toBeCloseTo(1.2, 5);
   });
+
+  test("_computeClockScale keeps the dial a constant screen size (perspective)", async () => {
+    const { _computeClockScale } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    const fov = 0.8;
+    const near = _computeClockScale(
+      { position: { x: 0, y: 0, z: -5 }, fov },
+      { x: 0, y: 0, z: 0 }
+    );
+    const far = _computeClockScale(
+      { position: { x: 0, y: 0, z: -20 }, fov },
+      { x: 0, y: 0, z: 0 }
+    );
+    // Twice the distance → twice the world scale → same apparent size.
+    expect(far / near).toBeCloseTo(4, 5);
+    // dist=10, fov=0.8: viewHeight = 2·10·tan(0.4); scale = viewHeight·(1/3)/(2·1.5)
+    const mid = _computeClockScale(
+      { position: { x: 0, y: 0, z: -10 }, fov },
+      { x: 0, y: 0, z: 0 }
+    );
+    expect(mid).toBeCloseTo((2 * 10 * Math.tan(0.4)) / 9, 5);
+  });
+
+  test("_computeClockScale uses the ortho frustum height and falls back to 1", async () => {
+    const { _computeClockScale } = await import(
+      "../../frontend/src/js/ui/model-clock-gizmo.js"
+    );
+    const scale = _computeClockScale(
+      { position: { x: 0, y: 0, z: -10 }, orthoTop: 4, orthoBottom: -4 },
+      { x: 0, y: 0, z: 0 }
+    );
+    // viewHeight = 8 → scale = 8·(1/3)/3
+    expect(scale).toBeCloseTo(8 / 9, 5);
+    // No fov and no ortho bounds → unrecognized camera shape → scale 1.
+    expect(
+      _computeClockScale({ position: { x: 0, y: 0, z: -10 } }, { x: 0, y: 0, z: 0 })
+    ).toBe(1);
+  });
 });
 
 describe("model-clock-gizmo lifecycle", () => {
