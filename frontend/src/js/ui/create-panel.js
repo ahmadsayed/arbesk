@@ -15,7 +15,7 @@ import {
 } from "../engine/scene-graph.js";
 import { showToast } from "./toasts.js";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.js";
-import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow } from "./chat-messages.js";
+import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage } from "./chat-messages.js";
 import { followupActionsFor } from "../state/generation-actions.js";
 import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
@@ -754,7 +754,7 @@ const ANIMATE_PRESETS = [
  */
 function presentGenerationResult(
   result,
-  { prompt, provider, task, prevAssetManifestCid, transformMatrix },
+  { prompt, provider, task, prevAssetManifestCid, transformMatrix, rigModel },
 ) {
   const generationId = addPendingGeneration({
     assetManifestCid: result.assetManifestCid,
@@ -769,6 +769,7 @@ function presentGenerationResult(
     ...(result.taskId && { backendTaskId: result.taskId }),
     ...(result.providerTaskId && { taskId: result.providerTaskId }),
     ...(result.tier !== undefined && { tier: result.tier }),
+    ...(rigModel && { rigModel }),
   });
 
   // A fresh Tripo3D result is the active version for typed retexture
@@ -824,6 +825,268 @@ function addFollowupActions(generationId, bubbleEl = null) {
     onPick: ACTION_DEFS[id].run,
   }));
   addAssetActionRow(assetMessage || { bubble }, actions);
+}
+
+// ─── Rig model selector ───
+
+const RIG_MODEL_OPTIONS = [
+  { value: "", label: "Auto (recommended)", description: "Humanoid mesh → v1.0 biped rig with 90+ presets. Falls back to v2.5 generic if v1.0 is rejected." },
+  { value: "v1.0-20240301", label: "v1.0 Humanoid", description: "Humanoid skeleton, ~65 bones, best quality for bipeds. May be rejected (error 1004) — try v2.5 if so." },
+  { value: "v2.5-20260210", label: "v2.5 Generic", description: "Universal skeleton — bipeds, creatures, all body plans. Fewer bones, simpler animations." },
+];
+
+/**
+ * Build a rig model radio group as a DOM fragment. When `selectedValue`
+ * is provided that radio is pre-checked; the caller reads `wrap.dataset.value`.
+ * @param {string} [selectedValue]
+ * @returns {HTMLElement}
+ */
+function buildRigModelSelector(selectedValue = "") {
+  const wrap = document.createElement("div");
+  wrap.className = "rig-model-selector";
+  wrap.dataset.value = selectedValue;
+
+  const label = document.createElement("label");
+  label.className = "form-label";
+  label.textContent = "Rig Model";
+  label.style.display = "block";
+  label.style.marginBottom = "var(--size-1)";
+  wrap.appendChild(label);
+
+  for (const opt of RIG_MODEL_OPTIONS) {
+    const row = document.createElement("label");
+    row.style.display = "flex";
+    row.style.alignItems = "flex-start";
+    row.style.gap = "var(--size-2)";
+    row.style.padding = "var(--size-1) 0";
+    row.style.cursor = "pointer";
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "rigModel";
+    radio.value = opt.value;
+    radio.checked = opt.value === selectedValue;
+    radio.addEventListener("change", () => {
+      if (radio.checked) wrap.dataset.value = opt.value;
+    });
+
+    const text = document.createElement("div");
+    const title = document.createElement("span");
+    title.style.display = "block";
+    title.style.fontWeight = "600";
+    title.textContent = opt.label;
+    const desc = document.createElement("span");
+    desc.style.display = "block";
+    desc.style.fontSize = "0.85em";
+    desc.style.color = "var(--color-text-secondary, #888)";
+    desc.style.marginTop = "2px";
+    desc.textContent = opt.description;
+    text.appendChild(title);
+    text.appendChild(desc);
+
+    row.appendChild(radio);
+    row.appendChild(text);
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+/**
+ * Rig model selector dialog — standalone, used by Auto-rig and retry chips.
+ * @param {string} [title] - dialog title
+ * @returns {Promise<string|null>} rig model value (empty = auto), or null
+ */
+function showRigModelDialog(title = "Rig Model") {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    const selector = buildRigModelSelector("");
+    wrap.appendChild(selector);
+    const goBtn = document.createElement("button");
+    goBtn.className = "btn btn-primary";
+    goBtn.type = "button";
+    goBtn.style.marginTop = "var(--size-2)";
+    goBtn.textContent = "Continue";
+    wrap.appendChild(goBtn);
+
+    // showCustomDialog overwrites wrap.closeDialog with its own —
+    // wire the button after the dialog is built.
+    showCustomDialog(title, wrap).then((v) => {
+      resolve(v);
+    });
+
+    goBtn.addEventListener("click", () => {
+      const val = selector.dataset.value !== undefined ? selector.dataset.value : "";
+      // closeDialog was attached by showCustomDialog; calling it
+      // resolves the showCustomDialog promise with val and tears down
+      // the modal.
+      if (typeof wrap.closeDialog === "function") {
+        wrap.closeDialog(val);
+      } else {
+        resolve(val);
+      }
+    });
+  });
+}
+
+/**
+ * After a rig-only or animate result where the user did NOT explicitly pick
+ * a rig model, offer retry chips with the other model(s). When the user picks
+ * one the same operation is re-run with `rigModel` forced.
+ * @param {string} generationId
+ * @param {"rig"|"animate"} task
+ */
+function maybeAddRigRetryChips(generationId, task) {
+  const record = getPendingGeneration(generationId);
+  if (!record || record.rigModel) return; // user already chose explicitly
+
+  const otherModels = RIG_MODEL_OPTIONS.filter((o) => o.value !== "");
+  if (otherModels.length === 0) return;
+
+  const choices = otherModels.map((opt) => ({
+    label: `Retry with ${opt.label}`,
+    value: opt.value,
+  }));
+
+  addChoiceMessage(
+    task === "rig"
+      ? "Rig didn't come out as expected? Try a different skeleton:"
+      : "Animation deformed? Try the other rig model:",
+    choices,
+    (rigModel) => {
+      if (task === "rig") {
+        void retryRig(generationId, /** @type {string} */ (rigModel));
+      } else {
+        void retryAnimate(generationId, /** @type {string} */ (rigModel));
+      }
+    },
+  );
+}
+
+/**
+ * Re-run the auto-rig operation with an explicit rig model.
+ * @param {string} generationId
+ * @param {string} rigModel
+ */
+async function retryRig(generationId, rigModel) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.sourceAssetCid) return;
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return;
+  }
+  try { await getOrCreateSession(); } catch {
+    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to rig assets." });
+    return;
+  }
+  const prompt = `Auto-rig (${rigModel === "v1.0-20240301" ? "v1.0 Humanoid" : "v2.5 Generic"})`;
+  addChatMessage("user", prompt);
+  const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
+  const assetName = getAssetName();
+  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
+  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const transformMatrix = buildTransformMatrix();
+  try {
+    const result = await generateAsset({
+      prompt: "Auto-rig",
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      sourceAssetCid: record.sourceAssetCid,
+      animate: true,
+      rigOnly: true,
+      rigModel,
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+      signal,
+      onTaskId,
+    });
+    presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix, rigModel });
+    dismissCreatePulse();
+    refreshProviderBalance({ force: true });
+  } catch (err) {
+    if (isGenerationCancelled(err)) { addChatMessage("system", "Auto-rig stopped."); return; }
+    console.error("Retry auto-rig failed:", err);
+    let userMsg = "Rigging failed. Please try again.";
+    if (err instanceof ApiError) {
+      if (err.code === "MODEL_NOT_RIGGABLE") userMsg = "This model isn't riggable.";
+      else if (err.message) userMsg = err.message;
+    }
+    addChatMessage("system", userMsg);
+  } finally { working?.remove(); }
+}
+
+/**
+ * Re-run the animate operation with an explicit rig model. Prompts the
+ * user for presets again (may differ per skeleton).
+ * @param {string} generationId
+ * @param {string} rigModel
+ */
+async function retryAnimate(generationId, rigModel) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.sourceAssetCid) return;
+  // Reuse onAnimate with the rig model pre-selected but still let the user
+  // pick presets via the dialog — we pass rigModel to force it.
+  // For simplicity, re-trigger onAnimate with rigModel forced.
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return;
+  }
+  try { await getOrCreateSession(); } catch {
+    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to animate assets." });
+    return;
+  }
+  // Show just the preset picker (no rig model selector — we already know it)
+  const picked = await showCheckboxDialog(
+    "Retry Animate",
+    `Using ${rigModel === "v1.0-20240301" ? "v1.0 Humanoid" : "v2.5 Generic"} rig. Pick up to 5 animations:`,
+    ANIMATE_PRESETS,
+    { max: 5 },
+  );
+  if (!picked) return;
+  const animateInPlace = picked.includes(IN_PLACE_OPTION);
+  const animations = picked.filter((p) => p !== IN_PLACE_OPTION);
+  if (animations.length === 0) return;
+
+  const labels = animations.map((p) => p.replace("preset:", "")).join(", ");
+  const prompt = `Animate: ${labels} (${rigModel === "v1.0-20240301" ? "v1.0" : "v2.5"})`;
+  addChatMessage("user", prompt);
+  const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
+  const assetName = getAssetName();
+  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
+  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const transformMatrix = buildTransformMatrix();
+  try {
+    const result = await generateAsset({
+      prompt: `Animate: ${labels}`,
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      sourceAssetCid: record.sourceAssetCid,
+      sourceTaskId: record.backendTaskId,
+      animate: true,
+      animations,
+      rigModel,
+      ...(animateInPlace && { animateInPlace: true }),
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+      signal,
+      onTaskId,
+    });
+    presentGenerationResult(result, { prompt, provider: "tripo3d", task: "animate", prevAssetManifestCid, transformMatrix, rigModel });
+    dismissCreatePulse();
+    refreshProviderBalance({ force: true });
+  } catch (err) {
+    if (isGenerationCancelled(err)) { addChatMessage("system", "Animation stopped."); return; }
+    console.error("Retry animate failed:", err);
+    let userMsg = "Animation failed. Please try again.";
+    if (err instanceof ApiError) {
+      if (err.code === "MODEL_NOT_RIGGABLE") userMsg = "This model isn't riggable with the chosen skeleton.";
+      else if (err.message) userMsg = err.message;
+    }
+    addChatMessage("system", userMsg);
+  } finally { working?.remove(); }
 }
 
 /**
@@ -1023,7 +1286,7 @@ async function onRetopo(generationId) {
 
 /**
  * Auto-rig a generation bubble (no animation): backend rig-check → rig →
- * Mixamo-ready GLB chat bubble. The rigged result keeps the Animate action,
+ * Rigged-GLB chat bubble (Tripo-native skeleton). The rigged result keeps the Animate action,
  * which then takes the retarget-only path.
  * @param {string} generationId
  */
@@ -1040,6 +1303,8 @@ async function onAutoRig(generationId) {
     showToast({ type: "warning", title: "Sign In Required", message: "Sign in to rig assets." });
     return;
   }
+  const rigModel = await showRigModelDialog("Auto-rig — rig model");
+  if (rigModel === null) return; // cancelled
   const prompt = "Auto-rig";
   addChatMessage("user", prompt);
   const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
@@ -1056,15 +1321,17 @@ async function onAutoRig(generationId) {
       sourceAssetCid: record.sourceAssetCid,
       animate: true,
       rigOnly: true,
+      ...(rigModel && { rigModel }),
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
       signal,
       onTaskId,
     });
-    presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix });
+    const rigResultId = presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix, rigModel: rigModel || undefined });
     dismissCreatePulse();
     refreshProviderBalance({ force: true });
+    maybeAddRigRetryChips(rigResultId, "rig");
   } catch (err) {
     if (isGenerationCancelled(err)) {
       addChatMessage("system", "Auto-rig stopped.");
@@ -1099,16 +1366,80 @@ async function onAnimate(generationId) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
 
-  const picked = await showCheckboxDialog(
-    "Rig & Animate",
-    "Pick up to 5 animations to bake into the model. Rigging works best on full-body humanoids or creatures (T-pose).",
-    ANIMATE_PRESETS,
-    { max: 5 },
-  );
-  if (!picked) return;
-  const animateInPlace = picked.includes(IN_PLACE_OPTION);
-  const presets = picked.filter((p) => p !== IN_PLACE_OPTION);
-  if (presets.length === 0) return;
+  // Combined dialog: rig model selector + preset checkboxes + in-place toggle
+  const dialogResult = await new Promise((resolve) => {
+    const wrap = document.createElement("div");
+
+    // Rig model selector
+    const selector = buildRigModelSelector("");
+    wrap.appendChild(selector);
+
+    // Separator
+    const sep = document.createElement("hr");
+    sep.style.margin = "var(--size-2) 0";
+    sep.style.border = "none";
+    sep.style.borderTop = "1px solid var(--color-border, #444)";
+    wrap.appendChild(sep);
+
+    // Preset checkboxes
+    const presetHint = document.createElement("p");
+    presetHint.style.margin = "0 0 var(--size-1)";
+    presetHint.textContent = "Pick up to 5 animations:";
+    wrap.appendChild(presetHint);
+
+    const boxes = ANIMATE_PRESETS.map((opt) => {
+      const label = document.createElement("label");
+      label.style.display = "flex";
+      label.style.alignItems = "center";
+      label.style.gap = "var(--size-2)";
+      label.style.padding = "var(--size-1) 0";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = opt.value;
+      input.checked = !!opt.checked;
+      const counts = opt.countsTowardMax !== false;
+      input.addEventListener("change", () => {
+        const checkedCount = boxes.filter((b) => b.input.checked && b.counts).length;
+        if (checkedCount > 5) input.checked = false;
+      });
+      const text = document.createElement("span");
+      text.textContent = opt.label;
+      label.appendChild(input);
+      label.appendChild(text);
+      wrap.appendChild(label);
+      return { input, value: opt.value, counts };
+    });
+
+    const goBtn = document.createElement("button");
+    goBtn.className = "btn btn-primary";
+    goBtn.type = "button";
+    goBtn.style.marginTop = "var(--size-2)";
+    goBtn.textContent = "Animate";
+    wrap.appendChild(goBtn);
+
+    // showCustomDialog overwrites wrap.closeDialog — wire the button
+    // after the dialog is built so we call the real closeDialog.
+    showCustomDialog("Rig & Animate", wrap).then((v) => {
+      resolve(v);
+    });
+
+    goBtn.addEventListener("click", () => {
+      const presets = boxes.filter((b) => b.input.checked).map((b) => b.value);
+      const rigModelVal = selector.dataset.value || "";
+      const result = { presets, rigModel: rigModelVal || null };
+      if (typeof wrap.closeDialog === "function") {
+        wrap.closeDialog(result);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+
+  if (!dialogResult) return;
+  const { presets, rigModel } = dialogResult;
+  const animateInPlace = presets.includes(IN_PLACE_OPTION);
+  const animations = presets.filter((p) => p !== IN_PLACE_OPTION);
+  if (animations.length === 0) return;
 
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
@@ -1125,7 +1456,7 @@ async function onAnimate(generationId) {
     return;
   }
 
-  const labels = presets.map((p) => p.replace("preset:", "")).join(", ");
+  const labels = animations.map((p) => p.replace("preset:", "")).join(", ");
   const prompt = `Animate: ${labels}`;
   addChatMessage("user", prompt);
   const { working, signal, onTaskId } = addStoppableWorkingMessage(
@@ -1149,8 +1480,9 @@ async function onAnimate(generationId) {
       sourceAssetCid: record.sourceAssetCid,
       sourceTaskId: record.backendTaskId,
       animate: true,
-      animations: presets,
+      animations: animations,
       ...(animateInPlace && { animateInPlace: true }),
+      ...(rigModel && { rigModel }),
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
@@ -1158,16 +1490,18 @@ async function onAnimate(generationId) {
       onTaskId,
     });
 
-    presentGenerationResult(result, {
+    const animResultId = presentGenerationResult(result, {
       prompt,
       provider: "tripo3d",
       task: "animate",
       prevAssetManifestCid,
       transformMatrix,
+      rigModel: rigModel || undefined,
     });
     dismissCreatePulse();
     // Rig + retarget consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
+    maybeAddRigRetryChips(animResultId, "animate");
   } catch (err) {
     if (isGenerationCancelled(err)) {
       addChatMessage("system", "Animation stopped.");

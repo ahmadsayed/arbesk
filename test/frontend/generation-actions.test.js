@@ -18,4 +18,13 @@ describe("followupActionsFor", () => {
   it("returns nothing for the mock provider", () => {
     expect(followupActionsFor({ provider: "mock", task: "model" })).toEqual([]);
   });
+  it("returns nothing for a known non-glTF source format (3MF)", () => {
+    // Tripo follow-up endpoints accept glTF/GLB only — offering the actions
+    // would fail upstream (rig-check rejects non-GLB with code 1004).
+    expect(followupActionsFor({ provider: "tripo3d", task: "model", format: "3mf" })).toEqual([]);
+  });
+  it("keeps all four actions for glb/gltf formats", () => {
+    expect(followupActionsFor({ provider: "tripo3d", task: "model", format: "glb" })).toHaveLength(4);
+    expect(followupActionsFor({ provider: "tripo3d", task: "model", format: "gltf" })).toHaveLength(4);
+  });
 });

@@ -68,6 +68,11 @@ export const generateAssetSchema = z
     // task. Optional — the GLB chain is the canonical path.
     sourceTaskId: z.string().max(64).optional(),
     rigOnly: z.boolean().optional(),
+    // Rig model version override (tripo3d only). When omitted the adapter
+    // auto-selects: bipeds try v1.0-20240301 first, falling back to
+    // v2.5-20260210 on code 1004. Explicit selection skips the fallback —
+    // the request fails if the chosen model is rejected.
+    rigModel: z.enum(["v1.0-20240301", "v2.5-20260210"]).optional(),
     // Retarget option (tripo3d only): play the animation in place, without
     // root displacement.
     animateInPlace: z.boolean().optional(),
@@ -116,6 +121,10 @@ export const generateAssetSchema = z
   .refine((v) => !v.rigOnly || v.animate, {
     message: "rigOnly is only valid with animate",
     path: ["rigOnly"],
+  })
+  .refine((v) => !v.rigModel || v.animate, {
+    message: "rigModel is only valid with animate",
+    path: ["rigModel"],
   })
   .refine((v) => !v.animateInPlace || (v.animate && !v.rigOnly), {
     message: "animateInPlace is only valid with animate (not rigOnly)",

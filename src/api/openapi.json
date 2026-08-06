@@ -1131,7 +1131,7 @@
           },
           "rigOnly": {
             "type": "boolean",
-            "description": "Optional (tripo3d only, with animate): stop the chain after the rig step — returns the Mixamo-ready rigged GLB with no baked animation."
+            "description": "Optional (tripo3d only, with animate): stop the chain after the rig step — returns the rigged GLB (Tripo-native skeleton) with no baked animation."
           }
         }
       },

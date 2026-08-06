@@ -15,6 +15,7 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 | Model arrives tiny in the viewport | `auto_size` defaults to `false` — models come in arbitrary units. Pass `auto_size: true` (meters) |
 | Retopo'd model has melted eyes/face | Adaptive decimate is extremely aggressive (~1% of source polys). Pass explicit `face_limit` near the v2.0 max (20,000 tris) |
 | Code 1004 on rig | Rig has its own model line; the retired default is rejected. Use `v1.0-20240301` (biped) or `v2.5-20260210` (creatures) → rule 4 |
+| Code 1004 on retarget, "不支持mixamo骨骼的retarget" (mixamo-skeleton retarget not supported) | The rig was created with `spec: "mixamo"` — retarget only supports Tripo-native skeletons, on BOTH rig lines (v1.0 accepts mixamo at rig time, then retarget rejects it; observed live 2026-08-06). Rig with `spec: "tripo"` (the default); already-rigged mixamo tasks must be re-rigged |
 | Code 2006 on refine | `refine_model` endpoint is dead. Use `POST /models/texture` (texture-only refine) |
 | Code 1002 / 2010 | Auth failed (401) / insufficient credits (402) |
 | "Not riggable" | Source isn't a clear full-body humanoid/creature. T-pose full-body rigs best; retopo first if mesh is chaotic |
@@ -65,7 +66,7 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 **Hero character for web animation:**
 1. `generation/text-to-model` — `model: v3.1-20260211`, `texture: true`, `pbr: true`, `auto_size: true`, optionally `texture_quality: "detailed"`.
 2. `mesh/decimate` — `model: "v2.0"`, `quad: false`, `bake: true`, explicit `face_limit` (≈20K for faces).
-3. `animations/rig-check` → `animations/rig` — `spec: "mixamo"`, rig model per creature type (rule 4).
+3. `animations/rig-check` → `animations/rig` — `spec: "tripo"` (never `mixamo` — retarget rejects mixamo rigs), rig model per creature type (rule 4).
 4. `animations/retarget` — `input: <rig task>`, `animations: [...]`, `out_format: "glb"`.
 
 **Adapter/driver checklist (any provider):** async create+poll with terminal-state mapping · auth/credit errors mapped to 401/402 · provider model versions as env-overridable constants (providers retire versions) · validate output format AND magic bytes before handing to the renderer · BYOK keys transient per request, never logged.

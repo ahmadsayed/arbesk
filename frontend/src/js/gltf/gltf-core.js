@@ -19,6 +19,97 @@ import { extractDataURI } from "../utils/uri.js";
 
 export const IPFS_URI_PREFIX = "ipfs://";
 
+const GLB_MAGIC = 0x46546c67; // "glTF"
+const GLB_VERSION = 2;
+const GLB_CHUNK_TYPE_JSON = 0x4e4f534a; // "JSON"
+const GLB_CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0"
+
+/**
+ * Fast custom GLB serializer.
+ *
+ * Packs glTF JSON + optional BIN chunk into a GLB v2 container without
+ * decoding/re-encoding mesh data, so content-addressed CIDs remain stable.
+ *
+ * @param {object} json - glTF JSON object
+ * @param {ArrayBuffer|Uint8Array|null} binaryChunk - Optional BIN chunk
+ * @returns {ArrayBuffer} GLB bytes
+ */
+function serializeGLBCustom(json, binaryChunk = null) {
+  const jsonText = JSON.stringify(json);
+  const jsonBytes = new TextEncoder().encode(jsonText);
+  // GLB requires each chunk's data (including padding) to be a multiple of 4 bytes.
+  const jsonPadding = (4 - (jsonBytes.length % 4)) % 4;
+  const binPadding = binaryChunk ? (4 - (binaryChunk.byteLength % 4)) % 4 : 0;
+
+  const headerLength = 12;
+  const jsonChunkHeaderLength = 8;
+  const jsonChunkLength = jsonBytes.length + jsonPadding;
+  const binChunkHeaderLength = binaryChunk ? 8 : 0;
+  const binChunkLength = binaryChunk ? binaryChunk.byteLength + binPadding : 0;
+  const totalLength =
+    headerLength +
+    jsonChunkHeaderLength +
+    jsonChunkLength +
+    binChunkHeaderLength +
+    binChunkLength;
+
+  const buffer = new ArrayBuffer(totalLength);
+  const view = new DataView(buffer);
+  let offset = 0;
+
+  // Header
+  view.setUint32(offset, GLB_MAGIC, true);
+  offset += 4;
+  view.setUint32(offset, GLB_VERSION, true);
+  offset += 4;
+  view.setUint32(offset, totalLength, true);
+  offset += 4;
+
+  // JSON chunk - chunkLength includes padding to match @gltf-transform/core.
+  view.setUint32(offset, jsonChunkLength, true);
+  offset += 4;
+  view.setUint32(offset, GLB_CHUNK_TYPE_JSON, true);
+  offset += 4;
+  const jsonArray = new Uint8Array(buffer, offset, jsonBytes.length);
+  jsonArray.set(jsonBytes);
+  offset += jsonBytes.length;
+  for (let i = 0; i < jsonPadding; i++) {
+    view.setUint8(offset++, 0x20);
+  }
+
+  // BIN chunk - chunkLength includes padding to match @gltf-transform/core.
+  if (binaryChunk) {
+    view.setUint32(offset, binChunkLength, true);
+    offset += 4;
+    view.setUint32(offset, GLB_CHUNK_TYPE_BIN, true);
+    offset += 4;
+    const binArray = new Uint8Array(buffer, offset, binaryChunk.byteLength);
+    binArray.set(new Uint8Array(binaryChunk));
+    offset += binaryChunk.byteLength;
+    for (let i = 0; i < binPadding; i++) {
+      view.setUint8(offset++, 0);
+    }
+  }
+
+  return buffer;
+}
+
+/**
+ * Serialize a glTF JSON + optional binary chunk back into a GLB v2 container.
+ *
+ * Uses the fast custom serializer. It does not decode/re-encode mesh data, so
+ * the binary payload (and therefore its content-addressed CID) stays identical.
+ * This is kept as a utility for GLB export/download; the storage/edit path does
+ * not re-serialize to GLB.
+ *
+ * @param {object} json - glTF JSON object
+ * @param {ArrayBuffer|Uint8Array|null} binaryChunk - Optional BIN chunk
+ * @returns {ArrayBuffer} GLB bytes
+ */
+export function serializeGLB(json, binaryChunk = null) {
+  return serializeGLBCustom(json, binaryChunk);
+}
+
 /**
  * Check if a glTF JSON is already in composite format (any buffer or image
  * referencing `ipfs://<CID>`).

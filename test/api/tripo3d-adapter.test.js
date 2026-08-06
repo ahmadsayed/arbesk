@@ -215,7 +215,7 @@ describe("tripo3d adapter", () => {
     expect(JSON.parse(opts.body)).toEqual({
       input: "file_glb_1",
       rig_type: "biped",
-      spec: "mixamo",
+      spec: "tripo",
       model: "v1.0-20240301",
     });
   });
@@ -256,6 +256,29 @@ describe("tripo3d adapter", () => {
       status: 402,
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("rigModelTask uses explicit model override directly, no fallback", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_explicit" } }),
+    });
+    const result = await rigModelTask("file_glb_1", "biped", key, { model: "v2.5-20260210" });
+    expect(result).toEqual({ taskId: "task_explicit", model: "v2.5-20260210" });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("v2.5-20260210");
+  });
+
+  test("rigModelTask explicit model throws on failure (no fallback)", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 1004, message: "model retired" }),
+    });
+    await expect(
+      rigModelTask("file_glb_1", "biped", key, { model: "v1.0-20240301" }),
+    ).rejects.toMatchObject({ code: 1004 });
+    expect(global.fetch).toHaveBeenCalledTimes(1); // no fallback attempt
   });
 
   test("retargetTask submits animations/retarget with presets", async () => {
@@ -669,7 +692,7 @@ describe("file_token inputs", () => {
     await rigCheckTask("file_glb_1", "key");
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({ input: "file_glb_1" });
     await rigModelTask("file_glb_1", "biped", "key");
-    expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ input: "file_glb_1", rig_type: "biped", spec: "mixamo" });
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ input: "file_glb_1", rig_type: "biped", spec: "tripo" });
   });
 });
 

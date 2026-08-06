@@ -1,6 +1,14 @@
 import express from "express";
 import { mockGenerate } from "../adapters/mock-adapter.js";
 import {
+  composeGltfJson,
+  serializeGLB,
+} from "../../../frontend/src/js/gltf/gltf-core.js";
+import {
+  isGzipped,
+  decompress,
+} from "../../../frontend/src/js/utils/compression.js";
+import {
   createTask,
   createImageTask,
   createRefineTask,
@@ -35,6 +43,143 @@ const Router = express.Router;
 /** Tripo's file upload limit for source GLBs (file_token flow). */
 const TRIPO_SOURCE_GLB_LIMIT_BYTES = 150 * 1024 * 1024;
 
+/** glTF 2.0 GLB magic number. */
+const GLB_MAGIC = 0x46546C67;
+
+/** 400 message for sources Tripo follow-ups cannot consume (→ SOURCE_ASSET_UNSUPPORTED_FORMAT). */
+const MSG_SOURCE_UNSUPPORTED =
+  "Source asset is not glTF/GLB — Tripo follow-ups (retexture, retopo, auto-rig, animate) require a glTF or GLB model";
+
+/** 400 message prefix for glTF JSON with references we cannot inline (→ SOURCE_ASSET_UNSUPPORTED_FORMAT). */
+const MSG_SOURCE_UNRESOLVABLE_PREFIX = "Source glTF has external references that cannot be resolved";
+
+/**
+ * Check whether a buffer is a binary GLB (magic "glTF", 0x46546C67).
+ * @param {Buffer} buf
+ * @returns {boolean}
+ */
+function isGlb(buf) {
+  return buf.length >= 4 && buf.readUInt32LE(0) === GLB_MAGIC;
+}
+
+/**
+ * Check whether a buffer looks like glTF JSON (starts with `{`). Any glTF
+ * JSON — composite with `ipfs://` refs or self-contained with data URIs —
+ * is composed to GLB before upload. Only the first byte is checked: a
+ * fixed head window misses composites whose `ipfs://` refs sit deeper in
+ * the document, and those then fail Tripo-side with code 1004.
+ * @param {Buffer} buf
+ * @returns {boolean}
+ */
+function looksLikeGltfJson(buf) {
+  return buf.length >= 1 && buf[0] === 0x7B; // '{'
+}
+
+/**
+ * Injected fetcher for the shared compose pipeline (gltf-core.js): fetch a
+ * CID's payload from IPFS and return it base64-encoded. Honors the
+ * composite entry's `_arbesk.compressed` storage flag, with a gzip-magic
+ * sniff as fallback — decomposed components are stored gzipped
+ * (`compress: true` in decomposer.js / async-gltf.js) and `catBytes`
+ * returns the raw stored bytes.
+ * @param {string} cid
+ * @param {any} [arbeskMeta] - `_arbesk` dedup metadata from the composite entry
+ * @returns {Promise<string>} base64-encoded (decompressed) payload
+ */
+async function fetchCidAsBase64(cid, arbeskMeta) {
+  console.log(`[GEN] composite compose fetch ipfs://${cid}`);
+  const raw = await getStorage().catBytes(cid);
+  const bytes = arbeskMeta?.compressed || isGzipped(raw) ? decompress(raw) : raw;
+  return Buffer.from(bytes).toString("base64");
+}
+
+/**
+ * Resolve a glTF JSON document into a self-contained GLB binary buffer
+ * suitable for Tripo upload, via the shared pipeline in gltf-core.js:
+ * `composeGltfJson` inlines `ipfs://<CID>` refs as base64 data URIs and
+ * strips dedup metadata; `serializeGLB` packs the result. Data URIs pass
+ * through; any other external URI (relative path, http(s)) cannot be
+ * inlined here and fails fast with a 400 TripoApiError instead of
+ * producing a corrupt GLB.
+ *
+ * We only run this for the Tripo file_token path — browser rendering uses
+ * the frontend compose (composer.js).
+ *
+ * @param {Buffer} compositeBuf - raw bytes of the glTF JSON
+ * @returns {Promise<Buffer>} self-contained GLB binary
+ */
+async function resolveCompositeToGlb(compositeBuf) {
+  /** @type {any} */
+  let gltf;
+  try {
+    gltf = JSON.parse(compositeBuf.toString("utf-8"));
+  } catch {
+    console.log("[GEN] source asset starts with '{' but is not valid JSON");
+    throw new TripoApiError(MSG_SOURCE_UNSUPPORTED, 0, 400);
+  }
+
+  const composed = /** @type {any} */ (await composeGltfJson(gltf, fetchCidAsBase64));
+
+  // Fail fast on references that are neither ipfs:// (resolved above) nor
+  // data: (inlined below) — a relative or http(s) URI would otherwise be
+  // silently zero-filled into a corrupt GLB.
+  for (const buf of composed.buffers || []) {
+    if (buf.uri && !buf.uri.startsWith("data:")) {
+      console.log(`[GEN] source glTF has unresolvable buffer uri=${buf.uri}`);
+      throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (buffer uri: ${buf.uri})`, 0, 400);
+    }
+  }
+  for (const img of composed.images || []) {
+    if (img.uri && !img.uri.startsWith("data:")) {
+      console.log(`[GEN] source glTF has unresolvable image uri=${img.uri}`);
+      throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (image uri: ${img.uri})`, 0, 400);
+    }
+  }
+
+  // Pack data-URI buffers into a single BIN chunk. The buffers are
+  // concatenated in order; bufferViews that reference buffer > 0 need their
+  // byteOffset adjusted by the cumulative size of previous buffers.
+  const binParts = /** @type {Buffer[]} */ ([]);
+  const bufOffsets = /** @type {number[]} */ ([]);
+  let cumulative = 0;
+  for (const buf of composed.buffers || []) {
+    bufOffsets.push(cumulative);
+    if (buf.uri && buf.uri.startsWith("data:")) {
+      const b64 = buf.uri.split(",")[1];
+      const bytes = Buffer.from(b64, "base64");
+      binParts.push(bytes);
+      cumulative += bytes.length;
+    } else {
+      const len = buf.byteLength || 0;
+      binParts.push(Buffer.alloc(len));
+      cumulative += len;
+    }
+  }
+
+  // Rewrite buffer definitions: no URIs (they reference the BIN chunk).
+  for (let i = 0; i < (composed.buffers || []).length; i++) {
+    composed.buffers[i] = { byteLength: binParts[i].length };
+  }
+
+  // Adjust bufferView byteOffsets for buffer > 0.
+  if (composed.bufferViews) {
+    for (const bv of composed.bufferViews) {
+      if (bv.buffer > 0 && bv.buffer < bufOffsets.length) {
+        bv.byteOffset = (bv.byteOffset || 0) + bufOffsets[bv.buffer];
+        bv.buffer = 0;
+      }
+    }
+  }
+
+  const bin = Buffer.concat(binParts);
+  const glb = Buffer.from(serializeGLB(composed, bin));
+
+  console.log(
+    `[GEN] composite composed → GLB buffers=${binParts.length} bin=${bin.length}B total=${glb.length}B`,
+  );
+  return glb;
+}
+
 /**
  * Map a Tripo adapter error status to the documented API error code.
  * @param {number} status
@@ -49,9 +194,11 @@ function providerErrorCode(status) {
 /**
  * Fetch a source GLB from IPFS and upload it to Tripo, returning the
  * file_token. Throws TripoApiError(400, SOURCE_ASSET_UNAVAILABLE-shaped)
- * when the CID cannot be read or yields an empty buffer, and
- * TripoApiError(400, SOURCE_ASSET_TOO_LARGE-shaped) when the GLB exceeds
- * Tripo's 150 MB file limit.
+ * when the CID cannot be read or yields an empty buffer,
+ * TripoApiError(400, SOURCE_ASSET_UNSUPPORTED_FORMAT-shaped) when the
+ * content is neither glTF JSON nor GLB (or has unresolvable external
+ * references), and TripoApiError(400, SOURCE_ASSET_TOO_LARGE-shaped)
+ * when the GLB exceeds Tripo's 150 MB file limit.
  * @param {string} cid
  * @param {string} apiKey
  * @returns {Promise<string>} file_token
@@ -68,6 +215,30 @@ async function uploadSourceGlb(cid, apiKey) {
   if (!glb || glb.length === 0) {
     console.log(`[GEN] source GLB empty cid=${cid}`);
     throw new TripoApiError("Source asset unavailable in IPFS", 0, 400);
+  }
+  // Decomposed assets are stored gzipped — decompress before any
+  // format detection (gzip magic would otherwise read as "not glTF").
+  if (isGzipped(glb)) {
+    console.log(`[GEN] source asset is gzipped — decompressing cid=${cid}`);
+    glb = Buffer.from(decompress(glb));
+  }
+  // Raw size gate first: an oversized source is too large regardless of
+  // format (and composing would only make it bigger).
+  if (glb.length > TRIPO_SOURCE_GLB_LIMIT_BYTES) {
+    console.log(`[GEN] source GLB too large cid=${cid} bytes=${glb.length}`);
+    throw new TripoApiError("Source asset exceeds the 150 MB upload limit", 0, 400);
+  }
+  // Saved assets store glTF JSON (composite with ipfs:// buffer URIs, or
+  // self-contained with data URIs) — compose it into a binary GLB before
+  // uploading. Anything else (3MF, FBX, ...) is rejected up front: Tripo's
+  // rig-check accepts GLB only and fails other formats with code 1004.
+  if (!isGlb(glb)) {
+    if (!looksLikeGltfJson(glb)) {
+      console.log(`[GEN] source asset is not glTF/GLB cid=${cid}`);
+      throw new TripoApiError(MSG_SOURCE_UNSUPPORTED, 0, 400);
+    }
+    console.log(`[GEN] source asset is glTF JSON — composing to GLB cid=${cid}`);
+    glb = await resolveCompositeToGlb(glb);
   }
   if (glb.length > TRIPO_SOURCE_GLB_LIMIT_BYTES) {
     console.log(`[GEN] source GLB too large cid=${cid} bytes=${glb.length}`);
@@ -100,7 +271,7 @@ export default function generateAssetNode() {
     validateBody(generateAssetSchema),
     async (req, res) => {
       try {
-        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, animateInPlace, animations, faceLimit, textureQuality, imageData, imageMime } = req.body;
+        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, imageData, imageMime } = req.body;
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
@@ -187,8 +358,10 @@ export default function generateAssetNode() {
           if (sourceAssetCid) {
             // Retarget-only shortcut: the caller references a completed rig-only
             // registry entry whose skeleton still lives Tripo-side (registry TTL).
+            // Skip this shortcut when the caller explicitly picked a different rig
+            // model — we need the full chain with the user's chosen model.
             // Everything else goes through the GLB — the canonical, expiry-free path.
-            if (animate && sourceTaskId) {
+            if (animate && sourceTaskId && !rigModel) {
               const rigSource = getCompletedTask(sourceTaskId, res.locals.userAddress);
               if (rigSource && rigSource.kind === "animate" && rigSource.phase === "rig" && !rigOnly) {
                 console.log(`[GEN] retarget-only: source rig=${rigSource.tripoTaskId} animations=${(animations || []).join(",")}`);
@@ -208,7 +381,7 @@ export default function generateAssetNode() {
               const rigCheckId = await rigCheckTask(fileToken, key);
               const taskId = registerTask({
                 tripoTaskId: rigCheckId, providerKey: key, userAddress: res.locals.userAddress,
-                kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken,
+                kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken, rigModel,
               });
               return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
             }
@@ -282,6 +455,15 @@ export default function generateAssetNode() {
           return res.status(400).json({
             error: {
               code: "SOURCE_ASSET_TOO_LARGE",
+              message: err.message,
+            },
+          });
+        }
+        if (err instanceof TripoApiError && err.status === 400 &&
+            (err.message === MSG_SOURCE_UNSUPPORTED || err.message.startsWith(MSG_SOURCE_UNRESOLVABLE_PREFIX))) {
+          return res.status(400).json({
+            error: {
+              code: "SOURCE_ASSET_UNSUPPORTED_FORMAT",
               message: err.message,
             },
           });
@@ -440,6 +622,7 @@ export default function generateAssetNode() {
             entry.sourceFileToken || "",
             rigOutput.rig_type || "biped",
             entry.providerKey,
+            { model: entry.rigModel },
           );
           updateTaskEntry(taskId, res.locals.userAddress, {
             tripoTaskId: rig.taskId,

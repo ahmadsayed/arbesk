@@ -210,11 +210,18 @@ export async function uploadModel(glbBuffer, apiKey) {
     throw new TripoApiError("apiKey is required", 0, 400);
   }
   console.log(`[GEN] Tripo uploadModel size=${glbBuffer.length}`);
+  // Log the first 4 bytes to confirm GLB magic.
+  if (glbBuffer.length >= 4) {
+    const magic = glbBuffer.readUInt32LE(0);
+    const isGlb = magic === 0x46546C67;
+    console.log(`[GEN] Tripo uploadModel magic=0x${magic.toString(16)} glb=${isGlb} head=${glbBuffer.toString("utf-8", 0, Math.min(glbBuffer.length, 8)).replace(/[^\x20-\x7E]/g, ".")}`);
+  }
   const form = new FormData();
-  // Copy into a plain ArrayBuffer-backed view — Buffer's ArrayBufferLike
-  // (possibly shared) backing store is not a valid BlobPart.
-  const bytes = new Uint8Array(glbBuffer);
-  form.append("file", new Blob([bytes], { type: "model/gltf-binary" }), "model.glb");
+  // Use Buffer.from to get a fresh, exact-size ArrayBuffer then wrap in Blob.
+  // Node.js Buffer's underlying ArrayBuffer may be a slice of a larger pool
+  // buffer, which confuses some Blob / FormData implementations.
+  const copy = Buffer.from(glbBuffer);
+  form.append("file", new Blob([copy], { type: "model/gltf-binary" }), "model.glb");
   const data = await tripoFetch("files", apiKey, "POST", form, TRIPO_INGEST_TIMEOUT_MS);
   if (typeof data?.file_token !== "string") {
     throw new TripoApiError("Tripo did not return a file token", 0, 502);
@@ -358,18 +365,24 @@ export async function rigCheckTask(fileToken, apiKey) {
 }
 
 /**
- * Create a rig task: attach a Mixamo-compatible skeleton to a model.
+ * Create a rig task: attach a skeleton to a model.
  * Bipeds try the humanoid rig line (TRIPO_RIG_BIPED_MODEL) first and fall
  * back to the generic line (TRIPO_RIG_MODEL) when Tripo rejects it (code
  * 1004 — the biped line was retired once before). Creatures always use the
  * generic line. The returned model tells the retarget step which preset
  * namespace the rig accepts (v1.0 biped rigs need `preset:biped:*`).
+ *
+ * `spec` stays "tripo" (Tripo-native bone naming): retarget rejects rigs
+ * built with `spec: "mixamo"` — code 1004, "不支持mixamo骨骼的retarget"
+ * (mixamo-skeleton retarget not supported), observed live 2026-08-06.
  * @param {string} fileToken - file_token from uploadModel()
  * @param {string} rigType - from rig-check output, e.g. "biped"
  * @param {string} apiKey
+ * @param {{model?: string}} [options] - explicit model override; skips
+ *   auto-select + fallback when set
  * @returns {Promise<{taskId: string, model: string}>} task_id + rig model used
  */
-export async function rigModelTask(fileToken, rigType, apiKey) {
+export async function rigModelTask(fileToken, rigType, apiKey, options = {}) {
   if (!fileToken || typeof fileToken !== "string") {
     throw new TripoApiError("fileToken is required", 0, 400);
   }
@@ -378,6 +391,22 @@ export async function rigModelTask(fileToken, rigType, apiKey) {
   }
   if (!apiKey || typeof apiKey !== "string") {
     throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  // Explicit model override — skip auto-select and fallback entirely.
+  if (options.model) {
+    console.log(
+      `[GEN] Tripo rigModelTask input=${fileToken} rig_type=${rigType} model=${options.model} (explicit)`,
+    );
+    const data = await tripoFetch("animations/rig", apiKey, "POST", {
+      input: fileToken,
+      rig_type: rigType,
+      spec: "tripo",
+      model: options.model,
+    }, TRIPO_INGEST_TIMEOUT_MS);
+    if (typeof data.task_id !== "string") {
+      throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+    }
+    return { taskId: data.task_id, model: options.model };
   }
   const preferred = rigType === "biped" ? TRIPO_RIG_BIPED_MODEL : TRIPO_RIG_MODEL;
   const candidates =
@@ -391,7 +420,7 @@ export async function rigModelTask(fileToken, rigType, apiKey) {
       const data = await tripoFetch("animations/rig", apiKey, "POST", {
         input: fileToken,
         rig_type: rigType,
-        spec: "mixamo",
+        spec: "tripo",
         model,
       }, TRIPO_INGEST_TIMEOUT_MS);
       if (typeof data.task_id !== "string") {

@@ -524,7 +524,7 @@ export async function getProviderBalance(providerKey) {
  * @param {number} [params.faceLimit] - target faces for retopo (adaptive when omitted)
  * @param {boolean} [params.animate] - rig & animate sourceAssetCid (tripo3d)
  * @param {string[]} [params.animations] - retarget presets (e.g. ["preset:idle"]), max 5; required with animate unless rigOnly
- * @param {boolean} [params.rigOnly] - stop after the rig step (Mixamo-ready model, no baked animation)
+ * @param {boolean} [params.rigOnly] - stop after the rig step (rigged model, Tripo-native skeleton, no baked animation)
  * @param {boolean} [params.animateInPlace] - retarget with animate_in_place (no root displacement)
  * @param {string} [params.textureQuality] - "detailed" for HD textures (tripo3d)
  * @param {string} [params.imageData] - base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine)
@@ -550,6 +550,7 @@ export async function generateAsset({
   retopo,
   animate,
   rigOnly,
+  rigModel,
   animateInPlace,
   animations,
   faceLimit,
@@ -576,7 +577,7 @@ export async function generateAsset({
       ...(sourceTaskId && { sourceTaskId }),
       ...(retexture && { retexture: true }),
       ...(retopo && { retopo: true, ...(faceLimit && { faceLimit }) }),
-      ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations, ...(animateInPlace && { animateInPlace: true }) }) }),
+      ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations, ...(animateInPlace && { animateInPlace: true }) }), ...(rigModel && { rigModel }) }),
     }),
     ...(textureQuality && { textureQuality }),
     ...(imageData && { imageData, imageMime }),

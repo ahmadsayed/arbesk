@@ -539,7 +539,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("accepts auto-rig (animate + rigOnly, no animations)", async () => {
-      ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+      ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
       const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
         ok: true,
         json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_rc" } }),
@@ -728,7 +728,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
 
       it("POST animate uploads the GLB and starts rig-check with the file token", async () => {
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
         const calls = [];
         const bodies = [];
         jest.spyOn(global, "fetch").mockImplementation(async (url, opts) => {
@@ -796,7 +796,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
 
       it("POST animate with rigOnly and a sourceTaskId falls through to a fresh rig-only chain", async () => {
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
         const rigSourceId = registerTask({
           tripoTaskId: "task_rig_done_2",
           providerKey: "k",
@@ -838,7 +838,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
 
       it("POST animate with an unknown sourceTaskId falls back to the GLB chain", async () => {
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
         const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
           ok: true,
           json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_rc_fb" } }),
@@ -869,7 +869,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       it("GET advances the animate chain rig-check → rig → retarget → GLB", async () => {
         const glb = new TextEncoder().encode("animated-glb");
         const session = await makeSessionHeader();
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
 
         const fetchSpy = jest.spyOn(global, "fetch");
         fetchSpy.mockReset();
@@ -994,7 +994,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       it("rigOnly chain stops after rig — no retarget call, rig GLB returned", async () => {
         const glb = new TextEncoder().encode("rigged-glb");
         const session = await makeSessionHeader();
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
 
         const fetchSpy = jest.spyOn(global, "fetch");
         fetchSpy.mockReset();
@@ -1080,7 +1080,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
       it("GET fails the chain with MODEL_NOT_RIGGABLE when Tripo says no", async () => {
         const session = await makeSessionHeader();
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
 
         const fetchSpy = jest.spyOn(global, "fetch");
         fetchSpy.mockReset();
@@ -1177,7 +1177,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         const WALLET = "0x1234567890123456789012345678901234567890";
 
         it("POST retopo uploads the source GLB and creates a decimate task with GLB-safe defaults", async () => {
-          ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+          ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
           const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
             ok: true,
             json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_dec_1" } }),
@@ -1215,7 +1215,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         });
 
         it("POST retopo with faceLimit forwards face_limit", async () => {
-          ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+          ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
           const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
             ok: true,
             json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_dec_2" } }),
@@ -1543,7 +1543,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       });
 
       it("POST retexture uploads the source GLB and starts a texture task", async () => {
-        ipfsStorage.set("bafySource", Buffer.from("glb source bytes"));
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
         const calls = [];
         const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async (url) => {
           calls.push(url);
@@ -1599,6 +1599,140 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe("SOURCE_ASSET_TOO_LARGE");
         expect(res.body.error.message).toContain("150 MB");
+      });
+
+      it("returns 400 SOURCE_ASSET_UNSUPPORTED_FORMAT when the source is not glTF/GLB", async () => {
+        // 3MF is a ZIP — neither GLB magic nor glTF JSON. Tripo's rig-check
+        // would reject it with code 1004; we fail before uploading.
+        ipfsStorage.set("bafy3mf", Buffer.from("PK\x03\x04 fake 3mf zip bytes"));
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafy3mf", animate: true, rigOnly: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_UNSUPPORTED_FORMAT");
+      });
+
+      it("returns 400 SOURCE_ASSET_UNSUPPORTED_FORMAT for glTF with unresolvable external refs", async () => {
+        ipfsStorage.set(
+          "bafyLoose",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{ uri: "intro.bin", byteLength: 4 }],
+          })),
+        );
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyLoose", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_UNSUPPORTED_FORMAT");
+        expect(res.body.error.message).toContain("intro.bin");
+      });
+
+      it("composes composite glTF JSON (ipfs:// refs) to GLB before upload", async () => {
+        ipfsStorage.set("bafyBuf", Buffer.from([1, 2, 3, 4]));
+        ipfsStorage.set(
+          "bafyComposite",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{ uri: "ipfs://bafyBuf", byteLength: 4 }],
+          })),
+        );
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => ({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_comp" } }),
+        }));
+        fetchSpy.mockClear();
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyComposite", retexture: true });
+        expect(res.status).toBe(202);
+        expect(fetchSpy.mock.calls[0][0]).toBe("https://openapi.tripo3d.ai/v3/files");
+        // The uploaded file must be a real GLB containing the buffer bytes.
+        const form = fetchSpy.mock.calls[0][1].body;
+        const uploaded = Buffer.from(await form.get("file").arrayBuffer());
+        expect(uploaded.readUInt32LE(0)).toBe(0x46546c67);
+        expect(uploaded.includes(Buffer.from([1, 2, 3, 4]))).toBe(true);
+      });
+
+      it("detects composite glTF even when ipfs:// refs sit past the first KB", async () => {
+        ipfsStorage.set("bafyBuf", Buffer.from([1, 2, 3, 4]));
+        ipfsStorage.set(
+          "bafyDeep",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0", copyright: "x".repeat(2048) },
+            buffers: [{ uri: "ipfs://bafyBuf", byteLength: 4 }],
+          })),
+        );
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => ({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_deep" } }),
+        }));
+        fetchSpy.mockClear();
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyDeep", retexture: true });
+        expect(res.status).toBe(202);
+        const uploaded = Buffer.from(await fetchSpy.mock.calls[0][1].body.get("file").arrayBuffer());
+        expect(uploaded.readUInt32LE(0)).toBe(0x46546c67);
+      });
+
+      it("composes self-contained glTF JSON (data-URI buffers) to GLB before upload", async () => {
+        ipfsStorage.set(
+          "bafyEmbedded",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{ uri: "data:application/octet-stream;base64,AQIDBA==", byteLength: 4 }],
+          })),
+        );
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => ({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_emb" } }),
+        }));
+        fetchSpy.mockClear();
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyEmbedded", retexture: true });
+        expect(res.status).toBe(202);
+        const uploaded = Buffer.from(await fetchSpy.mock.calls[0][1].body.get("file").arrayBuffer());
+        expect(uploaded.readUInt32LE(0)).toBe(0x46546c67);
+        expect(uploaded.includes(Buffer.from([1, 2, 3, 4]))).toBe(true);
+      });
+
+      it("composes a gzipped composite with gzipped components (real saved-asset form)", async () => {
+        // Saved assets store the composite JSON and its components gzipped
+        // (decomposer/async-gltf compress: true); _arbesk.compressed flags it.
+        const binBytes = Buffer.from([1, 2, 3, 4]);
+        ipfsStorage.set("bafyBufGz", zlib.gzipSync(binBytes));
+        ipfsStorage.set(
+          "bafyCompositeGz",
+          zlib.gzipSync(Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{
+              uri: "ipfs://bafyBufGz",
+              byteLength: 4,
+              _arbesk: { hash: "abc123", hashAlgo: "murmur3-32", compressed: true, bytes: 4 },
+            }],
+          }))),
+        );
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => ({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_gz" } }),
+        }));
+        fetchSpy.mockClear();
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyCompositeGz", retexture: true });
+        expect(res.status).toBe(202);
+        const uploaded = Buffer.from(await fetchSpy.mock.calls[0][1].body.get("file").arrayBuffer());
+        expect(uploaded.readUInt32LE(0)).toBe(0x46546c67);
+        // The BIN chunk must hold the DECOMPRESSED bytes.
+        expect(uploaded.includes(binBytes)).toBe(true);
       });
     });
 
