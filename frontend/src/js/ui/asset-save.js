@@ -126,6 +126,21 @@ function isDefaultName(name) {
   return DEFAULT_NAMES.has((name || "").toLowerCase().trim());
 }
 
+/**
+ * Adopt a loaded manifest's name into session state. Opening an asset
+ * never set `activeAssetName`, so chat-driven auto-saves (Show in Studio,
+ * animate) wrote "Untitled Asset" over the published name and the next
+ * publish re-prompted for one. Default or absent names (e.g. in-session
+ * generation manifests) must not clobber a good name already in state.
+ * @param {any} manifest
+ */
+export function adoptManifestName(manifest) {
+  const name = manifest?.name?.trim();
+  if (name && !isDefaultName(name)) {
+    assetState.set({ activeAssetName: name });
+  }
+}
+
 async function resolveAssetName() {
   // Always prefer the user's in-session rename.
   if (assetState.get().activeAssetName) return assetState.get().activeAssetName;

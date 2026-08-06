@@ -40,7 +40,7 @@ import {
   _resetPendingGenerations,
 } from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
-import { onSaveAssetDraft } from "./asset-save.js";
+import { onSaveAssetDraft, adoptManifestName } from "./asset-save.js";
 
 // ─── DOM References ───
 const promptInput = document.getElementById("promptInput");
@@ -1724,6 +1724,10 @@ promptInput.addEventListener("input", () => {
 let openAssetIdentity = null;
 
 on(EVENTS.SCENE_READY, (event) => {
+  // Opening/restoring an asset never set activeAssetName — adopt the
+  // manifest's name so auto-saves and publish keep it instead of
+  // "Untitled Asset" (default/absent names are ignored inside).
+  adoptManifestName(event?.manifest);
   const name = event?.manifest?.name || assetState.get().activeAssetName;
   if (name) syncAssetNameDisplay(name);
   const manifestCid =

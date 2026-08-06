@@ -133,6 +133,29 @@ describe("onSaveAssetDraft", () => {
   });
 });
 
+describe("adoptManifestName", () => {
+  test("adopts a real manifest name into session state", async () => {
+    const { adoptManifestName } = await loadModule();
+    const { assetState } = await import(
+      "../../frontend/src/js/state/asset-state.js"
+    );
+    adoptManifestName({ name: "refaat" });
+    expect(assetState.set).toHaveBeenCalledWith({ activeAssetName: "refaat" });
+  });
+
+  test("does not clobber state with a default or absent name", async () => {
+    const { adoptManifestName } = await loadModule();
+    const { assetState } = await import(
+      "../../frontend/src/js/state/asset-state.js"
+    );
+    adoptManifestName({ name: "Untitled Asset" });
+    adoptManifestName({ name: "  " });
+    adoptManifestName({});
+    adoptManifestName(null);
+    expect(assetState.set).not.toHaveBeenCalled();
+  });
+});
+
 describe("onPublishAsset", () => {
   test("publishes normally when saveAssetDraftCore succeeds", async () => {
     const { onPublishAsset } = await loadModule();
