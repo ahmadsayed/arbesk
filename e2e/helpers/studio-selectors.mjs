@@ -73,6 +73,8 @@ export const SELECTORS = {
   redoButton: "#redoBtn",
   scaleFactorInput: "#nodeScaleFactor",
   scaleSectionSummary: "#scaleSection summary",
+  animationsSection: "#animationsSection",
+  animationSelect: "#animationSelect",
   // New asset + nesting (linked child worlds)
   newAssetBtn: "#newAssetBtn",
   settingsSwitcherBtn: '[data-view="settings"]',
