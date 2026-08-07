@@ -83,6 +83,7 @@ async function loadApi(options = {}) {
 
   await jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     getFromRemoteIPFS: jest.fn().mockResolvedValue({}),
+    getArrayBufferFromRemoteIPFS: jest.fn().mockRejectedValue(new Error("unmocked")),
   }));
 
   await jest.unstable_mockModule("../../frontend/src/js/utils/log.js", () => ({
@@ -1208,6 +1209,114 @@ describe("generateAsset", () => {
     const body = JSON.parse(postOpts.body);
     expect(body).toMatchObject({ textureQuality: "detailed" });
     expect(body.highQuality).toBeUndefined();
+  }, 15_000);
+
+  test("compensates provider re-normalization on follow-ups via post_processor scale", async () => {
+    const buildGlb = (size) => {
+      const gltf = {
+        asset: { version: "2.0" },
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+        accessors: [{ type: "VEC3", min: [-size / 2, -size / 2, -size / 2], max: [size / 2, size / 2, size / 2] }],
+      };
+      const json = new TextEncoder().encode(JSON.stringify(gltf));
+      const pad = (4 - (json.length % 4)) % 4;
+      const jsonChunk = new Uint8Array(json.length + pad);
+      jsonChunk.set(json);
+      jsonChunk.fill(0x20, json.length);
+      const total = 12 + 8 + jsonChunk.length;
+      const buf = new ArrayBuffer(total);
+      const view = new DataView(buf);
+      view.setUint32(0, 0x46546c67, true);
+      view.setUint32(4, 2, true);
+      view.setUint32(8, total, true);
+      view.setUint32(12, jsonChunk.length, true);
+      view.setUint32(16, 0x4e4f534a, true);
+      new Uint8Array(buf, 20).set(jsonChunk);
+      return buf;
+    };
+    // Tripo rig/retarget re-normalize: source is 2 units tall, result 0.5.
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-anim-1", provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from(buildGlb(0.5)).toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    remote.getArrayBufferFromRemoteIPFS.mockResolvedValue(buildGlb(2));
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "Animate: idle",
+      nodeId: "n-anim",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      sourceAssetCid: "bafySource",
+      animate: true,
+      animations: ["preset:idle"],
+    });
+
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.scene.nodes[0].post_processor.scale).toEqual({ x: 4, y: 4, z: 4 });
+  }, 15_000);
+
+  test("fresh generations keep the default post_processor scale", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({
+          status: 202,
+          body: { taskId: "task-fresh-1", provider: "tripo3d", status: "running" },
+        })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "A fresh model",
+      nodeId: "n-fresh",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+    });
+
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.scene.nodes[0].post_processor.scale).toEqual({ x: 1, y: 1, z: 1 });
   }, 15_000);
 
   test("propagates provider errors without retrying", async () => {

@@ -502,6 +502,43 @@ export async function getProviderBalance(providerKey) {
 }
 
 /**
+ * Best-effort scale compensation for Tripo follow-ups: the rig and
+ * retarget endpoints re-normalize model size (observed live 2026-08-06:
+ * generation 2.0 → rig 1.0 → retarget 0.5 units tall), so a follow-up
+ * result comes back smaller than its source. Measure both and return the
+ * uniform scale that keeps the new version at the source's visual size.
+ * Never throws — compensation is cosmetic and must not fail a generation.
+ * @param {string} sourceCid - the follow-up's source asset CID
+ * @param {Uint8Array} resultBytes - raw bytes of the new asset
+ * @returns {Promise<number | null>} scale factor, or null to leave default
+ */
+async function followupScaleCompensation(sourceCid, resultBytes) {
+  try {
+    const { getArrayBufferFromRemoteIPFS } = await import(
+      "../ipfs/remote-ipfs.js"
+    );
+    const { boundsFromGlbBytes, computeGltfBounds, compensationScale } =
+      await import("../gltf/bounds.js");
+    const toBounds = (bytes) =>
+      boundsFromGlbBytes(bytes) ??
+      computeGltfBounds(JSON.parse(new TextDecoder().decode(bytes)));
+    const srcBounds = toBounds(await getArrayBufferFromRemoteIPFS(sourceCid));
+    const scale = compensationScale(srcBounds, toBounds(resultBytes));
+    if (scale) {
+      log(
+        `[GEN] follow-up scale compensation ×${scale.toFixed(3)} (provider re-normalized the model)`
+      );
+    }
+    return scale;
+  } catch (e) {
+    warn(
+      `[GEN] scale compensation skipped: ${e instanceof Error ? e.message : e}`
+    );
+    return null;
+  }
+}
+
+/**
  * POST /api/v1/generations
  *
  * The backend validates the session, checks the rate limit, calls the
@@ -628,6 +665,12 @@ export async function generateAsset({
   );
   log(`[GEN] browser uploaded source asset → ${assetCid}`);
 
+  // Follow-ups (retopo/rig/animate) come back re-normalized by the
+  // provider — measure and compensate so versions keep a consistent size.
+  const scaleCompensation = sourceAssetCid
+    ? await followupScaleCompensation(sourceAssetCid, assetBytes)
+    : null;
+
   // Reference image (image-to-3D): pin it on IPFS and record it in the
   // manifest so the provenance chain keeps what the model was made from.
   let referenceImage = null;
@@ -698,7 +741,9 @@ export async function generateAsset({
         Array.isArray(transformMatrix) && transformMatrix.length === 16
           ? transformMatrix
           : identityMatrix(),
-      post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
+      post_processor: scaleCompensation
+        ? { color: null, scale: { x: scaleCompensation, y: scaleCompensation, z: scaleCompensation } }
+        : { color: null, scale: { x: 1, y: 1, z: 1 } },
     },
   ];
 
