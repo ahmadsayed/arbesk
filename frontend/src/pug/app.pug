@@ -347,6 +347,12 @@ html(lang="en")
                         label(for="nodeScalePercent") Percent
                         input#nodeScalePercent.form-input(type="number" min="1" step="1" value="100" aria-label="Uniform scale percentage")
                     p.inspector-hint Applies the same scale on all axes — enter the same value on each copy to make them identical in size.
+              section#animationsSection.inspector-section.inspector-animations(hidden)
+                details
+                  summary.inspector-section-title Animations
+                  div
+                    select#animationSelect.form-select(aria-label="Animation clip")
+                      option(value="") None
               section#parametricEditor.inspector-section
                 details
                   summary.inspector-section-title Color
@@ -470,6 +476,7 @@ html(lang="en")
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")
     script(type="module", src="/js/engine/parametric-preview.js")
+    script(type="module", src="/js/engine/animation-preview.js")
     script(type="module", src="/js/blockchain/token-resolver.js")
     script(type="module", src="/js/blockchain/wallet.js")
     script(type="module", src="/js/services/api.js")

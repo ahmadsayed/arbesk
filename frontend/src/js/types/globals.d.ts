@@ -27,6 +27,7 @@ declare namespace BABYLON {
   type Camera = any;
   type HemisphericLight = any;
   type DirectionalLight = any;
+  type AnimationGroup = any;
 }
 
 declare const BABYLON: any;
