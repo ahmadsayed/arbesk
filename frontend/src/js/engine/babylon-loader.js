@@ -33,6 +33,24 @@ function loadScript(src) {
 }
 
 /**
+ * Register glTF loader defaults. Babylon's glTF plugin auto-plays the first
+ * animation on import; the Studio keeps the viewport static until the user
+ * picks a clip in the inspector (see engine/animation-preview.js).
+ */
+export function registerGltfLoaderDefaults() {
+  const startModes = BABYLON.GLTF2?.GLTFLoaderAnimationStartMode;
+  if (!startModes) return;
+  BABYLON.SceneLoader.OnPluginActivatedObservable.add(
+    /** @param {{ name: string, animationStartMode?: number }} plugin */
+    (plugin) => {
+      if (plugin.name === "gltf") {
+        plugin.animationStartMode = startModes.NONE;
+      }
+    },
+  );
+}
+
+/**
  * Load Babylon core + plugins exactly once. Safe to call repeatedly —
  * subsequent calls return the in-flight (or settled) promise.
  * @returns {Promise<void>} resolves when window.BABYLON is fully ready
@@ -43,7 +61,9 @@ export function ensureBabylon() {
       Promise.all([
         loadScript(`${BJS_BASE}loaders/babylonjs.loaders.min.js`),
         loadScript(`${BJS_BASE}materialsLibrary/babylonjs.materials.min.js`),
-      ]).then(() => undefined),
+      ]).then(() => {
+        registerGltfLoaderDefaults();
+      }),
     );
   }
   return _promise;
