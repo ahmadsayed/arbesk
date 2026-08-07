@@ -68,6 +68,18 @@ export function disposeNode(nodeId) {
     state.nodeMeshes.delete(nodeId);
     state._nonChromeMeshCache = null;
   }
+  const animationGroups = state.nodeAnimationGroups.get(nodeId);
+  if (animationGroups) {
+    for (const group of animationGroups) {
+      try {
+        group.stop();
+        if (!group.isDisposed()) group.dispose();
+      } catch {
+        // ignore — group may already be torn down
+      }
+    }
+    state.nodeAnimationGroups.delete(nodeId);
+  }
   const anchor = state.nodeAnchors.get(nodeId);
   if (anchor) {
     if (!anchor.isDisposed()) {
@@ -138,6 +150,17 @@ export function clearScene() {
     if (anchor && !anchor.isDisposed()) anchor.dispose();
   });
   state.nodeAnchors.clear();
+
+  state.nodeAnimationGroups.forEach((groups) => {
+    groups.forEach((group) => {
+      try {
+        if (!group.isDisposed()) group.dispose();
+      } catch {
+        // ignore
+      }
+    });
+  });
+  state.nodeAnimationGroups.clear();
 
   if (state.rootSceneAnchor && !state.rootSceneAnchor.isDisposed()) {
     state.rootSceneAnchor.dispose();

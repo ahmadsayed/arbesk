@@ -20,6 +20,8 @@ export const state = {
   nodeAnchors: new Map(),
   /** @type {Map<string, BABYLON.AbstractMesh[]>} */
   nodeMeshes: new Map(),
+  /** @type {Map<string, BABYLON.AnimationGroup[]>} */
+  nodeAnimationGroups: new Map(),
   /** @type {BABYLON.TransformNode|null} */
   rootSceneAnchor: null,
   /** @type {Array<Object>} */

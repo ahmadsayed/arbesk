@@ -46,7 +46,8 @@ async function loadAsset(src, parentNode, nodeId) {
       result.meshes,
       nodeId,
       parentNode,
-      result.transformNodes || []
+      result.transformNodes || [],
+      result.animationGroups || []
     );
     return result.meshes;
   } catch (error) {
@@ -77,13 +78,14 @@ async function importFromBlob(blob, extension) {
     return {
       meshes: result.meshes,
       transformNodes: result.transformNodes || [],
+      animationGroups: result.animationGroups || [],
     };
   } finally {
     URL.revokeObjectURL(blobUrl);
   }
 }
 
-function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
+function attachMetadata(meshes, nodeId, parentNode, transformNodes = [], animationGroups = []) {
   const meshArray = [];
   const importedNodes = [...transformNodes, ...meshes];
 
@@ -112,6 +114,9 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = []) {
 
   centerImportedAsset(meshArray, importedNodes, parentNode, nodeId);
   state.nodeMeshes.set(nodeId, meshArray);
+  if (animationGroups.length > 0) {
+    state.nodeAnimationGroups.set(nodeId, animationGroups);
+  }
   state._nonChromeMeshCache = null;
 }
 
