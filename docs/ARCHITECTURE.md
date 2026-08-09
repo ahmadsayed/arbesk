@@ -1,13 +1,13 @@
 # Arbesk System Architecture
 
-> Status: Current v0.9 — Phases 1–5.4 complete (token child worlds, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented. Phase 5 server-side micro-ledger is not implemented; the ledger panel is client-side manifest-driven only.
-> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child worlds, collection manifests, and studio publishing
+> Status: Current v0.9 — Phases 1–5.4 complete (token child assets, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented. Phase 5 server-side micro-ledger is not implemented; the ledger panel is client-side manifest-driven only.
+> Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child assets, collection manifests, and studio publishing
 
 ---
 
 ## 1. Vision
 
-Arbesk is a local-first 3D world studio built around **fractal manifests**: every world is a content-addressed JSON document whose nodes point to 3D assets, transforms, child manifests, and optional publish thumbnails. The manifest is agnostic to the underlying asset data — it only references content-addressed sources; the asset bytes themselves (glTF/GLB) carry their own revision state.
+Arbesk is a local-first 3D asset studio built around **fractal manifests**: every asset is a content-addressed JSON document whose nodes point to 3D assets, transforms, child manifests, and optional publish thumbnails. The manifest is agnostic to the underlying asset data — it only references content-addressed sources; the asset bytes themselves (glTF/GLB) carry their own revision state.
 
 The system currently combines:
 
@@ -774,14 +774,14 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 
 ---
 
-## 9. Phase 5.1: Token ID-Based Child Worlds (Complete)
+## 9. Phase 5.1: Token ID-Based Child Assets (Complete)
 
-Child worlds are referenced by on-chain token IDs. The parent manifest stores a `child_ref` with `chainId`, `contractAddress`, and `tokenId`; at load time the browser calls `tokenURI()` to resolve the latest collection manifest CID and then loads the relevant asset from the collection's `assets` map.
+Child assets are referenced by on-chain token IDs. The parent manifest stores a `child_ref` with `chainId`, `contractAddress`, and `tokenId`; at load time the browser calls `tokenURI()` to resolve the latest collection manifest CID and then loads the relevant asset from the collection's `assets` map.
 
 Key constraints still in force:
 - Every token child node must have a `transform_matrix`; no local `history` array
 - Token child nodes do not contain a local `source`; their state is resolved from the referenced token's manifest chain
-- `MAX_CHILD_WORLD_DEPTH = 5`; cycle detection enforced in `scene-graph.js`
+- `MAX_CHILD_ASSET_DEPTH = 5`; cycle detection enforced in `scene-graph.js`
 - Resolver: `frontend/src/js/blockchain/token-resolver.js`
 
 ---
