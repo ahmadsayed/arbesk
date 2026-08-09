@@ -14,11 +14,11 @@ import {
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
-const CHILD_NAME = "Child World";
-const PARENT_NAME = "Parent World";
+const CHILD_NAME = "Child Asset";
+const PARENT_NAME = "Parent Asset";
 
-test.describe("nesting / linked child worlds", () => {
-  test("links a collection asset as a child world, then dives and ascends", async ({
+test.describe("nesting / linked child assets", () => {
+  test("links a collection asset as a child asset, then dives and ascends", async ({
     page,
   }) => {
     // startNewAsset() uses a native confirm(); auto-accept native dialogs.
@@ -86,7 +86,7 @@ test.describe("nesting / linked child worlds", () => {
     expect(refNode.child_ref.assetID.length).toBeGreaterThan(0);
     expect(refNode.history).toBeUndefined();
 
-    // ── 7. Dive into the child world ──────────────────────────────────
+    // ── 7. Dive into the child asset ──────────────────────────────────
     // Subscribe to the mitt nesting bus so we can assert the
     // depth-change events.
     await page.evaluate(async () => {

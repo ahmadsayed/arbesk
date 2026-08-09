@@ -519,7 +519,7 @@ on(EVENTS.SUBMESH_SELECTED, (/** @type {{meshName?: string}} */ e) => {
 if (inspectorToggle) inspectorToggle.addEventListener("click", toggleInspector);
 if (inspectorReveal) inspectorReveal.addEventListener("click", expandInspector);
 
-// Dive button for child worlds
+// Dive button for child assets
 const diveBtn = document.getElementById("inspectorDiveBtn");
 if (diveBtn) {
   diveBtn.addEventListener("click", () => {

@@ -3,7 +3,7 @@
  * Arbesk Outliner - Scene Hierarchy Tree
  *
  * Renders the scene graph from the current level's manifest.
- * Click to select, double-click child worlds to dive in.
+ * Click to select, double-click child assets to dive in.
  * Supports drag reorder and drag-from-library to add children.
  */
 
@@ -87,7 +87,7 @@ function getNodes() {
 
 /**
  * Build a hierarchical outline tree from the flat manifest nodes array.
- * Child-world nodes (nodes with child_ref) are grouped under the nearest
+ * Child-asset nodes (nodes with child_ref) are grouped under the nearest
  * preceding regular node so the outline reflects the parent/child relationship
  * shown in the viewport.
  */
@@ -98,14 +98,14 @@ function buildOutlineTree(nodes) {
   let currentParent = null;
 
   nodes.forEach((node) => {
-    const isChildWorld = !!node.child_ref;
-    if (isChildWorld && currentParent) {
+    const isChildAsset = !!node.child_ref;
+    if (isChildAsset && currentParent) {
       currentParent.children ||= [];
       currentParent.children.push({ ...node });
     } else {
       const cloned = { ...node };
       tree.push(cloned);
-      if (!isChildWorld) {
+      if (!isChildAsset) {
         currentParent = cloned;
       }
     }
@@ -163,7 +163,7 @@ function renderTree(nodes, depth = 0) {
 
   if (!Array.isArray(nodes) || nodes.length === 0) {
     if (depth === 0) {
-      tree.innerHTML = '<div class="ledger-empty">No items in this world</div>';
+      tree.innerHTML = '<div class="ledger-empty">No items in this asset</div>';
       updateFooter(0, 0);
     }
     return { totalNodes: 0, childCount: 0 };
@@ -215,7 +215,7 @@ function getNodeDisplayName(node) {
   return node.node_id || "Untitled";
 }
 
-function createNodeElement(node, isChildWorld, depth = 0) {
+function createNodeElement(node, isChildAsset, depth = 0) {
   const el = document.createElement("div");
   el.className = "outliner-node";
   el.dataset.nodeId = node.node_id;
@@ -271,7 +271,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   // Icon
   const icon = document.createElement("span");
   icon.className = "outliner-node-icon";
-  icon.textContent = isChildWorld ? "🧩" : "📦";
+  icon.textContent = isChildAsset ? "🧩" : "📦";
   el.appendChild(icon);
 
   // Label
@@ -280,11 +280,11 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   label.textContent = getNodeDisplayName(node);
   el.appendChild(label);
 
-  // Badge (token ID for child worlds).
+  // Badge (token ID for child assets).
   // Supports both legacy {tokenId} and collection {collection: {tokenId}, assetID} formats.
   const badgeTokenId =
     node.child_ref?.tokenId || node.child_ref?.collection?.tokenId;
-  if (isChildWorld && badgeTokenId) {
+  if (isChildAsset && badgeTokenId) {
     const badge = document.createElement("span");
     badge.className = "outliner-node-badge";
     badge.textContent = `#${badgeTokenId}`;
@@ -298,7 +298,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   });
 
   // Double-click child → dive
-  if (isChildWorld) {
+  if (isChildAsset) {
     el.addEventListener("dblclick", (e) => {
       e.stopPropagation();
       diveIntoChild(node);

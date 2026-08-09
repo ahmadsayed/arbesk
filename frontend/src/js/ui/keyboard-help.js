@@ -17,7 +17,7 @@ const SECTIONS = [
     rows: [
       [`${MOD}+B`, "Toggle sidebar"],
       [`${MOD}+1 – 5`, "Switch sidebar panel"],
-      ["Alt+←", "Go up to parent world"],
+      ["Alt+←", "Go up to parent asset"],
     ],
   },
   {

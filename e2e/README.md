@@ -160,9 +160,9 @@ Validates the edit → **republish** branch (no new mint):
 
 **Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.js` / `services/asset-save/` publish branch or collection manifest resolution can break it.
 
-### 6. Nesting / linked child worlds (`e2e/specs/06-nesting.spec.js`)
+### 6. Nesting / linked child assets (`e2e/specs/06-nesting.spec.js`)
 
-Validates the "dollhouse architecture" — linking a token as a child world and navigating depth:
+Validates the "dollhouse architecture" — linking a token as a child asset and navigating depth:
 
 1. Publishes a world to use as the child reference.
 2. Starts a fresh parent (**New asset** → name), generates the parent's own content.
@@ -202,7 +202,7 @@ Regression coverage for issue #25 lives in `test/frontend/material-editor.test.j
 
 Validates the two ways to reuse another collection's asset inside a parent scene:
 
-1. Publishes a child world.
+1. Publishes a child asset.
 2. Starts a fresh parent draft and uses the gallery card's **Add to Scene**.
 3. **Fork (copy)** — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
 4. **Live reference** — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.

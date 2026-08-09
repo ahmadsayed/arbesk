@@ -40,7 +40,7 @@ import {
 // Re-exports — backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-export { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
+export { state, DEFAULT_WOOD_COLOR, MAX_CHILD_ASSET_DEPTH } from "./state.js";
 
 export {
   extractCid,
@@ -385,16 +385,16 @@ export function initEngine() {
       // Walk the full parent chain. Track the first nodeId seen (for regular
       // nodes) but do NOT stop — continue until a childRef boundary is found
       // or the chain ends. A childRef boundary means we are inside a child
-      // world; the parent manifest's node_id is on the outer anchor above it.
+      // asset; the parent manifest's node_id is on the outer anchor above it.
       let firstNodeId = null;
-      let childWorldNodeId = null;
+      let childAssetNodeId = null;
 
       while (target) {
         if (target.metadata?.childRef) {
           // childAnchor: its parent is the outer anchor whose metadata.nodeId
           // is the parent-manifest node_id (manifest-loaded path).
           // Fall back to childAnchor's own nodeId for freshly-dropped nodes.
-          childWorldNodeId =
+          childAssetNodeId =
             target.parent?.metadata?.nodeId || target.metadata?.nodeId || null;
           break;
         }
@@ -404,8 +404,8 @@ export function initEngine() {
         target = target.parent;
       }
 
-      const resolvedNodeId = childWorldNodeId || firstNodeId;
-      const isChildWorldNode = !!childWorldNodeId;
+      const resolvedNodeId = childAssetNodeId || firstNodeId;
+      const isChildAssetNode = !!childAssetNodeId;
 
       const now = Date.now();
       const isDoubleClick =
@@ -436,9 +436,9 @@ export function initEngine() {
           resolvedNodeId === state.highlightedNodeId &&
           state.selectedNodeIds.size === 1
         ) {
-          // Sub-mesh toggle only applies to regular (non-child-world) nodes
+          // Sub-mesh toggle only applies to regular (non-child-asset) nodes
           // and is a single-selection feature.
-          if (!isChildWorldNode && mesh.name) {
+          if (!isChildAssetNode && mesh.name) {
             if (state.highlightedSubMeshName === mesh.name) {
               selectNode(resolvedNodeId, target);
             } else {
@@ -590,7 +590,7 @@ function getNodeChildRef(nodeId) {
         resolvedCid: anchor.metadata.resolvedCid || null,
       };
     }
-    // Otherwise walk up to find a parent child_ref world.
+    // Otherwise walk up to find a parent child_ref asset.
     let current = anchor.parent;
     while (current) {
       if (current.metadata?.childRef) {

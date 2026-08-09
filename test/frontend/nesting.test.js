@@ -135,7 +135,7 @@ test("dive routes the child name through renameAsset and keeps CID/tokenId write
   expect(p.activeAssetName).toBe("Parent World");
 });
 
-test("dive falls back to 'Child World' when the child manifest has no name", async () => {
+test("dive falls back to 'Child Asset' when the child manifest has no name", async () => {
   await loadModule();
   _childManifest = {}; // no name
 
@@ -150,6 +150,6 @@ test("dive falls back to 'Child World' when the child manifest has no name", asy
   });
   await waitFor(() => loadAssetManifestMock.mock.calls.length > 0);
 
-  expect(renameAssetSpy).toHaveBeenCalledWith("Child World");
-  expect(assetState.get().activeAssetName).toBe("Child World");
+  expect(renameAssetSpy).toHaveBeenCalledWith("Child Asset");
+  expect(assetState.get().activeAssetName).toBe("Child Asset");
 });

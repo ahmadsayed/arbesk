@@ -7,7 +7,9 @@
  */
 
 export const DEFAULT_WOOD_COLOR = "#C19A6B";
-export const MAX_CHILD_WORLD_DEPTH = 5;
+export const MAX_CHILD_ASSET_DEPTH = 5;
+// Deprecated alias — kept for backwards compatibility during migration.
+export const MAX_CHILD_WORLD_DEPTH = MAX_CHILD_ASSET_DEPTH;
 export const PLACEHOLDER_COLOR = "#E8D5B7";
 export const ERROR_PLACEHOLDER_COLOR = "#CC6666";
 

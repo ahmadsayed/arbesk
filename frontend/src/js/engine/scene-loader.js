@@ -3,7 +3,7 @@
  * Arbesk Scene Loader
  *
  * Extracted from scene-graph.js - handles IPFS asset loading, manifest parsing,
- * token child world resolution, collection manifest loading, and drag/drop
+ * token child asset resolution, collection manifest loading, and drag/drop
  * linked asset composition.
  */
 
@@ -18,7 +18,7 @@ import { emit, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { activateAssetManifest } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
-import { state, MAX_CHILD_WORLD_DEPTH } from "./state.js";
+import { state, MAX_CHILD_ASSET_DEPTH } from "./state.js";
 import {
   extractCid,
   getManifestNodes,
@@ -150,16 +150,16 @@ function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Token child world loading
+// Token child asset loading
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   const childRef = node.child_ref;
   if (!childRef) return [];
 
-  if (depth >= MAX_CHILD_WORLD_DEPTH) {
+  if (depth >= MAX_CHILD_ASSET_DEPTH) {
     console.warn(
-      `[SCENE] max child world depth (${MAX_CHILD_WORLD_DEPTH}) reached at node ${node.node_id}`
+      `[SCENE] max child asset depth (${MAX_CHILD_ASSET_DEPTH}) reached at node ${node.node_id}`
     );
     const placeholder = createPlaceholder(node.node_id, anchor, "error");
     return [placeholder];

@@ -142,10 +142,10 @@ describe("Token Resolver - child_ref validation", () => {
     expect(nodeEntry.transform_matrix).toHaveLength(16);
   });
 
-  it("MAX_CHILD_WORLD_DEPTH is correctly defined", () => {
+  it("MAX_CHILD_ASSET_DEPTH is correctly defined", () => {
     // This constant must be 5 per the specification
-    const MAX_CHILD_WORLD_DEPTH = 5;
-    expect(MAX_CHILD_WORLD_DEPTH).toBe(5);
+    const MAX_CHILD_ASSET_DEPTH = 5;
+    expect(MAX_CHILD_ASSET_DEPTH).toBe(5);
   });
 });
 
