@@ -15,7 +15,8 @@ import {
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
 import { emit, EVENTS } from "../events/bus.js";
-import { assetState, tagManifestCid } from "../state/asset-state.js";
+import { assetState } from "../state/asset-state.js";
+import { activateAssetManifest } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { state, MAX_CHILD_WORLD_DEPTH } from "./state.js";
 import {
@@ -387,10 +388,7 @@ async function loadAssetManifest(
   );
 
   if (!parentAnchor) {
-    assetState.set({
-      activeAssetManifestCid: manifestCid,
-      currentManifest: tagManifestCid(manifest, manifestCid),
-    });
+    activateAssetManifest(manifestCid, manifest);
     emit(EVENTS.SCENE_READY, { manifest, manifestCid });
   }
 

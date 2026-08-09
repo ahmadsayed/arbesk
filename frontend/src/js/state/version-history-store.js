@@ -13,6 +13,7 @@
 
 import { on, EVENTS } from "../events/bus.js";
 import { assetState } from "./asset-state.js";
+import { setLatestManifestCid } from "../domain/asset.js";
 
 export const _deps = {
   walkChain: async (cid) => {
@@ -86,7 +87,7 @@ export async function loadVersion(cid) {
       chainRootCid || assetState.get().latestAssetManifestCid;
     await _deps.clearScene();
     if (preservedLatest) {
-      assetState.set({ latestAssetManifestCid: preservedLatest });
+      setLatestManifestCid(preservedLatest);
     }
     await _deps.loadAssetManifest(cid);
     activeCid = cid;
@@ -156,7 +157,7 @@ on(EVENTS.SCENE_READY, (e) => {
 
   chainRootCid = manifestCid;
   activeCid = manifestCid;
-  assetState.set({ latestAssetManifestCid: manifestCid });
+  setLatestManifestCid(manifestCid);
   _refresh();
 });
 
