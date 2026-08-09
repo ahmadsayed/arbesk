@@ -1,4 +1,4 @@
-import { followupActionsFor } from "../../frontend/src/js/state/generation-actions.js";
+import { followupActionsFor } from "../../frontend/src/js/domain/generation-actions.js";
 
 describe("followupActionsFor", () => {
   it("returns all four actions for a plain tripo3d generation", () => {

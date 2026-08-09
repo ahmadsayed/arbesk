@@ -4,7 +4,7 @@
  * Model Clock Gizmo — 3D Babylon ring for scrubbing a node's version history.
  */
 
-import * as store from "../state/version-history-store.js";
+import * as store from "../domain/version-history-store.js";
 import { on, EVENTS } from "../events/bus.js";
 import { state } from "../engine/state.js";
 

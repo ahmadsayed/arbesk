@@ -13,7 +13,7 @@ let _resetSubscribers;
 let store;
 beforeAll(async () => {
   store = await import(
-    "../../frontend/src/js/state/version-history-store.js"
+    "../../frontend/src/js/domain/version-history-store.js"
   );
   _resetSubscribers = store._resetSubscribers;
 });

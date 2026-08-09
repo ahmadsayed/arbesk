@@ -7,7 +7,7 @@
  * chain via the version-history store. Hidden when no chain is loaded.
  */
 
-import * as store from "../state/version-history-store.js";
+import * as store from "../domain/version-history-store.js";
 import { createVersionClock } from "./version-clock.js";
 
 const ROOT_ID = "sceneClock";

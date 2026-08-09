@@ -10,7 +10,7 @@
 import { on, EVENTS } from "../events/bus.js";
 import { getActiveAssetTokenId, getActiveAssetId } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
-import { CommentThread } from "../state/comment-thread.js";
+import { CommentThread } from "../services/comment-thread.js";
 import { truncateAddress } from "../utils/format.js";
 import { escapeHtml } from "../utils/html.js";
 import { getCachedSession } from "../services/api.js";

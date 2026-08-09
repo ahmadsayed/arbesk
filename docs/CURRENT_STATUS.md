@@ -21,7 +21,7 @@
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
-| Asset-Level Nostr Comments | ✅ Complete | `state/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
+| Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
 | Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.js`, `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
 | CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.js`, SIWE with `eoaAddress` fallback in `siwe-verify.js`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
@@ -112,7 +112,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
 - ✅ Tripo3D BYOK generation (task-based, v3 API, default model `v3.1-20260211`) with `POST /generations` + `GET /generations/:taskId` polling; `auto_size` is passed so models arrive at estimated real-world meter scale; panel-level "Texture quality" selector (Tripo3D only, persisted in localStorage) sends `texture_quality: detailed`
-- ✅ Version-card action row: every Tripo3D generation bubble carries a compact action row — `Retexture` (texture-prompt dialog) · `Retopo` (polygon-budget dialog) · `Auto-rig` (no dialog) · `Animate…` (preset dialog) — via `state/generation-actions.js`; actions run against the bubble's own GLB, so they never expire. Animated results are terminal (no actions); rig-only results keep only `Animate…`; mock provider gets none
+- ✅ Version-card action row: every Tripo3D generation bubble carries a compact action row — `Retexture` (texture-prompt dialog) · `Retopo` (polygon-budget dialog) · `Auto-rig` (no dialog) · `Animate…` (preset dialog) — via `domain/generation-actions.js`; actions run against the bubble's own GLB, so they never expire. Animated results are terminal (no actions); rig-only results keep only `Animate…`; mock provider gets none
 - ✅ Tripo3D `sourceAssetCid` GLB follow-ups: the backend fetches the bubble's GLB from IPFS and uploads it to Tripo (`POST /files` → `file_token`) as the source for retexture (`models/texture`, flat `text_prompt`), retopo (`mesh/decimate`), and rig/animate. glTF JSON sources (composite `ipfs://` refs or embedded data URIs — gzipped storage is decompressed first, components honor `_arbesk.compressed`) are composed to GLB before upload via the shared gltf-core pipeline (`composeGltfJson` + `serializeGLB`); other formats (3MF, …) or glTF with unresolvable external refs → 400 `SOURCE_ASSET_UNSUPPORTED_FORMAT` (rig-check accepts GLB only — upstream code 1004). Unreadable or empty GLB → 400 `SOURCE_ASSET_UNAVAILABLE`; GLB over Tripo's 150 MB file limit → 400 `SOURCE_ASSET_TOO_LARGE`
 - ✅ Typed-prompt retexture targets the "active version": a visible `Refining: <name> ×` indicator above the input, set on generation result, Show in Studio, and bubble/history restore; cleared by detach, Clear Chat, asset switch, or restoring a chat-less (e.g. parametric-edit) version
 - ✅ Show in Studio auto-saves a draft (existing asset-save flow) and annotates the bubble "Saved" — publish stays a separate manual action. Clicking a bubble's preview restores that version to the Studio; the manifest-chain tip is preserved across the restore so the auto-save chains linearly onto the prior tip (no fork)
@@ -216,15 +216,17 @@ frontend/src/js/
 │   ├── asset-store.js          # Shared asset store (domain-only import); emits ASSET_STATE_CHANGED with full-state payload
 │   ├── asset.js                # Asset facade — single writer of asset identity/name/CID fields; getters + save/publish commands
 │   ├── collection.js           # Collection state commands (single writer of active/selected collection) + publishCollection seam
-│   └── editors.js              # Merkle editor helpers, editor-list cache, proof commands
+│   ├── editors.js              # Merkle editor helpers, editor-list cache, proof commands
+│   ├── version-history-store.js # Headless manifest-chain store (entries, active/published CIDs) feeding the scene/model clocks
+│   └── generation-actions.js   # Pure follow-up-action policy for generation bubbles (retexture/retopo/auto-rig/animate)
 ├── state/
 │   ├── wallet-state.js / ui-state.js / library-state.js
-│   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
 │   └── create-store.js         # Generic createStore factory
 └── services/
     ├── api.js                  # API client: sessions (SIWE), generate, comments archive, unpin, upload-url, paymaster
     ├── asset-save/             # manifest-builder.js, collection-publish.js, editor-publish.js
     ├── library-ops.js          # Create named collection (with onPending hook), upload glTF/GLB/3MF (decomposed at upload)
+    ├── comment-thread.js       # Per-asset Nostr WebSocket + archive comment thread
     ├── team.js / asset-delete.js / url-utils.js
     └── ...
 ```

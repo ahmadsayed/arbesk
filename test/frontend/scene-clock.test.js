@@ -21,7 +21,7 @@ const storeMock = {
   _deps: {},
 };
 jest.unstable_mockModule(
-  "../../frontend/src/js/state/version-history-store.js",
+  "../../frontend/src/js/domain/version-history-store.js",
   () => storeMock
 );
 

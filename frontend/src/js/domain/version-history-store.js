@@ -17,7 +17,7 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetManifestCid,
   getActiveAssetTokenId,
-} from "../domain/asset.js";
+} from "./asset.js";
 
 export const _deps = {
   walkChain: async (cid) => {

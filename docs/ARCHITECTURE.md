@@ -177,7 +177,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
 | UI | `ui/asset-save.js` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
-| State / UI | `state/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clock UIs |
+| Domain / UI | `domain/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clock UIs |
 | UI | `ui/collaborators-panel.js` | Editor list / add/remove UI |
 | UI | `ui/comments-panel.js` | Asset-level comment thread UI |
 | UI | `ui/ledger-panel.js` | Activity feed — walks manifest chain client-side, fetches full manifests |
@@ -187,7 +187,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | Services | `services/asset-save/editor-publish.js` | Republish authorization for editors (Merkle proof) |
 | Services | `services/team.js` | Merkle-based editor add/remove |
 | Services | `services/asset-delete.js` | Remove an asset from a collection (direct IPFS write) |
-| State | `state/comment-thread.js` | Per-asset Nostr WebSocket + archive state |
+| Services | `services/comment-thread.js` | Per-asset Nostr WebSocket + archive state |
 | UI | `pug/app.pug` | Unified Studio + Library SPA shell (built to `dist/app.html`) |
 | UI | `ui/library-grid.js` | Library grid/list rendering, selection, keyboard shortcuts, rubber-band select |
 | UI | `ui/library-toolbar.js` | Breadcrumb, search, sort, view mode, New Collection, Upload |
@@ -315,7 +315,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 - `format` — `"glb"` or `"gltf"`.
 - `bundleCid` *(optional)* — an IPFS UnixFS directory root CID grouping the composite glTF + its `.bin` buffers + textures under their friendly names (`composite.gltf`, `buffer_0.bin`, `texture_0.png`). **Organizational only** — exists so Pinata/Kubo show a browsable folder for the asset. Loading ignores it. Dropped on color-bake edits (JSON-only changes), since re-bundling isn't worth the upload. Burn unpins it alongside `cid`.
 
-**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `state/comment-thread.js` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
+**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `services/comment-thread.js` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
 
 **Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides asset-level history.
 
@@ -372,7 +372,7 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 
 | Consumer | Description |
 |---|---|
-| Version clock UI | Frontend (`time-travel.js` / `state/version-history-store.js` / `ui/scene-clock.js` / `ui/model-clock.js`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
+| Version clock UI | Frontend (`time-travel.js` / `domain/version-history-store.js` / `ui/scene-clock.js` / `ui/model-clock.js`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
 | Activity ledger | Frontend (`ledger-panel.js`) walks the chain to render the activity feed |
 | Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |

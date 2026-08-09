@@ -35,6 +35,8 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 - `asset.js` — asset facade: getters (`getActiveAssetManifestCid`, `getCurrentManifest`, frozen `getAssetState()` snapshot, …) + commands (`adoptOpenedAsset`, `renameAsset`, `saveDraftAsset`, `publishAsset`)
 - `collection.js` — collection state commands, `publishCollection` seam (`onAdoptIdentity` callback)
 - `editors.js` — Merkle editor helpers, editor-list cache, proof commands
+- `version-history-store.js` — headless manifest-chain store feeding the scene/model clocks
+- `generation-actions.js` — pure follow-up-action policy for generation bubbles
 - **Contracts** `blockchain/contracts/` · **Tests** `test/`, `blockchain/test/`, `e2e/`
 
 ## 4. Commands

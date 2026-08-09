@@ -8,14 +8,14 @@
  */
 
 import { emit, EVENTS } from "../events/bus.js";
-import { walletState } from "./wallet-state.js";
+import { walletState } from "../state/wallet-state.js";
 import {
   getActiveAssetId,
   getActiveAssetManifestCid,
   getCurrentManifest,
 } from "../domain/asset.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
-import { clearSession, createSession, getCachedSession } from "../services/api.js";
+import { clearSession, createSession, getCachedSession } from "./api.js";
 import { buildEditorProof } from "../domain/editors.js";
 
 const RELAY_PATH = "/api/v1/chat/ws";

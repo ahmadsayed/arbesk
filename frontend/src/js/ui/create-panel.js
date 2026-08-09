@@ -16,7 +16,7 @@ import {
 import { showToast } from "./toasts.js";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.js";
 import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage } from "./chat-messages.js";
-import { followupActionsFor } from "../state/generation-actions.js";
+import { followupActionsFor } from "../domain/generation-actions.js";
 import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
   generateAsset,

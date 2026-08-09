@@ -58,7 +58,7 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     getProof: jest.fn(() => null),
   }));
 
-  const mod = await import("../../frontend/src/js/state/comment-thread.js");
+  const mod = await import("../../frontend/src/js/services/comment-thread.js");
   return { CommentThread: mod.CommentThread, emitMock, EVENTS: EVENTS_MOCK };
 }
 

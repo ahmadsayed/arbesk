@@ -188,7 +188,7 @@ Three breakpoints:
 | `ui/ledger-panel.js` | Refactored to `[data-view="ledger"]` (Activity) |
 | `ui/comments-panel.js` | **New** — asset-level comments in inspector |
 | `engine/parametric-preview.js` | **New** — node inspector / parametric color binding |
-| `state/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clocks |
+| `domain/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clocks |
 | `ui/asset-save.js` | Buttons in headerbar, Publish hidden for non-token nested worlds |
 | `ui/asset-drop-zone.js` | Drop overlay → viewport border + Outliner highlight |
 | `engine/scene-graph.js` | Minor: expose dive/ascend hooks |
