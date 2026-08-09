@@ -21,7 +21,7 @@ import { unpinAssetCids } from "./api.js";
 import { showConfirmDialog } from "../ui/dialog.js";
 import { showToast } from "../ui/toasts.js";
 import { emit, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
+import { getActiveAssetTokenId, getActiveAssetId } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { identityMatrix } from "../utils/collections.js";
 
@@ -127,8 +127,8 @@ export async function deleteAssetFromCollection({
   }
 
   if (
-    String(assetState.get().activeAssetTokenId) === String(tokenId) &&
-    String(assetState.get().activeAssetId) === String(assetId)
+    String(getActiveAssetTokenId()) === String(tokenId) &&
+    String(getActiveAssetId()) === String(assetId)
   ) {
     emit(EVENTS.ASSET_CLEARED);
   }

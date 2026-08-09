@@ -14,7 +14,7 @@ import {
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.js";
 import { composeGlTFToBlobAsync } from "../gltf/async-gltf.js";
-import { assetState } from "../state/asset-state.js";
+import { getAssetState } from "../domain/asset.js";
 import { announceStatus } from "./api.js";
 
 /**
@@ -93,7 +93,7 @@ export async function downloadAssetByManifestCid(manifestCid, assetName) {
  * @returns {Promise<string>} the filename the browser was told to save
  */
 export async function downloadActiveAsset() {
-  const { activeAssetManifestCid, activeAssetName } = assetState.get();
+  const { activeAssetManifestCid, activeAssetName } = getAssetState();
   if (!activeAssetManifestCid) {
     throw new Error("No asset is open.");
   }

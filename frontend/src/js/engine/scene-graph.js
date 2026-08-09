@@ -7,12 +7,16 @@
  */
 
 import { emit, on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { state } from "./state.js";
 import { getCssVar, hexToColor4 } from "./theme.js";
 import { clearScene } from "./cleanup.js";
-import { resetForNewAsset, renameAsset, adoptOpenedAsset } from "../domain/asset.js";
+import {
+  resetForNewAsset,
+  renameAsset,
+  adoptOpenedAsset,
+  getActiveAssetManifestCid,
+} from "../domain/asset.js";
 import { adoptOpenedCollection } from "../domain/collection.js";
 
 import {
@@ -830,7 +834,7 @@ export function loadFromParams() {
     // load. This block only wires the Studio-view UI handlers.
 
     async function startNewAsset() {
-      if (assetState.get().activeAssetManifestCid) {
+      if (getActiveAssetManifestCid()) {
         const ok = confirm(
           "Start a new asset? Any unsaved changes will be lost."
         );

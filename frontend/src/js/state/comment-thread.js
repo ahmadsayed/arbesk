@@ -9,7 +9,11 @@
 
 import { emit, EVENTS } from "../events/bus.js";
 import { walletState } from "./wallet-state.js";
-import { assetState } from "./asset-state.js";
+import {
+  getActiveAssetId,
+  getActiveAssetManifestCid,
+  getCurrentManifest,
+} from "../domain/asset.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { clearSession, createSession, getCachedSession } from "../services/api.js";
 import { buildEditorProof } from "../domain/editors.js";
@@ -260,14 +264,14 @@ export class CommentThread {
 
   async _loadArchiveForCurrentManifest(manifest) {
     const assetId =
-      manifest?.asset_id || this._currentAssetId || assetState.get().activeAssetId;
+      manifest?.asset_id || this._currentAssetId || getActiveAssetId();
     let archiveCid = manifest?.comments_archive_cid;
 
     // If no manifest was passed in the event, try to fetch the currently loaded
     // manifest from IPFS so we can read its comments_archive_cid.
     if (!archiveCid && assetId) {
-      const activeCid = assetState.get().activeAssetManifestCid;
-      const cachedManifest = assetState.get().currentManifest;
+      const activeCid = getActiveAssetManifestCid();
+      const cachedManifest = getCurrentManifest();
       if (
         cachedManifest?.asset_id === assetId &&
         cachedManifest?.comments_archive_cid

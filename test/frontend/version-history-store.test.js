@@ -4,9 +4,9 @@
 import { jest, expect, test, describe, beforeEach, beforeAll } from "@jest/globals";
 import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
 import {
-  assetState,
+  assetStore,
   _resetForTesting,
-} from "../../frontend/src/js/state/asset-state.js";
+} from "../../frontend/src/js/domain/asset-store.js";
 
 let _resetSubscribers;
 
@@ -52,7 +52,7 @@ describe("version-history-store", () => {
     const seen = [];
     const unsub = store.subscribe((s) => seen.push(s));
 
-    assetState.set({ activeAssetManifestCid: "cid-v3", activeAssetTokenId: 1 });
+    assetStore.set({ activeAssetManifestCid: "cid-v3", activeAssetTokenId: 1 });
     emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
     await flush();
 
@@ -66,7 +66,7 @@ describe("version-history-store", () => {
   });
 
   test("SCENE_EMPTY clears everything", async () => {
-    assetState.set({ activeAssetManifestCid: "cid-v3" });
+    assetStore.set({ activeAssetManifestCid: "cid-v3" });
     emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
     await flush();
 
@@ -76,7 +76,7 @@ describe("version-history-store", () => {
   });
 
   test("loadVersion clears scene, preserves latest CID, loads target", async () => {
-    assetState.set({ activeAssetManifestCid: "cid-v3" });
+    assetStore.set({ activeAssetManifestCid: "cid-v3" });
     emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
     await flush();
 
@@ -85,13 +85,13 @@ describe("version-history-store", () => {
     expect(store._deps.clearScene).toHaveBeenCalled();
     expect(store._deps.loadAssetManifest).toHaveBeenCalledWith("cid-v1");
     // Chain root (latest) survives the clearScene reset.
-    expect(assetState.get().latestAssetManifestCid).toBe("cid-v3");
+    expect(assetStore.get().latestAssetManifestCid).toBe("cid-v3");
     expect(store.getState().activeCid).toBe("cid-v1");
     expect(store.getState().isLoading).toBe(false);
   });
 
   test("loadVersion failure alerts and reverts activeCid", async () => {
-    assetState.set({ activeAssetManifestCid: "cid-v3" });
+    assetStore.set({ activeAssetManifestCid: "cid-v3" });
     emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
     await flush();
 

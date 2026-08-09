@@ -28,8 +28,14 @@ import {
   clearPendingChildRefs,
   captureAssetThumbnail,
 } from "../../engine/scene-graph.js";
-import { assetState } from "../../state/asset-state.js";
-import { cacheCurrentManifest, recordSavedVersion } from "../../domain/asset.js";
+import {
+  cacheCurrentManifest,
+  recordSavedVersion,
+  getActiveAssetManifestCid,
+  getLatestAssetManifestCid,
+  getActiveAssetTokenId,
+  getCurrentManifest,
+} from "../../domain/asset.js";
 import {
   listPendingGenerations,
   updatePendingGeneration,
@@ -51,7 +57,7 @@ function isRateLimitError(err) {
  */
 function _useCachedManifest(activeCid) {
   if (!activeCid) return null;
-  const cached = assetState.get().currentManifest;
+  const cached = getCurrentManifest();
   const hasAssetId = !!cached?.asset_id;
   const cachedCid = cached?._manifestCid || null;
   const hit = hasAssetId && (!cachedCid || cachedCid === activeCid);
@@ -86,7 +92,7 @@ function looksStored(node) {
 export function advanceManifestVersion(manifest, latestCid) {
   manifest.version = (manifest.version || 0) + 1;
   manifest.prev_asset_manifest_cid =
-    latestCid || assetState.get().activeAssetManifestCid || null;
+    latestCid || getActiveAssetManifestCid() || null;
 }
 
 /**
@@ -218,11 +224,11 @@ export async function decomposeManifestNodes(
  * For drafts without a token, fall back to the currently loaded manifest.
  */
 export async function resolveLatestManifestCid() {
-  if (assetState.get().latestAssetManifestCid) {
-    return assetState.get().latestAssetManifestCid;
+  if (getLatestAssetManifestCid()) {
+    return getLatestAssetManifestCid();
   }
 
-  const tokenId = assetState.get().activeAssetTokenId;
+  const tokenId = getActiveAssetTokenId();
   if (tokenId) {
     try {
       const onChainCid = await getTokenURI(tokenId);
@@ -239,7 +245,7 @@ export async function resolveLatestManifestCid() {
       );
     }
   }
-  return assetState.get().activeAssetManifestCid || null;
+  return getActiveAssetManifestCid() || null;
 }
 
 /**
@@ -343,7 +349,7 @@ export async function prepareManifestForWrite(assetName) {
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
 
-  const activeCid = assetState.get().activeAssetManifestCid;
+  const activeCid = getActiveAssetManifestCid();
   if (activeCid) {
     manifest = _useCachedManifest(activeCid);
     if (!manifest) {
@@ -387,9 +393,9 @@ export async function prepareManifestForWrite(assetName) {
   const latestCid = await resolveLatestManifestCid();
   log(
     `Save: versioning base | active=${activeCid} latest=${
-      assetState.get().latestAssetManifestCid
+      getLatestAssetManifestCid()
     } onChain=${
-      assetState.get().activeAssetTokenId || "none"
+      getActiveAssetTokenId() || "none"
     } chosenPrev=${latestCid}`
   );
 
@@ -705,7 +711,7 @@ export async function saveAssetDraftCore(
     // round-trip entirely.
     cacheCurrentManifest(
       prepared.manifest,
-      assetState.get().activeAssetManifestCid
+      getActiveAssetManifestCid()
     );
     return {
       ok: false,

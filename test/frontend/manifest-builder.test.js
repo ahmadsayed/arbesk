@@ -239,12 +239,12 @@ describe("decomposeManifestNodes", () => {
 
 describe("prepareManifestForWrite", () => {
   let ctx;
-  let assetState;
+  let assetStore;
 
   beforeEach(async () => {
     ctx = await load();
-    const stateMod = await import("../../frontend/src/js/state/asset-state.js");
-    assetState = stateMod.assetState;
+    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    assetStore = stateMod.assetStore;
     stateMod._resetForTesting();
   });
 
@@ -252,7 +252,7 @@ describe("prepareManifestForWrite", () => {
     const manifest = makeManifest([
       makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
     ]);
-    assetState.set({
+    assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
     });
@@ -269,7 +269,7 @@ describe("prepareManifestForWrite", () => {
       makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
     ]);
     ctx.remote.getFromRemoteIPFS.mockResolvedValue(manifest);
-    assetState.set({
+    assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyOtherManifest" },
     });
@@ -290,7 +290,7 @@ describe("prepareManifestForWrite", () => {
     const manifest = makeManifest([
       makeNode({ format: "glb", path: "asset.glb", cid: "bafyGlb" }),
     ]);
-    assetState.set({
+    assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       latestAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
@@ -355,7 +355,7 @@ describe("prepareManifestForWrite", () => {
     manifest.metadata = {
       chat: [{ prompt: "old version prompt", provider: "mock", task: "model", timestamp: 1 }],
     };
-    assetState.set({
+    assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
     });
@@ -385,7 +385,7 @@ describe("prepareManifestForWrite", () => {
     manifest.metadata = {
       chat: [{ prompt: "old", provider: "mock", task: "model", timestamp: 1 }],
     };
-    assetState.set({
+    assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
     });
@@ -436,9 +436,9 @@ describe("prepareManifestForWrite", () => {
         format: "3mf",
       }),
     ]);
-    const stateMod = await import("../../frontend/src/js/state/asset-state.js");
+    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
     stateMod._resetForTesting();
-    stateMod.assetState.set({
+    stateMod.assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
     });
@@ -494,7 +494,7 @@ describe("prepareManifestForWrite", () => {
       })
     );
     const ctx = await load();
-    const stateMod = await import("../../frontend/src/js/state/asset-state.js");
+    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
     stateMod._resetForTesting();
     const { writeJSONToIPFS } = await import(
       "../../frontend/src/js/ipfs/write-to-ipfs.js"
@@ -505,7 +505,7 @@ describe("prepareManifestForWrite", () => {
     // without the child ref this save would be a no-op.
     const manifest = makeManifest([makeNode()]);
     ctx.gltfHandler.isStoredForm.mockReturnValue(true);
-    stateMod.assetState.set({
+    stateMod.assetStore.set({
       activeAssetManifestCid: "bafyManifest",
       latestAssetManifestCid: "bafyManifest",
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
