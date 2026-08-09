@@ -12,8 +12,7 @@ import { walletState } from "./wallet-state.js";
 import { assetState } from "./asset-state.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { clearSession, createSession, getCachedSession } from "../services/api.js";
-import { fetchEditors, getEditorSetVersion } from "../services/team.js";
-import { getProof } from "../gltf/merkle-editors.js";
+import { buildEditorProof } from "../domain/editors.js";
 
 const RELAY_PATH = "/api/v1/chat/ws";
 const RECONNECT_DELAY_MS = 3000;
@@ -246,19 +245,13 @@ export class CommentThread {
    * Build a Merkle proof for the current wallet against the token's editor list.
    * Returns null for owners or when the wallet is not a listed collaborator.
    */
-  async _loadEditorProof(tokenId, chainId, address) {
+  async _loadEditorProof(tokenId, _chainId, address) {
     try {
-      const editorList = await fetchEditors(tokenId);
-      if (!editorList || editorList.length === 0) return null;
-      const version = await getEditorSetVersion(tokenId);
-      const result = getProof(editorList, address, tokenId, version);
+      const result = await buildEditorProof(tokenId, address);
       if (!result) return null;
       return { proof: result.proof, role: result.role };
     } catch (err) {
-      console.warn(
-        "[COMMENT_THREAD] could not build editor proof:",
-        err.message
-      );
+      console.warn("[COMMENT_THREAD] could not build editor proof:", err.message);
       return null;
     }
   }

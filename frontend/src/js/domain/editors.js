@@ -1,20 +1,18 @@
 // @ts-nocheck
 /**
- * Domain: Editors — Merkle editor-list operations and local cache.
+ * Domain: Editors — Merkle editor-list operations, local cache, and proof commands.
  *
- * Centralizes the editor list localStorage cache, Merkle root computation,
- * proof generation, and on-chain version lookup used by publish, team,
+ * Centralizes editor list localStorage caching, on-chain version lookup,
+ * Merkle root computation, and proof generation for the publish, team,
  * delete, library, and comment flows.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
-// eslint-disable-next-line no-unused-vars
-import { CollaboratorRole } from "../blockchain/wallet.js";
-// eslint-disable-next-line no-unused-vars
-import { getActiveContract } from "../blockchain/wallet.js";
-// eslint-disable-next-line no-unused-vars
+import {
+  CollaboratorRole,
+  getActiveContract,
+} from "../blockchain/wallet.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
-// eslint-disable-next-line no-unused-vars
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 
 export const MAX_EDITORS_PER_TOKEN = 5000;
@@ -27,6 +25,14 @@ function _soliditySha3(...args) {
   return W3.utils.soliditySha3(...args);
 }
 
+/**
+ * Build a leaf hash for the editor Merkle tree.
+ * @param {string} address
+ * @param {number} role
+ * @param {string|number} tokenId
+ * @param {number} setVersion
+ * @returns {string} 32-byte hex string
+ */
 export function makeLeaf(address, role, tokenId, setVersion) {
   return _soliditySha3(
     { type: "address", value: address },
@@ -41,6 +47,13 @@ function _buildTree(leaves) {
   return SimpleMerkleTree.of(leaves);
 }
 
+/**
+ * Compute the Merkle root for an editor list at a given token/version.
+ * @param {Array<{address: string, role: number}>} editorList
+ * @param {string|number} tokenId
+ * @param {number} setVersion
+ * @returns {string} 32-byte hex root
+ */
 export function computeRoot(editorList, tokenId, setVersion) {
   if (!editorList || editorList.length === 0) {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -57,6 +70,14 @@ export function computeRoot(editorList, tokenId, setVersion) {
   return tree.root;
 }
 
+/**
+ * Generate a Merkle proof for an editor in the list.
+ * @param {Array<{address: string, role: number}>} editorList
+ * @param {string} targetAddress
+ * @param {string|number} tokenId
+ * @param {number} setVersion
+ * @returns {{proof: string[], role: number}|null}
+ */
 export function getProof(editorList, targetAddress, tokenId, setVersion) {
   if (!editorList || editorList.length === 0) return null;
   const entry = editorList.find(
@@ -73,6 +94,13 @@ export function getProof(editorList, targetAddress, tokenId, setVersion) {
   return { proof, role: entry.role };
 }
 
+/**
+ * Verify a Merkle proof against a root and leaf.
+ * @param {string} root
+ * @param {string} leaf
+ * @param {string[]} proof
+ * @returns {boolean}
+ */
 export function verifyProof(root, leaf, proof) {
   if (
     !root ||
@@ -81,4 +109,111 @@ export function verifyProof(root, leaf, proof) {
     return false;
   }
   return SimpleMerkleTree.verify(root, leaf, proof);
+}
+
+// ─── Cache ─────────────────────────────────────────────────────────────────
+
+export function editorListKey(tag) {
+  return EDITOR_LIST_PREFIX + tag;
+}
+
+export function saveEditorList(tag, list, cid = null) {
+  try {
+    localStorage.setItem(
+      editorListKey(tag),
+      JSON.stringify({ list, cid, saved: Date.now() })
+    );
+  } catch (e) {
+    console.warn("[EDITORS] failed to cache editor list:", e.message);
+  }
+}
+
+function _loadCachedEditorList(tag) {
+  try {
+    const raw = localStorage.getItem(editorListKey(tag));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.list)) return parsed.list;
+  } catch {
+    /* ignore corrupt cache */
+  }
+  return null;
+}
+
+export function clearEditorCache(tag) {
+  try {
+    localStorage.removeItem(editorListKey(tag));
+  } catch {
+    /* ignore */
+  }
+}
+
+// ─── List / version resolution ─────────────────────────────────────────────
+
+export async function loadEditorList(tag) {
+  if (!tag) return [];
+  try {
+    const c = getActiveContract();
+    if (c) {
+      const cid = await c.methods.editorListURI(tag).call();
+      if (cid) {
+        const fresh = await getFromRemoteIPFS(cid);
+        if (Array.isArray(fresh)) {
+          saveEditorList(tag, fresh, cid);
+          return fresh;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[EDITORS] failed to load editor list for ${tag}:`, err.message);
+  }
+  const cached = _loadCachedEditorList(tag);
+  return cached || [];
+}
+
+export async function getEditorSetVersion(tag) {
+  const c = getActiveContract();
+  if (!c) return 1;
+  try {
+    const version = await c.methods.editorSetVersion(tag).call();
+    return Number(version);
+  } catch {
+    return 1;
+  }
+}
+
+export function getCachedEditorRoot(tag) {
+  const cached = _loadCachedEditorList(tag);
+  if (!cached) return null;
+  return computeRoot(cached, tag, 1);
+}
+
+// ─── Proof command ─────────────────────────────────────────────────────────
+
+export async function buildEditorProof(tag, editorAddress, options = {}) {
+  const { isOwner = false, ownerRoot = null } = options;
+  const [versionResult, listResult] = await Promise.allSettled([
+    getEditorSetVersion(tag),
+    loadEditorList(tag),
+  ]);
+
+  const version = versionResult.status === "fulfilled" ? versionResult.value : 1;
+  const list = listResult.status === "fulfilled" ? listResult.value : [];
+
+  const proofFromList = getProof(list, editorAddress, tag, version);
+  if (proofFromList) return proofFromList;
+
+  if (isOwner && ownerRoot) {
+    const ownerLeaf = makeLeaf(
+      editorAddress,
+      CollaboratorRole.Editor,
+      tag,
+      version
+    );
+    if (ownerRoot.toLowerCase() === ownerLeaf.toLowerCase()) {
+      return { proof: [], role: CollaboratorRole.Editor };
+    }
+  }
+
+  return null;
 }

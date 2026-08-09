@@ -71,6 +71,9 @@ function _mockContract() {
       editorSetVersion: (_tokenId) => ({
         call: jest.fn().mockResolvedValue(String(VERSION)),
       }),
+      editorListURI: (_tokenId) => ({
+        call: jest.fn().mockResolvedValue(null),
+      }),
     },
   };
 }
