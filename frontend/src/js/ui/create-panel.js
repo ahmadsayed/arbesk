@@ -40,7 +40,8 @@ import {
   _resetPendingGenerations,
 } from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
-import { onSaveAssetDraft, adoptManifestName } from "./asset-save.js";
+import { onSaveAssetDraft } from "./asset-save.js";
+import { adoptManifestName } from "../domain/asset.js";
 
 // ─── DOM References ───
 const promptInput = document.getElementById("promptInput");

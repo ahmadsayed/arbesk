@@ -12,7 +12,7 @@ import { walletState } from "../state/wallet-state.js";
 import { state } from "./state.js";
 import { getCssVar, hexToColor4 } from "./theme.js";
 import { clearScene } from "./cleanup.js";
-import { getStateForNewAsset } from "../utils/new-asset.js";
+import { resetForNewAsset, renameAsset } from "../domain/asset.js";
 
 import {
   selectNode,
@@ -845,10 +845,11 @@ export function loadFromParams() {
       }
 
       clearScene();
-      assetState.set(getStateForNewAsset(assetState.get()));
-      // Emit before writing the new name below: SCENE_EMPTY listeners reset
-      // the header to "No asset open" (asset-save.js), which is correct for
-      // the library close-out path but must not clobber the fresh draft name.
+      resetForNewAsset();
+      // Emit before writing the new name below: SCENE_EMPTY re-renders the
+      // header chrome ("No asset open" — ui/asset-chrome.js), which is
+      // correct for the library close-out path but must not clobber the
+      // fresh draft name.
       emit(EVENTS.SCENE_EMPTY);
 
       // Prompt for a name using the GNOME HIG dialog
@@ -864,14 +865,10 @@ export function loadFromParams() {
       } catch {
         activeAssetName = "Untitled Asset";
       }
-      assetState.set({ activeAssetName });
+      renameAsset(activeAssetName);
 
       const nameEl = document.getElementById("assetNameDisplay");
       if (nameEl) nameEl.textContent = activeAssetName;
-      const statusEl = document.getElementById("assetStatusName");
-      if (statusEl) statusEl.textContent = activeAssetName;
-      const metaEl = document.getElementById("assetStatusMeta");
-      if (metaEl) metaEl.textContent = "Draft Scene";
       import("../ui/sidebar.js").then(function (m) {
         m.switchView("chat");
       });

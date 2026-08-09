@@ -7,17 +7,24 @@
  * `services/asset-save/manifest-builder.js`; collection and editor publishing
  * live in `services/asset-save/collection-publish.js` and
  * `services/asset-save/editor-publish.js`.
+ *
+ * Header chrome (title/meta + save/publish/download visibility) is owned by
+ * `ui/asset-chrome.js` — this module never writes it.
  */
 
 import { getContractAddress } from "../blockchain/network-config.js";
 import { showDialog } from "./dialog.js";
-import { getPendingChildRefs } from "../engine/scene-graph.js";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 import { getAssetName } from "../services/token.js";
 import { showToast } from "./toasts.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import {
+  renameAsset,
+  adoptLoadedManifestName,
+  isDefaultAssetName,
+} from "../domain/asset.js";
 import { deriveDefaultAssetId } from "../utils/collections.js";
 import { log, error } from "../utils/log.js";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.js";
@@ -37,8 +44,6 @@ const saveBtnText = document.getElementById("saveAssetBtnText");
 const publishBtn = document.getElementById("publishAssetBtn");
 const publishBtnText = document.getElementById("publishAssetBtnText");
 const downloadBtn = document.getElementById("downloadAssetBtn");
-const assetStatusName = document.getElementById("assetStatusName");
-const assetStatusMeta = document.getElementById("assetStatusMeta");
 
 let isSaving = false;
 let isPublishing = false;
@@ -59,34 +64,6 @@ function isRateLimitError(err) {
     err.message.includes("HTTP 429") ||
     err.message.includes("Too Many Requests")
   );
-}
-
-function updateAssetStatus(name, meta) {
-  if (assetStatusName) assetStatusName.textContent = name;
-  if (assetStatusMeta) assetStatusMeta.textContent = meta;
-}
-
-function updateButtonState() {
-  const hasAsset =
-    !!assetState.get().activeAssetManifestCid ||
-    !!assetState.get().generatedAsset ||
-    getPendingChildRefs().length > 0;
-  const hasWallet = !!walletState.get().walletAddress;
-  const visible = hasAsset && hasWallet;
-
-  if (saveBtn) saveBtn.hidden = !visible;
-  if (publishBtn) publishBtn.hidden = !visible;
-  // Downloads are read-only — no wallet/session required.
-  if (downloadBtn) downloadBtn.hidden = !hasAsset;
-
-  if (saveBtnText) saveBtnText.textContent = "Save";
-  if (saveBtn) saveBtn.title = "Save Draft (Ctrl+S)";
-  if (publishBtnText) {
-    publishBtnText.textContent = "Besk it";
-  }
-  if (publishBtn) {
-    publishBtn.title = "Besk it: publish this asset";
-  }
 }
 
 async function onDownloadAsset() {
@@ -115,32 +92,6 @@ async function fetchAssetName(tokenId) {
   return getAssetName(tokenId);
 }
 
-const DEFAULT_NAMES = new Set([
-  "untitled asset",
-  "my asset",
-  "no asset open",
-  "",
-]);
-
-function isDefaultName(name) {
-  return DEFAULT_NAMES.has((name || "").toLowerCase().trim());
-}
-
-/**
- * Adopt a loaded manifest's name into session state. Opening an asset
- * never set `activeAssetName`, so chat-driven auto-saves (Show in Studio,
- * animate) wrote "Untitled Asset" over the published name and the next
- * publish re-prompted for one. Default or absent names (e.g. in-session
- * generation manifests) must not clobber a good name already in state.
- * @param {any} manifest
- */
-export function adoptManifestName(manifest) {
-  const name = manifest?.name?.trim();
-  if (name && !isDefaultName(name)) {
-    assetState.set({ activeAssetName: name });
-  }
-}
-
 async function resolveAssetName() {
   // Always prefer the user's in-session rename.
   if (assetState.get().activeAssetName) return assetState.get().activeAssetName;
@@ -160,7 +111,7 @@ async function resolveAssetName() {
  */
 async function ensureExplicitName() {
   const currentName = assetState.get().activeAssetName || "";
-  if (!isDefaultName(currentName)) {
+  if (!isDefaultAssetName(currentName)) {
     return currentName; // already explicitly named - skip dialog
   }
   const input = await showDialog(
@@ -173,8 +124,7 @@ async function ensureExplicitName() {
   }
   const name = input.trim();
   if (name) {
-    assetState.set({ activeAssetName: name });
-    if (assetStatusName) assetStatusName.textContent = name;
+    renameAsset(name);
     return name;
   }
   return "Untitled Asset";
@@ -239,10 +189,6 @@ async function onSaveAssetDraft() {
     }
 
     emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
-    updateAssetStatus(
-      assetName,
-      assetState.get().activeAssetTokenId ? "Published" : "Draft Scene"
-    );
     announceStatus("Draft saved.");
     finishTaskProgress("Draft saved.");
     return result;
@@ -271,7 +217,6 @@ async function onSaveAssetDraft() {
       saveBtn.disabled = false;
       saveBtn.title = "Save Draft (Ctrl+S)";
     }
-    updateButtonState();
   }
 }
 
@@ -297,7 +242,6 @@ async function onPublishAsset() {
     if (!assetName) {
       isPublishing = false;
       if (publishBtn) publishBtn.disabled = false;
-      updateButtonState();
       finishTaskProgress("Besking cancelled.");
       return;
     }
@@ -395,7 +339,6 @@ async function onPublishAsset() {
       tokenId: assetState.get().activeAssetTokenId,
       cid: assetCid,
     });
-    updateAssetStatus(assetName, "Published");
   } catch (err) {
     error("Publish asset failed:", err);
     const rateLimited = isRateLimitError(err);
@@ -421,7 +364,6 @@ async function onPublishAsset() {
       publishBtn.disabled = false;
       publishBtn.title = "Besk it: publish this asset";
     }
-    updateButtonState();
   }
 }
 
@@ -450,29 +392,5 @@ document.addEventListener("keydown", (e) => {
 // Asset name is set at creation time and displayed read-only in the header.
 
 on(EVENTS.SCENE_READY, (e) => {
-  const manifest = e?.manifest;
-  // Preserve an existing rename - don't overwrite with fallback defaults.
-  const name =
-    manifest?.name || assetState.get().activeAssetName || "Untitled Asset";
-  if (manifest?.name || !assetState.get().activeAssetName) {
-    assetState.set({ activeAssetName: name });
-  }
-  updateAssetStatus(
-    name,
-    assetState.get().activeAssetTokenId ? "Published" : "Draft Scene"
-  );
-  updateButtonState();
+  adoptLoadedManifestName(e?.manifest);
 });
-
-on(EVENTS.SCENE_EMPTY, () => {
-  if (saveBtn) saveBtn.hidden = true;
-  if (publishBtn) publishBtn.hidden = true;
-  if (downloadBtn) downloadBtn.hidden = true;
-  updateAssetStatus("No asset open", "Create or open an asset");
-});
-on(EVENTS.WALLET_CONNECTED, updateButtonState);
-on(EVENTS.WALLET_DISCONNECTED, () => {
-  if (saveBtn) saveBtn.hidden = true;
-  if (publishBtn) publishBtn.hidden = true;
-});
-on(EVENTS.ASSET_STATE_CHANGED, updateButtonState);

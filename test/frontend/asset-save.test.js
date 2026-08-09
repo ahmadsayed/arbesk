@@ -135,7 +135,10 @@ describe("onSaveAssetDraft", () => {
 
 describe("adoptManifestName", () => {
   test("adopts a real manifest name into session state", async () => {
-    const { adoptManifestName } = await loadModule();
+    await loadModule(); // registers the asset-state mock
+    const { adoptManifestName } = await import(
+      "../../frontend/src/js/domain/asset.js"
+    );
     const { assetState } = await import(
       "../../frontend/src/js/state/asset-state.js"
     );
@@ -144,7 +147,10 @@ describe("adoptManifestName", () => {
   });
 
   test("does not clobber state with a default or absent name", async () => {
-    const { adoptManifestName } = await loadModule();
+    await loadModule(); // registers the asset-state mock
+    const { adoptManifestName } = await import(
+      "../../frontend/src/js/domain/asset.js"
+    );
     const { assetState } = await import(
       "../../frontend/src/js/state/asset-state.js"
     );

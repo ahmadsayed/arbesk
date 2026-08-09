@@ -29,6 +29,7 @@ import { CHAIN_IDS, DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../../../const
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
+import { closeAsset } from "../domain/asset.js";
 import { getOwnedTokens, getSharedTokens } from "../services/api.js";
 
 let assetLibraryBody = null;
@@ -1021,6 +1022,7 @@ on(EVENTS.SIDEBAR_VIEW_CHANGED, async ({ view }) => {
 
 on(EVENTS.ASSET_CLEARED, async () => {
   clearScene();
+  closeAsset();
   emit(EVENTS.SCENE_EMPTY);
   clearUrlAssetParams();
   await refreshAssetLibrary();
