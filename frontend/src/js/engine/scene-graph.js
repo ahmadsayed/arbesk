@@ -846,6 +846,10 @@ export function loadFromParams() {
 
       clearScene();
       assetState.set(getStateForNewAsset(assetState.get()));
+      // Emit before writing the new name below: SCENE_EMPTY listeners reset
+      // the header to "No asset open" (asset-save.js), which is correct for
+      // the library close-out path but must not clobber the fresh draft name.
+      emit(EVENTS.SCENE_EMPTY);
 
       // Prompt for a name using the GNOME HIG dialog
       let activeAssetName;
@@ -868,7 +872,6 @@ export function loadFromParams() {
       if (statusEl) statusEl.textContent = activeAssetName;
       const metaEl = document.getElementById("assetStatusMeta");
       if (metaEl) metaEl.textContent = "Draft Scene";
-      emit(EVENTS.SCENE_EMPTY);
       import("../ui/sidebar.js").then(function (m) {
         m.switchView("chat");
       });
