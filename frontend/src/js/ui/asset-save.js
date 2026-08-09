@@ -24,6 +24,7 @@ import {
   renameAsset,
   adoptLoadedManifestName,
   isDefaultAssetName,
+  saveDraftAsset,
 } from "../domain/asset.js";
 import { deriveDefaultAssetId } from "../utils/collections.js";
 import { log, error } from "../utils/log.js";
@@ -88,23 +89,6 @@ async function onDownloadAsset() {
   }
 }
 
-async function fetchAssetName(tokenId) {
-  return getAssetName(tokenId);
-}
-
-async function resolveAssetName() {
-  // Always prefer the user's in-session rename.
-  if (assetState.get().activeAssetName) return assetState.get().activeAssetName;
-
-  // If no rename yet, try fetching from the token's stored manifest.
-  if (assetState.get().activeAssetTokenId) {
-    return (
-      (await fetchAssetName(assetState.get().activeAssetTokenId)) || "My Asset"
-    );
-  }
-  return "My Asset";
-}
-
 /**
  * Prompt for a name only if it hasn't been explicitly set.
  * Returns the final name or null if cancelled.
@@ -156,8 +140,11 @@ async function onSaveAssetDraft() {
   );
 
   try {
-    const assetName = await resolveAssetName();
-    const result = await saveAssetDraftCore(assetName);
+    const result = await saveDraftAsset({
+      saveDraft: saveAssetDraftCore,
+      fetchTokenName: getAssetName,
+      updateUrlManifest,
+    });
 
     if (!result.ok) {
       if (result.reason === "empty") {
@@ -179,16 +166,6 @@ async function onSaveAssetDraft() {
       return result;
     }
 
-    const { cid } = result;
-
-    // Only rewrite the URL for non-tokenized drafts. For tokenized assets,
-    // the ?asset=<tokenId> URL already anchors to the blockchain; avoid
-    // stashing a draft manifest in query params.
-    if (!assetState.get().activeAssetTokenId) {
-      updateUrlManifest(cid);
-    }
-
-    emit(EVENTS.ASSET_DRAFT_SAVED, { cid });
     announceStatus("Draft saved.");
     finishTaskProgress("Draft saved.");
     return result;

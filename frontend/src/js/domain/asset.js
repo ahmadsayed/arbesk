@@ -5,7 +5,7 @@
  * CID/tokenId/currentManifest identity fields, and the single subscription
  * point for chrome rendering.
  */
-import { on, EVENTS } from "../events/bus.js";
+import { on, emit, EVENTS } from "../events/bus.js";
 import { assetState, tagManifestCid } from "../state/asset-state.js";
 import { getStateForNewAsset } from "../utils/new-asset.js";
 
@@ -227,4 +227,48 @@ export function adoptPublishedIdentity(tokenId, assetId) {
     activeAssetTokenId: String(tokenId),
     activeAssetId: assetId,
   });
+}
+
+// ─── Save/publish commands (Phase 2) ───────────────────────────────
+// IO stays in injected deps so the domain module never imports
+// services/asset-save/* (which imports this module for the state commands).
+
+/**
+ * Name resolution for saves (verbatim from ui/asset-save.js): the in-session
+ * rename wins; a tokenized asset falls back to its on-chain name; drafts fall
+ * back to "My Asset".
+ * @param {(tokenId: string) => Promise<string|null>} fetchTokenName
+ * @returns {Promise<string>}
+ */
+async function _resolveAssetName(fetchTokenName) {
+  const current = assetState.get().activeAssetName;
+  if (current) return current;
+  const tokenId = assetState.get().activeAssetTokenId;
+  if (tokenId) return (await fetchTokenName(tokenId)) || "My Asset";
+  return "My Asset";
+}
+
+/**
+ * Save the current draft. Builds and uploads the manifest via the injected
+ * serializer, updates the URL for non-tokenized drafts, and emits
+ * ASSET_DRAFT_SAVED. Returns the serializer's result verbatim; failures
+ * propagate to the caller (the UI owns toasts/progress).
+ * @param {{saveDraft: (assetName: string, options?: any) => Promise<any>,
+ *          fetchTokenName: (tokenId: string) => Promise<string|null>,
+ *          updateUrlManifest: (cid: string) => void}} deps
+ * @returns {Promise<any>}
+ */
+export async function saveDraftAsset(deps) {
+  const assetName = await _resolveAssetName(deps.fetchTokenName);
+  const result = await deps.saveDraft(assetName);
+  if (!result.ok) return result;
+
+  // Only rewrite the URL for non-tokenized drafts. For tokenized assets, the
+  // ?asset=<tokenId> URL already anchors to the blockchain; avoid stashing a
+  // draft manifest in query params.
+  if (!assetState.get().activeAssetTokenId) {
+    deps.updateUrlManifest(result.cid);
+  }
+  emit(EVENTS.ASSET_DRAFT_SAVED, { cid: result.cid });
+  return result;
 }
