@@ -377,14 +377,9 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       console.warn(`[LIBRARY] No tokenURI for Token ID: ${tokenId}; keeping studio empty`);
       clearScene();
       clearUrlAssetParams();
+      closeAsset();
       assetState.set({
-        activeAssetManifestCid: null,
-        activeAssetTokenId: null,
-        activeAssetName: null,
-        latestAssetManifestCid: null,
-        currentManifest: null,
         activeCollectionTokenId: null,
-        activeAssetId: null,
         selectedCollectionId: null,
       });
       return;
@@ -466,14 +461,9 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     console.warn(`[LIBRARY] Failed to open asset #${tokenId}; keeping studio empty:`, err.message);
     clearScene();
     clearUrlAssetParams();
+    closeAsset();
     assetState.set({
-      activeAssetManifestCid: null,
-      activeAssetTokenId: null,
-      activeAssetName: null,
-      latestAssetManifestCid: null,
-      currentManifest: null,
       activeCollectionTokenId: null,
-      activeAssetId: null,
       selectedCollectionId: null,
     });
   }

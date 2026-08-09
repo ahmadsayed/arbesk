@@ -8,8 +8,20 @@ import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 let _tokenURIs = {};
 let _manifests = {};
 
+const closeAssetSpy = jest.fn(() => {
+  assetState.set({
+    activeAssetManifestCid: null,
+    latestAssetManifestCid: null,
+    activeAssetTokenId: null,
+    activeAssetId: null,
+    activeAssetName: null,
+    currentManifest: null,
+  });
+});
+
 beforeEach(() => {
   resetAssetState();
+  closeAssetSpy.mockClear();
   _tokenURIs = {
     1: "bafyCollection1",
     2: "bafyCollection2",
@@ -44,7 +56,10 @@ async function loadModule() {
             getPastEvents: jest.fn().mockResolvedValue([]),
             methods: {
               tokenURI: (tokenId) => ({
-                call: jest.fn().mockResolvedValue(_tokenURIs[tokenId] || ""),
+                call:
+                  _tokenURIs[tokenId] instanceof Error
+                    ? jest.fn().mockRejectedValue(_tokenURIs[tokenId])
+                    : jest.fn().mockResolvedValue(_tokenURIs[tokenId] || ""),
               }),
               listTokens: () => ({
                 call: jest.fn().mockResolvedValue([]),
@@ -72,6 +87,20 @@ async function loadModule() {
       getRawArrayBufferFromRemoteIPFS: jest.fn().mockRejectedValue(new Error("no raw buffer")),
       getManifestChain: jest.fn((cid) => Promise.resolve([{ cid, version: 1, name: null, nodeCount: 0 }])),
       isIpfsCidReachable: jest.fn().mockResolvedValue(true),
+    })
+  );
+
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/domain/asset.js",
+    () => ({
+      closeAsset: closeAssetSpy,
+      renameAsset: (name) => assetState.set({ activeAssetName: name }),
+      resetForNewAsset: jest.fn(),
+      adoptLoadedManifestName: jest.fn(),
+      adoptManifestName: jest.fn(),
+      isDefaultAssetName: jest.fn(() => false),
+      getAssetSnapshot: jest.fn(),
+      subscribeAsset: jest.fn(),
     })
   );
 
@@ -170,6 +199,55 @@ describe("updateActiveAssetCard", () => {
       "Asset A Updated"
     );
     expect(card.dataset.manifestCid).toBe("bafyAUpdated");
+  });
+});
+
+describe("openAssetByTokenId error paths", () => {
+  function seedDirtyState() {
+    assetState.set({
+      activeAssetName: "Leftover",
+      activeAssetManifestCid: "bafyOld",
+      latestAssetManifestCid: "bafyOld",
+      activeAssetTokenId: "42",
+      activeAssetId: "asset-x",
+      currentManifest: { type: "asset" },
+      activeCollectionTokenId: "7",
+      selectedCollectionId: "sel-1",
+    });
+  }
+
+  function expectFullyCleared() {
+    const s = assetState.get();
+    expect(s.activeAssetName).toBeNull();
+    expect(s.activeAssetManifestCid).toBeNull();
+    expect(s.latestAssetManifestCid).toBeNull();
+    expect(s.activeAssetTokenId).toBeNull();
+    expect(s.activeAssetId).toBeNull();
+    expect(s.currentManifest).toBeNull();
+    expect(s.activeCollectionTokenId).toBeNull();
+    expect(s.selectedCollectionId).toBeNull();
+  }
+
+  test("empty tokenURI routes the clear through closeAsset", async () => {
+    const { openAssetByTokenId } = await loadModule();
+    seedDirtyState();
+
+    // Token 99 has no tokenURI → early-return clear path
+    await openAssetByTokenId("99");
+
+    expect(closeAssetSpy).toHaveBeenCalledTimes(1);
+    expectFullyCleared();
+  });
+
+  test("tokenURI rejection routes the clear through closeAsset", async () => {
+    const { openAssetByTokenId } = await loadModule();
+    seedDirtyState();
+    _tokenURIs[98] = new Error("execution reverted");
+
+    await openAssetByTokenId("98");
+
+    expect(closeAssetSpy).toHaveBeenCalledTimes(1);
+    expectFullyCleared();
   });
 });
 

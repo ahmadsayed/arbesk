@@ -11,6 +11,7 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
+import { renameAsset } from "../domain/asset.js";
 
 const MAX_DEPTH = 5;
 
@@ -103,9 +104,9 @@ async function onDiveRequested(e) {
     assetState.set({
       activeAssetManifestCid: manifest.cid,
       latestAssetManifestCid: manifest.cid,
-      activeAssetName: manifest.name || "Child World",
       activeAssetTokenId: refTokenId,
     });
+    renameAsset(manifest.name || "Child World");
     uiState.set({ nestingDepth: ++currentDepth });
 
     await loadAssetManifest(manifest.cid);
@@ -136,9 +137,9 @@ async function ascendOneLevel() {
     assetState.set({
       activeAssetManifestCid: prev.cid,
       latestAssetManifestCid: prev.cid,
-      activeAssetName: prev.assetName,
       activeAssetTokenId: prev.tokenId,
     });
+    renameAsset(prev.assetName);
 
     await loadAssetManifest(prev.cid);
 
