@@ -42,6 +42,7 @@ import {
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
 import { onSaveAssetDraft } from "./asset-save.js";
 import { adoptManifestName, adoptOpenedAsset, setActiveManifestCid, setLatestManifestCid } from "../domain/asset.js";
+import { selectCollection } from "../domain/collection.js";
 
 // ─── DOM References ───
 const promptInput = document.getElementById("promptInput");
@@ -421,13 +422,11 @@ function syncCollectionSelect() {
     collectionSelect.value = currentValue;
   } else if (defaultId) {
     collectionSelect.value = defaultId;
-    assetState.set({ selectedCollectionId: defaultId });
+    selectCollection(defaultId);
   }
 
   collectionSelect.addEventListener("change", () => {
-    assetState.set({
-      selectedCollectionId: collectionSelect.value || defaultId,
-    });
+    selectCollection(collectionSelect.value || defaultId);
   });
 }
 

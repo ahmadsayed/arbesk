@@ -32,16 +32,28 @@ test("adoptOpenedAsset sets active+latest and only the identity keys present", (
   adoptOpenedAsset("bafyOther", {
     tokenId: "7",
     assetId: "asset_1",
-    collectionTokenId: "7",
-    clearSelectedCollection: true,
   });
   s = assetState.get();
   expect(s.activeAssetManifestCid).toBe("bafyOther");
   expect(s.latestAssetManifestCid).toBe("bafyOther");
   expect(s.activeAssetTokenId).toBe("7");
   expect(s.activeAssetId).toBe("asset_1");
-  expect(s.activeCollectionTokenId).toBe("7");
-  expect(s.selectedCollectionId).toBeNull();
+  expect(s.selectedCollectionId).toBe("3"); // untouched
+});
+
+test("adoptOpenedAsset only writes asset identity fields, not collection context", () => {
+  assetState.set({ activeCollectionTokenId: "9", selectedCollectionId: "3" });
+  adoptOpenedAsset("bafyOther", {
+    tokenId: "7",
+    assetId: "asset_1",
+  });
+  const s = assetState.get();
+  expect(s.activeAssetManifestCid).toBe("bafyOther");
+  expect(s.latestAssetManifestCid).toBe("bafyOther");
+  expect(s.activeAssetTokenId).toBe("7");
+  expect(s.activeAssetId).toBe("asset_1");
+  expect(s.activeCollectionTokenId).toBe("9"); // untouched
+  expect(s.selectedCollectionId).toBe("3"); // untouched
 });
 
 test("adoptOpenedAsset writes an explicit null tokenId (key present)", () => {
@@ -103,6 +115,6 @@ test("adoptPublishedIdentity stringifies tokenId and keeps assetId verbatim", ()
   adoptPublishedIdentity(42, "asset_9");
   const s = assetState.get();
   expect(s.activeAssetTokenId).toBe("42");
-  expect(s.activeCollectionTokenId).toBe("42");
+  expect(s.activeCollectionTokenId).toBeNull();
   expect(s.activeAssetId).toBe("asset_9");
 });
