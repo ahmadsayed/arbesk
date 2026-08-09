@@ -106,6 +106,8 @@ let disposeChatPreview;
 let registerFormatHandler;
 let lastLoadCtx;
 let loadError = null;
+/** Fresh fake animation group installed on the import mock each test. */
+let animGroup;
 
 function makeCanvas() {
   const canvas = document.createElement("canvas");
@@ -129,6 +131,9 @@ beforeAll(async () => {
     observe() {}
     disconnect() {}
   };
+  // jsdom has no object-URL support; chat-preview wraps blobs in object URLs.
+  URL.createObjectURL = jest.fn(() => "blob:fake-preview");
+  URL.revokeObjectURL = jest.fn();
 
   ({ registerFormatHandler } = await import(
     "../../frontend/src/js/formats/index.js"
@@ -139,7 +144,8 @@ beforeAll(async () => {
     load: async (src, ctx) => {
       if (loadError) throw loadError;
       lastLoadCtx = ctx;
-      return { meshes: [fakeMesh], transformNodes: [] };
+      // Route through the scene-local importFromBlob like the real handlers.
+      return ctx.importFromBlob(new Blob(["model"]), ".testfmt");
     },
     decomposeForSave: async () => null,
     isStoredForm: () => true,
@@ -153,6 +159,15 @@ beforeAll(async () => {
 beforeEach(() => {
   lastLoadCtx = null;
   loadError = null;
+  animGroup = { name: "spin", start: jest.fn(), stop: jest.fn() };
+  global.BABYLON.SceneLoader.ImportMeshAsync.mockReset();
+  global.BABYLON.SceneLoader.ImportMeshAsync.mockResolvedValue({
+    meshes: [fakeMesh],
+    transformNodes: [],
+    animationGroups: [animGroup],
+  });
+  URL.createObjectURL.mockClear();
+  URL.revokeObjectURL.mockClear();
 });
 
 const SRC = { cid: "bafy-source", path: "asset.testfmt", format: "testfmt" };
@@ -214,4 +229,31 @@ test("returns null when the format load fails", async () => {
   const handle = await createChatPreview("g1", makeCanvas(), SRC);
   expect(handle).toBeNull();
   expect(getChatPreview("g1")).toBeNull();
+});
+
+test("auto-plays the first animation group looped after import", async () => {
+  const handle = await createChatPreview("g1", makeCanvas(), SRC);
+  expect(handle).not.toBeNull();
+  expect(animGroup.start).toHaveBeenCalledTimes(1);
+  expect(animGroup.start).toHaveBeenCalledWith(true);
+  await handle.dispose();
+});
+
+test("creates a preview without crashing when no animation groups exist", async () => {
+  global.BABYLON.SceneLoader.ImportMeshAsync.mockResolvedValue({
+    meshes: [fakeMesh],
+    transformNodes: [],
+  });
+  const handle = await createChatPreview("g1", makeCanvas(), SRC);
+  expect(handle).not.toBeNull();
+  await handle.dispose();
+
+  global.BABYLON.SceneLoader.ImportMeshAsync.mockResolvedValue({
+    meshes: [fakeMesh],
+    transformNodes: [],
+    animationGroups: [],
+  });
+  const handle2 = await createChatPreview("g2", makeCanvas(), SRC);
+  expect(handle2).not.toBeNull();
+  await handle2.dispose();
 });

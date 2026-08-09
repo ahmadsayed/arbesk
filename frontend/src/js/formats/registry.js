@@ -9,7 +9,7 @@
  * @typedef {Object} FormatLoadContext
  * @property {any} scene - Babylon scene instance
  * @property {string} cid - CID being loaded
- * @property {(blob: Blob, extension: string) => Promise<{meshes: any[], transformNodes?: any[]}>} importFromBlob
+ * @property {(blob: Blob, extension: string) => Promise<{meshes: any[], transformNodes?: any[], animationGroups?: any[]}>} importFromBlob
  */
 
 /**
@@ -32,7 +32,7 @@
  * @property {string} format - canonical lowercase key (e.g. "gltf", "glb")
  * @property {string[]} extensions - file extensions (e.g. [".glb"])
  * @property {(bytes: Uint8Array) => boolean} [sniff]
- * @property {(src: any, ctx: FormatLoadContext) => Promise<{meshes: any[], transformNodes?: any[]}>} load
+ * @property {(src: any, ctx: FormatLoadContext) => Promise<{meshes: any[], transformNodes?: any[], animationGroups?: any[]}>} load
  * @property {(node: any, ctx: FormatSaveContext) => Promise<FormatDecomposeResult | null>} decomposeForSave
  * @property {(node: any) => boolean} isStoredForm
  * @property {(node: any) => boolean} [isDedupSource]

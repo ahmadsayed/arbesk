@@ -33,7 +33,7 @@ const livePreviews = new Map();
 /**
  * Build a scene-local importFromBlob for the format handlers.
  * @param {any} scene
- * @returns {(blob: Blob, extension: string) => Promise<{meshes: any[], transformNodes: any[]}>}
+ * @returns {(blob: Blob, extension: string) => Promise<{meshes: any[], transformNodes: any[], animationGroups: any[]}>}
  */
 function makeImportFromBlob(scene) {
   return async (blob, extension) => {
@@ -47,9 +47,19 @@ function makeImportFromBlob(scene) {
         null,
         extension
       );
+      // The global loader default is animationStartMode NONE (the Studio
+      // inspector owns playback), but chat bubbles have no inspector — keep
+      // them lively by auto-playing the first clip looped. Best-effort:
+      // static models have no animation groups.
+      try {
+        result.animationGroups?.[0]?.start(true);
+      } catch (animErr) {
+        console.warn("[PREVIEW] animation autoplay failed:", animErr);
+      }
       return {
         meshes: result.meshes,
         transformNodes: result.transformNodes || [],
+        animationGroups: result.animationGroups || [],
       };
     } finally {
       URL.revokeObjectURL(blobUrl);
