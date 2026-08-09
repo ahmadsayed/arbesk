@@ -55,6 +55,60 @@ on(EVENTS.ASSET_STATE_CHANGED, () => {
   for (const fn of _listeners) fn(snapshot);
 });
 
+/** @returns {string|null} */
+export function getActiveAssetManifestCid() {
+  return assetStore.get().activeAssetManifestCid;
+}
+
+/** @returns {string|null} */
+export function getLatestAssetManifestCid() {
+  return assetStore.get().latestAssetManifestCid;
+}
+
+/** @returns {string|null} */
+export function getActiveAssetTokenId() {
+  return assetStore.get().activeAssetTokenId;
+}
+
+/** @returns {string|null} */
+export function getActiveAssetId() {
+  return assetStore.get().activeAssetId;
+}
+
+/** @returns {string|null} */
+export function getActiveAssetName() {
+  return assetStore.get().activeAssetName;
+}
+
+/** @returns {object|null} */
+export function getCurrentManifest() {
+  return assetStore.get().currentManifest;
+}
+
+/**
+ * Full read-only snapshot of the asset domain state. For consumers that need
+ * several fields at once; prefer individual getters when possible.
+ * @returns {Readonly<{
+ *   activeAssetManifestCid: string|null,
+ *   activeAssetTokenId: string|null,
+ *   activeAssetName: string|null,
+ *   latestAssetManifestCid: string|null,
+ *   currentManifest: object|null,
+ *   activeAssetId: string|null
+ * }>}
+ */
+export function getAssetState() {
+  const s = assetStore.get();
+  return Object.freeze({
+    activeAssetManifestCid: s.activeAssetManifestCid,
+    activeAssetTokenId: s.activeAssetTokenId,
+    activeAssetName: s.activeAssetName,
+    latestAssetManifestCid: s.latestAssetManifestCid,
+    currentManifest: s.currentManifest,
+    activeAssetId: s.activeAssetId,
+  });
+}
+
 const DEFAULT_NAMES = new Set([
   "untitled asset",
   "my asset",
