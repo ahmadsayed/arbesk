@@ -97,5 +97,8 @@ export async function downloadActiveAsset() {
   if (!activeAssetManifestCid) {
     throw new Error("No asset is open.");
   }
-  return downloadAssetByManifestCid(activeAssetManifestCid, activeAssetName);
+  return downloadAssetByManifestCid(
+    activeAssetManifestCid,
+    activeAssetName || undefined
+  );
 }
