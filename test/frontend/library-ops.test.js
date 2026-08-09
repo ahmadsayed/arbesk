@@ -106,6 +106,7 @@ async function loadModule() {
     () => ({
       publishAsset: jest.fn((...args) => _publishAsset(...args)),
       updateAssetURI: jest.fn().mockResolvedValue("0xTx"),
+      getActiveContract: jest.fn(),
       CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
     })
   );
