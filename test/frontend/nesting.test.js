@@ -90,6 +90,7 @@ async function waitFor(cond) {
 beforeEach(() => {
   resetAssetState();
   renameAssetSpy.mockClear();
+  adoptOpenedAssetSpy.mockClear();
   loadAssetManifestMock.mockClear();
   clearSceneMock.mockClear();
   _childManifestCid = "bafyChild";
