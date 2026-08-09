@@ -3,7 +3,7 @@
  * Arbesk Nesting Navigation - Dive/Ascend State Machine
  *
  * Manages breadcrumb path bar, back button, and depth gating
- * for fractal world nesting.
+ * for fractal asset nesting.
  */
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
@@ -82,7 +82,7 @@ async function onDiveRequested(e) {
     // Resolve child manifest CID from token
     const manifest = await resolveChildManifest(childRef);
     if (!manifest) {
-      alert("Could not resolve child world manifest.");
+      alert("Could not resolve child asset manifest.");
       return;
     }
 
@@ -91,18 +91,18 @@ async function onDiveRequested(e) {
       assetState.get();
     navStack.push({
       cid: activeAssetManifestCid,
-      name: activeAssetName || "World",
+      name: activeAssetName || "Asset",
       assetName: activeAssetName,
       tokenId: activeAssetTokenId,
     });
 
-    // Load child world
+    // Load child asset
     clearScene();
     // Extract tokenId from either old ({tokenId}) or new ({collection: {tokenId}}) format
     const refTokenId = childRef.tokenId || childRef.collection?.tokenId || null;
 
     adoptOpenedAsset(manifest.cid, { tokenId: refTokenId });
-    renameAsset(manifest.name || "Child World");
+    renameAsset(manifest.name || "Child Asset");
     uiState.set({ nestingDepth: ++currentDepth });
 
     await loadAssetManifest(manifest.cid);
@@ -115,7 +115,7 @@ async function onDiveRequested(e) {
     emit(EVENTS.NESTING_DID_DIVE, { depth: currentDepth, name: manifest.name });
   } catch (err) {
     console.error("[NESTING] dive failed:", err);
-    alert("Failed to open child world: " + err.message);
+    alert("Failed to open child asset: " + err.message);
   }
 }
 
@@ -142,7 +142,7 @@ async function ascendOneLevel() {
     emit(EVENTS.NESTING_DID_ASCEND, { depth: currentDepth, name: prev.name });
   } catch (err) {
     console.error("[NESTING] ascend failed:", err);
-    alert("Failed to return to parent world: " + err.message);
+    alert("Failed to return to parent asset: " + err.message);
   }
 }
 
@@ -180,7 +180,7 @@ function renderBreadcrumb() {
 
     const seg = document.createElement("button");
     seg.className = "pathbar-segment";
-    seg.textContent = entry.name || "World";
+    seg.textContent = entry.name || "Asset";
     seg.title = `Go back to ${entry.name}`;
     seg.addEventListener("click", () => ascendToLevel(i));
     pathBar.appendChild(seg);
@@ -220,7 +220,7 @@ async function resolveChildManifest(childRef) {
 function updatePublishVisibility() {
   const publishBtn = document.getElementById("publishAssetBtn");
   if (publishBtn) {
-    // Token-based child worlds are publishable regardless of depth.
+    // Token-based child assets are publishable regardless of depth.
     // Only hide publish when truly at root level with no token (empty state).
     const hidePublish =
       currentDepth > 0 && !assetState.get().activeAssetTokenId;

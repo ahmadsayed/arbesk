@@ -75,7 +75,7 @@ export const SELECTORS = {
   scaleSectionSummary: "#scaleSection summary",
   animationsSection: "#animationsSection",
   animationSelect: "#animationSelect",
-  // New asset + nesting (linked child worlds)
+  // New asset + nesting (linked child assets)
   newAssetBtn: "#newAssetBtn",
   settingsSwitcherBtn: '[data-view="settings"]',
   collectionSelect: "#collectionSelect",

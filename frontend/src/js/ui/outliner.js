@@ -163,7 +163,7 @@ function renderTree(nodes, depth = 0) {
 
   if (!Array.isArray(nodes) || nodes.length === 0) {
     if (depth === 0) {
-      tree.innerHTML = '<div class="ledger-empty">No items in this world</div>';
+      tree.innerHTML = '<div class="ledger-empty">No items in this asset</div>';
       updateFooter(0, 0);
     }
     return { totalNodes: 0, childCount: 0 };

@@ -42,12 +42,12 @@ html(lang="en")
           a.page-switcher-tab(href="/library" data-nav) Library
           a.page-switcher-tab.active(href="/studio" data-nav) Studio
 
-        button#backBtn.headerbar-back.hidden(aria-label="Go back to parent world", title="Go back (Alt+Left)")
+        button#backBtn.headerbar-back.hidden(aria-label="Go back to parent asset", title="Go back (Alt+Left)")
           svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
             path(d="M15 18l-6-6 6-6")
 
         .headerbar-title
-          nav#pathBar.pathbar.hidden(aria-label="World path")
+          nav#pathBar.pathbar.hidden(aria-label="Asset path")
           span#assetStatusName.headerbar-title-text(aria-label="Asset name") No asset open
           span#assetStatusMeta.headerbar-title-meta Create or open an asset
 
@@ -233,7 +233,7 @@ html(lang="en")
                 .sidebar-view-header
                   h3 Outline
                   .outliner-toolbar
-                    button#outlinerAddBtn.btn.btn-icon.btn-sm(aria-label="Add child world" title="Add child world")
+                    button#outlinerAddBtn.btn.btn-icon.btn-sm(aria-label="Add child asset" title="Add child asset")
                       svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
                         line(x1="12" y1="5" x2="12" y2="19")
                         line(x1="5" y1="12" x2="19" y2="12")
@@ -334,7 +334,7 @@ html(lang="en")
                         span.label Manifest CID
                         span#tokenChildCid.value(style="font-family:var(--font-mono);font-size:var(--font-size-0);word-break:break-all") —
                     .inspector-actions
-                      button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open This World &rarr;
+                      button#inspectorDiveBtn.btn.btn-primary(style="width:100%") Open Asset &rarr;
               section#scaleSection.inspector-section.inspector-scale(hidden)
                 details
                   summary.inspector-section-title Scale
