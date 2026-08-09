@@ -98,14 +98,14 @@ function buildOutlineTree(nodes) {
   let currentParent = null;
 
   nodes.forEach((node) => {
-    const isChildWorld = !!node.child_ref;
-    if (isChildWorld && currentParent) {
+    const isChildAsset = !!node.child_ref;
+    if (isChildAsset && currentParent) {
       currentParent.children ||= [];
       currentParent.children.push({ ...node });
     } else {
       const cloned = { ...node };
       tree.push(cloned);
-      if (!isChildWorld) {
+      if (!isChildAsset) {
         currentParent = cloned;
       }
     }
@@ -215,7 +215,7 @@ function getNodeDisplayName(node) {
   return node.node_id || "Untitled";
 }
 
-function createNodeElement(node, isChildWorld, depth = 0) {
+function createNodeElement(node, isChildAsset, depth = 0) {
   const el = document.createElement("div");
   el.className = "outliner-node";
   el.dataset.nodeId = node.node_id;
@@ -271,7 +271,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   // Icon
   const icon = document.createElement("span");
   icon.className = "outliner-node-icon";
-  icon.textContent = isChildWorld ? "🧩" : "📦";
+  icon.textContent = isChildAsset ? "🧩" : "📦";
   el.appendChild(icon);
 
   // Label
@@ -284,7 +284,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   // Supports both legacy {tokenId} and collection {collection: {tokenId}, assetID} formats.
   const badgeTokenId =
     node.child_ref?.tokenId || node.child_ref?.collection?.tokenId;
-  if (isChildWorld && badgeTokenId) {
+  if (isChildAsset && badgeTokenId) {
     const badge = document.createElement("span");
     badge.className = "outliner-node-badge";
     badge.textContent = `#${badgeTokenId}`;
@@ -298,7 +298,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   });
 
   // Double-click child → dive
-  if (isChildWorld) {
+  if (isChildAsset) {
     el.addEventListener("dblclick", (e) => {
       e.stopPropagation();
       diveIntoChild(node);

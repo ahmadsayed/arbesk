@@ -387,14 +387,14 @@ export function initEngine() {
       // or the chain ends. A childRef boundary means we are inside a child
       // asset; the parent manifest's node_id is on the outer anchor above it.
       let firstNodeId = null;
-      let childWorldNodeId = null;
+      let childAssetNodeId = null;
 
       while (target) {
         if (target.metadata?.childRef) {
           // childAnchor: its parent is the outer anchor whose metadata.nodeId
           // is the parent-manifest node_id (manifest-loaded path).
           // Fall back to childAnchor's own nodeId for freshly-dropped nodes.
-          childWorldNodeId =
+          childAssetNodeId =
             target.parent?.metadata?.nodeId || target.metadata?.nodeId || null;
           break;
         }
@@ -404,8 +404,8 @@ export function initEngine() {
         target = target.parent;
       }
 
-      const resolvedNodeId = childWorldNodeId || firstNodeId;
-      const isChildWorldNode = !!childWorldNodeId;
+      const resolvedNodeId = childAssetNodeId || firstNodeId;
+      const isChildAssetNode = !!childAssetNodeId;
 
       const now = Date.now();
       const isDoubleClick =
@@ -438,7 +438,7 @@ export function initEngine() {
         ) {
           // Sub-mesh toggle only applies to regular (non-child-world) nodes
           // and is a single-selection feature.
-          if (!isChildWorldNode && mesh.name) {
+          if (!isChildAssetNode && mesh.name) {
             if (state.highlightedSubMeshName === mesh.name) {
               selectNode(resolvedNodeId, target);
             } else {
