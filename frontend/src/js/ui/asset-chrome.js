@@ -7,8 +7,7 @@
  * header bug).
  */
 import { on, EVENTS } from "../events/bus.js";
-import { subscribeAsset } from "../domain/asset.js";
-import { assetState } from "../state/asset-state.js";
+import { subscribeAsset, getAssetState } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { getPendingChildRefs } from "../engine/cleanup.js";
 
@@ -22,7 +21,7 @@ const downloadBtn = document.getElementById("downloadAssetBtn");
  * Render the chrome from current state. Idempotent.
  */
 function renderChrome() {
-  const s = assetState.get();
+  const s = getAssetState();
   const hasAsset = !!(
     s.activeAssetManifestCid || getPendingChildRefs().length > 0
   );

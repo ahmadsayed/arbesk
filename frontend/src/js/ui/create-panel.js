@@ -31,7 +31,6 @@ import {
   disposeAllChatPreviews,
 } from "../services/chat-preview.js";
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import {
   addPendingGeneration,
@@ -41,7 +40,16 @@ import {
 } from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
 import { onSaveAssetDraft } from "./asset-save.js";
-import { adoptManifestName, adoptOpenedAsset, setActiveManifestCid, setLatestManifestCid } from "../domain/asset.js";
+import {
+  adoptManifestName,
+  adoptOpenedAsset,
+  setActiveManifestCid,
+  setLatestManifestCid,
+  getActiveAssetManifestCid,
+  getLatestAssetManifestCid,
+  getActiveAssetTokenId,
+  getActiveAssetName,
+} from "../domain/asset.js";
 import { selectCollection } from "../domain/collection.js";
 
 // ─── DOM References ───
@@ -522,7 +530,7 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
 
   // Capture the chain tip before the state set re-roots it at the record's
   // manifest — restoring an older bubble must not fork the chain.
-  const previousLatestCid = assetState.get().latestAssetManifestCid;
+  const previousLatestCid = getLatestAssetManifestCid();
 
   try {
     if (record.prevAssetManifestCid) {
@@ -532,7 +540,7 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
     adoptOpenedAsset(record.assetManifestCid);
 
     const url = new URL(window.location);
-    const activeTokenId = assetState.get().activeAssetTokenId;
+    const activeTokenId = getActiveAssetTokenId();
     if (activeTokenId) {
       url.searchParams.set("asset", activeTokenId);
       url.searchParams.delete("manifest");
@@ -627,7 +635,7 @@ function updateGenerateHint() {
 
 function getAssetName() {
   return (
-    assetState.get().activeAssetName ||
+    getActiveAssetName() ||
     assetNameDisplay?.textContent ||
     "Untitled Asset"
   ).trim();
@@ -636,7 +644,7 @@ function getAssetName() {
 function syncAssetNameDisplay(name = null) {
   if (!assetNameDisplay) return;
   assetNameDisplay.textContent =
-    name || assetState.get().activeAssetName || "Untitled Asset";
+    name || getActiveAssetName() || "Untitled Asset";
 }
 
 function getProvider() {
@@ -980,7 +988,7 @@ async function retryRig(generationId, rigModel) {
   const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
-  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
     const result = await generateAsset({
@@ -1051,7 +1059,7 @@ async function retryAnimate(generationId, rigModel) {
   const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
-  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
     const result = await generateAsset({
@@ -1154,7 +1162,7 @@ async function onRetexture(generationId) {
   const { working, signal, onTaskId } = addStoppableWorkingMessage("Retexturing — this takes a minute or two…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_retex_${Date.now()}`;
-  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
     const result = await generateAsset({
@@ -1226,7 +1234,7 @@ async function onRetopo(generationId) {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "_")}_retopo_${Date.now()}`;
   const prevAssetManifestCid =
-    assetState.get().activeAssetManifestCid || undefined;
+    getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
 
   try {
@@ -1307,7 +1315,7 @@ async function onAutoRig(generationId) {
   const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
-  const prevAssetManifestCid = assetState.get().activeAssetManifestCid || undefined;
+  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
     const result = await generateAsset({
@@ -1465,7 +1473,7 @@ async function onAnimate(generationId) {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
   const prevAssetManifestCid =
-    assetState.get().activeAssetManifestCid || undefined;
+    getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
 
   try {
@@ -1611,7 +1619,7 @@ async function onGenerate() {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "_")}_${Date.now()}`;
   const prevAssetManifestCid =
-    assetState.get().activeAssetManifestCid || undefined;
+    getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
 
   try {
@@ -1725,10 +1733,10 @@ on(EVENTS.SCENE_READY, (event) => {
   // manifest's name so auto-saves and publish keep it instead of
   // "Untitled Asset" (default/absent names are ignored inside).
   adoptManifestName(event?.manifest);
-  const name = event?.manifest?.name || assetState.get().activeAssetName;
+  const name = event?.manifest?.name || getActiveAssetName();
   if (name) syncAssetNameDisplay(name);
   const manifestCid =
-    event?.manifestCid || assetState.get().activeAssetManifestCid;
+    event?.manifestCid || getActiveAssetManifestCid();
   const identity = event?.manifest?.asset_id || manifestCid || null;
   if (identity && openAssetIdentity && identity !== openAssetIdentity) {
     clearChat();
@@ -1738,12 +1746,12 @@ on(EVENTS.SCENE_READY, (event) => {
 });
 
 on(EVENTS.ASSET_DRAFT_SAVED, () => {
-  const manifestCid = assetState.get().activeAssetManifestCid;
+  const manifestCid = getActiveAssetManifestCid();
   if (manifestCid) void renderChatProvenance(manifestCid);
 });
 
 on(EVENTS.ASSET_PUBLISHED, () => {
-  const manifestCid = assetState.get().activeAssetManifestCid;
+  const manifestCid = getActiveAssetManifestCid();
   if (manifestCid) void renderChatProvenance(manifestCid);
 });
 
@@ -1769,7 +1777,7 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }) => {
   // latestAssetManifestCid (version-history-store) at the OLD cid — hiding
   // every newer prompt and breaking repeated restores. Capture the chain
   // root up front and put both back once the load lands.
-  const previousLatestCid = assetState.get().latestAssetManifestCid || cid;
+  const previousLatestCid = getLatestAssetManifestCid() || cid;
   try {
     setActiveManifestCid(cid);
     await loadAssetManifest(cid);

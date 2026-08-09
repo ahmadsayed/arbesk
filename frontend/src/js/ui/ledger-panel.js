@@ -10,7 +10,7 @@
 
 import { truncateAddress, truncateCid } from "../utils/format.js";
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
+import { getActiveAssetManifestCid } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { walkManifestChain } from "../engine/time-travel.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
@@ -164,7 +164,7 @@ function extractActivities(chain) {
 }
 
 async function loadActivities() {
-  const cid = assetState.get().activeAssetManifestCid;
+  const cid = getActiveAssetManifestCid();
   if (!cid) {
     activities = [];
     render();

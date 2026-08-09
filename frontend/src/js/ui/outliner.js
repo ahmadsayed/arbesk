@@ -10,9 +10,12 @@
 import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
-import { cacheCurrentManifest } from "../domain/asset.js";
+import {
+  cacheCurrentManifest,
+  getActiveAssetManifestCid,
+  getCurrentManifest,
+} from "../domain/asset.js";
 import { getManifestNodes } from "../engine/transforms.js";
 
 let outlinerTree = null;
@@ -65,24 +68,25 @@ function initOutliner() {
   outlinerTree.addEventListener("drop", onDropFromLibrary);
 
   // Initial render if manifest is already loaded
-  if (assetState.get().activeAssetManifestCid) {
+  if (getActiveAssetManifestCid()) {
     refreshOutliner();
   }
 }
 
 // ─── Data ─────────────────────────────────────────────────────────────
 
-async function getCurrentManifest() {
-  if (!assetState.get().activeAssetManifestCid) return null;
+async function fetchCurrentManifest() {
+  const cid = getActiveAssetManifestCid();
+  if (!cid) return null;
   try {
-    return await getFromRemoteIPFS(assetState.get().activeAssetManifestCid);
+    return await getFromRemoteIPFS(cid);
   } catch {
     return null;
   }
 }
 
 function getNodes() {
-  return getManifestNodes(assetState.get().currentManifest);
+  return getManifestNodes(getCurrentManifest());
 }
 
 /**
@@ -117,8 +121,8 @@ function buildOutlineTree(nodes) {
 // ─── Rendering ────────────────────────────────────────────────────────
 
 async function refreshOutliner() {
-  const cid = assetState.get().activeAssetManifestCid;
-  const cached = assetState.get().currentManifest;
+  const cid = getActiveAssetManifestCid();
+  const cached = getCurrentManifest();
 
   let manifest = null;
   if (cached?._manifestCid === cid) {
@@ -127,7 +131,7 @@ async function refreshOutliner() {
     // the nodes it needs, so the shared reference is never mutated.
     manifest = cached;
   } else if (cid) {
-    manifest = await getCurrentManifest();
+    manifest = await fetchCurrentManifest();
     if (manifest) {
       cacheCurrentManifest(manifest, cid);
     }

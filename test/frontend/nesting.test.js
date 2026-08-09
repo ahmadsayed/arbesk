@@ -39,6 +39,7 @@ async function loadModule() {
     () => ({
       renameAsset: renameAssetSpy,
       adoptOpenedAsset: adoptOpenedAssetSpy,
+      getAssetState: () => assetState.get(),
     })
   );
   await jest.unstable_mockModule(

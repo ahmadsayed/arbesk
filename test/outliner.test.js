@@ -11,7 +11,7 @@ import {
   getNodes,
 } from "../frontend/src/js/ui/outliner.js";
 import { on, off, EVENTS } from "../frontend/src/js/events/bus.js";
-import { assetState, _resetForTesting as resetAssetState } from "../frontend/src/js/state/asset-state.js";
+import { assetStore, _resetForTesting as resetAssetState } from "../frontend/src/js/domain/asset-store.js";
 
 // jsdom does not implement CSS.escape, but outliner.js uses it for selectors.
 if (typeof CSS === "undefined" || !CSS.escape) {
@@ -139,7 +139,7 @@ describe("outliner node rendering", () => {
         children: [{ node_id: "child", name: "child" }],
       },
     ];
-    assetState.set({ currentManifest: { scene: { nodes } } });
+    assetStore.set({ currentManifest: { scene: { nodes } } });
     renderTree(nodes);
 
     let toggle = tree.querySelector('[data-node-id="parent"] .outliner-node-toggle');
@@ -164,7 +164,7 @@ describe("outliner node rendering", () => {
       { node_id: "cowboy", name: "cowboy", child_ref: { tokenId: "2103578700" } },
       { node_id: "person", name: "person", child_ref: { tokenId: "35131021" } },
     ];
-    assetState.set({ currentManifest: { scene: { nodes: flatNodes } } });
+    assetStore.set({ currentManifest: { scene: { nodes: flatNodes } } });
     renderTree(buildOutlineTree(getNodes()));
 
     expect(tree.querySelectorAll('[data-node-id="cowboy"]')).toHaveLength(1);
