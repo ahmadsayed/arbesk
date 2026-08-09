@@ -91,9 +91,9 @@ async function load() {
   const mod = await import(
     "../../frontend/src/js/services/asset-save/manifest-builder.js"
   );
-  const stateMod = await import("../../frontend/src/js/state/asset-state.js");
+  const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
   stateMod._resetForTesting();
-  return { mod, mocks, assetState: stateMod.assetState };
+  return { mod, mocks, assetStore: stateMod.assetStore };
 }
 
 function makeManifest() {
@@ -119,9 +119,9 @@ function makeManifest() {
  * Seed the in-memory manifest cache so prepareManifestForWrite needs no IPFS
  * fetch, and add a pending transform edit so the save is not a no-op.
  */
-function seedChangedSave({ assetState, mocks }) {
+function seedChangedSave({ assetStore, mocks }) {
   const manifest = makeManifest();
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: "bafyActive",
     latestAssetManifestCid: "bafyActive",
     currentManifest: { ...manifest, _manifestCid: "bafyActive" },
@@ -184,7 +184,7 @@ describe("saveAssetDraftCore", () => {
   it("does not write or snapshot when nothing changed", async () => {
     const ctx = await load();
     const manifest = makeManifest();
-    ctx.assetState.set({
+    ctx.assetStore.set({
       activeAssetManifestCid: "bafyActive",
       latestAssetManifestCid: "bafyActive",
       currentManifest: { ...manifest, _manifestCid: "bafyActive" },
@@ -211,7 +211,7 @@ describe("saveAssetDraftCore", () => {
         { prompt: "old prompt", provider: "mock", task: "model", timestamp: 1 },
       ],
     };
-    ctx.assetState.set({
+    ctx.assetStore.set({
       activeAssetManifestCid: "bafyActive",
       latestAssetManifestCid: "bafyActive",
       currentManifest: { ...manifest, _manifestCid: "bafyActive" },
@@ -247,7 +247,7 @@ describe("saveAssetDraftCore", () => {
         { prompt: "old prompt", provider: "mock", task: "model", timestamp: 1 },
       ],
     };
-    ctx.assetState.set({
+    ctx.assetStore.set({
       activeAssetManifestCid: "bafyActive",
       latestAssetManifestCid: "bafyActive",
       currentManifest: { ...manifest, _manifestCid: "bafyActive" },
@@ -268,7 +268,7 @@ describe("saveAssetDraftCore", () => {
     const manifest = makeManifest();
     // Force prepare to fetch the manifest from IPFS (cache CID mismatch) so we
     // can observe whether the thumbnail capture had already started by then.
-    ctx.assetState.set({
+    ctx.assetStore.set({
       activeAssetManifestCid: "bafyActive",
       latestAssetManifestCid: "bafyActive",
       currentManifest: { ...manifest, _manifestCid: "bafyStale" },

@@ -7,15 +7,15 @@
 import { jest, expect, test, beforeEach } from "@jest/globals";
 import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
 import {
-  assetState,
+  assetStore,
   _resetForTesting as resetAssetState,
-} from "../../frontend/src/js/state/asset-state.js";
+} from "../../frontend/src/js/domain/asset-store.js";
 
 const renameAssetSpy = jest.fn((name) =>
-  assetState.set({ activeAssetName: name })
+  assetStore.set({ activeAssetName: name })
 );
 // Behavior-preserving stand-in for the real command,
-// mirroring renameAssetSpy above — the assertions below read assetState.
+// mirroring renameAssetSpy above — the assertions below read assetStore.
 const adoptOpenedAssetSpy = jest.fn((cid, identity = {}) => {
   const patch = {
     activeAssetManifestCid: cid,
@@ -23,7 +23,7 @@ const adoptOpenedAssetSpy = jest.fn((cid, identity = {}) => {
   };
   if ("tokenId" in identity) patch.activeAssetTokenId = identity.tokenId;
   if ("assetId" in identity) patch.activeAssetId = identity.assetId;
-  assetState.set(patch);
+  assetStore.set(patch);
 });
 const loadAssetManifestMock = jest.fn().mockResolvedValue(undefined);
 const clearSceneMock = jest.fn();
@@ -39,7 +39,7 @@ async function loadModule() {
     () => ({
       renameAsset: renameAssetSpy,
       adoptOpenedAsset: adoptOpenedAssetSpy,
-      getAssetState: () => assetState.get(),
+      getAssetState: () => assetStore.get(),
     })
   );
   await jest.unstable_mockModule(
@@ -106,7 +106,7 @@ beforeEach(() => {
 test("dive routes the child name through renameAsset and keeps CID/tokenId writes", async () => {
   const { ascendOneLevel } = await loadModule();
 
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: "bafyParent",
     activeAssetName: "Parent World",
     activeAssetTokenId: "9",
@@ -119,7 +119,7 @@ test("dive routes the child name through renameAsset and keeps CID/tokenId write
 
   expect(renameAssetSpy).toHaveBeenCalledTimes(1);
   expect(renameAssetSpy).toHaveBeenCalledWith("Child Hub");
-  const s = assetState.get();
+  const s = assetStore.get();
   expect(s.activeAssetManifestCid).toBe("bafyChild");
   expect(s.latestAssetManifestCid).toBe("bafyChild");
   expect(s.activeAssetTokenId).toBe("5");
@@ -129,7 +129,7 @@ test("dive routes the child name through renameAsset and keeps CID/tokenId write
   await ascendOneLevel();
   expect(renameAssetSpy).toHaveBeenCalledTimes(2);
   expect(renameAssetSpy).toHaveBeenLastCalledWith("Parent World");
-  const p = assetState.get();
+  const p = assetStore.get();
   expect(p.activeAssetManifestCid).toBe("bafyParent");
   expect(p.latestAssetManifestCid).toBe("bafyParent");
   expect(p.activeAssetTokenId).toBe("9");
@@ -140,7 +140,7 @@ test("dive falls back to 'Child Asset' when the child manifest has no name", asy
   await loadModule();
   _childManifest = {}; // no name
 
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: "bafyParent",
     activeAssetName: "Parent World",
     activeAssetTokenId: "9",
@@ -152,5 +152,5 @@ test("dive falls back to 'Child Asset' when the child manifest has no name", asy
   await waitFor(() => loadAssetManifestMock.mock.calls.length > 0);
 
   expect(renameAssetSpy).toHaveBeenCalledWith("Child Asset");
-  expect(assetState.get().activeAssetName).toBe("Child Asset");
+  expect(assetStore.get().activeAssetName).toBe("Child Asset");
 });

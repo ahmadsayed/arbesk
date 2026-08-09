@@ -69,9 +69,9 @@ async function loadModule() {
   }));
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/state/asset-state.js",
+    "../../frontend/src/js/domain/asset-store.js",
     () => ({
-      assetState: {
+      assetStore: {
         get: jest.fn(() => ({})),
         set: jest.fn(),
       },
