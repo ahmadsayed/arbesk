@@ -743,7 +743,7 @@ const ANIMATE_PRESETS = [
   { value: "preset:run", label: "Run" },
   { value: "preset:jump", label: "Jump" },
   { value: "preset:slash", label: "Slash" },
-  { value: IN_PLACE_OPTION, label: "In place (no root motion)", countsTowardMax: false },
+  { value: IN_PLACE_OPTION, label: "In place (no root motion)", checked: true, countsTowardMax: false },
 ];
 
 /**
