@@ -217,3 +217,59 @@ describe("onPublishAsset", () => {
     );
   });
 });
+
+describe("button labels after completion", () => {
+  // The module grabs the button elements at import time, so the DOM must
+  // exist before loadModule().
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <button id="saveAssetBtn"><span id="saveAssetBtnText">Save</span></button>
+      <button id="publishAssetBtn"><span id="publishAssetBtnText">Besk it</span></button>
+      <button id="downloadAssetBtn"></button>`;
+  });
+
+  test("save restores the Save label on success", async () => {
+    const { onSaveAssetDraft } = await loadModule();
+    await onSaveAssetDraft();
+    expect(document.getElementById("saveAssetBtnText").textContent).toBe(
+      "Save"
+    );
+  });
+
+  test("save restores the Save label on failure", async () => {
+    const { onSaveAssetDraft } = await loadModule();
+    const { saveAssetDraftCore } = await import(
+      "../../frontend/src/js/services/asset-save/manifest-builder.js"
+    );
+    saveAssetDraftCore.mockRejectedValueOnce(new Error("ipfs down"));
+    await onSaveAssetDraft();
+    expect(document.getElementById("saveAssetBtnText").textContent).toBe(
+      "Save"
+    );
+  });
+
+  test("publish restores the Besk it label on success", async () => {
+    const { onPublishAsset } = await loadModule();
+    await onPublishAsset();
+    expect(document.getElementById("publishAssetBtnText").textContent).toBe(
+      "Besk it"
+    );
+  });
+
+  test("publish restores the Besk it label when cancelled at the name dialog", async () => {
+    _activeAssetName = "Untitled Asset"; // force the name prompt
+    const { onPublishAsset } = await loadModule();
+    const { showDialog } = await import("../../frontend/src/js/ui/dialog.js");
+    showDialog.mockResolvedValueOnce(null); // user cancels
+    const { publishCollectionForAsset } = await import(
+      "../../frontend/src/js/services/asset-save/collection-publish.js"
+    );
+
+    await onPublishAsset();
+
+    expect(publishCollectionForAsset).not.toHaveBeenCalled();
+    expect(document.getElementById("publishAssetBtnText").textContent).toBe(
+      "Besk it"
+    );
+  });
+});

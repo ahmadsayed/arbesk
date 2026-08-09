@@ -217,6 +217,7 @@ async function onSaveAssetDraft() {
       saveBtn.disabled = false;
       saveBtn.title = "Save Draft (Ctrl+S)";
     }
+    if (saveBtnText) saveBtnText.textContent = "Save";
   }
 }
 
@@ -364,6 +365,7 @@ async function onPublishAsset() {
       publishBtn.disabled = false;
       publishBtn.title = "Besk it: publish this asset";
     }
+    if (publishBtnText) publishBtnText.textContent = "Besk it";
   }
 }
 
