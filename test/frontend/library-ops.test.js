@@ -258,7 +258,7 @@ describe("uploadFileToCollection", () => {
 
   test("rejects files over the size cap", async () => {
     const { uploadFileToCollection } = await loadModule();
-    const file = new File([new ArrayBuffer(51 * 1024 * 1024)], "huge.glb", { type: "model/gltf-binary" });
+    const file = new File([new ArrayBuffer(101 * 1024 * 1024)], "huge.glb", { type: "model/gltf-binary" });
     await expect(uploadFileToCollection(file, "999")).rejects.toThrow("too large");
   });
 

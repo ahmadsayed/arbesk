@@ -628,7 +628,7 @@ For EOA wallets (MetaMask/Rabby), the spinner card appears just before the walle
 #### 5.4.10 Upload flow
 
 1. User opens a collection (Level 2), then clicks **↑ Upload** (or right-click → Upload File…).
-2. The OS file picker filters to `.glb` / `.gltf`, max 50 MB.
+2. The OS file picker filters to `.glb` / `.gltf` / `.3mf`, max 100 MB.
 3. The file bytes are written to IPFS (`writeToIPFS`), creating a `sourceCid`.
 4. An asset manifest JSON is written to IPFS, creating an `assetManifestCid`.
 5. The collection manifest is updated via `updateCollectionManifest`: `assets[assetId] = assetManifestCid`.
