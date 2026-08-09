@@ -436,7 +436,7 @@ export function initEngine() {
           resolvedNodeId === state.highlightedNodeId &&
           state.selectedNodeIds.size === 1
         ) {
-          // Sub-mesh toggle only applies to regular (non-child-world) nodes
+          // Sub-mesh toggle only applies to regular (non-child-asset) nodes
           // and is a single-selection feature.
           if (!isChildAssetNode && mesh.name) {
             if (state.highlightedSubMeshName === mesh.name) {

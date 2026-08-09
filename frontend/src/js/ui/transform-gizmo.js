@@ -194,7 +194,7 @@ function _ensureGroupPivot() {
 
 /**
  * Selected anchors whose Babylon parent chain contains no other selected
- * anchor. Ctrl+A selects child-world-internal anchors too; transforming both
+ * anchor. Ctrl+A selects child-asset-internal anchors too; transforming both
  * a parent and its nested child in the same group drag would move the child
  * twice (once via the parent hierarchy, once directly), so only the top-most
  * anchors are driven — nested ones ride along.
@@ -224,7 +224,7 @@ function _attachToGroupPivot(gizmoManager) {
     return;
   }
   // Selection collapses to a single subtree (e.g. a model plus its own
-  // child-world node): drive that anchor directly, no pivot needed.
+  // child-asset node): drive that anchor directly, no pivot needed.
   if (anchors.length === 1) {
     gizmoManager.attachToNode(anchors[0]);
     return;

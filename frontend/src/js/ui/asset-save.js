@@ -153,7 +153,7 @@ async function onSaveAssetDraft() {
         showToast({
           type: "warning",
           title: "Nothing to Save",
-          message: "Generate an asset or add linked worlds first.",
+          message: "Generate an asset or add linked assets first.",
         });
       } else if (result.reason === "no-changes") {
         finishTaskProgress("No changes to save.");
@@ -252,7 +252,7 @@ async function onPublishAsset() {
       showToast({
         type: "warning",
         title: "Nothing to Publish",
-        message: "Generate an asset or add linked worlds first.",
+        message: "Generate an asset or add linked assets first.",
       });
       return;
     }
