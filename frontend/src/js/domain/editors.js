@@ -7,10 +7,7 @@
  * delete, library, and comment flows.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
-import {
-  CollaboratorRole,
-  getActiveContract,
-} from "../blockchain/wallet.js";
+import { getActiveContract } from "../blockchain/wallet.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
@@ -182,16 +179,9 @@ export async function getEditorSetVersion(tag) {
   }
 }
 
-export function getCachedEditorRoot(tag) {
-  const cached = _loadCachedEditorList(tag);
-  if (!cached) return null;
-  return computeRoot(cached, tag, 1);
-}
-
 // ─── Proof command ─────────────────────────────────────────────────────────
 
-export async function buildEditorProof(tag, editorAddress, options = {}) {
-  const { isOwner = false, ownerRoot = null } = options;
+export async function buildEditorProof(tag, editorAddress) {
   const [versionResult, listResult] = await Promise.allSettled([
     getEditorSetVersion(tag),
     loadEditorList(tag),
@@ -200,20 +190,5 @@ export async function buildEditorProof(tag, editorAddress, options = {}) {
   const version = versionResult.status === "fulfilled" ? versionResult.value : 1;
   const list = listResult.status === "fulfilled" ? listResult.value : [];
 
-  const proofFromList = getProof(list, editorAddress, tag, version);
-  if (proofFromList) return proofFromList;
-
-  if (isOwner && ownerRoot) {
-    const ownerLeaf = makeLeaf(
-      editorAddress,
-      CollaboratorRole.Editor,
-      tag,
-      version
-    );
-    if (ownerRoot.toLowerCase() === ownerLeaf.toLowerCase()) {
-      return { proof: [], role: CollaboratorRole.Editor };
-    }
-  }
-
-  return null;
+  return getProof(list, editorAddress, tag, version);
 }

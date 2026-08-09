@@ -243,7 +243,7 @@ export class CommentThread {
 
   /**
    * Build a Merkle proof for the current wallet against the token's editor list.
-   * Returns null for owners or when the wallet is not a listed collaborator.
+   * Returns null when the wallet is not a listed collaborator.
    */
   async _loadEditorProof(tokenId, _chainId, address) {
     try {
