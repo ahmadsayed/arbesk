@@ -6,6 +6,10 @@
  * The canonical publish seam is added in Task 2.
  */
 import { assetState } from "../state/asset-state.js";
+import {
+  deriveDefaultCollectionId,
+  mergeAssetIntoCollection,
+} from "../utils/collections.js";
 
 /** @returns {string|null} */
 export function getActiveCollectionTokenId() {
@@ -61,4 +65,97 @@ export function clearActiveCollection() {
  */
 export function adoptPublishedCollection(tokenId) {
   assetState.set({ activeCollectionTokenId: String(tokenId) });
+}
+
+/**
+ * Build the next collection manifest for the asset, write it to IPFS, and
+ * anchor it on-chain. Canonical implementation; the thin service wrapper
+ * injects chain/IPFS/editor helpers.
+ *
+ * @param {string} assetCid
+ * @param {string} assetID
+ * @param {string} walletAddr
+ * @param {{
+ *   getOwnerOf: Function,
+ *   getTokenURI: Function,
+ *   getCollectionManifest: Function,
+ *   writeJSONToIPFS: Function,
+ *   republishCollection: Function,
+ *   publishNewToken: Function,
+ *   onAdoptIdentity?: (ctx: {tokenId: string, assetId: string, isNew: boolean}) => void|Promise<void>
+ * }} deps
+ * @returns {Promise<{tokenId: string, collectionCid: string, isNew: boolean}>}
+ */
+export async function publishCollection(assetCid, assetID, walletAddr, deps) {
+  const preferredCollectionId =
+    getSelectedCollectionId() || getActiveCollectionTokenId();
+
+  let existingCollectionTokenId = null;
+  let collectionManifest = null;
+
+  if (preferredCollectionId) {
+    try {
+      collectionManifest = await deps.getCollectionManifest(preferredCollectionId);
+      if (collectionManifest) existingCollectionTokenId = preferredCollectionId;
+    } catch {
+      // tokenURI reverted or IPFS fetch failed; treat as new collection
+    }
+  }
+
+  if (!existingCollectionTokenId) {
+    const defaultTokenId = deriveDefaultCollectionId(walletAddr);
+    const [ownerResult, manifestResult] = await Promise.allSettled([
+      deps.getOwnerOf(defaultTokenId),
+      deps.getCollectionManifest(defaultTokenId),
+    ]);
+    if (ownerResult.status === "fulfilled" && ownerResult.value) {
+      existingCollectionTokenId = defaultTokenId;
+      collectionManifest =
+        manifestResult.status === "fulfilled" ? manifestResult.value : null;
+    }
+  }
+
+  /** @type {Record<string, any>} */
+  const mergedCollection = mergeAssetIntoCollection(
+    collectionManifest,
+    assetID,
+    assetCid
+  );
+  mergedCollection.version = (mergedCollection.version || 0) + 1;
+  mergedCollection.prev_asset_manifest_cid = existingCollectionTokenId
+    ? await deps.getTokenURI(existingCollectionTokenId)
+    : null;
+  mergedCollection.timestamp = Date.now();
+
+  const collectionCid = await deps.writeJSONToIPFS(mergedCollection, null, {
+    type: "collection",
+    assetId: mergedCollection.asset_id,
+  });
+
+  let tokenId;
+  let isNew;
+
+  if (existingCollectionTokenId) {
+    await deps.republishCollection(
+      existingCollectionTokenId,
+      collectionCid,
+      walletAddr
+    );
+    tokenId = String(existingCollectionTokenId);
+    isNew = false;
+  } else {
+    const newTokenId = deriveDefaultCollectionId(walletAddr);
+    if (!newTokenId) throw new Error("Cannot derive default collection id");
+    tokenId = newTokenId;
+    await deps.publishNewToken(collectionCid, tokenId, walletAddr);
+    isNew = true;
+  }
+
+  adoptPublishedCollection(tokenId);
+
+  if (typeof deps.onAdoptIdentity === "function") {
+    await deps.onAdoptIdentity({ tokenId, assetId: assetID, isNew });
+  }
+
+  return { tokenId, collectionCid, isNew };
 }

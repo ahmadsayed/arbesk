@@ -343,7 +343,6 @@ export async function publishAsset(assetName, wallet, deps) {
   );
 
   deps.onProgress(0.9, "Besking — finalizing…");
-  adoptPublishedIdentity(tokenId, assetID);
   deps.updateUrlAsset(tokenId);
 
   if (isNew) {
@@ -356,7 +355,7 @@ export async function publishAsset(assetName, wallet, deps) {
   }
 
   emit(EVENTS.ASSET_PUBLISHED, {
-    tokenId: assetState.get().activeAssetTokenId,
+    tokenId: String(tokenId),
     cid: assetCid,
   });
   return { outcome: "published", tokenId: String(tokenId), cid: assetCid, isNew };
