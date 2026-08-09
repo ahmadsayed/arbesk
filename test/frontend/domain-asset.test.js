@@ -15,12 +15,12 @@ import {
   resetForNewAsset,
   closeAsset,
 } from "../../frontend/src/js/domain/asset.js";
-import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
+import { assetStore, _resetForTesting } from "../../frontend/src/js/domain/asset-store.js";
 
 beforeEach(() => _resetForTesting());
 
 test("snapshot is frozen and reflects the store", () => {
-  assetState.set({ activeAssetName: "Chair", activeAssetTokenId: "7" });
+  assetStore.set({ activeAssetName: "Chair", activeAssetTokenId: "7" });
   const snap = getAssetSnapshot();
   expect(snap.name).toBe("Chair");
   expect(snap.tokenId).toBe("7");
@@ -40,36 +40,36 @@ test("subscribeAsset fires immediately and on every store change", () => {
 });
 
 test("adoptLoadedManifestName: manifest name wins, else keep, else Untitled", () => {
-  assetState.set({ activeAssetName: "Session Name" });
+  assetStore.set({ activeAssetName: "Session Name" });
   adoptLoadedManifestName({ name: "Manifest Name" });
-  expect(assetState.get().activeAssetName).toBe("Manifest Name");
+  expect(assetStore.get().activeAssetName).toBe("Manifest Name");
 
   _resetForTesting();
   adoptLoadedManifestName({ name: "Manifest Name" });
-  expect(assetState.get().activeAssetName).toBe("Manifest Name");
+  expect(assetStore.get().activeAssetName).toBe("Manifest Name");
 
   _resetForTesting();
-  assetState.set({ activeAssetName: "Session Name" });
+  assetStore.set({ activeAssetName: "Session Name" });
   adoptLoadedManifestName({}); // no manifest name → keep session name
-  expect(assetState.get().activeAssetName).toBe("Session Name");
+  expect(assetStore.get().activeAssetName).toBe("Session Name");
 
   _resetForTesting();
   adoptLoadedManifestName({}); // nothing anywhere → Untitled Asset
-  expect(assetState.get().activeAssetName).toBe("Untitled Asset");
+  expect(assetStore.get().activeAssetName).toBe("Untitled Asset");
 });
 
 test("adoptManifestName never clobbers a good name with a default", () => {
-  assetState.set({ activeAssetName: "My Chair" });
+  assetStore.set({ activeAssetName: "My Chair" });
   adoptManifestName({ name: "Untitled Asset" });
-  expect(assetState.get().activeAssetName).toBe("My Chair");
+  expect(assetStore.get().activeAssetName).toBe("My Chair");
   adoptManifestName({ name: "Real Name" });
-  expect(assetState.get().activeAssetName).toBe("Real Name");
+  expect(assetStore.get().activeAssetName).toBe("Real Name");
   expect(isDefaultAssetName("  untitled asset ")).toBe(true);
   expect(isDefaultAssetName("My Chair")).toBe(false);
 });
 
 test("resetForNewAsset clears name and CIDs but preserves the collection", () => {
-  assetState.set({
+  assetStore.set({
     activeAssetName: "Old",
     activeAssetManifestCid: "bafyOld",
     latestAssetManifestCid: "bafyOld",
@@ -78,7 +78,7 @@ test("resetForNewAsset clears name and CIDs but preserves the collection", () =>
     activeCollectionTokenId: "7",
   });
   resetForNewAsset();
-  const s = assetState.get();
+  const s = assetStore.get();
   expect(s.activeAssetName).toBeNull();
   expect(s.activeAssetManifestCid).toBeNull();
   expect(s.activeAssetTokenId).toBeNull();
@@ -86,7 +86,7 @@ test("resetForNewAsset clears name and CIDs but preserves the collection", () =>
 });
 
 test("closeAsset clears all active-asset identity fields", () => {
-  assetState.set({
+  assetStore.set({
     activeAssetName: "Old",
     activeAssetManifestCid: "bafyOld",
     latestAssetManifestCid: "bafyOld",
@@ -95,7 +95,7 @@ test("closeAsset clears all active-asset identity fields", () => {
     currentManifest: { type: "asset" },
   });
   closeAsset();
-  const s = assetState.get();
+  const s = assetStore.get();
   expect(s.activeAssetName).toBeNull();
   expect(s.activeAssetManifestCid).toBeNull();
   expect(s.latestAssetManifestCid).toBeNull();

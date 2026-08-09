@@ -1,12 +1,12 @@
 // @ts-check
 /**
- * Domain: Asset — the one open asset. Facade over the legacy assetState
- * store: this module is the ONLY writer of the asset name and the
+ * Domain: Asset — the one open asset. Facade over the domain asset-store:
+ * this module is the ONLY writer of the asset name and the
  * CID/tokenId/currentManifest identity fields, and the single subscription
  * point for chrome rendering.
  */
 import { on, emit, EVENTS } from "../events/bus.js";
-import { assetState, tagManifestCid } from "../state/asset-state.js";
+import { assetStore, tagManifestCid } from "./asset-store.js";
 import { getStateForNewAsset } from "../utils/new-asset.js";
 import { deriveDefaultAssetId } from "../utils/collections.js";
 import { log } from "../utils/log.js";
@@ -28,7 +28,7 @@ const _listeners = new Set();
  * @returns {Readonly<AssetSnapshot>}
  */
 export function getAssetSnapshot() {
-  const s = assetState.get();
+  const s = assetStore.get();
   return Object.freeze({
     name: s.activeAssetName,
     assetId: s.activeAssetId,
@@ -75,7 +75,7 @@ export function isDefaultAssetName(name) {
  * @param {string} name
  */
 export function renameAsset(name) {
-  assetState.set({ activeAssetName: name });
+  assetStore.set({ activeAssetName: name });
 }
 
 /**
@@ -85,10 +85,10 @@ export function renameAsset(name) {
  * @param {any} manifest
  */
 export function adoptLoadedManifestName(manifest) {
-  const current = assetState.get().activeAssetName;
+  const current = assetStore.get().activeAssetName;
   const name = manifest?.name || current || "Untitled Asset";
   if (manifest?.name || !current) {
-    assetState.set({ activeAssetName: name });
+    assetStore.set({ activeAssetName: name });
   }
 }
 
@@ -101,7 +101,7 @@ export function adoptLoadedManifestName(manifest) {
 export function adoptManifestName(manifest) {
   const name = manifest?.name?.trim();
   if (name && !isDefaultAssetName(name)) {
-    assetState.set({ activeAssetName: name });
+    assetStore.set({ activeAssetName: name });
   }
 }
 
@@ -110,8 +110,8 @@ export function adoptManifestName(manifest) {
  * the open collection context survives (getStateForNewAsset semantics).
  */
 export function resetForNewAsset() {
-  assetState.set({
-    ...getStateForNewAsset(assetState.get()),
+  assetStore.set({
+    ...getStateForNewAsset(assetStore.get()),
     activeAssetName: null,
   });
 }
@@ -120,7 +120,7 @@ export function resetForNewAsset() {
  * Close the active asset entirely (library close-out).
  */
 export function closeAsset() {
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: null,
     latestAssetManifestCid: null,
     activeAssetTokenId: null,
@@ -148,7 +148,7 @@ export function adoptOpenedAsset(cid, identity = {}) {
   };
   if ("tokenId" in identity) patch.activeAssetTokenId = identity.tokenId;
   if ("assetId" in identity) patch.activeAssetId = identity.assetId;
-  assetState.set(patch);
+  assetStore.set(patch);
 }
 
 /**
@@ -159,7 +159,7 @@ export function adoptOpenedAsset(cid, identity = {}) {
  * @param {any} manifest
  */
 export function activateAssetManifest(cid, manifest) {
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: cid,
     currentManifest: tagManifestCid(manifest, cid),
   });
@@ -167,12 +167,12 @@ export function activateAssetManifest(cid, manifest) {
 
 /** @param {string|null} cid */
 export function setActiveManifestCid(cid) {
-  assetState.set({ activeAssetManifestCid: cid });
+  assetStore.set({ activeAssetManifestCid: cid });
 }
 
 /** @param {string|null} cid */
 export function setLatestManifestCid(cid) {
-  assetState.set({ latestAssetManifestCid: cid });
+  assetStore.set({ latestAssetManifestCid: cid });
 }
 
 /**
@@ -180,7 +180,7 @@ export function setLatestManifestCid(cid) {
  * (clearScene semantics — preserved verbatim from engine/cleanup.js).
  */
 export function clearAssetManifestCids() {
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: null,
     latestAssetManifestCid: null,
   });
@@ -193,7 +193,7 @@ export function clearAssetManifestCids() {
  * @param {string|null} cid
  */
 export function cacheCurrentManifest(manifest, cid) {
-  assetState.set({ currentManifest: tagManifestCid(manifest, cid) });
+  assetStore.set({ currentManifest: tagManifestCid(manifest, cid) });
 }
 
 /**
@@ -203,7 +203,7 @@ export function cacheCurrentManifest(manifest, cid) {
  * @param {any} manifest
  */
 export function recordSavedVersion(cid, manifest) {
-  assetState.set({
+  assetStore.set({
     latestAssetManifestCid: cid,
     activeAssetManifestCid: cid,
     currentManifest: tagManifestCid(manifest, cid),
@@ -216,7 +216,7 @@ export function recordSavedVersion(cid, manifest) {
  * @param {string} assetId
  */
 export function adoptPublishedIdentity(tokenId, assetId) {
-  assetState.set({
+  assetStore.set({
     activeAssetTokenId: String(tokenId),
     activeAssetId: assetId,
   });
@@ -234,9 +234,9 @@ export function adoptPublishedIdentity(tokenId, assetId) {
  * @returns {Promise<string>}
  */
 async function _resolveAssetName(fetchTokenName) {
-  const current = assetState.get().activeAssetName;
+  const current = assetStore.get().activeAssetName;
   if (current) return current;
-  const tokenId = assetState.get().activeAssetTokenId;
+  const tokenId = assetStore.get().activeAssetTokenId;
   if (tokenId) return (await fetchTokenName(tokenId)) || "My Asset";
   return "My Asset";
 }
@@ -259,7 +259,7 @@ export async function saveDraftAsset(deps) {
   // Only rewrite the URL for non-tokenized drafts. For tokenized assets, the
   // ?asset=<tokenId> URL already anchors to the blockchain; avoid stashing a
   // draft manifest in query params.
-  if (!assetState.get().activeAssetTokenId) {
+  if (!assetStore.get().activeAssetTokenId) {
     deps.updateUrlManifest(result.cid);
   }
   emit(EVENTS.ASSET_DRAFT_SAVED, { cid: result.cid });
@@ -285,7 +285,7 @@ export async function saveDraftAsset(deps) {
 export async function publishAsset(assetName, wallet, deps) {
   // Republishes (existing tokenId) snapshot the live comment thread into the
   // manifest via publishContext. First-time publishes have no prior comments.
-  const existingTokenId = assetState.get().activeAssetTokenId;
+  const existingTokenId = assetStore.get().activeAssetTokenId;
 
   // Fail fast on unauthorized republish attempts so the user gets immediate
   // feedback instead of paying for gas on a transaction that will revert.
@@ -324,12 +324,12 @@ export async function publishAsset(assetName, wallet, deps) {
   // it is generated from Date.now() at creation time and is unique per draft.
   // For updates to an existing asset, activeAssetId is already set and reused.
   const assetID = deriveDefaultAssetId(
-    assetState.get().activeAssetId,
+    assetStore.get().activeAssetId,
     publishedManifest?.asset_id || `asset_${Date.now()}`
   );
   log(
     `[PUBLISH] assetID derived | activeAssetId=${
-      assetState.get().activeAssetId
+      assetStore.get().activeAssetId
     } manifestAssetId=${publishedManifest?.asset_id} chosen=${assetID}`
   );
 

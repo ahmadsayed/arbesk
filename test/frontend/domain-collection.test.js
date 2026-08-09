@@ -13,9 +13,9 @@ import {
   publishCollection,
 } from "../../frontend/src/js/domain/collection.js";
 import {
-  assetState,
+  assetStore,
   _resetForTesting,
-} from "../../frontend/src/js/state/asset-state.js";
+} from "../../frontend/src/js/domain/asset-store.js";
 
 beforeEach(() => {
   _resetForTesting();
@@ -102,7 +102,7 @@ test("publishCollection mints a new default collection and adopts identity", asy
 });
 
 test("publishCollection republishes an existing collection", async () => {
-  assetState.set({ activeCollectionTokenId: "7" });
+  assetStore.set({ activeCollectionTokenId: "7" });
   const deps = {
     getOwnerOf: jest.fn().mockResolvedValue("0xOwner"),
     getTokenURI: jest.fn().mockResolvedValue("bafyPrev"),

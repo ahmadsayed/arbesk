@@ -3,11 +3,11 @@
  *
  * publishAsset: republish auth fail-fast, publishContext, no-changes still
  * anchors, assetID derivation, identity adoption, ASSET_PUBLISHED emission,
- * progress/status hook sequencing. IO deps injected; real assetState + bus.
+ * progress/status hook sequencing. IO deps injected; real assetStore + bus.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
 import { publishAsset } from "../../frontend/src/js/domain/asset.js";
-import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
+import { assetStore, _resetForTesting } from "../../frontend/src/js/domain/asset-store.js";
 import { on, EVENTS } from "../../frontend/src/js/events/bus.js";
 
 const WALLET = { address: "0xOwner", chainId: 31337, contractAddress: "0xC" };
@@ -53,7 +53,7 @@ test("first publish: no verifyCanEdit, identity adopted, event emitted", async (
 });
 
 test("republish: verifyCanEdit fail-fast with publishContext", async () => {
-  assetState.set({ activeAssetTokenId: "55", activeAssetId: "asset_9" });
+  assetStore.set({ activeAssetTokenId: "55", activeAssetId: "asset_9" });
   const deps = makeDeps();
   const out = await publishAsset("Hat", WALLET, deps);
   expect(deps.verifyCanEdit).toHaveBeenCalledWith("55", "0xOwner");

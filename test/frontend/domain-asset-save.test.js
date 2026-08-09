@@ -2,11 +2,11 @@
  * @jest-environment jsdom
  *
  * saveDraftAsset: name resolution, URL update ordering, ASSET_DRAFT_SAVED
- * emission. IO deps injected; real assetState + real event bus.
+ * emission. IO deps injected; real assetStore + real event bus.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
 import { saveDraftAsset } from "../../frontend/src/js/domain/asset.js";
-import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
+import { assetStore, _resetForTesting } from "../../frontend/src/js/domain/asset-store.js";
 import { on, EVENTS } from "../../frontend/src/js/events/bus.js";
 
 function makeDeps(over = {}) {
@@ -21,7 +21,7 @@ function makeDeps(over = {}) {
 beforeEach(() => _resetForTesting());
 
 test("in-session name wins; save runs; URL updated and event emitted for drafts", async () => {
-  assetState.set({ activeAssetName: "Session Name" });
+  assetStore.set({ activeAssetName: "Session Name" });
   const deps = makeDeps();
   const seen = [];
   const unsub = on(EVENTS.ASSET_DRAFT_SAVED, (e) => seen.push(e.cid));
@@ -37,7 +37,7 @@ test("in-session name wins; save runs; URL updated and event emitted for drafts"
 });
 
 test("tokenized asset: name from chain, no URL manifest update", async () => {
-  assetState.set({ activeAssetTokenId: "7" });
+  assetStore.set({ activeAssetTokenId: "7" });
   const deps = makeDeps();
   await saveDraftAsset(deps);
   expect(deps.fetchTokenName).toHaveBeenCalledWith("7");
@@ -47,7 +47,7 @@ test("tokenized asset: name from chain, no URL manifest update", async () => {
 
 test("falls back to My Asset when no name anywhere", async () => {
   const deps = makeDeps({ fetchTokenName: jest.fn().mockResolvedValue(null) });
-  assetState.set({ activeAssetTokenId: "7" });
+  assetStore.set({ activeAssetTokenId: "7" });
   await saveDraftAsset(deps);
   expect(deps.saveDraft).toHaveBeenCalledWith("My Asset");
 
