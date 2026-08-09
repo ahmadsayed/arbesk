@@ -22,6 +22,7 @@ export const EVENTS = {
   ASSET_BURNED:               "asset:burned",
   ASSET_CLEARED:              "asset:cleared",
   ASSET_DRAFT_SAVED:          "asset:draftSaved",
+  ASSET_FILE_DROPPED:         "asset:fileDropped",
   ASSET_LINKED_DROPPED:       "asset:linkedDropped",
   ASSET_OPEN_BY_TOKEN_ID:     "asset:openByTokenId",
   ASSET_PUBLISHED:            "asset:published",

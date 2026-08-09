@@ -53,11 +53,36 @@ export function clearPendingTransformEdit(nodeId) {
   state.pendingTransformEdits.delete(nodeId);
 }
 
+export function getPendingSourceOverrides() {
+  return state.pendingSourceOverrides;
+}
+
+export function clearPendingSourceOverrides() {
+  state.pendingSourceOverrides.clear();
+}
+
 /**
- * Dispose all meshes and anchors for a single node.
+ * @param {string} nodeId
+ * @param {{source: {cid: string, path: string, format: string}, name: string}} entry
+ */
+export function stagePendingSourceOverride(nodeId, entry) {
+  state.pendingSourceOverrides.set(nodeId, entry);
+}
+
+/**
  * @param {string} nodeId
  */
-export function disposeNode(nodeId) {
+export function clearPendingSourceOverride(nodeId) {
+  state.pendingSourceOverrides.delete(nodeId);
+}
+
+/**
+ * Dispose a node's meshes and animation groups while KEEPING its anchor —
+ * the anchor carries the node's transform and parent linkage. Used by the
+ * viewport file-drop override, which swaps a node's model in place.
+ * @param {string} nodeId
+ */
+export function disposeNodeContent(nodeId) {
   const meshes = state.nodeMeshes.get(nodeId);
   if (meshes) {
     for (const mesh of meshes) {
@@ -80,6 +105,14 @@ export function disposeNode(nodeId) {
     }
     state.nodeAnimationGroups.delete(nodeId);
   }
+}
+
+/**
+ * Dispose all meshes and anchors for a single node.
+ * @param {string} nodeId
+ */
+export function disposeNode(nodeId) {
+  disposeNodeContent(nodeId);
   const anchor = state.nodeAnchors.get(nodeId);
   if (anchor) {
     if (!anchor.isDisposed()) {
@@ -202,6 +235,7 @@ export function clearScene() {
   state.pendingChildRefs.length = 0;
   state.pendingPostProcessorEdits.clear();
   state.pendingTransformEdits.clear();
+  state.pendingSourceOverrides.clear();
 
   // Invalidate cached mesh filter
   state._nonChromeMeshCache = null;

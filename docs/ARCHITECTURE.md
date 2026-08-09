@@ -635,6 +635,8 @@ For EOA wallets (MetaMask/Rabby), the spinner card appears just before the walle
 6. A new collection manifest CID is written; `updateAssetURI` publishes it on-chain.
 7. `refreshLibraryData` is called; the new asset card appears.
 
+Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the same stage/decompose helper (`stageUploadSource` in `services/library-ops.js`) at drop time, then routes through `services/asset-file-drop.js`: with an asset open it replaces the root model node's source in place (staged as a `pendingSourceOverrides` entry — linked children, transforms, and history survive); with no asset open it creates a new unsaved draft named after the file. The normal Save Draft / Publish pipeline bakes the override into the next manifest version.
+
 ---
 
 #### 5.4.11 Opening an asset in Studio

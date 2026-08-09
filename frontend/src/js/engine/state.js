@@ -82,6 +82,14 @@ export const state = {
    */
   pendingTransformEdits: new Map(),
   /**
+   * Viewport file-drop source overrides staged but not yet persisted.
+   * Keyed by node_id. Picked up by `asset-save.js → prepareManifestForWrite`
+   * (replaces the node's source and resets its post_processor) and cleared
+   * on save.
+   * @type {Map<string, {source: {cid: string, path: string, format: string}, name: string}>}
+   */
+  pendingSourceOverrides: new Map(),
+  /**
    * The `assets` map of the collection currently open in the Studio.
    * Populated by loadCollectionManifest(); used to resolve `child_ref`
    * nodes whose `collection` field is `"self"`.

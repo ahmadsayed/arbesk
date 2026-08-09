@@ -61,6 +61,7 @@ export { createPlaceholder, disposePlaceholder } from "./placeholders.js";
 
 export {
   disposeNode,
+  disposeNodeContent,
   clearScene,
   clearPendingChildRefs,
   getPendingChildRefs,
@@ -70,6 +71,10 @@ export {
   getPendingTransformEdits,
   clearPendingTransformEdits,
   clearPendingTransformEdit,
+  getPendingSourceOverrides,
+  clearPendingSourceOverrides,
+  stagePendingSourceOverride,
+  clearPendingSourceOverride,
 } from "./cleanup.js";
 
 export {
@@ -78,6 +83,8 @@ export {
   loadNode,
   loadAsset,
   waitForPendingLinkedDrops,
+  replaceRootModelSource,
+  createRootDraftSource,
 } from "./scene-loader.js";
 export {
   deselectAll,

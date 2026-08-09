@@ -136,13 +136,13 @@ function fileExtension(filename) {
   return parts.length > 1 ? parts.pop().toLowerCase() : "";
 }
 
-function baseNameWithoutExtension(filename) {
+export function baseNameWithoutExtension(filename) {
   const ext = fileExtension(filename);
   if (!ext) return filename || "Uploaded Asset";
   return filename.slice(0, -ext.length - 1) || "Uploaded Asset";
 }
 
-function validateUploadFile(file) {
+export function validateUploadFile(file) {
   if (!file) throw new Error("No file selected");
   const ext = fileExtension(file.name);
   if (!ALLOWED_EXTENSIONS.has(ext)) {
@@ -189,6 +189,38 @@ async function decomposeUploadSource(assetManifest) {
 }
 
 /**
+ * Validate, upload, and decompose a desktop glTF/GLB/3MF file into its
+ * canonical stored form, returning the staged node source (post-decompose
+ * values). Shared by uploadFileToCollection and the Studio viewport
+ * file-drop flow so both store sources identically.
+ *
+ * @param {File} file
+ * @param {{assetName?: string, assetId?: string}} [ctx] - decompose context
+ * @returns {Promise<{cid: string, path: string, format: string}>}
+ */
+export async function stageUploadSource(file, { assetName, assetId } = {}) {
+  const format = validateUploadFile(file);
+  const arrayBuffer = await file.arrayBuffer();
+  const sourceCid = await writeToIPFS(
+    new Uint8Array(arrayBuffer),
+    file.name
+  );
+  log(`[LIBRARY-OPS] uploaded source asset → ${sourceCid}`);
+
+  // Decompose via a scratch single-node manifest; mutates node.source in place.
+  const scratchNode = {
+    node_id: "node_1",
+    source: { cid: sourceCid, path: file.name, format },
+  };
+  await decomposeUploadSource({
+    name: assetName || baseNameWithoutExtension(file.name),
+    asset_id: assetId || `asset_${Date.now()}`,
+    scene: { nodes: [scratchNode] },
+  });
+  return scratchNode.source;
+}
+
+/**
  * Upload a desktop glTF/GLB/3MF file into an existing collection. The source
  * is decomposed to its canonical stored form before the manifest is written.
  *
@@ -203,16 +235,10 @@ export async function uploadFileToCollection(file, collectionTokenId) {
   const c = getContract();
   if (!c) throw new Error("Contract not ready");
 
-  const format = validateUploadFile(file);
   const assetId = `asset_${Date.now()}`;
   const assetName = baseNameWithoutExtension(file.name);
 
-  const arrayBuffer = await file.arrayBuffer();
-  const sourceCid = await writeToIPFS(
-    new Uint8Array(arrayBuffer),
-    file.name
-  );
-  log(`[LIBRARY-OPS] uploaded source asset → ${sourceCid}`);
+  const source = await stageUploadSource(file, { assetName, assetId });
 
   const assetManifest = {
     type: "asset",
@@ -226,11 +252,7 @@ export async function uploadFileToCollection(file, collectionTokenId) {
           node_id: "node_1",
           type: "source_asset",
           name: assetName,
-          source: {
-            cid: sourceCid,
-            path: file.name,
-            format,
-          },
+          source,
           transform_matrix: identityMatrix(),
           post_processor: {
             color: null,
@@ -240,8 +262,6 @@ export async function uploadFileToCollection(file, collectionTokenId) {
       ],
     },
   };
-
-  await decomposeUploadSource(assetManifest);
 
   const assetManifestCid = await writeJSONToIPFS(assetManifest, null, {
     type: "asset",

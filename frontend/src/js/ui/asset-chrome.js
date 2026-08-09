@@ -9,7 +9,7 @@
 import { on, EVENTS } from "../events/bus.js";
 import { subscribeAsset, getAssetState } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
-import { getPendingChildRefs } from "../engine/cleanup.js";
+import { getPendingChildRefs, getPendingSourceOverrides } from "../engine/cleanup.js";
 
 const titleEl = document.getElementById("assetStatusName");
 const metaEl = document.getElementById("assetStatusMeta");
@@ -23,7 +23,9 @@ const downloadBtn = document.getElementById("downloadAssetBtn");
 function renderChrome() {
   const s = getAssetState();
   const hasAsset = !!(
-    s.activeAssetManifestCid || getPendingChildRefs().length > 0
+    s.activeAssetManifestCid ||
+    getPendingChildRefs().length > 0 ||
+    getPendingSourceOverrides().size > 0
   );
   const hasWallet = !!walletState.get().walletAddress;
 

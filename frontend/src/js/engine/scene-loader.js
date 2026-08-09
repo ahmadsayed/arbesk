@@ -27,7 +27,7 @@ import {
 } from "./transforms.js";
 import { createPlaceholder, disposePlaceholder } from "./placeholders.js";
 import { applyColor, applyScale } from "./time-travel.js";
-import { clearScene } from "./cleanup.js";
+import { clearScene, disposeNodeContent } from "./cleanup.js";
 import { createAnchorNode } from "./scene-graph.js";
 import { identityMatrix } from "../utils/collections.js";
 
@@ -624,6 +624,48 @@ async function waitForPendingLinkedDrops() {
   await Promise.all([..._inFlightLinkedDrops]);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Drag/drop - OS file source override
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Replace the model of an existing root node in place: disposes the node's
+ * meshes/animation groups (keeping its anchor, which carries the transform)
+ * and loads the new source under the same node_id.
+ *
+ * @param {string} nodeId
+ * @param {{cid: string, path: string, format: string}} source
+ * @returns {Promise<boolean>} false when the node has no live anchor
+ */
+async function replaceRootModelSource(nodeId, source) {
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!anchor) {
+    console.warn(`[SCENE] file-drop override ignored: no anchor for ${nodeId}`);
+    return false;
+  }
+  disposeNodeContent(nodeId);
+  await loadAsset(source, anchor, nodeId);
+  return true;
+}
+
+/**
+ * Create a fresh single-node draft scene from a dropped file: ensures a
+ * root anchor exists, creates `anchor_<nodeId>` under it, and loads the
+ * source. Used when a file is dropped with no asset open.
+ *
+ * @param {string} nodeId
+ * @param {{cid: string, path: string, format: string}} source
+ */
+async function createRootDraftSource(nodeId, source) {
+  if (!state.rootSceneAnchor) {
+    state.rootSceneAnchor = createAnchorNode("root_anchor", state.scene);
+  }
+  const anchor = createAnchorNode(`anchor_${nodeId}`, state.scene);
+  anchor.parent = state.rootSceneAnchor;
+  state.nodeAnchors.set(nodeId, anchor);
+  await loadAsset(source, anchor, nodeId);
+}
+
 export {
   loadAsset,
   loadNode,
@@ -633,4 +675,6 @@ export {
   nextLinkedNodeId,
   handleLinkedAssetDropped,
   waitForPendingLinkedDrops,
+  replaceRootModelSource,
+  createRootDraftSource,
 };

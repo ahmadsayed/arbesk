@@ -413,6 +413,8 @@ describe("prepareManifestForWrite", () => {
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
         clearPendingChildRefs: jest.fn(),
+        getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
+        clearPendingSourceOverrides: jest.fn(),
         captureAssetThumbnail: jest.fn(),
         // parametric-preview.js / time-travel.js are pulled in transitively
         // by manifest-builder and also import scene-graph — ESM linking
@@ -481,6 +483,8 @@ describe("prepareManifestForWrite", () => {
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
         clearPendingChildRefs: jest.fn(),
+        getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
+        clearPendingSourceOverrides: jest.fn(),
         captureAssetThumbnail: jest.fn(),
         // See the 3MF test above: transitively imported named exports must
         // all exist on the mocked module for ESM linking.
@@ -519,5 +523,134 @@ describe("prepareManifestForWrite", () => {
     expect(
       written.scene.nodes.some((n) => n.node_id === "linked_child_1")
     ).toBe(true);
+  });
+
+  // Viewport file-drop override: baking replaces the node's source and resets
+  // its post_processor (the old edits described the old geometry), and the
+  // save must be detected as a change, not a no-op — the override bake happens
+  // after the prevManifest no-op baseline snapshot, same as pending child refs.
+  // NOTE: keep the scene-graph-mocking tests at the END of this describe —
+  // the mock survives jest.resetModules() and would leak into earlier tests.
+  it("bakes a source override into an existing node and resets its post_processor", async () => {
+    const override = {
+      source: { cid: "bafyDropped", path: "composite.gltf", format: "gltf" },
+      name: "dropped-model",
+    };
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/scene-graph.js",
+      () => ({
+        getPendingChildRefs: jest.fn().mockReturnValue([]),
+        waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
+        getPendingPostProcessorEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingPostProcessorEdits: jest.fn(),
+        getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingTransformEdits: jest.fn(),
+        clearPendingChildRefs: jest.fn(),
+        getPendingSourceOverrides: jest
+          .fn()
+          .mockReturnValue(new Map([["n1", override]])),
+        clearPendingSourceOverrides: jest.fn(),
+        captureAssetThumbnail: jest.fn(),
+        // See the 3MF test above: transitively imported named exports must
+        // all exist on the mocked module for ESM linking.
+        getNodeMeshes: jest.fn(),
+        getNodeSubMeshes: jest.fn(),
+        getNodeChildRef: jest.fn(),
+        deselectAll: jest.fn(),
+        selectNodeById: jest.fn(),
+        selectSubMesh: jest.fn(),
+        state: { selectedNodeIds: new Set() },
+      })
+    );
+    const ctx = await load();
+    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    stateMod._resetForTesting();
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    writeJSONToIPFS.mockResolvedValue("bafyOverrideVersion");
+
+    const overriddenNode = makeNode();
+    overriddenNode.post_processor = {
+      color: "#ff0000",
+      scale: { x: 2, y: 2, z: 2 },
+    };
+    const manifest = makeManifest([overriddenNode]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    stateMod.assetStore.set({
+      activeAssetManifestCid: "bafyManifest",
+      latestAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.saveAssetDraftCore("Draft");
+
+    expect(result.ok).toBe(true);
+    const written = writeJSONToIPFS.mock.calls[0][0];
+    const node = written.scene.nodes.find((n) => n.node_id === "n1");
+    expect(node.source).toEqual(override.source);
+    expect(node.post_processor).toEqual({
+      color: null,
+      scale: { x: 1, y: 1, z: 1 },
+    });
+  });
+
+  // Viewport file drop with no asset open: the staged override alone must
+  // produce a fresh single-node manifest (node_1) that is written, not
+  // swallowed by first-save no-op detection.
+  it("creates a fresh single-node manifest from a source override with no asset open", async () => {
+    const override = {
+      source: { cid: "bafyDropped", path: "composite.gltf", format: "gltf" },
+      name: "dropped-model",
+    };
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/scene-graph.js",
+      () => ({
+        getPendingChildRefs: jest.fn().mockReturnValue([]),
+        waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
+        getPendingPostProcessorEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingPostProcessorEdits: jest.fn(),
+        getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingTransformEdits: jest.fn(),
+        clearPendingChildRefs: jest.fn(),
+        getPendingSourceOverrides: jest
+          .fn()
+          .mockReturnValue(new Map([["node_1", override]])),
+        clearPendingSourceOverrides: jest.fn(),
+        captureAssetThumbnail: jest.fn(),
+        // See the 3MF test above: transitively imported named exports must
+        // all exist on the mocked module for ESM linking.
+        getNodeMeshes: jest.fn(),
+        getNodeSubMeshes: jest.fn(),
+        getNodeChildRef: jest.fn(),
+        deselectAll: jest.fn(),
+        selectNodeById: jest.fn(),
+        selectSubMesh: jest.fn(),
+        state: { selectedNodeIds: new Set() },
+      })
+    );
+    const ctx = await load();
+    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    stateMod._resetForTesting();
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    writeJSONToIPFS.mockResolvedValue("bafyFreshDraft");
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+
+    const result = await ctx.mod.saveAssetDraftCore("dropped-model");
+
+    expect(result.ok).toBe(true);
+    expect(result.cid).toBe("bafyFreshDraft");
+    const written = writeJSONToIPFS.mock.calls[0][0];
+    expect(written.scene.nodes).toHaveLength(1);
+    expect(written.scene.nodes[0]).toEqual({
+      node_id: "node_1",
+      type: "source_asset",
+      name: "dropped-model",
+      source: override.source,
+      transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
+    });
   });
 });

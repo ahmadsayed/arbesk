@@ -357,6 +357,7 @@ frontend/src/js/
 | Nested child asset composition | ✅ | ✅ |
 | Collection create (optimistic) | ✅ instant card, auto-rollback | ✅ instant card, sponsored |
 | Upload GLB/glTF/3MF to collection (decomposed at upload) | ✅ | ✅ |
+| Viewport file drop (override open asset's model / create draft) | ✅ staged as unsaved draft | ✅ |
 | Library page (grid/list/search) | ✅ | ✅ |
 | Asset-level Nostr comments | ✅ | ✅ |
 | Merkle editor collaboration | ✅ | ✅ |

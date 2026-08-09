@@ -118,7 +118,7 @@ async function loadModule() {
 
   await jest.unstable_mockModule(
     "../../frontend/src/js/engine/cleanup.js",
-    () => ({ disposeNode: jest.fn(), clearScene: jest.fn() })
+    () => ({ disposeNode: jest.fn(), disposeNodeContent: jest.fn(), clearScene: jest.fn() })
   );
 
   await jest.unstable_mockModule(

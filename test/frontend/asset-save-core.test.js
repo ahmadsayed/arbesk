@@ -55,6 +55,8 @@ async function load() {
     getPendingTransformEdits: mocks.getPendingTransformEdits,
     clearPendingTransformEdits: jest.fn(),
     clearPendingChildRefs: jest.fn(),
+    getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
+    clearPendingSourceOverrides: jest.fn(),
     captureAssetThumbnail: mocks.captureAssetThumbnail,
   }));
   jest.unstable_mockModule(
@@ -62,6 +64,7 @@ async function load() {
     () => ({
       getPendingSourceColorEdits: mocks.getPendingSourceColorEdits,
       clearPendingSourceColorEdits: jest.fn(),
+      clearPendingSourceColorEdit: jest.fn(),
     })
   );
   jest.unstable_mockModule(

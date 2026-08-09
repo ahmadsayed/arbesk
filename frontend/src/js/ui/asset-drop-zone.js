@@ -1,8 +1,9 @@
 // @ts-nocheck
 /**
- * Viewport drop zone for linked asset composition.
- * The full persistence/rendering path is handled by the linked asset feature;
- * this module provides the clean scene-level UX event surface.
+ * Viewport drop zone for linked asset composition and OS file drops.
+ * The full persistence/rendering path is handled by the linked asset feature
+ * and services/asset-file-drop.js; this module provides the clean scene-level
+ * UX event surface.
  */
 
 import { emit, on, EVENTS } from "../events/bus.js";
@@ -13,6 +14,10 @@ const overlay = document.getElementById("assetDropOverlay");
 
 function hasLinkedAssetPayload(event) {
   return Array.from(event.dataTransfer?.types || []).includes(MIME);
+}
+
+function hasFilePayload(event) {
+  return Array.from(event.dataTransfer?.types || []).includes("Files");
 }
 
 function showOverlay() {
@@ -38,13 +43,13 @@ function parsePayload(event) {
 
 if (viewport) {
   viewport.addEventListener("dragenter", (event) => {
-    if (!hasLinkedAssetPayload(event)) return;
+    if (!hasLinkedAssetPayload(event) && !hasFilePayload(event)) return;
     event.preventDefault();
     showOverlay();
   });
 
   viewport.addEventListener("dragover", (event) => {
-    if (!hasLinkedAssetPayload(event)) return;
+    if (!hasLinkedAssetPayload(event) && !hasFilePayload(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     showOverlay();
@@ -57,14 +62,20 @@ if (viewport) {
   viewport.addEventListener("drop", (event) => {
     const payload = parsePayload(event);
     hideOverlay();
-    if (!payload) return;
+    if (payload) {
+      event.preventDefault();
+      emit(EVENTS.ASSET_LINKED_DROPPED, {
+        ...payload,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+      return;
+    }
 
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
     event.preventDefault();
-    emit(EVENTS.ASSET_LINKED_DROPPED, {
-      ...payload,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    });
+    emit(EVENTS.ASSET_FILE_DROPPED, { file });
   });
 }
 

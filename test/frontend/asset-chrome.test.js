@@ -22,7 +22,10 @@ function hidden(id) {
 beforeAll(async () => {
   await jest.unstable_mockModule(
     "../../frontend/src/js/engine/cleanup.js",
-    () => ({ getPendingChildRefs: () => [] })
+    () => ({
+      getPendingChildRefs: () => [],
+      getPendingSourceOverrides: () => new Map(),
+    })
   );
   document.body.innerHTML = `
     <span id="assetStatusName">No asset open</span>

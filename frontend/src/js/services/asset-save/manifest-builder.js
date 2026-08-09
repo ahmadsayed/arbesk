@@ -14,6 +14,7 @@ import { snapshotCommentsArchive } from "../api.js";
 import { getTokenURI } from "../token.js";
 import { getPendingChildRefs } from "../../engine/scene-graph.js";
 import { waitForPendingLinkedDrops } from "../../engine/scene-graph.js";
+import { waitForPendingFileDrops } from "../asset-file-drop.js";
 import { resolveFormatHandler } from "../../formats/index.js";
 import { buildDedupMap } from "../../gltf/dedup.js";
 import {
@@ -26,6 +27,8 @@ import {
   getPendingTransformEdits,
   clearPendingTransformEdits,
   clearPendingChildRefs,
+  getPendingSourceOverrides,
+  clearPendingSourceOverrides,
   captureAssetThumbnail,
 } from "../../engine/scene-graph.js";
 import {
@@ -41,6 +44,7 @@ import {
   updatePendingGeneration,
 } from "../../state/pending-generations.js";
 import { log, warn } from "../../utils/log.js";
+import { identityMatrix } from "../../utils/collections.js";
 
 function isRateLimitError(err) {
   if (!err || typeof err.message !== "string") return false;
@@ -344,10 +348,12 @@ export async function prepareManifestForWrite(assetName) {
   // while the drop is still resolving, its node is not in pendingChildRefs
   // yet and would be silently lost. Wait for any in-flight drops first.
   await waitForPendingLinkedDrops();
+  await waitForPendingFileDrops();
   const pendingRefs = getPendingChildRefs();
   const pendingPP = getPendingPostProcessorEdits();
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
+  const pendingOverrides = getPendingSourceOverrides();
 
   const activeCid = getActiveAssetManifestCid();
   if (activeCid) {
@@ -360,7 +366,8 @@ export async function prepareManifestForWrite(assetName) {
     pendingRefs.length > 0 ||
     pendingPP.size > 0 ||
     pendingTransforms.size > 0 ||
-    pendingColors.size > 0
+    pendingColors.size > 0 ||
+    pendingOverrides.size > 0
   ) {
     manifest = {
       type: "asset",
@@ -371,7 +378,7 @@ export async function prepareManifestForWrite(assetName) {
       scene: { nodes: [] },
     };
     log(
-      `Save: creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingTransforms.size} pending transform edits / ${pendingColors.size} pending source color edits`
+      `Save: creating fresh manifest for ${pendingRefs.length} pending child refs / ${pendingPP.size} pending post-processor edits / ${pendingTransforms.size} pending transform edits / ${pendingColors.size} pending source color edits / ${pendingOverrides.size} pending source overrides`
     );
   } else {
     return null;
@@ -421,6 +428,39 @@ export async function prepareManifestForWrite(assetName) {
   for (const pendingNode of pendingRefs) {
     if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
       manifest.scene.nodes.push(pendingNode);
+    }
+  }
+
+  // Bake pending viewport file-drop source overrides. Same ordering rule as
+  // the child refs above: must happen after the prevManifest snapshot so a
+  // drop-only save is not reported as "no changes". An override replaces the
+  // node's source and resets its post_processor to defaults — the old edits
+  // described the old geometry. When the node does not exist yet (fresh draft
+  // created by a drop with no asset open), a new single node is appended.
+  if (pendingOverrides.size > 0) {
+    for (const [nodeId, override] of pendingOverrides) {
+      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      if (node) {
+        node.source = { ...override.source };
+        node.post_processor = {
+          color: null,
+          scale: { x: 1, y: 1, z: 1 },
+        };
+        log(`Save: applied source override | node=${nodeId}`);
+      } else {
+        manifest.scene.nodes.push({
+          node_id: nodeId,
+          type: "source_asset",
+          name: override.name,
+          source: { ...override.source },
+          transform_matrix: identityMatrix(),
+          post_processor: {
+            color: null,
+            scale: { x: 1, y: 1, z: 1 },
+          },
+        });
+        log(`Save: created node from source override | node=${nodeId}`);
+      }
     }
   }
 
@@ -706,6 +746,7 @@ export async function saveAssetDraftCore(
     clearPendingPostProcessorEdits();
     clearPendingTransformEdits();
     clearPendingSourceColorEdits();
+    clearPendingSourceOverrides();
     // Keep the in-memory manifest cache aligned with the active CID even when
     // no new version is written, so the next save/publish can skip the IPFS
     // round-trip entirely.
@@ -750,6 +791,7 @@ export async function saveAssetDraftCore(
   clearPendingPostProcessorEdits();
   clearPendingTransformEdits();
   clearPendingSourceColorEdits();
+  clearPendingSourceOverrides();
 
   return {
     ok: true,
