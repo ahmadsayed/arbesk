@@ -1,13 +1,12 @@
 // @ts-check
 /**
  * Domain: Asset — the one open asset. Facade over the legacy assetState
- * store: this module is the ONLY writer of the asset name and the single
- * subscription point for chrome rendering. CID/tokenId fields still flow
- * through assetState directly (privatized in Phase 2 with the save/publish
- * commands).
+ * store: this module is the ONLY writer of the asset name and the
+ * CID/tokenId/currentManifest identity fields, and the single subscription
+ * point for chrome rendering.
  */
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
+import { assetState, tagManifestCid } from "../state/asset-state.js";
 import { getStateForNewAsset } from "../utils/new-asset.js";
 
 /** @type {Set<(snapshot: Readonly<AssetSnapshot>) => void>} */
@@ -126,5 +125,106 @@ export function closeAsset() {
     activeAssetId: null,
     activeAssetName: null,
     currentManifest: null,
+  });
+}
+
+// ─── Identity / CID commands (Phase 2) ─────────────────────────────
+// The ONLY writers of activeAssetManifestCid, latestAssetManifestCid,
+// activeAssetTokenId, activeAssetId, currentManifest. Collection-context
+// fields (activeCollectionTokenId, selectedCollectionId) ride along here
+// as a transitional seam — Phase 3 moves them to the Collection module.
+
+/**
+ * Adopt a freshly opened/loaded asset: active + latest CIDs point at `cid`.
+ * Identity keys are written only when present (`in` semantics), so callers
+ * reproduce their exact legacy patches — pass `tokenId: null` explicitly to
+ * clear. `clearSelectedCollection: true` writes `selectedCollectionId: null`.
+ * @param {string} cid
+ * @param {{tokenId?: string|null, assetId?: string|null, collectionTokenId?: string|null, clearSelectedCollection?: boolean}} [identity]
+ */
+export function adoptOpenedAsset(cid, identity = {}) {
+  /** @type {Record<string, any>} */
+  const patch = {
+    activeAssetManifestCid: cid,
+    latestAssetManifestCid: cid,
+  };
+  if ("tokenId" in identity) patch.activeAssetTokenId = identity.tokenId;
+  if ("assetId" in identity) patch.activeAssetId = identity.assetId;
+  if ("collectionTokenId" in identity)
+    patch.activeCollectionTokenId = identity.collectionTokenId;
+  if (identity.clearSelectedCollection) patch.selectedCollectionId = null;
+  assetState.set(patch);
+}
+
+/**
+ * Root-load tail (scene-loader): the loaded manifest becomes active and is
+ * cached as currentManifest. Does NOT touch latestAssetManifestCid — the
+ * version-history store's SCENE_READY listener owns the chain tip.
+ * @param {string} cid
+ * @param {any} manifest
+ */
+export function activateAssetManifest(cid, manifest) {
+  assetState.set({
+    activeAssetManifestCid: cid,
+    currentManifest: tagManifestCid(manifest, cid),
+  });
+}
+
+/** @param {string|null} cid */
+export function setActiveManifestCid(cid) {
+  assetState.set({ activeAssetManifestCid: cid });
+}
+
+/** @param {string|null} cid */
+export function setLatestManifestCid(cid) {
+  assetState.set({ latestAssetManifestCid: cid });
+}
+
+/**
+ * Scene cleared: both CIDs go. Token identity and currentManifest survive
+ * (clearScene semantics — preserved verbatim from engine/cleanup.js).
+ */
+export function clearAssetManifestCids() {
+  assetState.set({
+    activeAssetManifestCid: null,
+    latestAssetManifestCid: null,
+  });
+}
+
+/**
+ * Cache a fetched manifest against its CID without changing active/latest
+ * (outliner cache fill, no-changes save path).
+ * @param {any} manifest
+ * @param {string|null} cid
+ */
+export function cacheCurrentManifest(manifest, cid) {
+  assetState.set({ currentManifest: tagManifestCid(manifest, cid) });
+}
+
+/**
+ * A new version was written to IPFS: it becomes the active + latest tip and
+ * the cached current manifest.
+ * @param {string} cid
+ * @param {any} manifest
+ */
+export function recordSavedVersion(cid, manifest) {
+  assetState.set({
+    latestAssetManifestCid: cid,
+    activeAssetManifestCid: cid,
+    currentManifest: tagManifestCid(manifest, cid),
+  });
+}
+
+/**
+ * Publish succeeded: the collection token is now the asset's on-chain
+ * identity.
+ * @param {string|number} tokenId
+ * @param {string} assetId
+ */
+export function adoptPublishedIdentity(tokenId, assetId) {
+  assetState.set({
+    activeCollectionTokenId: String(tokenId),
+    activeAssetTokenId: String(tokenId),
+    activeAssetId: assetId,
   });
 }
