@@ -356,7 +356,12 @@ export async function publishAsset(assetName, wallet, deps) {
   deps.updateUrlAsset(tokenId);
 
   if (isNew) {
-    await deps.onNewCollection?.();
+    // Fire-and-forget: the UI shows success feedback immediately; the panel
+    // refresh is a side effect and must not block the published outcome.
+    const maybePromise = deps.onNewCollection?.();
+    if (maybePromise && typeof maybePromise.catch === "function") {
+      maybePromise.catch(() => {});
+    }
   }
 
   emit(EVENTS.ASSET_PUBLISHED, {
