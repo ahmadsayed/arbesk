@@ -40,7 +40,7 @@ import {
 // Re-exports — backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-export { state, DEFAULT_WOOD_COLOR, MAX_CHILD_WORLD_DEPTH } from "./state.js";
+export { state, DEFAULT_WOOD_COLOR, MAX_CHILD_ASSET_DEPTH } from "./state.js";
 
 export {
   extractCid,
