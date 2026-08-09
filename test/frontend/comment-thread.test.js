@@ -36,6 +36,13 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     getCachedSession: jest.fn(() => null),
     clearSession: jest.fn(),
     createSession: jest.fn(),
+    getConfig: jest.fn(() => ({ ipfs: { gateway: "http://127.0.0.1:8080" } })),
+  }));
+
+  jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+    __esModule: true,
+    getActiveContract: jest.fn(),
+    CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
   }));
 
   jest.unstable_mockModule("../../frontend/src/js/services/team.js", () => ({
