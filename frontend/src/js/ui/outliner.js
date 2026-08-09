@@ -3,7 +3,7 @@
  * Arbesk Outliner - Scene Hierarchy Tree
  *
  * Renders the scene graph from the current level's manifest.
- * Click to select, double-click child worlds to dive in.
+ * Click to select, double-click child assets to dive in.
  * Supports drag reorder and drag-from-library to add children.
  */
 
@@ -87,7 +87,7 @@ function getNodes() {
 
 /**
  * Build a hierarchical outline tree from the flat manifest nodes array.
- * Child-world nodes (nodes with child_ref) are grouped under the nearest
+ * Child-asset nodes (nodes with child_ref) are grouped under the nearest
  * preceding regular node so the outline reflects the parent/child relationship
  * shown in the viewport.
  */
@@ -280,7 +280,7 @@ function createNodeElement(node, isChildWorld, depth = 0) {
   label.textContent = getNodeDisplayName(node);
   el.appendChild(label);
 
-  // Badge (token ID for child worlds).
+  // Badge (token ID for child assets).
   // Supports both legacy {tokenId} and collection {collection: {tokenId}, assetID} formats.
   const badgeTokenId =
     node.child_ref?.tokenId || node.child_ref?.collection?.tokenId;

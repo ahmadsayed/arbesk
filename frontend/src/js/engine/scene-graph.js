@@ -385,7 +385,7 @@ export function initEngine() {
       // Walk the full parent chain. Track the first nodeId seen (for regular
       // nodes) but do NOT stop — continue until a childRef boundary is found
       // or the chain ends. A childRef boundary means we are inside a child
-      // world; the parent manifest's node_id is on the outer anchor above it.
+      // asset; the parent manifest's node_id is on the outer anchor above it.
       let firstNodeId = null;
       let childWorldNodeId = null;
 
@@ -590,7 +590,7 @@ function getNodeChildRef(nodeId) {
         resolvedCid: anchor.metadata.resolvedCid || null,
       };
     }
-    // Otherwise walk up to find a parent child_ref world.
+    // Otherwise walk up to find a parent child_ref asset.
     let current = anchor.parent;
     while (current) {
       if (current.metadata?.childRef) {
