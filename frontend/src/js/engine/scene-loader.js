@@ -15,8 +15,7 @@ import {
   clearResolutionCache,
 } from "../blockchain/token-resolver.js";
 import { emit, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
-import { activateAssetManifest } from "../domain/asset.js";
+import { activateAssetManifest, getCurrentManifest } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { state, MAX_CHILD_ASSET_DEPTH } from "./state.js";
 import {
@@ -566,7 +565,7 @@ async function _handleLinkedAssetDropped(event) {
     // Gather every node_id already in play (saved manifest, pending drops,
     // loaded scene) so a repeat drop of the same asset gets its own id and
     // becomes an independent instance instead of replacing the first one.
-    const currentManifest = assetState.get().currentManifest;
+    const currentManifest = getCurrentManifest();
     const existingIds = new Set([
       ...(currentManifest
         ? getManifestNodes(currentManifest).map((n) => n.node_id)

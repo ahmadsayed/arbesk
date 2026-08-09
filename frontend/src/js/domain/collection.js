@@ -5,7 +5,7 @@
  * Owns reads/writes of activeCollectionTokenId and selectedCollectionId.
  * The canonical publish seam is added in Task 2.
  */
-import { assetState } from "../state/asset-state.js";
+import { assetStore } from "./asset-store.js";
 import {
   deriveDefaultCollectionId,
   mergeAssetIntoCollection,
@@ -13,12 +13,12 @@ import {
 
 /** @returns {string|null} */
 export function getActiveCollectionTokenId() {
-  return assetState.get().activeCollectionTokenId || null;
+  return assetStore.get().activeCollectionTokenId || null;
 }
 
 /** @returns {string|null} */
 export function getSelectedCollectionId() {
-  return assetState.get().selectedCollectionId || null;
+  return assetStore.get().selectedCollectionId || null;
 }
 
 /**
@@ -33,7 +33,7 @@ export function adoptOpenedCollection(
   /** @type {Record<string, any>} */
   const patch = { activeCollectionTokenId: String(tokenId) };
   if (clearSelectedCollection) patch.selectedCollectionId = null;
-  assetState.set(patch);
+  assetStore.set(patch);
 }
 
 /**
@@ -41,19 +41,19 @@ export function adoptOpenedCollection(
  * @param {string|number|null} tokenId
  */
 export function selectCollection(tokenId) {
-  assetState.set({
+  assetStore.set({
     selectedCollectionId: tokenId ? String(tokenId) : null,
   });
 }
 
 /** Clear the selected-collection hint. */
 export function clearSelectedCollection() {
-  assetState.set({ selectedCollectionId: null });
+  assetStore.set({ selectedCollectionId: null });
 }
 
 /** Clear the active collection context entirely (library close-out / error). */
 export function clearActiveCollection() {
-  assetState.set({
+  assetStore.set({
     activeCollectionTokenId: null,
     selectedCollectionId: null,
   });
@@ -64,7 +64,7 @@ export function clearActiveCollection() {
  * @param {string|number} tokenId
  */
 export function adoptPublishedCollection(tokenId) {
-  assetState.set({ activeCollectionTokenId: String(tokenId) });
+  assetStore.set({ activeCollectionTokenId: String(tokenId) });
 }
 
 /**

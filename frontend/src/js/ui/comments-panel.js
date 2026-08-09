@@ -8,7 +8,7 @@
  */
 
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
+import { getActiveAssetTokenId, getActiveAssetId } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { CommentThread } from "../state/comment-thread.js";
 import { truncateAddress } from "../utils/format.js";
@@ -63,9 +63,9 @@ function bindThreadEvents() {
 // ─── State Changes ──────────────────────────────────────────────────────────
 
 async function onAssetContextChanged(e) {
-  const tokenId = assetState.get().activeAssetTokenId;
+  const tokenId = getActiveAssetTokenId();
   const chainId = walletState.get().chainId;
-  const assetId = assetState.get().activeAssetId;
+  const assetId = getActiveAssetId();
   await thread.setContext({ tokenId, chainId, assetId, manifest: e?.manifest });
 }
 

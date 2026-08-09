@@ -213,7 +213,7 @@ frontend/src/js/
 │   ├── source-color-editor.js  # Per-mesh color editor integration
 │   └── glb-parser.js           # Binary glTF container parsing
 ├── state/
-│   ├── asset-state.js / wallet-state.js / ui-state.js / library-state.js
+│   ├── wallet-state.js / ui-state.js / library-state.js
 │   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
 │   └── create-store.js         # Generic createStore factory
 └── services/

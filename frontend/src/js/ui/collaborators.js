@@ -9,7 +9,7 @@
 
 import { initCollaboratorPanel } from "./collaborators-panel.js";
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
+import { getActiveAssetTokenId } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 
 let teamPanel = null;
@@ -38,7 +38,7 @@ function hideTeamPanel() {
 }
 
 async function refreshTeamPanel() {
-  const tokenId = assetState.get().activeAssetTokenId;
+  const tokenId = getActiveAssetTokenId();
   if (!tokenId || !walletState.get().walletAddress) {
     hideTeamPanel();
     return;

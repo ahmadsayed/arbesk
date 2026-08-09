@@ -9,9 +9,12 @@
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
-import { adoptOpenedAsset, renameAsset } from "../domain/asset.js";
+import {
+  adoptOpenedAsset,
+  renameAsset,
+  getAssetState,
+} from "../domain/asset.js";
 
 const MAX_DEPTH = 5;
 
@@ -88,7 +91,7 @@ async function onDiveRequested(e) {
 
     // Save current state on the stack
     const { activeAssetManifestCid, activeAssetName, activeAssetTokenId } =
-      assetState.get();
+      getAssetState();
     navStack.push({
       cid: activeAssetManifestCid,
       name: activeAssetName || "Asset",
@@ -223,7 +226,7 @@ function updatePublishVisibility() {
     // Token-based child assets are publishable regardless of depth.
     // Only hide publish when truly at root level with no token (empty state).
     const hidePublish =
-      currentDepth > 0 && !assetState.get().activeAssetTokenId;
+      currentDepth > 0 && !getAssetState().activeAssetTokenId;
     publishBtn.classList.toggle("hidden", hidePublish);
   }
 }

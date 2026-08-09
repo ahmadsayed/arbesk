@@ -6,7 +6,7 @@
  */
 import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 
-let assetState, _resetAssets, walletState, emit, EVENTS;
+let assetStore, _resetAssets, walletState, emit, EVENTS;
 let renameAsset, resetForNewAsset, closeAsset;
 
 function title() {
@@ -32,8 +32,8 @@ beforeAll(async () => {
     <button id="publishAssetBtn" hidden></button>
     <button id="publishAssetBtnText"></button>
     <button id="downloadAssetBtn" hidden></button>`;
-  ({ assetState, _resetForTesting: _resetAssets } = await import(
-    "../../frontend/src/js/state/asset-state.js"
+  ({ assetStore, _resetForTesting: _resetAssets } = await import(
+    "../../frontend/src/js/domain/asset-store.js"
   ));
   ({ walletState } = await import(
     "../../frontend/src/js/state/wallet-state.js"
@@ -70,7 +70,7 @@ test("named draft without wallet: name shown, buttons still hidden", () => {
 test("loaded asset with wallet: buttons appear", () => {
   walletState.set({ walletAddress: "0xabc" });
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
-  assetState.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
+  assetStore.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
   expect(title()).toBe("Chair");
   expect(meta()).toBe("Draft Scene");
   expect(hidden("saveAssetBtn")).toBe(false);
@@ -79,7 +79,7 @@ test("loaded asset with wallet: buttons appear", () => {
 });
 
 test("tokenized asset shows Published", () => {
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: "bafyX",
     activeAssetName: "Chair",
     activeAssetTokenId: "7",
@@ -88,7 +88,7 @@ test("tokenized asset shows Published", () => {
 });
 
 test("closeAsset returns chrome to the empty state", () => {
-  assetState.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
+  assetStore.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
   closeAsset();
   expect(title()).toBe("No asset open");
   expect(meta()).toBe("Create or open an asset");
@@ -97,7 +97,7 @@ test("closeAsset returns chrome to the empty state", () => {
 
 test("wallet disconnect hides save/publish but keeps download", () => {
   walletState.set({ walletAddress: "0xabc" });
-  assetState.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
+  assetStore.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
   walletState.set({ walletAddress: null });
   emit(EVENTS.WALLET_DISCONNECTED, {});
   expect(hidden("saveAssetBtn")).toBe(true);

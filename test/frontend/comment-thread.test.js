@@ -21,9 +21,11 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     walletState: { get: () => wallet },
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/state/asset-state.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/domain/asset.js", () => ({
     __esModule: true,
-    assetState: { get: () => asset },
+    getActiveAssetId: () => asset.activeAssetId,
+    getActiveAssetManifestCid: () => asset.activeAssetManifestCid,
+    getCurrentManifest: () => asset.currentManifest,
   }));
 
   jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({

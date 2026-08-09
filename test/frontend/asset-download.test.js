@@ -28,8 +28,8 @@ beforeAll(async () => {
   jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
     composeGlTFToBlobAsync,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/state/asset-state.js", () => ({
-    assetState: { get: jest.fn(() => _assetState) },
+  jest.unstable_mockModule("../../frontend/src/js/domain/asset.js", () => ({
+    getAssetState: jest.fn(() => _assetState),
   }));
   jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
     announceStatus: jest.fn(),

@@ -2,14 +2,14 @@
  * @jest-environment jsdom
  */
 import { jest, expect, test, beforeEach, describe } from "@jest/globals";
-import { assetState, _resetForTesting as resetAssetState } from "../../frontend/src/js/state/asset-state.js";
+import { assetStore, _resetForTesting as resetAssetState } from "../../frontend/src/js/domain/asset-store.js";
 import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 
 let _tokenURIs = {};
 let _manifests = {};
 
 const closeAssetSpy = jest.fn(() => {
-  assetState.set({
+  assetStore.set({
     activeAssetManifestCid: null,
     latestAssetManifestCid: null,
     activeAssetTokenId: null,
@@ -94,12 +94,19 @@ async function loadModule() {
     "../../frontend/src/js/domain/asset.js",
     () => ({
       closeAsset: closeAssetSpy,
-      renameAsset: (name) => assetState.set({ activeAssetName: name }),
+      renameAsset: (name) => assetStore.set({ activeAssetName: name }),
       resetForNewAsset: jest.fn(),
       adoptLoadedManifestName: jest.fn(),
       adoptManifestName: jest.fn(),
       isDefaultAssetName: jest.fn(() => false),
       getAssetSnapshot: jest.fn(),
+      getAssetState: () => assetStore.get(),
+      getActiveAssetManifestCid: () => assetStore.get().activeAssetManifestCid,
+      getLatestAssetManifestCid: () => assetStore.get().latestAssetManifestCid,
+      getActiveAssetTokenId: () => assetStore.get().activeAssetTokenId,
+      getActiveAssetId: () => assetStore.get().activeAssetId,
+      getActiveAssetName: () => assetStore.get().activeAssetName,
+      getCurrentManifest: () => assetStore.get().currentManifest,
       subscribeAsset: jest.fn(),
       adoptOpenedAsset: jest.fn(),
       activateAssetManifest: jest.fn(),
@@ -133,7 +140,7 @@ describe("renderAssetLibrary", () => {
     const { initAssetLibrary, renderAssetLibrary } = await loadModule();
     initAssetLibrary();
 
-    assetState.set({ activeCollectionTokenId: "2" });
+    assetStore.set({ activeCollectionTokenId: "2" });
     await renderAssetLibrary(["1", "2"], []);
 
     const cards = document.querySelectorAll(".asset-card");
@@ -147,7 +154,7 @@ describe("renderAssetLibrary", () => {
     initAssetLibrary();
 
     _manifests.bafyCollection2.assets = {};
-    assetState.set({ activeCollectionTokenId: "2" });
+    assetStore.set({ activeCollectionTokenId: "2" });
     await renderAssetLibrary(["1", "2"], []);
 
     expect(document.querySelector(".asset-card")).toBeNull();
@@ -180,11 +187,11 @@ describe("updateActiveAssetCard", () => {
     initAssetLibrary();
 
     // Render an initial card for asset-a inside collection 1.
-    assetState.set({ activeCollectionTokenId: "1" });
+    assetStore.set({ activeCollectionTokenId: "1" });
     await renderAssetLibrary(["1"], []);
 
     // Simulate a publish that updated the manifest in memory.
-    assetState.set({
+    assetStore.set({
       activeAssetTokenId: "1",
       activeAssetId: "asset-a",
       activeAssetManifestCid: "bafyAUpdated",
@@ -212,7 +219,7 @@ describe("updateActiveAssetCard", () => {
 
 describe("openAssetByTokenId error paths", () => {
   function seedDirtyState() {
-    assetState.set({
+    assetStore.set({
       activeAssetName: "Leftover",
       activeAssetManifestCid: "bafyOld",
       latestAssetManifestCid: "bafyOld",
@@ -225,7 +232,7 @@ describe("openAssetByTokenId error paths", () => {
   }
 
   function expectFullyCleared() {
-    const s = assetState.get();
+    const s = assetStore.get();
     expect(s.activeAssetName).toBeNull();
     expect(s.activeAssetManifestCid).toBeNull();
     expect(s.latestAssetManifestCid).toBeNull();

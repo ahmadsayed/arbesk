@@ -12,8 +12,12 @@
  */
 
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "./asset-state.js";
-import { setLatestManifestCid } from "../domain/asset.js";
+import {
+  setLatestManifestCid,
+  getLatestAssetManifestCid,
+  getActiveAssetManifestCid,
+  getActiveAssetTokenId,
+} from "../domain/asset.js";
 
 export const _deps = {
   walkChain: async (cid) => {
@@ -84,7 +88,7 @@ export async function loadVersion(cid) {
     // clearScene() resets latestAssetManifestCid, but the chain root (latest
     // version) must survive while the user is scrubbing history.
     const preservedLatest =
-      chainRootCid || assetState.get().latestAssetManifestCid;
+      chainRootCid || getLatestAssetManifestCid();
     await _deps.clearScene();
     if (preservedLatest) {
       setLatestManifestCid(preservedLatest);
@@ -107,7 +111,7 @@ export async function loadVersion(cid) {
 // ─── Refresh ───
 
 async function _refresh() {
-  const manifestCid = assetState.get().activeAssetManifestCid;
+  const manifestCid = getActiveAssetManifestCid();
   if (!manifestCid) {
     entries = [];
     chainRootCid = null;
@@ -127,7 +131,7 @@ async function _refresh() {
   chainRootCid = manifestCid;
   activeCid = manifestCid;
 
-  const tokenId = assetState.get().activeAssetTokenId;
+  const tokenId = getActiveAssetTokenId();
   const [chain, pubCid] = await Promise.all([
     _deps.walkChain(chainRootCid).catch((err) => {
       console.error("History chain fetch failed:", err);
@@ -146,7 +150,7 @@ async function _refresh() {
 // ─── Bus subscriptions (mirrors the retired asset-history.js) ───
 
 on(EVENTS.SCENE_READY, (e) => {
-  const manifestCid = e?.manifestCid || assetState.get().activeAssetManifestCid;
+  const manifestCid = e?.manifestCid || getActiveAssetManifestCid();
   if (!manifestCid) return;
 
   if (isHistoryNavigation) {
@@ -162,7 +166,7 @@ on(EVENTS.SCENE_READY, (e) => {
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {
-  if (assetState.get().activeAssetManifestCid && !isHistoryNavigation) {
+  if (getActiveAssetManifestCid() && !isHistoryNavigation) {
     _refresh();
   }
 });
@@ -187,6 +191,6 @@ on(EVENTS.SCENE_EMPTY, () => {
 // ─── Module-load bootstrap ───
 // If the store is imported after SCENE_READY already fired, seed the clock
 // from the current asset state exactly like the retired asset-history.js did.
-if (assetState.get().activeAssetManifestCid && !isHistoryNavigation) {
+if (getActiveAssetManifestCid() && !isHistoryNavigation) {
   _refresh();
 }

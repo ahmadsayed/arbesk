@@ -27,9 +27,13 @@ import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.js";
 import { switchView, getActiveView } from "./sidebar.js";
 import { CHAIN_IDS, DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
-import { adoptOpenedAsset, closeAsset } from "../domain/asset.js";
+import {
+  adoptOpenedAsset,
+  closeAsset,
+  getCurrentManifest,
+  getAssetState,
+} from "../domain/asset.js";
 import {
   adoptOpenedCollection,
   clearSelectedCollection,
@@ -873,12 +877,12 @@ async function updateActiveAssetCard() {
   if (!assetLibraryBody) return false;
 
   const { activeAssetTokenId, activeAssetId, activeAssetManifestCid } =
-    assetState.get();
+    getAssetState();
   const tokenId = normalizeTokenId(activeAssetTokenId);
   const assetId = activeAssetId ? String(activeAssetId) : null;
   if (!tokenId || !assetId || !activeAssetManifestCid) return false;
 
-  const currentManifest = assetState.get().currentManifest;
+  const currentManifest = getCurrentManifest();
   if (
     !currentManifest ||
     currentManifest._manifestCid !== activeAssetManifestCid
@@ -914,7 +918,7 @@ async function updateActiveAssetCard() {
 
 function highlightActiveAsset() {
   if (!assetLibraryBody) return;
-  const { activeAssetTokenId, activeAssetId } = assetState.get();
+  const { activeAssetTokenId, activeAssetId } = getAssetState();
   const tokenIdMatch = normalizeTokenId(activeAssetTokenId);
   const assetIdMatch = activeAssetId ? String(activeAssetId) : null;
 

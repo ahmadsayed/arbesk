@@ -51,9 +51,9 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/state/asset-state.js",
+    "../../frontend/src/js/domain/asset-store.js",
     () => ({
-      assetState: {
+      assetStore: {
         get: jest.fn(() => ({
           activeAssetName: _activeAssetName,
           activeAssetTokenId: _activeAssetTokenId,
@@ -139,11 +139,11 @@ describe("adoptManifestName", () => {
     const { adoptManifestName } = await import(
       "../../frontend/src/js/domain/asset.js"
     );
-    const { assetState } = await import(
-      "../../frontend/src/js/state/asset-state.js"
+    const { assetStore } = await import(
+      "../../frontend/src/js/domain/asset-store.js"
     );
     adoptManifestName({ name: "refaat" });
-    expect(assetState.set).toHaveBeenCalledWith({ activeAssetName: "refaat" });
+    expect(assetStore.set).toHaveBeenCalledWith({ activeAssetName: "refaat" });
   });
 
   test("does not clobber state with a default or absent name", async () => {
@@ -151,14 +151,14 @@ describe("adoptManifestName", () => {
     const { adoptManifestName } = await import(
       "../../frontend/src/js/domain/asset.js"
     );
-    const { assetState } = await import(
-      "../../frontend/src/js/state/asset-state.js"
+    const { assetStore } = await import(
+      "../../frontend/src/js/domain/asset-store.js"
     );
     adoptManifestName({ name: "Untitled Asset" });
     adoptManifestName({ name: "  " });
     adoptManifestName({});
     adoptManifestName(null);
-    expect(assetState.set).not.toHaveBeenCalled();
+    expect(assetStore.set).not.toHaveBeenCalled();
   });
 });
 

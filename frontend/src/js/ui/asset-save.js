@@ -18,7 +18,6 @@ import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.js";
 import { getAssetName } from "../services/token.js";
 import { showToast } from "./toasts.js";
 import { on, EVENTS } from "../events/bus.js";
-import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import {
   renameAsset,
@@ -26,6 +25,8 @@ import {
   isDefaultAssetName,
   saveDraftAsset,
   publishAsset,
+  getActiveAssetName,
+  getActiveAssetTokenId,
 } from "../domain/asset.js";
 import { error } from "../utils/log.js";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.js";
@@ -94,7 +95,7 @@ async function onDownloadAsset() {
  * Returns the final name or null if cancelled.
  */
 async function ensureExplicitName() {
-  const currentName = assetState.get().activeAssetName || "";
+  const currentName = getActiveAssetName() || "";
   if (!isDefaultAssetName(currentName)) {
     return currentName; // already explicitly named - skip dialog
   }
@@ -209,7 +210,7 @@ async function onPublishAsset() {
   }
   if (publishBtnText) publishBtnText.textContent = "Besking…";
   announceStatus(
-    assetState.get().activeAssetTokenId
+    getActiveAssetTokenId()
       ? "Republishing asset…"
       : "Publishing asset…"
   );

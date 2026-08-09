@@ -35,8 +35,8 @@ beforeAll(async () => {
     })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/state/asset-state.js",
-    () => ({ assetState: { get: jest.fn(() => ({})), set: jest.fn() }, tagManifestCid: jest.fn() })
+    "../../frontend/src/js/domain/asset-store.js",
+    () => ({ assetStore: { get: jest.fn(() => ({})), set: jest.fn() }, tagManifestCid: jest.fn() })
   );
   await jest.unstable_mockModule(
     "../../frontend/src/js/state/wallet-state.js",
