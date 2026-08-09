@@ -28,7 +28,8 @@ import {
   clearPendingChildRefs,
   captureAssetThumbnail,
 } from "../../engine/scene-graph.js";
-import { assetState, tagManifestCid } from "../../state/asset-state.js";
+import { assetState } from "../../state/asset-state.js";
+import { cacheCurrentManifest, recordSavedVersion } from "../../domain/asset.js";
 import {
   listPendingGenerations,
   updatePendingGeneration,
@@ -702,12 +703,10 @@ export async function saveAssetDraftCore(
     // Keep the in-memory manifest cache aligned with the active CID even when
     // no new version is written, so the next save/publish can skip the IPFS
     // round-trip entirely.
-    assetState.set({
-      currentManifest: tagManifestCid(
-        prepared.manifest,
-        assetState.get().activeAssetManifestCid
-      ),
-    });
+    cacheCurrentManifest(
+      prepared.manifest,
+      assetState.get().activeAssetManifestCid
+    );
     return {
       ok: false,
       reason: "no-changes",
@@ -739,11 +738,7 @@ export async function saveAssetDraftCore(
     assetId: prepared.manifest.asset_id,
   });
 
-  assetState.set({
-    latestAssetManifestCid: cid,
-    activeAssetManifestCid: cid,
-    currentManifest: tagManifestCid(prepared.manifest, cid),
-  });
+  recordSavedVersion(cid, prepared.manifest);
 
   clearPendingChildRefs();
   clearPendingPostProcessorEdits();

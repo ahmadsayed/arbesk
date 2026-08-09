@@ -7,7 +7,7 @@
 
 import { emit, EVENTS } from "../events/bus.js";
 import { state } from "./state.js";
-import { assetState } from "../state/asset-state.js";
+import { setActiveManifestCid, clearAssetManifestCids } from "../domain/asset.js";
 import { uiState } from "../state/ui-state.js";
 
 export function clearPendingChildRefs() {
@@ -95,7 +95,7 @@ export function disposeNode(nodeId) {
  */
 export function clearScene() {
   if (!state.scene) {
-    assetState.set({ activeAssetManifestCid: null });
+    setActiveManifestCid(null);
     uiState.set({ selectedNodeId: null });
     return;
   }
@@ -196,10 +196,7 @@ export function clearScene() {
 
   emit(EVENTS.SCENE_CLEARED);
 
-  assetState.set({
-    activeAssetManifestCid: null,
-    latestAssetManifestCid: null,
-  });
+  clearAssetManifestCids();
   uiState.set({ selectedNodeId: null });
 
   state.pendingChildRefs.length = 0;

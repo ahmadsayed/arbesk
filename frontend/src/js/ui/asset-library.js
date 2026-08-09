@@ -29,7 +29,7 @@ import { CHAIN_IDS, DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../../../const
 import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
-import { closeAsset } from "../domain/asset.js";
+import { adoptOpenedAsset, closeAsset } from "../domain/asset.js";
 import { getOwnedTokens, getSharedTokens } from "../services/api.js";
 
 let assetLibraryBody = null;
@@ -316,20 +316,16 @@ async function openAssetEntry(entry) {
         assetEntries,
       });
 
-      assetState.set({
-        activeAssetTokenId: String(entry.tokenId),
-        activeCollectionTokenId: String(entry.tokenId),
-        selectedCollectionId: null,
-        activeAssetId: entry.assetId,
-        activeAssetManifestCid: entry.manifestCid,
-        latestAssetManifestCid: entry.manifestCid,
+      adoptOpenedAsset(entry.manifestCid, {
+        tokenId: String(entry.tokenId),
+        collectionTokenId: String(entry.tokenId),
+        clearSelectedCollection: true,
+        assetId: entry.assetId,
       });
     } else {
-      assetState.set({
-        activeAssetTokenId: String(entry.tokenId),
-        selectedCollectionId: null,
-        activeAssetManifestCid: entry.manifestCid,
-        latestAssetManifestCid: entry.manifestCid,
+      adoptOpenedAsset(entry.manifestCid, {
+        tokenId: String(entry.tokenId),
+        clearSelectedCollection: true,
       });
     }
 
@@ -411,13 +407,11 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
         : null;
 
       clearScene();
-      assetState.set({
-        activeAssetTokenId: String(tokenId),
-        activeCollectionTokenId: String(tokenId),
-        selectedCollectionId: null,
-        activeAssetId: hasExplicitAssetId ? assetId : null,
-        activeAssetManifestCid: targetAssetCid,
-        latestAssetManifestCid: targetAssetCid,
+      adoptOpenedAsset(targetAssetCid, {
+        tokenId: String(tokenId),
+        collectionTokenId: String(tokenId),
+        clearSelectedCollection: true,
+        assetId: hasExplicitAssetId ? assetId : null,
       });
       console.log("[LIBRARY] collection asset state set, activeCollectionTokenId:", String(tokenId));
       dismissCreatePulse();
@@ -439,12 +433,10 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
 
     // Standalone asset: load it directly.
     clearScene();
-    assetState.set({
-      activeAssetTokenId: String(tokenId),
-      selectedCollectionId: null,
-      activeAssetId: assetId,
-      activeAssetManifestCid: cid,
-      latestAssetManifestCid: cid,
+    adoptOpenedAsset(cid, {
+      tokenId: String(tokenId),
+      clearSelectedCollection: true,
+      assetId,
     });
     dismissCreatePulse();
     updateUrlAsset(tokenId, assetId);

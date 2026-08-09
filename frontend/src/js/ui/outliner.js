@@ -10,8 +10,9 @@
 import { switchView } from "./sidebar.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { emit, on, EVENTS } from "../events/bus.js";
-import { assetState, tagManifestCid } from "../state/asset-state.js";
+import { assetState } from "../state/asset-state.js";
 import { uiState } from "../state/ui-state.js";
+import { cacheCurrentManifest } from "../domain/asset.js";
 import { getManifestNodes } from "../engine/transforms.js";
 
 let outlinerTree = null;
@@ -128,7 +129,7 @@ async function refreshOutliner() {
   } else if (cid) {
     manifest = await getCurrentManifest();
     if (manifest) {
-      assetState.set({ currentManifest: tagManifestCid(manifest, cid) });
+      cacheCurrentManifest(manifest, cid);
     }
   }
 

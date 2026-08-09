@@ -41,7 +41,7 @@ import {
 } from "../state/pending-generations.js";
 import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.js";
 import { onSaveAssetDraft } from "./asset-save.js";
-import { adoptManifestName } from "../domain/asset.js";
+import { adoptManifestName, adoptOpenedAsset, setActiveManifestCid, setLatestManifestCid } from "../domain/asset.js";
 
 // ─── DOM References ───
 const promptInput = document.getElementById("promptInput");
@@ -530,10 +530,7 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
       clearScene();
     }
 
-    assetState.set({
-      activeAssetManifestCid: record.assetManifestCid,
-      latestAssetManifestCid: record.assetManifestCid,
-    });
+    adoptOpenedAsset(record.assetManifestCid);
 
     const url = new URL(window.location);
     const activeTokenId = assetState.get().activeAssetTokenId;
@@ -555,7 +552,7 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
       previousLatestCid &&
       previousLatestCid !== record.assetManifestCid
     ) {
-      assetState.set({ latestAssetManifestCid: previousLatestCid });
+      setLatestManifestCid(previousLatestCid);
       await renderChatProvenance(previousLatestCid);
     }
 
@@ -1775,9 +1772,9 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }) => {
   // root up front and put both back once the load lands.
   const previousLatestCid = assetState.get().latestAssetManifestCid || cid;
   try {
-    assetState.set({ activeAssetManifestCid: cid });
+    setActiveManifestCid(cid);
     await loadAssetManifest(cid);
-    assetState.set({ latestAssetManifestCid: previousLatestCid });
+    setLatestManifestCid(previousLatestCid);
     await renderChatProvenance(previousLatestCid);
     if (sourceCid) setActiveVersion({ sourceAssetCid: sourceCid, manifestCid: cid, name });
     else setActiveVersion(null); // chat-less version (e.g. parametric edit) — no retexture target

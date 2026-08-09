@@ -12,7 +12,7 @@ import { walletState } from "../state/wallet-state.js";
 import { state } from "./state.js";
 import { getCssVar, hexToColor4 } from "./theme.js";
 import { clearScene } from "./cleanup.js";
-import { resetForNewAsset, renameAsset } from "../domain/asset.js";
+import { resetForNewAsset, renameAsset, adoptOpenedAsset } from "../domain/asset.js";
 
 import {
   selectNode,
@@ -800,12 +800,10 @@ export function loadFromParams() {
       .call()
       .then((/** @type {string|null} */ cid) => {
         if (cid) {
-          assetState.set({
-            activeAssetTokenId: String(assetTokenId),
-            activeCollectionTokenId: String(assetTokenId),
-            selectedCollectionId: null,
-            activeAssetManifestCid: cid,
-            latestAssetManifestCid: cid,
+          adoptOpenedAsset(cid, {
+            tokenId: String(assetTokenId),
+            collectionTokenId: String(assetTokenId),
+            clearSelectedCollection: true,
           });
           emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, {
             tokenId: assetTokenId,
@@ -815,10 +813,7 @@ export function loadFromParams() {
       })
       .catch(() => {});
   } else if (manifestCid) {
-    assetState.set({
-      activeAssetManifestCid: manifestCid,
-      latestAssetManifestCid: manifestCid,
-    });
+    adoptOpenedAsset(manifestCid);
     loadAssetManifest(manifestCid);
     dismissCreatePulse();
   }

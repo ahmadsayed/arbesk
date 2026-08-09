@@ -101,6 +101,14 @@ async function loadModule() {
       isDefaultAssetName: jest.fn(() => false),
       getAssetSnapshot: jest.fn(),
       subscribeAsset: jest.fn(),
+      adoptOpenedAsset: jest.fn(),
+      activateAssetManifest: jest.fn(),
+      setActiveManifestCid: jest.fn(),
+      setLatestManifestCid: jest.fn(),
+      clearAssetManifestCids: jest.fn(),
+      cacheCurrentManifest: jest.fn(),
+      recordSavedVersion: jest.fn(),
+      adoptPublishedIdentity: jest.fn(),
     })
   );
 

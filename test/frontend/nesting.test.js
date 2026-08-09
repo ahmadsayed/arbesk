@@ -2,8 +2,7 @@
  * @jest-environment jsdom
  *
  * Nesting dive/ascend: the asset name must be written through the domain
- * facade (renameAsset), while CID/tokenId fields still flow through
- * assetState directly.
+ * facade (renameAsset), and CID/tokenId identity through adoptOpenedAsset.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
 import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
@@ -15,6 +14,20 @@ import {
 const renameAssetSpy = jest.fn((name) =>
   assetState.set({ activeAssetName: name })
 );
+// Behavior-preserving stand-in for the real command (same patch semantics),
+// mirroring renameAssetSpy above — the assertions below read assetState.
+const adoptOpenedAssetSpy = jest.fn((cid, identity = {}) => {
+  const patch = {
+    activeAssetManifestCid: cid,
+    latestAssetManifestCid: cid,
+  };
+  if ("tokenId" in identity) patch.activeAssetTokenId = identity.tokenId;
+  if ("assetId" in identity) patch.activeAssetId = identity.assetId;
+  if ("collectionTokenId" in identity)
+    patch.activeCollectionTokenId = identity.collectionTokenId;
+  if (identity.clearSelectedCollection) patch.selectedCollectionId = null;
+  assetState.set(patch);
+});
 const loadAssetManifestMock = jest.fn().mockResolvedValue(undefined);
 const clearSceneMock = jest.fn();
 
@@ -28,6 +41,7 @@ async function loadModule() {
     "../../frontend/src/js/domain/asset.js",
     () => ({
       renameAsset: renameAssetSpy,
+      adoptOpenedAsset: adoptOpenedAssetSpy,
     })
   );
   await jest.unstable_mockModule(
@@ -76,6 +90,7 @@ async function waitFor(cond) {
 beforeEach(() => {
   resetAssetState();
   renameAssetSpy.mockClear();
+  adoptOpenedAssetSpy.mockClear();
   loadAssetManifestMock.mockClear();
   clearSceneMock.mockClear();
   _childManifestCid = "bafyChild";
