@@ -1,10 +1,9 @@
 // @ts-check
 /**
- * Domain: Collection — collection-context state and publish seam.
+ * Domain: Collection — collection-context state commands.
  *
  * Owns reads/writes of activeCollectionTokenId and selectedCollectionId.
- * Publishes assets into a collection via the canonical publishCollection
- * command; all chain/IPFS/editor deps are injected by the caller.
+ * The canonical publish seam is added in Task 2.
  */
 import { assetState } from "../state/asset-state.js";
 
