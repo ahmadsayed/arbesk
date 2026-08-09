@@ -7,13 +7,13 @@
  * never burned.
  */
 
-import { getActiveContract } from "../blockchain/wallet.js";
 import {
   updateAssetURI,
   CollaboratorRole,
   burn,
 } from "../blockchain/wallet.js";
 import { requireWallet } from "../blockchain/wallet-guard.js";
+import { loadEditorList, getEditorSetVersion } from "../domain/editors.js";
 import { getProof } from "../gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
@@ -24,44 +24,6 @@ import { emit, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { identityMatrix } from "../utils/collections.js";
-
-const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
-
-function editorListKey(tokenId) {
-  return EDITOR_LIST_PREFIX + tokenId;
-}
-
-async function loadEditorList(tokenId) {
-  try {
-    const stored = localStorage.getItem(editorListKey(tokenId));
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.cid) {
-        try {
-          const fresh = await getFromRemoteIPFS(parsed.cid);
-          if (Array.isArray(fresh)) return fresh;
-        } catch {
-          // IPFS fetch failed, use cached
-        }
-      }
-      if (Array.isArray(parsed.list)) return parsed.list;
-    }
-  } catch {
-    // localStorage unavailable or corrupted
-  }
-  return null;
-}
-
-async function getEditorSetVersion(tokenId) {
-  try {
-    const c = getActiveContract();
-    if (!c) return 1;
-    const version = await c.methods.editorSetVersion(tokenId).call();
-    return Number(version);
-  } catch {
-    return 1;
-  }
-}
 
 /**
  * Remove an asset from its parent collection.
@@ -123,7 +85,7 @@ export async function deleteAssetFromCollection({
 
   const walletAddr = walletState.get().walletAddress;
   let editorList = await loadEditorList(tokenId);
-  if (!editorList) {
+  if (!editorList || editorList.length === 0) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   }
   const currentVersion = await getEditorSetVersion(tokenId);
@@ -193,7 +155,7 @@ export async function deleteAssetFromCollection({
 export async function burnCollection(tokenId) {
   const { walletAddress: walletAddr } = requireWallet();
   let editorList = await loadEditorList(tokenId);
-  if (!editorList) {
+  if (!editorList || editorList.length === 0) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   }
   const currentVersion = await getEditorSetVersion(tokenId);
@@ -229,7 +191,7 @@ export async function updateCollectionManifest(tokenId, mutate, options = {}) {
 
   const walletAddr = walletState.get().walletAddress;
   let editorList = await loadEditorList(tokenId);
-  if (!editorList) {
+  if (!editorList || editorList.length === 0) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   }
   const currentVersion = await getEditorSetVersion(tokenId);

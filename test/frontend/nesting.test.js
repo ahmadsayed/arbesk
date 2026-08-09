@@ -14,7 +14,7 @@ import {
 const renameAssetSpy = jest.fn((name) =>
   assetState.set({ activeAssetName: name })
 );
-// Behavior-preserving stand-in for the real command (same patch semantics),
+// Behavior-preserving stand-in for the real command,
 // mirroring renameAssetSpy above — the assertions below read assetState.
 const adoptOpenedAssetSpy = jest.fn((cid, identity = {}) => {
   const patch = {
@@ -23,9 +23,6 @@ const adoptOpenedAssetSpy = jest.fn((cid, identity = {}) => {
   };
   if ("tokenId" in identity) patch.activeAssetTokenId = identity.tokenId;
   if ("assetId" in identity) patch.activeAssetId = identity.assetId;
-  if ("collectionTokenId" in identity)
-    patch.activeCollectionTokenId = identity.collectionTokenId;
-  if (identity.clearSelectedCollection) patch.selectedCollectionId = null;
   assetState.set(patch);
 });
 const loadAssetManifestMock = jest.fn().mockResolvedValue(undefined);

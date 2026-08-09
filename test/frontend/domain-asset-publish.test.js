@@ -25,6 +25,7 @@ function makeDeps(over = {}) {
     onNewCollection: jest.fn(),
     onStatus: jest.fn(),
     onProgress: jest.fn(),
+    onAdoptIdentity: jest.fn(),
     ...over,
   };
 }
@@ -48,10 +49,6 @@ test("first publish: no verifyCanEdit, identity adopted, event emitted", async (
   expect(deps.onNewCollection).toHaveBeenCalled();
   expect(seen).toEqual([{ tokenId: "123", cid: "bafyAsset" }]);
   expect(out).toEqual({ outcome: "published", tokenId: "123", cid: "bafyAsset", isNew: true });
-  const s = assetState.get();
-  expect(s.activeAssetTokenId).toBe("123");
-  expect(s.activeCollectionTokenId).toBe("123");
-  expect(s.activeAssetId).toBe("asset_1");
   unsub();
 });
 

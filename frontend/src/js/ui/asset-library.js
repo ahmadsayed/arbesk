@@ -30,6 +30,12 @@ import { emit, on, EVENTS } from "../events/bus.js";
 import { assetState } from "../state/asset-state.js";
 import { walletState } from "../state/wallet-state.js";
 import { adoptOpenedAsset, closeAsset } from "../domain/asset.js";
+import {
+  adoptOpenedCollection,
+  clearSelectedCollection,
+  clearActiveCollection,
+  getActiveCollectionTokenId,
+} from "../domain/collection.js";
 import { getOwnedTokens, getSharedTokens } from "../services/api.js";
 
 let assetLibraryBody = null;
@@ -318,15 +324,14 @@ async function openAssetEntry(entry) {
 
       adoptOpenedAsset(entry.manifestCid, {
         tokenId: String(entry.tokenId),
-        collectionTokenId: String(entry.tokenId),
-        clearSelectedCollection: true,
         assetId: entry.assetId,
       });
+      adoptOpenedCollection(String(entry.tokenId), { clearSelectedCollection: true });
     } else {
       adoptOpenedAsset(entry.manifestCid, {
         tokenId: String(entry.tokenId),
-        clearSelectedCollection: true,
       });
+      clearSelectedCollection();
     }
 
     dismissCreatePulse();
@@ -374,10 +379,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       clearScene();
       clearUrlAssetParams();
       closeAsset();
-      assetState.set({
-        activeCollectionTokenId: null,
-        selectedCollectionId: null,
-      });
+      clearActiveCollection();
       return;
     }
 
@@ -409,10 +411,9 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       clearScene();
       adoptOpenedAsset(targetAssetCid, {
         tokenId: String(tokenId),
-        collectionTokenId: String(tokenId),
-        clearSelectedCollection: true,
         assetId: hasExplicitAssetId ? assetId : null,
       });
+      adoptOpenedCollection(String(tokenId), { clearSelectedCollection: true });
       console.log("[LIBRARY] collection asset state set, activeCollectionTokenId:", String(tokenId));
       dismissCreatePulse();
       updateUrlAsset(tokenId, hasExplicitAssetId ? assetId : null);
@@ -435,9 +436,9 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     clearScene();
     adoptOpenedAsset(cid, {
       tokenId: String(tokenId),
-      clearSelectedCollection: true,
       assetId,
     });
+    clearSelectedCollection();
     dismissCreatePulse();
     updateUrlAsset(tokenId, assetId);
     await ensureEngineReady();
@@ -454,10 +455,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     clearScene();
     clearUrlAssetParams();
     closeAsset();
-    assetState.set({
-      activeCollectionTokenId: null,
-      selectedCollectionId: null,
-    });
+    clearActiveCollection();
   }
 }
 
@@ -486,10 +484,6 @@ function normalizeTokenId(id) {
   } catch {
     return String(id);
   }
-}
-
-function getActiveCollectionTokenId() {
-  return assetState.get().activeCollectionTokenId || null;
 }
 
 async function renderAssetLibrary(owned, shared) {

@@ -13,6 +13,7 @@ import { state } from "./state.js";
 import { getCssVar, hexToColor4 } from "./theme.js";
 import { clearScene } from "./cleanup.js";
 import { resetForNewAsset, renameAsset, adoptOpenedAsset } from "../domain/asset.js";
+import { adoptOpenedCollection } from "../domain/collection.js";
 
 import {
   selectNode,
@@ -800,11 +801,8 @@ export function loadFromParams() {
       .call()
       .then((/** @type {string|null} */ cid) => {
         if (cid) {
-          adoptOpenedAsset(cid, {
-            tokenId: String(assetTokenId),
-            collectionTokenId: String(assetTokenId),
-            clearSelectedCollection: true,
-          });
+          adoptOpenedAsset(cid, { tokenId: String(assetTokenId) });
+          adoptOpenedCollection(String(assetTokenId), { clearSelectedCollection: true });
           emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, {
             tokenId: assetTokenId,
             assetId: assetId || null,

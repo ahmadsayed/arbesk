@@ -7,17 +7,20 @@
  * All writes go through updateEditors (Merkle root update).
  */
 
-import { contract, getActiveContract, updateEditors } from "../blockchain/wallet.js";
+import { contract, updateEditors } from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "../gltf/merkle-editors.js";
+import {
+  loadEditorList,
+  saveEditorList,
+  getEditorSetVersion,
+} from "../domain/editors.js";
 import { requireWallet } from "../blockchain/wallet-guard.js";
 import { resolveUserEmail } from "./api.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 export const CollaboratorRole = Object.freeze({
   None: 0,
   Viewer: 1,
@@ -30,52 +33,7 @@ export const CollaboratorRole = Object.freeze({
  * @returns {Promise<Array<{address: string, role: number}>>}
  */
 export async function fetchEditors(tokenId) {
-  if (!tokenId) return [];
-
-  // Authoritative source: the editor list CID stored on-chain is updated
-  // atomically whenever editorSetVersion bumps, so it is always in sync with
-  // the current Merkle root. Use this for proof generation and mutations.
-  try {
-    const c = getActiveContract();
-    if (c) {
-      const cid = await c.methods.editorListURI(tokenId).call();
-      if (cid) {
-        const fresh = await getFromRemoteIPFS(cid);
-        if (Array.isArray(fresh)) {
-          _saveEditorListLocally(tokenId, fresh, cid);
-          return fresh;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(
-      `[TEAM] failed to load editor list from chain for ${tokenId}:`,
-      err.message
-    );
-  }
-
-  // Fallback: localStorage cache (may be stale, but better than nothing when
-  // the chain or IPFS is unreachable).
-  try {
-    const key = `arbesk_editor_list_${tokenId}`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.cid) {
-        try {
-          const fresh = await getFromRemoteIPFS(parsed.cid);
-          if (Array.isArray(fresh)) return fresh;
-        } catch {
-          /* use cached */
-        }
-      }
-      if (Array.isArray(parsed.list)) return parsed.list;
-    }
-  } catch {
-    /* unavailable */
-  }
-
-  return [];
+  return loadEditorList(tokenId);
 }
 
 /**
@@ -95,37 +53,8 @@ export async function isOwner(tokenId) {
   }
 }
 
-function _editorListKey(tokenId) {
-  return EDITOR_LIST_PREFIX + tokenId;
-}
-
-function _saveEditorListLocally(tokenId, list, cid) {
-  try {
-    localStorage.setItem(
-      _editorListKey(tokenId),
-      JSON.stringify({ list, cid: cid || null, saved: Date.now() })
-    );
-  } catch (e) {
-    console.warn("[TEAM] failed to cache editor list locally:", e.message);
-  }
-  return cid || "";
-}
-
-async function _getEditorSetVersion(tokenId) {
-  if (!contract) return 1;
-  try {
-    const version = await contract.methods.editorSetVersion(tokenId).call();
-    return Number(version);
-  } catch {
-    return 1;
-  }
-}
-
 /** Export for use by asset-save.js */
-export {
-  _getEditorSetVersion as getEditorSetVersion,
-  _saveEditorListLocally as saveEditorListLocally,
-};
+export { getEditorSetVersion, saveEditorList as saveEditorListLocally };
 
 function _normalizeAddress(address) {
   if (!address || typeof address !== "string" || !address.startsWith("0x")) {
@@ -137,7 +66,7 @@ function _normalizeAddress(address) {
 async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
   const { walletAddress } = requireWallet();
 
-  const currentVersion = await _getEditorSetVersion(tokenId);
+  const currentVersion = await getEditorSetVersion(tokenId);
   const nextVersion = currentVersion + 1;
   const newRoot = computeRoot(newEditors, tokenId, nextVersion);
 
@@ -157,7 +86,7 @@ async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
     type: "editors",
     assetId: `token_${tokenId}_v${nextVersion}`,
   });
-  _saveEditorListLocally(tokenId, newEditors, listCid);
+  saveEditorList(tokenId, newEditors, listCid);
 
   const txHash = await updateEditors(
     tokenId,

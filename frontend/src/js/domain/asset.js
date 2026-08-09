@@ -130,19 +130,15 @@ export function closeAsset() {
   });
 }
 
-// ─── Identity / CID commands (Phase 2) ─────────────────────────────
+// ─── Identity / CID commands ───────────────────────────────────────
 // The ONLY writers of activeAssetManifestCid, latestAssetManifestCid,
-// activeAssetTokenId, activeAssetId, currentManifest. Collection-context
-// fields (activeCollectionTokenId, selectedCollectionId) ride along here
-// as a transitional seam — Phase 3 moves them to the Collection module.
+// activeAssetTokenId, activeAssetId, currentManifest.
 
 /**
  * Adopt a freshly opened/loaded asset: active + latest CIDs point at `cid`.
- * Identity keys are written only when present (`in` semantics), so callers
- * reproduce their exact legacy patches — pass `tokenId: null` explicitly to
- * clear. `clearSelectedCollection: true` writes `selectedCollectionId: null`.
+ * Identity keys are written only when present (`in` semantics).
  * @param {string} cid
- * @param {{tokenId?: string|null, assetId?: string|null, collectionTokenId?: string|null, clearSelectedCollection?: boolean}} [identity]
+ * @param {{tokenId?: string|null, assetId?: string|null}} [identity]
  */
 export function adoptOpenedAsset(cid, identity = {}) {
   /** @type {Record<string, any>} */
@@ -152,9 +148,6 @@ export function adoptOpenedAsset(cid, identity = {}) {
   };
   if ("tokenId" in identity) patch.activeAssetTokenId = identity.tokenId;
   if ("assetId" in identity) patch.activeAssetId = identity.assetId;
-  if ("collectionTokenId" in identity)
-    patch.activeCollectionTokenId = identity.collectionTokenId;
-  if (identity.clearSelectedCollection) patch.selectedCollectionId = null;
   assetState.set(patch);
 }
 
@@ -218,14 +211,12 @@ export function recordSavedVersion(cid, manifest) {
 }
 
 /**
- * Publish succeeded: the collection token is now the asset's on-chain
- * identity.
+ * Publish succeeded: the token is now the asset's on-chain identity.
  * @param {string|number} tokenId
  * @param {string} assetId
  */
 export function adoptPublishedIdentity(tokenId, assetId) {
   assetState.set({
-    activeCollectionTokenId: String(tokenId),
     activeAssetTokenId: String(tokenId),
     activeAssetId: assetId,
   });
@@ -352,7 +343,6 @@ export async function publishAsset(assetName, wallet, deps) {
   );
 
   deps.onProgress(0.9, "Besking — finalizing…");
-  adoptPublishedIdentity(tokenId, assetID);
   deps.updateUrlAsset(tokenId);
 
   if (isNew) {
@@ -365,7 +355,7 @@ export async function publishAsset(assetName, wallet, deps) {
   }
 
   emit(EVENTS.ASSET_PUBLISHED, {
-    tokenId: assetState.get().activeAssetTokenId,
+    tokenId: String(tokenId),
     cid: assetCid,
   });
   return { outcome: "published", tokenId: String(tokenId), cid: assetCid, isNew };

@@ -14,11 +14,11 @@ import {
   updateAssetURI,
 } from "../../blockchain/wallet.js";
 import {
-  fetchEditors as fetchEditorsFromTeam,
+  loadEditorList,
+  saveEditorList,
   getEditorSetVersion,
-  isOwner,
-  saveEditorListLocally,
-} from "../team.js";
+} from "../../domain/editors.js";
+import { isOwner } from "../team.js";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.js";
 
 async function getEditorRoot(tokenId) {
@@ -42,7 +42,7 @@ async function buildWalletProof(tokenId, walletAddr) {
   // Version and editor list are independent; resolve them in parallel.
   const [versionResult, editorListResult] = await Promise.allSettled([
     getEditorSetVersion(tokenId),
-    fetchEditorsFromTeam(tokenId),
+    loadEditorList(tokenId),
   ]);
 
   const currentVersion =
@@ -130,7 +130,7 @@ export async function prepareInitialEditors(tokenId, walletAddr) {
       type: "editors",
       assetId: `token_${tokenId}_v1`,
     })) || "";
-  saveEditorListLocally(tokenId, editorList, editorListUri || null);
+  saveEditorList(tokenId, editorList, editorListUri || null);
   return { editorList, editorRoot, editorListUri };
 }
 

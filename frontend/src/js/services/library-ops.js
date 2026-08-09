@@ -17,7 +17,7 @@ import {
   publishAsset,
   CollaboratorRole,
 } from "../blockchain/wallet.js";
-import { computeRoot } from "../gltf/merkle-editors.js";
+import { computeRoot, saveEditorList } from "../domain/editors.js";
 import { updateCollectionManifest } from "./asset-delete.js";
 import { walletState } from "../state/wallet-state.js";
 import {
@@ -30,29 +30,8 @@ function ts() {
   return new Date().toLocaleTimeString();
 }
 
-const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(["glb", "gltf", "3mf"]);
-
-function editorListKey(tokenId) {
-  return EDITOR_LIST_PREFIX + tokenId;
-}
-
-function saveEditorListLocally(tokenId, editorList, ipfsCid = null) {
-  try {
-    localStorage.setItem(
-      editorListKey(tokenId),
-      JSON.stringify({
-        list: editorList,
-        cid: ipfsCid,
-        saved: Date.now(),
-      })
-    );
-  } catch (e) {
-    warn("[LIBRARY-OPS] failed to cache editor list:", e.message);
-  }
-  return ipfsCid || "";
-}
 
 function getContract() {
   return walletState.get().contract;
@@ -128,7 +107,7 @@ export async function createNamedCollection(name, { onPending } = {}) {
     assetId: `token_${tokenId}_v1`,
   });
   if (!editorListUri) throw new Error("Failed to persist editor list to IPFS");
-  saveEditorListLocally(tokenId, editorList, editorListUri);
+  saveEditorList(tokenId, editorList, editorListUri);
 
   // Surface the (deterministic) token id + manifest CID before the mint so the
   // UI can show an optimistic "minting" card while the transaction settles.
