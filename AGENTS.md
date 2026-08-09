@@ -25,7 +25,16 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 ## 3. Repo Layout
 
 - **Backend** `src/api/`: routes `index.js` + `routes/` · generation `assets/` (`generate-node.js`, `generation-tasks.js`, `adapters/`) · storage `storage/` (kubo/pinata) · auth `authentication.js`, `sessions.js`, `siwe-verify.js` · `token-indexer.js` · `comments-archive.js` · `chat-proxy.js` (WS) · `nostr-relay.js` · `manifest-utils.js` · `asset-tag.js` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
-- **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, token-resolver) · `ipfs/` · `gltf/` (+ `merkle-editors.js`) · `3mf/` · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · templates `frontend/src/pug/` · styles `frontend/src/scss/`
+- **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, token-resolver) · `ipfs/` · `gltf/` (+ `merkle-editors.js`) · `3mf/` · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · `domain/` (asset domain model, see §3.1) · templates `frontend/src/pug/` · styles `frontend/src/scss/`
+
+### 3.1 Frontend Domain Layer (single-writer discipline)
+
+`frontend/src/js/domain/` owns all shared asset/collection state. **Write discipline: asset identity, name, and manifest-CID fields mutate only via `domain/asset.js`; collection fields (`activeCollectionTokenId`, `selectedCollectionId`) only via `domain/collection.js`.** Never write these fields from UI/engine/services — route through the domain commands.
+
+- `asset-store.js` — the shared store (only `domain/` imports it; UI/engine/services read via getters and subscribe to `EVENTS.ASSET_STATE_CHANGED`, full-state payload)
+- `asset.js` — asset facade: getters (`getActiveAssetManifestCid`, `getCurrentManifest`, frozen `getAssetState()` snapshot, …) + commands (`adoptOpenedAsset`, `renameAsset`, `saveDraftAsset`, `publishAsset`)
+- `collection.js` — collection state commands, `publishCollection` seam (`onAdoptIdentity` callback)
+- `editors.js` — Merkle editor helpers, editor-list cache, proof commands
 - **Contracts** `blockchain/contracts/` · **Tests** `test/`, `blockchain/test/`, `e2e/`
 
 ## 4. Commands

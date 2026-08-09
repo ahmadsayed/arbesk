@@ -17,7 +17,7 @@
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/app.pug` (unified Studio + Library SPA), 29 SCSS partials, sidebar/outliner/nesting |
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, browser-side thumbnail upload to IPFS, unpin lifecycle |
-| Phase 5.1: Token ID-Based Child Worlds | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
+| Phase 5.1: Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
 | Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
@@ -212,6 +212,11 @@ frontend/src/js/
 │   ├── merkle-editors.js       # Merkle tree/proof library for editor authorization
 │   ├── source-color-editor.js  # Per-mesh color editor integration
 │   └── glb-parser.js           # Binary glTF container parsing
+├── domain/
+│   ├── asset-store.js          # Shared asset store (domain-only import); emits ASSET_STATE_CHANGED with full-state payload
+│   ├── asset.js                # Asset facade — single writer of asset identity/name/CID fields; getters + save/publish commands
+│   ├── collection.js           # Collection state commands (single writer of active/selected collection) + publishCollection seam
+│   └── editors.js              # Merkle editor helpers, editor-list cache, proof commands
 ├── state/
 │   ├── wallet-state.js / ui-state.js / library-state.js
 │   ├── comment-thread.js       # Nostr WebSocket + archive comment thread
@@ -347,7 +352,7 @@ frontend/src/js/
 | Republish / update URI | ✅ | ✅ |
 | Parametric color/scale edit | ✅ | ✅ |
 | Time-travel version slider | ✅ | ✅ |
-| Nested child world composition | ✅ | ✅ |
+| Nested child asset composition | ✅ | ✅ |
 | Collection create (optimistic) | ✅ instant card, auto-rollback | ✅ instant card, sponsored |
 | Upload GLB/glTF/3MF to collection (decomposed at upload) | ✅ | ✅ |
 | Library page (grid/list/search) | ✅ | ✅ |

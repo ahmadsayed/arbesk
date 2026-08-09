@@ -13,9 +13,9 @@ The system currently combines:
 
 - **Mock-backed generative 3D flow** via Express and private IPFS
 - **Parametric versioning** for free color/scale changes
-- **Babylon.js rendering** with GLB/GLTF loading and one-node-per-world replacement behavior
+- **Babylon.js rendering** with GLB/GLTF loading and one-node-per-asset replacement behavior
 - **Free-tier on-chain generation quota** via `ArbeskAssetFree.recordGeneration()` (10/day per wallet; contract `owner()` bypasses quota)
-- **EVM PayGo** generation payments and ERC721 world ownership via `ArbeskAsset` (paid tier)
+- **EVM PayGo** generation payments and ERC721 asset ownership via `ArbeskAsset` (paid tier)
 - **Collection manifests** — every published token is a collection manifest that maps `assetID`s to asset manifest CIDs
 - **Off-chain Merkle editor proofs** — the contract stores only a Merkle root; the full editor list lives on IPFS and is proved at call time
 - **Private Dockerized Kubo/IPFS** for local content-addressed storage; Pinata-backed storage for public testnet
@@ -256,7 +256,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
   "type": "asset",
   "manifest_id": "manifest_001",
   "asset_id": "asset_1700000000000",
-  "name": "My World",
+  "name": "My Asset",
   "version": 4,
   "timestamp": 1780000000,
   "prev_asset_manifest_cid": "bafyPreviousManifest...",
@@ -317,7 +317,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 
 **`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `state/comment-thread.js` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
 
-**Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides world-level history.
+**Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides asset-level history.
 
 **Chat provenance (`metadata.chat`).** Each manifest version produced by AI chat activity carries a top-level `metadata.chat` array holding the prompts consumed since the previous version: `{prompt, provider, task, taskId?, timestamp}`. Entries are version-scoped — the full conversation is reconstructed by walking `prev_asset_manifest_cid` and concatenating each version's array, oldest to newest. Records are written at save/publish time only (save-anchored); unaccepted generations stay ephemeral. `taskId` holds the provider-side task ID (e.g. Tripo) for future cross-session enhance flows. Versions with no AI activity omit the field.
 
@@ -366,7 +366,7 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 - **Content-addressed immutability**: Each manifest CID is a verifiable fingerprint. The chain cannot be altered without changing every subsequent CID.
 - **Backward-only traversal**: The chain walks from newest to oldest via `prev_asset_manifest_cid`. There is no forward pointer — IPFS CIDs of future versions cannot be known in advance.
 - **IPFS as the chain substrate**: Unlike a traditional blockchain, the "chain" here lives on IPFS. The CIDs themselves form the links; no separate ledger or contract maintains the ordering.
-- **Temporal isolation**: Loading a specific manifest CID renders the exact world state at that version. The chain enables time-travel without re-rendering unrelated nodes.
+- **Temporal isolation**: Loading a specific manifest CID renders the exact asset state at that version. The chain enables time-travel without re-rendering unrelated nodes.
 
 **How the chain is used:**
 
