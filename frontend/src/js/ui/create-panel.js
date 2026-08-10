@@ -757,6 +757,21 @@ const ANIMATE_PRESETS = [
  * followupActionsFor) a follow-up action row.
  * @returns {string} the pending generation id
  */
+/**
+ * Wire a bubble's Show in Studio button — the ONLY way a bubble's model
+ * enters the Studio (the preview is orbit-only). The button stays live
+ * after sending: re-clicking a sent bubble restores that version.
+ * @param {string} generationId
+ * @param {import("./chat-messages.js").AssetMessageHandle} assetMessage
+ */
+function wireSendButton(generationId, assetMessage) {
+  assetMessage.sendButton.addEventListener("click", () => {
+    const record = getPendingGeneration(generationId);
+    if (record?.status === "sent") void restoreGeneration(generationId);
+    else void sendGenerationToStudio(generationId, assetMessage);
+  });
+}
+
 function presentGenerationResult(
   result,
   { prompt, provider, task, prevAssetManifestCid, transformMatrix, rigModel },
@@ -790,15 +805,7 @@ function presentGenerationResult(
   const assetMessage = addAssetMessage({ prompt, format: result.format });
   if (assetMessage) {
     assetMessages.set(generationId, assetMessage);
-    assetMessage.sendButton.addEventListener("click", () => {
-      void sendGenerationToStudio(generationId, assetMessage);
-    });
-    // Clicking the preview restores that version to the Studio.
-    assetMessage.bubble
-      .querySelector(".chat-asset-preview")
-      ?.addEventListener("click", () => {
-        void restoreGeneration(generationId);
-      });
+    wireSendButton(generationId, assetMessage);
     void attachChatPreview(generationId, assetMessage);
     // The helper gates by provider/task: animated results are terminal,
     // rig-only results keep only Animate, mock gets nothing.
@@ -840,8 +847,8 @@ function addFollowupActions(generationId, bubbleEl = null) {
  *
  * `assetManifestCid` is null for viewport drops (the model is already in the
  * Studio as an unsaved change) — the bubble's Send button is disabled there.
- * Otherwise the bubble keeps the usual Show-in-Studio / click-to-restore
- * behavior against that manifest.
+ * Otherwise the bubble keeps the usual Show-in-Studio behavior against that
+ * manifest (re-clicking the button restores the version).
  * @param {{name: string, label?: string, source: {cid: string, path: string, format: string},
  *          assetManifestCid?: string|null, recorded?: boolean}} detail
  * @returns {string} the pending generation id
@@ -874,14 +881,7 @@ function presentStagedModel({ name, label, source, assetManifestCid = null, reco
   if (assetMessage) {
     assetMessages.set(generationId, assetMessage);
     if (assetManifestCid) {
-      assetMessage.sendButton.addEventListener("click", () => {
-        void sendGenerationToStudio(generationId, assetMessage);
-      });
-      assetMessage.bubble
-        .querySelector(".chat-asset-preview")
-        ?.addEventListener("click", () => {
-          void restoreGeneration(generationId);
-        });
+      wireSendButton(generationId, assetMessage);
     } else {
       // Drop path: the model is already in the viewport — nothing to send.
       assetMessage.sendButton.disabled = true;
@@ -1636,10 +1636,11 @@ async function onAnimate(generationId) {
 }
 
 /**
- * Re-send an older generation to the Studio — the click-to-restore path for
- * version-card bubbles. Resets the record to pending so the send path
- * accepts it again, then runs the normal Show-in-Studio tail (which also
- * makes the restored version the active version).
+ * Re-send an already-sent generation to the Studio — the path taken when the
+ * user re-clicks Show in Studio on a sent bubble. Resets the record to
+ * pending so the send path accepts it again, then runs the normal
+ * Show-in-Studio tail (which also makes the restored version the active
+ * version).
  * @param {string} generationId
  */
 async function restoreGeneration(generationId) {

@@ -111,7 +111,7 @@ Validates free-tier mock generation end-to-end:
 
 - Types `cowboy` into the prompt input and clicks **Generate asset**.
 - Confirms the result lands as an asset chat bubble (live 3D preview canvas + **Show in Studio** button) and that the Studio URL/scene stay untouched.
-- Clicks **Show in Studio**, then confirms the chat history shows `Model carved via mock` and the bubble collapses to the disabled "Shown in Studio" state.
+- Clicks **Show in Studio**, then confirms the chat history shows `Model carved via mock` and the bubble collapses to its sent state (snapshot preview, button stays live as the restore path).
 - Verifies multiple pending generations keep independent send buttons.
 - Extracts the manifest CID from `?manifest=baf...` in the URL. The exact CIDv1 prefix depends on the IPFS backend (e.g. `bafy...` for dag-pb, `bafkrei...` for raw JSON).
 - Fetches the manifest from the local IPFS gateway.

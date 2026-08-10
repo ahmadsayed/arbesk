@@ -6,7 +6,9 @@
  * the prompt caption, and a "Show in Studio" action. The bubble's lifecycle
  * mirrors the pending-generation record: while pending it can show a live
  * preview (or a static fallback), and once sent it collapses to a snapshot
- * image with the action disabled.
+ * image. The preview is orbit-only — the button is the sole way a model
+ * enters the Studio, and it stays live after sending so re-clicking it
+ * restores that version.
  */
 
 const chatHistoryList = document.getElementById("chatHistoryList");
@@ -229,7 +231,8 @@ export function addWorkingMessage(text, options = {}) {
  *   canvas for a static image, keeping the Show-in-Studio action active
  *   (used when the preview cap evicts this bubble, or on preview teardown)
  * @property {(snapshot: Blob|null) => void} markSent - collapse the preview
- *   and disable the action with a "Shown in Studio" caption
+ *   to a snapshot and tag the bubble sent; the Show-in-Studio button stays
+ *   live so it doubles as the explicit restore path
  * @property {() => void} markFallback - replace the canvas with a static
  *   format badge when no live preview is available
  * @property {() => void} markSaved - annotate the bubble with a "Saved" pill
@@ -305,8 +308,7 @@ export function addAssetMessage({ prompt, format }) {
     },
     markSent(snapshot) {
       swapPreview(snapshot);
-      sendButton.disabled = true;
-      sendButton.textContent = "Shown in Studio";
+      sendButton.disabled = false;
       bubble.classList.add("chat-bubble-asset-sent");
     },
     markFallback() {

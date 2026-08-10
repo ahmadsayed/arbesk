@@ -155,10 +155,10 @@ function truncateAddress(address) {
 }
 
 /**
- * Click the Show-in-Studio button of the latest pending generation. Waits for
- * an *enabled* button: bubbles already sent keep a disabled "Shown in Studio"
- * button, and a plain `.last()` locator would latch onto one of those while
- * the new bubble is still being generated.
+ * Click the Show-in-Studio button of the latest pending generation. Sent
+ * bubbles keep their button live (re-click restores), so this pins the
+ * newest bubble with `.last()` — appended last — and skips only buttons
+ * disabled mid-send or on drop-path bubbles ("In Studio").
  *
  * @param {Page} page
  * @returns {Promise<void>}

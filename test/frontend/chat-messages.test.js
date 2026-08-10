@@ -54,13 +54,14 @@ test("addAssetMessage builds a bubble with canvas, caption, and send button", ()
   expect(handle.sendButton.disabled).toBe(false);
 });
 
-test("markSent swaps the canvas for a snapshot and disables the button", () => {
+test("markSent swaps the canvas for a snapshot and keeps the button live", () => {
   const handle = addAssetMessage({ prompt: "p", format: "glb" });
   handle.markSent(new Blob(["x"], { type: "image/webp" }));
   expect(handle.bubble.querySelector("img.chat-asset-snapshot")).not.toBeNull();
   expect(handle.bubble.querySelector("canvas")).toBeNull();
-  expect(handle.sendButton.disabled).toBe(true);
-  expect(handle.sendButton.textContent).toBe("Shown in Studio");
+  // The button stays enabled — re-clicking it is the explicit restore path.
+  expect(handle.sendButton.disabled).toBe(false);
+  expect(handle.sendButton.textContent).toBe("Show in Studio");
   expect(handle.bubble.classList.contains("chat-bubble-asset-sent")).toBe(true);
 });
 

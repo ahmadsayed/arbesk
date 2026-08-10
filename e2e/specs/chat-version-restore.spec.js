@@ -11,7 +11,7 @@ function manifestCidFromUrl(url) {
 }
 
 test.describe("chat version cards", () => {
-  test("Show in Studio auto-saves a draft and clicking a bubble preview restores that version", async ({
+  test("Show in Studio auto-saves a draft and re-clicking it on an older bubble restores that version", async ({
     page,
   }) => {
     await connectStudio(page);
@@ -35,11 +35,12 @@ test.describe("chat version cards", () => {
     const secondCid = manifestCidFromUrl(page.url());
     expect(secondCid).toBeTruthy();
 
-    // Clicking the first bubble's preview restores that version to the
-    // Studio: the URL flips to a different manifest and the send tail runs
-    // again. Auto-save is idempotent on the bubble (still 2 saved pills).
+    // Re-clicking the first bubble's Show in Studio restores that version
+    // to the Studio (the preview itself is orbit-only): the URL flips to a
+    // different manifest and the send tail runs again. Auto-save is
+    // idempotent on the bubble (still 2 saved pills).
     const firstBubble = page.locator(SELECTORS.assetBubble).first();
-    await firstBubble.locator(".chat-asset-preview").click();
+    await firstBubble.locator(".chat-asset-send").click();
     await page.waitForURL(
       (url) => {
         const cid = manifestCidFromUrl(url.toString());

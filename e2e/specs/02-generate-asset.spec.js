@@ -44,9 +44,14 @@ test.describe("asset generation", () => {
     );
     await page.waitForURL(MANIFEST_URL_REGEX);
 
-    // After sending, the bubble collapses to the sent state.
-    await expect(sendButton).toBeDisabled();
-    await expect(sendButton).toHaveText("Shown in Studio");
+    // After sending, the bubble collapses to the sent state — snapshot
+    // replaces the canvas — but the button stays live: re-clicking it is
+    // the explicit restore path (the preview is orbit-only).
+    await expect(sendButton).toBeEnabled();
+    await expect(sendButton).toHaveText("Show in Studio");
+    await expect(page.locator(SELECTORS.assetBubble)).toHaveClass(
+      /chat-bubble-asset-sent/,
+    );
   });
 
   test("multiple pending generations keep independent send buttons", async ({
@@ -61,10 +66,14 @@ test.describe("asset generation", () => {
     await expect(first).toBeEnabled();
     await expect(second).toBeEnabled();
 
-    // Sending the first leaves the second bubble actionable.
+    // Sending the first leaves both bubbles actionable: the second is still
+    // pending, and the first's button stays live as its restore path.
     await first.click();
     await page.waitForURL(MANIFEST_URL_REGEX);
-    await expect(first).toBeDisabled();
+    await expect(first).toBeEnabled();
+    await expect(page.locator(SELECTORS.assetBubble).first()).toHaveClass(
+      /chat-bubble-asset-sent/,
+    );
     await expect(second).toBeEnabled();
   });
 });
