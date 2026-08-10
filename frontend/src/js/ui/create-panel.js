@@ -330,6 +330,23 @@ if (textureQualitySelect) {
   });
 }
 
+// Collapsible provider/quality section — open by default, persisted so the
+// user's preference survives reloads.
+const composerSettings = /** @type {HTMLDetailsElement|null} */ (
+  document.getElementById("composerSettings")
+);
+const COMPOSER_SETTINGS_STORAGE = "arbesk-composer-settings-open";
+if (composerSettings) {
+  composerSettings.open =
+    localStorage.getItem(COMPOSER_SETTINGS_STORAGE) !== "0";
+  composerSettings.addEventListener("toggle", () => {
+    localStorage.setItem(
+      COMPOSER_SETTINGS_STORAGE,
+      composerSettings.open ? "1" : "0"
+    );
+  });
+}
+
 /**
  * Build the key dialog body: a password input (prefilled from localStorage,
  * persisted on input), a show/hide toggle, and a Clear Key action. The input

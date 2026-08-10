@@ -185,23 +185,26 @@ html(lang="en")
                         p.welcome-text Create an asset
                         p.welcome-sub Describe the 3D asset you want to generate.
                   .chat-composer
-                    .form-group
-                      label.form-label(for="providerSelect") Generation Provider
-                      .provider-row
-                        select#providerSelect.form-select
-                          option(value="mock") Mock (Local)
-                          option(value="tripo3d") Tripo 3D
-                        button#providerKeyBtn.provider-key-btn(type="button" hidden aria-label="Configure API key" title="Configure Tripo 3D API key")
-                          svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                            path(d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4")
-                      p#providerKeyHint.provider-key-hint(hidden) API key required — select the key icon to add it.
-                      p#providerBalance.provider-balance(hidden)
-                      #textureQualityRow.form-group(hidden)
-                        label.form-label(for="textureQualitySelect") Texture quality
-                        select#textureQualitySelect.form-select
-                          option(value="standard") Standard
-                          option(value="detailed") Detailed (slower, more credits)
-                          option(value="extreme") Extreme 8K (most credits)
+                    details#composerSettings.composer-settings(open)
+                      summary.composer-settings-summary Provider &amp; Quality
+                      .composer-settings-body
+                        .form-group
+                          label.form-label(for="providerSelect") Generation Provider
+                          .provider-row
+                            select#providerSelect.form-select
+                              option(value="mock") Mock (Local)
+                              option(value="tripo3d") Tripo 3D
+                            button#providerKeyBtn.provider-key-btn(type="button" hidden aria-label="Configure API key" title="Configure Tripo 3D API key")
+                              svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                                path(d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4")
+                          p#providerKeyHint.provider-key-hint(hidden) API key required — select the key icon to add it.
+                          p#providerBalance.provider-balance(hidden)
+                          #textureQualityRow.form-group(hidden)
+                            label.form-label(for="textureQualitySelect") Texture quality
+                            select#textureQualitySelect.form-select
+                              option(value="standard") Standard
+                              option(value="detailed") Detailed (slower, more credits)
+                              option(value="extreme") Extreme 8K (most credits)
                     #imageAttachChip.image-attach-chip(hidden)
                       img#imageAttachThumb.image-attach-thumb(alt="Attached source image")
                       span#imageAttachName.image-attach-name

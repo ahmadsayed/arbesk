@@ -317,6 +317,53 @@
   }
 }
 
+// Collapsible provider/quality settings — native <details>, same expander
+// language as the inspector sections (dim uppercase title, ▸ chevron).
+.composer-settings {
+  border: var(--border-size-1) solid var(--border-hairline);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+
+  .composer-settings-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    padding: var(--size-1) var(--size-2);
+    font-size: var(--font-size-0);
+    font-weight: var(--font-weight-7);
+    color: var(--dim-fg);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: "▸";
+      font-size: var(--font-size-1);
+      transition: transform var(--duration-quick) var(--ease-out-3);
+    }
+
+    &:hover {
+      background: var(--surface-overlay-hover);
+    }
+  }
+
+  &[open] .composer-settings-summary::after {
+    transform: rotate(90deg);
+  }
+
+  .composer-settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-2);
+    padding: var(--size-2);
+  }
+}
+
 // Input + submit sit on one row; the hint (when shown) drops below it.
 .messagebar-row {
   display: flex;
