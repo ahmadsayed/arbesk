@@ -17,6 +17,13 @@ import { showToast } from "./toasts.js";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.js";
 import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage } from "./chat-messages.js";
 import { followupActionsFor } from "../domain/generation-actions.js";
+import {
+  VIEW_LABELS,
+  MAX_ATTACH_IMAGES,
+  addAttachedImage,
+  setAttachedImageView,
+  removeAttachedImage,
+} from "./attach-views.js";
 import { renderChatProvenance, clearHistoryBubbles } from "./chat-history.js";
 import {
   generateAsset,
@@ -58,19 +65,15 @@ const generateBtn = document.getElementById("generateBtn");
 const generateHint = document.getElementById("generateHint");
 const clearChatBtn = document.getElementById("clearChatBtn");
 
-// Image-to-3D attach (Tripo3D only)
+// Image-to-3D attach (Tripo3D only) — up to 4 reference views
 const imageAttachBtn = /** @type {HTMLButtonElement|null} */ (
   document.getElementById("imageAttachBtn")
 );
 const imageAttachInput = /** @type {HTMLInputElement|null} */ (
   document.getElementById("imageAttachInput")
 );
-const imageAttachChip = document.getElementById("imageAttachChip");
-const imageAttachThumb = /** @type {HTMLImageElement|null} */ (
-  document.getElementById("imageAttachThumb")
-);
-const imageAttachName = document.getElementById("imageAttachName");
-const imageAttachRemove = document.getElementById("imageAttachRemove");
+const imageAttachChips = document.getElementById("imageAttachChips");
+const multiviewHint = document.getElementById("multiviewHint");
 
 // Settings
 const assetNameDisplay = document.getElementById("assetNameDisplay");
@@ -205,21 +208,25 @@ function refreshProviderBalance({ force = false } = {}) {
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-/** @type {{base64: string, mime: string, name: string} | null} */
-let attachedImage = null;
+/**
+ * Attached reference images in canonical view order (front, left, back,
+ * right) — the attach-views helpers keep views unique and the array sorted.
+ * @type {Array<{base64: string, mime: string, name: string, view: string, dataUrl: string}>}
+ */
+let attachedImages = [];
 
 /**
- * Drop the attached image and hide the preview chip.
+ * Drop all attached images and hide the chips.
  */
 function clearAttachedImage() {
-  attachedImage = null;
+  attachedImages = [];
   if (imageAttachInput) imageAttachInput.value = "";
-  if (imageAttachChip) imageAttachChip.hidden = true;
+  renderAttachChips();
 }
 
 /**
  * The attach button only applies to Tripo3D (image-to-3D). Switching back to
- * the mock provider hides it and discards any attached image.
+ * the mock provider hides it and discards any attached images.
  */
 function syncImageAttachUI() {
   const enabled = getProvider() === "tripo3d";
@@ -228,53 +235,138 @@ function syncImageAttachUI() {
 }
 
 /**
- * Read and validate an image file selected via the attach input, then show
- * the preview chip. Invalid files are rejected with a toast and cleared.
- * @param {File} file
+ * Re-render the chip row from attachedImages (canonical view order). A lone
+ * image renders exactly like the legacy single chip — no view selector. With
+ * 2+ images each chip gets a Front/Left/Back/Right selector and the multiview
+ * hint line appears below the chips.
  */
-function attachImageFile(file) {
-  if (!IMAGE_MIMES.has(file.type)) {
-    showToast({
-      type: "warning",
-      title: "Unsupported Image",
-      message: "Attach a JPEG, PNG, or WebP image.",
-    });
-    clearAttachedImage();
-    return;
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    showToast({
-      type: "warning",
-      title: "Image Too Large",
-      message: "Images are limited to 10 MB.",
-    });
-    clearAttachedImage();
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = String(reader.result || "");
-    const base64 = dataUrl.split(",")[1] || "";
-    if (!base64) {
-      clearAttachedImage();
-      return;
+function renderAttachChips() {
+  if (!imageAttachChips) return;
+  imageAttachChips.replaceChildren();
+  const multiview = attachedImages.length > 1;
+  attachedImages.forEach((image, index) => {
+    const chip = document.createElement("div");
+    chip.className = "image-attach-chip";
+
+    const thumb = document.createElement("img");
+    thumb.className = "image-attach-thumb";
+    thumb.src = image.dataUrl;
+    thumb.alt = `Attached source image (${VIEW_LABELS[image.view] || image.view})`;
+    chip.appendChild(thumb);
+
+    const name = document.createElement("span");
+    name.className = "image-attach-name";
+    name.textContent = image.name;
+    chip.appendChild(name);
+
+    if (multiview) {
+      const viewSelect = document.createElement("select");
+      viewSelect.className = "image-attach-view";
+      viewSelect.setAttribute(
+        "aria-label",
+        `Reference view for ${image.name}`
+      );
+      for (const [value, label] of Object.entries(VIEW_LABELS)) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        viewSelect.appendChild(option);
+      }
+      viewSelect.value = image.view;
+      viewSelect.addEventListener("change", () => {
+        attachedImages = setAttachedImageView(
+          attachedImages,
+          index,
+          viewSelect.value
+        );
+        renderAttachChips();
+      });
+      chip.appendChild(viewSelect);
     }
-    attachedImage = { base64, mime: file.type, name: file.name };
-    if (imageAttachThumb) imageAttachThumb.src = dataUrl;
-    if (imageAttachName) imageAttachName.textContent = file.name;
-    if (imageAttachChip) imageAttachChip.hidden = false;
-  };
-  reader.readAsDataURL(file);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "image-attach-remove";
+    remove.setAttribute("aria-label", `Remove attached image ${image.name}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", () => {
+      attachedImages = removeAttachedImage(attachedImages, index);
+      renderAttachChips();
+    });
+    chip.appendChild(remove);
+
+    imageAttachChips.appendChild(chip);
+  });
+  imageAttachChips.hidden = attachedImages.length === 0;
+  if (multiviewHint) {
+    multiviewHint.hidden = !multiview;
+    if (multiview) {
+      const extra = attachedImages.length - 1;
+      multiviewHint.textContent = `Multiview: Front + ${extra} view${extra === 1 ? "" : "s"} — the model is built from all angles`;
+    }
+  }
+}
+
+/**
+ * Read and validate image files selected via the attach input, then add them
+ * to the set (up to 4, views auto-assigned in attach order). Invalid files
+ * are rejected with a toast; a selection that would exceed 4 views is
+ * rejected wholesale.
+ * @param {File[]} files
+ */
+function attachImageFiles(files) {
+  if (files.length === 0) return;
+  if (attachedImages.length + files.length > MAX_ATTACH_IMAGES) {
+    showToast({
+      type: "warning",
+      title: "Too Many Images",
+      message: "Up to 4 reference views are supported.",
+    });
+    if (imageAttachInput) imageAttachInput.value = "";
+    return;
+  }
+  for (const file of files) {
+    if (!IMAGE_MIMES.has(file.type)) {
+      showToast({
+        type: "warning",
+        title: "Unsupported Image",
+        message: "Attach a JPEG, PNG, or WebP image.",
+      });
+      continue;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showToast({
+        type: "warning",
+        title: "Image Too Large",
+        message: "Images are limited to 10 MB.",
+      });
+      continue;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const base64 = dataUrl.split(",")[1] || "";
+      if (!base64) return;
+      attachedImages = addAttachedImage(attachedImages, {
+        base64,
+        mime: file.type,
+        name: file.name,
+        dataUrl,
+      });
+      renderAttachChips();
+    };
+    reader.readAsDataURL(file);
+  }
+  // Reset so picking the same file again still fires "change".
+  if (imageAttachInput) imageAttachInput.value = "";
 }
 
 if (imageAttachBtn && imageAttachInput) {
   imageAttachBtn.addEventListener("click", () => imageAttachInput.click());
   imageAttachInput.addEventListener("change", () => {
-    const file = imageAttachInput.files?.[0];
-    if (file) attachImageFile(file);
+    attachImageFiles(Array.from(imageAttachInput.files || []));
   });
 }
-imageAttachRemove?.addEventListener("click", clearAttachedImage);
 
 // ─── BYOK Key Dialog ───
 
@@ -1781,19 +1873,40 @@ async function restoreGeneration(generationId) {
 
 async function onGenerate() {
   const prompt = promptInput.value.trim();
-  if (!prompt && !attachedImage) return;
+  if (!prompt && attachedImages.length === 0) return;
+
+  // attachedImages is canonical-sorted, so [0] is always the front view.
+  const frontImage = attachedImages[0] || null;
+  const multiview = attachedImages.length > 1;
 
   // Image-only generations get a synthesized prompt so chat history,
   // manifest provenance, and display names all carry meaningful text.
   const effectivePrompt =
-    prompt || (attachedImage ? `Image: ${attachedImage.name}` : "");
-  const imagePayload = attachedImage
+    prompt ||
+    (multiview
+      ? `Images: ${frontImage.name} + ${attachedImages.length - 1} views`
+      : frontImage
+        ? `Image: ${frontImage.name}`
+        : "");
+  // Wire contract: 1 image → legacy imageData/imageMime; 2+ → images array
+  // of {imageData, imageMime, view} in canonical view order (imageName rides
+  // along for the manifest but is stripped from the POST body by api.js).
+  const imagePayload = multiview
     ? {
-        imageData: attachedImage.base64,
-        imageMime: attachedImage.mime,
-        imageName: attachedImage.name,
+        images: attachedImages.map((img) => ({
+          imageData: img.base64,
+          imageMime: img.mime,
+          imageName: img.name,
+          view: img.view,
+        })),
       }
-    : null;
+    : frontImage
+      ? {
+          imageData: frontImage.base64,
+          imageMime: frontImage.mime,
+          imageName: frontImage.name,
+        }
+      : null;
 
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
@@ -1813,12 +1926,22 @@ async function onGenerate() {
   }
 
   if (imagePayload) {
-    // Show the reference image itself in the chat, not just its filename.
-    addImageMessage(
-      "user",
-      `data:${imagePayload.imageMime};base64,${imagePayload.imageData}`,
-      effectivePrompt,
-    );
+    // Show the reference image(s) in the chat, not just filenames — a grid
+    // bubble with per-view captions for multiview, the single image as today.
+    if (multiview) {
+      addImageMessage("user", frontImage.dataUrl, effectivePrompt, {
+        images: attachedImages.map((img) => ({
+          src: img.dataUrl,
+          caption: VIEW_LABELS[img.view] || img.view,
+        })),
+      });
+    } else {
+      addImageMessage(
+        "user",
+        `data:${imagePayload.imageMime};base64,${imagePayload.imageData}`,
+        effectivePrompt,
+      );
+    }
   } else {
     addChatMessage("user", effectivePrompt);
   }

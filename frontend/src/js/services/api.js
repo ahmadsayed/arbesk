@@ -567,6 +567,7 @@ async function followupScaleCompensation(sourceCid, resultBytes) {
  * @param {string} [params.imageData] - base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine)
  * @param {string} [params.imageMime] - MIME type of imageData (image/jpeg, image/png, image/webp)
  * @param {string} [params.imageName] - original filename of imageData; the reference image is uploaded to IPFS and recorded in the manifest
+ * @param {Array<{imageData: string, imageMime: string, imageName?: string, view: string}>} [params.images] - multiview image-to-3D (2-4 views, canonical order); replaces imageData on the wire — imageName is used for the manifest only, never sent
  * @param {AbortSignal} [params.signal] - aborts polling (GENERATION_CANCELLED); the upstream task may still finish
  * @param {(taskId: string) => void} [params.onTaskId] - called with the backend task id once the provider task starts (used for cancel)
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
@@ -595,6 +596,7 @@ export async function generateAsset({
   imageData,
   imageMime,
   imageName,
+  images,
   signal,
   onTaskId,
 }) {
@@ -618,6 +620,16 @@ export async function generateAsset({
     }),
     ...(textureQuality && { textureQuality }),
     ...(imageData && { imageData, imageMime }),
+    // Multiview (2+ images): canonical-ordered views, no legacy imageData,
+    // no imageName on the wire.
+    ...(Array.isArray(images) &&
+      images.length > 0 && {
+        images: images.map(({ imageData: d, imageMime: m, view }) => ({
+          imageData: d,
+          imageMime: m,
+          view,
+        })),
+      }),
   };
 
   announceStatus("Generating 3D asset…");
@@ -689,6 +701,29 @@ export async function generateAsset({
     };
   }
 
+  // Multiview reference images: pin each view on IPFS and record them all in
+  // the manifest; the front view also fills the legacy singular
+  // reference_image for back-compat with existing readers.
+  let referenceImages = null;
+  if (Array.isArray(images) && images.length > 0) {
+    referenceImages = [];
+    for (const view of images) {
+      const viewExt = (view.imageMime || "image/png").split("/")[1] || "png";
+      const viewName = view.imageName || `reference-${view.view}.${viewExt}`;
+      const viewCid = await writeToIPFS(base64ToBytes(view.imageData), viewName);
+      log(`[GEN] browser uploaded reference image (${view.view}) → ${viewCid}`);
+      referenceImages.push({
+        cid: viewCid,
+        mime: view.imageMime,
+        name: viewName,
+        view: view.view,
+      });
+    }
+    referenceImage =
+      referenceImages.find((entry) => entry.view === "front") ||
+      referenceImages[0];
+  }
+
   // Build the manifest (same logic previously done server-side)
   const displayName = prompt
     ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
@@ -737,6 +772,9 @@ export async function generateAsset({
       },
       // Reference image the model was generated from (image-to-3D only).
       ...(referenceImage && { reference_image: referenceImage }),
+      // Multiview: all reference views (canonical order); reference_image
+      // above still carries the front view for existing readers.
+      ...(referenceImages && { reference_images: referenceImages }),
       transform_matrix:
         Array.isArray(transformMatrix) && transformMatrix.length === 16
           ? transformMatrix

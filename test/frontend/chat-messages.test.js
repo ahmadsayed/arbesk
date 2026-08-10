@@ -112,8 +112,37 @@ test("addImageMessage renders an image bubble with a caption", () => {
   const img = bubble.querySelector("img.chat-image-thumb");
   expect(img).not.toBeNull();
   expect(img.src).toContain("data:image/png;base64,AAAA");
+  // Single-image mode never renders the multiview grid.
+  expect(bubble.querySelector(".chat-image-grid")).toBeNull();
   expect(bubble.querySelector(".chat-bubble-content").textContent).toBe(
     "Image: chair.png"
+  );
+  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
+});
+
+test("addImageMessage with options.images renders a captioned 2-column grid", () => {
+  addImageMessage("user", "data:image/png;base64,FRONT", "Images: chair.png + 2 views", {
+    images: [
+      { src: "data:image/png;base64,FRONT", caption: "Front" },
+      { src: "data:image/png;base64,LEFT", caption: "Left" },
+      { src: "data:image/png;base64,BACK", caption: "Back" },
+    ],
+  });
+  const list = document.getElementById("chatHistoryList");
+  const bubble = list.querySelector(".chat-bubble-image");
+  expect(bubble).not.toBeNull();
+  const grid = bubble.querySelector(".chat-image-grid");
+  expect(grid).not.toBeNull();
+  const cells = grid.querySelectorAll(".chat-image-cell");
+  expect(cells.length).toBe(3);
+  const thumbs = grid.querySelectorAll("img.chat-image-thumb");
+  expect(thumbs[0].src).toContain("data:image/png;base64,FRONT");
+  const captions = [...grid.querySelectorAll(".chat-image-view")].map(
+    (el) => el.textContent
+  );
+  expect(captions).toEqual(["Front", "Left", "Back"]);
+  expect(bubble.querySelector(".chat-bubble-content").textContent).toBe(
+    "Images: chair.png + 2 views"
   );
   expect(list.querySelector(".chat-welcome").hidden).toBe(true);
 });

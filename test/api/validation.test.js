@@ -144,6 +144,110 @@ describe("API schemas", () => {
       ).toBe(false);
     });
 
+    const b64 = (s) => Buffer.from(s).toString("base64");
+    const view = (v, mime = "image/png") => ({
+      imageData: b64(`${v}-png`),
+      imageMime: mime,
+      view: v,
+    });
+
+    it("accepts a valid 2-view multiview payload without a prompt", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          provider: "tripo3d",
+          images: [view("front"), view("left")],
+        }).success,
+      ).toBe(true);
+    });
+
+    it("accepts a valid 4-view multiview payload", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          provider: "tripo3d",
+          images: [view("front"), view("left"), view("back"), view("right")],
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects multiview images without a front view", () => {
+      const result = generateAssetSchema.safeParse({
+        nodeId: "n1",
+        images: [view("left"), view("back")],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const paths = result.error.issues.map((i) => i.path);
+        expect(paths).toEqual(expect.arrayContaining([["images"]]));
+      }
+    });
+
+    it("rejects duplicate views in multiview images", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          images: [view("front"), view("front")],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects a single multiview image", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          images: [view("front")],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects more than 4 multiview images", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          images: [
+            view("front"),
+            view("left"),
+            view("back"),
+            view("right"),
+            view("front"),
+          ],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects images combined with legacy imageData", () => {
+      const result = generateAssetSchema.safeParse({
+        nodeId: "n1",
+        imageData: b64("png"),
+        imageMime: "image/png",
+        images: [view("front"), view("left")],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const paths = result.error.issues.map((i) => i.path);
+        expect(paths).toEqual(expect.arrayContaining([["images"]]));
+      }
+    });
+
+    it("rejects an unsupported view label", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          images: [view("front"), view("top")],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects multiview images with non-base64 imageData", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          nodeId: "n1",
+          images: [view("front"), { ...view("left"), imageData: "not base64!!!" }],
+        }).success,
+      ).toBe(false);
+    });
+
     it("accepts an animate payload without a prompt", () => {
       expect(
         generateAssetSchema.safeParse({

@@ -1119,6 +1119,31 @@
             "description": "MIME type of imageData. Required when imageData is present.",
             "enum": ["image/jpeg", "image/png", "image/webp"]
           },
+          "images": {
+            "type": "array",
+            "description": "Optional (tripo3d only): multiview image-to-3D — 2–4 labeled views of the same subject. Exactly one front view is required and views must be unique. Mutually exclusive with imageData; counts as an alternative to prompt.",
+            "minItems": 2,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "required": ["imageData", "imageMime", "view"],
+              "properties": {
+                "imageData": {
+                  "type": "string",
+                  "description": "Base64-encoded view image (max ~10 MB raw).",
+                  "format": "byte"
+                },
+                "imageMime": {
+                  "type": "string",
+                  "enum": ["image/jpeg", "image/png", "image/webp"]
+                },
+                "view": {
+                  "type": "string",
+                  "enum": ["front", "left", "back", "right"]
+                }
+              }
+            }
+          },
           "animations": {
             "type": "array",
             "description": "Retarget presets to bake (max 5). Required when animate is set and rigOnly is not set.",

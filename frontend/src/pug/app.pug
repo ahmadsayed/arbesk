@@ -205,18 +205,18 @@ html(lang="en")
                               option(value="standard") Standard
                               option(value="detailed") Detailed (slower, more credits)
                               option(value="extreme") Extreme 8K (most credits)
-                    #imageAttachChip.image-attach-chip(hidden)
-                      img#imageAttachThumb.image-attach-thumb(alt="Attached source image")
-                      span#imageAttachName.image-attach-name
-                      button#imageAttachRemove.image-attach-remove(type="button" aria-label="Remove attached image") &times;
+                    //- Multiview attach chips (rendered by create-panel.js from the
+                    //- attachedImages array, canonical view order front/left/back/right).
+                    #imageAttachChips.image-attach-chips(hidden)
+                    p#multiviewHint.messagebar-hint(hidden)
                     #refineIndicator.refine-indicator(hidden)
                       span#refineIndicatorText.refine-indicator-text
                       button#refineIndicatorDetach.refine-indicator-detach(type="button" aria-label="Detach — next prompt starts a new model") &times;
                     .messagebar-row
                       textarea#promptInput.messagebar-input(placeholder="Describe the 3D asset you envision…" rows="3" aria-label="Asset generation prompt")
-                      input#imageAttachInput(type="file" accept="image/jpeg,image/png,image/webp" hidden)
+                      input#imageAttachInput(type="file" accept="image/jpeg,image/png,image/webp" multiple hidden)
                       .messagebar-actions
-                        button#imageAttachBtn.messagebar-attach(type="button" hidden aria-label="Attach image for image-to-3D" title="Attach an image (Tripo 3D image-to-3D)")
+                        button#imageAttachBtn.messagebar-attach(type="button" hidden aria-label="Attach image for image-to-3D" title="Attach reference image(s) — up to 4 views (Tripo 3D)")
                           svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                             rect(x="3" y="3" width="18" height="18" rx="2" ry="2")
                             circle(cx="8.5" cy="8.5" r="1.5")

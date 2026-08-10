@@ -2,6 +2,7 @@ import { jest } from "@jest/globals";
 import {
   createTask,
   createImageTask,
+  createMultiviewTask,
   createRefineTask,
   uploadImage,
   uploadModel,
@@ -172,6 +173,92 @@ describe("tripo3d adapter", () => {
       code: 0,
       status: 400,
     });
+  });
+
+  test("createMultiviewTask submits generation/multiview-to-model with canonical view order", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_mv" } }),
+    });
+    const id = await createMultiviewTask(
+      { back: "ftok_b", front: "ftok_f", right: "ftok_r", left: "ftok_l" },
+      key,
+    );
+    expect(id).toBe("task_mv");
+    const [url, opts] = global.fetch.mock.calls[0];
+    expect(url).toBe("https://openapi.tripo3d.ai/v3/generation/multiview-to-model");
+    expect(JSON.parse(opts.body)).toEqual({
+      inputs: [
+        { front: "ftok_f" },
+        { left: "ftok_l" },
+        { back: "ftok_b" },
+        { right: "ftok_r" },
+      ],
+      model: "v3.1-20260211",
+      texture: true,
+      pbr: true,
+      auto_size: true,
+    });
+  });
+
+  test("createMultiviewTask skips absent views and keeps canonical order", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_mv2" } }),
+    });
+    await createMultiviewTask({ back: "ftok_b", front: "ftok_f" }, key);
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).inputs).toEqual([
+      { front: "ftok_f" },
+      { back: "ftok_b" },
+    ]);
+  });
+
+  test("createMultiviewTask passes texture_quality through", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_mv3" } }),
+    });
+    await createMultiviewTask({ front: "ftok_f", left: "ftok_l" }, key, {
+      textureQuality: "detailed",
+    });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("detailed");
+  });
+
+  test("createMultiviewTask rejects a missing front view without calling fetch", async () => {
+    global.fetch = jest.fn();
+    await expect(
+      createMultiviewTask({ left: "ftok_l", back: "ftok_b" }, key),
+    ).rejects.toMatchObject({ code: 0, status: 400 });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test("createMultiviewTask rejects a single view without calling fetch", async () => {
+    global.fetch = jest.fn();
+    await expect(
+      createMultiviewTask({ front: "ftok_f" }, key),
+    ).rejects.toMatchObject({ code: 0, status: 400 });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test("createMultiviewTask rejects an unknown view key without calling fetch", async () => {
+    global.fetch = jest.fn();
+    await expect(
+      createMultiviewTask(
+        /** @type {any} */ ({ front: "ftok_f", left: "ftok_l", top: "ftok_t" }),
+        key,
+      ),
+    ).rejects.toMatchObject({ code: 0, status: 400 });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test("createMultiviewTask maps upstream non-zero codes like the other methods", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 2010, message: "insufficient credits" }),
+    });
+    await expect(
+      createMultiviewTask({ front: "ftok_f", left: "ftok_l" }, key),
+    ).rejects.toMatchObject({ code: 2010, status: 402 });
   });
 
   test("pollTask returns output on success", async () => {

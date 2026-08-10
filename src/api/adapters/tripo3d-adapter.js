@@ -263,6 +263,63 @@ export async function createImageTask(fileToken, apiKey, options = {}) {
   return data.task_id;
 }
 
+/** Multiview views in the canonical order Tripo's inputs array follows. */
+const MULTIVIEW_VIEWS = /** @type {const} */ (["front", "left", "back", "right"]);
+
+/**
+ * Create a multiview image-to-3D task (POST /generation/multiview-to-model)
+ * from previously uploaded view images. 2–4 views of the same subject; the
+ * front view is mandatory.
+ * @param {{front: string, left?: string, back?: string, right?: string}} viewTokens -
+ *   file_token per view, from uploadImage()
+ * @param {string} apiKey
+ * @param {object} [options]
+ * @param {string} [options.textureQuality="standard"] - one of TEXTURE_QUALITIES
+ * @returns {Promise<string>} task_id
+ */
+export async function createMultiviewTask(viewTokens, apiKey, options = {}) {
+  if (!viewTokens || typeof viewTokens !== "object") {
+    throw new TripoApiError("viewTokens is required", 0, 400);
+  }
+  const unknown = Object.keys(viewTokens).filter(
+    (k) => !MULTIVIEW_VIEWS.includes(/** @type {any} */ (k)),
+  );
+  if (unknown.length > 0) {
+    throw new TripoApiError(
+      `Unknown multiview view(s): ${unknown.join(", ")}`,
+      0,
+      400,
+    );
+  }
+  if (!viewTokens.front || typeof viewTokens.front !== "string") {
+    throw new TripoApiError("multiview requires a front view", 0, 400);
+  }
+  const present = MULTIVIEW_VIEWS.filter((v) => viewTokens[v]);
+  if (present.length < 2) {
+    throw new TripoApiError("multiview requires at least 2 views", 0, 400);
+  }
+  if (!apiKey || typeof apiKey !== "string") {
+    throw new TripoApiError("apiKey is required", 0, 400);
+  }
+  console.log(
+    `[GEN] Tripo createMultiviewTask views=${present.join(",")} tq=${options.textureQuality || "standard"}`,
+  );
+  const data = await tripoFetch("generation/multiview-to-model", apiKey, "POST", {
+    // View-key array in canonical order: [{front: t}, {left: t}, ...].
+    inputs: present.map((v) => ({ [v]: viewTokens[v] })),
+    model: TRIPO_MODEL_VERSION,
+    texture: true,
+    pbr: true,
+    auto_size: true,
+    ...textureQualityField(options),
+  });
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  console.log(`[GEN] Tripo multiview task created task_id=${data.task_id}`);
+  return data.task_id;
+}
+
 /**
  * Refine an existing model's texture/material via a text prompt.
  * Uses the v3 re-texture endpoint (POST /models/texture) — geometry is

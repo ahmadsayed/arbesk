@@ -215,6 +215,33 @@
   }
 }
 
+// Multiview reference bubble — 2-column thumbnail grid, view caption under
+// each thumb (Front / Left / Back / Right).
+.chat-image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--size-1);
+  margin-bottom: var(--size-1);
+}
+
+.chat-image-cell {
+  margin: 0;
+
+  .chat-image-thumb {
+    width: 100%;
+    max-width: none;
+    max-height: 96px;
+    margin-bottom: 0;
+    object-fit: cover;
+  }
+}
+
+.chat-image-view {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  text-align: center;
+}
+
 .chat-choices {
   display: flex;
   flex-wrap: wrap;
@@ -499,6 +526,23 @@
   }
 }
 
+// Attach chip stack — chips render dynamically from the attachedImages array
+// in canonical view order (create-panel.js); one chip per reference view.
+.image-attach-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+  margin-bottom: var(--size-2);
+
+  &[hidden] {
+    display: none;
+  }
+
+  .image-attach-chip {
+    margin-bottom: 0;
+  }
+}
+
 .image-attach-chip {
   display: flex;
   align-items: center;
@@ -549,6 +593,31 @@
 
   &:focus-visible {
     outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+// Per-chip view selector (Front/Left/Back/Right) — badge-like, ≥32px tall
+// for a HIG touch target, chevron matching the .form-select idiom.
+.image-attach-view {
+  appearance: none;
+  min-height: 32px;
+  padding: 0 var(--size-6) 0 var(--size-2);
+  font-size: var(--font-size-0);
+  font-family: var(--font-family);
+  color: var(--view-fg);
+  background-color: var(--card-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--size-2) center;
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--accent-bg);
     box-shadow: var(--focus-ring);
   }
 }

@@ -70,12 +70,15 @@ export function addChatMessage(role, text, options = {}) {
 
 /**
  * Append a chat message containing an image (e.g. a reference photo attached
- * for image-to-3D), with an optional caption below it.
+ * for image-to-3D), with an optional caption below it. When `options.images`
+ * is given (multiview), the bubble renders a 2-column thumbnail grid with a
+ * small view caption under each thumb instead of the single image.
  * @param {"user"|"system"} role
- * @param {string} src - image URL or data URI
+ * @param {string} src - image URL or data URI (single-image mode)
  * @param {string} [caption]
  * @param {Object} [options]
  * @param {Date} [options.timestamp] - defaults to now
+ * @param {Array<{src: string, caption?: string}>} [options.images] - multiview thumbnails
  */
 export function addImageMessage(role, src, caption, options = {}) {
   if (!chatHistoryList) return;
@@ -84,11 +87,33 @@ export function addImageMessage(role, src, caption, options = {}) {
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble chat-bubble-${role} chat-bubble-image`;
 
-  const img = document.createElement("img");
-  img.className = "chat-image-thumb";
-  img.src = src;
-  img.alt = caption || "Attached image";
-  bubble.appendChild(img);
+  if (Array.isArray(options.images) && options.images.length > 0) {
+    const grid = document.createElement("div");
+    grid.className = "chat-image-grid";
+    for (const entry of options.images) {
+      const cell = document.createElement("figure");
+      cell.className = "chat-image-cell";
+      const img = document.createElement("img");
+      img.className = "chat-image-thumb";
+      img.src = entry.src;
+      img.alt = entry.caption || caption || "Attached image";
+      cell.appendChild(img);
+      if (entry.caption) {
+        const viewCaption = document.createElement("figcaption");
+        viewCaption.className = "chat-image-view";
+        viewCaption.textContent = entry.caption;
+        cell.appendChild(viewCaption);
+      }
+      grid.appendChild(cell);
+    }
+    bubble.appendChild(grid);
+  } else {
+    const img = document.createElement("img");
+    img.className = "chat-image-thumb";
+    img.src = src;
+    img.alt = caption || "Attached image";
+    bubble.appendChild(img);
+  }
 
   if (caption) {
     const content = document.createElement("span");

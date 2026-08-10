@@ -14,8 +14,8 @@ export const SELECTORS = {
   generateHint: "#generateHint",
   imageAttachBtn: "#imageAttachBtn",
   imageAttachInput: "#imageAttachInput",
-  imageAttachChip: "#imageAttachChip",
-  imageAttachRemove: "#imageAttachRemove",
+  imageAttachChips: "#imageAttachChips",
+  multiviewHint: "#multiviewHint",
   chatHistoryList: "#chatHistoryList",
   chatHistoryBubbles: ".chat-bubble-history",
   // Asset chat bubble (generation result pending a "Show in Studio" decision)

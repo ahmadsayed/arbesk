@@ -106,8 +106,27 @@ export const generateAssetSchema = z
       .regex(/^[A-Za-z0-9+/=\r\n]+$/, "imageData must be base64")
       .optional(),
     imageMime: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
+    // Multiview image-to-3D (tripo3d only): 2–4 labeled views of the same
+    // subject. Mutually exclusive with the single-image imageData field.
+    images: z
+      .array(
+        z.object({
+          imageData: z
+            .string()
+            .max(
+              MAX_IMAGE_BASE64_LENGTH,
+              "imageData exceeds the 10 MB image limit",
+            )
+            .regex(/^[A-Za-z0-9+/=\r\n]+$/, "imageData must be base64"),
+          imageMime: z.enum(["image/jpeg", "image/png", "image/webp"]),
+          view: z.enum(["front", "left", "back", "right"]),
+        }),
+      )
+      .min(2, "images requires 2-4 views")
+      .max(4, "images requires 2-4 views")
+      .optional(),
   })
-  .refine((v) => v.prompt || v.imageData || v.sourceAssetCid, {
+  .refine((v) => v.prompt || v.imageData || v.images?.length || v.sourceAssetCid, {
     message: "prompt, imageData, or sourceAssetCid is required",
     path: ["prompt"],
   })
@@ -115,6 +134,28 @@ export const generateAssetSchema = z
     message: "imageMime is required when imageData is present",
     path: ["imageMime"],
   })
+  .refine((v) => !v.images || !v.imageData, {
+    message: "images and imageData are mutually exclusive",
+    path: ["images"],
+  })
+  .refine(
+    (v) =>
+      !v.images ||
+      new Set(v.images.map((img) => img.view)).size === v.images.length,
+    {
+      message: "images views must be unique",
+      path: ["images"],
+    },
+  )
+  .refine(
+    (v) =>
+      !v.images ||
+      v.images.filter((img) => img.view === "front").length === 1,
+    {
+      message: "images must include exactly one front view",
+      path: ["images"],
+    },
+  )
   .refine(
     (v) =>
       !v.sourceAssetCid ||

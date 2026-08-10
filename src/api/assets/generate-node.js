@@ -11,6 +11,7 @@ import {
 import {
   createTask,
   createImageTask,
+  createMultiviewTask,
   createRefineTask,
   uploadImage,
   uploadModel,
@@ -271,7 +272,7 @@ export default function generateAssetNode() {
     validateBody(generateAssetSchema),
     async (req, res) => {
       try {
-        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, imageData, imageMime } = req.body;
+        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, imageData, imageMime, images } = req.body;
 
         const effectiveProvider = provider || "mock";
         const useMockAdapter =
@@ -405,19 +406,39 @@ export default function generateAssetNode() {
           // Fresh generation. Action flags without sourceAssetCid are
           // ignored here — the prompt/image starts a new model.
           console.log(
-            `[GEN] using Tripo3D adapter for "${prompt || "(image)"}" image=${Boolean(imageData)}`,
+            `[GEN] using Tripo3D adapter for "${prompt || (images ? "(multiview)" : "(image)")}" image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
           );
-          const tripoTaskId = imageData
-            ? await createImageTask(
-                await uploadImage(
-                  Buffer.from(imageData, "base64"),
-                  imageMime,
-                  key,
+          const tripoTaskId = images
+            ? await createMultiviewTask(
+                // Upload every view first (parallel), then key tokens by view.
+                /** @type {{front: string, left?: string, back?: string, right?: string}} */ (
+                  Object.fromEntries(
+                    await Promise.all(
+                      images.map(async (/** @type {{imageData: string, imageMime: string, view: string}} */ img) => [
+                        img.view,
+                        await uploadImage(
+                          Buffer.from(img.imageData, "base64"),
+                          img.imageMime,
+                          key,
+                        ),
+                      ]),
+                    ),
+                  )
                 ),
                 key,
                 { textureQuality },
               )
-            : await createTask(prompt, key, { textureQuality });
+            : imageData
+              ? await createImageTask(
+                  await uploadImage(
+                    Buffer.from(imageData, "base64"),
+                    imageMime,
+                    key,
+                  ),
+                  key,
+                  { textureQuality },
+                )
+              : await createTask(prompt, key, { textureQuality });
           const taskId = registerTask({
             tripoTaskId,
             providerKey: key,
