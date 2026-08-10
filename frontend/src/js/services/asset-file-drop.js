@@ -14,7 +14,7 @@
  * flow uses, so the save pipeline sees an already-stored source.
  */
 
-import { on, EVENTS } from "../events/bus.js";
+import { on, emit, EVENTS } from "../events/bus.js";
 import {
   getCurrentManifest,
   resetForNewAsset,
@@ -113,6 +113,7 @@ async function _handleAssetFileDropped(detail) {
     clearPendingSourceColorEdit(target.node_id);
     stagePendingSourceOverride(target.node_id, { source, name });
     log(`[DROP] overrode root model node ${target.node_id}`);
+    emit(EVENTS.ASSET_FILE_STAGED, { name, source, assetManifestCid: null });
     showToast({
       type: "success",
       title: "Model Replaced",
@@ -129,6 +130,7 @@ async function _handleAssetFileDropped(detail) {
   renameAsset(name);
   await createRootDraftSource("node_1", source);
   log(`[DROP] created draft from ${file.name}`);
+  emit(EVENTS.ASSET_FILE_STAGED, { name, source, assetManifestCid: null });
   showToast({
     type: "success",
     title: "Draft Created",

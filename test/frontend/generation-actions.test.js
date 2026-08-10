@@ -27,4 +27,11 @@ describe("followupActionsFor", () => {
     expect(followupActionsFor({ provider: "tripo3d", task: "model", format: "glb" })).toHaveLength(4);
     expect(followupActionsFor({ provider: "tripo3d", task: "model", format: "gltf" })).toHaveLength(4);
   });
+  it("returns all four actions for an uploaded glTF/GLB model", () => {
+    expect(followupActionsFor({ provider: "upload", task: "upload", format: "glb" }))
+      .toEqual(["retexture", "retopo", "auto-rig", "animate"]);
+  });
+  it("returns nothing for an uploaded 3MF model", () => {
+    expect(followupActionsFor({ provider: "upload", task: "upload", format: "3mf" })).toEqual([]);
+  });
 });

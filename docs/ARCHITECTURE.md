@@ -635,7 +635,7 @@ For EOA wallets (MetaMask/Rabby), the spinner card appears just before the walle
 6. A new collection manifest CID is written; `updateAssetURI` publishes it on-chain.
 7. `refreshLibraryData` is called; the new asset card appears.
 
-Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the same stage/decompose helper (`stageUploadSource` in `services/library-ops.js`) at drop time, then routes through `services/asset-file-drop.js`: with an asset open it replaces the root model node's source in place (staged as a `pendingSourceOverrides` entry — linked children, transforms, and history survive); with no asset open it creates a new unsaved draft named after the file. The normal Save Draft / Publish pipeline bakes the override into the next manifest version.
+Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the same stage/decompose helper (`stageUploadSource` in `services/library-ops.js`) at drop time, then routes through `services/asset-file-drop.js`: with an asset open it replaces the root model node's source in place (staged as a `pendingSourceOverrides` entry — linked children, transforms, and history survive); with no asset open it creates a new unsaved draft named after the file. The normal Save Draft / Publish pipeline bakes the override into the next manifest version. Both paths then emit `ASSET_FILE_STAGED`, and the create panel presents the staged model as a version-card chat bubble with the standard follow-up action row (Retopo/Retexture/Auto-rig/Animate run off the staged `sourceAssetCid`; known non-glTF formats get no row).
 
 ---
 

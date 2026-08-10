@@ -13,6 +13,7 @@
  */
 
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
+import { emit, EVENTS } from "../events/bus.js";
 import {
   publishAsset,
   CollaboratorRole,
@@ -280,6 +281,14 @@ export async function uploadFileToCollection(file, collectionTokenId) {
   );
 
   log(`[LIBRARY-OPS] added ${assetId} to collection ${collectionTokenId} → ${newCollectionCid}`);
+
+  // Surface the uploaded model in the Studio chat as an actionable bubble
+  // (Retopo/Retexture/Auto-rig/Animate run off its staged source CID).
+  emit(EVENTS.ASSET_FILE_STAGED, {
+    name: assetName,
+    source,
+    assetManifestCid,
+  });
 
   return { assetId, assetManifestCid, newCollectionCid };
 }

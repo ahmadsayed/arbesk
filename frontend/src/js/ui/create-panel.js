@@ -564,8 +564,8 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
     }
 
     // The restored/sent version becomes the active version for typed
-    // retexture follow-ups (Tripo3D only).
-    if (record.provider === "tripo3d") {
+    // retexture follow-ups (Tripo3D generations and uploaded models).
+    if (record.provider === "tripo3d" || record.provider === "upload") {
       setActiveVersion({
         sourceAssetCid: record.sourceAssetCid,
         manifestCid: record.assetManifestCid,
@@ -830,6 +830,67 @@ function addFollowupActions(generationId, bubbleEl = null) {
     onPick: ACTION_DEFS[id].run,
   }));
   addAssetActionRow(assetMessage || { bubble }, actions);
+}
+
+/**
+ * Present an uploaded/dropped model as a chat bubble with live preview and
+ * the follow-up action row (Retexture · Retopo · Auto-rig · Animate…) — the
+ * actions run off the staged sourceAssetCid, so any uploaded GLB/glTF is
+ * immediately retopo-able. Triggered by ASSET_FILE_STAGED (viewport drop,
+ * Library upload).
+ *
+ * `assetManifestCid` is null for viewport drops (the model is already in the
+ * Studio as an unsaved change) — the bubble's Send button is disabled there.
+ * Library uploads pass their fresh manifest CID, so the bubble keeps the
+ * usual Show-in-Studio / click-to-restore behavior.
+ * @param {{name: string, source: {cid: string, path: string, format: string},
+ *          assetManifestCid?: string|null}} detail
+ * @returns {string} the pending generation id
+ */
+function presentUploadedModel({ name, source, assetManifestCid = null }) {
+  const generationId = addPendingGeneration({
+    assetManifestCid,
+    sourceAssetCid: source.cid,
+    prompt: `Uploaded: ${name}`,
+    format: source.format,
+    path: source.path,
+    prevAssetManifestCid: null,
+    provider: "upload",
+    task: "upload",
+  });
+
+  // The uploaded model becomes the active version for typed retexture
+  // follow-ups until detached, cleared, or replaced.
+  setActiveVersion({
+    sourceAssetCid: source.cid,
+    manifestCid: assetManifestCid,
+    name,
+  });
+
+  const assetMessage = addAssetMessage({
+    prompt: `Uploaded: ${name}`,
+    format: source.format,
+  });
+  if (assetMessage) {
+    assetMessages.set(generationId, assetMessage);
+    if (assetManifestCid) {
+      assetMessage.sendButton.addEventListener("click", () => {
+        void sendGenerationToStudio(generationId, assetMessage);
+      });
+      assetMessage.bubble
+        .querySelector(".chat-asset-preview")
+        ?.addEventListener("click", () => {
+          void restoreGeneration(generationId);
+        });
+    } else {
+      // Drop path: the model is already in the viewport — nothing to send.
+      assetMessage.sendButton.disabled = true;
+      assetMessage.sendButton.textContent = "In Studio";
+    }
+    void attachChatPreview(generationId, assetMessage);
+    addFollowupActions(generationId);
+  }
+  return generationId;
 }
 
 // ─── Rig model selector ───
@@ -1748,6 +1809,12 @@ on(EVENTS.SCENE_READY, (event) => {
 on(EVENTS.ASSET_DRAFT_SAVED, () => {
   const manifestCid = getActiveAssetManifestCid();
   if (manifestCid) void renderChatProvenance(manifestCid);
+});
+
+// Viewport file drop / Library upload: present the staged model as an
+// actionable chat bubble (Retopo et al. run off its sourceAssetCid).
+on(EVENTS.ASSET_FILE_STAGED, (detail) => {
+  if (detail?.source?.cid) presentUploadedModel(detail);
 });
 
 on(EVENTS.ASSET_PUBLISHED, () => {
