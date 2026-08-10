@@ -758,15 +758,85 @@ function addStoppableWorkingMessage(workingText) {
 // out before presets go to the backend, and doesn't count toward Tripo's
 // 5-animation cap (see showCheckboxDialog's countsTowardMax).
 const IN_PLACE_OPTION = "option:in-place";
+const IN_PLACE_PRESET = {
+  value: IN_PLACE_OPTION,
+  label: "In place (no root motion)",
+  checked: true,
+  countsTowardMax: false,
+};
 
-const ANIMATE_PRESETS = [
-  { value: "preset:idle", label: "Idle", checked: true },
-  { value: "preset:walk", label: "Walk", checked: true },
-  { value: "preset:run", label: "Run" },
-  { value: "preset:jump", label: "Jump" },
-  { value: "preset:slash", label: "Slash" },
-  { value: IN_PLACE_OPTION, label: "In place (no root motion)", checked: true, countsTowardMax: false },
+// Curated animate presets, categorized for the dialog. Short-form IDs exist
+// on both rig lines; preset:biped:* IDs are v1.0 biped rig only (Tripo's 90+
+// library) and get a clear error on the generic v2.5 rig (adapter guard).
+const ANIMATE_PRESET_GROUPS = [
+  {
+    category: "Basics",
+    presets: [
+      { value: "preset:idle", label: "Idle", checked: true },
+      { value: "preset:walk", label: "Walk", checked: true },
+      { value: "preset:run", label: "Run" },
+      { value: "preset:jump", label: "Jump" },
+      { value: "preset:climb", label: "Climb" },
+      { value: "preset:turn", label: "Turn" },
+    ],
+  },
+  {
+    category: "Combat",
+    presets: [
+      { value: "preset:slash", label: "Slash" },
+      { value: "preset:shoot", label: "Shoot" },
+      { value: "preset:biped:front_kick_01", label: "Front Kick" },
+      { value: "preset:biped:box_01", label: "Box" },
+      { value: "preset:biped:cast_a_spell", label: "Cast a Spell" },
+    ],
+  },
+  {
+    category: "Reactions",
+    presets: [
+      { value: "preset:hurt", label: "Hurt" },
+      { value: "preset:fall", label: "Fall" },
+      { value: "preset:dive", label: "Dive" },
+      { value: "preset:biped:defeat_02", label: "Defeat" },
+      { value: "preset:biped:scared_01", label: "Scared" },
+    ],
+  },
+  {
+    category: "Emotes",
+    presets: [
+      { value: "preset:biped:dance_01", label: "Dance 1" },
+      { value: "preset:biped:dance_02", label: "Dance 2" },
+      { value: "preset:biped:cheer", label: "Cheer" },
+      { value: "preset:biped:victory_celebration", label: "Victory" },
+      { value: "preset:biped:wave_goodbye_01", label: "Wave Goodbye" },
+      { value: "preset:biped:clap", label: "Clap" },
+      { value: "preset:biped:bow", label: "Bow" },
+    ],
+  },
+  {
+    category: "Daily Life",
+    presets: [
+      { value: "preset:biped:sit", label: "Sit" },
+      { value: "preset:biped:look_around", label: "Look Around" },
+      { value: "preset:biped:standing_relax", label: "Relax" },
+      { value: "preset:biped:swim", label: "Swim" },
+    ],
+  },
 ];
+
+// Flat view (groups in order + the in-place toggle) for the retry picker's
+// flat checkbox dialog.
+const ANIMATE_PRESETS = [
+  ...ANIMATE_PRESET_GROUPS.flatMap((g) => g.presets),
+  IN_PLACE_PRESET,
+];
+
+/** Chat-prompt label for a preset ID: "preset:biped:dance_01" → "dance 01".
+ * @param {string} preset
+ * @returns {string}
+ */
+function animatePresetLabel(preset) {
+  return preset.replace(/^preset:(biped:)?/, "").replace(/_/g, " ");
+}
 
 /**
  * Register a finished generation as a pending record and present it as an
@@ -1169,7 +1239,7 @@ async function retryAnimate(generationId, rigModel) {
   const animations = picked.filter((p) => p !== IN_PLACE_OPTION);
   if (animations.length === 0) return;
 
-  const labels = animations.map((p) => p.replace("preset:", "")).join(", ");
+  const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels} (${rigModel === "v1.0-20240301" ? "v1.0" : "v2.5"})`;
   addChatMessage("user", prompt);
   const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
@@ -1490,6 +1560,13 @@ async function onAnimate(generationId) {
   // Combined dialog: rig model selector + preset checkboxes + in-place toggle
   const dialogResult = await new Promise((resolve) => {
     const wrap = document.createElement("div");
+    // Single scroll region sized to fit INSIDE the dialog shell (which caps
+    // at 100vh − 2×--size-10 and keeps its header/actions pinned). Without
+    // this the content overflows the dialog's scroll box and the focus-on-
+    // open scroll clips the title off the top. 190px ≈ header + actions +
+    // body padding.
+    wrap.style.maxHeight = "calc(100vh - var(--size-10) * 2 - 190px)";
+    wrap.style.overflowY = "auto";
 
     // Rig model selector
     const selector = buildRigModelSelector("");
@@ -1502,13 +1579,23 @@ async function onAnimate(generationId) {
     sep.style.borderTop = "1px solid var(--color-border, #444)";
     wrap.appendChild(sep);
 
-    // Preset checkboxes
+    // Preset checkboxes, grouped by category. The wrap above is the single
+    // scroll region — the list itself renders fully.
     const presetHint = document.createElement("p");
     presetHint.style.margin = "0 0 var(--size-1)";
     presetHint.textContent = "Pick up to 5 animations:";
     wrap.appendChild(presetHint);
 
-    const boxes = ANIMATE_PRESETS.map((opt) => {
+    const groupsWrap = document.createElement("div");
+    wrap.appendChild(groupsWrap);
+
+    /** @type {Array<{input: HTMLInputElement, value: string, counts: boolean}>} */
+    const boxes = [];
+    /**
+     * @param {{value: string, label: string, checked?: boolean, countsTowardMax?: boolean}} opt
+     * @param {HTMLElement} container
+     */
+    const addPresetRow = (opt, container) => {
       const label = document.createElement("label");
       label.style.display = "flex";
       label.style.alignItems = "center";
@@ -1527,9 +1614,25 @@ async function onAnimate(generationId) {
       text.textContent = opt.label;
       label.appendChild(input);
       label.appendChild(text);
-      wrap.appendChild(label);
-      return { input, value: opt.value, counts };
-    });
+      container.appendChild(label);
+      boxes.push({ input, value: opt.value, counts });
+    };
+
+    for (const group of ANIMATE_PRESET_GROUPS) {
+      const header = document.createElement("div");
+      header.textContent = group.category;
+      header.style.fontSize = "var(--font-size-0)";
+      header.style.fontWeight = "var(--font-weight-7)";
+      header.style.color = "var(--dim-fg)";
+      header.style.textTransform = "uppercase";
+      header.style.letterSpacing = "0.06em";
+      header.style.marginTop = "var(--size-2)";
+      groupsWrap.appendChild(header);
+      for (const opt of group.presets) addPresetRow(opt, groupsWrap);
+    }
+
+    // The in-place toggle lives below the scrollable list — always visible.
+    addPresetRow(IN_PLACE_PRESET, wrap);
 
     const goBtn = document.createElement("button");
     goBtn.className = "btn btn-primary";
@@ -1577,7 +1680,7 @@ async function onAnimate(generationId) {
     return;
   }
 
-  const labels = animations.map((p) => p.replace("preset:", "")).join(", ");
+  const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels}`;
   addChatMessage("user", prompt);
   const { working, signal, onTaskId } = addStoppableWorkingMessage(

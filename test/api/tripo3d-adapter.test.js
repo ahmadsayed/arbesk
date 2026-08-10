@@ -317,6 +317,29 @@ describe("tripo3d adapter", () => {
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).animate_in_place).toBe(true);
   });
 
+  test("retargetTask passes preset:biped:* through unchanged for v1.0 biped rigs", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_rt" } }),
+    });
+    await retargetTask("task_rig", ["preset:biped:dance_01"], key, {
+      rigModel: "v1.0-20240301",
+    });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).animations).toEqual([
+      "preset:biped:dance_01",
+    ]);
+  });
+
+  test("retargetTask rejects biped-only presets on a known generic (v2.5) rig", async () => {
+    global.fetch = jest.fn();
+    await expect(
+      retargetTask("task_rig", ["preset:biped:dance_01"], key, {
+        rigModel: "v2.5-20260210",
+      }),
+    ).rejects.toMatchObject({ code: 0, status: 400 });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   test("retargetTask rejects an empty animations array with status 400", async () => {
     await expect(retargetTask("task_rig", [], key)).rejects.toMatchObject({
       code: 0,

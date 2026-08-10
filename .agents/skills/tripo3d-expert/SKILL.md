@@ -75,7 +75,7 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 
 - `src/api/adapters/tripo3d-adapter.js` — the reference adapter (create/image/refine/decimate/rig/retarget/poll/download, `TripoApiError`)
 - `src/api/assets/generate-node.js` — routes: BYOK gating, task registry, animate chain (rig-check → rig → retarget + retarget-only path), retopo route
-- `src/api/schemas.js` — request validation (`ANIMATION_PRESETS` = the 11 v2.5 biped presets)
+- `src/api/schemas.js` — request validation (`ANIMATION_PRESETS` = the 11 generic v2.5 presets + 16 curated `preset:biped:*` ones; the adapter rejects biped-only presets with a clear 400 when the rig is a known generic/v2.5 task)
 - Frontend: `services/api.js` (`generateAsset`), `ui/create-panel.js` (HQ checkbox, retopo/animate chips)
 
 ## References

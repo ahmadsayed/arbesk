@@ -49,6 +49,24 @@ export const ANIMATION_PRESETS = /** @type {[string, ...string[]]} */ ([
   "preset:hurt",
   "preset:fall",
   "preset:turn",
+  // Curated v1.0 biped-rig presets (Tripo's 90+ library). The adapter maps
+  // short-form IDs to this namespace for v1.0 rigs; these pass through as-is.
+  "preset:biped:front_kick_01",
+  "preset:biped:box_01",
+  "preset:biped:cast_a_spell",
+  "preset:biped:defeat_02",
+  "preset:biped:scared_01",
+  "preset:biped:dance_01",
+  "preset:biped:dance_02",
+  "preset:biped:cheer",
+  "preset:biped:victory_celebration",
+  "preset:biped:wave_goodbye_01",
+  "preset:biped:clap",
+  "preset:biped:bow",
+  "preset:biped:sit",
+  "preset:biped:look_around",
+  "preset:biped:standing_relax",
+  "preset:biped:swim",
 ]);
 
 export const generateAssetSchema = z

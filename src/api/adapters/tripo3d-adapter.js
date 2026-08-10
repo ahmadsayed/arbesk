@@ -466,6 +466,18 @@ export async function retargetTask(rigTaskId, animations, apiKey, options = {}) 
   // v1.0 biped rigs use the preset:biped:* namespace; generic (v2.5) rigs
   // take the short form. Map only the short form, never double-prefix.
   const isBipedV1 = options.rigModel === TRIPO_RIG_BIPED_MODEL;
+  // A KNOWN generic (v2.5) rig can't take biped-library presets — fail with
+  // a clear message instead of Tripo's opaque validation error.
+  if (!isBipedV1 && options.rigModel === TRIPO_RIG_MODEL) {
+    const bipedOnly = animations.find((a) => a.startsWith("preset:biped:"));
+    if (bipedOnly) {
+      throw new TripoApiError(
+        `Animation "${bipedOnly}" requires the v1.0 biped rig — the generic rig supports only idle/walk/run/dive/climb/jump/slash/shoot/hurt/fall/turn.`,
+        0,
+        400,
+      );
+    }
+  }
   const presets = isBipedV1
     ? animations.map((a) =>
         a.startsWith("preset:biped:") ? a : a.replace(/^preset:/, "preset:biped:"),
