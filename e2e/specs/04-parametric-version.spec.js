@@ -134,4 +134,57 @@ test.describe("parametric versioning + time-travel", () => {
     expect(assetManifest.version).toBe(4);
     expect(assetManifest.prev_asset_manifest_cid).toBe(saveCid);
   });
+
+  test("model clock billboards to the camera while orbiting", async ({
+    page,
+  }) => {
+    await connectStudio(page);
+    await generate(page, PROMPT);
+
+    // Select the node and enter Time mode so the 3D clock gizmo appears.
+    await page.click(SELECTORS.outlinerSwitcherBtn);
+    await page.locator(SELECTORS.outlinerNode).first().click();
+    await page.click(SELECTORS.timeModeButton);
+    await expect(page.locator(SELECTORS.modelClockBadge)).toBeVisible();
+
+    // Dot of the clock face normal with the root→camera direction: 1 means
+    // the ring faces the viewer. Regression: a stale-Euler roundtrip in
+    // syncRootToCamera froze the ring at its first-frame orientation.
+    const facingDot = () =>
+      page.evaluate(() => {
+        const B = window.BABYLON;
+        const ul = B.UtilityLayerRenderer?.DefaultUtilityLayer;
+        const cam = ul?.originalScene?.activeCamera;
+        const root = ul?.utilityLayerScene?.getNodeByName("modelClockRoot");
+        if (!root || !cam) return null;
+        root.computeWorldMatrix(true);
+        const fwd = B.Vector3.TransformNormal(
+          new B.Vector3(0, 0, 1),
+          root.getWorldMatrix(),
+        ).normalize();
+        const toCam = cam.position
+          .subtract(root.getAbsolutePosition())
+          .normalize();
+        return B.Vector3.Dot(fwd, toCam);
+      });
+
+    expect(await facingDot()).toBeGreaterThan(0.98);
+
+    // Orbit hard; the ring must keep facing the viewer (not stay pinned to
+    // the scene orientation).
+    const canvas = page.locator("#renderCanvas");
+    const box = await canvas.boundingBox();
+    await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.4);
+    await page.mouse.down();
+    for (let i = 1; i <= 16; i++) {
+      await page.mouse.move(
+        box.x + box.width * 0.35 + i * 22,
+        box.y + box.height * 0.4 - i * 3,
+      );
+      await page.waitForTimeout(20);
+    }
+    await page.mouse.up();
+
+    await expect.poll(facingDot).toBeGreaterThan(0.98);
+  });
 });

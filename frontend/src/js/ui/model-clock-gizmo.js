@@ -263,9 +263,16 @@ function syncRootToCamera(root, anchor, camera, offset) {
   if (dist < 0.001) return; // camera coincident with anchor; keep previous pose
   const forward = dir.scale(1 / dist);
   root.position.copyFrom(anchorPos.subtract(forward.scale(offset)));
+  // Billboard the face at the viewer. Babylon's lookAt writes only one
+  // rotation representation — the Euler `rotation` when no quaternion
+  // exists, `rotationQuaternion` otherwise — and leaves the other stale.
+  // Once a quaternion is present, reading `rotation` right after lookAt
+  // yields frozen angles, so a lookAt → FromEulerAngles(rotation) roundtrip
+  // pins the ring to its first-frame pose. Null the quaternion first so
+  // every frame takes the Euler path, then mirror into rotationQuaternion,
+  // which the drag-plane math reads.
+  root.rotationQuaternion = null;
   root.lookAt(cameraPos);
-  // lookAt sets Euler rotation; keep rotationQuaternion in sync so the drag
-  // plane math can transform world hit points back into root-local space.
   root.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(
     root.rotation.x,
     root.rotation.y,
