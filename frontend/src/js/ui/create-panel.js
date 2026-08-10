@@ -833,33 +833,36 @@ function addFollowupActions(generationId, bubbleEl = null) {
 }
 
 /**
- * Present an uploaded/dropped model as a chat bubble with live preview and
- * the follow-up action row (Retexture · Retopo · Auto-rig · Animate…) — the
- * actions run off the staged sourceAssetCid, so any uploaded GLB/glTF is
- * immediately retopo-able. Triggered by ASSET_FILE_STAGED (viewport drop,
- * Library upload).
+ * Present a staged model (uploaded, dropped, or already open) as a chat
+ * bubble with live preview and the follow-up action row (Retexture · Retopo ·
+ * Auto-rig · Animate…) — the actions run off the staged sourceAssetCid, so
+ * any glTF/GLB with a CID is immediately retopo-able.
  *
  * `assetManifestCid` is null for viewport drops (the model is already in the
  * Studio as an unsaved change) — the bubble's Send button is disabled there.
- * Library uploads pass their fresh manifest CID, so the bubble keeps the
- * usual Show-in-Studio / click-to-restore behavior.
- * @param {{name: string, source: {cid: string, path: string, format: string},
- *          assetManifestCid?: string|null}} detail
+ * Otherwise the bubble keeps the usual Show-in-Studio / click-to-restore
+ * behavior against that manifest.
+ * @param {{name: string, label?: string, source: {cid: string, path: string, format: string},
+ *          assetManifestCid?: string|null, recorded?: boolean}} detail
  * @returns {string} the pending generation id
  */
-function presentUploadedModel({ name, source, assetManifestCid = null }) {
+function presentStagedModel({ name, label, source, assetManifestCid = null, recorded = false }) {
+  const prompt = label || `Uploaded: ${name}`;
   const generationId = addPendingGeneration({
     assetManifestCid,
     sourceAssetCid: source.cid,
-    prompt: `Uploaded: ${name}`,
+    prompt,
     format: source.format,
     path: source.path,
     prevAssetManifestCid: null,
     provider: "upload",
     task: "upload",
   });
+  // Opening an existing asset is not chat activity — never let the save-time
+  // provenance collector write it into a later version's metadata.chat.
+  if (recorded) updatePendingGeneration(generationId, { recorded: true });
 
-  // The uploaded model becomes the active version for typed retexture
+  // The staged model becomes the active version for typed retexture
   // follow-ups until detached, cleared, or replaced.
   setActiveVersion({
     sourceAssetCid: source.cid,
@@ -867,10 +870,7 @@ function presentUploadedModel({ name, source, assetManifestCid = null }) {
     name,
   });
 
-  const assetMessage = addAssetMessage({
-    prompt: `Uploaded: ${name}`,
-    format: source.format,
-  });
+  const assetMessage = addAssetMessage({ prompt, format: source.format });
   if (assetMessage) {
     assetMessages.set(generationId, assetMessage);
     if (assetManifestCid) {
@@ -891,6 +891,44 @@ function presentUploadedModel({ name, source, assetManifestCid = null }) {
     addFollowupActions(generationId);
   }
   return generationId;
+}
+
+/**
+ * ASSET_FILE_STAGED entry point (viewport drop, Library upload): present the
+ * freshly staged model as an actionable bubble. `assetManifestCid` is null
+ * for viewport drops (the model is already in the Studio as an unsaved
+ * change) — the bubble's Send button is disabled there.
+ * @param {{name: string, source: {cid: string, path: string, format: string},
+ *          assetManifestCid?: string|null}} detail
+ * @returns {string} the pending generation id
+ */
+function presentUploadedModel({ name, source, assetManifestCid = null }) {
+  return presentStagedModel({ name, source, assetManifestCid });
+}
+
+/**
+ * Present an already-open asset's root model as an actionable bubble, so
+ * assets that predate chat provenance (or were never generated in-app) still
+ * offer Retopo/Retexture/Auto-rig/Animate against the open model. Skipped
+ * when the chat already has live bubbles (a fresh generation session) or the
+ * tip manifest carries provenance (its history bubbles are actionable).
+ * @param {any} manifest
+ * @param {string} manifestCid
+ */
+function presentOpenedAssetModel(manifest, manifestCid) {
+  if (assetMessages.size > 0) return; // live session bubbles already present
+  if (manifest?.metadata?.chat?.length) return; // history covers this asset
+  const rootNode = (manifest?.scene?.nodes || []).find(
+    (n) => n.source?.cid && !n.child_ref
+  );
+  if (!rootNode) return; // composition-only asset — no model to act on
+  presentStagedModel({
+    name: manifest.name || "Asset",
+    label: manifest.name || "Asset",
+    source: rootNode.source,
+    assetManifestCid: manifestCid,
+    recorded: true,
+  });
 }
 
 // ─── Rig model selector ───
@@ -1799,11 +1837,18 @@ on(EVENTS.SCENE_READY, (event) => {
   const manifestCid =
     event?.manifestCid || getActiveAssetManifestCid();
   const identity = event?.manifest?.asset_id || manifestCid || null;
-  if (identity && openAssetIdentity && identity !== openAssetIdentity) {
+  const identityChanged = !!(identity && identity !== openAssetIdentity);
+  if (identityChanged && openAssetIdentity) {
     clearChat();
   }
   if (identity) openAssetIdentity = identity;
   if (manifestCid) void renderChatProvenance(manifestCid);
+  // An asset that was opened (not generated/uploaded this session) gets an
+  // actionable bubble for its root model — otherwise the panel offers no
+  // follow-up actions for pre-existing assets.
+  if (identityChanged && manifestCid && event?.manifest?.type === "asset") {
+    presentOpenedAssetModel(event.manifest, manifestCid);
+  }
 });
 
 on(EVENTS.ASSET_DRAFT_SAVED, () => {
