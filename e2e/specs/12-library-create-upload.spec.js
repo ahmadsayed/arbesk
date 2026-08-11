@@ -8,6 +8,7 @@ import {
   openLibraryCollection,
   createLibraryCollection,
   uploadLibraryFile,
+  dropLibraryFile,
   uniqueAssetName,
 } from "../helpers/flows.mjs";
 import {
@@ -121,6 +122,31 @@ test.describe.serial("Library create collection and upload", () => {
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_3MF_ASSET_NAME,
     );
+  });
+
+  test("drag-dropping a GLB onto the Library uploads it decomposed", async ({
+    page,
+  }) => {
+    const collectionName = uniqueAssetName("Drop Collection");
+    await connectLibrary(page);
+
+    await createLibraryCollection(page, collectionName);
+    await openLibraryCollection(page, collectionName);
+    await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(0);
+
+    // dropLibraryFile also asserts the drop overlay activates on dragenter.
+    await dropLibraryFile(page, GLB_FIXTURE, UPLOADED_ASSET_NAME);
+    await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(1);
+
+    // Same pipeline as the Upload button: decomposed at upload time into the
+    // canonical stored form, named after the file without extension.
+    const uploadedManifest = await fetchUploadedAssetManifest(
+      page,
+      UPLOADED_ASSET_NAME,
+    );
+    expect(uploadedManifest.name).toBe(UPLOADED_ASSET_NAME);
+    expect(uploadedManifest.scene.nodes[0].source.path).toBe("composite.gltf");
+    expect(uploadedManifest.scene.nodes[0].source.format).toBe("gltf");
   });
 
   test("warns when uploading without an open collection", async ({ page }) => {

@@ -189,6 +189,9 @@ export function addChoiceMessage(text, choices, onPick) {
  * @typedef {Object} WorkingMessageHandle
  * @property {HTMLElement} bubble
  * @property {(text: string) => void} setText
+ * @property {(fraction: number, text?: string) => void} setProgress - show a
+ *   determinate progress bar at 0..1 (replacing the indeterminate spinner,
+ *   GNOME-style) and append the percentage to the status text
  * @property {() => void} remove
  */
 
@@ -214,12 +217,27 @@ export function addWorkingMessage(text, options = {}) {
   spinner.className = "chat-working-spinner";
   spinner.setAttribute("aria-hidden", "true");
 
+  const body = document.createElement("span");
+  body.className = "chat-working-body";
+
   const content = document.createElement("span");
   content.className = "chat-bubble-content";
   content.textContent = text;
 
+  const track = document.createElement("span");
+  track.className = "chat-working-track";
+  track.hidden = true;
+  const fill = document.createElement("span");
+  fill.className = "chat-working-fill";
+  track.appendChild(fill);
+
+  body.appendChild(content);
+  body.appendChild(track);
+
   bubble.appendChild(spinner);
-  bubble.appendChild(content);
+  bubble.appendChild(body);
+
+  let baseText = text;
 
   const onCancel = options.onCancel;
   if (typeof onCancel === "function") {
@@ -239,7 +257,21 @@ export function addWorkingMessage(text, options = {}) {
   return {
     bubble,
     setText(next) {
+      baseText = next;
       content.textContent = next;
+    },
+    setProgress(fraction, nextText) {
+      const clamped = Math.min(1, Math.max(0, fraction));
+      if (typeof nextText === "string" && nextText) baseText = nextText;
+      // Determinate progress replaces the spinner (one indicator, not two).
+      spinner.hidden = true;
+      track.hidden = false;
+      track.setAttribute("role", "progressbar");
+      track.setAttribute("aria-valuemin", "0");
+      track.setAttribute("aria-valuemax", "100");
+      track.setAttribute("aria-valuenow", String(Math.round(clamped * 100)));
+      fill.style.width = `${Math.round(clamped * 100)}%`;
+      content.textContent = `${baseText} ${Math.round(clamped * 100)}%`;
     },
     remove() {
       bubble.remove();

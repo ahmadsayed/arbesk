@@ -38,7 +38,13 @@ async function gatewayBase() {
   return _gatewayPromise;
 }
 
-async function fetchIpfsRawBytes(cid) {
+/**
+ * @param {string} cid
+ * @param {(fraction: number) => void} [onProgress] - called with 0..1 as bytes
+ *   arrive, when the gateway reports Content-Length. Only the caller that
+ *   starts the download gets callbacks; coalesced joiners do not.
+ */
+async function fetchIpfsRawBytes(cid, onProgress) {
   const existing = _inflightRawDownloads.get(cid);
   if (existing) {
     return existing;
@@ -53,6 +59,26 @@ async function fetchIpfsRawBytes(cid) {
     if (!response.ok) {
       throw new Error(`IPFS gateway returned ${response.status} for ${cid}`);
     }
+    const total = Number(response.headers?.get("Content-Length")) || 0;
+    if (onProgress && total > 0 && response.body) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.byteLength;
+        onProgress(Math.min(1, received / total));
+      }
+      const bytes = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return bytes;
+    }
     return new Uint8Array(await response.arrayBuffer());
   })();
 
@@ -66,8 +92,8 @@ async function fetchIpfsRawBytes(cid) {
   return downloadPromise;
 }
 
-async function fetchIpfsBytes(cid) {
-  const bytes = await fetchIpfsRawBytes(cid);
+async function fetchIpfsBytes(cid, onProgress) {
+  const bytes = await fetchIpfsRawBytes(cid, onProgress);
   if (isGzipped(bytes)) {
     const decompressed = decompress(bytes);
     console.log(
@@ -78,8 +104,8 @@ async function fetchIpfsBytes(cid) {
   return bytes;
 }
 
-async function fetchIpfsPayload(cid, kind) {
-  const bytes = await fetchIpfsBytes(cid);
+async function fetchIpfsPayload(cid, kind, onProgress) {
+  const bytes = await fetchIpfsBytes(cid, onProgress);
 
   if (kind === "blob") {
     return new Blob([bytes]);
@@ -103,12 +129,12 @@ async function getBase64FromRemoteIPFS(cid) {
   return arrayBufferToBase64(bytes.buffer);
 }
 
-async function getBlobFromRemoteIPFS(cid) {
-  return await fetchIpfsPayload(cid, "blob");
+async function getBlobFromRemoteIPFS(cid, onProgress) {
+  return await fetchIpfsPayload(cid, "blob", onProgress);
 }
 
-async function getArrayBufferFromRemoteIPFS(cid) {
-  const bytes = await fetchIpfsBytes(cid);
+async function getArrayBufferFromRemoteIPFS(cid, onProgress) {
+  const bytes = await fetchIpfsBytes(cid, onProgress);
   return bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength

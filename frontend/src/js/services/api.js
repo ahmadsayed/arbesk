@@ -150,8 +150,10 @@ export async function createSession() {
   // verifies the EOA signature and keeps the smart account as the session address.
   const signerAddress = eoaAddress || walletAddress;
   let signature;
+  const _tSign = performance.now();
   try {
     signature = await web3.eth.personal.sign(message, signerAddress, "");
+    console.log(`[LOGIN-TIMING] siweSign: ${Math.round(performance.now() - _tSign)}ms`);
   } catch (err) {
     const cause = /** @type {any} */ (err);
     // Log the reason inline: wallets bury it in nested objects that render
@@ -178,6 +180,7 @@ export async function createSession() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  console.log(`[LOGIN-TIMING] sessionsPost: ${Math.round(performance.now() - _tSign)}ms (incl. sign)`);
 
   const data = await response.json().catch(() => ({}));
 
@@ -398,9 +401,12 @@ const GENERATION_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
  * @param {string} taskId
  * @param {AbortSignal} [signal] - aborts the wait (the upstream task may
  *   still finish; the result is discarded)
+ * @param {(update: {stage: string|null, progress: number}) => void} [onProgress]
+ *   - called on each queued/running poll with the provider-reported progress
+ *   (0..100) and, for chained animate tasks, the current stage label
  * @returns {Promise<{assetData: string, format: string, path: string}>}
  */
-async function pollGeneration(taskId, signal) {
+async function pollGeneration(taskId, signal, onProgress) {
   const start = Date.now();
 
   while (Date.now() - start < GENERATION_TIMEOUT_MS) {
@@ -438,6 +444,7 @@ async function pollGeneration(taskId, signal) {
         ? `${pollData.stage}… ${progress}%`
         : `Generating 3D asset on Tripo3D… ${progress}%`
     );
+    onProgress?.({ stage: pollData.stage ?? null, progress });
 
     await new Promise((resolve) => setTimeout(resolve, GENERATION_POLL_INTERVAL_MS));
   }
@@ -570,6 +577,7 @@ async function followupScaleCompensation(sourceCid, resultBytes) {
  * @param {Array<{imageData: string, imageMime: string, imageName?: string, view: string}>} [params.images] - multiview image-to-3D (2-4 views, canonical order); replaces imageData on the wire — imageName is used for the manifest only, never sent
  * @param {AbortSignal} [params.signal] - aborts polling (GENERATION_CANCELLED); the upstream task may still finish
  * @param {(taskId: string) => void} [params.onTaskId] - called with the backend task id once the provider task starts (used for cancel)
+ * @param {(update: {stage: string|null, progress: number}) => void} [params.onProgress] - provider-reported poll progress (0..100) plus stage label for chained animate tasks
  * @returns {Promise<{assetManifestCid: string, sourceAssetCid: string, format: string, path: string, tier?: number, taskId?: string, providerTaskId?: string}>}
  */
 export async function generateAsset({
@@ -599,6 +607,7 @@ export async function generateAsset({
   images,
   signal,
   onTaskId,
+  onProgress,
 }) {
   announceStatus("Authenticating…");
 
@@ -657,7 +666,7 @@ export async function generateAsset({
   if (data.taskId) {
     onTaskId?.(data.taskId);
     announceStatus("Generating 3D asset on Tripo3D…");
-    const final = await pollGeneration(data.taskId, signal);
+    const final = await pollGeneration(data.taskId, signal, onProgress);
     Object.assign(data, final);
   }
 

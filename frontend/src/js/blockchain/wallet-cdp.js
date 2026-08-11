@@ -97,6 +97,32 @@ export async function initCdpClient(projectId) {
 }
 
 /**
+ * Fire-and-forget CDP warmup: fetch backend config and initialize the SDK.
+ * Memoized so app-init can kick it off at page load (overlapping the ~800ms
+ * CDP token-refresh round trip with UI setup) and autoConnectWallet can await
+ * the same in-flight promise instead of re-running the chain serially.
+ * @returns {Promise<boolean>} true when the SDK ended up initialized
+ */
+let _warmupPromise = null;
+export function warmupCdpClient() {
+  if (!_warmupPromise) {
+    _warmupPromise = (async () => {
+      try {
+        const { getConfig } = await import("../services/api.js");
+        const config = await getConfig();
+        if (!config?.cdpProjectId) return false;
+        await initCdpClient(config.cdpProjectId);
+        return true;
+      } catch (err) {
+        warn("CDP", "warmup failed:", /** @type {Error} */ (err).message);
+        return false;
+      }
+    })();
+  }
+  return _warmupPromise;
+}
+
+/**
  * Wipe CDP/Coinbase browser state (localStorage keys, IndexedDB databases)
  * and sign out. Stale state from a previous session causes "User is already
  * authenticated" or "EVM account not found" errors on the next login.

@@ -480,6 +480,64 @@ export async function uploadLibraryFile(page, filePath, expectedAssetName) {
   });
 }
 
+/**
+ * Drag-drop a file from disk onto the Library view and wait until the asset
+ * card appears. Uses a synthetic DataTransfer built in page context — same
+ * upload pipeline as the Upload button.
+ *
+ * @param {Page} page
+ * @param {string} filePath
+ * @param {string} expectedAssetName
+ */
+export async function dropLibraryFile(page, filePath, expectedAssetName) {
+  const fs = await import("fs");
+  const path = await import("path");
+  const b64 = fs.readFileSync(filePath).toString("base64");
+  const fileName = path.basename(filePath);
+  await page.evaluate(
+    ({ b64: data, fileName: name, viewId, overlaySelector }) => {
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      const file = new File([bytes], name);
+      // @ts-expect-error — DataTransfer exists in the browser, where
+      // page.evaluate runs this callback
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      // @ts-expect-error — document exists in the browser, where
+      // page.evaluate runs this callback
+      const view = document.getElementById(viewId);
+      const fire = (/** @type {string} */ type) =>
+        view.dispatchEvent(
+          // @ts-expect-error — DragEvent exists in the browser, where
+          // page.evaluate runs this callback
+          new DragEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+          }),
+        );
+      fire("dragenter");
+      // @ts-expect-error — document exists in the browser, where
+      // page.evaluate runs this callback
+      const overlayActive = document
+        .querySelector(overlaySelector)
+        ?.classList.contains("active");
+      if (!overlayActive) {
+        throw new Error("library drop overlay did not activate on dragenter");
+      }
+      fire("drop");
+    },
+    {
+      b64,
+      fileName,
+      viewId: "libraryView",
+      overlaySelector: SELECTORS.libraryDropOverlay,
+    },
+  );
+  await expect(libraryAssetLocator(page, expectedAssetName).first()).toBeVisible({
+    timeout: 30000,
+  });
+}
+
 // ── Multi-wallet / editor collaboration helpers ──────────────────────────────
 
 /**

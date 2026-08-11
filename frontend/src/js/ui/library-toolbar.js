@@ -111,8 +111,16 @@ async function handleUploadFile(file) {
     btn.title = "Uploading…";
   }
 
+  const { startTaskProgress, setTaskProgress, finishTaskProgress, failTaskProgress } =
+    await import("./task-progress.js");
+  const PROGRESS_ROOT = "libraryProgress";
+  startTaskProgress(`Uploading ${file.name}…`, 0.02, PROGRESS_ROOT);
+
   try {
-    const { assetId } = await uploadFileToCollection(file, collectionTokenId);
+    const { assetId } = await uploadFileToCollection(file, collectionTokenId, {
+      onStage: (fraction, label) => setTaskProgress(fraction, label, PROGRESS_ROOT),
+    });
+    finishTaskProgress(`Uploaded ${file.name}.`, PROGRESS_ROOT);
     await refreshLibraryData();
     libraryState.set({ selectedIds: [`asset-${collectionTokenId}-${assetId}`] });
     announce(`Uploaded ${file.name}`);
@@ -122,6 +130,7 @@ async function handleUploadFile(file) {
       message: `"${file.name}" was added to the collection.`,
     });
   } catch (err) {
+    failTaskProgress(`Failed to upload ${file.name}.`, PROGRESS_ROOT);
     console.error("[LIBRARY-TOOLBAR] upload failed:", err);
     showToast({
       type: "error",
@@ -137,6 +146,61 @@ async function handleUploadFile(file) {
     const input = document.getElementById("libraryUploadInput");
     if (input) input.value = "";
   }
+}
+
+/**
+ * OS file drop onto the Library view. Dropping a .glb/.gltf/.3mf runs the
+ * exact upload-button flow (validate → IPFS → decompose → asset named after
+ * the file → add to the open collection). The overlay mirrors the viewport
+ * drop indicator; its label flips to the no-collection hint when the upload
+ * would be rejected, so the affordance is honest during the drag.
+ */
+function initLibraryDropZone() {
+  const view = document.getElementById("libraryView");
+  const overlay = document.getElementById("libraryDropOverlay");
+  const label = document.getElementById("libraryDropText");
+  if (!view || !overlay) return;
+
+  // Nested children each fire dragenter/dragleave — track depth so the
+  // overlay only hides when the pointer truly leaves the view.
+  let dragDepth = 0;
+  const isFileDrag = (e) => e.dataTransfer?.types?.includes("Files");
+
+  const syncLabel = () => {
+    if (!label) return;
+    label.textContent = libraryState.get().currentCollectionTokenId
+      ? "Drop to upload to this collection"
+      : "Open a collection to upload files";
+  };
+
+  view.addEventListener("dragenter", (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    syncLabel();
+    overlay.classList.add("active");
+  });
+  view.addEventListener("dragover", (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  view.addEventListener("dragleave", (e) => {
+    if (!isFileDrag(e)) return;
+    dragDepth--;
+    if (dragDepth <= 0) {
+      dragDepth = 0;
+      overlay.classList.remove("active");
+    }
+  });
+  view.addEventListener("drop", (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    overlay.classList.remove("active");
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleUploadFile(file);
+  });
 }
 
 export function initLibraryToolbar() {
@@ -191,6 +255,8 @@ export function initLibraryToolbar() {
       const file = e.target.files?.[0];
       if (file) handleUploadFile(file);
     });
+
+  initLibraryDropZone();
 
   on(EVENTS.LIBRARY_STATE_CHANGED, renderToolbar);
   renderToolbar();

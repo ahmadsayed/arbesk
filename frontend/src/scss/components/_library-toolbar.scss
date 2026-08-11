@@ -17,6 +17,27 @@
   place-items: center;
 }
 
+// OS file drop overlay content (host: #libraryDropOverlay, which reuses
+// .viewport-drop-indicator). The label sits on a chip so it stays readable
+// over grid cards and the gate empty state.
+.library-drop-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-bg);
+  font-weight: 600;
+
+  p {
+    margin: 0;
+    padding: var(--size-1) var(--size-3);
+    background-color: var(--view-bg);
+    border-radius: var(--radius-round);
+  }
+}
+
 .library-toolbar {
   display: flex;
   align-items: center;

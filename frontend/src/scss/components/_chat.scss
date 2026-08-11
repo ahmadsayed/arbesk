@@ -114,6 +114,44 @@
   font-size: 0.85em;
 }
 
+// Text + optional determinate progress bar (provider-reported generation
+// progress). The bar replaces the spinner once real progress arrives —
+// GNOME: one indicator, determinate whenever the total is known.
+.chat-working-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-working-track {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-round);
+  background-color: var(--border-color);
+  overflow: hidden;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.chat-working-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background-color: var(--accent-bg);
+  border-radius: var(--radius-round);
+  transition: width 300ms var(--ease-out-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-working-fill {
+    transition: none;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .chat-working-spinner {
     animation: spin 0.8s linear infinite;

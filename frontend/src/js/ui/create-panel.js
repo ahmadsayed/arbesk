@@ -826,7 +826,7 @@ async function confirmStopTask(controller, getTaskId) {
  * A working message with a Stop button, plus the AbortSignal / onTaskId
  * wiring generateAsset needs to make the task stoppable.
  * @param {string} workingText
- * @returns {{working: import("./chat-messages.js").WorkingMessageHandle | null, signal: AbortSignal, onTaskId: (id: string) => void}}
+ * @returns {{working: import("./chat-messages.js").WorkingMessageHandle | null, signal: AbortSignal, onTaskId: (id: string) => void, onProgress: (update: {stage: string|null, progress: number}) => void}}
  */
 function addStoppableWorkingMessage(workingText) {
   const controller = new AbortController();
@@ -839,6 +839,11 @@ function addStoppableWorkingMessage(workingText) {
     signal: controller.signal,
     onTaskId: (id) => {
       taskId = id;
+    },
+    onProgress: ({ stage, progress }) => {
+      // Stage labels ("Rigging skeleton", …) reflect the current chain phase
+      // more accurately than the initial text; fall back to it otherwise.
+      working?.setProgress(progress / 100, stage || undefined);
     },
   };
 }
@@ -1263,7 +1268,7 @@ async function retryRig(generationId, rigModel) {
   }
   const prompt = `Auto-rig (${rigModel === "v1.0-20240301" ? "v1.0 Humanoid" : "v2.5 Generic"})`;
   addChatMessage("user", prompt);
-  const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
+  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
@@ -1283,6 +1288,7 @@ async function retryRig(generationId, rigModel) {
       tier: getTier(),
       signal,
       onTaskId,
+      onProgress,
     });
     presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix, rigModel });
     dismissCreatePulse();
@@ -1334,7 +1340,7 @@ async function retryAnimate(generationId, rigModel) {
   const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels} (${rigModel === "v1.0-20240301" ? "v1.0" : "v2.5"})`;
   addChatMessage("user", prompt);
-  const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
+  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
@@ -1356,6 +1362,7 @@ async function retryAnimate(generationId, rigModel) {
       tier: getTier(),
       signal,
       onTaskId,
+      onProgress,
     });
     presentGenerationResult(result, { prompt, provider: "tripo3d", task: "animate", prevAssetManifestCid, transformMatrix, rigModel });
     dismissCreatePulse();
@@ -1437,7 +1444,7 @@ async function onRetexture(generationId) {
     return;
   }
   addChatMessage("user", `Retexture: ${texturePrompt}`);
-  const { working, signal, onTaskId } = addStoppableWorkingMessage("Retexturing — this takes a minute or two…");
+  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Retexturing — this takes a minute or two…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_retex_${Date.now()}`;
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
@@ -1456,6 +1463,7 @@ async function onRetexture(generationId) {
       tier: getTier(),
       signal,
       onTaskId,
+      onProgress,
     });
     presentGenerationResult(result, { prompt: `Retexture: ${texturePrompt}`, provider: "tripo3d", task: "texture", prevAssetManifestCid, transformMatrix });
     dismissCreatePulse();
@@ -1503,7 +1511,7 @@ async function onRetopo(generationId) {
 
   const prompt = "Retopo for animation";
   addChatMessage("user", prompt);
-  const { working, signal, onTaskId } = addStoppableWorkingMessage(
+  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage(
     "Rebuilding topology — this takes a minute or two…",
   );
 
@@ -1529,6 +1537,7 @@ async function onRetopo(generationId) {
       tier: getTier(),
       signal,
       onTaskId,
+      onProgress,
     });
 
     presentGenerationResult(result, {
@@ -1590,7 +1599,7 @@ async function onAutoRig(generationId) {
   if (rigModel === null) return; // cancelled
   const prompt = "Auto-rig";
   addChatMessage("user", prompt);
-  const { working, signal, onTaskId } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
+  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
   const assetName = getAssetName();
   const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
@@ -1610,6 +1619,7 @@ async function onAutoRig(generationId) {
       tier: getTier(),
       signal,
       onTaskId,
+      onProgress,
     });
     const rigResultId = presentGenerationResult(result, { prompt, provider: "tripo3d", task: "rig", prevAssetManifestCid, transformMatrix, rigModel: rigModel || undefined });
     dismissCreatePulse();
@@ -1775,7 +1785,7 @@ async function onAnimate(generationId) {
   const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels}`;
   addChatMessage("user", prompt);
-  const { working, signal, onTaskId } = addStoppableWorkingMessage(
+  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage(
     "Rigging and animating — this chains three Tripo tasks and takes a few minutes…",
   );
 
@@ -1804,6 +1814,7 @@ async function onAnimate(generationId) {
       tier: getTier(),
       signal,
       onTaskId,
+      onProgress,
     });
 
     const animResultId = presentGenerationResult(result, {
@@ -2000,7 +2011,7 @@ async function onGenerate() {
       ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
       ...(imagePayload && imagePayload),
       ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
-      ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId }),
+      ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId, onProgress: stoppable.onProgress }),
     });
 
     // Defer the Studio viewport load: register the result, show an asset

@@ -31,7 +31,7 @@ import { clearScene, disposeNodeContent } from "./cleanup.js";
 import { createAnchorNode } from "./scene-graph.js";
 import { identityMatrix } from "../utils/collections.js";
 
-async function loadAsset(src, parentNode, nodeId) {
+async function loadAsset(src, parentNode, nodeId, onProgress = null) {
   const cid = extractCid(src);
   const handler = resolveFormatHandler(src);
   console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${handler.format}`);
@@ -41,6 +41,7 @@ async function loadAsset(src, parentNode, nodeId) {
       scene: state.scene,
       cid,
       importFromBlob,
+      onProgress,
     });
     attachMetadata(
       result.meshes,
@@ -277,7 +278,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   }
 }
 
-async function loadNode(node, parentNode, depth, resolvingCids) {
+async function loadNode(node, parentNode, depth, resolvingCids, onProgress = null) {
   console.log(
     `[SCENE] loadNode node_id=${node.node_id} source=${JSON.stringify(
       node.source
@@ -304,7 +305,7 @@ async function loadNode(node, parentNode, depth, resolvingCids) {
   }
 
   if (node.source) {
-    meshes = await loadAsset(node.source, anchor, node.node_id);
+    meshes = await loadAsset(node.source, anchor, node.node_id, onProgress);
   } else {
     console.warn(
       `[SCENE] node ${node.node_id} has no source - no geometry to load`
@@ -324,7 +325,8 @@ async function loadAssetManifest(
   manifestCid,
   parentAnchor = null,
   depth = 0,
-  resolvingCids = new Set()
+  resolvingCids = new Set(),
+  reporter = null
 ) {
   console.log(`[SCENE] loadAssetManifest cid=${manifestCid} depth=${depth}`);
 
@@ -354,7 +356,8 @@ async function loadAssetManifest(
         firstAsset.value,
         parentAnchor,
         depth,
-        resolvingCids
+        resolvingCids,
+        reporter
       );
     }
     return manifest;
@@ -376,13 +379,27 @@ async function loadAssetManifest(
     state.rootSceneAnchor = rootAnchor;
   }
 
+  const manifestNodes = getManifestNodes(manifest);
+  if (reporter && depth === 0) reporter.setNodeCount(manifestNodes.length);
+
   await Promise.all(
-    getManifestNodes(manifest).map((node) =>
+    manifestNodes.map((node) =>
       // Each sibling branch gets its own copy of the in-progress resolution
       // set: cycle detection only cares about the root→node path, and a
       // shared set would falsely flag two siblings referencing the same
       // asset (duplicate live-ref instances) as circular.
-      loadNode(node, rootAnchor, depth, new Set(resolvingCids))
+      loadNode(
+        node,
+        rootAnchor,
+        depth,
+        new Set(resolvingCids),
+        reporter && depth === 0
+          ? (f) => reporter.setNodeFraction(node.node_id, f)
+          : null
+      ).then((result) => {
+        reporter?.setNodeFraction(node.node_id, 1);
+        return result;
+      })
     )
   );
 

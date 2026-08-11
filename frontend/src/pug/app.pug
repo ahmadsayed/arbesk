@@ -27,7 +27,7 @@ html(lang="en")
           "fflate": "https://esm.sh/fflate@0.8.2",
           "fast-xml-parser": "https://esm.sh/fast-xml-parser@4.5.3",
           "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
-          "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113"
+          "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113?bundle"
         }
       }
   body
@@ -461,6 +461,20 @@ html(lang="en")
                     line(x1="3" y1="18" x2="3.01" y2="18")
 
             #libraryLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
+
+          //- Upload progress (drop / Upload button) — same GNOME infobar
+          //- component as the viewport's #taskProgress, rooted at this view.
+          #libraryProgress.task-progress(hidden aria-hidden="true")
+            span#libraryProgressLabel.task-progress-label
+            .task-progress-track
+              #libraryProgressFill.task-progress-fill
+
+          //- OS file drop target — mirrors the viewport drop indicator; the
+          //- label flips between upload affordance and the no-collection hint.
+          #libraryDropOverlay.viewport-drop-indicator
+            .library-drop-content
+              .asset-drop-icon ⊕
+              p#libraryDropText Drop to upload to this collection
         input#libraryUploadInput(type="file" accept=".glb,.gltf,.3mf" hidden)
       //- Wallet Popover (shared)
       #walletPopover.wallet-popover.hidden(aria-label="Wallet menu")

@@ -10,6 +10,7 @@
  * @property {any} scene - Babylon scene instance
  * @property {string} cid - CID being loaded
  * @property {(blob: Blob, extension: string) => Promise<{meshes: any[], transformNodes?: any[], animationGroups?: any[]}>} importFromBlob
+ * @property {(fraction: number) => void} [onProgress] - optional byte-level download progress (0..1) for the source fetch
  */
 
 /**

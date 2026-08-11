@@ -51,7 +51,7 @@ export const threeMfHandler = {
     console.log(`[FORMATS-3mf] fetching 3MF | cid=${cid}`);
     // Gzip-sniffing reader: uncompressed today, but tolerant if compression
     // is ever enabled on source uploads (glTF/GLB handlers use it too).
-    const raw = new Uint8Array(await getArrayBufferFromRemoteIPFS(cid));
+    const raw = new Uint8Array(await getArrayBufferFromRemoteIPFS(cid, ctx.onProgress));
 
     let packageBytes = raw;
     if (!isZipBytes(raw)) {

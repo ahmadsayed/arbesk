@@ -227,9 +227,11 @@ export async function stageUploadSource(file, { assetName, assetId } = {}) {
  *
  * @param {File} file
  * @param {string|number} collectionTokenId
+ * @param {{ onStage?: (fraction: number, label: string) => void }} [options] -
+ *   stepped progress updates for the UI (no fake animation: real stages only)
  * @returns {Promise<{assetId: string, assetManifestCid: string, newCollectionCid: string}>}
  */
-export async function uploadFileToCollection(file, collectionTokenId) {
+export async function uploadFileToCollection(file, collectionTokenId, { onStage } = {}) {
   if (!collectionTokenId) throw new Error("Open a collection first to upload into it");
 
   requireWallet();
@@ -239,8 +241,10 @@ export async function uploadFileToCollection(file, collectionTokenId) {
   const assetId = `asset_${Date.now()}`;
   const assetName = baseNameWithoutExtension(file.name);
 
+  onStage?.(0.1, `Uploading ${file.name} to IPFS…`);
   const source = await stageUploadSource(file, { assetName, assetId });
 
+  onStage?.(0.55, "Writing asset manifest…");
   const assetManifest = {
     type: "asset",
     name: assetName,
@@ -270,6 +274,7 @@ export async function uploadFileToCollection(file, collectionTokenId) {
   });
   log(`[LIBRARY-OPS] uploaded asset manifest → ${assetManifestCid}`);
 
+  onStage?.(0.8, "Updating collection on-chain…");
   const newCollectionCid = await updateCollectionManifest(
     collectionTokenId,
     (col) => {

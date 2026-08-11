@@ -126,6 +126,7 @@ export const SELECTORS = {
   libraryCreateCollectionBtn: "#libraryCreateCollectionBtn",
   libraryUploadBtn: "#libraryUploadBtn",
   libraryUploadInput: "#libraryUploadInput",
+  libraryDropOverlay: "#libraryDropOverlay",
   libraryItemCount: "#libraryItemCount",
   libraryLiveRegion: "#libraryLiveRegion",
   contextMenu: ".context-menu",

@@ -41,6 +41,48 @@ import {
   getActiveCollectionTokenId,
 } from "../domain/collection.js";
 import { getOwnedTokens, getSharedTokens } from "../services/api.js";
+import {
+  startTaskProgress,
+  setTaskProgress,
+  finishTaskProgress,
+  failTaskProgress,
+} from "./task-progress.js";
+
+/**
+ * Build a progress reporter for a Studio asset load. The manifest fetch
+ * covers the first 5%; the rest is split evenly across the manifest's scene
+ * nodes, with byte-level download progress filling each node's slice
+ * (wired via the optional onProgress ctx of the format handlers).
+ * @param {string} label - stage label shown next to the bar
+ */
+function createAssetLoadReporter(label) {
+  const MANIFEST_SHARE = 0.05;
+  let total = 0;
+  const fractions = new Map();
+  const render = () => {
+    if (total <= 0) return;
+    let sum = 0;
+    for (const f of fractions.values()) sum += f;
+    setTaskProgress(
+      Math.min(0.99, MANIFEST_SHARE + (1 - MANIFEST_SHARE) * (sum / total)),
+      label
+    );
+  };
+  return {
+    /** @param {number} n */
+    setNodeCount(n) {
+      total = n;
+    },
+    /**
+     * @param {string} nodeId
+     * @param {number} fraction - 0..1
+     */
+    setNodeFraction(nodeId, fraction) {
+      fractions.set(nodeId, Math.min(1, Math.max(0, fraction)));
+      render();
+    },
+  };
+}
 
 let assetLibraryBody = null;
 let libraryRenderInFlight = false;
@@ -306,6 +348,9 @@ async function openAssetEntry(entry) {
     return;
   }
 
+  const assetLabel = entry.name || `asset #${entry.tokenId}`;
+  const loadLabel = `Loading ${assetLabel}…`;
+  startTaskProgress(loadLabel, 0.02);
   try {
     clearScene();
 
@@ -340,7 +385,14 @@ async function openAssetEntry(entry) {
 
     dismissCreatePulse();
     updateUrlAsset(entry.tokenId);
-    await loadAssetManifest(entry.manifestCid);
+    await loadAssetManifest(
+      entry.manifestCid,
+      null,
+      0,
+      new Set(),
+      createAssetLoadReporter(loadLabel)
+    );
+    finishTaskProgress(`Loaded ${assetLabel}.`);
 
     const { refreshTeamPanel } = await import("./collaborators.js");
     refreshTeamPanel();
@@ -349,6 +401,7 @@ async function openAssetEntry(entry) {
       switchView("library");
     }
   } catch (err) {
+    failTaskProgress(`Failed to load ${assetLabel}.`);
     console.error("Failed to open asset entry", entry, err);
     alert(`Failed to open asset #${entry.tokenId}`);
   }
@@ -376,6 +429,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
 
   console.log("[LIBRARY] openAssetByTokenId", tokenId, "assetId", assetId);
 
+  let progressStarted = false;
   try {
     const cid = await contract.methods.tokenURI(tokenId).call();
     if (!cid) {
@@ -424,7 +478,17 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
 
       if (targetAssetCid) {
         await ensureEngineReady();
-        await loadAssetManifest(targetAssetCid);
+        const loadLabel = `Loading asset #${tokenId}…`;
+        startTaskProgress(loadLabel, 0.02);
+        progressStarted = true;
+        await loadAssetManifest(
+          targetAssetCid,
+          null,
+          0,
+          new Set(),
+          createAssetLoadReporter(loadLabel)
+        );
+        finishTaskProgress(`Loaded asset #${tokenId}.`);
       }
 
       const { refreshTeamPanel } = await import("./collaborators.js");
@@ -446,7 +510,11 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     dismissCreatePulse();
     updateUrlAsset(tokenId, assetId);
     await ensureEngineReady();
-    await loadAssetManifest(cid);
+    const loadLabel = `Loading asset #${tokenId}…`;
+    startTaskProgress(loadLabel, 0.02);
+    progressStarted = true;
+    await loadAssetManifest(cid, null, 0, new Set(), createAssetLoadReporter(loadLabel));
+    finishTaskProgress(`Loaded asset #${tokenId}.`);
 
     const { refreshTeamPanel } = await import("./collaborators.js");
     refreshTeamPanel();
@@ -455,6 +523,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       switchView("library");
     }
   } catch (err) {
+    if (progressStarted) failTaskProgress(`Failed to load asset #${tokenId}.`);
     console.warn(`[LIBRARY] Failed to open asset #${tokenId}; keeping studio empty:`, err.message);
     clearScene();
     clearUrlAssetParams();

@@ -120,11 +120,18 @@ function initWallet() {
  * Initialize contract instance if ABI and address are available.
  * Uses network-aware configuration: picks the contract address
  * based on the wallet's current chainId.
+ *
+ * @param {number|null} knownChainId - chainId already resolved by the caller,
+ *   avoiding a redundant eth_chainId round trip.
  */
-async function _initContract() {
+async function _initContract(knownChainId = null) {
   try {
-    const chainId = Number(await web3.eth.getChainId());
+    const chainId = knownChainId ?? Number(await web3.eth.getChainId());
     const network = getNetworkConfig(chainId);
+
+    // Kick off the ABI fetch immediately — it is independent of the address
+    // lookup and the bytecode check below.
+    const abiPromise = getContractArtifact("ArbeskAssetFree");
 
     let addr = getNetworkContractAddress(chainId);
     if (!addr) {
@@ -140,14 +147,15 @@ async function _initContract() {
           `contract=${addr} usdc=${network.usdcToken}`
       );
     }
-
-    const abiData = await getContractArtifact("ArbeskAssetFree");
     if (!addr) return;
-    if (!abiData?.abi) return;
 
-    // Verify contract actually exists at this address on the current chain
-    const code = await web3.eth.getCode(addr);
-    if (!code || code === "0x" || code === "0x0") {
+    // CDP smart wallets are pinned to Base Sepolia and the address comes from
+    // network config (a deploy-time constant) — skip the bytecode check, which
+    // costs a full public-RPC round trip. EOA/WalletConnect users can be on any
+    // network, so the wrong-network guard still applies to them.
+    const skipCodeCheck = activeConnectionSource === "cdp";
+    const code = skipCodeCheck ? null : await web3.eth.getCode(addr);
+    if (!skipCodeCheck && (!code || code === "0x" || code === "0x0")) {
       warn(
         `[CONTRACT] No bytecode at ${addr}. ` +
           `Wrong network? Current chain: ${chainId}`
@@ -157,6 +165,9 @@ async function _initContract() {
       walletState.set({ contract: null, contractAddress: null });
       return;
     }
+
+    const abiData = await abiPromise;
+    if (!abiData?.abi) return;
 
     contractAddress = addr;
     contract = new web3.eth.Contract(abiData.abi, contractAddress);
@@ -229,11 +240,18 @@ async function autoConnectWallet() {
     if (lastWallet === "cdp") {
       // Try CDP silent restore
       try {
-        const config = await (await import("../services/api.js")).getConfig();
-        if (config?.cdpProjectId) {
-          const { initCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.js");
-          await initCdpClient(config.cdpProjectId);
+        const _t0 = performance.now();
+        const _mark = (label) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
+        const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.js");
+        _mark("sdkModuleImport");
+        // warmupCdpClient was kicked off at page load (app-init.js) — this
+        // awaits the shared in-flight promise, so the config fetch + SDK
+        // initialize overlap with UI setup instead of serializing here.
+        const warmed = await warmupCdpClient();
+        _mark("initCdpClient (warmup)");
+        if (warmed) {
           const cdpResult = await autoConnectCdpWallet();
+          _mark("autoConnectCdpWallet");
           if (cdpResult) {
             web3Provider = cdpResult.provider;
             web3 = newWeb3(cdpResult.provider);
@@ -241,6 +259,7 @@ async function autoConnectWallet() {
             activeConnectionSource = "cdp";
             const email = getCdpEmail() || cdpResult.email || null;
             await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
+            _mark("finishWalletSetup (total restore)");
             return;
           }
         }
@@ -330,6 +349,8 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
   let chainId = Number(await web3.eth.getChainId());
   walletState.set({ chainId });
   log("Connected wallet:", address, "chainId:", chainId);
+  const _tSetup = performance.now();
+  const _markSetup = (label) => console.log(`[LOGIN-TIMING] setup:${label}: ${Math.round(performance.now() - _tSetup)}ms`);
 
   // Prompt network switch if not on a supported chain.
   // CDP smart wallets are pinned to Base Sepolia, so this only applies to EOA/WC.
@@ -361,16 +382,19 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
     }
   }
 
-  await _initContract();
+  await _initContract(chainId);
+  _markSetup("initContract");
   // CDP smart accounts are gasless (sponsored UserOps) — skip the low-ETH warning.
   if (activeConnectionSource !== "cdp") {
     await _checkBalance();
+    _markSetup("checkBalance");
   }
 
   emit(EVENTS.WALLET_CONNECTED, {
     address,
     chainId,
   });
+  _markSetup("walletConnectedEmitted");
 
   // Setup listeners (only once per provider)
   _attachProviderListeners();
@@ -461,9 +485,11 @@ function _attachProviderListeners() {
  * Uses dynamic import to avoid circular dependency with api.js
  */
 async function authenticateUser() {
+  const _tAuth = performance.now();
   try {
     const { getOrCreateSession } = await import("../services/api.js");
     const session = await getOrCreateSession();
+    console.log(`[LOGIN-TIMING] sessionAuth: ${Math.round(performance.now() - _tAuth)}ms`);
     emit(EVENTS.USER_AUTHENTICATED, {
       address: walletState.get().walletAddress,
       session,

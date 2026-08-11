@@ -42,7 +42,7 @@ export const glbHandler = {
   async load(src, ctx) {
     const cid = ctx.cid || src.cid;
     console.log(`[FORMATS-glb] fetching GLB blob | cid=${cid}`);
-    const blob = await getBlobFromRemoteIPFS(cid);
+    const blob = await getBlobFromRemoteIPFS(cid, ctx.onProgress);
     console.log(`[FORMATS-glb] fetched | bytes=${blob.size}`);
     return ctx.importFromBlob(blob, ".glb");
   },

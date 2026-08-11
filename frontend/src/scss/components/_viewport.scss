@@ -35,9 +35,9 @@
   }
 }
 
-// Task progress (save/publish) — GNOME infobar-style banner pinned to the
-// top edge of the viewport: visible without blocking interaction, with a
-// stage label telling the user what is happening right now.
+// Task progress (save/publish, asset loads) — GNOME infobar-style banner
+// pinned to the top edge of the viewport: visible without blocking
+// interaction, with a stage label telling the user what is happening now.
 .task-progress {
   position: absolute;
   top: 0;

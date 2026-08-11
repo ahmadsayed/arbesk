@@ -15,6 +15,11 @@
   overflow: hidden;
 }
 
+// Anchor for #libraryDropOverlay (absolute, inset) during OS file drags.
+#libraryView {
+  position: relative;
+}
+
 // Pre-router paint: js/app/initial-view.js (blocking, in <head>) marks
 // <html data-initial-view> from the URL so a cold /library entry never
 // flashes the Studio while deferred scripts and modules load. The router
