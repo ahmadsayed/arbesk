@@ -542,6 +542,11 @@ export function initEngine() {
         e.preventDefault();
         snapView(VIEW_TOP);
         break;
+      case "g":
+        e.preventDefault();
+        // Module is already cached once the toolbar exists — no load cost.
+        import("../ui/transform-gizmo.js").then((m) => m.toggleGrid());
+        break;
     }
   });
 }

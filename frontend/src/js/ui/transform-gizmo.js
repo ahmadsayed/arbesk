@@ -20,6 +20,28 @@ import { pushUndoEntry } from "../engine/undo-stack.js";
 
 const TOOLBAR_ID = "transformToolbar";
 
+/**
+ * Show/hide the viewport ground grid and in-scene axis lines. Both are
+ * viewport chrome owned by scene-graph.js (metadata.isViewportChrome) —
+ * this only flips their enabled flags and syncs the toolbar button state.
+ * @returns {boolean} the new visibility
+ */
+export function toggleGrid() {
+  const grid = state.scene?.getMeshByName("groundGrid");
+  if (!grid) return false;
+  const visible = !grid.isEnabled();
+  grid.setEnabled(visible);
+  for (const name of ["axisX", "axisZ"]) {
+    state.scene?.getMeshByName(name)?.setEnabled(visible);
+  }
+  const btn = document.getElementById("gridToggleBtn");
+  if (btn) {
+    btn.classList.toggle("active", visible);
+    btn.setAttribute("aria-pressed", String(visible));
+  }
+  return visible;
+}
+
 const ICONS = {
   translate:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l4-4 4 4"/><path d="M9 5v14"/><path d="M19 15l-4 4-4-4"/><path d="M15 19V5"/></svg>',
@@ -33,6 +55,8 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>',
   redo:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg>',
+  grid:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>',
 };
 
 /**
@@ -308,12 +332,6 @@ function createToolbar() {
   toolbar.setAttribute("aria-label", "Transform tools");
 
   toolbar.innerHTML = `
-    <button id="undoBtn" class="btn btn-flat btn-sm" data-action="undo" aria-label="Undo" title="Nothing to undo" disabled>
-      ${ICONS.undo}
-    </button>
-    <button id="redoBtn" class="btn btn-flat btn-sm" data-action="redo" aria-label="Redo" title="Nothing to redo" disabled>
-      ${ICONS.redo}
-    </button>
     <button class="btn btn-flat btn-sm transform-tool" data-mode="translate" aria-label="Move (T)" title="Move (T)">
       ${ICONS.translate}
     </button>
@@ -328,12 +346,32 @@ function createToolbar() {
     </button>
   `;
 
-  viewport.appendChild(toolbar);
+  // Edit/view actions — vertical strip on the right edge of the viewport.
+  const side = document.createElement("div");
+  side.id = "transformToolbarSide";
+  side.className = "transform-toolbar transform-toolbar-side";
+  side.setAttribute("role", "toolbar");
+  side.setAttribute("aria-label", "Edit and view actions");
+  side.innerHTML = `
+    <button id="undoBtn" class="btn btn-flat btn-sm" data-action="undo" aria-label="Undo" title="Nothing to undo" disabled>
+      ${ICONS.undo}
+    </button>
+    <button id="redoBtn" class="btn btn-flat btn-sm" data-action="redo" aria-label="Redo" title="Nothing to redo" disabled>
+      ${ICONS.redo}
+    </button>
+    <button id="gridToggleBtn" class="btn btn-flat btn-sm active" data-action="toggleGrid" aria-label="Toggle grid and axes (G)" title="Toggle grid and axes (G)" aria-pressed="true">
+      ${ICONS.grid}
+    </button>
+  `;
 
-  toolbar.addEventListener("click", (e) => {
+  viewport.appendChild(toolbar);
+  viewport.appendChild(side);
+
+  const onToolbarClick = (e) => {
     const actionBtn = e.target.closest("[data-action]");
     if (actionBtn) {
       if (actionBtn.dataset.action === "undo") undo();
+      else if (actionBtn.dataset.action === "toggleGrid") toggleGrid();
       else redo();
       return;
     }
@@ -342,7 +380,9 @@ function createToolbar() {
     const mode = btn.dataset.mode;
     if (!mode) return;
     setMode(mode);
-  });
+  };
+  toolbar.addEventListener("click", onToolbarClick);
+  side.addEventListener("click", onToolbarClick);
 }
 
 function wireEvents(gizmoManager) {

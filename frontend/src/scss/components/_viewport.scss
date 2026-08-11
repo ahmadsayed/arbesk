@@ -185,6 +185,17 @@
   }
 }
 
+// Edit/view actions (undo, redo, grid & axes toggle) — vertical strip pinned
+// to the right edge of the viewport, vertically centered.
+.transform-toolbar-side {
+  left: auto;
+  bottom: auto;
+  right: var(--size-3);
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+}
+
 // ── Viewport orientation gizmo ─────────────────────────────────────
 // Blender-style 2D X/Y/Z overlay in the top-right corner. Sits above
 // the 3D canvas but never intercepts pointer events.
