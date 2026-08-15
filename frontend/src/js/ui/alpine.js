@@ -29,12 +29,15 @@ export function registerAlpineComponent(name, factory) {
   Alpine.data(name, factory);
   if (_startScheduled) return;
   _startScheduled = true;
-  if (document.readyState === "loading") {
-    // Deferred module scripts evaluate before DOMContentLoaded, so every
-    // registerAlpineComponent() call lands before start() walks the DOM.
-    document.addEventListener("DOMContentLoaded", () => Alpine.start(), { once: true });
+  // NOTE: document.readyState is already "interactive" while deferred module
+  // scripts are still evaluating — "loading" ends when the parser finishes,
+  // NOT when module evaluation finishes. Only DOMContentLoaded is guaranteed
+  // to fire after every deferred module has run, so wait for it unless the
+  // document is fully complete (tests, late dynamic imports).
+  if (document.readyState === "complete") {
+    queueMicrotask(() => Alpine.start());
   } else {
-    Alpine.start();
+    document.addEventListener("DOMContentLoaded", () => Alpine.start(), { once: true });
   }
 }
 
