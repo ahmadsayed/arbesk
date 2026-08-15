@@ -1,18 +1,114 @@
 /**
- * Shared header wallet button state updater.
+ * Header wallet button — Alpine.js component.
  *
- * Keeps studio-init.js and library-init.js consistent for:
+ * Renders the headerbar wallet controls from the reactive
+ * `Alpine.store("headerWallet")`:
  *   - disconnected: show #connectWalletBtn, hide #disconnectWalletBtn
- *   - connected via CDP email: simple "Account" label, hide network selector
+ *   - connected via CDP email: email/"Account" label, hide network selector
  *   - connected via crypto wallet: truncated address + optional Sign In dot
+ *
+ * The DOM lives in app.pug (.headerbar-actions, `x-data="headerWallet"`).
+ * The store syncs itself from walletState + auth bus events, and the legacy
+ * exported updaters remain as thin store writers so existing callers
+ * (app-init.js) keep working unchanged.
  */
 
 import { truncateAddress } from "../utils/format.js";
 import { getCachedSession } from "../services/api.js";
 import { walletState } from "../state/wallet-state.js";
+import { on, EVENTS } from "../events/bus.js";
+import { Alpine, registerAlpineComponent } from "./alpine.js";
 
 /**
- * Update the header wallet button and network selector for the current wallet state.
+ * @typedef {object} HeaderWalletState
+ * @property {string} address - full wallet address, "" when disconnected
+ * @property {"cdp"|"walletconnect"|"injected"|null} walletSource
+ * @property {string|null} email
+ * @property {boolean} isAuthenticated
+ */
+
+/** @type {HeaderWalletState|null} reactive Alpine.store proxy */
+let _state = null;
+
+/**
+ * Get (or lazily create) the reactive header-wallet store.
+ * @returns {HeaderWalletState}
+ */
+function hwState() {
+  if (!_state) {
+    // Alpine.store(name, value) is a setter (returns undefined); read it back.
+    if (!Alpine.store("headerWallet")) {
+      Alpine.store("headerWallet", {
+        address: "",
+        walletSource: null,
+        email: null,
+        isAuthenticated: false,
+      });
+    }
+    _state = /** @type {HeaderWalletState} */ (Alpine.store("headerWallet"));
+  }
+  return /** @type {HeaderWalletState} */ (_state);
+}
+
+// ─── Component factory (template-facing) ─────────────────────────────
+
+/**
+ * Alpine data factory for the header wallet controls (`x-data="headerWallet"`).
+ * @returns {object}
+ */
+export function headerWallet() {
+  return {
+    get connected() {
+      return !!hwState().address;
+    },
+
+    get isCdp() {
+      return hwState().walletSource === "cdp";
+    },
+
+    get label() {
+      const s = hwState();
+      if (!s.address) return "Disconnect";
+      if (s.walletSource === "cdp") {
+        // Web2-friendly: show email (truncated), no Sign In dot
+        const email = s.email;
+        return email && email.length > 24
+          ? `${email.slice(0, 21)}…`
+          : email || "Account";
+      }
+      const truncated = truncateAddress(s.address);
+      return s.isAuthenticated ? truncated : `${truncated} • Sign In`;
+    },
+
+    get showAuthRequired() {
+      const s = hwState();
+      return !!s.address && s.walletSource !== "cdp" && !s.isAuthenticated;
+    },
+
+    /** Alpine init hook: follow wallet state and auth bus events. */
+    init() {
+      on(EVENTS.WALLET_STATE_CHANGED, (/** @type {any} */ s) => {
+        const st = hwState();
+        st.address = s.walletAddress || "";
+        st.walletSource = s.walletSource || null;
+        st.email = s.email || null;
+        st.isAuthenticated = isWalletAuthenticated(st.address);
+      });
+      on(EVENTS.USER_AUTHENTICATED, () => {
+        hwState().isAuthenticated = true;
+      });
+      on(EVENTS.USER_AUTH_REQUIRED, () => {
+        hwState().isAuthenticated = false;
+      });
+    },
+  };
+}
+
+// ─── Legacy imperative API (now thin store writers) ──────────────────
+
+/**
+ * Update the header wallet button and network selector.
+ * Writes to the reactive store; Alpine bindings update the DOM.
  *
  * @param {string|null} address
  * @param {boolean} isAuthenticated
@@ -20,50 +116,11 @@ import { walletState } from "../state/wallet-state.js";
  * @param {string|null} email
  */
 export function updateHeaderWalletButton(address, isAuthenticated, walletSource, email = null) {
-  const connectBtn = document.getElementById("connectWalletBtn");
-  const disconnectBtn = document.getElementById("disconnectWalletBtn");
-  const networkSelect = document.getElementById("headerbarNetworkSelect");
-
-  if (!connectBtn || !disconnectBtn) return;
-
-  if (!address) {
-    connectBtn.classList.remove("hidden");
-    connectBtn.classList.add("disconnected");
-    disconnectBtn.classList.add("hidden");
-    disconnectBtn.classList.remove("auth-required");
-    if (networkSelect) {
-      networkSelect.classList.remove("connected");
-      networkSelect.classList.remove("hidden");
-    }
-
-    const text = disconnectBtn.querySelector("span");
-    if (text) text.textContent = "Disconnect";
-    return;
-  }
-
-  connectBtn.classList.add("hidden");
-  connectBtn.classList.remove("disconnected");
-  disconnectBtn.classList.remove("hidden");
-
-  const text = disconnectBtn.querySelector("span");
-  if (!text) return;
-
-  if (walletSource === "cdp") {
-    // Web2-friendly: show email (truncated), no Sign In dot, hide network selector
-    const displayEmail = email && email.length > 24 ? `${email.slice(0, 21)}…` : (email || "Account");
-    text.textContent = displayEmail;
-    disconnectBtn.classList.remove("auth-required");
-    if (networkSelect) networkSelect.classList.add("hidden");
-  } else {
-    // Crypto wallet: truncated address + Sign In reminder if needed
-    const truncated = truncateAddress(address);
-    text.textContent = isAuthenticated ? truncated : `${truncated} • Sign In`;
-    disconnectBtn.classList.toggle("auth-required", !isAuthenticated);
-    if (networkSelect) {
-      networkSelect.classList.add("connected");
-      networkSelect.classList.remove("hidden");
-    }
-  }
+  const s = hwState();
+  s.address = address || "";
+  s.isAuthenticated = isAuthenticated;
+  s.walletSource = walletSource;
+  s.email = email;
 }
 
 /**
@@ -86,3 +143,5 @@ export function isWalletAuthenticated(address) {
   const cached = getCachedSession();
   return !!(cached && address && cached.address === address.toLowerCase());
 }
+
+registerAlpineComponent("headerWallet", headerWallet);

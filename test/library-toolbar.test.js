@@ -239,7 +239,11 @@ describe("upload button", () => {
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(_uploadFileToCollection).toHaveBeenCalledWith(file, "99");
+    expect(_uploadFileToCollection).toHaveBeenCalledWith(
+      file,
+      "99",
+      expect.objectContaining({ onStage: expect.any(Function) })
+    );
     expect(libraryState.get().selectedIds).toEqual(["asset-99-asset_123"]);
   });
 });
