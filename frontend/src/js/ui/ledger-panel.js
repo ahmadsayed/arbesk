@@ -1,10 +1,17 @@
 /**
- * Arbesk UI Activity Panel (Manifest-Driven)
+ * Arbesk UI Activity Panel (Manifest-Driven) — Alpine.js component
  *
  * Derives the activity feed entirely from the asset manifest chain.
  * No localStorage. No server-side ledger. No event accumulation.
  * The manifest file (and its version chain via prev_manifest_cid)
  * is the single source of truth.
+ *
+ * The DOM lives in app.pug ([data-view="ledger"] fragment,
+ * `x-data="ledgerPanel"`). Reactive state lives in an Alpine.store so that
+ * BOTH template expressions and external code (the bus-event reload
+ * subscriptions) mutate the same reactive proxy — mutating a component's
+ * captured `this` from outside Alpine's expression evaluation does not
+ * trigger reactivity, but store writes always do.
  */
 
 import { truncateAddress, truncateCid } from "../utils/format.js";
@@ -13,6 +20,7 @@ import { getActiveAssetManifestCid } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 import { walkManifestChain } from "../engine/time-travel.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { Alpine, registerAlpineComponent } from "./alpine.js";
 
 const ACTIVITY_CONFIG = {
   GENERATION: { label: "Generation", icon: "✦" },
@@ -22,26 +30,37 @@ const ACTIVITY_CONFIG = {
   LOAD: { label: "Load", icon: "→" },
 };
 
-/** @type {HTMLElement|null} */
-let body;
-/** @type {HTMLElement|null} */
-let list;
-/** @type {HTMLSelectElement|null} */
-let filterSelect;
-/** @type {HTMLElement|null} */
-let statsEl;
-/** @type {HTMLElement|null} */
-let anchorBtn;
-let initialized = false;
-/** @type {any[]} */
-let activities = [];
+/**
+ * @typedef {object} LedgerPanelState
+ * @property {any[]} activities - extracted chain entries, most recent first
+ * @property {string} filter - opType filter bound to #ledgerFilter ("" = all)
+ * @property {string} statsText - "# ops · # assets" line; kept stale when the
+ *   last load yielded no entries (legacy render() only updated it on a
+ *   non-empty list)
+ */
 
-function ensureDOM() {
-  body = document.getElementById("ledgerBody");
-  list = document.getElementById("ledgerList");
-  filterSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById("ledgerFilter"));
-  statsEl = document.getElementById("ledgerStats");
-  anchorBtn = document.getElementById("ledgerAnchorBtn");
+/** @type {LedgerPanelState|null} reactive Alpine.store proxy */
+let _state = null;
+
+let initialized = false;
+
+/**
+ * Get (or lazily create) the reactive ledger state store.
+ * @returns {LedgerPanelState}
+ */
+function state() {
+  if (!_state) {
+    // Alpine.store(name, value) is a setter (returns undefined); read it back.
+    if (!Alpine.store("ledgerPanel")) {
+      Alpine.store("ledgerPanel", {
+        activities: [],
+        filter: "",
+        statsText: "",
+      });
+    }
+    _state = /** @type {LedgerPanelState} */ (Alpine.store("ledgerPanel"));
+  }
+  return /** @type {LedgerPanelState} */ (_state);
 }
 
 /** @param {number|string} ts */
@@ -56,57 +75,27 @@ function formatDate(ts) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-/** @param {any} entry */
-function renderEntry(entry) {
+/**
+ * Map a raw activity entry to the view model rendered by the x-for template.
+ * @param {any} entry
+ * @returns {{id: string, icon: string, label: string, opType: string, cid: string, cidShort: string, actor: string, actorShort: string, timeText: string}}
+ */
+function toRow(entry) {
   const config = ACTIVITY_CONFIG[/** @type {keyof typeof ACTIVITY_CONFIG} */ (entry.opType)] || {
     label: entry.opType,
     icon: "·",
   };
-
-  const li = document.createElement("li");
-  li.className = "ledger-entry";
-  li.innerHTML = `
-    <span class="ledger-entry-icon">${config.icon}</span>
-    <span class="ledger-entry-type" title="${entry.opType}">${
-    config.label
-  }</span>
-    <span class="ledger-entry-cid" title="${entry.cid}">${truncateCid(
-    entry.cid
-  )}</span>
-    <span class="ledger-entry-actor" title="${
-      entry.actorAddress
-    }">${truncateAddress(entry.actorAddress)}</span>
-    <span class="ledger-entry-time">${formatDate(entry.timestamp)} ${formatTime(
-    entry.timestamp
-  )}</span>
-  `;
-  return li;
-}
-
-function render() {
-  if (!list) return;
-
-  const opType = filterSelect?.value || "";
-  const filtered = opType
-    ? activities.filter((a) => a.opType === opType)
-    : activities;
-
-  list.innerHTML = "";
-  if (filtered.length === 0) {
-    list.innerHTML =
-      '<li class="ledger-empty">No operations recorded yet.</li>';
-    return;
-  }
-  for (const entry of filtered) {
-    list.appendChild(renderEntry(entry));
-  }
-
-  if (statsEl) {
-    const total = activities.length;
-    const uniqueCids = new Set(activities.map((a) => a.cid).filter(Boolean))
-      .size;
-    statsEl.textContent = `${total} ops · ${uniqueCids} assets`;
-  }
+  return {
+    id: entry.id,
+    icon: config.icon,
+    label: config.label,
+    opType: entry.opType,
+    cid: entry.cid,
+    cidShort: truncateCid(entry.cid),
+    actor: entry.actorAddress,
+    actorShort: truncateAddress(entry.actorAddress),
+    timeText: `${formatDate(entry.timestamp)} ${formatTime(entry.timestamp)}`,
+  };
 }
 
 /**
@@ -179,8 +168,7 @@ function extractActivities(chain) {
 async function loadActivities() {
   const cid = getActiveAssetManifestCid();
   if (!cid) {
-    activities = [];
-    render();
+    state().activities = [];
     return;
   }
 
@@ -201,31 +189,70 @@ async function loadActivities() {
       .filter((r) => r.status === "fulfilled")
       .map((r) => r.value);
 
-    activities = extractActivities(chain);
+    const s = state();
+    s.activities = extractActivities(chain);
+    // Legacy render() only refreshed the stats line when the list was
+    // non-empty; keep that here so an empty load leaves the previous text.
+    if (s.activities.length) {
+      const uniqueCids = new Set(s.activities.map((a) => a.cid).filter(Boolean))
+        .size;
+      s.statsText = `${s.activities.length} ops · ${uniqueCids} assets`;
+    }
   } catch (err) {
     console.warn("[LEDGER] failed to load manifest history:", /** @type {Error} */ (err).message);
-    activities = [];
+    state().activities = [];
   }
-
-  render();
 }
 
 function onAnchorClicked() {
   console.warn("[LEDGER] anchorManifest() not available in current contract");
 }
 
+// ─── Component factory (template-facing) ─────────────────────────────
+
+/**
+ * Alpine data factory for the ledger panel (`x-data="ledgerPanel"`).
+ * Getters read the reactive store, so Alpine effects track them; methods
+ * delegate to the module functions above.
+ * @returns {object}
+ */
+export function ledgerPanel() {
+  return {
+    /** View-model rows for the x-for template, honoring the opType filter. */
+    get rows() {
+      const s = state();
+      const filtered = s.filter
+        ? s.activities.filter((a) => a.opType === s.filter)
+        : s.activities;
+      return filtered.map(toRow);
+    },
+
+    get filter() {
+      return state().filter;
+    },
+
+    /** @param {string} value */
+    set filter(value) {
+      state().filter = value;
+    },
+
+    get statsText() {
+      return state().statsText;
+    },
+
+    anchor() {
+      onAnchorClicked();
+    },
+  };
+}
+
+// ─── Initialization ──────────────────────────────────────────────────
+
 function initLedgerPanel() {
+  registerAlpineComponent("ledgerPanel", ledgerPanel);
+
   if (initialized) return;
-  ensureDOM();
-  if (!body) return;
-
-  if (filterSelect) {
-    filterSelect.addEventListener("change", render);
-  }
-
-  if (anchorBtn) {
-    anchorBtn.addEventListener("click", onAnchorClicked);
-  }
+  if (!document.getElementById("ledgerBody")) return;
 
   // Refresh when the scene changes or the asset is saved/published
   on(EVENTS.SCENE_READY, () => loadActivities());

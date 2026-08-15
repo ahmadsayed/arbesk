@@ -270,9 +270,9 @@ html(lang="en")
                 .sidebar-view-header
                   h3 Activity
                 .sidebar-view-body
-                  #ledgerBody.ledger-panel-body
+                  #ledgerBody.ledger-panel-body(x-data="ledgerPanel")
                     .ledger-panel-controls
-                      select#ledgerFilter.ledger-filter
+                      select#ledgerFilter.ledger-filter(x-model="filter")
                         option(value="") All Operations
                         option(value="GENERATION") Generation
                         option(value="PARAMETRIC") Parametric
@@ -284,9 +284,19 @@ html(lang="en")
                         option(value="TEAM_EDIT") Team Edit
                       button#ledgerAnchorBtn.ledger-anchor-btn(
                         title="Anchor current manifest CID on-chain for immutability proof"
+                        @click="anchor()"
                       ) Anchor Manifest
-                    #ledgerStats.ledger-stats
+                    #ledgerStats.ledger-stats(x-text="statsText")
                     ul#ledgerList.ledger-list
+                      template(x-for="row in rows" :key="row.id")
+                        li.ledger-entry
+                          span.ledger-entry-icon(x-text="row.icon")
+                          span.ledger-entry-type(:title="row.opType" x-text="row.label")
+                          span.ledger-entry-cid(:title="row.cid" x-text="row.cidShort")
+                          span.ledger-entry-actor(:title="row.actor" x-text="row.actorShort")
+                          span.ledger-entry-time(x-text="row.timeText")
+                      template(x-if="!rows.length")
+                        li.ledger-empty No operations recorded yet.
 
             //- Drag handle to resize the sidebar (wide layouts only)
             #sidebarResizeHandle.sidebar-resize-handle(role="separator" aria-orientation="vertical" aria-label="Resize sidebar" title="Drag to resize · double-click to reset" tabindex="0")
