@@ -25,6 +25,7 @@ html(lang="en")
         "imports": {
           "@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js",
           "fflate": "https://esm.sh/fflate@0.8.2",
+          "alpinejs": "https://esm.sh/alpinejs@3.16.1",
           "fast-xml-parser": "https://esm.sh/fast-xml-parser@4.5.3",
           "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
           "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113?bundle"
@@ -476,20 +477,20 @@ html(lang="en")
               .asset-drop-icon ⊕
               p#libraryDropText Drop to upload to this collection
         input#libraryUploadInput(type="file" accept=".glb,.gltf,.3mf" hidden)
-      //- Wallet Popover (shared)
-      #walletPopover.wallet-popover.hidden(aria-label="Wallet menu")
+      //- Wallet Popover (shared) — Alpine.js component, see js/ui/wallet-popover.js
+      #walletPopover.wallet-popover.hidden(x-data="walletPopover" :class="{ hidden: !isOpen }" aria-label="Wallet menu")
         .wallet-popover-header
-          span#walletPopoverAddress.wallet-popover-address —
-          button#walletPopoverCopy.wallet-popover-copy(type="button") Copy
-        a#walletPopoverExplorer.wallet-popover-explorer.hidden(href="#" target="_blank" rel="noopener noreferrer")
+          span#walletPopoverAddress.wallet-popover-address(x-text="displayAddress" :title="address") —
+          button#walletPopoverCopy.wallet-popover-copy(type="button" @click="copy()" x-text="copied ? 'Copied!' : 'Copy'" :class="{ copied }") Copy
+        a#walletPopoverExplorer.wallet-popover-explorer.hidden(href="#" target="_blank" rel="noopener noreferrer" :href="explorerUrl || '#'" :class="{ hidden: !explorerUrl }")
           | View on Explorer
           svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
             path(d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6")
             polyline(points="15 3 21 3 21 9")
             line(x1="10" y1="14" x2="21" y2="3")
         .wallet-popover-actions
-          button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button") Sign In
-          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button") Log Out
+          button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button" @click="signIn()" :class="{ hidden: !showSignIn }") Sign In
+          button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button" @click="disconnect()") Log Out
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")
     script(type="module", src="/js/engine/parametric-preview.js")

@@ -32,3 +32,6 @@ declare namespace BABYLON {
 }
 
 declare const BABYLON: any;
+
+// Loaded via the importmap in app.pug; no bundled type declarations.
+declare module "alpinejs";
