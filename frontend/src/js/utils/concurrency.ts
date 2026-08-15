@@ -7,23 +7,26 @@
  * concurrent upload/download requests.
  */
 
-/**
- * @typedef {object} Limiter
- * @property {<T>(fn: () => Promise<T>) => Promise<T>} run
- * @property {() => number} pending
- * @property {() => number} active
- */
+export interface Limiter {
+  run<T>(fn: () => Promise<T>): Promise<T>;
+  pending(): number;
+  active(): number;
+}
+
+interface QueuedTask {
+  fn: () => Promise<any>;
+  resolve: (value: any) => void;
+  reject: (reason?: any) => void;
+}
 
 /**
  * Create a concurrency limiter.
  *
- * @param {number} limit - Maximum number of concurrently executing tasks.
- * @returns {Limiter}
+ * @param limit - Maximum number of concurrently executing tasks.
  */
-export function createConcurrencyLimiter(limit) {
+export function createConcurrencyLimiter(limit: number): Limiter {
   const max = Math.max(1, Math.floor(limit));
-  /** @type {Array<{fn: () => Promise<any>, resolve: (value: any) => void, reject: (reason?: any) => void}>} */
-  const queue = [];
+  const queue: QueuedTask[] = [];
   let running = 0;
 
   function next() {
@@ -53,11 +56,8 @@ export function createConcurrencyLimiter(limit) {
   return {
     /**
      * Queue a task and return a promise that resolves with its result.
-     * @template T
-     * @param {() => Promise<T>} fn
-     * @returns {Promise<T>}
      */
-    run(fn) {
+    run<T>(fn: () => Promise<T>): Promise<T> {
       return new Promise((resolve, reject) => {
         queue.push({ fn, resolve, reject });
         next();

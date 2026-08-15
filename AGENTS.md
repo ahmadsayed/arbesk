@@ -52,7 +52,7 @@ docker compose up -d                   # IPFS + Hardhat + Nostr; logs: docker co
 npm install && (cd frontend && npm install)   # + (cd blockchain && npm install) — IDE intellisense only
 
 # Frontend / Backend
-npm run build:frontend                 # Pug→HTML, SCSS→CSS, JS copy (no Webpack/Vite)
+npm run build:frontend                 # Pug→HTML, SCSS→CSS, JS copy + swc TS emit (no Webpack/Vite)
 npm start                              # backend :9090;  npm run nodemon = auto-rebuild
 
 # Testing
@@ -75,7 +75,7 @@ npm run test:frontend                  # always verify last
 
 ## 5. Coding Conventions
 
-- **JS/TS**: backend `src/` is TypeScript run via Node type-stripping (`node src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; Node does not elide imports), and relative imports inside `src/` carry explicit `.ts` extensions. Frontend stays plain ESM JS (served unbundled); CJS only in `blockchain/scripts/`. CDN globals `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
+- **JS/TS**: backend `src/` is TypeScript run via Node type-stripping (`node src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; Node does not elide imports), and relative imports inside `src/` carry explicit `.ts` extensions. Frontend: `utils/` `state/` `domain/` `gltf/gltf-core` are `.ts`, transpiled per-file by swc into `dist/js` (`frontend/scripts/render-ts.js`, no type-aware emit) — **import specifiers always match the on-disk file** (`.ts` for converted modules, `.js` for plain JS; the emit step rewrites relative `.ts` specifiers to `.js` for the browser, and jest maps `.js`→source via `moduleNameMapper`). Backend modules import shared frontend sources directly with their real extensions (e.g. `generate-node.ts` → `frontend/src/js/gltf/gltf-core.ts`). The rest of the frontend stays plain ESM JS; CJS only in `blockchain/scripts/` + `frontend/scripts/`. CDN globals `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
 - **Type-checking**: `allowJs`/`checkJs`, `strict: true` (`npm run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
 - **Lint**: `npm run lint[:fix]`; part of `test:all`; husky pre-commit runs lint-staged + both typechecks.
 - **Validation**: Zod (`src/api/schemas.js`, `validation.js`) via `validateBody`/`validateQuery`; failures → 400 `VALIDATION_ERROR` with `details.issues`.

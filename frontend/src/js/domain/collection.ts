@@ -1,46 +1,39 @@
-// @ts-check
 /**
  * Domain: Collection — collection-context state commands.
  *
  * Owns reads/writes of activeCollectionTokenId and selectedCollectionId.
  * The canonical publish seam is added in Task 2.
  */
-import { assetStore } from "./asset-store.js";
+import { assetStore } from "./asset-store.ts";
 import {
   deriveDefaultCollectionId,
   mergeAssetIntoCollection,
-} from "../utils/collections.js";
+} from "../utils/collections.ts";
 
-/** @returns {string|null} */
-export function getActiveCollectionTokenId() {
+export function getActiveCollectionTokenId(): string | null {
   return assetStore.get().activeCollectionTokenId || null;
 }
 
-/** @returns {string|null} */
-export function getSelectedCollectionId() {
+export function getSelectedCollectionId(): string | null {
   return assetStore.get().selectedCollectionId || null;
 }
 
 /**
  * Adopt a collection as the active collection context.
- * @param {string|number} tokenId
- * @param {{clearSelectedCollection?: boolean}} [options]
  */
 export function adoptOpenedCollection(
-  tokenId,
-  { clearSelectedCollection = false } = {}
+  tokenId: string | number,
+  { clearSelectedCollection = false }: { clearSelectedCollection?: boolean } = {}
 ) {
-  /** @type {Record<string, any>} */
-  const patch = { activeCollectionTokenId: String(tokenId) };
+  const patch: Record<string, any> = { activeCollectionTokenId: String(tokenId) };
   if (clearSelectedCollection) patch.selectedCollectionId = null;
   assetStore.set(patch);
 }
 
 /**
  * Select a target collection for the next publish (collection dropdown).
- * @param {string|number|null} tokenId
  */
-export function selectCollection(tokenId) {
+export function selectCollection(tokenId: string | number | null) {
   assetStore.set({
     selectedCollectionId: tokenId ? String(tokenId) : null,
   });
@@ -61,37 +54,47 @@ export function clearActiveCollection() {
 
 /**
  * Publish succeeded: the token is now the active collection.
- * @param {string|number} tokenId
  */
-export function adoptPublishedCollection(tokenId) {
+export function adoptPublishedCollection(tokenId: string | number) {
   assetStore.set({ activeCollectionTokenId: String(tokenId) });
+}
+
+export interface PublishCollectionDeps {
+  getOwnerOf: Function;
+  getTokenURI: Function;
+  getCollectionManifest: Function;
+  writeJSONToIPFS: Function;
+  republishCollection: Function;
+  publishNewToken: Function;
+  onAdoptIdentity?: (ctx: {
+    tokenId: string;
+    assetId: string;
+    isNew: boolean;
+  }) => void | Promise<void>;
+}
+
+export interface PublishCollectionResult {
+  tokenId: string;
+  collectionCid: string;
+  isNew: boolean;
 }
 
 /**
  * Build the next collection manifest for the asset, write it to IPFS, and
  * anchor it on-chain. Canonical implementation; the thin service wrapper
  * injects chain/IPFS/editor helpers.
- *
- * @param {string} assetCid
- * @param {string} assetID
- * @param {string} walletAddr
- * @param {{
- *   getOwnerOf: Function,
- *   getTokenURI: Function,
- *   getCollectionManifest: Function,
- *   writeJSONToIPFS: Function,
- *   republishCollection: Function,
- *   publishNewToken: Function,
- *   onAdoptIdentity?: (ctx: {tokenId: string, assetId: string, isNew: boolean}) => void|Promise<void>
- * }} deps
- * @returns {Promise<{tokenId: string, collectionCid: string, isNew: boolean}>}
  */
-export async function publishCollection(assetCid, assetID, walletAddr, deps) {
+export async function publishCollection(
+  assetCid: string,
+  assetID: string,
+  walletAddr: string,
+  deps: PublishCollectionDeps
+): Promise<PublishCollectionResult> {
   const preferredCollectionId =
     getSelectedCollectionId() || getActiveCollectionTokenId();
 
-  let existingCollectionTokenId = null;
-  let collectionManifest = null;
+  let existingCollectionTokenId: string | null = null;
+  let collectionManifest: Record<string, any> | null = null;
 
   if (preferredCollectionId) {
     try {
@@ -115,8 +118,7 @@ export async function publishCollection(assetCid, assetID, walletAddr, deps) {
     }
   }
 
-  /** @type {Record<string, any>} */
-  const mergedCollection = mergeAssetIntoCollection(
+  const mergedCollection: Record<string, any> = mergeAssetIntoCollection(
     collectionManifest,
     assetID,
     assetCid
@@ -132,8 +134,8 @@ export async function publishCollection(assetCid, assetID, walletAddr, deps) {
     assetId: mergedCollection.asset_id,
   });
 
-  let tokenId;
-  let isNew;
+  let tokenId: string;
+  let isNew: boolean;
 
   if (existingCollectionTokenId) {
     await deps.republishCollection(

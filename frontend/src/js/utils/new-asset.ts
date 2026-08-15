@@ -7,11 +7,8 @@
  * Preserves the opened/selected collection so new assets publish into the
  * collection the user is currently working in instead of falling back to the
  * wallet's default collection.
- *
- * @param {Record<string, any>|null|undefined} currentState
- * @returns {Record<string, any>}
  */
-export function getStateForNewAsset(currentState) {
+export function getStateForNewAsset(currentState: Record<string, any> | null | undefined): Record<string, any> {
   return {
     activeAssetManifestCid: null,
     latestAssetManifestCid: null,

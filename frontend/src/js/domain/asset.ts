@@ -1,4 +1,3 @@
-// @ts-check
 /**
  * Domain: Asset — the one open asset. Facade over the domain asset-store:
  * this module is the ONLY writer of the asset name and the
@@ -6,28 +5,25 @@
  * point for chrome rendering.
  */
 import { on, emit, EVENTS } from "../events/bus.js";
-import { assetStore, tagManifestCid } from "./asset-store.js";
-import { getStateForNewAsset } from "../utils/new-asset.js";
-import { deriveDefaultAssetId } from "../utils/collections.js";
-import { log } from "../utils/log.js";
+import { assetStore, tagManifestCid } from "./asset-store.ts";
+import { getStateForNewAsset } from "../utils/new-asset.ts";
+import { deriveDefaultAssetId } from "../utils/collections.ts";
+import { log } from "../utils/log.ts";
 
-/** @type {Set<(snapshot: Readonly<AssetSnapshot>) => void>} */
-const _listeners = new Set();
+export interface AssetSnapshot {
+  name: string | null;
+  assetId: string | null;
+  tokenId: string | null;
+  activeCid: string | null;
+  latestCid: string | null;
+}
 
-/**
- * @typedef {Object} AssetSnapshot
- * @property {string|null} name
- * @property {string|null} assetId
- * @property {string|null} tokenId
- * @property {string|null} activeCid
- * @property {string|null} latestCid
- */
+const _listeners = new Set<(snapshot: Readonly<AssetSnapshot>) => void>();
 
 /**
  * Frozen point-in-time view of the active asset for renderers.
- * @returns {Readonly<AssetSnapshot>}
  */
-export function getAssetSnapshot() {
+export function getAssetSnapshot(): Readonly<AssetSnapshot> {
   const s = assetStore.get();
   return Object.freeze({
     name: s.activeAssetName,
@@ -41,10 +37,11 @@ export function getAssetSnapshot() {
 /**
  * Subscribe to asset changes. Fires immediately with the current snapshot,
  * then on every ASSET_STATE_CHANGED.
- * @param {(snapshot: Readonly<AssetSnapshot>) => void} fn
- * @returns {() => void} unsubscribe
+ * @returns unsubscribe
  */
-export function subscribeAsset(fn) {
+export function subscribeAsset(
+  fn: (snapshot: Readonly<AssetSnapshot>) => void
+): () => void {
   _listeners.add(fn);
   fn(getAssetSnapshot());
   return () => _listeners.delete(fn);
@@ -55,49 +52,42 @@ on(EVENTS.ASSET_STATE_CHANGED, () => {
   for (const fn of _listeners) fn(snapshot);
 });
 
-/** @returns {string|null} */
-export function getActiveAssetManifestCid() {
+export function getActiveAssetManifestCid(): string | null {
   return assetStore.get().activeAssetManifestCid;
 }
 
-/** @returns {string|null} */
-export function getLatestAssetManifestCid() {
+export function getLatestAssetManifestCid(): string | null {
   return assetStore.get().latestAssetManifestCid;
 }
 
-/** @returns {string|null} */
-export function getActiveAssetTokenId() {
+export function getActiveAssetTokenId(): string | null {
   return assetStore.get().activeAssetTokenId;
 }
 
-/** @returns {string|null} */
-export function getActiveAssetId() {
+export function getActiveAssetId(): string | null {
   return assetStore.get().activeAssetId;
 }
 
-/** @returns {string|null} */
-export function getActiveAssetName() {
+export function getActiveAssetName(): string | null {
   return assetStore.get().activeAssetName;
 }
 
-/** @returns {object|null} */
-export function getCurrentManifest() {
+export function getCurrentManifest(): object | null {
   return assetStore.get().currentManifest;
 }
 
 /**
  * Full read-only snapshot of the asset domain state. For consumers that need
  * several fields at once; prefer individual getters when possible.
- * @returns {Readonly<{
- *   activeAssetManifestCid: string|null,
- *   activeAssetTokenId: string|null,
- *   activeAssetName: string|null,
- *   latestAssetManifestCid: string|null,
- *   currentManifest: object|null,
- *   activeAssetId: string|null
- * }>}
  */
-export function getAssetState() {
+export function getAssetState(): Readonly<{
+  activeAssetManifestCid: string | null;
+  activeAssetTokenId: string | null;
+  activeAssetName: string | null;
+  latestAssetManifestCid: string | null;
+  currentManifest: object | null;
+  activeAssetId: string | null;
+}> {
   const s = assetStore.get();
   return Object.freeze({
     activeAssetManifestCid: s.activeAssetManifestCid,
@@ -116,19 +106,14 @@ const DEFAULT_NAMES = new Set([
   "",
 ]);
 
-/**
- * @param {string|null|undefined} name
- * @returns {boolean}
- */
-export function isDefaultAssetName(name) {
+export function isDefaultAssetName(name: string | null | undefined): boolean {
   return DEFAULT_NAMES.has((name || "").toLowerCase().trim());
 }
 
 /**
  * Rename the active asset. The only writer of activeAssetName.
- * @param {string} name
  */
-export function renameAsset(name) {
+export function renameAsset(name: string): void {
   assetStore.set({ activeAssetName: name });
 }
 
@@ -136,9 +121,8 @@ export function renameAsset(name) {
  * Naming rule for a freshly loaded manifest (SCENE_READY): the manifest's
  * name wins; with no manifest name keep the session name; with neither,
  * fall back to "Untitled Asset".
- * @param {any} manifest
  */
-export function adoptLoadedManifestName(manifest) {
+export function adoptLoadedManifestName(manifest: any): void {
   const current = assetStore.get().activeAssetName;
   const name = manifest?.name || current || "Untitled Asset";
   if (manifest?.name || !current) {
@@ -150,9 +134,8 @@ export function adoptLoadedManifestName(manifest) {
  * Naming rule for chat-driven auto-saves: adopt the manifest's name only
  * when it is a real name — a default/absent name must not clobber a good
  * session name. (Moved verbatim from ui/asset-save.js.)
- * @param {any} manifest
  */
-export function adoptManifestName(manifest) {
+export function adoptManifestName(manifest: any): void {
   const name = manifest?.name?.trim();
   if (name && !isDefaultAssetName(name)) {
     assetStore.set({ activeAssetName: name });
@@ -163,7 +146,7 @@ export function adoptManifestName(manifest) {
  * Clear the active asset for a fresh draft: name, CIDs, token identity go;
  * the open collection context survives (getStateForNewAsset semantics).
  */
-export function resetForNewAsset() {
+export function resetForNewAsset(): void {
   assetStore.set({
     ...getStateForNewAsset(assetStore.get()),
     activeAssetName: null,
@@ -173,7 +156,7 @@ export function resetForNewAsset() {
 /**
  * Close the active asset entirely (library close-out).
  */
-export function closeAsset() {
+export function closeAsset(): void {
   assetStore.set({
     activeAssetManifestCid: null,
     latestAssetManifestCid: null,
@@ -191,12 +174,12 @@ export function closeAsset() {
 /**
  * Adopt a freshly opened/loaded asset: active + latest CIDs point at `cid`.
  * Identity keys are written only when present (`in` semantics).
- * @param {string} cid
- * @param {{tokenId?: string|null, assetId?: string|null}} [identity]
  */
-export function adoptOpenedAsset(cid, identity = {}) {
-  /** @type {Record<string, any>} */
-  const patch = {
+export function adoptOpenedAsset(
+  cid: string,
+  identity: { tokenId?: string | null; assetId?: string | null } = {}
+): void {
+  const patch: Record<string, any> = {
     activeAssetManifestCid: cid,
     latestAssetManifestCid: cid,
   };
@@ -209,23 +192,19 @@ export function adoptOpenedAsset(cid, identity = {}) {
  * Root-load tail (scene-loader): the loaded manifest becomes active and is
  * cached as currentManifest. Does NOT touch latestAssetManifestCid — the
  * version-history store's SCENE_READY listener owns the chain tip.
- * @param {string} cid
- * @param {any} manifest
  */
-export function activateAssetManifest(cid, manifest) {
+export function activateAssetManifest(cid: string, manifest: any): void {
   assetStore.set({
     activeAssetManifestCid: cid,
     currentManifest: tagManifestCid(manifest, cid),
   });
 }
 
-/** @param {string|null} cid */
-export function setActiveManifestCid(cid) {
+export function setActiveManifestCid(cid: string | null): void {
   assetStore.set({ activeAssetManifestCid: cid });
 }
 
-/** @param {string|null} cid */
-export function setLatestManifestCid(cid) {
+export function setLatestManifestCid(cid: string | null): void {
   assetStore.set({ latestAssetManifestCid: cid });
 }
 
@@ -233,7 +212,7 @@ export function setLatestManifestCid(cid) {
  * Scene cleared: both CIDs go. Token identity and currentManifest survive
  * (clearScene semantics — preserved verbatim from engine/cleanup.js).
  */
-export function clearAssetManifestCids() {
+export function clearAssetManifestCids(): void {
   assetStore.set({
     activeAssetManifestCid: null,
     latestAssetManifestCid: null,
@@ -243,20 +222,16 @@ export function clearAssetManifestCids() {
 /**
  * Cache a fetched manifest against its CID without changing active/latest
  * (outliner cache fill, no-changes save path).
- * @param {any} manifest
- * @param {string|null} cid
  */
-export function cacheCurrentManifest(manifest, cid) {
+export function cacheCurrentManifest(manifest: any, cid: string | null): void {
   assetStore.set({ currentManifest: tagManifestCid(manifest, cid) });
 }
 
 /**
  * A new version was written to IPFS: it becomes the active + latest tip and
  * the cached current manifest.
- * @param {string} cid
- * @param {any} manifest
  */
-export function recordSavedVersion(cid, manifest) {
+export function recordSavedVersion(cid: string, manifest: any): void {
   assetStore.set({
     latestAssetManifestCid: cid,
     activeAssetManifestCid: cid,
@@ -266,10 +241,11 @@ export function recordSavedVersion(cid, manifest) {
 
 /**
  * Publish succeeded: the token is now the asset's on-chain identity.
- * @param {string|number} tokenId
- * @param {string} assetId
  */
-export function adoptPublishedIdentity(tokenId, assetId) {
+export function adoptPublishedIdentity(
+  tokenId: string | number,
+  assetId: string
+): void {
   assetStore.set({
     activeAssetTokenId: String(tokenId),
     activeAssetId: assetId,
@@ -284,10 +260,10 @@ export function adoptPublishedIdentity(tokenId, assetId) {
  * Name resolution for saves (verbatim from ui/asset-save.js): the in-session
  * rename wins; a tokenized asset falls back to its on-chain name; drafts fall
  * back to "My Asset".
- * @param {(tokenId: string) => Promise<string|null>} fetchTokenName
- * @returns {Promise<string>}
  */
-async function _resolveAssetName(fetchTokenName) {
+async function _resolveAssetName(
+  fetchTokenName: (tokenId: string) => Promise<string | null>
+): Promise<string> {
   const current = assetStore.get().activeAssetName;
   if (current) return current;
   const tokenId = assetStore.get().activeAssetTokenId;
@@ -300,12 +276,12 @@ async function _resolveAssetName(fetchTokenName) {
  * serializer, updates the URL for non-tokenized drafts, and emits
  * ASSET_DRAFT_SAVED. Returns the serializer's result verbatim; failures
  * propagate to the caller (the UI owns toasts/progress).
- * @param {{saveDraft: (assetName: string, options?: any) => Promise<any>,
- *          fetchTokenName: (tokenId: string) => Promise<string|null>,
- *          updateUrlManifest: (cid: string) => void}} deps
- * @returns {Promise<any>}
  */
-export async function saveDraftAsset(deps) {
+export async function saveDraftAsset(deps: {
+  saveDraft: (assetName: string, options?: any) => Promise<any>;
+  fetchTokenName: (tokenId: string) => Promise<string | null>;
+  updateUrlManifest: (cid: string) => void;
+}): Promise<any> {
   const assetName = await _resolveAssetName(deps.fetchTokenName);
   const result = await deps.saveDraft(assetName);
   if (!result.ok) return result;
@@ -327,16 +303,27 @@ export async function saveDraftAsset(deps) {
  * points. Collection coordination goes through the injected
  * `publishCollection` dep (services/asset-save/collection-publish.js today;
  * the Collection module in Phase 3).
- * @param {string} assetName - already explicit (UI ran ensureExplicitName)
- * @param {{address: string, chainId: number, contractAddress: string}} wallet
- * @param {{verifyCanEdit: Function, saveDraft: Function,
- *          publishCollection: Function, updateUrlAsset: Function,
- *          onNewCollection?: Function, onStatus: Function,
- *          onProgress: Function}} deps
- * @returns {Promise<{outcome: string, tokenId?: string, cid?: string,
- *          isNew?: boolean, reason?: string}>}
+ * @param assetName - already explicit (UI ran ensureExplicitName)
  */
-export async function publishAsset(assetName, wallet, deps) {
+export async function publishAsset(
+  assetName: string,
+  wallet: { address: string; chainId: number; contractAddress: string },
+  deps: {
+    verifyCanEdit: Function;
+    saveDraft: Function;
+    publishCollection: Function;
+    updateUrlAsset: Function;
+    onNewCollection?: Function;
+    onStatus: Function;
+    onProgress: Function;
+  }
+): Promise<{
+  outcome: string;
+  tokenId?: string;
+  cid?: string;
+  isNew?: boolean;
+  reason?: string;
+}> {
   // Republishes (existing tokenId) snapshot the live comment thread into the
   // manifest via publishContext. First-time publishes have no prior comments.
   const existingTokenId = assetStore.get().activeAssetTokenId;

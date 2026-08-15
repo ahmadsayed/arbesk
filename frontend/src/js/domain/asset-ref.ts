@@ -1,30 +1,25 @@
-// @ts-check
 /**
  * Domain: AssetRef — one asset referencing another (the tree edge).
  * Wraps the persisted `child_ref` manifest shape. IO-free: resolution goes
  * through an injected resolver.
  */
 
-/**
- * @typedef {Object} AssetRefCollection
- * @property {number} chainId
- * @property {string} contractAddress
- * @property {string} tokenId
- */
+export interface AssetRefCollection {
+  chainId: number;
+  contractAddress: string;
+  tokenId: string;
+}
 
-/**
- * @typedef {Object} AssetRef
- * @property {AssetRefCollection|"self"} collection
- * @property {string|null} assetID
- */
+export interface AssetRef {
+  collection: AssetRefCollection | "self";
+  assetID: string | null;
+}
 
 /**
  * Normalize the persisted child_ref shapes (current collection form and the
  * legacy flat token form) into a canonical AssetRef.
- * @param {any} childRef
- * @returns {AssetRef|null}
  */
-export function normalizeAssetRef(childRef) {
+export function normalizeAssetRef(childRef: any): AssetRef | null {
   if (!childRef || typeof childRef !== "object") return null;
   if (childRef.collection === "self") {
     return { collection: "self", assetID: childRef.assetID ?? null };
@@ -50,21 +45,14 @@ export function normalizeAssetRef(childRef) {
  * Canonical identity key: chainId:contract:tokenId:assetID (contract
  * lowercased). Self refs key as self:<assetID> — meaningful only within the
  * currently open collection.
- * @param {AssetRef} ref
- * @returns {string}
  */
-export function assetRefKey(ref) {
+export function assetRefKey(ref: AssetRef): string {
   if (ref.collection === "self") return `self:${ref.assetID ?? ""}`;
   const c = ref.collection;
   return `${c.chainId}:${c.contractAddress.toLowerCase()}:${c.tokenId}:${ref.assetID ?? ""}`;
 }
 
-/**
- * @param {AssetRef|null} a
- * @param {AssetRef|null} b
- * @returns {boolean}
- */
-export function assetRefsEqual(a, b) {
+export function assetRefsEqual(a: AssetRef | null, b: AssetRef | null): boolean {
   if (!a || !b) return a === b;
   return assetRefKey(a) === assetRefKey(b);
 }
@@ -73,11 +61,15 @@ export function assetRefsEqual(a, b) {
  * Resolve a ref to the manifest CID it currently points at. The resolver is
  * injected (`resolveCollectionChildRef` from blockchain/token-resolver.js in
  * the app, a fake in tests).
- * @param {AssetRef} ref
- * @param {{resolve: (childRef: any, selfAssets: any) => Promise<any>, selfAssets?: any}} deps
- * @returns {Promise<any>} the resolver's {resolved, manifestCid?, error?} result
+ * @returns the resolver's {resolved, manifestCid?, error?} result
  */
-export function resolveAssetRef(ref, deps) {
+export function resolveAssetRef(
+  ref: AssetRef,
+  deps: {
+    resolve: (childRef: any, selfAssets: any) => Promise<any>;
+    selfAssets?: any;
+  }
+): Promise<any> {
   const childRef =
     ref.collection === "self"
       ? { collection: "self", assetID: ref.assetID }

@@ -9,8 +9,8 @@
  * Keeps the `[TAG]` format required by AGENTS.md.
  */
 
-function isDebugEnabled() {
-  if (typeof window !== "undefined" && /** @type {any} */ (window).ARBESK_DEBUG === true) return true;
+function isDebugEnabled(): boolean {
+  if (typeof window !== "undefined" && (window as any).ARBESK_DEBUG === true) return true;
   try {
     return typeof localStorage !== "undefined" &&
       localStorage.getItem("arbesk-debug") === "true";
@@ -19,27 +19,15 @@ function isDebugEnabled() {
   }
 }
 
-/**
- * @param {string} tag
- * @param {...any} args
- */
-export function log(tag, ...args) {
+export function log(tag: string, ...args: any[]): void {
   if (!isDebugEnabled()) return;
   console.log(`[${tag}]`, ...args);
 }
 
-/**
- * @param {string} tag
- * @param {...any} args
- */
-export function warn(tag, ...args) {
+export function warn(tag: string, ...args: any[]): void {
   console.warn(`[${tag}]`, ...args);
 }
 
-/**
- * @param {string} tag
- * @param {...any} args
- */
-export function error(tag, ...args) {
+export function error(tag: string, ...args: any[]): void {
   console.error(`[${tag}]`, ...args);
 }

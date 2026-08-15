@@ -16,25 +16,43 @@ export const DB_VERSION = 1;
 export const MAX_CACHE_BYTES = 500 * 1024 * 1024; // 500 MB
 export const BIG_CONTENT_THRESHOLD_BYTES = 64 * 1024; // 64 KB
 
-function getIndexedDB() {
+/**
+ * Payload record shape stored in memory and IndexedDB:
+ * { hash, cid, compressed, bytes, bytesCount, storedAt }
+ */
+export interface CachedPayloadRecord {
+  hash: string;
+  cid: string;
+  compressed: boolean;
+  bytes: Uint8Array;
+  bytesCount: number;
+  storedAt: number;
+}
+
+interface ContentCacheOptions {
+  memory?: Map<string, any>;
+  maxBytes?: number;
+  db?: IDBDatabase | null;
+}
+
+function getIndexedDB(): IDBFactory | null {
   return typeof indexedDB !== "undefined" ? indexedDB : null;
 }
 
 export class ContentCache {
-  /**
-   * @param {{memory?: Map<string, any>, maxBytes?: number, db?: IDBDatabase|null}} [options]
-   */
-  constructor(options = {}) {
+  private _memory: Map<string, any>;
+  private _maxBytes: number;
+  private _currentBytes: number;
+  private _dbPromise: Promise<IDBDatabase | null> | null;
+
+  constructor(options: ContentCacheOptions = {}) {
     this._memory = options.memory || new Map();
     this._maxBytes = options.maxBytes ?? MAX_CACHE_BYTES;
     this._currentBytes = 0;
     this._dbPromise = options.db === null ? null : (options.db ? Promise.resolve(options.db) : this._openDb());
   }
 
-  /**
-   * @returns {Promise<IDBDatabase|null>}
-   */
-  async _openDb() {
+  private async _openDb(): Promise<IDBDatabase | null> {
     const idb = getIndexedDB();
     if (!idb) return null;
     try {
@@ -43,25 +61,20 @@ export class ContentCache {
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
         request.onupgradeneeded = (event) => {
-          const db = (/** @type {IDBOpenDBRequest} */ (event.target)).result;
+          const db = (event.target as IDBOpenDBRequest).result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
             db.createObjectStore(STORE_NAME, { keyPath: "hash" });
           }
         };
       });
     } catch (err) {
-      const error = /** @type {Error} */ (err);
+      const error = err as Error;
       console.warn("[CONTENT-CACHE] IndexedDB open failed:", error.message);
       return null;
     }
   }
 
-  /**
-   * @param {IDBTransactionMode} mode
-   * @param {(store: IDBObjectStore) => any} fn
-   * @returns {Promise<any>}
-   */
-  async _withStore(mode, fn) {
+  private async _withStore(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => any): Promise<any> {
     const db = await this._dbPromise;
     if (!db) return null;
     return new Promise((resolve, reject) => {
@@ -82,10 +95,8 @@ export class ContentCache {
    * Return the cached payload record for a hash, or null if not cached.
    *
    * Record shape: { hash, cid, compressed, bytes, bytesCount, storedAt }
-   * @param {string} hash
-   * @returns {Promise<any>}
    */
-  async getPayload(hash) {
+  async getPayload(hash: string): Promise<any> {
     // Fast path: in-memory cache.
     const memRecord = this._memory.get(hash);
     if (memRecord) {
@@ -107,11 +118,7 @@ export class ContentCache {
     return null;
   }
 
-  /**
-   * @param {string} hash
-   * @returns {Promise<any>}
-   */
-  async _getFromDb(hash) {
+  private async _getFromDb(hash: string): Promise<any> {
     const data = await this._withStore("readonly", (store) =>
       store.get(hash)
     );
@@ -130,13 +137,8 @@ export class ContentCache {
    * Store a payload in the cache. Evicts old entries if the byte cap
    * would be exceeded. Returns true if stored, false if the single payload
    * is larger than the cap.
-   * @param {string} hash
-   * @param {string} cid
-   * @param {boolean} compressed
-   * @param {Uint8Array} bytes
-   * @returns {Promise<boolean>}
    */
-  async putPayload(hash, cid, compressed, bytes) {
+  async putPayload(hash: string, cid: string, compressed: boolean, bytes: Uint8Array): Promise<boolean> {
     const bytesCount = bytes.length;
 
     if (bytesCount > this._maxBytes) {
@@ -152,7 +154,7 @@ export class ContentCache {
 
     this._evictIfNeeded(bytesCount);
 
-    const record = {
+    const record: CachedPayloadRecord = {
       hash,
       cid,
       compressed,
@@ -166,21 +168,19 @@ export class ContentCache {
 
     // Persist asynchronously; failures are non-fatal.
     this._putToDb(record).catch((err) =>
-      console.warn("[CONTENT-CACHE] IndexedDB write failed:", /** @type {Error} */ (err).message)
+      console.warn("[CONTENT-CACHE] IndexedDB write failed:", (err as Error).message)
     );
 
     return true;
   }
 
-  /**
-   * @param {number} requiredBytes
-   */
-  _evictIfNeeded(requiredBytes) {
+  private _evictIfNeeded(requiredBytes: number): void {
     while (
       this._currentBytes + requiredBytes > this._maxBytes &&
       this._memory.size > 0
     ) {
-      const firstKey = this._memory.keys().next().value;
+      // The while condition guarantees size > 0, so a first key exists.
+      const firstKey = this._memory.keys().next().value!;
       const first = this._memory.get(firstKey);
       this._currentBytes -= first.bytesCount;
       this._memory.delete(firstKey);
@@ -188,26 +188,18 @@ export class ContentCache {
     }
   }
 
-  /**
-   * @param {Record<string, any>} record
-   * @returns {Promise<void>}
-   */
-  async _putToDb(record) {
+  private async _putToDb(record: Record<string, any>): Promise<void> {
     await this._withStore("readwrite", (store) => store.put(record));
   }
 
-  /**
-   * @param {string} hash
-   * @returns {Promise<void>}
-   */
-  async _deleteFromDb(hash) {
+  private async _deleteFromDb(hash: string): Promise<void> {
     await this._withStore("readwrite", (store) => store.delete(hash));
   }
 
   /**
    * Remove every cached payload.
    */
-  async clearCache() {
+  async clearCache(): Promise<void> {
     this._memory.clear();
     this._currentBytes = 0;
     const db = await this._dbPromise;
@@ -220,28 +212,14 @@ export class ContentCache {
 // Default process-wide cache instance for browser use.
 const _defaultCache = new ContentCache();
 
-/**
- * @param {string} hash
- * @returns {Promise<any>}
- */
-export async function getPayload(hash) {
+export async function getPayload(hash: string): Promise<any> {
   return _defaultCache.getPayload(hash);
 }
 
-/**
- * @param {string} hash
- * @param {string} cid
- * @param {boolean} compressed
- * @param {Uint8Array} bytes
- * @returns {Promise<boolean>}
- */
-export async function putPayload(hash, cid, compressed, bytes) {
+export async function putPayload(hash: string, cid: string, compressed: boolean, bytes: Uint8Array): Promise<boolean> {
   return _defaultCache.putPayload(hash, cid, compressed, bytes);
 }
 
-/**
- * @returns {Promise<void>}
- */
-export async function clearCache() {
+export async function clearCache(): Promise<void> {
   return _defaultCache.clearCache();
 }

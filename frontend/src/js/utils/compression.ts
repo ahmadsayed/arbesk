@@ -12,10 +12,8 @@ const GZIP_MAGIC = new Uint8Array([0x1f, 0x8b]);
 
 /**
  * Convert common input types to Uint8Array.
- * @param {string|Uint8Array|ArrayBuffer} data
- * @returns {Uint8Array}
  */
-function toUint8Array(data) {
+function toUint8Array(data: string | Uint8Array | ArrayBuffer): Uint8Array {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   if (typeof data === "string") return new TextEncoder().encode(data);
@@ -25,10 +23,8 @@ function toUint8Array(data) {
 /**
  * Return the input as a Uint8Array, preserving the original bytes.
  * Unlike toUint8Array, this does NOT re-encode strings.
- * @param {Uint8Array|ArrayBuffer} data
- * @returns {Uint8Array}
  */
-function toBytes(data) {
+function toBytes(data: Uint8Array | ArrayBuffer): Uint8Array {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   throw new Error("compression: expected binary input");
@@ -36,28 +32,22 @@ function toBytes(data) {
 
 /**
  * Check whether the first bytes look like a gzip stream.
- * @param {Uint8Array|ArrayBuffer} data
- * @returns {boolean}
  */
-export function isGzipped(data) {
+export function isGzipped(data: Uint8Array | ArrayBuffer): boolean {
   const bytes = toBytes(data);
   return bytes.length >= 2 && bytes[0] === GZIP_MAGIC[0] && bytes[1] === GZIP_MAGIC[1];
 }
 
 /**
  * Gzip-compress data.
- * @param {string|Uint8Array|ArrayBuffer} data
- * @returns {Uint8Array}
  */
-export function compress(data) {
+export function compress(data: string | Uint8Array | ArrayBuffer): Uint8Array {
   return gzipSync(toUint8Array(data), { level: 9 });
 }
 
 /**
  * Gzip-decompress data.
- * @param {Uint8Array|ArrayBuffer} data
- * @returns {Uint8Array}
  */
-export function decompress(data) {
+export function decompress(data: Uint8Array | ArrayBuffer): Uint8Array {
   return gunzipSync(toBytes(data));
 }

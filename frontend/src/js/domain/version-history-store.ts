@@ -16,11 +16,12 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetManifestCid,
   getActiveAssetTokenId,
-} from "./asset.js";
+} from "./asset.ts";
+
+export type VersionHistoryEntry = { cid: string; [key: string]: any };
 
 export const _deps = {
-  /** @param {string} cid */
-  walkChain: async (cid) => {
+  walkChain: async (cid: string) => {
     const { walkManifestChain } = await import("../engine/time-travel.js");
     return walkManifestChain(cid);
   },
@@ -28,13 +29,11 @@ export const _deps = {
     const { clearScene } = await import("../engine/scene-graph.js");
     clearScene();
   },
-  /** @param {string} cid */
-  loadAssetManifest: async (cid) => {
+  loadAssetManifest: async (cid: string) => {
     const { loadAssetManifest } = await import("../engine/scene-graph.js");
     return loadAssetManifest(cid);
   },
-  /** @param {string|number} tokenId */
-  fetchPublishedCid: async (tokenId) => {
+  fetchPublishedCid: async (tokenId: string | number) => {
     const { getActiveContract } = await import("../blockchain/wallet.js");
     const contract = getActiveContract();
     if (!contract) return null;
@@ -44,19 +43,14 @@ export const _deps = {
 };
 
 // ─── State ───
-/** @type {Array<{cid: string, [key: string]: any}>} */
-let entries = []; // oldest → newest, from walkManifestChain (incl. nodes map)
-/** @type {string|null} */
-let chainRootCid = null; // CID used to fetch the chain (latest known)
-/** @type {string|null} */
-let activeCid = null; // currently loaded manifest CID
-/** @type {string|null} */
-let publishedCid = null; // CID currently anchored on-chain
+let entries: VersionHistoryEntry[] = []; // oldest → newest, from walkManifestChain (incl. nodes map)
+let chainRootCid: string | null = null; // CID used to fetch the chain (latest known)
+let activeCid: string | null = null; // currently loaded manifest CID
+let publishedCid: string | null = null; // CID currently anchored on-chain
 let isLoading = false;
 let isHistoryNavigation = false;
 
-/** @type {Set<(snapshot: VersionHistoryState) => void>} */
-const _subscribers = new Set();
+const _subscribers: Set<(snapshot: VersionHistoryState) => void> = new Set();
 
 function _notify() {
   const snapshot = getState();
@@ -65,26 +59,24 @@ function _notify() {
 
 // ─── Public API ───
 
-/**
- * @typedef {object} VersionHistoryState
- * @property {Array<{cid: string, [key: string]: any}>} entries oldest → newest
- * @property {string|null} activeCid
- * @property {string|null} publishedCid
- * @property {boolean} isLoading
- */
+export interface VersionHistoryState {
+  /** oldest → newest */
+  entries: VersionHistoryEntry[];
+  activeCid: string | null;
+  publishedCid: string | null;
+  isLoading: boolean;
+}
 
-/**
- * @returns {VersionHistoryState}
- */
-export function getState() {
+export function getState(): VersionHistoryState {
   return { entries: [...entries], activeCid, publishedCid, isLoading };
 }
 
 /**
- * @param {(snapshot: VersionHistoryState) => void} fn
- * @returns {() => boolean} unsubscribe function
+ * @returns unsubscribe function
  */
-export function subscribe(fn) {
+export function subscribe(
+  fn: (snapshot: VersionHistoryState) => void
+): () => boolean {
   _subscribers.add(fn);
   return () => _subscribers.delete(fn);
 }
@@ -99,9 +91,9 @@ export function activeIndex() {
 }
 
 /**
- * @param {string} cid manifest CID to load
+ * @param cid manifest CID to load
  */
-export async function loadVersion(cid) {
+export async function loadVersion(cid: string) {
   if (isLoading || cid === activeCid) return;
   const prevCid = activeCid;
   isLoading = true;
@@ -122,7 +114,7 @@ export async function loadVersion(cid) {
     activeCid = cid;
   } catch (err) {
     console.error("Failed to load history version:", err);
-    alert("Failed to load version: " + /** @type {Error} */ (err).message);
+    alert("Failed to load version: " + (err as Error).message);
     activeCid = prevCid; // snap the hand back
   } finally {
     isLoading = false;

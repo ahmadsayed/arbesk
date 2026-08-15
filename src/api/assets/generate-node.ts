@@ -4,11 +4,11 @@ import { mockGenerate } from "../adapters/mock-adapter.ts";
 import {
   composeGltfJson,
   serializeGLB,
-} from "../../../frontend/src/js/gltf/gltf-core.js";
+} from "../../../frontend/src/js/gltf/gltf-core.ts";
 import {
   isGzipped,
   decompress,
-} from "../../../frontend/src/js/utils/compression.js";
+} from "../../../frontend/src/js/utils/compression.ts";
 import {
   createTask,
   createImageTask,

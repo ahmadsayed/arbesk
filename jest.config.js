@@ -17,6 +17,9 @@ export default {
   setupFiles: ["<rootDir>/test/jest.setup.js"],
   moduleNameMapper: {
     "^multiformats/hashes/sha2$": "<rootDir>/node_modules/multiformats/src/hashes/sha2.js",
+    // Frontend .ts sources import siblings with .js specifiers (emitted-ESM
+    // convention); strip the extension so jest resolves the .ts source.
+    "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   extensionsToTreatAsEsm: [".ts"],
   transform: {

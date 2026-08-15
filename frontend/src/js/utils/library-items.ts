@@ -1,11 +1,7 @@
 /**
  * Filter library items by a case-insensitive substring of the name.
- * @template {{name: string}} T
- * @param {T[]} items
- * @param {string} searchQuery
- * @returns {T[]}
  */
-export function filterItems(items, searchQuery) {
+export function filterItems<T extends { name: string }>(items: T[], searchQuery: string): T[] {
   const q = searchQuery.trim().toLowerCase();
   if (!q) return items;
   return items.filter((item) => item.name.toLowerCase().includes(q));
@@ -13,12 +9,8 @@ export function filterItems(items, searchQuery) {
 
 /**
  * Compute the inclusive id range between an anchor and a target item.
- * @param {Array<{id: any}>} items
- * @param {any} anchorId
- * @param {any} targetId
- * @returns {any[]}
  */
-export function computeRangeSelection(items, anchorId, targetId) {
+export function computeRangeSelection(items: Array<{ id: any }>, anchorId: any, targetId: any): any[] {
   const ids = items.map((i) => i.id);
   const anchorIndex = ids.indexOf(anchorId);
   const targetIndex = ids.indexOf(targetId);
@@ -32,10 +24,8 @@ export function computeRangeSelection(items, anchorId, targetId) {
 
 /**
  * Format a byte count for display.
- * @param {number|null|undefined} bytes
- * @returns {string}
  */
-export function formatBytes(bytes) {
+export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null) return "-";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -44,10 +34,8 @@ export function formatBytes(bytes) {
 
 /**
  * Trim a token ID for display: `#1234…abcd`.
- * @param {any} tokenId
- * @returns {string}
  */
-export function trimTokenId(tokenId) {
+export function trimTokenId(tokenId: any): string {
   const s = String(tokenId);
   if (s.length <= 8) return `#${s}`;
   return `#${s.slice(0, 4)}…${s.slice(-4)}`;

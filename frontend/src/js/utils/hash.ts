@@ -22,29 +22,22 @@ export const SUPPORTED_HASH_ALGORITHMS = new Set(["murmur3-32", "murmur3-128"]);
 
 /**
  * Convert a 32-bit unsigned integer to an 8-digit hex string.
- * @param {number} value
- * @returns {string}
  */
-function u32ToHex(value) {
+function u32ToHex(value: number): string {
   return (value >>> 0).toString(16).padStart(8, "0");
 }
 
 /**
  * Rotate a 32-bit integer left.
- * @param {number} x
- * @param {number} r
- * @returns {number}
  */
-function rotl32(x, r) {
+function rotl32(x: number, r: number): number {
   return ((x << r) | (x >>> (32 - r))) >>> 0;
 }
 
 /**
  * MurmurHash3 finalization mix for a 32-bit lane.
- * @param {number} h
- * @returns {number}
  */
-function fmix32(h) {
+function fmix32(h: number): number {
   h ^= h >>> 16;
   h = Math.imul(h, 0x85ebca6b);
   h ^= h >>> 13;
@@ -58,11 +51,9 @@ function fmix32(h) {
  *
  * Based on the public-domain reference implementation by Austin Appleby.
  *
- * @param {Uint8Array} bytes
- * @param {number} [seed=0]
- * @returns {number} 32-bit unsigned hash value
+ * @returns 32-bit unsigned hash value
  */
-export function murmur3_32(bytes, seed = 0) {
+export function murmur3_32(bytes: Uint8Array, seed: number = 0): number {
   if (!(bytes instanceof Uint8Array)) {
     throw new Error("murmur3_32: expected Uint8Array");
   }
@@ -137,11 +128,9 @@ export function murmur3_32(bytes, seed = 0) {
  *
  * Based on the public-domain reference implementation by Austin Appleby.
  *
- * @param {Uint8Array} bytes
- * @param {number} [seed=0]
- * @returns {string} 32-character hex-encoded 128-bit hash
+ * @returns 32-character hex-encoded 128-bit hash
  */
-export function murmur3_128(bytes, seed = 0) {
+export function murmur3_128(bytes: Uint8Array, seed: number = 0): string {
   if (!(bytes instanceof Uint8Array)) {
     throw new Error("murmur3_128: expected Uint8Array");
   }
@@ -236,11 +225,9 @@ export function murmur3_128(bytes, seed = 0) {
 /**
  * Hash bytes using the chosen algorithm and return a hex string.
  *
- * @param {Uint8Array} bytes
- * @param {string} [algorithm="murmur3-128"]
- * @returns {string} hex-encoded hash
+ * @returns hex-encoded hash
  */
-export function hashBytes(bytes, algorithm = DEFAULT_HASH_ALGORITHM) {
+export function hashBytes(bytes: Uint8Array, algorithm: string = DEFAULT_HASH_ALGORITHM): string {
   if (algorithm === "murmur3-128") {
     return murmur3_128(bytes);
   }
@@ -249,4 +236,3 @@ export function hashBytes(bytes, algorithm = DEFAULT_HASH_ALGORITHM) {
   }
   throw new Error(`hashBytes: unsupported algorithm "${algorithm}"`);
 }
-

@@ -1,9 +1,7 @@
 /**
  * Escape HTML special characters in a string.
- * @param {any} str
- * @returns {string}
  */
-export function escapeHtml(str) {
+export function escapeHtml(str: any): string {
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

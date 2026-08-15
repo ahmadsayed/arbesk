@@ -13,15 +13,15 @@ const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 
 export const MAX_EDITORS_PER_TOKEN = 5000;
 
-/**
- * @typedef {{address: string, role: number}} EditorEntry
- */
+export interface EditorEntry {
+  address: string;
+  role: number;
+}
 
 /**
- * @param {...any} args
- * @returns {any} hex string from Web3.utils.soliditySha3
+ * @returns hex string from Web3.utils.soliditySha3
  */
-function _soliditySha3(...args) {
+function _soliditySha3(...args: any[]): any {
   const W3 = window.Web3;
   if (!W3 || !W3.utils || !W3.utils.soliditySha3) {
     throw new Error("Web3.js not loaded from CDN");
@@ -31,13 +31,14 @@ function _soliditySha3(...args) {
 
 /**
  * Build a leaf hash for the editor Merkle tree.
- * @param {string} address
- * @param {number} role
- * @param {string|number} tokenId
- * @param {number} setVersion
- * @returns {string} 32-byte hex string
+ * @returns 32-byte hex string
  */
-export function makeLeaf(address, role, tokenId, setVersion) {
+export function makeLeaf(
+  address: string,
+  role: number,
+  tokenId: string | number,
+  setVersion: number
+): string {
   return _soliditySha3(
     { type: "address", value: address },
     { type: "uint8", value: role },
@@ -47,22 +48,22 @@ export function makeLeaf(address, role, tokenId, setVersion) {
 }
 
 /**
- * @param {string[]} leaves
- * @returns {any} SimpleMerkleTree instance, or null for an empty list
+ * @returns SimpleMerkleTree instance, or null for an empty list
  */
-function _buildTree(leaves) {
+function _buildTree(leaves: string[]): SimpleMerkleTree | null {
   if (!leaves || leaves.length === 0) return null;
   return SimpleMerkleTree.of(leaves);
 }
 
 /**
  * Compute the Merkle root for an editor list at a given token/version.
- * @param {Array<{address: string, role: number}>} editorList
- * @param {string|number} tokenId
- * @param {number} setVersion
- * @returns {string} 32-byte hex root
+ * @returns 32-byte hex root
  */
-export function computeRoot(editorList, tokenId, setVersion) {
+export function computeRoot(
+  editorList: EditorEntry[],
+  tokenId: string | number,
+  setVersion: number
+): string {
   if (!editorList || editorList.length === 0) {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
   }
@@ -75,18 +76,18 @@ export function computeRoot(editorList, tokenId, setVersion) {
     makeLeaf(e.address, e.role, tokenId, setVersion)
   );
   const tree = _buildTree(leaves);
-  return tree.root;
+  return tree!.root;
 }
 
 /**
  * Generate a Merkle proof for an editor in the list.
- * @param {Array<{address: string, role: number}>} editorList
- * @param {string} targetAddress
- * @param {string|number} tokenId
- * @param {number} setVersion
- * @returns {{proof: string[], role: number}|null}
  */
-export function getProof(editorList, targetAddress, tokenId, setVersion) {
+export function getProof(
+  editorList: EditorEntry[],
+  targetAddress: string,
+  tokenId: string | number,
+  setVersion: number
+): { proof: string[]; role: number } | null {
   if (!editorList || editorList.length === 0) return null;
   const entry = editorList.find(
     (e) => e.address.toLowerCase() === targetAddress.toLowerCase()
@@ -98,18 +99,18 @@ export function getProof(editorList, targetAddress, tokenId, setVersion) {
   );
   const tree = _buildTree(leaves);
   const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
-  const proof = tree.getProof(leaf);
+  const proof = tree!.getProof(leaf);
   return { proof, role: entry.role };
 }
 
 /**
  * Verify a Merkle proof against a root and leaf.
- * @param {string} root
- * @param {string} leaf
- * @param {string[]} proof
- * @returns {boolean}
  */
-export function verifyProof(root, leaf, proof) {
+export function verifyProof(
+  root: string,
+  leaf: string,
+  proof: string[]
+): boolean {
   if (
     !root ||
     root === "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -122,34 +123,28 @@ export function verifyProof(root, leaf, proof) {
 // ─── Cache ─────────────────────────────────────────────────────────────────
 
 /**
- * @param {string} tag asset tag
- * @returns {string} localStorage key
+ * @returns localStorage key
  */
-export function editorListKey(tag) {
+export function editorListKey(tag: string): string {
   return EDITOR_LIST_PREFIX + tag;
 }
 
-/**
- * @param {string} tag
- * @param {EditorEntry[]} list
- * @param {string|null} [cid]
- */
-export function saveEditorList(tag, list, cid = null) {
+export function saveEditorList(
+  tag: string,
+  list: EditorEntry[],
+  cid: string | null = null
+) {
   try {
     localStorage.setItem(
       editorListKey(tag),
       JSON.stringify({ list, cid, saved: Date.now() })
     );
   } catch (e) {
-    console.warn("[EDITORS] failed to cache editor list:", /** @type {Error} */ (e).message);
+    console.warn("[EDITORS] failed to cache editor list:", (e as Error).message);
   }
 }
 
-/**
- * @param {string} tag
- * @returns {EditorEntry[]|null}
- */
-function _loadCachedEditorList(tag) {
+function _loadCachedEditorList(tag: string): EditorEntry[] | null {
   try {
     const raw = localStorage.getItem(editorListKey(tag));
     if (!raw) return null;
@@ -161,10 +156,7 @@ function _loadCachedEditorList(tag) {
   return null;
 }
 
-/**
- * @param {string} tag
- */
-export function clearEditorCache(tag) {
+export function clearEditorCache(tag: string) {
   try {
     localStorage.removeItem(editorListKey(tag));
   } catch {
@@ -174,11 +166,7 @@ export function clearEditorCache(tag) {
 
 // ─── List / version resolution ─────────────────────────────────────────────
 
-/**
- * @param {string} tag
- * @returns {Promise<EditorEntry[]>}
- */
-export async function loadEditorList(tag) {
+export async function loadEditorList(tag: string): Promise<EditorEntry[]> {
   if (!tag) return [];
   try {
     const c = getActiveContract();
@@ -193,17 +181,13 @@ export async function loadEditorList(tag) {
       }
     }
   } catch (err) {
-    console.warn(`[EDITORS] failed to load editor list for ${tag}:`, /** @type {Error} */ (err).message);
+    console.warn(`[EDITORS] failed to load editor list for ${tag}:`, (err as Error).message);
   }
   const cached = _loadCachedEditorList(tag);
   return cached || [];
 }
 
-/**
- * @param {string} tag
- * @returns {Promise<number>}
- */
-export async function getEditorSetVersion(tag) {
+export async function getEditorSetVersion(tag: string): Promise<number> {
   const c = getActiveContract();
   if (!c) return 1;
   try {
@@ -216,12 +200,10 @@ export async function getEditorSetVersion(tag) {
 
 // ─── Proof command ─────────────────────────────────────────────────────────
 
-/**
- * @param {string} tag
- * @param {string} editorAddress
- * @returns {Promise<{proof: string[], role: number}|null>}
- */
-export async function buildEditorProof(tag, editorAddress) {
+export async function buildEditorProof(
+  tag: string,
+  editorAddress: string
+): Promise<{ proof: string[]; role: number } | null> {
   const [versionResult, listResult] = await Promise.allSettled([
     getEditorSetVersion(tag),
     loadEditorList(tag),

@@ -7,10 +7,8 @@ import { getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
 /**
  * Extract the CID from a manifest thumbnail field.
  * Thumbnails may be a bare CID string or an object ({ cid } or { source: { cid } }).
- * @param {any} thumbnail
- * @returns {string|null}
  */
-export function extractThumbnailCid(thumbnail) {
+export function extractThumbnailCid(thumbnail: any): string | null {
   if (!thumbnail) return null;
   if (typeof thumbnail === "string") return thumbnail;
   return thumbnail.cid || thumbnail.source?.cid || null;
@@ -20,12 +18,12 @@ export function extractThumbnailCid(thumbnail) {
  * Load a thumbnail blob from IPFS and replace the container's content with
  * an <img>. The object URL is revoked once the image loads or fails.
  *
- * @param {HTMLElement} containerEl - element whose content is replaced by the img
- * @param {string} cid - thumbnail CID
- * @param {string} [name] - asset/item name used for the alt text
- * @returns {Promise<HTMLImageElement|null>} the img element, or null on failure
+ * @param containerEl - element whose content is replaced by the img
+ * @param cid - thumbnail CID
+ * @param name - asset/item name used for the alt text
+ * @returns the img element, or null on failure
  */
-export async function loadThumbnailInto(containerEl, cid, name) {
+export async function loadThumbnailInto(containerEl: HTMLElement, cid: string, name?: string): Promise<HTMLImageElement | null> {
   if (!cid || !containerEl) return null;
   try {
     const blob = await getBlobFromRemoteIPFS(cid);

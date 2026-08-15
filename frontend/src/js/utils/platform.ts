@@ -7,10 +7,10 @@ export const MOD = isMac ? '⌘' : 'Ctrl';
  * modifier. On Mac: "New asset (Ctrl+N)" → "New asset (⌘N)".
  * On Linux/Windows this is a no-op.
  */
-export function rewriteShortcutTitles() {
+export function rewriteShortcutTitles(): void {
   if (!isMac) return;
   document.querySelectorAll('[title]').forEach(el => {
-    const target = /** @type {HTMLElement} */ (el);
+    const target = el as HTMLElement;
     target.title = target.title.replace(/Ctrl\+/g, '⌘');
   });
 }

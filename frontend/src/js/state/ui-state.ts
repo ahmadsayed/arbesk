@@ -1,14 +1,12 @@
-import { createStore } from "./create-store.js";
+import { createStore } from "./create-store.ts";
 import { EVENTS } from "../events/bus.js";
 
-/**
- * @typedef {Object} UiState
- * @property {string|null} selectedNodeId
- * @property {number} nestingDepth
- */
+export interface UiState {
+  selectedNodeId: string | null;
+  nestingDepth: number;
+}
 
-/** @type {UiState} */
-const _defaults = {
+const _defaults: UiState = {
   selectedNodeId: null,
   nestingDepth: 0,
 };

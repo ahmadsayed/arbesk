@@ -4,23 +4,22 @@
  * Production writes must go through the domain modules; tests may import
  * the store directly for setup/assertions.
  */
-import { createStore } from "../state/create-store.js";
+import { createStore } from "../state/create-store.ts";
 import { EVENTS } from "../events/bus.js";
 
-/**
- * @typedef {Object} AssetStoreState
- * @property {string|null} activeAssetManifestCid
- * @property {string|null} activeAssetTokenId
- * @property {string|null} activeAssetName
- * @property {string|null} latestAssetManifestCid
- * @property {any} currentManifest
- * @property {string|null} activeCollectionTokenId
- * @property {string|null} activeAssetId
- * @property {string|null} selectedCollectionId
- */
+export interface AssetStoreState {
+  activeAssetManifestCid: string | null;
+  activeAssetTokenId: string | null;
+  activeAssetName: string | null;
+  latestAssetManifestCid: string | null;
+  currentManifest: any;
+  activeCollectionTokenId: string | null;
+  activeAssetId: string | null;
+  selectedCollectionId: string | null;
+}
 
 const { store: assetStore, _resetForTesting } = createStore(
-  /** @type {AssetStoreState} */ ({
+  {
     activeAssetManifestCid: null,
     activeAssetTokenId: null,
     activeAssetName: null,
@@ -29,7 +28,7 @@ const { store: assetStore, _resetForTesting } = createStore(
     activeCollectionTokenId: null,
     activeAssetId: null,
     selectedCollectionId: null,
-  }),
+  } as AssetStoreState,
   EVENTS.ASSET_STATE_CHANGED
 );
 
@@ -41,11 +40,10 @@ export { assetStore, _resetForTesting };
  * against `currentManifest._manifestCid` to skip an IPFS refetch, so every
  * writer of `currentManifest` must stamp the CID — this is the single
  * definition of that convention.
- * @template T
- * @param {T} manifest
- * @param {string|null} cid
- * @returns {T & { _manifestCid: string|null }}
  */
-export function tagManifestCid(manifest, cid) {
+export function tagManifestCid<T>(
+  manifest: T,
+  cid: string | null
+): T & { _manifestCid: string | null } {
   return { ...manifest, _manifestCid: cid };
 }

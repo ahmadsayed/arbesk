@@ -11,10 +11,9 @@
  * Uses keccak256(soliditySha3(address)) so the contract can recompute and
  * verify ownership. One wallet = one default collection.
  *
- * @param {string} walletAddr
- * @returns {string|null} hex token id, or null if inputs are missing
+ * @returns hex token id, or null if inputs are missing
  */
-export function deriveDefaultCollectionId(walletAddr) {
+export function deriveDefaultCollectionId(walletAddr: string): string | null {
   if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
   return window.Web3.utils.soliditySha3({
     type: "address",
@@ -25,11 +24,9 @@ export function deriveDefaultCollectionId(walletAddr) {
 /**
  * Derive a deterministic named collection token ID from wallet + name.
  *
- * @param {string} walletAddr
- * @param {string} name
- * @returns {string|null} hex token id, or null if inputs are missing
+ * @returns hex token id, or null if inputs are missing
  */
-export function deriveNamedCollectionId(walletAddr, name) {
+export function deriveNamedCollectionId(walletAddr: string, name: string): string | null {
   if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
   return window.Web3.utils.soliditySha3(
     { type: "address", value: walletAddr },
@@ -41,12 +38,13 @@ export function deriveNamedCollectionId(walletAddr, name) {
  * Merge an asset CID into a collection manifest's `assets` map.
  * Pure function - does not touch IPFS or chain state.
  *
- * @param {Record<string, any>|null} collectionManifest
- * @param {string} assetID
- * @param {string} assetCid
- * @returns {Record<string, any>} new collection manifest object
+ * @returns new collection manifest object
  */
-export function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
+export function mergeAssetIntoCollection(
+  collectionManifest: Record<string, any> | null,
+  assetID: string,
+  assetCid: string
+): Record<string, any> {
   const base = collectionManifest
     ? { ...collectionManifest }
     : {
@@ -55,7 +53,7 @@ export function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) 
         version: 0,
         assets: {},
       };
-  const assets = { ...(/** @type {Record<string, string>} */ (base.assets || {})) };
+  const assets = { ...((base.assets || {}) as Record<string, string>) };
   assets[assetID] = assetCid;
   return {
     ...base,
@@ -66,19 +64,14 @@ export function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) 
 
 /**
  * Derive the assetID an asset occupies within its collection.
- *
- * @param {string|null} existingAssetId
- * @param {string|null} fallbackAssetId
- * @returns {string}
  */
-export function deriveDefaultAssetId(existingAssetId, fallbackAssetId) {
+export function deriveDefaultAssetId(existingAssetId: string | null, fallbackAssetId: string | null): string {
   return existingAssetId || fallbackAssetId || `asset_${Date.now()}`;
 }
 
 /**
  * 4x4 identity transform matrix.
- * @returns {number[]}
  */
-export function identityMatrix() {
+export function identityMatrix(): number[] {
   return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 }
