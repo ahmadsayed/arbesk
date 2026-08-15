@@ -501,6 +501,59 @@ html(lang="en")
         .wallet-popover-actions
           button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button" @click="signIn()" :class="{ hidden: !showSignIn }") Sign In
           button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button" @click="disconnect()") Log Out
+    //- Shared modal dialog host — Alpine.js component, see js/ui/dialog.js.
+    //- x-if (not x-show): a closed dialog is absent from the DOM entirely.
+    #appDialogHost(x-data="dialog")
+      template(x-if="open")
+        .dialog-backdrop(@click.self="cancel()")
+          .dialog(role="dialog" aria-modal="true" :aria-labelledby="titleId")
+            .dialog-header
+              h2.dialog-title(:id="titleId" x-text="title")
+            template(x-if="kind === 'prompt'")
+              .dialog-body
+                p(style="margin:0 0 var(--size-2)" x-text="body")
+                .form-group
+                  input.dialog-input.form-input(type="text" autocomplete="off" :value="inputValue" @keydown.enter.prevent="confirm()" @keydown.escape.prevent="cancel()")
+            template(x-if="kind === 'confirm'")
+              .dialog-body
+                p(style="margin:0" x-text="body")
+            template(x-if="kind === 'info'")
+              .dialog-body(x-html="bodyHtml")
+            template(x-if="kind === 'checkbox'")
+              .dialog-body
+                p(style="margin:0 0 var(--size-2)" x-text="body")
+                template(x-for="(opt, idx) in options" :key="idx")
+                  label(style="display:flex;align-items:center;gap:var(--size-2);padding:var(--size-1) 0")
+                    input(type="checkbox" :value="opt.value" :checked="opt.checked" @change="onOptionToggle(opt, $event)")
+                    span(x-text="opt.label")
+            template(x-if="kind === 'custom'")
+              .dialog-body.collaborator-dialog-body
+                #appDialogCustomBody
+            template(x-if="kind === 'burn'")
+              .dialog-body
+                p.dialog-warning(style="margin:0 0 var(--size-2)") Burning collection will delete all assets unless it is part of besked collection
+                p(style="margin:0 0 var(--size-2)") Type #[strong(x-text="collectionName")] to confirm.
+                .form-group
+                  input.dialog-input.form-input(type="text" autocomplete="off" :placeholder="placeholder" @input="onBurnInput($event.target.value)" @keydown.escape.prevent="cancel()" @keydown.enter="onBurnEnter($event)")
+            template(x-if="kind === 'prompt'")
+              .dialog-actions
+                button.btn.btn-secondary.dialog-cancel-btn(type="button" @click="cancel()") Cancel
+                button.btn.btn-primary.dialog-confirm-btn(type="button" @click="confirm()") Confirm
+            template(x-if="kind === 'confirm'")
+              .dialog-actions
+                template(x-for="(btn, idx) in buttons" :key="idx")
+                  button.dialog-action-btn(type="button" :class="btn.className" :data-value="btn.value" x-text="btn.text" @click="closeWithValue(btn.value)")
+            template(x-if="kind === 'info' || kind === 'custom'")
+              .dialog-actions
+                button.btn.btn-primary.dialog-close-btn(type="button" @click="cancel()") Close
+            template(x-if="kind === 'checkbox'")
+              .dialog-actions
+                button.btn.btn-secondary.dialog-action-btn(type="button" data-value="cancel" @click="cancel()") Cancel
+                button.btn.btn-primary.dialog-confirm-btn(type="button" @click="confirmCheckbox()") Confirm
+            template(x-if="kind === 'burn'")
+              .dialog-actions
+                button.btn.btn-secondary.dialog-cancel-btn(type="button" @click="cancel()") Cancel
+                button.btn.btn-danger.dialog-burn-btn(type="button" :disabled="!burnEnabled" @click="closeWithValue('burn')") Burn Collection
     script(type="module", src="/js/engine/scene-graph.js")
     script(type="module", src="/js/engine/time-travel.js")
     script(type="module", src="/js/engine/parametric-preview.js")

@@ -1,9 +1,16 @@
 /**
- * Arbesk Dialog Utility
+ * Arbesk Dialog Utility — Alpine.js component
  *
  * GNOME HIG-styled modal dialog that replaces browser prompt().
  * Uses the popover surface tokens, backdrop blur, and
  * keyboard-accessible focus trap (Escape to cancel, Enter to confirm).
+ *
+ * The DOM lives in app.pug (#appDialogHost fragment, `x-data="dialog"`).
+ * Reactive state lives in an Alpine.store so template expressions and the
+ * imperative show*() entry points mutate the same reactive proxy. The host
+ * shows one dialog at a time: show*() calls that arrive while a dialog is
+ * open are parked in a FIFO queue and opened after the current one resolves
+ * (each caller's promise resolves with its own dialog's result).
  *
  * Usage:
  *   import { showDialog } from "./ui/dialog.js";
@@ -11,18 +18,96 @@
  *   if (result === null) { /&#42; cancelled &#42;/ }
  */
 
-import { escapeHtml } from "../utils/html.js";
+import { Alpine, registerAlpineComponent } from "./alpine.js";
+
+/**
+ * @typedef {object} DialogState
+ * @property {boolean} open
+ * @property {""|"prompt"|"confirm"|"info"|"checkbox"|"custom"|"burn"} kind
+ * @property {string} title
+ * @property {string} body - plain-text instructional line (escaped via x-text)
+ * @property {string} bodyHtml - trusted HTML body (info dialogs only)
+ * @property {string} inputValue
+ * @property {string} placeholder
+ * @property {Array<{text: string, value: string, className: string}>} buttons
+ * @property {Array<{value: string, label: string, checked: boolean, countsTowardMax: boolean}>} options
+ * @property {number} max - max selectable checkboxes that count toward the cap
+ * @property {string} collectionName
+ * @property {string} titleId - id of the .dialog-title element (aria-labelledby)
+ */
+
+/**
+ * @typedef {object} DialogSpec
+ * @property {"prompt"|"confirm"|"info"|"checkbox"|"custom"|"burn"} kind
+ * @property {string} title
+ * @property {string} [body]
+ * @property {string} [bodyHtml]
+ * @property {string} [inputValue]
+ * @property {string} [placeholder]
+ * @property {Array<{text: string, value: string, className: string}>} [buttons]
+ * @property {Array<{value: string, label: string, checked: boolean, countsTowardMax: boolean}>} [options]
+ * @property {number} [max]
+ * @property {string} [collectionName]
+ * @property {HTMLElement} [bodyEl] - caller-supplied body (custom dialogs)
+ */
+
+/** @type {DialogState|null} reactive Alpine.store proxy */
+let _state = null;
+
+/**
+ * Get (or lazily create) the reactive dialog state store.
+ * @returns {DialogState}
+ */
+function state() {
+  if (!_state) {
+    // Alpine.store(name, value) is a setter (returns undefined); read it back.
+    if (!Alpine.store("dialog")) {
+      Alpine.store("dialog", {
+        open: false,
+        kind: "",
+        title: "",
+        body: "",
+        bodyHtml: "",
+        inputValue: "",
+        placeholder: "",
+        buttons: [],
+        options: [],
+        max: Infinity,
+        collectionName: "",
+        titleId: "",
+      });
+    }
+    _state = /** @type {DialogState} */ (Alpine.store("dialog"));
+  }
+  return /** @type {DialogState} */ (_state);
+}
+
+// ── Non-template plumbing (module-level, never in the store) ────────────────
+// The store is deeply reactive: DOM nodes stored there would be proxied and
+// fail DOM brand checks (appendChild etc.), so the caller body element, the
+// pending resolver, and the focus-trap teardown stay module-level.
+
+/** @type {((value: any) => void)|null} resolver of the currently open dialog */
+let _resolve = null;
+/** @type {(() => void)|null} focus-trap deactivate fn for the open dialog */
+let _removeTrap = null;
+/** @type {HTMLElement|null} caller-supplied body of the open custom dialog */
+let _customBodyEl = null;
+/** Monotonic id invalidating pending post-render work of superseded dialogs. */
+let _openSeq = 0;
+/** @type {Array<() => void>} parked open requests (FIFO) */
+const _queue = [];
 
 // ── Shared infrastructure ────────────────────────────────────────────────────
 
 /**
- * @param {HTMLElement} dialog
+ * @param {Element} dialog
  * @param {Element|null} [initialFocusEl]
  */
 function _trapFocus(dialog, initialFocusEl) {
   const trap = /** @type {any} */ (window).focusTrap.createFocusTrap(dialog, {
     initialFocus: initialFocusEl,
-    escapeDeactivates: false, // Escape is handled by _buildDialog's global keydown
+    escapeDeactivates: false, // Escape is handled by the global keydown listener
     allowOutsideClick: true, // lets MetaMask overlays receive clicks without breaking the trap
   });
   trap.activate();
@@ -30,63 +115,278 @@ function _trapFocus(dialog, initialFocusEl) {
 }
 
 /**
- * Builds the shared dialog scaffold: backdrop, dialog element with title,
- * resolved guard, closeDialog, backdrop-click-to-cancel, and global Escape.
- * Caller appends body/actions to `dialog`, calls _trapFocus, then passes the
- * returned removeTrap to setRemoveTrap.
- * @param {string} title
+ * Run `fn` after Alpine has flushed the x-if insertion into the DOM.
+ * @param {() => void} fn
+ */
+function _afterRender(fn) {
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => fn());
+  } else {
+    queueMicrotask(() => queueMicrotask(fn));
+  }
+}
+
+/**
+ * The element that receives initial focus for a dialog kind, matching the
+ * pre-Alpine implementation: input (prompt/burn), first action button
+ * (confirm), close button (info/custom), confirm button (checkbox).
+ * @param {DialogSpec["kind"]} kind
+ * @param {Element} dialogEl
+ * @returns {Element|null}
+ */
+function _initialFocusEl(kind, dialogEl) {
+  switch (kind) {
+    case "prompt":
+    case "burn":
+      return dialogEl.querySelector(".dialog-input");
+    case "confirm":
+      return dialogEl.querySelector(".dialog-action-btn");
+    case "checkbox":
+      return dialogEl.querySelector(".dialog-confirm-btn");
+    case "info":
+    case "custom":
+      return dialogEl.querySelector(".dialog-close-btn");
+    default:
+      return null;
+  }
+}
+
+/**
+ * Global Escape handler, bound while a dialog is open.
+ * @param {KeyboardEvent} e
+ */
+function _onGlobalKey(e) {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    _close(null);
+  }
+}
+
+/**
+ * Populate the store from `spec`, flip the host open, and schedule the focus
+ * trap for after Alpine inserts the dialog DOM.
+ * @param {DialogSpec} spec
  * @param {(value: any) => void} resolve
  */
-function _buildDialog(title, resolve) {
-  const dialogId = "dialog-title-" + Date.now();
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "dialog-backdrop";
-
-  const dialog = document.createElement("div");
-  dialog.className = "dialog";
-  dialog.setAttribute("role", "dialog");
-  dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-labelledby", dialogId);
-  dialog.innerHTML = `<div class="dialog-header"><h2 class="dialog-title" id="${dialogId}">${escapeHtml(
-    title
-  )}</h2></div>`;
-
-  backdrop.appendChild(dialog);
-  document.body.appendChild(backdrop);
-
-  let resolved = false;
-  let removeTrap = () => {};
-
-  /** @param {KeyboardEvent} e */
-  function onGlobalKey(e) {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      closeDialog(null);
+function _open(spec, resolve) {
+  if (!document.getElementById("appDialogHost")) {
+    throw new Error("#appDialogHost is missing from the DOM");
+  }
+  const s = state();
+  s.kind = spec.kind;
+  s.title = spec.title;
+  s.body = spec.body || "";
+  s.bodyHtml = spec.bodyHtml || "";
+  s.inputValue = spec.inputValue || "";
+  s.placeholder = spec.placeholder || "";
+  s.buttons = spec.buttons || [];
+  s.options = spec.options || [];
+  s.max = spec.max ?? Infinity;
+  s.collectionName = spec.collectionName || "";
+  s.titleId = "dialog-title-" + Date.now();
+  _resolve = resolve;
+  _customBodyEl = spec.bodyEl || null;
+  if (_customBodyEl) {
+    // Attach before the dialog opens so body-internal action buttons can
+    // close it early with a value; _close's resolve-once guard keeps a later
+    // Close/Escape a no-op.
+    /** @type {any} */ (_customBodyEl).closeDialog = _close;
+  }
+  document.addEventListener("keydown", _onGlobalKey);
+  s.open = true;
+  const seq = ++_openSeq;
+  _afterRender(() => {
+    if (seq !== _openSeq || !state().open) return; // superseded or already closed
+    try {
+      const dialogEl = document.querySelector("#appDialogHost .dialog");
+      if (!dialogEl) return;
+      if (spec.kind === "custom" && _customBodyEl) {
+        dialogEl
+          .querySelector("#appDialogCustomBody")
+          ?.appendChild(_customBodyEl);
+      }
+      _removeTrap = _trapFocus(dialogEl, _initialFocusEl(spec.kind, dialogEl));
+    } catch (err) {
+      console.error(
+        "[DIALOG] error activating focus trap:",
+        /** @type {Error} */ (err)
+      );
     }
-  }
-
-  /** @param {any} value */
-  function closeDialog(value) {
-    if (resolved) return;
-    resolved = true;
-    document.removeEventListener("keydown", onGlobalKey);
-    removeTrap();
-    backdrop.remove();
-    resolve(value);
-  }
-
-  document.addEventListener("keydown", onGlobalKey);
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) closeDialog(null);
   });
+}
 
+/**
+ * Close the open dialog, resolving its promise exactly once (resolve-once
+ * guard: a second Escape/Close/backdrop click is a no-op). Deactivates the
+ * focus trap before the dialog leaves the DOM, then drains the FIFO queue.
+ * @param {any} value
+ */
+function _close(value) {
+  const s = state();
+  if (!s.open) return;
+  const resolve = _resolve;
+  _resolve = null;
+  document.removeEventListener("keydown", _onGlobalKey);
+  if (_removeTrap) {
+    _removeTrap();
+    _removeTrap = null;
+  }
+  if (_customBodyEl) {
+    _customBodyEl.remove();
+    _customBodyEl = null;
+  }
+  s.open = false;
+  if (resolve) resolve(value);
+  _drainQueue();
+}
+
+/**
+ * Park an open request; it runs immediately when no dialog is open.
+ * @param {() => void} openRequest
+ */
+function _enqueue(openRequest) {
+  _queue.push(openRequest);
+  _drainQueue();
+}
+
+/** Open the next parked request when no dialog is open. */
+function _drainQueue() {
+  if (state().open || _queue.length === 0) return;
+  const next = _queue.shift();
+  if (next) next();
+}
+
+/**
+ * Open a dialog for `spec`, preserving the legacy error contract: log with a
+ * [DIALOG] prefix and resolve with `errorValue` instead of throwing.
+ * @param {DialogSpec} spec
+ * @param {(value: any) => void} resolve
+ * @param {string} errorLabel - e.g. "dialog", "confirm dialog"
+ * @param {any} [errorValue=null]
+ */
+function _openGuarded(spec, resolve, errorLabel, errorValue = null) {
+  try {
+    _open(spec, resolve);
+  } catch (err) {
+    console.error(
+      `[DIALOG] error creating ${errorLabel}:`,
+      /** @type {Error} */ (err)
+    );
+    resolve(errorValue);
+    _drainQueue();
+  }
+}
+
+// ── Component factory (template-facing) ─────────────────────────────────────
+
+/**
+ * Alpine data factory for the shared dialog host (`x-data="dialog"`).
+ * Getters read the reactive store, so Alpine effects track them; methods
+ * delegate to the module functions above.
+ * @returns {object}
+ */
+export function dialog() {
   return {
-    dialog,
-    closeDialog,
-    /** @param {() => void} fn */
-    setRemoveTrap(fn) {
-      removeTrap = fn;
+    get open() {
+      return state().open;
+    },
+    get kind() {
+      return state().kind;
+    },
+    get title() {
+      return state().title;
+    },
+    get body() {
+      return state().body;
+    },
+    get bodyHtml() {
+      return state().bodyHtml;
+    },
+    get inputValue() {
+      return state().inputValue;
+    },
+    get placeholder() {
+      return state().placeholder;
+    },
+    get buttons() {
+      return state().buttons;
+    },
+    get options() {
+      return state().options;
+    },
+    get collectionName() {
+      return state().collectionName;
+    },
+    get titleId() {
+      return state().titleId;
+    },
+    get burnEnabled() {
+      const s = state();
+      return s.inputValue.trim() === s.collectionName.trim();
+    },
+
+    cancel() {
+      _close(null);
+    },
+
+    /** @param {any} value */
+    closeWithValue(value) {
+      _close(value);
+    },
+
+    /** Prompt confirm: read the live input (trimmed; blank resolves null). */
+    confirm() {
+      const input = /** @type {HTMLInputElement|null} */ (
+        document.querySelector("#appDialogHost .dialog-input")
+      );
+      const raw = input ? input.value : state().inputValue;
+      _close(raw.trim() || null);
+    },
+
+    /** Checkbox confirm: resolve with the checked values. */
+    confirmCheckbox() {
+      const selected = state()
+        .options.filter((o) => o.checked)
+        .map((o) => o.value);
+      _close(selected);
+    },
+
+    /**
+     * Checkbox toggle with max enforcement; options that don't count toward
+     * the max (e.g. "in place") never consume slots.
+     * @param {{checked: boolean, countsTowardMax: boolean}} opt
+     * @param {Event} event
+     */
+    onOptionToggle(opt, event) {
+      const s = state();
+      const input = /** @type {HTMLInputElement} */ (event.target);
+      // Only options that count toward the max can be refused; toggles like
+      // "in place" never consume slots.
+      if (input.checked && opt.countsTowardMax) {
+        const count = s.options.filter(
+          (o) => o.checked && o.countsTowardMax
+        ).length;
+        if (count >= s.max) {
+          input.checked = false;
+          return;
+        }
+      }
+      opt.checked = input.checked;
+    },
+
+    /** @param {string} value */
+    onBurnInput(value) {
+      state().inputValue = value;
+    },
+
+    /** Burn confirm via Enter, only while the burn button would be enabled. */
+    /** @param {KeyboardEvent} event */
+    onBurnEnter(event) {
+      const s = state();
+      if (s.inputValue.trim() === s.collectionName.trim()) {
+        event.preventDefault();
+        _close("burn");
+      }
     },
   };
 }
@@ -103,56 +403,13 @@ function _buildDialog(title, resolve) {
  */
 export function showDialog(title, body, defaultValue = "") {
   return new Promise((resolve) => {
-    try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
-        title,
-        resolve
-      );
-
-      const bodyDiv = document.createElement("div");
-      bodyDiv.className = "dialog-body";
-      bodyDiv.innerHTML = `
-        <p style="margin:0 0 var(--size-2)">${escapeHtml(body)}</p>
-        <div class="form-group">
-          <input type="text" class="form-input dialog-input" value="${escapeHtml(
-            defaultValue
-          )}" autocomplete="off">
-        </div>`;
-
-      const actionsDiv = document.createElement("div");
-      actionsDiv.className = "dialog-actions";
-      actionsDiv.innerHTML = `
-        <button class="btn btn-secondary dialog-cancel-btn" type="button">Cancel</button>
-        <button class="btn btn-primary dialog-confirm-btn" type="button">Confirm</button>`;
-
-      dialog.appendChild(bodyDiv);
-      dialog.appendChild(actionsDiv);
-
-      const input = /** @type {HTMLInputElement} */ (dialog.querySelector(".dialog-input"));
-      const cancelBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-cancel-btn"));
-      const confirmBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-confirm-btn"));
-
-      function confirm() {
-        closeDialog(input.value.trim() || null);
-      }
-
-      cancelBtn.addEventListener("click", () => closeDialog(null));
-      confirmBtn.addEventListener("click", confirm);
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          closeDialog(null);
-        } else if (e.key === "Enter") {
-          e.preventDefault();
-          confirm();
-        }
-      });
-
-      setRemoveTrap(_trapFocus(dialog, input));
-    } catch (err) {
-      console.error("[DIALOG] error creating dialog:", err);
-      resolve(null);
-    }
+    _enqueue(() =>
+      _openGuarded(
+        { kind: "prompt", title, body, inputValue: defaultValue },
+        resolve,
+        "dialog"
+      )
+    );
   });
 }
 
@@ -168,53 +425,26 @@ export function showDialog(title, body, defaultValue = "") {
  */
 export function showConfirmDialog(title, body, buttons = []) {
   return new Promise((resolve) => {
-    try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
-        title,
-        resolve
-      );
-
-      const normalizedButtons = buttons.length
+    const normalized = (
+      buttons.length
         ? buttons
         : [
             { text: "Cancel", value: "cancel" },
             { text: "Confirm", value: "confirm" },
-          ];
-
-      const bodyDiv = document.createElement("div");
-      bodyDiv.className = "dialog-body";
-      bodyDiv.innerHTML = `<p style="margin:0">${escapeHtml(body)}</p>`;
-
-      const actionsDiv = document.createElement("div");
-      actionsDiv.className = "dialog-actions";
-      actionsDiv.innerHTML = normalizedButtons
-        .map((btn, idx) => {
-          const cls =
-            btn.className ||
-            (idx === 0 ? "btn btn-secondary" : "btn btn-primary");
-          return `<button class="${escapeHtml(
-            cls
-          )} dialog-action-btn" type="button" data-value="${escapeHtml(
-            btn.value
-          )}">${escapeHtml(btn.text)}</button>`;
-        })
-        .join("");
-
-      dialog.appendChild(bodyDiv);
-      dialog.appendChild(actionsDiv);
-
-      dialog.querySelectorAll(".dialog-action-btn").forEach((btn) => {
-        btn.addEventListener("click", () =>
-          closeDialog(/** @type {HTMLElement} */ (btn).dataset.value || null)
-        );
-      });
-
-      const firstBtn = dialog.querySelector(".dialog-action-btn");
-      setRemoveTrap(_trapFocus(dialog, firstBtn));
-    } catch (err) {
-      console.error("[DIALOG] error creating confirm dialog:", err);
-      resolve(null);
-    }
+          ]
+    ).map((btn, idx) => ({
+      text: btn.text,
+      value: btn.value,
+      className:
+        btn.className || (idx === 0 ? "btn btn-secondary" : "btn btn-primary"),
+    }));
+    _enqueue(() =>
+      _openGuarded(
+        { kind: "confirm", title, body, buttons: normalized },
+        resolve,
+        "confirm dialog"
+      )
+    );
   });
 }
 
@@ -261,31 +491,14 @@ export function showForkOrLiveRefDialog(assetID, { allowLiveRef = true } = {}) {
  */
 export function showInfoDialog(title, bodyHtml) {
   return new Promise((resolve) => {
-    try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
-        title,
-        resolve
-      );
-
-      const bodyDiv = document.createElement("div");
-      bodyDiv.className = "dialog-body";
-      bodyDiv.innerHTML = bodyHtml;
-
-      const actionsDiv = document.createElement("div");
-      actionsDiv.className = "dialog-actions";
-      actionsDiv.innerHTML = `<button class="btn btn-primary dialog-close-btn" type="button">Close</button>`;
-
-      dialog.appendChild(bodyDiv);
-      dialog.appendChild(actionsDiv);
-
-      const closeBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-close-btn"));
-      closeBtn.addEventListener("click", () => closeDialog(null));
-
-      setRemoveTrap(_trapFocus(dialog, closeBtn));
-    } catch (err) {
-      console.error("[DIALOG] error creating info dialog:", err);
-      resolve();
-    }
+    _enqueue(() =>
+      _openGuarded(
+        { kind: "info", title, bodyHtml },
+        resolve,
+        "info dialog",
+        undefined
+      )
+    );
   });
 }
 
@@ -300,66 +513,20 @@ export function showInfoDialog(title, bodyHtml) {
  */
 export function showCheckboxDialog(title, body, options, { max = Infinity } = {}) {
   return new Promise((resolve) => {
-    try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
-        title,
-        resolve
-      );
-
-      const bodyDiv = document.createElement("div");
-      bodyDiv.className = "dialog-body";
-
-      const hint = document.createElement("p");
-      hint.style.margin = "0 0 var(--size-2)";
-      hint.textContent = body;
-      bodyDiv.appendChild(hint);
-
-      const boxes = options.map((opt) => {
-        const label = document.createElement("label");
-        label.style.display = "flex";
-        label.style.alignItems = "center";
-        label.style.gap = "var(--size-2)";
-        label.style.padding = "var(--size-1) 0";
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.value = opt.value;
-        input.checked = !!opt.checked;
-        // Non-answer toggles (e.g. "in place") don't consume the max slots.
-        const counts = opt.countsTowardMax !== false;
-        input.addEventListener("change", () => {
-          const checkedCount = boxes.filter((b) => b.input.checked && b.counts).length;
-          if (checkedCount > max) input.checked = false;
-        });
-        const text = document.createElement("span");
-        text.textContent = opt.label;
-        label.appendChild(input);
-        label.appendChild(text);
-        bodyDiv.appendChild(label);
-        return { input, value: opt.value, counts };
-      });
-
-      const actionsDiv = document.createElement("div");
-      actionsDiv.className = "dialog-actions";
-      actionsDiv.innerHTML =
-        `<button class="btn btn-secondary dialog-action-btn" type="button" data-value="cancel">Cancel</button>` +
-        `<button class="btn btn-primary dialog-confirm-btn" type="button">Confirm</button>`;
-      dialog.appendChild(bodyDiv);
-      dialog.appendChild(actionsDiv);
-
-      /** @type {HTMLElement} */ (actionsDiv
-        .querySelector('.dialog-action-btn[data-value="cancel"]'))
-        .addEventListener("click", () => closeDialog(null));
-      const confirmBtn = /** @type {HTMLElement} */ (actionsDiv.querySelector(".dialog-confirm-btn"));
-      confirmBtn.addEventListener("click", () => {
-        const selected = boxes.filter((b) => b.input.checked).map((b) => b.value);
-        closeDialog(selected);
-      });
-
-      setRemoveTrap(_trapFocus(dialog, confirmBtn));
-    } catch (err) {
-      console.error("[DIALOG] error creating checkbox dialog:", err);
-      resolve(null);
-    }
+    const normalized = options.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+      checked: !!opt.checked,
+      // Non-answer toggles (e.g. "in place") don't consume the max slots.
+      countsTowardMax: opt.countsTowardMax !== false,
+    }));
+    _enqueue(() =>
+      _openGuarded(
+        { kind: "checkbox", title, body, options: normalized, max },
+        resolve,
+        "checkbox dialog"
+      )
+    );
   });
 }
 
@@ -378,34 +545,9 @@ export function showCheckboxDialog(title, body, options, { max = Infinity } = {}
  */
 export function showCustomDialog(title, bodyEl) {
   return new Promise((resolve) => {
-    try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
-        title,
-        resolve
-      );
-
-      // Let body-internal action buttons close the dialog with a result.
-      /** @type {any} */ (bodyEl).closeDialog = closeDialog;
-
-      const bodyDiv = document.createElement("div");
-      bodyDiv.className = "dialog-body collaborator-dialog-body";
-      bodyDiv.appendChild(bodyEl);
-
-      const actionsDiv = document.createElement("div");
-      actionsDiv.className = "dialog-actions";
-      actionsDiv.innerHTML = `<button class="btn btn-primary dialog-close-btn" type="button">Close</button>`;
-
-      dialog.appendChild(bodyDiv);
-      dialog.appendChild(actionsDiv);
-
-      const closeBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-close-btn"));
-      closeBtn.addEventListener("click", () => closeDialog(null));
-
-      setRemoveTrap(_trapFocus(dialog, closeBtn));
-    } catch (err) {
-      console.error("[DIALOG] error creating custom dialog:", err);
-      resolve(null);
-    }
+    _enqueue(() =>
+      _openGuarded({ kind: "custom", title, bodyEl }, resolve, "custom dialog")
+    );
   });
 }
 
@@ -418,61 +560,16 @@ export function showCustomDialog(title, bodyEl) {
  */
 export function showBurnCollectionDialog(collectionName) {
   return new Promise((resolve) => {
-    try {
-      const { dialog, closeDialog, setRemoveTrap } = _buildDialog(
-        "Burn Collection",
-        resolve
-      );
-
-      const bodyDiv = document.createElement("div");
-      bodyDiv.className = "dialog-body";
-      bodyDiv.innerHTML = `
-        <p class="dialog-warning" style="margin:0 0 var(--size-2)">
-          Burning collection will delete all assets unless it is part of besked collection
-        </p>
-        <p style="margin:0 0 var(--size-2)">Type <strong>${escapeHtml(
-          collectionName
-        )}</strong> to confirm.</p>
-        <div class="form-group">
-          <input type="text" class="form-input dialog-input" placeholder="${escapeHtml(
-            collectionName
-          )}" autocomplete="off">
-        </div>`;
-
-      const actionsDiv = document.createElement("div");
-      actionsDiv.className = "dialog-actions";
-      actionsDiv.innerHTML = `
-        <button class="btn btn-secondary dialog-cancel-btn" type="button">Cancel</button>
-        <button class="btn btn-danger dialog-burn-btn" type="button" disabled>Burn Collection</button>`;
-
-      dialog.appendChild(bodyDiv);
-      dialog.appendChild(actionsDiv);
-
-      const input = /** @type {HTMLInputElement} */ (dialog.querySelector(".dialog-input"));
-      const cancelBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-cancel-btn"));
-      const burnBtn = /** @type {HTMLButtonElement} */ (dialog.querySelector(".dialog-burn-btn"));
-
-      input.addEventListener("input", () => {
-        burnBtn.disabled =
-          input.value.trim() !== collectionName.trim();
-      });
-
-      cancelBtn.addEventListener("click", () => closeDialog(null));
-      burnBtn.addEventListener("click", () => closeDialog("burn"));
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          closeDialog(null);
-        } else if (e.key === "Enter" && !burnBtn.disabled) {
-          e.preventDefault();
-          closeDialog("burn");
-        }
-      });
-
-      setRemoveTrap(_trapFocus(dialog, input));
-    } catch (err) {
-      console.error("[DIALOG] error creating burn dialog:", err);
-      resolve(null);
-    }
+    _enqueue(() =>
+      _openGuarded(
+        { kind: "burn", title: "Burn Collection", collectionName, placeholder: collectionName },
+        resolve,
+        "burn dialog"
+      )
+    );
   });
 }
+
+// ── Registration ─────────────────────────────────────────────────────────────
+
+registerAlpineComponent("dialog", dialog);
