@@ -56,6 +56,7 @@ function singleItemMenuItems(ids) {
   const id = ids[0];
   if (isCollection(id)) {
     const collection = getItem(id);
+    if (!collection) return [];
     return [
       { label: "Open", action: () => openCollection(id) },
       {
@@ -233,19 +234,20 @@ export async function requestRename(id) {
         ),
       });
     } else {
+      const asset = /** @type {import("../state/library-state.js").LibraryAssetItem} */ (item);
       const { getFromRemoteIPFS } = await ipfsOps();
       const { writeJSONToIPFS } = await ipfsWriteOps();
-      const manifest = await getFromRemoteIPFS(item.manifestCid);
+      const manifest = await getFromRemoteIPFS(asset.manifestCid);
       const updated = { ...manifest, name };
       const newCid = await writeJSONToIPFS(updated, null, {
         type: "asset",
-        assetId: item.assetId,
+        assetId: asset.assetId,
       });
       await updateCollectionManifest(
-        item.tokenId,
+        asset.tokenId,
         (col) => {
           col.assets = { ...col.assets };
-          col.assets[item.assetId] = newCid;
+          col.assets[asset.assetId] = newCid;
           return col;
         },
         { label: "rename asset" }
@@ -271,7 +273,7 @@ export async function requestRename(id) {
 export async function requestDeleteSelected(ids) {
   const assets = ids
     .map((id) => libraryState.get().assets.find((a) => a.id === id))
-    .filter(Boolean);
+    .filter((a) => a !== undefined);
   if (assets.length === 0) return;
 
   const { deleteAssetFromCollection } = await assetDeleteOps();

@@ -182,8 +182,9 @@ function sortItems(items, sortBy) {
 
 function currentItems() {
   const state = libraryState.get();
-  const source =
-    state.currentCollectionTokenId === null ? state.collections : state.assets;
+  const source = /** @type {import("../state/library-state.js").LibraryItem[]} */ (
+    state.currentCollectionTokenId === null ? state.collections : state.assets
+  );
   return sortItems(filterItems(source, state.searchQuery), state.sortBy);
 }
 

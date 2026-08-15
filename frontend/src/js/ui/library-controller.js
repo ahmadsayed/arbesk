@@ -110,6 +110,7 @@ async function isTokenOwnedBy(tokenId, address) {
  * @param {string[]} tokenIds
  * @param {string} role
  * @param {string} walletAddr
+ * @returns {Promise<import("../state/library-state.js").LibraryCollectionItem[]>}
  */
 async function buildCollectionEntries(tokenIds, role, walletAddr) {
   const entries = await Promise.all(
@@ -118,8 +119,7 @@ async function buildCollectionEntries(tokenIds, role, walletAddr) {
   const defaultIdHex = deriveDefaultCollectionId(walletAddr);
   // tokenIds come from the contract as decimal strings; soliditySha3 returns hex.
   const defaultId = defaultIdHex ? BigInt(defaultIdHex).toString() : null;
-  return /** @type {any[]} */ (entries.filter(Boolean))
-    .map((meta) => {
+  return entries.filter((meta) => meta !== null).map((meta) => {
       const isDefault = defaultId && String(meta.tokenId) === defaultId;
       return {
         id: `collection-${meta.tokenId}`,
@@ -159,17 +159,19 @@ export async function loadCurrentAssets() {
 
     if (isStale()) return;
 
-    const assets = entries.map((entry) => ({
-      id: `asset-${entry.tokenId}-${entry.assetId}`,
-      type: "asset",
-      tokenId: entry.tokenId,
-      assetId: entry.assetId,
-      manifestCid: entry.manifestCid,
-      name: entry.name || entry.assetId || `Asset`,
-      thumbnailCid: extractThumbnailCid(entry.thumbnail),
-      status: "besked",
-      role,
-    }));
+    const assets = /** @type {import("../state/library-state.js").LibraryAssetItem[]} */ (
+      entries.map((entry) => ({
+        id: `asset-${entry.tokenId}-${entry.assetId}`,
+        type: "asset",
+        tokenId: entry.tokenId,
+        assetId: entry.assetId,
+        manifestCid: entry.manifestCid,
+        name: entry.name || entry.assetId || `Asset`,
+        thumbnailCid: extractThumbnailCid(entry.thumbnail),
+        status: "besked",
+        role,
+      }))
+    );
     libraryState.set({ assets, isLoading: false });
   } catch (err) {
     console.error("[LIBRARY] Failed to load collection assets", err);
@@ -215,6 +217,7 @@ export async function refreshLibraryData(forceIndexer = false) {
         .map((c) => [String(c.tokenId), c])
     );
 
+    /** @type {import("../state/library-state.js").LibraryCollectionItem[]} */
     const ownedFromOptimistic = [];
     const ownedToFetch = [];
     for (const tokenId of owned) {
@@ -291,7 +294,7 @@ export async function refreshLibraryData(forceIndexer = false) {
           return null;
         })
       )
-    ).filter(Boolean);
+    ).filter((c) => c !== null);
     const collections = [...fetchedCollections, ...keptMissing];
 
     const stillExists = collections.some(
