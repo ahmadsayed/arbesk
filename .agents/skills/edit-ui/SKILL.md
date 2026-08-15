@@ -18,8 +18,9 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 7. **Babylon.js is a CDN global** — never `import` it; loaded via `<script>`.
 8. **Pug has no includes** — two Pug files: `app.pug` (unified SPA shell: Studio + Library views) and `index.pug` (landing page).
 9. **New SCSS file needs `@use` in `styles.scss`** or it won't be built.
-10. **CSS variables, not raw px** — spacing, colors, radii, durations from tokens.
-11. **E2E is a public contract** — renaming an id/class/label, changing status text, or reordering a flow breaks specs. Update `e2e/helpers/studio-selectors.mjs` + specs and run the suite.
+10. **Icons come from the sprite** — never inline SVG paths in Pug. Add a `<symbol>` to `frontend/public/icons.svg` and reference `use(href="/icons.svg#id")`; keep symbol children bare so host `stroke="currentColor"` inherits (no `<img>` — kills theming).
+11. **CSS variables, not raw px** — spacing, colors, radii, durations from tokens.
+12. **E2E is a public contract** — renaming an id/class/label, changing status text, or reordering a flow breaks specs. Update `e2e/helpers/studio-selectors.mjs` + specs and run the suite.
 
 ## File Map
 

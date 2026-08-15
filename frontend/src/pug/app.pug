@@ -45,7 +45,7 @@ html(lang="en")
 
         button#backBtn.headerbar-back.hidden(aria-label="Go back to parent asset", title="Go back (Alt+Left)")
           svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-            path(d="M15 18l-6-6 6-6")
+            use(href="/icons.svg#chevron-left")
 
         .headerbar-title
           nav#pathBar.pathbar.hidden(aria-label="Asset path")
@@ -56,54 +56,36 @@ html(lang="en")
         .headerbar-doc-actions
           button#newAssetBtn.btn.btn-secondary(type="button" aria-label="New asset" title="New asset (Ctrl+N)")
             svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              line(x1="12" y1="5" x2="12" y2="19")
-              line(x1="5" y1="12" x2="19" y2="12")
+              use(href="/icons.svg#plus")
             span New
           button#saveAssetBtn.btn.btn-secondary(hidden type="button" aria-label="Save Draft" title="Save Draft (Ctrl+S)")
             svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z")
-              path(d="M17 21v-8H7v8")
-              path(d="M7 3v5h8")
+              use(href="/icons.svg#save")
             span#saveAssetBtnText Save
           button#publishAssetBtn.btn.btn-primary(hidden type="button" aria-label="Publish asset" title="Publish (Besk it) this asset")
             svg.besk-it-logo(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M12.00,2.00 L21.51,15.09 L6.12,20.09 L6.12,3.91 L21.51,8.91 L12.00,22.00 L2.49,8.91 L17.88,3.91 L17.88,20.09 L2.49,15.09 Z")
-              path(d="M12.00,7.50 L16.28,13.39 L9.35,15.64 L9.35,8.36 L16.28,10.61 L12.00,16.50 L7.72,10.61 L14.65,8.36 L14.65,15.64 L7.72,13.39 Z")
+              use(href="/icons.svg#besk-star")
             span#publishAssetBtnText Besk it
           button#downloadAssetBtn.btn.btn-icon.btn-flat(hidden type="button" aria-label="Download model file" title="Download the model file (GLB/glTF)")
             svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4")
-              polyline(points="7 10 12 15 17 10")
-              line(x1="12" y1="15" x2="12" y2="3")
+              use(href="/icons.svg#download")
 
         .headerbar-actions(x-data="headerWallet")
           button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
             svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              circle(cx="12" cy="12" r="5")
-              line(x1="12" y1="1" x2="12" y2="3")
-              line(x1="12" y1="21" x2="12" y2="23")
-              line(x1="4.22" y1="4.22" x2="5.64" y2="5.64")
-              line(x1="18.36" y1="18.36" x2="19.78" y2="19.78")
-              line(x1="1" y1="12" x2="3" y2="12")
-              line(x1="21" y1="12" x2="23" y2="12")
-              line(x1="4.22" y1="19.78" x2="5.64" y2="18.36")
-              line(x1="18.36" y1="5.64" x2="19.78" y2="4.22")
+              use(href="/icons.svg#sun")
             svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z")
+              use(href="/icons.svg#moon")
           select#headerbarNetworkSelect.headerbar-network-select(:class="{ connected: connected && !isCdp, hidden: isCdp }" aria-label="Select network" title="Select network")
             option(value="baseSepolia" selected) Base Sepolia Testnet
             option(value="hardhat") Hardhat Local
           button#connectWalletBtn.headerbar-wallet.disconnected(:class="{ hidden: connected, disconnected: !connected }" aria-label="Login or sign up")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4")
-              path(d="M10 17l5-5-5-5")
-              path(d="M15 12H3")
+              use(href="/icons.svg#log-in")
             span Login / Signup
           button#disconnectWalletBtn.headerbar-wallet.hidden(:class="{ hidden: !connected, 'auth-required': showAuthRequired }" aria-label="Wallet menu")
             svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-              path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
-              path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
-              path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+              use(href="/icons.svg#wallet")
             span#disconnectWalletBtnText(x-text="label") Disconnect
       //- ═══════════════════════════════════════════════════════════
       //- Studio view
@@ -115,34 +97,23 @@ html(lang="en")
             .sidebar-switcher(role="tablist")
               button.sidebar-switcher-btn.active(data-view="chat" role="tab" aria-selected="true" tabindex="0" aria-label="AI Generation" title="AI Generation (Ctrl+1)")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  path(d="M12 3 L13.8 10.2 L21 12 L13.8 13.8 L12 21 L10.2 13.8 L3 12 L10.2 10.2 Z")
+                  use(href="/icons.svg#sparkle")
               button.sidebar-switcher-btn(data-view="settings" role="tab" aria-selected="false" tabindex="-1" aria-label="Settings" title="Settings (Ctrl+2)")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  circle(cx="12" cy="12" r="3")
-                  path(d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z")
+                  use(href="/icons.svg#settings")
               button.sidebar-switcher-btn(data-view="outline" role="tab" aria-selected="false" tabindex="-1" aria-label="Outline" title="Outline (Ctrl+3)")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  circle(cx="12" cy="12" r="10")
-                  line(x1="12" y1="2" x2="12" y2="7")
-                  line(x1="12" y1="17" x2="12" y2="22")
-                  line(x1="2" y1="12" x2="7" y2="12")
-                  line(x1="17" y1="12" x2="22" y2="12")
+                  use(href="/icons.svg#crosshair")
               button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Gallery" title="Gallery (Ctrl+4)")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  path(d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20")
-                  path(d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z")
+                  use(href="/icons.svg#book")
               button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+5)")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  path(d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z")
-                  path(d="M14 2v6h6")
-                  path(d="M8 13h2")
-                  path(d="M8 17h2")
-                  path(d="M14 13h2")
-                  path(d="M14 17h2")
+                  use(href="/icons.svg#file-text")
               .sidebar-switcher-bottom
                 button#sidebarToggle.panel-toggle(aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)" aria-expanded="true" aria-controls="sidebar")
                   svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                    polyline(points="15 18 9 12 15 6")
+                    use(href="/icons.svg#chevron-left")
             .sidebar-content
               //- View: Settings
               .sidebar-view(data-view="settings" hidden)
@@ -176,8 +147,7 @@ html(lang="en")
                   .outliner-toolbar
                     button#clearChatBtn.btn.btn-icon.btn-sm(type="button" aria-label="Clear chat" title="Clear chat — start new model")
                       svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                        polyline(points="3 6 5 6 21 6")
-                        path(d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2")
+                        use(href="/icons.svg#trash")
                 .sidebar-view-body
                   #chatHistory
                     #chatHistoryList.chat-history-list
@@ -197,7 +167,7 @@ html(lang="en")
                               option(value="tripo3d") Tripo 3D
                             button#providerKeyBtn.provider-key-btn(type="button" hidden aria-label="Configure API key" title="Configure Tripo 3D API key")
                               svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                                path(d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4")
+                                use(href="/icons.svg#key")
                           p#providerKeyHint.provider-key-hint(hidden) API key required — select the key icon to add it.
                           p#providerBalance.provider-balance(hidden)
                           #textureQualityRow.form-group(hidden)
@@ -219,17 +189,14 @@ html(lang="en")
                       .messagebar-actions
                         button#imageAttachBtn.messagebar-attach(type="button" hidden aria-label="Attach image for image-to-3D" title="Attach reference image(s) — up to 4 views (Tripo 3D)")
                           svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                            rect(x="3" y="3" width="18" height="18" rx="2" ry="2")
-                            circle(cx="8.5" cy="8.5" r="1.5")
-                            polyline(points="21 15 16 10 5 21")
+                            use(href="/icons.svg#image")
                         button#generateBtn.messagebar-submit(aria-label="Generate asset")
                           svg.messagebar-submit-icon(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                            polygon(points="12 2 22 12 12 22 12 16 2 16 2 8 12 8")
+                            use(href="/icons.svg#send-arrow")
                           .messagebar-spinner
                     p#generateHint.messagebar-hint(hidden)
                       svg.messagebar-hint-icon(width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                        rect(x="3" y="11" width="18" height="11" rx="2" ry="2")
-                        path(d="M7 11V7a5 5 0 0 1 10 0v4")
+                        use(href="/icons.svg#lock")
                       span Sign in to start generating assets.
 
               //- View: Outline
@@ -239,11 +206,10 @@ html(lang="en")
                   .outliner-toolbar
                     button#outlinerAddBtn.btn.btn-icon.btn-sm(aria-label="Add child asset" title="Add child asset")
                       svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                        line(x1="12" y1="5" x2="12" y2="19")
-                        line(x1="5" y1="12" x2="19" y2="12")
+                        use(href="/icons.svg#plus")
                     button#outlinerRemoveBtn.btn.btn-icon.btn-sm(aria-label="Remove selected" title="Remove selected")
                       svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                        line(x1="5" y1="12" x2="19" y2="12")
+                        use(href="/icons.svg#minus")
                 .sidebar-view-body
                   .outliner
                     .outliner-tree
@@ -258,9 +224,7 @@ html(lang="en")
                     .empty-state
                       .empty-state-icon
                         svg(width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                          path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
-                          path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
-                          path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+                          use(href="/icons.svg#wallet")
                       h2.empty-state-title No assets yet
                       p.empty-state-sub Sign in to browse and open the asset tokens you own.
                       button#galleryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Login / Signup
@@ -304,7 +268,7 @@ html(lang="en")
           //- Sidebar reveal button
           button#sidebarReveal.sidebar-reveal(aria-label="Show sidebar" title="Show sidebar (Ctrl+B)")
             svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-              polyline(points="9 18 15 12 9 6")
+              use(href="/icons.svg#chevron-right")
 
           //- Main content area
           main#mainStage.main-stage
@@ -396,10 +360,10 @@ html(lang="en")
             .inspector-footer
               button#inspectorToggle.panel-toggle(aria-label="Collapse inspector" title="Collapse inspector" aria-expanded="true")
                 svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-                  polyline(points="9 18 15 12 9 6")
+                  use(href="/icons.svg#chevron-right")
           button#inspectorReveal.inspector-reveal(aria-label="Show inspector" title="Show inspector")
             svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
-              polyline(points="15 18 9 12 15 6")
+              use(href="/icons.svg#chevron-left")
         footer#bottomBar.bottombar
           .bottombar-status
             span#bottomBarStatus.bottombar-status-item Draft
@@ -417,9 +381,7 @@ html(lang="en")
             .empty-state
               .empty-state-icon
                 svg(width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  path(d="M21 12V7H5a2 2 0 0 1 0-4h14v4")
-                  path(d="M3 5v14a2 2 0 0 0 2 2h16v-5")
-                  path(d="M18 12a2 2 0 0 0 0 4h4v-4Z")
+                  use(href="/icons.svg#wallet")
               h2.empty-state-title Sign in to continue
               p.empty-state-sub Sign in to browse your collections and assets.
               button#libraryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Login / Signup
@@ -428,7 +390,7 @@ html(lang="en")
             .library-toolbar
               button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to collections" title="Up to collections" hidden)
                 svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                  polyline(points="18 15 12 9 6 15")
+                  use(href="/icons.svg#chevron-up")
                 span Up
               nav#libraryBreadcrumb.pathbar(aria-label="Collection path")
               input#librarySearchInput.form-input.library-search(type="search" placeholder="Search collections and assets…" aria-label="Search items")
@@ -439,15 +401,11 @@ html(lang="en")
               .library-toolbar-actions
                 button#libraryCreateCollectionBtn.btn.btn-secondary.btn-sm(type="button" hidden)
                   svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                    path(d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z")
-                    line(x1="12" y1="11" x2="12" y2="17")
-                    line(x1="9" y1="14" x2="15" y2="14")
+                    use(href="/icons.svg#folder-plus")
                   span New Collection
                 button#libraryUploadBtn.btn.btn-primary.btn-sm(type="button" hidden)
                   svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                    path(d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4")
-                    polyline(points="17 8 12 3 7 8")
-                    line(x1="12" y1="3" x2="12" y2="15")
+                    use(href="/icons.svg#upload")
                   span Upload
 
             #libraryContent.library-content
@@ -458,18 +416,10 @@ html(lang="en")
               .library-view-toggle(role="group" aria-label="View mode")
                 button#libraryGridViewBtn.active(type="button" data-view="grid" aria-label="Grid view" title="Grid view")
                   svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                    rect(x="3" y="3" width="7" height="7")
-                    rect(x="14" y="3" width="7" height="7")
-                    rect(x="3" y="14" width="7" height="7")
-                    rect(x="14" y="14" width="7" height="7")
+                    use(href="/icons.svg#grid")
                 button#libraryListViewBtn(type="button" data-view="list" aria-label="List view" title="List view")
                   svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-                    line(x1="8" y1="6" x2="21" y2="6")
-                    line(x1="8" y1="12" x2="21" y2="12")
-                    line(x1="8" y1="18" x2="21" y2="18")
-                    line(x1="3" y1="6" x2="3.01" y2="6")
-                    line(x1="3" y1="12" x2="3.01" y2="12")
-                    line(x1="3" y1="18" x2="3.01" y2="18")
+                    use(href="/icons.svg#list")
 
             #libraryLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
 
@@ -495,9 +445,7 @@ html(lang="en")
         a#walletPopoverExplorer.wallet-popover-explorer.hidden(href="#" target="_blank" rel="noopener noreferrer" :href="explorerUrl || '#'" :class="{ hidden: !explorerUrl }")
           | View on Explorer
           svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-            path(d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6")
-            polyline(points="15 3 21 3 21 9")
-            line(x1="10" y1="14" x2="21" y2="3")
+            use(href="/icons.svg#external-link")
         .wallet-popover-actions
           button#walletPopoverSignIn.wallet-popover-signin.btn.btn-primary.btn-sm.hidden(type="button" @click="signIn()" :class="{ hidden: !showSignIn }") Sign In
           button#walletPopoverDisconnect.wallet-popover-disconnect.btn.btn-danger.btn-sm(type="button" @click="disconnect()") Log Out
