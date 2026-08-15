@@ -16,7 +16,7 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 5. **All viewport chrome gets `metadata.isViewportChrome = true`** so `clearScene()` preserves it.
 6. **Rebuild after every change** — `npm run build:frontend`; backend serves `dist/`, not `src/`.
 7. **Babylon.js is a CDN global** — never `import` it; loaded via `<script>`.
-8. **Pug has no includes** — two Pug files: `app.pug` (unified SPA shell: Studio + Library views) and `index.pug` (landing page).
+8. **Pug partials live in `src/pug/includes/`** — `app.pug` is a slim shell that `include`s them (head / header / studio-sidebar / studio-main / bottombar / library-view / wallet-popover / dialog-host); `build-pug.js` skips files with `include`/`mixin`/`layouts` in the path so partials never render standalone. Partials are written at column 0 (Pug re-indents at the include site); `#appDialogHost` must stay a body-level sibling of `#app`. Entry pages remain `app.pug` (unified SPA shell: Studio + Library views) and `index.pug` (landing page).
 9. **New SCSS file needs `@use` in `styles.scss`** or it won't be built.
 10. **Icons come from the sprite** — never inline SVG paths in Pug. Add a `<symbol>` to `frontend/public/icons.svg` and reference `use(href="/icons.svg#id")`; keep symbol children bare so host `stroke="currentColor"` inherits (no `<img>` — kills theming).
 11. **CSS variables, not raw px** — spacing, colors, radii, durations from tokens.
@@ -26,7 +26,7 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 
 | File | Role |
 |------|------|
-| `frontend/src/pug/app.pug` | unified SPA shell (Studio + Library views) |
+| `frontend/src/pug/app.pug` | unified SPA shell — includes only; real markup in `src/pug/includes/` |
 | `frontend/src/pug/index.pug` | landing/marketing page |
 | `frontend/src/scss/styles.scss` | imports all component files |
 | `frontend/src/js/engine/scene-graph.js` | Babylon engine, camera, selection, keyboard |

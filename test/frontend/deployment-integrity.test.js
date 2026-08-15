@@ -32,6 +32,17 @@ const COMPOSE_PATH = resolve(ROOT_DIR, "docker-compose.yml");
 
 // --- Helpers ---
 
+// app.pug is an include-only shell; resolve its `include includes/...` lines
+// (in document order) so assertions keep covering the full effective markup.
+const PUG_DIR = resolve(ROOT_DIR, "frontend/src/pug");
+
+function renderPugSource(entryPath) {
+  return readFileSync(entryPath, "utf-8").replace(
+    /^\s*include\s+(includes\/[\w.-]+)\s*$/gm,
+    (_, rel) => renderPugSource(resolve(PUG_DIR, rel)),
+  );
+}
+
 function loadEnv(path) {
   if (!existsSync(path)) return {};
   const raw = readFileSync(path, "utf-8");
@@ -423,7 +434,7 @@ describe("Deployment Pipeline Integrity", () => {
     });
 
     test("app.pug import map points @gltf-transform/core at the vendored file", () => {
-      const content = readFileSync(STUDIO_PUG_PATH, "utf-8");
+      const content = renderPugSource(STUDIO_PUG_PATH);
       expect(content).toContain(
         '"@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js"',
       );
@@ -678,7 +689,7 @@ describe("Deployment Pipeline Integrity", () => {
 
 describe("AI Generation sidebar", () => {
   const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
-  const pug = () => readFileSync(STUDIO_PUG_PATH, "utf-8");
+  const pug = () => renderPugSource(STUDIO_PUG_PATH);
 
   test("provider select offers only Mock and Tripo 3D", () => {
     const content = pug();

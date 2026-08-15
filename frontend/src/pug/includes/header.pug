@@ -1,0 +1,53 @@
+h1.sr-only Arbesk
+.headerbar-brand
+  img.logo-light(src="/logo.webp", alt="Arbesk")
+  img.logo-dark(src="/logo-dark.webp", alt="Arbesk")
+
+nav.page-switcher(aria-label="Page")
+  a.page-switcher-tab(href="/library" data-nav) Library
+  a.page-switcher-tab.active(href="/studio" data-nav) Studio
+
+button#backBtn.headerbar-back.hidden(aria-label="Go back to parent asset", title="Go back (Alt+Left)")
+  svg(width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+    use(href="/icons.svg#chevron-left")
+
+.headerbar-title
+  nav#pathBar.pathbar.hidden(aria-label="Asset path")
+  span#assetStatusName.headerbar-title-text(aria-label="Asset name") No asset open
+  span#assetStatusMeta.headerbar-title-meta Create or open an asset
+
+.headerbar-divider(aria-hidden="true")
+.headerbar-doc-actions
+  button#newAssetBtn.btn.btn-secondary(type="button" aria-label="New asset" title="New asset (Ctrl+N)")
+    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#plus")
+    span New
+  button#saveAssetBtn.btn.btn-secondary(hidden type="button" aria-label="Save Draft" title="Save Draft (Ctrl+S)")
+    svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#save")
+    span#saveAssetBtnText Save
+  button#publishAssetBtn.btn.btn-primary(hidden type="button" aria-label="Publish asset" title="Publish (Besk it) this asset")
+    svg.besk-it-logo(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#besk-star")
+    span#publishAssetBtnText Besk it
+  button#downloadAssetBtn.btn.btn-icon.btn-flat(hidden type="button" aria-label="Download model file" title="Download the model file (GLB/glTF)")
+    svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#download")
+
+.headerbar-actions(x-data="headerWallet")
+  button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
+    svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#sun")
+    svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#moon")
+  select#headerbarNetworkSelect.headerbar-network-select(:class="{ connected: connected && !isCdp, hidden: isCdp }" aria-label="Select network" title="Select network")
+    option(value="baseSepolia" selected) Base Sepolia Testnet
+    option(value="hardhat") Hardhat Local
+  button#connectWalletBtn.headerbar-wallet.disconnected(:class="{ hidden: connected, disconnected: !connected }" aria-label="Login or sign up")
+    svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#log-in")
+    span Login / Signup
+  button#disconnectWalletBtn.headerbar-wallet.hidden(:class="{ hidden: !connected, 'auth-required': showAuthRequired }" aria-label="Wallet menu")
+    svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#wallet")
+    span#disconnectWalletBtnText(x-text="label") Disconnect
