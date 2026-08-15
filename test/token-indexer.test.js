@@ -35,7 +35,7 @@ async function loadModule() {
     utils: { toBigInt: (x) => BigInt(x) },
   };
 
-  await jest.unstable_mockModule("../src/config.js", () => ({
+  await jest.unstable_mockModule("../src/config.ts", () => ({
     getWeb3: jest.fn(() => fakeWeb3),
     getContractAddress: jest.fn(() => "0x0000000000000000000000000000000000000001"),
     NETWORK_CONFIGS: {},
@@ -44,11 +44,11 @@ async function loadModule() {
   // These tests never touch IPFS; mocking the storage module keeps the real
   // ESM-only ipfs-http-client (incompatible with Jest's module loader) out of
   // the import graph. Mirrors token-indexer-shared.test.js.
-  await jest.unstable_mockModule("../src/api/storage/index.js", () => ({
+  await jest.unstable_mockModule("../src/api/storage/index.ts", () => ({
     getStorage: jest.fn(),
   }));
 
-  return import("../src/api/token-indexer.js");
+  return import("../src/api/token-indexer.ts");
 }
 
 beforeEach(() => {

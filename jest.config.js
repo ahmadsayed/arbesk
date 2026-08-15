@@ -18,5 +18,11 @@ export default {
   moduleNameMapper: {
     "^multiformats/hashes/sha2$": "<rootDir>/node_modules/multiformats/src/hashes/sha2.js",
   },
-  transform: {},
+  extensionsToTreatAsEsm: [".ts"],
+  transform: {
+    "^.+\\.ts$": [
+      "@swc/jest",
+      { sourceMaps: "inline", module: { type: "es6" } },
+    ],
+  },
 };

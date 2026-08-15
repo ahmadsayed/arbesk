@@ -1,5 +1,5 @@
 import zlib from "zlib";
-import { maybeDecompress } from "../../src/api/ipfs-utils.js";
+import { maybeDecompress } from "../../src/api/ipfs-utils.ts";
 
 describe("maybeDecompress", () => {
   it("returns plain UTF-8 strings unchanged", async () => {

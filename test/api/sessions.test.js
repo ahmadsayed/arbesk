@@ -7,13 +7,13 @@ const EOA_ADDRESS = "0xEOA000000000000000000000000000000000000A";
 
 async function loadModule(verifySiweResult) {
   jest.resetModules();
-  jest.unstable_mockModule("../../src/api/siwe-verify.js", () => ({
+  jest.unstable_mockModule("../../src/api/siwe-verify.ts", () => ({
     verifySiwe: jest.fn(async () => verifySiweResult),
   }));
-  jest.unstable_mockModule("../../src/api/validation.js", () => ({
+  jest.unstable_mockModule("../../src/api/validation.ts", () => ({
     validateBody: jest.fn(() => (req, res, next) => next()),
   }));
-  return await import("../../src/api/sessions.js");
+  return await import("../../src/api/sessions.ts");
 }
 
 function createApp(routerFactory) {
@@ -121,15 +121,15 @@ describe("session routes", () => {
 
   it("POST /sessions returns 500 when verification throws", async () => {
     jest.resetModules();
-    jest.unstable_mockModule("../../src/api/siwe-verify.js", () => ({
+    jest.unstable_mockModule("../../src/api/siwe-verify.ts", () => ({
       verifySiwe: jest.fn(async () => {
         throw new Error("verify exploded");
       }),
     }));
-    jest.unstable_mockModule("../../src/api/validation.js", () => ({
+    jest.unstable_mockModule("../../src/api/validation.ts", () => ({
       validateBody: jest.fn(() => (req, res, next) => next()),
     }));
-    mod = await import("../../src/api/sessions.js");
+    mod = await import("../../src/api/sessions.ts");
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")
@@ -142,17 +142,17 @@ describe("session routes", () => {
   it("POST /sessions creates a session for a valid SIWE signature from a smart account", async () => {
     // CDP smart accounts: SIWE message address = smart account, eoaAddress = embedded EOA
     jest.resetModules();
-    jest.unstable_mockModule("../../src/api/siwe-verify.js", () => ({
+    jest.unstable_mockModule("../../src/api/siwe-verify.ts", () => ({
       verifySiwe: jest.fn(async (_msg, _sig, opts) =>
         opts && opts.eoaAddress
           ? { valid: true, address: VALID_ADDRESS }
           : { valid: false, error: "no eoaAddress" },
       ),
     }));
-    jest.unstable_mockModule("../../src/api/validation.js", () => ({
+    jest.unstable_mockModule("../../src/api/validation.ts", () => ({
       validateBody: jest.fn(() => (req, res, next) => next()),
     }));
-    mod = await import("../../src/api/sessions.js");
+    mod = await import("../../src/api/sessions.ts");
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")

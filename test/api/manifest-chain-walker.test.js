@@ -48,10 +48,10 @@ describe("walkManifestChain", () => {
 
     process.env.IPFS_BACKEND = "kubo";
 
-    const walkerMod = await import("../../src/api/manifest-chain-walker.js");
+    const walkerMod = await import("../../src/api/manifest-chain-walker.ts");
     walkManifestChain = walkerMod.walkManifestChain;
 
-    const storageMod = await import("../../src/api/storage/index.js");
+    const storageMod = await import("../../src/api/storage/index.ts");
     _resetStorage = storageMod._resetStorage;
 
     return () => {

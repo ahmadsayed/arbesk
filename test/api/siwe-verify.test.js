@@ -7,7 +7,7 @@ jest.unstable_mockModule("viem/actions", () => ({
   verifyMessage: verifyMessageMock,
 }));
 
-jest.unstable_mockModule("../../src/config.js", () => ({
+jest.unstable_mockModule("../../src/config.ts", () => ({
   getViemPublicClient: jest.fn((chainId) =>
     chainId ? { chainId: Number(chainId) } : null,
   ),
@@ -22,7 +22,7 @@ let verifySiwe;
 let parseSiweMessage;
 
 beforeAll(async () => {
-  const siweModule = await import("../../src/api/siwe-verify.js");
+  const siweModule = await import("../../src/api/siwe-verify.ts");
   verifySiwe = siweModule.verifySiwe;
   parseSiweMessage = siweModule.parseSiweMessage;
 });

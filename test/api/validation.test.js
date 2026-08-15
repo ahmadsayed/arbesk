@@ -7,7 +7,7 @@ import {
   unpinSchema,
   gcSchema,
   validateManifest,
-} from "../../src/api/schemas.js";
+} from "../../src/api/schemas.ts";
 
 describe("API schemas", () => {
   describe("cidSchema", () => {

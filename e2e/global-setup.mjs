@@ -278,7 +278,7 @@ async function startBackend(i) {
 
   if (!backendAlreadyRunning) {
     log(`Worker ${i}: starting backend on ${ports.backendPort}...`);
-    const backendProcess = spawn("node", ["src/index.js"], {
+    const backendProcess = spawn("node", ["src/index.ts"], {
       cwd: ROOT,
       env: {
         ...process.env,

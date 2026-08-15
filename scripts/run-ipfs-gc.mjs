@@ -16,7 +16,7 @@ import { Command } from "commander";
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runIpfsGC } from "../src/api/ipfs-gc.js";
+import { runIpfsGC } from "../src/api/ipfs-gc.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");

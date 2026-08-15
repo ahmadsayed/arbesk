@@ -4,7 +4,7 @@ import express from "express";
 import createRateLimitMiddleware, {
   generationRateLimit,
   _resetRateLimiters,
-} from "../../src/api/rate-limiter.js";
+} from "../../src/api/rate-limiter.ts";
 
 async function run(mw, { userAddress, ip }) {
   const req = createRequest({ body: {}, ip });

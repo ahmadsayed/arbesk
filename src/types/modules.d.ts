@@ -16,11 +16,11 @@ declare module "ipfs-http-client" {
   export interface KuboClient {
     add(
       data: string | Uint8Array,
-      options?: { filename?: string },
+      options?: { filename?: string; cidVersion?: number },
     ): Promise<KuboAddResult>;
     addAll(
       source: Iterable<{ path: string; content: Uint8Array | string }>,
-      options?: { wrapWithDirectory?: boolean },
+      options?: { wrapWithDirectory?: boolean; cidVersion?: number },
     ): AsyncIterable<KuboAddResult>;
     pin: {
       add(cid: string): Promise<void>;

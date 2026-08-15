@@ -9,8 +9,8 @@ import { jest } from "@jest/globals";
 import request from "supertest";
 import express from "express";
 
-import { createSession } from "../../src/api/sessions.js";
-import { _resetRateLimiters } from "../../src/api/rate-limiter.js";
+import { createSession } from "../../src/api/sessions.ts";
+import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
 
 const listEndUsers = jest.fn();
 
@@ -18,7 +18,7 @@ jest.unstable_mockModule("@coinbase/cdp-sdk", () => ({
   CdpClient: jest.fn(() => ({ endUser: { listEndUsers } })),
 }));
 
-const { default: usersRoutes } = await import("../../src/api/routes/users.js");
+const { default: usersRoutes } = await import("../../src/api/routes/users.ts");
 
 const SESSION_WALLET = "0x1234567890123456789012345678901234567890";
 const SMART_ACCOUNT = "0x407EDfCFd16a5623012BbB778BD47A2bf861ed40";

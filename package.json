@@ -3,13 +3,13 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Arbesk — 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "scripts": {
     "test": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
     "test:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat test",
     "build:frontend": "cd frontend && npm run build",
-    "start": "node src/index.js",
-    "nodemon": "npm run build:frontend && nodemon src/index.js",
+    "start": "node src/index.ts",
+    "nodemon": "npm run build:frontend && nodemon --ext ts,js,json src/index.ts",
     "dev": "./scripts/start-dev.sh",
     "dev:testnet": "./scripts/start-dev.sh --testnet",
     "test:api": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
@@ -56,6 +56,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
+    "@swc/core": "^1.16.0",
+    "@swc/jest": "^0.2.39",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
@@ -76,7 +78,8 @@
     "nodemon": "^3.0.0",
     "playwright": "^1.60.0",
     "supertest": "^6.3.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
   },
   "lint-staged": {
     "*.{js,mjs,cjs}": [
@@ -85,6 +88,6 @@
     ]
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.18.0"
   }
 }

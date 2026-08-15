@@ -33,17 +33,17 @@ async function loadModule() {
     utils: { toBigInt: (x) => BigInt(x) },
   };
 
-  await jest.unstable_mockModule("../src/config.js", () => ({
+  await jest.unstable_mockModule("../src/config.ts", () => ({
     getWeb3: jest.fn(() => fakeWeb3),
     getContractAddress: jest.fn(() => "0x0000000000000000000000000000000000000001"),
     NETWORK_CONFIGS: {},
   }));
 
-  await jest.unstable_mockModule("../src/api/storage/index.js", () => ({
+  await jest.unstable_mockModule("../src/api/storage/index.ts", () => ({
     getStorage: jest.fn(() => ({ cat: _cat })),
   }));
 
-  return import("../src/api/token-indexer.js");
+  return import("../src/api/token-indexer.ts");
 }
 
 beforeEach(() => {

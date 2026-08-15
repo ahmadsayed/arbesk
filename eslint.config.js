@@ -1,5 +1,22 @@
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
+
+const baseRules = {
+  ...js.configs.recommended.rules,
+  "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+  "no-console": "off",
+  "no-empty": ["error", { allowEmptyCatch: true }],
+  "no-undef": "error",
+  "no-redeclare": "error",
+  "no-unreachable": "error",
+  "no-var": "error",
+  "prefer-const": "error",
+  "eqeqeq": ["error", "always", { null: "ignore" }],
+  // v10 recommended rules that are too noisy for this legacy codebase.
+  "no-useless-assignment": "off",
+  "preserve-caught-error": "off",
+};
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
@@ -35,20 +52,48 @@ export default [
     plugins: {
       // Flat-config plugins go here when we add them.
     },
+    rules: baseRules,
+  },
+
+  {
+    name: "arbesk/typescript",
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.es2022,
+        ...globals.node,
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
     rules: {
-      ...js.configs.recommended.rules,
-      "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
-      "no-console": "off",
-      "no-empty": ["error", { allowEmptyCatch: true }],
-      "no-undef": "error",
-      "no-redeclare": "error",
-      "no-unreachable": "error",
-      "no-var": "error",
-      "prefer-const": "error",
-      "eqeqeq": ["error", "always", { null: "ignore" }],
-      // v10 recommended rules that are too noisy for this legacy codebase.
-      "no-useless-assignment": "off",
-      "preserve-caught-error": "off",
+      ...baseRules,
+      // TypeScript itself reports unresolved names/types; eslint's no-undef
+      // false-positives on type annotations.
+      "no-undef": "off",
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      // Node type-stripping does not elide imports: type-only imports must
+      // be written as `import type` or the runtime resolution fails.
+      "@typescript-eslint/consistent-type-imports": "error",
+    },
+  },
+
+  {
+    name: "arbesk/typescript-declarations",
+    files: ["**/*.d.ts"],
+    rules: {
+      // Ambient declaration files legitimately augment the same globals and
+      // use inline import() types.
+      "no-redeclare": "off",
+      "@typescript-eslint/consistent-type-imports": "off",
     },
   },
 

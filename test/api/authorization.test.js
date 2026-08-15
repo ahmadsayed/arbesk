@@ -10,16 +10,16 @@ const mockGetWeb3 = jest.fn();
 const mockMakeLeaf = jest.fn();
 const mockVerifyProof = jest.fn();
 
-jest.unstable_mockModule("../../src/api/sessions.js", () => ({
+jest.unstable_mockModule("../../src/api/sessions.ts", () => ({
   validateSession: mockValidateSession,
 }));
 
-jest.unstable_mockModule("../../src/config.js", () => ({
+jest.unstable_mockModule("../../src/config.ts", () => ({
   getContractAddress: mockGetContractAddress,
   getWeb3: mockGetWeb3,
 }));
 
-jest.unstable_mockModule("../../src/api/merkle-editors-node.js", () => ({
+jest.unstable_mockModule("../../src/api/merkle-editors-node.ts", () => ({
   makeLeaf: mockMakeLeaf,
   verifyProof: mockVerifyProof,
 }));
@@ -28,7 +28,7 @@ const {
   checkAssetAccess,
   authorizeAssetAccess,
   getTokenUri,
-} = await import("../../src/api/authorization.js");
+} = await import("../../src/api/authorization.ts");
 
 describe("authorization", () => {
   const CONTRACT = "0xContractAddress0000000000000000000000000001";

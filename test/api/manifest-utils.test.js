@@ -3,7 +3,7 @@ import {
   getSceneNodes,
   bumpManifestVersion,
   validateManifest,
-} from "../../src/api/manifest-utils.js";
+} from "../../src/api/manifest-utils.ts";
 
 describe("getSceneNodes", () => {
   it("returns the existing nodes array", () => {

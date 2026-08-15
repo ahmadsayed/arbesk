@@ -2,7 +2,7 @@ import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import {
   makeLeaf,
   verifyProof,
-} from "../../src/api/merkle-editors-node.js";
+} from "../../src/api/merkle-editors-node.ts";
 
 // Root/proof construction is a client-side concern (the backend only verifies),
 // so the test builds trees directly with @openzeppelin/merkle-tree — the same

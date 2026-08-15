@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
-import { createKuboAdapter } from "../../src/api/storage/kubo-adapter.js";
-import { createPinataAdapter } from "../../src/api/storage/pinata-adapter.js";
+import { createKuboAdapter } from "../../src/api/storage/kubo-adapter.ts";
+import { createPinataAdapter } from "../../src/api/storage/pinata-adapter.ts";
 
 describe("kubo adapter", () => {
   function fakeIpfs() {

@@ -1,12 +1,12 @@
 import { jest } from "@jest/globals";
 import request from "supertest";
 import zlib from "zlib";
-import { _resetRateLimiters } from "../src/api/rate-limiter.js";
+import { _resetRateLimiters } from "../src/api/rate-limiter.ts";
 import {
   _resetRegistry,
   registerTask,
   markTaskComplete,
-} from "../src/api/generation-tasks.js";
+} from "../src/api/generation-tasks.ts";
 
 jest.setTimeout(30000);
 
@@ -263,15 +263,15 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
     process.env.GC_ADMIN_TOKEN = "test-admin-token";
 
-    const sessions = await import("../src/api/sessions.js");
+    const sessions = await import("../src/api/sessions.ts");
     createSession = sessions.createSession;
 
-    const { app: importedApp } = await import("../src/index.js");
+    const { app: importedApp } = await import("../src/index.ts");
     app = importedApp;
 
     // Import after mocking ipfs-http-client so the storage adapter factory
     // resolves the mock instead of the real ESM-only client under Jest.
-    const storageMod = await import("../src/api/storage/index.js");
+    const storageMod = await import("../src/api/storage/index.ts");
     _resetStorage = storageMod._resetStorage;
   });
 
@@ -2085,7 +2085,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("allows an editor with a valid Merkle proof", async () => {
       const { SimpleMerkleTree } = await import("@openzeppelin/merkle-tree");
-      const { makeLeaf } = await import("../src/api/merkle-editors-node.js");
+      const { makeLeaf } = await import("../src/api/merkle-editors-node.ts");
 
       const tokenId = "7";
       const setVersion = "1";
@@ -2174,7 +2174,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("accepts an allowlisted contractAddress from the body", async () => {
-      const { NETWORK_CONFIGS } = await import("../src/config.js");
+      const { NETWORK_CONFIGS } = await import("../src/config.ts");
       const { CHAIN_IDS } = await import("../constants/chains.js");
       const freeAddr = NETWORK_CONFIGS[CHAIN_IDS.HARDHAT_LOCAL].contractAddress;
 
@@ -2199,7 +2199,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
     });
 
     it("falls back to the paid contract when the token only exists there", async () => {
-      const { NETWORK_CONFIGS } = await import("../src/config.js");
+      const { NETWORK_CONFIGS } = await import("../src/config.ts");
       const { CHAIN_IDS } = await import("../constants/chains.js");
       const paidAddr =
         NETWORK_CONFIGS[CHAIN_IDS.HARDHAT_LOCAL].paidContractAddress;

@@ -40,7 +40,7 @@ function upsertEnvKeys(path, values) {
  * @param {Record<string, string>} values
  */
 function syncNetworkConfig(values) {
-  const files = ["frontend/src/js/blockchain/network-config.js", "src/config.js"];
+  const files = ["frontend/src/js/blockchain/network-config.js", "src/config.ts"];
   const fields = {
     contractAddress: values.CONTRACT_ADDRESS,
     paidContractAddress: values.PAID_CONTRACT_ADDRESS,

@@ -13,11 +13,11 @@ async function buildApp() {
     getSharedTokens: jest.fn().mockReturnValue(["7", "42"]),
   };
 
-  await jest.unstable_mockModule("../../src/api/token-indexer.js", () => ({
+  await jest.unstable_mockModule("../../src/api/token-indexer.ts", () => ({
     getIndexer: jest.fn(() => mockIndexer),
   }));
 
-  const { default: indexerRoutes } = await import("../../src/api/routes/indexer.js");
+  const { default: indexerRoutes } = await import("../../src/api/routes/indexer.ts");
 
   const app = express();
   app.use("/indexer", indexerRoutes());

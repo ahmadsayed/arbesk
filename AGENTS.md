@@ -4,7 +4,7 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 
 ## 1. Identity & Key Constraints
 
-**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. JS (Node + browser), Solidity, Pug/SCSS. Phases 1–5.4 complete (`docs/CURRENT_STATUS.md`).
+**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, Node type-stripping — no emit step; requires Node ≥ 22.18), JS browser frontend, Solidity, Pug/SCSS. Phases 1–5.4 complete (`docs/CURRENT_STATUS.md`).
 
 - **Chains**: Hardhat local + Base Sepolia. IDs, `DEPLOYMENT_BLOCKS`, `LOG_CHUNK_SIZES` in `constants/chains.js` — no magic numbers.
 - **Wallets**: EOA (MetaMask/Rabby) via SIWE everywhere; CDP email-login smart accounts on **Base Sepolia only** (`smart-wallet-support.js`).
@@ -24,7 +24,7 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 
 ## 3. Repo Layout
 
-- **Backend** `src/api/`: routes `index.js` + `routes/` · generation `assets/` (`generate-node.js`, `generation-tasks.js`, `adapters/`) · storage `storage/` (kubo/pinata) · auth `authentication.js`, `sessions.js`, `siwe-verify.js` · `token-indexer.js` · `comments-archive.js` · `chat-proxy.js` (WS) · `nostr-relay.js` · `manifest-utils.js` · `asset-tag.js` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
+- **Backend** `src/api/` (all `.ts`): routes `index.ts` + `routes/` · generation `assets/` (`generate-node.ts`, `generation-tasks.ts`, `adapters/`) · storage `storage/` (kubo/pinata) · auth `authentication.ts`, `sessions.ts`, `siwe-verify.ts` · `token-indexer.ts` · `comments-archive.ts` · `chat-proxy.ts` (WS) · `nostr-relay.ts` · `manifest-utils.ts` · `asset-tag.ts` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
 - **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, token-resolver) · `ipfs/` · `gltf/` (+ `merkle-editors.js`) · `3mf/` · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · `domain/` (asset domain model, see §3.1) · templates `frontend/src/pug/` · styles `frontend/src/scss/`
 
 ### 3.1 Frontend Domain Layer (single-writer discipline)
@@ -75,7 +75,7 @@ npm run test:frontend                  # always verify last
 
 ## 5. Coding Conventions
 
-- **JS**: ESM in root + frontend; CJS only in `blockchain/scripts/`. CDN globals `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
+- **JS/TS**: backend `src/` is TypeScript run via Node type-stripping (`node src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; Node does not elide imports), and relative imports inside `src/` carry explicit `.ts` extensions. Frontend stays plain ESM JS (served unbundled); CJS only in `blockchain/scripts/`. CDN globals `BABYLON`, `Web3`, `window.web3`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
 - **Type-checking**: `allowJs`/`checkJs`, `strict: true` (`npm run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
 - **Lint**: `npm run lint[:fix]`; part of `test:all`; husky pre-commit runs lint-staged + both typechecks.
 - **Validation**: Zod (`src/api/schemas.js`, `validation.js`) via `validateBody`/`validateQuery`; failures → 400 `VALIDATION_ERROR` with `details.issues`.
@@ -157,7 +157,7 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 | Local Nostr relay | — | `ws://127.0.0.1:7777` |
 | Base Sepolia | — | `https://sepolia.base.org` (backend); `https://base-sepolia-rpc.publicnode.com` (CDP browser passthrough) |
 
-Backend on :9090. Hardhat networks: `hardhat` (local), `baseSepolia` (testnet; ETH gas, CDP smart accounts sponsored via paymaster proxy `src/api/routes/paymaster.js`).
+Backend on :9090. Hardhat networks: `hardhat` (local), `baseSepolia` (testnet; ETH gas, CDP smart accounts sponsored via paymaster proxy `src/api/routes/paymaster.ts`).
 
 Env files (gitignored, never commit): `blockchain/.env` (deploy keys/addresses — bootstrap from `.env.example`), root `.env` (backend; `CONTRACT_ADDRESS`/`PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy; CDP keys: `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_API_KEY_ID`/`SECRET`; `INDEXER_DISABLE_TESTNET` kill-switch). Full reference: `docs/CURRENT_STATUS.md §8`. Ops: `scripts/run-ipfs-gc.mjs` (IPFS GC), `scripts/sync-deployed-addresses.mjs`.
 

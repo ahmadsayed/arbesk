@@ -15,14 +15,14 @@ function getKeepAliveAgent(web3) {
 }
 
 test("Base Sepolia web3 provider uses a keep-alive agent", async () => {
-  const { getWeb3 } = await import("../src/config.js");
+  const { getWeb3 } = await import("../src/config.ts");
   const agent = getKeepAliveAgent(getWeb3(CHAIN_IDS.BASE_TESTNET));
   expect(agent).toBeDefined();
   expect(agent.options.keepAlive).toBe(true);
 });
 
 test("default web3 instance uses a keep-alive agent", async () => {
-  const { web3 } = await import("../src/config.js");
+  const { web3 } = await import("../src/config.ts");
   const agent = getKeepAliveAgent(web3);
   expect(agent).toBeDefined();
   expect(agent.options.keepAlive).toBe(true);

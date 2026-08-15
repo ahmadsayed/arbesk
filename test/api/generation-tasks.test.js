@@ -6,7 +6,7 @@ import {
   markTaskComplete,
   evictTask,
   _resetRegistry,
-} from "../../src/api/generation-tasks.js";
+} from "../../src/api/generation-tasks.ts";
 
 jest.useFakeTimers();
 
@@ -60,7 +60,7 @@ describe("generation-tasks registry", () => {
   });
 
   test("registry has no persistence imports", async () => {
-    const mod = await import("../../src/api/generation-tasks.js");
+    const mod = await import("../../src/api/generation-tasks.ts");
     // Indirect check: the module should not expose a save/load function.
     expect(mod.save).toBeUndefined();
     expect(mod.load).toBeUndefined();

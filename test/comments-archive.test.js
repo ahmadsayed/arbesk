@@ -69,7 +69,7 @@ describe("Comments Archive Service", () => {
       WebSocket: MockWebSocket,
     }));
 
-    jest.unstable_mockModule("../src/config.js", () => ({
+    jest.unstable_mockModule("../src/config.ts", () => ({
       NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
     }));
 
@@ -80,7 +80,7 @@ describe("Comments Archive Service", () => {
       }),
     };
 
-    const mod = await import("../src/api/comments-archive.js");
+    const mod = await import("../src/api/comments-archive.ts");
     archiveCommentsForAsset = mod.archiveCommentsForAsset;
     fetchCommentsArchive = mod.fetchCommentsArchive;
   });

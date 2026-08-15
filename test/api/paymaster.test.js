@@ -8,9 +8,9 @@ import { jest } from "@jest/globals";
 import request from "supertest";
 import express from "express";
 
-import { createSession } from "../../src/api/sessions.js";
-import { _resetRateLimiters } from "../../src/api/rate-limiter.js";
-import paymasterRoutes from "../../src/api/routes/paymaster.js";
+import { createSession } from "../../src/api/sessions.ts";
+import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
+import paymasterRoutes from "../../src/api/routes/paymaster.ts";
 
 const SESSION_WALLET = "0x1234567890123456789012345678901234567890";
 

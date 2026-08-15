@@ -97,12 +97,12 @@ describe("Manifest comments archive integration", () => {
       };
     });
 
-    jest.unstable_mockModule("../src/api/sessions.js", () => ({
+    jest.unstable_mockModule("../src/api/sessions.ts", () => ({
       default: jest.fn(() => express.Router()),
       validateSession: jest.fn(() => "0xTestAddress"),
     }));
 
-    jest.unstable_mockModule("../src/config.js", () => ({
+    jest.unstable_mockModule("../src/config.ts", () => ({
       CONTRACT_ADDRESS: "0xArbeskContractAddress",
       PAID_CONTRACT_ADDRESS: "0xPaidContractAddress",
       HARDHAT_RPC_URL: "http://127.0.0.1:8545",
@@ -138,8 +138,8 @@ describe("Manifest comments archive integration", () => {
       NOSTR_SERVICE_PRIVATE_KEY: "a".repeat(64),
     }));
 
-    const { default: createApi } = await import("../src/api/index.js");
-    const storageMod = await import("../src/api/storage/index.js");
+    const { default: createApi } = await import("../src/api/index.ts");
+    const storageMod = await import("../src/api/storage/index.ts");
     _resetStorage = storageMod._resetStorage;
     app = express();
     app.use(express.json({ limit: "50mb" }));

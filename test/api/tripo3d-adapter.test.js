@@ -15,7 +15,7 @@ import {
   downloadModel,
   cancelTask,
   TripoApiError,
-} from "../../src/api/adapters/tripo3d-adapter.js";
+} from "../../src/api/adapters/tripo3d-adapter.ts";
 
 const key = "tsk_test_secret_key_xyz";
 
@@ -686,7 +686,7 @@ describe("tripo3d adapter", () => {
     try {
       await jest.isolateModulesAsync(async () => {
         const { createTask, TRIPO_MODEL_VERSION } = await import(
-          "../../src/api/adapters/tripo3d-adapter.js"
+          "../../src/api/adapters/tripo3d-adapter.ts"
         );
         expect(TRIPO_MODEL_VERSION).toBe("v9.9-custom");
         global.fetch = jest.fn().mockResolvedValue({

@@ -81,7 +81,7 @@ const safeClose = jest.fn((ws, code, reason) => {
   if (ws && typeof ws.close === "function") ws.close(code, reason);
 });
 
-jest.unstable_mockModule("../../src/api/nostr-relay.js", () => ({
+jest.unstable_mockModule("../../src/api/nostr-relay.ts", () => ({
   KIND_CHAT: 1,
   TAG_ASSET: "asset",
   createRelay,
@@ -90,11 +90,11 @@ jest.unstable_mockModule("../../src/api/nostr-relay.js", () => ({
 
 const authorizeAssetAccess = jest.fn();
 
-jest.unstable_mockModule("../../src/api/authorization.js", () => ({
+jest.unstable_mockModule("../../src/api/authorization.ts", () => ({
   authorizeAssetAccess,
 }));
 
-jest.unstable_mockModule("../../src/config.js", () => ({
+jest.unstable_mockModule("../../src/config.ts", () => ({
   NOSTR_SERVICE_PRIVATE_KEY: "a".repeat(64),
   NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
   getContractAddress: jest.fn(() => "0xContractAddress"),
@@ -107,7 +107,7 @@ let lastRelay;
 let lastRelayOpts;
 
 beforeAll(async () => {
-  const mod = await import("../../src/api/chat-proxy.js");
+  const mod = await import("../../src/api/chat-proxy.ts");
   createChatProxy = mod.createChatProxy;
 });
 
@@ -599,25 +599,25 @@ describe("chat-proxy service key", () => {
       utils: { hexToBytes: jest.fn() },
     }));
 
-    jest.unstable_mockModule("../../src/api/nostr-relay.js", () => ({
+    jest.unstable_mockModule("../../src/api/nostr-relay.ts", () => ({
       KIND_CHAT: 1,
       TAG_ASSET: "asset",
       createRelay: jest.fn(),
       safeClose: jest.fn(),
     }));
 
-    jest.unstable_mockModule("../../src/api/authorization.js", () => ({
+    jest.unstable_mockModule("../../src/api/authorization.ts", () => ({
       authorizeAssetAccess: jest.fn(),
     }));
 
-    jest.unstable_mockModule("../../src/config.js", () => ({
+    jest.unstable_mockModule("../../src/config.ts", () => ({
       NOSTR_SERVICE_PRIVATE_KEY: undefined,
       NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
       getContractAddress: jest.fn(),
     }));
 
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
-    const mod = await import("../../src/api/chat-proxy.js");
+    const mod = await import("../../src/api/chat-proxy.ts");
     const wss = mod.createChatProxy({});
 
     expect(wss).toBeNull();
