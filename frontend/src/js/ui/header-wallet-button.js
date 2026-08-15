@@ -85,15 +85,22 @@ export function headerWallet() {
       return !!s.address && s.walletSource !== "cdp" && !s.isAuthenticated;
     },
 
-    /** Alpine init hook: follow wallet state and auth bus events. */
+    /**
+     * Alpine init hook: SEED from current state, then follow bus events.
+     * Seeding is mandatory: auto-connect on page load can set walletState and
+     * emit WALLET_CONNECTED before Alpine.start() (DOMContentLoaded), and a
+     * subscriber registered here would never see those earlier events.
+     */
     init() {
-      on(EVENTS.WALLET_STATE_CHANGED, (/** @type {any} */ s) => {
+      const syncFromStore = (/** @type {any} */ s) => {
         const st = hwState();
         st.address = s.walletAddress || "";
         st.walletSource = s.walletSource || null;
         st.email = s.email || null;
         st.isAuthenticated = isWalletAuthenticated(st.address);
-      });
+      };
+      syncFromStore(walletState.get());
+      on(EVENTS.WALLET_STATE_CHANGED, syncFromStore);
       on(EVENTS.USER_AUTHENTICATED, () => {
         hwState().isAuthenticated = true;
       });

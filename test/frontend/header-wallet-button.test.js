@@ -8,7 +8,7 @@
  * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeEach, afterEach } from "@jest/globals";
+import { jest, expect, test, afterEach } from "@jest/globals";
 
 const ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 const TRUNCATED = "0x1234…5678";
@@ -39,11 +39,16 @@ let walletStateMod;
 /** @type {typeof import("../../frontend/src/js/events/bus.js")} */
 let bus;
 
-async function setup() {
+/**
+ * @param {Record<string, any>} [preState] - walletState patch applied BEFORE
+ *   the module loads (simulates the auto-connect-on-page-load race)
+ */
+async function setup(preState) {
   jest.resetModules();
   document.body.innerHTML = FRAGMENT;
   walletStateMod = await import("../../frontend/src/js/state/wallet-state.js");
   bus = await import("../../frontend/src/js/events/bus.js");
+  if (preState) walletStateMod.walletState.set(preState);
   mod = await import("../../frontend/src/js/ui/header-wallet-button.js");
   await flush();
 }
@@ -53,10 +58,6 @@ const disconnectBtn = () => /** @type {HTMLElement} */ (document.getElementById(
 const textEl = () => /** @type {HTMLElement} */ (document.getElementById("disconnectWalletBtnText"));
 const netSel = () => /** @type {HTMLElement} */ (document.getElementById("headerbarNetworkSelect"));
 
-beforeEach(async () => {
-  await setup();
-});
-
 afterEach(async () => {
   const { Alpine } = await import("../../frontend/src/js/ui/alpine.js");
   Alpine.destroyTree(document.body);
@@ -65,7 +66,7 @@ afterEach(async () => {
 });
 
 test("disconnected: connect button visible, wallet button hidden, label Disconnect", async () => {
-  await flush();
+  await setup();
   expect(connectBtn().classList.contains("hidden")).toBe(false);
   expect(connectBtn().classList.contains("disconnected")).toBe(true);
   expect(disconnectBtn().classList.contains("hidden")).toBe(true);
@@ -76,6 +77,7 @@ test("disconnected: connect button visible, wallet button hidden, label Disconne
 });
 
 test("unauthenticated crypto wallet: truncated address with Sign In reminder", async () => {
+  await setup();
   mod.updateHeaderWalletButton(ADDRESS, false, "injected");
   await flush();
   expect(connectBtn().classList.contains("hidden")).toBe(true);
@@ -87,6 +89,7 @@ test("unauthenticated crypto wallet: truncated address with Sign In reminder", a
 });
 
 test("authenticated crypto wallet: truncated address without reminder", async () => {
+  await setup();
   mod.updateHeaderWalletButton(ADDRESS, true, "injected");
   await flush();
   expect(textEl().textContent).toBe(TRUNCATED);
@@ -94,6 +97,7 @@ test("authenticated crypto wallet: truncated address without reminder", async ()
 });
 
 test("CDP wallet: shows email, no reminder, network select hidden", async () => {
+  await setup();
   mod.updateHeaderWalletButton(ADDRESS, true, "cdp", "user@example.com");
   await flush();
   expect(textEl().textContent).toBe("user@example.com");
@@ -102,6 +106,7 @@ test("CDP wallet: shows email, no reminder, network select hidden", async () => 
 });
 
 test("CDP wallet: long emails truncate to 21 chars + ellipsis; missing email shows Account", async () => {
+  await setup();
   mod.updateHeaderWalletButton(ADDRESS, true, "cdp", "a-very-long-email-address@example.com");
   await flush();
   expect(textEl().textContent).toBe("a-very-long-email-add…");
@@ -112,6 +117,7 @@ test("CDP wallet: long emails truncate to 21 chars + ellipsis; missing email sho
 });
 
 test("reset: null address restores the disconnected state", async () => {
+  await setup();
   mod.updateHeaderWalletButton(ADDRESS, true, "injected");
   await flush();
   mod.updateHeaderWalletButton(null, false, null, null);
@@ -122,6 +128,7 @@ test("reset: null address restores the disconnected state", async () => {
 });
 
 test("follows walletState changes without explicit updater calls", async () => {
+  await setup();
   walletStateMod.walletState.set({ walletAddress: ADDRESS, walletSource: "injected" });
   await flush();
   expect(textEl().textContent).toContain(TRUNCATED);
@@ -129,6 +136,7 @@ test("follows walletState changes without explicit updater calls", async () => {
 });
 
 test("follows USER_AUTH_REQUIRED / USER_AUTHENTICATED bus events", async () => {
+  await setup();
   walletStateMod.walletState.set({ walletAddress: ADDRESS, walletSource: "injected" });
   await flush();
   bus.emit(bus.EVENTS.USER_AUTHENTICATED, { address: ADDRESS });
@@ -138,4 +146,13 @@ test("follows USER_AUTH_REQUIRED / USER_AUTHENTICATED bus events", async () => {
   bus.emit(bus.EVENTS.USER_AUTH_REQUIRED, { address: ADDRESS });
   await flush();
   expect(textEl().textContent).toBe(`${TRUNCATED} • Sign In`);
+});
+
+test("regression: seeds from walletState set BEFORE the component initializes (auto-connect race)", async () => {
+  // Browser auto-connect on page load can set walletState + emit
+  // WALLET_CONNECTED before Alpine.start() at DOMContentLoaded; a
+  // subscription-only init() would never see those events (E2E 20 caught this).
+  await setup({ walletAddress: ADDRESS, walletSource: "injected" });
+  expect(connectBtn().classList.contains("hidden")).toBe(true);
+  expect(textEl().textContent).toContain(TRUNCATED);
 });
