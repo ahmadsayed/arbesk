@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk API Service
  *
@@ -7,7 +6,7 @@
  */
 
 import { on, EVENTS } from "../events/bus.js";
-import { web3 } from "../blockchain/wallet.js";
+import * as wallet from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import {
   getContractAddress as getNetworkContractAddress,
@@ -19,6 +18,7 @@ import { identityMatrix } from "../utils/collections.js";
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
 
+/** @param {string} message */
 export function announceStatus(message) {
   const el = document.getElementById("srStatus");
   if (el) {
@@ -33,6 +33,11 @@ export function announceStatus(message) {
  * Custom API error with status and backend error code.
  */
 export class ApiError extends Error {
+  /**
+   * @param {string} message
+   * @param {number} status
+   * @param {string|null} [code]
+   */
   constructor(message, status, code = null) {
     super(message);
     this.status = status;
@@ -44,6 +49,7 @@ export class ApiError extends Error {
 /**
  * Parse a standardized error response body.
  */
+/** @param {any} data */
 function parseErrorBody(data) {
   if (data?.error && typeof data.error === "object") {
     return {
@@ -97,6 +103,11 @@ export function getCachedSession() {
 /**
  * Store session token in localStorage.
  */
+/**
+ * @param {string} token
+ * @param {number} expiresAt
+ * @param {string} address
+ */
 function cacheSession(token, expiresAt, address) {
   try {
     localStorage.setItem(
@@ -131,7 +142,7 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
  */
 export async function createSession() {
   const { walletAddress, eoaAddress, chainId: walletChainId } = walletState.get();
-  if (!web3 || !walletAddress) {
+  if (!wallet.web3 || !walletAddress) {
     throw new ApiError("Not signed in", 401, "WALLET_NOT_CONNECTED");
   }
 
@@ -152,7 +163,7 @@ export async function createSession() {
   let signature;
   const _tSign = performance.now();
   try {
-    signature = await web3.eth.personal.sign(message, signerAddress, "");
+    signature = await wallet.web3.eth.personal.sign(message, signerAddress, "");
     console.log(`[LOGIN-TIMING] siweSign: ${Math.round(performance.now() - _tSign)}ms`);
   } catch (err) {
     const cause = /** @type {any} */ (err);
@@ -206,6 +217,7 @@ export async function createSession() {
  *
  * @returns {Promise<string>} session token
  */
+/** @type {Promise<string>|null} */
 let sessionCreationPromise = null;
 
 export async function getOrCreateSession() {
@@ -254,10 +266,11 @@ export async function getOrCreateSession() {
  * @param {Object} [options]
  * @param {string} [options.method="POST"]
  * @param {Object|string} [options.body] - JSON-serialized unless already a string
- * @param {Object} [options.headers] - extra request headers
+ * @param {Object<string, string>} [options.headers] - extra request headers
  * @returns {Promise<Response>}
  */
 async function fetchWithSession(path, { method = "POST", body, headers = {} } = {}) {
+  /** @param {string} token */
   const doFetch = (token) =>
     fetch(`${API_BASE}${path}`, {
       method,
@@ -284,13 +297,14 @@ async function fetchWithSession(path, { method = "POST", body, headers = {} } = 
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
+/** @type {Promise<any>|null} */
 let _configPromise = null;
 
 /**
  * GET /api/v1/config
  * Config is immutable for the page lifetime, so the (successful) result is
  * memoized; a failed fetch clears the cache so the next call can retry.
- * @returns {Promise<Object>} { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
+ * @returns {Promise<any>} { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
  */
 export async function getConfig() {
   if (_configPromise) return _configPromise;
@@ -313,7 +327,7 @@ export async function getConfig() {
  */
 export async function getContractAddress() {
   try {
-    const chainId = Number(await web3.eth.getChainId());
+    const chainId = Number(await wallet.web3.eth.getChainId());
     const networkAddr = getNetworkContractAddress(chainId);
     if (networkAddr) return networkAddr;
     const config = await getConfig();
@@ -357,7 +371,7 @@ export async function getOwnedTokens(address, chainId, force = false) {
     if (!Array.isArray(data.owned)) throw new Error("invalid indexer response");
     return data.owned.map(String);
   } catch (err) {
-    warn("[SESSION] indexer query failed, falling back to scan:", err.message);
+    warn("[SESSION] indexer query failed, falling back to scan:", /** @type {Error} */ (err).message);
     return null;
   }
 }
@@ -384,7 +398,7 @@ export async function getSharedTokens(address, chainId, force = false) {
     if (!Array.isArray(data.shared)) throw new Error("invalid indexer response");
     return data.shared.map(String);
   } catch (err) {
-    warn("[SESSION] shared indexer query failed:", err.message);
+    warn("[SESSION] shared indexer query failed:", /** @type {Error} */ (err).message);
     return null;
   }
 }
@@ -526,6 +540,7 @@ async function followupScaleCompensation(sourceCid, resultBytes) {
     );
     const { boundsFromGlbBytes, computeGltfBounds, compensationScale } =
       await import("../gltf/bounds.js");
+    /** @param {Uint8Array} bytes */
     const toBounds = (bytes) =>
       boundsFromGlbBytes(bytes) ??
       computeGltfBounds(JSON.parse(new TextDecoder().decode(bytes)));
@@ -556,11 +571,13 @@ async function followupScaleCompensation(sourceCid, resultBytes) {
  * @param {Object} params
  * @param {string} params.prompt
  * @param {string} params.nodeId
+ * @param {string} [params.txHash] - legacy payment tx hash (unused, kept for call-site compat)
  * @param {string} [params.provider]
  * @param {string} [params.assetId]
  * @param {string} [params.prevAssetManifestCid]
  * @param {number[]} [params.transformMatrix]
  * @param {number} [params.tier] - 0=Basic, 1=Standard, 2=Premium, 3=Pro
+ * @param {string} [params.providerKey] - BYOK provider API key, sent per-request
  * @param {string} [params.sourceAssetCid] - CID of a completed generation's GLB; the source for retexture/retopo/animate follow-ups
  * @param {string} [params.sourceTaskId] - backend registry task id of the task that produced sourceAssetCid; drives the retarget-only shortcut for animating an already-rigged result
  * @param {boolean} [params.retexture] - texture/material-only refine of sourceAssetCid (tripo3d)
@@ -569,6 +586,7 @@ async function followupScaleCompensation(sourceCid, resultBytes) {
  * @param {boolean} [params.animate] - rig & animate sourceAssetCid (tripo3d)
  * @param {string[]} [params.animations] - retarget presets (e.g. ["preset:idle"]), max 5; required with animate unless rigOnly
  * @param {boolean} [params.rigOnly] - stop after the rig step (rigged model, Tripo-native skeleton, no baked animation)
+ * @param {string} [params.rigModel] - Tripo rig endpoint model override (e.g. biped fallback)
  * @param {boolean} [params.animateInPlace] - retarget with animate_in_place (no root displacement)
  * @param {string} [params.textureQuality] - "detailed" for HD textures (tripo3d)
  * @param {string} [params.imageData] - base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine)
@@ -745,7 +763,7 @@ export async function generateAsset({
       log(`[GEN] previous manifest loaded - v${manifest.version}`);
     } catch (e) {
       warn(
-        `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${e.message}`
+        `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${/** @type {Error} */ (e).message}`
       );
     }
   }
@@ -795,7 +813,7 @@ export async function generateAsset({
   ];
 
   announceStatus("Uploading manifest to IPFS…");
-  const assetManifestCid = await writeJSONToIPFS(manifest, null, {
+  const assetManifestCid = await writeJSONToIPFS(manifest, /** @type {any} */ (null), {
     assetId: manifest.asset_id,
   });
   log(`[GEN] browser uploaded manifest → ${assetManifestCid}`);
@@ -918,7 +936,7 @@ export async function getUploadCredentials(count) {
  * @param {Object} [tokenContext] - Token the CID belongs to
  * @param {string|number} [tokenContext.tokenId] - Collection token ID
  * @param {number} [tokenContext.chainId]
- * @param {string} [tokenContext.contractAddress] - Contract override
+ * @param {string|null} [tokenContext.contractAddress] - Contract override
  * @param {string[]} [tokenContext.proof] - Merkle editor proof (non-owners)
  * @returns {Promise<{unpinned: string[], count: number, errors?: string[]}>}
  */
@@ -926,9 +944,11 @@ export async function unpinAssetCids(
   cid,
   { tokenId, chainId, contractAddress, proof } = {}
 ) {
+  /** @type {{ cid: string, tokenId?: string, chainId?: number, contractAddress?: string, proof?: string[] }} */
   const body = { cid };
   if (tokenId != null) body.tokenId = String(tokenId);
-  if (Number.isFinite(chainId) && chainId > 0) body.chainId = chainId;
+  if (typeof chainId === "number" && Number.isFinite(chainId) && chainId > 0)
+    body.chainId = chainId;
   if (contractAddress) body.contractAddress = contractAddress;
   if (Array.isArray(proof) && proof.length > 0) body.proof = proof;
 

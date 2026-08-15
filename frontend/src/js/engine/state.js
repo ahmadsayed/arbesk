@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Scene Graph - Shared State
  *
@@ -26,7 +25,7 @@ export const state = {
   nodeAnimationGroups: new Map(),
   /** @type {BABYLON.TransformNode|null} */
   rootSceneAnchor: null,
-  /** @type {Array<Object>} */
+  /** @type {Array<any>} */
   pendingChildRefs: [],
   /**
    * Post-processor edits (color/scale/meshOverrides) accumulated in the
@@ -93,7 +92,7 @@ export const state = {
    * The `assets` map of the collection currently open in the Studio.
    * Populated by loadCollectionManifest(); used to resolve `child_ref`
    * nodes whose `collection` field is `"self"`.
-   * @type {Object|null}
+   * @type {Record<string, any>|null}
    */
   activeCollectionAssets: null,
   /**

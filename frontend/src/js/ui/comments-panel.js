@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Comments Panel
  *
@@ -15,6 +14,18 @@ import { truncateAddress } from "../utils/format.js";
 import { escapeHtml } from "../utils/html.js";
 import { getCachedSession } from "../services/api.js";
 
+/**
+ * @typedef {object} CommentPanelElements
+ * @property {HTMLElement|null} [section]
+ * @property {HTMLElement|null} [title]
+ * @property {HTMLElement|null} [list]
+ * @property {HTMLElement|null} [empty]
+ * @property {HTMLInputElement|null} [input]
+ * @property {HTMLButtonElement|null} [postBtn]
+ * @property {HTMLElement|null} [count]
+ * @property {HTMLElement|null} [live]
+ */
+/** @type {CommentPanelElements} */
 const elements = {};
 const thread = new CommentThread();
 
@@ -33,8 +44,8 @@ function cacheElements() {
   elements.title = document.getElementById("commentsTitle");
   elements.list = document.getElementById("commentList");
   elements.empty = document.getElementById("commentsEmpty");
-  elements.input = document.getElementById("commentComposerInput");
-  elements.postBtn = document.getElementById("postCommentBtn");
+  elements.input = /** @type {HTMLInputElement|null} */ (document.getElementById("commentComposerInput"));
+  elements.postBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("postCommentBtn"));
   elements.count = document.getElementById("commentsCount");
   elements.live = document.getElementById("commentsLiveRegion");
 }
@@ -62,6 +73,7 @@ function bindThreadEvents() {
 
 // ─── State Changes ──────────────────────────────────────────────────────────
 
+/** @param {any} e */
 async function onAssetContextChanged(e) {
   const tokenId = getActiveAssetTokenId();
   const chainId = walletState.get().chainId;
@@ -74,6 +86,7 @@ function onAuthChanged() {
   thread.connect();
 }
 
+/** @param {{ source?: string }} event */
 function onThreadChange({ source }) {
   renderAll();
   updateUI();
@@ -82,6 +95,7 @@ function onThreadChange({ source }) {
   }
 }
 
+/** @param {{ error?: string }} [event] */
 function onThreadStatus({ error } = {}) {
   updateUI();
   if (error) showError(error);
@@ -93,11 +107,12 @@ function onPostComment() {
   const text = elements.input?.value?.trim();
   if (!text) return;
   if (thread.post(text)) {
-    elements.input.value = "";
-    elements.input.focus();
+    /** @type {HTMLInputElement} */ (elements.input).value = "";
+    /** @type {HTMLInputElement} */ (elements.input).focus();
   }
 }
 
+/** @param {KeyboardEvent} e */
 function onComposerKeydown(e) {
   if (e.ctrlKey && e.key === "Enter") {
     e.preventDefault();
@@ -117,8 +132,10 @@ function renderAll() {
   scrollToBottom();
 }
 
+/** @param {any} event */
 function renderEvent(event) {
-  const senderTag = (event.tags || []).find(
+  const tags = /** @type {any[]} */ (event.tags || []);
+  const senderTag = tags.find(
     (t) => Array.isArray(t) && t[0] === "sender"
   );
   const sender = senderTag?.[1] || "unknown";
@@ -173,6 +190,7 @@ function renderEvent(event) {
   return li;
 }
 
+/** @param {string} html */
 function renderMentions(html) {
   // Highlight @0x... mentions without linking anywhere for v1.
   return html.replace(
@@ -235,15 +253,17 @@ function setEmptyState(title, sub) {
   elements.empty.hidden = false;
 }
 
+/** @param {string} text */
 function announce(text) {
   if (elements.live) {
     elements.live.textContent = "";
     requestAnimationFrame(() => {
-      elements.live.textContent = text;
+      /** @type {HTMLElement} */ (elements.live).textContent = text;
     });
   }
 }
 
+/** @param {string} message */
 function showError(message) {
   console.warn("[COMMENTS] server error:", message);
   // Surface short errors via the empty-state subtitle for v1.
@@ -288,9 +308,9 @@ export function getInitials(value) {
 
 /**
  * Detect whether the given wallet address is mentioned in the text.
- * Matches both full and truncated @0x… forms.
+ * Matches both full and truncated 0x… mention forms.
  * @param {string} text
- * @param {string} walletAddress
+ * @param {string|null} walletAddress
  * @returns {boolean}
  */
 export function isMentioned(text, walletAddress) {

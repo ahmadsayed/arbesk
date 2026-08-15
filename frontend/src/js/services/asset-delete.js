@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Shared collection asset deletion helper.
  *
@@ -40,7 +39,7 @@ export async function deleteAssetFromCollection({
   assetName,
   onAfterDelete,
 }) {
-  const { contract: c } = requireWallet();
+  const { contract: c } = /** @type {any} */ (requireWallet());
 
   const confirmed = await showConfirmDialog(
     "Delete Asset",
@@ -78,12 +77,12 @@ export async function deleteAssetFromCollection({
   newCollection.version = (newCollection.version || 0) + 1;
 
   // Write updated collection directly to IPFS - no backend middleman.
-  const newCollectionCid = await writeJSONToIPFS(newCollection, null, {
+  const newCollectionCid = await writeJSONToIPFS(newCollection, /** @type {any} */ (null), {
     type: "collection",
     assetId: newCollection.asset_id,
   });
 
-  const walletAddr = walletState.get().walletAddress;
+  const walletAddr = /** @type {string} */ (walletState.get().walletAddress);
   let editorList = await loadEditorList(tokenId);
   if (!editorList || editorList.length === 0) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
@@ -169,13 +168,13 @@ export async function burnCollection(tokenId) {
  * Load a collection manifest, apply a mutation, write the new manifest to IPFS,
  * and update the on-chain tokenURI. Reuses editor-list/proof logic from delete.
  *
- * @param {string} tokenId
- * @param {Function} mutate - Receives the collection manifest; should mutate and return it.
+ * @param {string|number} tokenId
+ * @param {(collection: any) => any} mutate - Receives the collection manifest; should mutate and return it.
  * @param {{label?: string, onAfterUpdate?: Function}} [options]
  * @returns {Promise<string>} New collection CID.
  */
 export async function updateCollectionManifest(tokenId, mutate, options = {}) {
-  const { contract: c } = requireWallet();
+  const { contract: c } = /** @type {any} */ (requireWallet());
 
   const currentCid = await c.methods.tokenURI(tokenId).call();
   const collection = await getFromRemoteIPFS(currentCid);
@@ -184,18 +183,19 @@ export async function updateCollectionManifest(tokenId, mutate, options = {}) {
   newCollection.version = (newCollection.version || 0) + 1;
   newCollection.prev_asset_manifest_cid = currentCid;
 
-  const newCollectionCid = await writeJSONToIPFS(newCollection, null, {
+  const newCollectionCid = await writeJSONToIPFS(newCollection, /** @type {any} */ (null), {
     type: "collection",
     assetId: newCollection.asset_id,
   });
 
-  const walletAddr = walletState.get().walletAddress;
-  let editorList = await loadEditorList(tokenId);
+  const walletAddr = /** @type {string} */ (walletState.get().walletAddress);
+  const tokenIdStr = /** @type {string} */ (tokenId);
+  let editorList = await loadEditorList(tokenIdStr);
   if (!editorList || editorList.length === 0) {
     editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   }
-  const currentVersion = await getEditorSetVersion(tokenId);
-  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
+  const currentVersion = await getEditorSetVersion(tokenIdStr);
+  const proofResult = getProof(editorList, walletAddr, tokenIdStr, currentVersion);
   if (!proofResult) throw new Error("Not an authorized editor");
 
   const txHash = await updateAssetURI(
@@ -237,7 +237,7 @@ export async function sendAssetToCollection({
   mode,
   onAfterSend,
 }) {
-  const { contract: c } = requireWallet();
+  const { contract: c } = /** @type {any} */ (requireWallet());
   if (String(sourceTokenId) === String(targetTokenId)) {
     throw new Error("Source and target collection must be different");
   }
@@ -283,7 +283,7 @@ export async function sendAssetToCollection({
         ],
       },
     };
-    targetAssetCid = await writeJSONToIPFS(refManifest, null, {
+    targetAssetCid = await writeJSONToIPFS(refManifest, /** @type {any} */ (null), {
       type: "asset",
       assetId: targetAssetId,
     });

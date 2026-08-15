@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Collaborator Panel - Reusable Merkle Editor UI
  *
@@ -22,6 +21,19 @@ import { showToast } from "./toasts.js";
 const instances = new Map();
 
 /**
+ * @typedef {object} CollaboratorPanelState
+ * @property {string|number} tokenId
+ * @property {boolean} editable
+ * @property {boolean} isOwner
+ * @property {AbortController} abortController
+ * @property {HTMLElement} [ownerBadge]
+ * @property {HTMLElement} [list]
+ * @property {HTMLElement} [controls]
+ * @property {HTMLInputElement} [input]
+ * @property {HTMLSelectElement} [roleSelect]
+ */
+
+/**
  * Build (or rebuild) a collaborator panel inside `container` for `tokenId`.
  *
  * @param {HTMLElement} container
@@ -33,6 +45,7 @@ const instances = new Map();
 export function initCollaboratorPanel(container, tokenId, options = {}) {
   destroyCollaboratorPanel(container);
 
+  /** @type {CollaboratorPanelState} */
   const state = {
     tokenId,
     editable: Boolean(options.editable),
@@ -110,11 +123,11 @@ export function initCollaboratorPanel(container, tokenId, options = {}) {
         input.value = "";
         await refresh();
       } catch (err) {
-        console.warn("[COLLAB-PANEL] add failed:", err.message);
+        console.warn("[COLLAB-PANEL] add failed:", /** @type {Error} */ (err).message);
         showToast({
           type: "error",
           title: "Add Failed",
-          message: err.message || "Could not add collaborator.",
+          message: /** @type {Error} */ (err).message || "Could not add collaborator.",
         });
       }
     },
@@ -141,7 +154,7 @@ export function initCollaboratorPanel(container, tokenId, options = {}) {
       const editorList = await fetchEditors(tokenId);
       renderList(state, editorList);
     } catch (err) {
-      console.warn("[COLLAB-PANEL] refresh failed:", err.message);
+      console.warn("[COLLAB-PANEL] refresh failed:", /** @type {Error} */ (err).message);
       list.innerHTML = "";
     }
   }
@@ -154,6 +167,7 @@ export function initCollaboratorPanel(container, tokenId, options = {}) {
   return { refresh, destroy };
 }
 
+/** @param {HTMLElement} container */
 function destroyCollaboratorPanel(container) {
   const state = instances.get(container);
   if (!state) return;
@@ -163,8 +177,12 @@ function destroyCollaboratorPanel(container) {
   container.classList.remove("collaborator-panel");
 }
 
+/**
+ * @param {CollaboratorPanelState} state
+ * @param {any[]} editorList
+ */
 function renderList(state, editorList) {
-  const { list, ownerBadge, controls } = state;
+  const { list, ownerBadge, controls } = /** @type {Required<CollaboratorPanelState>} */ (state);
   list.innerHTML = "";
 
   const editable = state.editable && state.isOwner;
@@ -248,17 +266,21 @@ function renderList(state, editorList) {
   list.appendChild(fragment);
 }
 
+/**
+ * @param {CollaboratorPanelState} state
+ * @param {() => Promise<any>} operation
+ */
 async function mutate(state, operation) {
   try {
     await operation();
     const editorList = await fetchEditors(state.tokenId);
     renderList(state, editorList);
   } catch (err) {
-    console.warn("[COLLAB-PANEL] mutation failed:", err.message);
+    console.warn("[COLLAB-PANEL] mutation failed:", /** @type {Error} */ (err).message);
     showToast({
       type: "error",
       title: "Update Failed",
-      message: err.message || "Could not update collaborators.",
+      message: /** @type {Error} */ (err).message || "Could not update collaborators.",
     });
   }
 }

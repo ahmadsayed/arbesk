@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Wallet readiness guard - shared by services that require a connected wallet.
  *
@@ -12,7 +11,7 @@ import { walletState } from "../state/wallet-state.js";
  * Assert the wallet is connected and return web3 + contract + address.
  * Throws with a consistent error message if the wallet is not ready.
  *
- * @returns {{ web3: object, contract: object, walletAddress: string }}
+ * @returns {{ contract: any, walletAddress: string }}
  * @throws {Error} if wallet is not connected or contract is not initialized
  */
 export function requireWallet() {

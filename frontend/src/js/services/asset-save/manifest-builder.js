@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Manifest construction helpers for save/publish.
  *
@@ -46,6 +45,7 @@ import {
 import { log, warn } from "../../utils/log.js";
 import { identityMatrix } from "../../utils/collections.js";
 
+/** @param {any} err */
 function isRateLimitError(err) {
   if (!err || typeof err.message !== "string") return false;
   return (
@@ -59,9 +59,10 @@ function isRateLimitError(err) {
  * Avoids a round-trip to IPFS when the manifest was just produced by a
  * previous save/publish in the same session.
  */
+/** @param {string|null} activeCid */
 function _useCachedManifest(activeCid) {
   if (!activeCid) return null;
-  const cached = getCurrentManifest();
+  const cached = /** @type {any} */ (getCurrentManifest());
   const hasAssetId = !!cached?.asset_id;
   const cachedCid = cached?._manifestCid || null;
   const hit = hasAssetId && (!cachedCid || cachedCid === activeCid);
@@ -87,12 +88,17 @@ const _verifiedCompositeCids = new Set();
  * declare their own stored-form predicate via the format handler.
  * Lets us skip an expensive IPFS fetch on no-op save/publish cycles.
  */
+/** @param {any} node */
 function looksStored(node) {
   if (!node.source?.cid || node.child_ref) return false;
   if (_verifiedCompositeCids.has(node.source.cid)) return true;
   return resolveFormatHandler(node.source).isStoredForm(node);
 }
 
+/**
+ * @param {any} manifest
+ * @param {string|null} latestCid
+ */
 export function advanceManifestVersion(manifest, latestCid) {
   manifest.version = (manifest.version || 0) + 1;
   manifest.prev_asset_manifest_cid =
@@ -102,8 +108,13 @@ export function advanceManifestVersion(manifest, latestCid) {
 /**
  * Compare two manifests for semantic equality, ignoring auto-generated fields.
  */
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function manifestsSemanticallyEqual(a, b) {
   if (!a || !b) return false;
+  /** @param {any} m */
   const strip = (m) => {
     const copy = JSON.parse(JSON.stringify(m));
     delete copy.timestamp;
@@ -118,10 +129,10 @@ export function manifestsSemanticallyEqual(a, b) {
  * Try to decompose a single node's source asset.
  * Returns a { nodeId, cid, path, format } result or null if not applicable.
  *
- * @param {object} node
- * @param {object} manifest
- * @param {Map<string,string>} [dedupMap]
- * @param {Map<string,*>} [pendingColorEdits] - Source-color edits still to be
+ * @param {any} node
+ * @param {any} manifest
+ * @param {Map<string,string>|null} [dedupMap]
+ * @param {Map<string,any>|null} [pendingColorEdits] - Source-color edits still to be
  *   applied. When a node has a pending edit we cannot take the fast path,
  *   because baking colors into a GLB produces a monolithic glTF that still
  *   carries the "composite.gltf" path marker and needs one more decomposition.
@@ -152,7 +163,7 @@ async function _decomposeOneNode(
     const result = await handler.decomposeForSave(node, {
       assetName: manifest.name,
       assetId: manifest.asset_id,
-      dedupMap,
+      dedupMap: /** @type {any} */ (dedupMap),
     });
     if (!result) return null;
 
@@ -177,7 +188,7 @@ async function _decomposeOneNode(
     if (isRateLimitError(err)) throw err;
     warn(
       `Decompose save: failed to decompose node ${node.node_id}:`,
-      err.message
+      /** @type {Error} */ (err).message
     );
     return null;
   }
@@ -189,9 +200,9 @@ async function _decomposeOneNode(
  * and updates node.source.cid to point to the composite JSON.
  * Already-composite nodes (ipfs:// URIs) are skipped.
  *
- * @param {object} manifest - The manifest being prepared for write
- * @param {Map<string,string>} [dedupMap]
- * @param {Map<string,*>} [pendingColorEdits]
+ * @param {any} manifest - The manifest being prepared for write
+ * @param {Map<string,string>|null} [dedupMap]
+ * @param {Map<string,any>|null} [pendingColorEdits]
  * @returns {Promise<number>} Count of nodes decomposed
  */
 export async function decomposeManifestNodes(
@@ -201,7 +212,7 @@ export async function decomposeManifestNodes(
 ) {
   const nodes = manifest.scene?.nodes || [];
 
-  const jobs = nodes.map((node) =>
+  const jobs = nodes.map((/** @type {any} */ node) =>
     _decomposeOneNode(node, manifest, dedupMap, pendingColorEdits)
   );
 
@@ -209,7 +220,7 @@ export async function decomposeManifestNodes(
   let decomposed = 0;
   for (const r of results) {
     if (r.status !== "fulfilled" || !r.value) continue;
-    const node = nodes.find((n) => n.node_id === r.value.nodeId);
+    const node = nodes.find((/** @type {any} */ n) => n.node_id === r.value.nodeId);
     if (!node) continue;
     node.source.cid = r.value.cid;
     node.source.path = r.value.path;
@@ -245,7 +256,7 @@ export async function resolveLatestManifestCid() {
     } catch (err) {
       warn(
         `Save: failed to read on-chain tokenURI for #${tokenId}:`,
-        err.message
+        /** @type {Error} */ (err).message
       );
     }
   }
@@ -257,23 +268,24 @@ export async function resolveLatestManifestCid() {
  * asset manifests. Used to skip re-uploading unchanged buffers/images when
  * saving a new version.
  */
+/** @param {any[]} manifests */
 async function buildDedupMapFromManifests(manifests) {
   const composites = [];
   for (const manifest of manifests) {
     if (!manifest?.scene?.nodes) continue;
     const jobs = manifest.scene.nodes
       .filter(
-        (n) =>
+        (/** @type {any} */ n) =>
           n.source?.cid &&
           (resolveFormatHandler(n.source).isDedupSource?.(n) ?? false)
       )
-      .map(async (n) => {
+      .map(async (/** @type {any} */ n) => {
         try {
           return await getFromRemoteIPFS(n.source.cid);
         } catch (err) {
           warn(
             `Save: failed to fetch composite for dedup | cid=${n.source.cid}:`,
-            err.message
+            /** @type {Error} */ (err).message
           );
           return null;
         }
@@ -303,7 +315,7 @@ function collectChatProvenanceEntries(activeCid) {
 
   // Walk the records' own/prev links outward from the active CID to find the
   // chain tail that belongs to this asset.
-  const reachable = new Set(activeCid ? [activeCid] : []);
+  const reachable = new Set(/** @type {Array<string|null>} */ (activeCid ? [activeCid] : []));
   let grew = true;
   while (grew) {
     grew = false;
@@ -342,6 +354,9 @@ function collectChatProvenanceEntries(activeCid) {
   return entries;
 }
 
+/**
+ * @param {string} assetName
+ */
 export async function prepareManifestForWrite(assetName) {
   let manifest;
   // A linked-asset drop is fire-and-forget: if the user hits Save/Publish
@@ -425,8 +440,8 @@ export async function prepareManifestForWrite(assetName) {
   // the prevManifest snapshot above: pushing them earlier makes the no-op
   // baseline already contain the child, so "link a child → Save" on an
   // otherwise unchanged draft is wrongly reported as "no changes".
-  for (const pendingNode of pendingRefs) {
-    if (!manifest.scene.nodes.some((n) => n.node_id === pendingNode.node_id)) {
+  for (const pendingNode of /** @type {any[]} */ (pendingRefs)) {
+    if (!manifest.scene.nodes.some((/** @type {any} */ n) => n.node_id === pendingNode.node_id)) {
       manifest.scene.nodes.push(pendingNode);
     }
   }
@@ -439,7 +454,7 @@ export async function prepareManifestForWrite(assetName) {
   // created by a drop with no asset open), a new single node is appended.
   if (pendingOverrides.size > 0) {
     for (const [nodeId, override] of pendingOverrides) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      const node = manifest.scene.nodes.find((/** @type {any} */ n) => n.node_id === nodeId);
       if (node) {
         node.source = { ...override.source };
         node.post_processor = {
@@ -465,10 +480,10 @@ export async function prepareManifestForWrite(assetName) {
   }
 
   const sourceNodes = manifest.scene.nodes.filter(
-    (n) => n.source?.cid && !n.child_ref
+    (/** @type {any} */ n) => n.source?.cid && !n.child_ref
   );
   const needsDedup =
-    pendingColors.size > 0 || sourceNodes.some((n) => !looksStored(n));
+    pendingColors.size > 0 || sourceNodes.some((/** @type {any} */ n) => !looksStored(n));
 
   const dedupMap = needsDedup
     ? await buildDedupMapFromManifests(
@@ -483,9 +498,10 @@ export async function prepareManifestForWrite(assetName) {
   if (pendingColors.size > 0) {
     const colorJobs = [];
     for (const [nodeId, nodeEdits] of pendingColors) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      const node = manifest.scene.nodes.find((/** @type {any} */ n) => n.node_id === nodeId);
       if (!node || !node.source?.cid) continue;
 
+      /** @type {Record<string, string>} */
       const colorMap = {};
       for (const [meshName, color] of nodeEdits) {
         colorMap[meshName] = color;
@@ -511,7 +527,7 @@ export async function prepareManifestForWrite(assetName) {
             if (isRateLimitError(err)) throw err;
             warn(
               `Save: failed to bake colors into source for ${nodeId}:`,
-              err.message
+              /** @type {Error} */ (err).message
             );
             return null;
           }
@@ -523,7 +539,7 @@ export async function prepareManifestForWrite(assetName) {
     for (const r of colorResults) {
       if (r.status !== "fulfilled" || !r.value) continue;
       const { nodeId, result } = r.value;
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      const node = manifest.scene.nodes.find((/** @type {any} */ n) => n.node_id === nodeId);
       if (!node) continue;
       node.source.cid = result.sourceCid;
       // The edited source is always glTF JSON now; keep the node's
@@ -542,7 +558,7 @@ export async function prepareManifestForWrite(assetName) {
   if (pendingPP.size > 0) {
     const ppJobs = [];
     for (const [nodeId, pp] of pendingPP) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      const node = manifest.scene.nodes.find((/** @type {any} */ n) => n.node_id === nodeId);
       if (!node) continue;
 
       const isDecomposed =
@@ -583,7 +599,7 @@ export async function prepareManifestForWrite(assetName) {
             } catch (err) {
               warn(
                 `Save: failed to bake colors into composite glTF for ${nodeId}:`,
-                err.message
+                /** @type {Error} */ (err).message
               );
             }
             return { nodeId, pp, result };
@@ -606,7 +622,7 @@ export async function prepareManifestForWrite(assetName) {
     for (const r of ppResults) {
       if (r.status !== "fulfilled" || !r.value) continue;
       const { nodeId, pp, result } = r.value;
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      const node = manifest.scene.nodes.find((/** @type {any} */ n) => n.node_id === nodeId);
       if (!node) continue;
 
       if (result) {
@@ -642,7 +658,7 @@ export async function prepareManifestForWrite(assetName) {
   // in its edited position/rotation/scale on next load.
   if (pendingTransforms.size > 0) {
     for (const [nodeId, matrixArray] of pendingTransforms) {
-      const node = manifest.scene.nodes.find((n) => n.node_id === nodeId);
+      const node = manifest.scene.nodes.find((/** @type {any} */ n) => n.node_id === nodeId);
       if (!node) continue;
       node.transform_matrix = matrixArray;
       log(`Save: applied transform edit | node=${nodeId}`);
@@ -691,6 +707,10 @@ export async function prepareManifestForWrite(assetName) {
   };
 }
 
+/**
+ * @param {string} assetName
+ * @param {{ captureThumbnail?: boolean, publishContext?: any }} [options]
+ */
 export async function saveAssetDraftCore(
   assetName,
   { captureThumbnail = false, publishContext = null } = {}
@@ -699,7 +719,7 @@ export async function saveAssetDraftCore(
   // preparation, so run both concurrently. Failures are non-fatal.
   const thumbnailPromise = captureThumbnail
     ? captureAssetThumbnail().catch((thumbnailError) => {
-        warn("[SAVE] thumbnail capture skipped:", thumbnailError.message);
+        warn("[SAVE] thumbnail capture skipped:", /** @type {Error} */ (thumbnailError).message);
         return null;
       })
     : null;
@@ -710,7 +730,7 @@ export async function saveAssetDraftCore(
   }
 
   if (thumbnailPromise) {
-    const thumbnail = await thumbnailPromise;
+    const thumbnail = /** @type {any} */ (await thumbnailPromise);
     if (thumbnail?.cid) {
       prepared.manifest.thumbnail = prepared.manifest.thumbnail?.cid
         ? { ...prepared.manifest.thumbnail, cid: thumbnail.cid }
@@ -774,13 +794,13 @@ export async function saveAssetDraftCore(
       const { cid: archiveCid } = await snapshotCommentsArchive(archiveContext);
       prepared.manifest.comments_archive_cid = archiveCid;
     } catch (archiveErr) {
-      warn(`[SAVE] comments archive skipped: ${archiveErr.message}`);
+      warn(`[SAVE] comments archive skipped: ${/** @type {Error} */ (archiveErr).message}`);
     }
   }
 
   // Write manifest directly to IPFS - no backend middleman.
   // The browser already writes glTF buffers and textures this way.
-  const cid = await writeJSONToIPFS(prepared.manifest, null, {
+  const cid = await writeJSONToIPFS(prepared.manifest, /** @type {any} */ (null), {
     type: prepared.manifest.type,
     assetId: prepared.manifest.asset_id,
   });

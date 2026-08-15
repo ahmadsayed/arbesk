@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk glTF Web Worker
  *
@@ -41,9 +40,12 @@ const _inflightRawDownloads = new Map();
 console.log("[WORKER-INIT] gltf-worker module evaluating");
 
 const HASH_ALGORITHM = DEFAULT_HASH_ALGORITHM;
+/** @param {number} i */
 const WORKER_BUFFER_PLACEHOLDER = (i) => `__worker_buffer_${i}__`;
+/** @param {number} i */
 const WORKER_IMAGE_PLACEHOLDER = (i) => `__worker_image_${i}__`;
 
+/** @type {any} */
 let io = null;
 function getIO() {
   if (!io) io = new WebIO();
@@ -52,6 +54,10 @@ function getIO() {
 
 // ─── Remaining Worker Utilities ─────────────────────────────────────────
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {string|null}
+ */
 function detectImageMimeType(bytes) {
   const b = bytes;
   if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
@@ -91,8 +97,13 @@ function detectImageMimeType(bytes) {
   return null;
 }
 
+/**
+ * @param {string|null|undefined} mimeType
+ * @returns {string}
+ */
 function extFromMimeType(mimeType) {
   if (!mimeType) return "bin";
+  /** @type {Object<string, string>} */
   const map = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -112,15 +123,24 @@ function extFromMimeType(mimeType) {
  * Assets are stored gzipped on IPFS (see commit 401da4b), so without this the
  * worker hands compressed bytes to Babylon.js, which fails with errors like
  * "Invalid typed array length".
+ *
+ * @param {Uint8Array} bytes
+ * @returns {boolean}
  */
 function isGzipped(bytes) {
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {Promise<Uint8Array>}
+ */
 async function gunzip(bytes) {
   const ds = new DecompressionStream("gzip");
   // DecompressionStream works on ReadableStream; wrap the bytes once.
-  const readable = new Response(bytes).body.pipeThrough(ds);
+  const readable = /** @type {ReadableStream} */ (
+    new Response(/** @type {BodyInit} */ (bytes)).body
+  ).pipeThrough(ds);
   const decompressed = await new Response(readable).arrayBuffer();
   return new Uint8Array(decompressed);
 }
@@ -131,14 +151,24 @@ async function gunzip(bytes) {
  * global in all evergreen browsers - the symmetric counterpart to gunzip().
  * Compressing here keeps IPFS uploads small (fewer bytes to the pinning
  * service); reads sniff the gzip magic bytes so the encoding is transparent.
+ *
+ * @param {Uint8Array} bytes
+ * @returns {Promise<Uint8Array>}
  */
 async function gzip(bytes) {
   const cs = new CompressionStream("gzip");
-  const readable = new Response(bytes).body.pipeThrough(cs);
+  const readable = /** @type {ReadableStream} */ (
+    new Response(/** @type {BodyInit} */ (bytes)).body
+  ).pipeThrough(cs);
   const compressed = await new Response(readable).arrayBuffer();
   return new Uint8Array(compressed);
 }
 
+/**
+ * @param {string} cid
+ * @param {string} gatewayBase
+ * @returns {Promise<ArrayBuffer>}
+ */
 async function fetchRawBytes(cid, gatewayBase) {
   const existing = _inflightRawDownloads.get(cid);
   if (existing) {
@@ -171,8 +201,15 @@ async function fetchRawBytes(cid, gatewayBase) {
   return downloadPromise;
 }
 
+/**
+ * @param {string} cid
+ * @param {string} gatewayBase
+ * @returns {Promise<ArrayBuffer>}
+ */
 async function fetchDecompressedBytes(cid, gatewayBase) {
-  let bytes = new Uint8Array(await fetchRawBytes(cid, gatewayBase));
+  let bytes = /** @type {Uint8Array} */ (
+    new Uint8Array(await fetchRawBytes(cid, gatewayBase))
+  );
   if (isGzipped(bytes)) {
     const before = bytes.length;
     bytes = await gunzip(bytes);
@@ -180,9 +217,14 @@ async function fetchDecompressedBytes(cid, gatewayBase) {
       `[WORKER-IPFS] gunzipped ${cid} ${before} → ${bytes.length} bytes`
     );
   }
-  return bytes.buffer;
+  return /** @type {ArrayBuffer} */ (bytes.buffer);
 }
 
+/**
+ * @param {string} cid
+ * @param {any} arbeskMeta
+ * @param {string} gatewayBase
+ */
 async function fetchCIDAsBase64(cid, arbeskMeta, gatewayBase) {
   return fetchCIDAsBase64Cached(cid, arbeskMeta, {
     fetchRaw: (c) => fetchRawBytes(c, gatewayBase),
@@ -193,6 +235,9 @@ async function fetchCIDAsBase64(cid, arbeskMeta, gatewayBase) {
 
 // ─── Operations ─────────────────────────────────────────────────────────────
 
+/**
+ * @param {any} payload
+ */
 async function compose(payload) {
   const { compositeJson, gatewayBase } = payload || {};
   if (!compositeJson) throw new Error("compose: gltfJson is null");
@@ -210,6 +255,8 @@ async function compose(payload) {
  * transferred ArrayBuffer (zero-copy) instead of a structured-cloned JSON
  * object full of giant base64 strings that the main thread would have to
  * re-stringify.
+ *
+ * @param {any} payload
  */
 async function composeToBytes(payload) {
   const { composedJson } = await compose(payload);
@@ -217,6 +264,9 @@ async function composeToBytes(payload) {
   return new Transfer({ composedBytes }, [composedBytes.buffer]);
 }
 
+/**
+ * @param {any} payload
+ */
 async function decomposeGltf(payload) {
   const { gltfJson } = payload || {};
   if (!gltfJson) throw new Error("decomposeGltf: gltf is null");
@@ -224,7 +274,9 @@ async function decomposeGltf(payload) {
     return { composite: gltfJson, buffers: [], images: [] };
   }
 
+  /** @type {Array<{name: string, bytes: Uint8Array|null, mime: string, skip?: boolean}>} */
   const buffers = [];
+  /** @type {Array<{name: string, bytes: Uint8Array|null, mime: string|null, skip?: boolean}>} */
   const images = [];
   const composite = await decomposeGltfJson(gltfJson, {
     logPrefix: "[WORKER-DECOMPOSE]",
@@ -250,6 +302,11 @@ async function decomposeGltf(payload) {
   return { composite, buffers, images };
 }
 
+/**
+ * @param {any} buf
+ * @param {ArrayBuffer|Uint8Array|null} binaryChunk
+ * @returns {Uint8Array|null}
+ */
 function resolveBufferBytes(buf, binaryChunk) {
   if (!buf.uri) {
     if (!binaryChunk) {
@@ -271,6 +328,9 @@ function resolveBufferBytes(buf, binaryChunk) {
   return null;
 }
 
+/**
+ * @param {any} payload
+ */
 async function decomposeGlb(payload) {
   const { arrayBuffer } = payload || {};
   if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
@@ -287,8 +347,11 @@ async function decomposeGlb(payload) {
     : null;
 
   const composite = JSON.parse(JSON.stringify(json));
+  /** @type {Array<{name: string, bytes: Uint8Array|null, mime: string, skip?: boolean}>} */
   const buffers = [];
+  /** @type {Array<{name: string, bytes: Uint8Array|null, mime: string|null, skip?: boolean}>} */
   const images = [];
+  /** @type {Uint8Array[]} */
   const bufferBytesByIndex = [];
 
   const gltfBuffers = composite.buffers || [];
@@ -408,6 +471,10 @@ async function decomposeGlb(payload) {
   return { composite, buffers, images };
 }
 
+/**
+ * @param {string} hex
+ * @returns {number[]}
+ */
 function hexToBaseColorFactor(hex) {
   const clean = hex.replace("#", "");
   return [
@@ -418,7 +485,13 @@ function hexToBaseColorFactor(hex) {
   ];
 }
 
+/**
+ * @param {any} gltf
+ * @param {string} nodeName
+ * @returns {Array<{nodeIndex: number, primitiveIndex: number, materialIndex: number}>}
+ */
 function findNodeMaterials(gltf, nodeName) {
+  /** @type {Array<{nodeIndex: number, primitiveIndex: number, materialIndex: number}>} */
   const matches = [];
   if (!gltf.nodes || !gltf.meshes) return matches;
 
@@ -444,21 +517,30 @@ function findNodeMaterials(gltf, nodeName) {
   return matches;
 }
 
+/**
+ * @param {any} gltf
+ * @param {Array<{nodeIndex: number, primitiveIndex: number, materialIndex: number}>} matches
+ * @param {string} newMaterialName
+ */
 function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
   if (matches.length === 0) return;
 
   const targetMaterialIndex = matches[0].materialIndex;
-  const usedByOthers = gltf.nodes.some((node, ni) => {
-    if (node.mesh === undefined || node.mesh === null) return false;
-    const mesh = gltf.meshes[node.mesh];
-    if (!mesh || !mesh.primitives) return false;
-    return mesh.primitives.some((prim, pi) => {
-      const isTarget = matches.some(
-        (m) => m.nodeIndex === ni && m.primitiveIndex === pi
+  const usedByOthers = gltf.nodes.some(
+    (/** @type {any} */ node, /** @type {number} */ ni) => {
+      if (node.mesh === undefined || node.mesh === null) return false;
+      const mesh = gltf.meshes[node.mesh];
+      if (!mesh || !mesh.primitives) return false;
+      return mesh.primitives.some(
+        (/** @type {any} */ prim, /** @type {number} */ pi) => {
+          const isTarget = matches.some(
+            (m) => m.nodeIndex === ni && m.primitiveIndex === pi
+          );
+          return !isTarget && prim.material === targetMaterialIndex;
+        }
       );
-      return !isTarget && prim.material === targetMaterialIndex;
-    });
-  });
+    }
+  );
 
   if (!usedByOthers) return;
 
@@ -478,6 +560,9 @@ function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
   }
 }
 
+/**
+ * @param {any} payload
+ */
 function bakeSourceColors(payload) {
   const { gltfJson, nodeColors } = payload || {};
   if (!gltfJson) throw new Error("bakeSourceColors: gltfJson is required");
@@ -517,6 +602,10 @@ function bakeSourceColors(payload) {
   return { bakedJson: gltf, modified, skipped };
 }
 
+/**
+ * @param {any} name
+ * @returns {string}
+ */
 function sanitizeAsyncName(name) {
   return (
     String(name || "asset")
@@ -526,6 +615,12 @@ function sanitizeAsyncName(name) {
   );
 }
 
+/**
+ * @param {any} targets
+ * @param {string} placeholder
+ * @param {string} cid
+ * @param {any} meta
+ */
 function rewritePlaceholderTargets(targets, placeholder, cid, meta) {
   for (const t of targets || []) {
     if (t.uri === placeholder) {
@@ -539,6 +634,12 @@ function rewritePlaceholderTargets(targets, placeholder, cid, meta) {
  * Upload a list of extracted { name, bytes, placeholder, meta? } items using a
  * single batch call when possible, and rewrite the matching placeholder URIs
  * in the composite target arrays.
+ *
+ * @param {Array<{name: string, bytes: Uint8Array|null, mime: string|null, skip?: boolean}>} items
+ * @param {any} targets
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential} credential
+ * @param {Map<string, string>|null} dedupMap
+ * @param {(i: number) => string} makePlaceholder
  */
 async function uploadExtractedItems(
   items,
@@ -566,7 +667,7 @@ async function uploadExtractedItems(
     const placeholder = makePlaceholder(idx);
 
     if (dedupMap?.has(meta.hash)) {
-      const cid = dedupMap.get(meta.hash);
+      const cid = /** @type {string} */ (dedupMap.get(meta.hash));
       rewritePlaceholderTargets(targets, placeholder, cid, meta);
       continue;
     }
@@ -603,6 +704,8 @@ async function uploadExtractedItems(
 /**
  * Decompose a standard glTF and upload its buffers/images from the worker.
  * Returns the composite with ipfs:// URIs already in place.
+ *
+ * @param {any} payload
  */
 async function decomposeAndUploadGltf(payload) {
   const { gltfJson, credential, options = {} } = payload || {};
@@ -636,6 +739,8 @@ async function decomposeAndUploadGltf(payload) {
 /**
  * Decompose a GLB and upload its buffers/images from the worker. When
  * storeComposite is true, also uploads the composite JSON and returns its CID.
+ *
+ * @param {any} payload
  */
 async function decomposeAndUploadGlb(payload) {
   const { arrayBuffer, credential, options = {} } = payload || {};
@@ -686,8 +791,14 @@ async function decomposeAndUploadGlb(payload) {
 
 // ─── Worker Registration ────────────────────────────────────────────────────
 
+/**
+ * @param {any} result
+ * @returns {ArrayBuffer[]}
+ */
 function collectTransferables(result) {
+  /** @type {ArrayBuffer[]} */
   const transfer = [];
+  /** @type {Set<ArrayBuffer>} */
   const seen = new Set();
   for (const list of [result.buffers, result.images]) {
     if (!Array.isArray(list)) continue;
@@ -702,8 +813,11 @@ function collectTransferables(result) {
   return transfer;
 }
 
+/**
+ * @param {(payload: any) => Promise<any> | any} handler
+ */
 function wrapWithTransfer(handler) {
-  return async (payload) => {
+  return async (/** @type {any} */ payload) => {
     const result = await handler(payload);
     const transfer = collectTransferables(result);
     return transfer.length > 0 ? new Transfer(result, transfer) : result;
@@ -724,14 +838,15 @@ try {
   });
   console.log("[WORKER-INIT] methods registered");
 } catch (err) {
-  console.error("[WORKER-INIT] failed to register methods:", err);
+  const initErr = /** @type {Error} */ (err);
+  console.error("[WORKER-INIT] failed to register methods:", initErr);
   // Register an emergency reporter so the main thread can retrieve the
   // initialization error instead of guessing why custom methods are missing.
   try {
     workerpool.worker({
       initError: () => ({
-        message: err?.message || String(err),
-        stack: err?.stack || null,
+        message: initErr?.message || String(initErr),
+        stack: initErr?.stack || null,
       }),
     });
     console.log("[WORKER-INIT] initError reporter registered");

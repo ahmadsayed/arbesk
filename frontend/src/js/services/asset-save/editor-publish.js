@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Editor / collaborator helpers for publish and republish.
  *
@@ -7,12 +6,8 @@
  */
 
 import { computeRoot, getProof, makeLeaf } from "../../gltf/merkle-editors.js";
-import {
-  CollaboratorRole,
-  contract,
-  publishAsset,
-  updateAssetURI,
-} from "../../blockchain/wallet.js";
+import * as wallet from "../../blockchain/wallet.js";
+import { CollaboratorRole } from "../../blockchain/wallet.js";
 import {
   loadEditorList,
   saveEditorList,
@@ -21,12 +16,13 @@ import {
 import { isOwner } from "../team.js";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.js";
 
+/** @param {string|number} tokenId */
 async function getEditorRoot(tokenId) {
-  if (!contract) return null;
+  if (!wallet.contract) return null;
   try {
-    return await contract.methods.editorRoot(tokenId).call();
+    return await wallet.contract.methods.editorRoot(tokenId).call();
   } catch (err) {
-    console.warn("[EDITOR-PUBLISH] failed to read editorRoot:", err.message);
+    console.warn("[EDITOR-PUBLISH] failed to read editorRoot:", /** @type {Error} */ (err).message);
     return null;
   }
 }
@@ -38,11 +34,16 @@ async function getEditorRoot(tokenId) {
  * is the only editor. This keeps existing tokens editable by their owners
  * without changing the smart contract.
  */
+/**
+ * @param {string|number} tokenId
+ * @param {string} walletAddr
+ */
 async function buildWalletProof(tokenId, walletAddr) {
   // Version and editor list are independent; resolve them in parallel.
+  const tokenIdStr = /** @type {string} */ (tokenId);
   const [versionResult, editorListResult] = await Promise.allSettled([
-    getEditorSetVersion(tokenId),
-    loadEditorList(tokenId),
+    getEditorSetVersion(tokenIdStr),
+    loadEditorList(tokenIdStr),
   ]);
 
   const currentVersion =
@@ -82,6 +83,10 @@ async function buildWalletProof(tokenId, walletAddr) {
 /**
  * Throw if the connected wallet is not an authorized editor of the token.
  */
+/**
+ * @param {string|number} tokenId
+ * @param {string} walletAddr
+ */
 export async function verifyCanEdit(tokenId, walletAddr) {
   const proofResult = await buildWalletProof(tokenId, walletAddr);
   if (!proofResult) {
@@ -100,6 +105,11 @@ export async function verifyCanEdit(tokenId, walletAddr) {
  * Merkle editor proof for the current wallet.
  * Returns the transaction hash.
  */
+/**
+ * @param {string|number} tokenId
+ * @param {string} collectionCid
+ * @param {string} walletAddr
+ */
 export async function republishCollection(tokenId, collectionCid, walletAddr) {
   const proofResult = await buildWalletProof(tokenId, walletAddr);
   if (!proofResult) {
@@ -111,7 +121,7 @@ export async function republishCollection(tokenId, collectionCid, walletAddr) {
     }
     throw new Error("Not an authorized editor");
   }
-  const txHash = await updateAssetURI(tokenId, collectionCid, proofResult.proof);
+  const txHash = await wallet.updateAssetURI(tokenId, collectionCid, proofResult.proof);
   if (!txHash) throw new Error("Republish transaction failed");
   return txHash;
 }
@@ -121,22 +131,31 @@ export async function republishCollection(tokenId, collectionCid, walletAddr) {
  * new token. Persists the editor list to IPFS and localStorage.
  * Returns { editorList, editorRoot, editorListUri }.
  */
+/**
+ * @param {string|number} tokenId
+ * @param {string} walletAddr
+ */
 export async function prepareInitialEditors(tokenId, walletAddr) {
   const editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
   const editorRoot = computeRoot(editorList, tokenId, 1);
   const editorListUri =
-    (await writeJSONToIPFS(editorList, null, {
+    (await writeJSONToIPFS(editorList, /** @type {any} */ (null), {
       compress: true,
       type: "editors",
       assetId: `token_${tokenId}_v1`,
     })) || "";
-  saveEditorList(tokenId, editorList, editorListUri || null);
+  saveEditorList(/** @type {string} */ (tokenId), editorList, editorListUri || null);
   return { editorList, editorRoot, editorListUri };
 }
 
 /**
  * Publish a brand new token with the given collection manifest CID.
  * Returns the transaction hash.
+ */
+/**
+ * @param {string} collectionCid
+ * @param {string|number} tokenId
+ * @param {string} walletAddr
  */
 export async function publishNewToken(
   collectionCid,
@@ -147,7 +166,7 @@ export async function publishNewToken(
     tokenId,
     walletAddr
   );
-  const txHash = await publishAsset(
+  const txHash = await wallet.publishAsset(
     collectionCid,
     tokenId,
     editorRoot,

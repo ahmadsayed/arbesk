@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CDP Email-OTP Wallet + Smart Account integration.
  *
@@ -30,7 +29,7 @@ let _currentEoaAccount = null;
 /** @type {string|null} Smart account address (user.evmSmartAccountObjects?.[0]?.address) */
 let _smartAccountAddress = null;
 
-/** @type {{ request: (args: object) => Promise<unknown> } | null} */
+/** @type {any} */
 let _provider = null;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -103,6 +102,7 @@ export async function initCdpClient(projectId) {
  * the same in-flight promise instead of re-running the chain serially.
  * @returns {Promise<boolean>} true when the SDK ended up initialized
  */
+/** @type {Promise<boolean>|null} */
 let _warmupPromise = null;
 export function warmupCdpClient() {
   if (!_warmupPromise) {
@@ -158,7 +158,7 @@ export async function resetCdpStorage() {
  * state and rebuild the EIP-1193 provider from it.
  * @param {object|null} eoaAccount
  * @param {string|null} smartAccountAddress
- * @returns {{ request: (args: object) => Promise<unknown> } | null}
+ * @returns {any}
  */
 function _applyCdpSession(eoaAccount, smartAccountAddress) {
   _currentEoaAccount = eoaAccount;
@@ -219,7 +219,7 @@ export async function verifyEmailOtp(flowId, otp) {
         error("CDP", "createEvmSmartAccount failed:", createErr);
         throw createErr;
       }
-      const updatedUser = await getCurrentUser();
+      const updatedUser = /** @type {any} */ (await getCurrentUser());
       log("CDP", "post-create accounts:", {
         eoa: updatedUser?.evmAccountObjects?.[0]?.address,
         smartAccount: updatedUser?.evmSmartAccountObjects?.[0]?.address,
@@ -256,7 +256,7 @@ export async function verifyEmailOtp(flowId, otp) {
 /**
  * Attempt to restore a previous CDP session silently.
  * Returns null if no session is available (user must sign in again).
- * @returns {Promise<{ eoaAddress: string, smartAccountAddress: string, provider: object }|null>}
+ * @returns {Promise<{ eoaAddress: string, smartAccountAddress: string, provider: any, email: string|null }|null>}
  */
 export async function autoConnectCdpWallet() {
   if (!_cdpInitialized) {
@@ -286,11 +286,11 @@ export async function autoConnectCdpWallet() {
       eoaAddress: eoaAccount.address,
       smartAccountAddress: smartAccountAddress ?? eoaAccount.address,
       provider: _provider,
-      email: user.email || null,
+      email: /** @type {any} */ (user).email || null,
     };
   } catch (err) {
     // getCurrentUser() throws when no session exists — that's expected, not an error
-    log("CDP", "autoConnect: no session available:", err.message);
+    log("CDP", "autoConnect: no session available:", /** @type {Error} */ (err).message);
     _applyCdpSession(null, null);
     return null;
   }
@@ -305,7 +305,7 @@ export async function disconnectCdpWallet() {
     await signOut();
     log("CDP", "signed out");
   } catch (err) {
-    warn("CDP", "signOut failed (non-fatal):", err.message);
+    warn("CDP", "signOut failed (non-fatal):", /** @type {Error} */ (err).message);
   } finally {
     _applyCdpSession(null, null);
   }
@@ -319,7 +319,7 @@ export async function disconnectCdpWallet() {
  * UserOperation hash, so we block here until CDP reports the real txHash.
  *
  * @param {string} userOpHash
- * @param {string} smartAccountAddress
+ * @param {any} smartAccountAddress
  * @returns {Promise<string>}
  */
 async function _waitForUserOperationTransaction(userOpHash, smartAccountAddress) {
@@ -332,14 +332,14 @@ async function _waitForUserOperationTransaction(userOpHash, smartAccountAddress)
     let op;
     try {
       op = await getUserOperation({
-        evmSmartAccount: smartAccountAddress,
-        userOperationHash: userOpHash,
+        evmSmartAccount: /** @type {any} */ (smartAccountAddress),
+        userOperationHash: /** @type {any} */ (userOpHash),
         network: CDP_NETWORK_BASE_SEPOLIA,
       });
     } catch (err) {
       // Transient fetch error — retry, unless this was the last attempt.
       if (attempt === maxAttempts) {
-        throw new Error(`Timed out waiting for UserOperation ${userOpHash}: ${err.message}`);
+        throw new Error(`Timed out waiting for UserOperation ${userOpHash}: ${/** @type {Error} */ (err).message}`);
       }
       continue;
     }
@@ -370,7 +370,7 @@ async function _waitForUserOperationTransaction(userOpHash, smartAccountAddress)
  * Decode a hex-encoded UTF-8 string (e.g. "0x68656c6c6f") to its plain-text
  * form. If the string is not 0x-prefixed, return it as-is.
  * Web3.js encodes the SIWE message as a hex string before calling personal_sign.
- * @param {string} hexOrPlain
+ * @param {any} hexOrPlain
  * @returns {string}
  */
 function hexToUtf8OrKeepHex(hexOrPlain) {
@@ -398,9 +398,9 @@ function hexToUtf8OrKeepHex(hexOrPlain) {
  *  - eth_sendTransaction({ to, value, data }) → sendUserOperation → userOpHash
  *  - all other methods                  → forwarded to Base Sepolia public RPC
  *
- * @param {object} eoaAccount - user.evmAccountObjects[0] from CDP
- * @param {string|null} smartAccountAddress - user.evmSmartAccountObjects[0].address from CDP
- * @returns {{ request: (args: object) => Promise<unknown> }}
+ * @param {any} eoaAccount - user.evmAccountObjects[0] from CDP
+ * @param {any} smartAccountAddress - user.evmSmartAccountObjects[0].address from CDP
+ * @returns {any}
  */
 export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
   // The on-chain token owner is the smart account; fall back to EOA if absent
@@ -474,7 +474,7 @@ export function buildCdpEip1193Provider(eoaAccount, smartAccountAddress) {
 
         // ── Transactions ──────────────────────────────────────────
         case "eth_sendTransaction": {
-          const txParams = params?.[0] ?? {};
+          const txParams = /** @type {any} */ (params?.[0] ?? {});
           const { to, value, data } = txParams;
 
           if (!to) {

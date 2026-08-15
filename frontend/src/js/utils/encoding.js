@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Shared encoding utilities for binary data and base64 conversion.
  * Consolidated from glb-parser.js, decomposer.js, composer.js, and remote-ipfs.js.
@@ -30,7 +29,7 @@ export function arrayBufferToBase64(buffer) {
   const CHUNK = 0x8000; // 32 KiB
   let binary = "";
   for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    binary += String.fromCharCode.apply(null, /** @type {any} */ (bytes.subarray(i, i + CHUNK)));
   }
   return btoa(binary);
 }

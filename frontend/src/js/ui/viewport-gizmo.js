@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Viewport Gizmo
  *
@@ -23,10 +22,16 @@ let COLOR_Z = "#3478eb"; // blue
 
 const AXIS_LABELS = { x: "X", y: "Y", z: "Z" };
 
+/** @type {HTMLCanvasElement|null} */
 let gizmoCanvas = null;
+/** @type {CanvasRenderingContext2D|null} */
 let gizmoCtx = null;
 let dpr = 1;
 
+/**
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.ArcRotateCamera} camera
+ */
 function initViewportGizmo(scene, camera) {
   // Pull axis colors from the SCSS token system.
   const ax = getCssVar("--axis-x");
@@ -36,7 +41,9 @@ function initViewportGizmo(scene, camera) {
   if (ay) COLOR_Y = ay;
   if (az) COLOR_Z = az;
 
-  gizmoCanvas = document.getElementById("viewportGizmo");
+  gizmoCanvas = /** @type {HTMLCanvasElement|null} */ (
+    document.getElementById("viewportGizmo")
+  );
   if (!gizmoCanvas) {
     console.warn("[GIZMO] #viewportGizmo canvas not found in DOM");
     return;
@@ -64,6 +71,7 @@ function resize() {
   gizmoCanvas.style.height = GIZMO_SIZE + "px";
 }
 
+/** @param {BABYLON.ArcRotateCamera} camera */
 function draw(camera) {
   if (!gizmoCtx || !camera) return;
 
@@ -106,7 +114,16 @@ function draw(camera) {
   drawAxis(vz, AXIS_LABELS.z, COLOR_Z, cx, cy);
 }
 
+/**
+ * @param {{x:number, y:number}} viewDir
+ * @param {string} label
+ * @param {string} color
+ * @param {number} cx
+ * @param {number} cy
+ */
 function drawAxis(viewDir, label, color, cx, cy) {
+  // Non-null: draw() guards on gizmoCtx before calling drawAxis.
+  const ctx = /** @type {CanvasRenderingContext2D} */ (gizmoCtx);
   // Project to 2D (Y is flipped in screen space).
   const dx = viewDir.x * AXIS_LENGTH;
   const dy = -viewDir.y * AXIS_LENGTH;
@@ -115,28 +132,28 @@ function drawAxis(viewDir, label, color, cx, cy) {
   // drawing only the central dot.
   const len = Math.hypot(dx, dy);
   if (len < 1) {
-    gizmoCtx.beginPath();
-    gizmoCtx.arc(cx, cy, 3, 0, Math.PI * 2);
-    gizmoCtx.fillStyle = color;
-    gizmoCtx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
     return;
   }
 
   // Axis line.
-  gizmoCtx.beginPath();
-  gizmoCtx.moveTo(cx, cy);
-  gizmoCtx.lineTo(cx + dx, cy + dy);
-  gizmoCtx.strokeStyle = color;
-  gizmoCtx.lineWidth = 2;
-  gizmoCtx.lineCap = "round";
-  gizmoCtx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + dx, cy + dy);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.stroke();
 
   // Label at the tip.
-  gizmoCtx.fillStyle = color;
-  gizmoCtx.font = "600 10px system-ui, sans-serif";
-  gizmoCtx.textAlign = "center";
-  gizmoCtx.textBaseline = "middle";
-  gizmoCtx.fillText(
+  ctx.fillStyle = color;
+  ctx.font = "600 10px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(
     label,
     cx + dx + LABEL_OFFSET * Math.sign(dx || 1),
     cy + dy

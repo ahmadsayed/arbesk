@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Undo Controller
  *
@@ -50,6 +49,10 @@ registerUndoApplier("transform", (item, direction) => {
   stageNodeTransform(item.nodeId);
 });
 
+/**
+ * @param {import("./undo-stack.js").UndoEntry} entry
+ * @param {'before'|'after'} direction
+ */
 function _applyEntry(entry, direction) {
   const applier = _appliers.get(entry.type);
   if (!applier) return;
@@ -80,13 +83,13 @@ export function redo() {
 
 // ── Toolbar button state (buttons live in ui/transform-gizmo.js) ──
 function _syncToolbarButtons() {
-  const undoBtn = document.getElementById("undoBtn");
+  const undoBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("undoBtn"));
   if (undoBtn) {
     undoBtn.disabled = !canUndo();
     const label = peekUndoLabel();
     undoBtn.title = label ? `Undo ${label} (${MOD}+Z)` : "Nothing to undo";
   }
-  const redoBtn = document.getElementById("redoBtn");
+  const redoBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("redoBtn"));
   if (redoBtn) {
     redoBtn.disabled = !canRedo();
     const label = peekRedoLabel();

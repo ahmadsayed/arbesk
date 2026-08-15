@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Transform Gizmo
  *
@@ -108,6 +107,7 @@ function initTransformGizmo(scene, _camera) {
 /**
  * Read the current local transform of one anchor and stage it for
  * persistence in the manifest.
+ * @param {string} nodeId
  */
 function captureNodeTransform(nodeId) {
   if (stageNodeTransform(nodeId)) {
@@ -142,6 +142,7 @@ function captureSelectedTransform() {
 // Snapshot the selected anchors' matrices at drag start; at drag end push one
 // undo entry per drag gesture covering every node that actually moved.
 
+/** @type {Record<string, string>} */
 const _MODE_LABELS = { translate: "Move", rotate: "Rotate", scale: "Scale" };
 
 /** @type {Array<{nodeId: string, matrix: number[]}>|null} */
@@ -176,7 +177,7 @@ function _pushDragUndoEntry() {
   if (items.length === 0) return; // click without drag
   pushUndoEntry({
     type: "transform",
-    label: _MODE_LABELS[mode] || "Transform",
+    label: _MODE_LABELS[mode || ""] || "Transform",
     items,
   });
 }
@@ -240,6 +241,7 @@ function _topLevelSelectedAnchors() {
 /**
  * Place the pivot at the centroid of the selected anchors' world positions
  * with identity rotation/scale, and attach the gizmo to it.
+ * @param {any} gizmoManager - BABYLON.GizmoManager
  */
 function _attachToGroupPivot(gizmoManager) {
   const anchors = _topLevelSelectedAnchors();
@@ -367,24 +369,25 @@ function createToolbar() {
   viewport.appendChild(toolbar);
   viewport.appendChild(side);
 
-  const onToolbarClick = (e) => {
-    const actionBtn = e.target.closest("[data-action]");
+  const onToolbarClick = (/** @type {MouseEvent} */ e) => {
+    const actionBtn = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest("[data-action]"));
     if (actionBtn) {
       if (actionBtn.dataset.action === "undo") undo();
       else if (actionBtn.dataset.action === "toggleGrid") toggleGrid();
       else redo();
       return;
     }
-    const btn = e.target.closest(".transform-tool");
+    const btn = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest(".transform-tool"));
     if (!btn) return;
     const mode = btn.dataset.mode;
     if (!mode) return;
-    setMode(mode);
+    setMode(/** @type {any} */ (mode));
   };
   toolbar.addEventListener("click", onToolbarClick);
   side.addEventListener("click", onToolbarClick);
 }
 
+/** @param {any} gizmoManager - BABYLON.GizmoManager */
 function wireEvents(gizmoManager) {
   on(EVENTS.NODE_SELECTED, () => {
     if (!state.transformMode) {
@@ -422,12 +425,13 @@ function wireEvents(gizmoManager) {
   });
 }
 
+/** @param {any} _gizmoManager - BABYLON.GizmoManager (unused, kept for call symmetry) */
 function wireKeyboard(_gizmoManager) {
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const tag = document.activeElement?.tagName?.toLowerCase();
     const editable =
-      document.activeElement?.isContentEditable ||
+      /** @type {any} */ (document.activeElement)?.isContentEditable ||
       tag === "input" ||
       tag === "textarea" ||
       tag === "select" ||
@@ -489,6 +493,7 @@ function setMode(mode) {
 
 const _subscribedGizmos = new WeakSet();
 
+/** @param {any} gizmo - Babylon position/rotation/scale gizmo */
 function ensureDragEndSubscription(gizmo) {
   if (!gizmo || _subscribedGizmos.has(gizmo)) return;
   let subscribed = false;
@@ -513,6 +518,7 @@ function ensureDragEndSubscription(gizmo) {
   if (subscribed) _subscribedGizmos.add(gizmo);
 }
 
+/** @param {any} gizmoManager - BABYLON.GizmoManager */
 function attachToSelected(gizmoManager) {
   if (state.selectedNodeIds.size > 1) {
     _attachToGroupPivot(gizmoManager);
@@ -543,13 +549,14 @@ function updateToolbarUI() {
   const activeMode = hasSelection ? state.transformMode : null;
 
   for (const btn of toolbar.querySelectorAll(".transform-tool")) {
-    const isActive = btn.dataset.mode === activeMode;
-    btn.classList.toggle("active", isActive);
-    btn.setAttribute("aria-pressed", String(isActive));
-    const isTime = btn.dataset.mode === "time";
-    btn.disabled = !hasSelection || (isTime && isMulti);
+    const toolBtn = /** @type {HTMLButtonElement} */ (btn);
+    const isActive = toolBtn.dataset.mode === activeMode;
+    toolBtn.classList.toggle("active", isActive);
+    toolBtn.setAttribute("aria-pressed", String(isActive));
+    const isTime = toolBtn.dataset.mode === "time";
+    toolBtn.disabled = !hasSelection || (isTime && isMulti);
     if (isTime) {
-      btn.title = isMulti
+      toolBtn.title = isMulti
         ? "Time travel is available for a single selected node"
         : "Time (V)";
     }

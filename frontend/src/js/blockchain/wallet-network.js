@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet Network Switching
  *
@@ -12,7 +11,7 @@ import { web3Provider, NETWORKS } from "./wallet-core.js";
 /**
  * Detect the "chain is not added to wallet" error across wallet vendors.
  * MetaMask returns 4902; Rabby returns -32603 with "Unrecognized chain ID".
- * @param {Object} error
+ * @param {any} error
  * @returns {boolean}
  */
 function _isChainUnknownError(error) {
@@ -25,11 +24,15 @@ function _isChainUnknownError(error) {
   );
 }
 
+/**
+ * @param {string} networkKey
+ * @returns {Promise<boolean>}
+ */
 async function _promptNetworkSwitch(networkKey) {
   const ethereum = web3Provider;
   if (!ethereum) return false;
 
-  const net = NETWORKS[networkKey];
+  const net = NETWORKS[/** @type {keyof typeof NETWORKS} */ (networkKey)];
   if (!net) {
     console.error(`[WALLET] Unknown network key: ${networkKey}`);
     return false;
@@ -65,7 +68,7 @@ async function _promptNetworkSwitch(networkKey) {
       } catch (addError) {
         console.warn(
           `[WALLET] wallet_addEthereumChain also failed:`,
-          addError.message || addError
+          /** @type {Error} */ (addError).message || addError
         );
         showToast({
           type: "warning",
@@ -79,7 +82,7 @@ async function _promptNetworkSwitch(networkKey) {
         });
         return false;
       }
-    } else if (switchError.code === 4001) {
+    } else if (/** @type {any} */ (switchError).code === 4001) {
       // User rejected
       showToast({
         type: "warning",
@@ -93,7 +96,7 @@ async function _promptNetworkSwitch(networkKey) {
       showToast({
         type: "warning",
         title: "Network Switch Failed",
-        message: switchError.message || "Could not switch network.",
+        message: /** @type {Error} */ (switchError).message || "Could not switch network.",
         duration: 0,
       });
       return false;
@@ -101,9 +104,13 @@ async function _promptNetworkSwitch(networkKey) {
   }
 }
 
+/**
+ * @param {string} networkKey
+ * @returns {Promise<void>}
+ */
 async function switchNetwork(networkKey) {
   if (!web3Provider) return;
-  const net = NETWORKS[networkKey];
+  const net = NETWORKS[/** @type {keyof typeof NETWORKS} */ (networkKey)];
   if (!net) return;
 
   const ethereum = web3Provider;

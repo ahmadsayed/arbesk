@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Thin orchestrator around domain/collection.js publishCollection.
  */
@@ -11,6 +10,11 @@ import {
   publishNewToken,
 } from "./editor-publish.js";
 
+/**
+ * @param {string} assetCid - New asset manifest CID to add to the collection.
+ * @param {string} assetID - Asset ID inside the collection.
+ * @param {string} walletAddr - Connected wallet address.
+ */
 export async function publishCollectionForAsset(assetCid, assetID, walletAddr) {
   return publishCollection(assetCid, assetID, walletAddr, {
     getOwnerOf,

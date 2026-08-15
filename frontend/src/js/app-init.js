@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Unified App Initializer (Studio + Library SPA)
  *
@@ -99,7 +98,7 @@ if (new URLSearchParams(location.search).has("login")) {
 document
   .getElementById("headerbarNetworkSelect")
   ?.addEventListener("change", async (e) => {
-    const key = e.target.value;
+    const key = /** @type {HTMLSelectElement | null} */ (e.target)?.value;
     if (!key) return;
     // Only store/select keys the wallet layer actually knows about.
     if (!getSupportedNetworkSelectKeys().includes(key)) {
@@ -125,6 +124,7 @@ initLibraryToolbar();
 initLibraryContextMenu();
 applyWalletGate(Boolean(walletState.get().walletAddress));
 
+/** @type {string | number | null} */
 let _lastLoadedCollectionTokenId = null;
 on(EVENTS.LIBRARY_STATE_CHANGED, (state) => {
   const tokenId = state?.currentCollectionTokenId ?? null;
@@ -140,7 +140,9 @@ on(EVENTS.WALLET_CONNECTED, async (e) => {
   updateHeaderWalletButtonFromState(address, isWalletAuthenticated(address));
 
   // Sync network selector to current chain
-  const netSel = document.getElementById("headerbarNetworkSelect");
+  const netSel = /** @type {HTMLSelectElement | null} */ (
+    document.getElementById("headerbarNetworkSelect")
+  );
   if (netSel) {
     const key = getNetworkSelectKey(e?.chainId);
     if (key) netSel.value = key;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Version History Store (headless)
  *
@@ -20,6 +19,7 @@ import {
 } from "./asset.js";
 
 export const _deps = {
+  /** @param {string} cid */
   walkChain: async (cid) => {
     const { walkManifestChain } = await import("../engine/time-travel.js");
     return walkManifestChain(cid);
@@ -28,10 +28,12 @@ export const _deps = {
     const { clearScene } = await import("../engine/scene-graph.js");
     clearScene();
   },
+  /** @param {string} cid */
   loadAssetManifest: async (cid) => {
     const { loadAssetManifest } = await import("../engine/scene-graph.js");
     return loadAssetManifest(cid);
   },
+  /** @param {string|number} tokenId */
   fetchPublishedCid: async (tokenId) => {
     const { getActiveContract } = await import("../blockchain/wallet.js");
     const contract = getActiveContract();
@@ -42,13 +44,18 @@ export const _deps = {
 };
 
 // ─── State ───
+/** @type {Array<{cid: string, [key: string]: any}>} */
 let entries = []; // oldest → newest, from walkManifestChain (incl. nodes map)
+/** @type {string|null} */
 let chainRootCid = null; // CID used to fetch the chain (latest known)
+/** @type {string|null} */
 let activeCid = null; // currently loaded manifest CID
+/** @type {string|null} */
 let publishedCid = null; // CID currently anchored on-chain
 let isLoading = false;
 let isHistoryNavigation = false;
 
+/** @type {Set<(snapshot: VersionHistoryState) => void>} */
 const _subscribers = new Set();
 
 function _notify() {
@@ -58,10 +65,25 @@ function _notify() {
 
 // ─── Public API ───
 
+/**
+ * @typedef {object} VersionHistoryState
+ * @property {Array<{cid: string, [key: string]: any}>} entries oldest → newest
+ * @property {string|null} activeCid
+ * @property {string|null} publishedCid
+ * @property {boolean} isLoading
+ */
+
+/**
+ * @returns {VersionHistoryState}
+ */
 export function getState() {
   return { entries: [...entries], activeCid, publishedCid, isLoading };
 }
 
+/**
+ * @param {(snapshot: VersionHistoryState) => void} fn
+ * @returns {() => boolean} unsubscribe function
+ */
 export function subscribe(fn) {
   _subscribers.add(fn);
   return () => _subscribers.delete(fn);
@@ -76,6 +98,9 @@ export function activeIndex() {
   return i === -1 ? entries.length - 1 : i;
 }
 
+/**
+ * @param {string} cid manifest CID to load
+ */
 export async function loadVersion(cid) {
   if (isLoading || cid === activeCid) return;
   const prevCid = activeCid;
@@ -97,7 +122,7 @@ export async function loadVersion(cid) {
     activeCid = cid;
   } catch (err) {
     console.error("Failed to load history version:", err);
-    alert("Failed to load version: " + err.message);
+    alert("Failed to load version: " + /** @type {Error} */ (err).message);
     activeCid = prevCid; // snap the hand back
   } finally {
     isLoading = false;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Shared URI and string utilities.
  * Consolidated from glb-parser.js, decomposer.js, write-to-ipfs.js, and remote-ipfs.js.

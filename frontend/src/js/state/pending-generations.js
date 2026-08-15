@@ -11,7 +11,7 @@
 /**
  * @typedef {Object} PendingGeneration
  * @property {string} id
- * @property {string} assetManifestCid
+ * @property {string|null} assetManifestCid - null for viewport drops (unsaved model already in the Studio)
  * @property {string} sourceAssetCid
  * @property {string} prompt
  * @property {string} [format]

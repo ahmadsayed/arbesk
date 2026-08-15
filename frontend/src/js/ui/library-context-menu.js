@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { libraryState } from "../state/library-state.js";
 import {
   showBurnCollectionDialog,
@@ -18,6 +17,7 @@ const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.js");
 const libraryInitOps = () => import("./library-controller.js");
 const collaboratorsPanelOps = () => import("./collaborators-panel.js");
 
+/** @type {HTMLElement | null} */
 let menuEl = null;
 
 export function closeContextMenu() {
@@ -27,11 +27,13 @@ export function closeContextMenu() {
   }
 }
 
+/** @param {string} text */
 function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
   if (region) region.textContent = text;
 }
 
+/** @param {string} id */
 function getItem(id) {
   const state = libraryState.get();
   return (
@@ -41,10 +43,15 @@ function getItem(id) {
   );
 }
 
+/** @param {string} id */
 function isCollection(id) {
   return libraryState.get().collections.some((c) => c.id === id);
 }
 
+/**
+ * @param {string[]} ids
+ * @returns {{ label: string, action: () => void, danger?: boolean, disabled?: boolean }[]}
+ */
 function singleItemMenuItems(ids) {
   const id = ids[0];
   if (isCollection(id)) {
@@ -82,6 +89,10 @@ function singleItemMenuItems(ids) {
   ];
 }
 
+/**
+ * @param {string[]} ids
+ * @returns {{ label: string, action: () => void, danger?: boolean, disabled?: boolean }[]}
+ */
 function multiSelectionMenuItems(ids) {
   return [
     { label: "Open first in Studio", action: () => openSelectedAssetInStudio(ids) },
@@ -89,6 +100,9 @@ function multiSelectionMenuItems(ids) {
   ];
 }
 
+/**
+ * @returns {{ label: string, action: () => void, danger?: boolean, disabled?: boolean }[]}
+ */
 function emptySpaceMenuItems() {
   const inCollection = libraryState.get().currentCollectionTokenId !== null;
   const items = [
@@ -124,6 +138,7 @@ function requestUploadFile() {
   input.click();
 }
 
+/** @param {string} id */
 function openCollection(id) {
   const collection = libraryState.get().collections.find((c) => c.id === id);
   if (!collection) return;
@@ -134,6 +149,7 @@ function openCollection(id) {
   announce(`Opened collection ${collection.name}`);
 }
 
+/** @param {string[]} ids */
 async function openSelectedAssetInStudio(ids) {
   if (!ids.length) return;
   const asset = libraryState.get().assets.find((a) => a.id === ids[0]);
@@ -142,6 +158,7 @@ async function openSelectedAssetInStudio(ids) {
   openInStudio(asset.tokenId, asset.assetId);
 }
 
+/** @param {string} id */
 async function requestManageCollaborators(id) {
   const collection = getItem(id);
   if (!collection) return;
@@ -156,6 +173,7 @@ async function requestManageCollaborators(id) {
   panel.destroy();
 }
 
+/** @param {string} id */
 async function requestBurnCollection(id) {
   const collection = getItem(id);
   if (!collection) return;
@@ -184,11 +202,12 @@ async function requestBurnCollection(id) {
     showToast({
       type: "error",
       title: "Burn Failed",
-      message: err.message || "Could not burn the collection.",
+      message: /** @type {Error} */ (err).message || "Could not burn the collection.",
     });
   }
 }
 
+/** @param {string} id */
 export async function requestRename(id) {
   const item = getItem(id);
   if (!item) return;
@@ -243,11 +262,12 @@ export async function requestRename(id) {
     showToast({
       type: "error",
       title: "Rename Failed",
-      message: err.message || "Could not rename item.",
+      message: /** @type {Error} */ (err).message || "Could not rename item.",
     });
   }
 }
 
+/** @param {string[]} ids */
 export async function requestDeleteSelected(ids) {
   const assets = ids
     .map((id) => libraryState.get().assets.find((a) => a.id === id))
@@ -269,7 +289,7 @@ export async function requestDeleteSelected(ids) {
       showToast({
         type: "error",
         title: "Delete Failed",
-        message: err.message || "Could not delete asset.",
+        message: /** @type {Error} */ (err).message || "Could not delete asset.",
       });
       return;
     }
@@ -283,6 +303,7 @@ export async function requestDeleteSelected(ids) {
   announce(`${assets.length} asset${assets.length === 1 ? "" : "s"} deleted`);
 }
 
+/** @param {string} assetId */
 export async function requestSendToCollection(assetId) {
   const asset = libraryState.get().assets.find((a) => a.id === assetId);
   if (!asset) return;
@@ -331,11 +352,15 @@ export async function requestSendToCollection(assetId) {
     showToast({
       type: "error",
       title: "Send Failed",
-      message: err.message || "Could not send asset to collection.",
+      message: /** @type {Error} */ (err).message || "Could not send asset to collection.",
     });
   }
 }
 
+/**
+ * @param {any[]} collections
+ * @returns {Promise<string|null>} chosen collection tokenId, or null when cancelled
+ */
 export function showTargetCollectionDialog(collections) {
   return new Promise((resolve) => {
     import("./dialog.js").then(() => {
@@ -374,9 +399,11 @@ export function showTargetCollectionDialog(collections) {
       backdrop.appendChild(dialog);
       document.body.appendChild(backdrop);
 
+      /** @type {any} */
       let trap = null;
       let resolved = false;
 
+      /** @param {string|null} value */
       function close(value) {
         if (resolved) return;
         resolved = true;
@@ -388,6 +415,7 @@ export function showTargetCollectionDialog(collections) {
         resolve(value);
       }
 
+      /** @param {KeyboardEvent} e */
       function onKey(e) {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -397,7 +425,7 @@ export function showTargetCollectionDialog(collections) {
 
       dialog.querySelector(".dialog-cancel-btn")?.addEventListener("click", () => close(null));
       dialog.querySelector(".dialog-confirm-btn")?.addEventListener("click", () => {
-        const select = dialog.querySelector("#targetCollectionSelect");
+        const select = /** @type {HTMLSelectElement|null} */ (dialog.querySelector("#targetCollectionSelect"));
         close(select ? select.value : null);
       });
       document.addEventListener("keydown", onKey);
@@ -405,9 +433,10 @@ export function showTargetCollectionDialog(collections) {
         if (e.target === backdrop) close(null);
       });
 
-      if (window.focusTrap) {
+      const focusTrapLib = /** @type {any} */ (window).focusTrap;
+      if (focusTrapLib) {
         try {
-          trap = window.focusTrap.createFocusTrap(dialog, {
+          trap = focusTrapLib.createFocusTrap(dialog, {
             initialFocus: dialog.querySelector("#targetCollectionSelect"),
             escapeDeactivates: false,
             allowOutsideClick: true,
@@ -419,11 +448,20 @@ export function showTargetCollectionDialog(collections) {
   });
 }
 
+/**
+ * @param {HTMLElement[]} items
+ * @param {number} index
+ */
 function focusMenuItem(items, index) {
   const wrapped = (index + items.length) % items.length;
   items[wrapped].focus();
 }
 
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {string[]} targetIds
+ */
 export function openContextMenu(x, y, targetIds) {
   closeContextMenu();
 
@@ -434,13 +472,14 @@ export function openContextMenu(x, y, targetIds) {
       ? singleItemMenuItems(targetIds)
       : multiSelectionMenuItems(targetIds);
 
-  menuEl = document.createElement("div");
-  menuEl.className = "context-menu";
-  menuEl.style.left = `${x}px`;
-  menuEl.style.top = `${y}px`;
-  menuEl.setAttribute("role", "menu");
-  menuEl.setAttribute("aria-label", "Library actions");
-  menuEl.setAttribute("aria-orientation", "vertical");
+  const menu = document.createElement("div");
+  menuEl = menu;
+  menu.className = "context-menu";
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "Library actions");
+  menu.setAttribute("aria-orientation", "vertical");
 
   items.forEach((item) => {
     const btn = document.createElement("button");
@@ -455,12 +494,12 @@ export function openContextMenu(x, y, targetIds) {
       closeContextMenu();
       item.action();
     });
-    menuEl.appendChild(btn);
+    menu.appendChild(btn);
   });
 
-  menuEl.addEventListener("keydown", (e) => {
-    const buttons = [...menuEl.querySelectorAll(".context-menu-item")];
-    const currentIndex = buttons.indexOf(document.activeElement);
+  menu.addEventListener("keydown", (e) => {
+    const buttons = /** @type {HTMLElement[]} */ ([...menu.querySelectorAll(".context-menu-item")]);
+    const currentIndex = buttons.indexOf(/** @type {HTMLElement} */ (document.activeElement));
     if (e.key === "ArrowDown") {
       e.preventDefault();
       focusMenuItem(buttons, currentIndex + 1);
@@ -470,8 +509,8 @@ export function openContextMenu(x, y, targetIds) {
     }
   });
 
-  document.body.appendChild(menuEl);
-  menuEl.querySelector(".context-menu-item")?.focus();
+  document.body.appendChild(menu);
+  /** @type {HTMLElement|null} */ (menu.querySelector(".context-menu-item"))?.focus();
 }
 
 export function initLibraryContextMenu() {
@@ -479,22 +518,23 @@ export function initLibraryContextMenu() {
 
   container?.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    const el = e.target.closest("[data-id]");
+    const el = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest("[data-id]"));
 
     if (!el) {
       openContextMenu(e.clientX, e.clientY, []);
       return;
     }
 
-    const id = el.dataset.id;
+    // `el` matched [data-id], so the attribute is present.
+    const id = /** @type {string} */ (el.dataset.id);
     const state = libraryState.get();
     const ids = state.selectedIds.includes(id) ? state.selectedIds : [id];
     if (!state.selectedIds.includes(id)) libraryState.set({ selectedIds: ids });
-    openContextMenu(e.clientX, e.clientY, ids);
+    openContextMenu(e.clientX, e.clientY, /** @type {string[]} */ (ids));
   });
 
   document.addEventListener("click", (e) => {
-    if (menuEl && !menuEl.contains(e.target)) closeContextMenu();
+    if (menuEl && !menuEl.contains(/** @type {Node|null} */ (e.target))) closeContextMenu();
   });
 
   document.addEventListener("keydown", (e) => {

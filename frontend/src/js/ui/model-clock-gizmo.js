@@ -1,5 +1,4 @@
 // TODO: tighten types for Babylon mesh API and strict event typing; currently too dynamic for checkJs.
-// @ts-nocheck
 /**
  * Model Clock Gizmo — 3D Babylon ring for scrubbing a node's version history.
  */
@@ -152,7 +151,14 @@ const RIM_THICKNESS_FACTOR = 0.022;
 
 let isDraggingHandle = false;
 
-function createGizmoMaterial(scene, name, [r, g, b], alpha = 1.0) {
+/**
+ * @param {BABYLON.Scene} scene
+ * @param {string} name
+ * @param {number[]} rgb
+ * @param {number} [alpha]
+ */
+function createGizmoMaterial(scene, name, rgb, alpha = 1.0) {
+  const [r, g, b] = rgb;
   const mat = new BABYLON.StandardMaterial(name, scene);
   mat.emissiveColor = new BABYLON.Color3(r, g, b);
   mat.diffuseColor = new BABYLON.Color3(0, 0, 0);
@@ -280,6 +286,11 @@ function syncRootToCamera(root, anchor, camera, offset) {
   );
 }
 
+/**
+ * @param {BABYLON.Scene} scene
+ * @param {string} nodeId
+ * @returns {any|null}
+ */
 function buildGizmoForNode(scene, nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   // Show the full asset version chain on the model clock so the active
@@ -300,6 +311,7 @@ function buildGizmoForNode(scene, nodeId) {
   // compensate. Re-zero the local transform so every gizmo part starts at
   // the root origin — otherwise the ring keeps -(anchor position) and the
   // gray track splits from the blue arc for nodes away from the origin.
+  /** @param {any} node */
   const parentToRoot = (node) => {
     node.setParent(root);
     node.position.setAll(0);
@@ -454,16 +466,26 @@ function buildGizmoForNode(scene, nodeId) {
   return gizmo;
 }
 
+/**
+ * @param {any} g
+ * @param {number} activeIdx
+ */
 function syncHandlePosition(g, activeIdx) {
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   const angle = (_angleForIndex(safeIdx, g.filtered.length) * Math.PI) / 180;
   placeHandle(g, angle);
 }
 
+/**
+ * @param {any} g
+ * @param {number} activeIdx
+ */
 function updateTickColors(g, activeIdx) {
   const s = store.getState();
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
-  const publishedIdx = g.filtered.findIndex((e) => e.cid === s.publishedCid);
+  const publishedIdx = g.filtered.findIndex(
+    (/** @type {any} */ e) => e.cid === s.publishedCid
+  );
 
   for (let i = 0; i < g.ticks.length; i++) {
     const rgb =
@@ -472,9 +494,12 @@ function updateTickColors(g, activeIdx) {
   }
 }
 
+/** @param {any} g */
 function syncVisuals(g) {
   const s = store.getState();
-  const activeIdx = g.filtered.findIndex((e) => e.cid === s.activeCid);
+  const activeIdx = g.filtered.findIndex(
+    (/** @type {any} */ e) => e.cid === s.activeCid
+  );
   const safeIdx = activeIdx >= 0 ? activeIdx : g.filtered.length - 1;
   const colorIdx = isDraggingHandle && g.dragHoverIdx >= 0 ? g.dragHoverIdx : safeIdx;
   updateTickColors(g, colorIdx);
@@ -513,7 +538,8 @@ function wireDrag(gizmo, mainScene, camera) {
     return Math.atan2(local.y, local.x);
   }
 
-  gizmo.pointerObserver = uScene.onPointerObservable.add((pi) => {
+  gizmo.pointerObserver = uScene.onPointerObservable.add(
+    (/** @type {any} */ pi) => {
     const picked = pi.pickInfo?.pickedMesh;
     switch (pi.type) {
       case BABYLON.PointerEventTypes.POINTERDOWN: {
@@ -582,6 +608,11 @@ function wireDrag(gizmo, mainScene, camera) {
   });
 }
 
+/**
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.ArcRotateCamera} camera
+ * @returns {() => void} destroy function
+ */
 export function initModelClockGizmo(scene, camera) {
   const viewport = document.getElementById("viewport");
   let tickLabelsContainer = document.getElementById("modelClockTickLabels");
@@ -592,8 +623,11 @@ export function initModelClockGizmo(scene, camera) {
     viewport.appendChild(tickLabelsContainer);
   }
 
+  /** @type {any} */
   let current = null;
+  /** @type {string|null} */
   let currentNodeId = null;
+  /** @type {string|null} */
   let clockTargetNodeId = null;
 
   /** Project a world position to a viewport-relative CSS transform and
@@ -616,9 +650,10 @@ export function initModelClockGizmo(scene, camera) {
     el.hidden = projected.z < 0 || projected.z > 1;
   }
 
+  /** @param {any} gizmo */
   function createTickLabels(gizmo) {
     if (!tickLabelsContainer) return;
-    gizmo.tickLabelEls = gizmo.filtered.map((entry) => {
+    gizmo.tickLabelEls = gizmo.filtered.map((/** @type {any} */ entry) => {
       const el = document.createElement("div");
       el.className = "model-clock-tick-label";
       el.textContent = `v${entry.version}`;
@@ -649,11 +684,15 @@ export function initModelClockGizmo(scene, camera) {
     if (!current.tickLabelEls) return;
 
     const s = store.getState();
-    const activeIdx = current.filtered.findIndex((e) => e.cid === s.activeCid);
+    const activeIdx = current.filtered.findIndex(
+      (/** @type {any} */ e) => e.cid === s.activeCid
+    );
     const safeActiveIdx = activeIdx >= 0 ? activeIdx : current.filtered.length - 1;
     const hoverIdx = isDraggingHandle && current.dragHoverIdx >= 0 ? current.dragHoverIdx : -1;
     const badgeIdx = hoverIdx >= 0 ? hoverIdx : safeActiveIdx;
-    const publishedIdx = current.filtered.findIndex((e) => e.cid === s.publishedCid);
+    const publishedIdx = current.filtered.findIndex(
+      (/** @type {any} */ e) => e.cid === s.publishedCid
+    );
 
     const badgeEntry = current.filtered[badgeIdx];
     if (current.badgeEl && badgeEntry) {
@@ -672,6 +711,7 @@ export function initModelClockGizmo(scene, camera) {
     }
   }
 
+  /** @param {any} e */
   function onSelect(e) {
     destroyCurrent();
     if (state.transformMode !== "time") return;
@@ -704,6 +744,7 @@ export function initModelClockGizmo(scene, camera) {
     isDraggingHandle = false;
   }
 
+  /** @param {any} e */
   function onModeChanged(e) {
     if (e?.mode === "time") {
       const target = clockTargetNodeId || state.highlightedNodeId;
@@ -749,12 +790,14 @@ export function initModelClockGizmo(scene, camera) {
     onSelect({ nodeId: clockTargetNodeId });
   }
 
+  /** @param {KeyboardEvent} e */
   function onKeyDown(e) {
     if (!current) return;
     if (state.transformMode !== "time") return;
-    const tag = document.activeElement?.tagName?.toLowerCase();
+    const activeEl = /** @type {HTMLElement|null} */ (document.activeElement);
+    const tag = activeEl?.tagName?.toLowerCase();
     const editable =
-      document.activeElement?.isContentEditable ||
+      activeEl?.isContentEditable ||
       tag === "input" ||
       tag === "textarea" ||
       tag === "select";
@@ -763,7 +806,7 @@ export function initModelClockGizmo(scene, camera) {
     const n = current.filtered.length;
     let idx = null;
     const activeIdx = current.filtered.findIndex(
-      (entry) => entry.cid === store.getState().activeCid
+      (/** @type {any} */ entry) => entry.cid === store.getState().activeCid
     );
     switch (e.key) {
       case "ArrowLeft":

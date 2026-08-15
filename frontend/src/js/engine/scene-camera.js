@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Scene Camera
  *
@@ -17,6 +16,7 @@ const VIEW_FRONT = { name: "Front", alpha: 0, beta: Math.PI / 2 };
 const VIEW_RIGHT = { name: "Right", alpha: Math.PI / 2, beta: Math.PI / 2 };
 const VIEW_TOP = { name: "Top", alpha: 0, beta: 0.01 };
 
+/** @param {{center: BABYLON.Vector3, size: BABYLON.Vector3}|null} bounds */
 function frameCameraToBounds(bounds) {
   if (!state.camera || !bounds) return;
 
@@ -52,13 +52,14 @@ function frameCameraToBounds(bounds) {
   );
 }
 
+/** @returns {BABYLON.AbstractMesh[]} */
 function _getNonChromeMeshes() {
   if (!state._nonChromeMeshCache) {
     state._nonChromeMeshCache = state.scene.meshes.filter(
-      (m) => m && !m.isDisposed() && !m.metadata?.isViewportChrome
+      (/** @type {BABYLON.AbstractMesh} */ m) => m && !m.isDisposed() && !m.metadata?.isViewportChrome
     );
   }
-  return state._nonChromeMeshCache;
+  return /** @type {BABYLON.AbstractMesh[]} */ (state._nonChromeMeshCache);
 }
 
 /**
@@ -106,6 +107,7 @@ function frameSelected() {
  * Snap the camera to an orthographic view preset (1=Front, 3=Right, 7=Top).
  * Frames the scene first to compute good camera parameters, converts the
  * perspective radius to ortho radius, then animates alpha + beta + radius.
+ * @param {{name: string, alpha: number, beta: number}} preset
  */
 function snapView(preset) {
   if (!state.camera || !state.scene) return;

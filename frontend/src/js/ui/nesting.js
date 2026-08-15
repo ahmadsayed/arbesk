@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Nesting Navigation - Dive/Ascend State Machine
  *
@@ -19,11 +18,14 @@ import {
 const MAX_DEPTH = 5;
 
 // Navigation stack: [{ cid, name, assetName, tokenId, contractAddress }]
+/** @type {Array<Record<string, any>>} */
 let navStack = [];
 let currentDepth = 0;
 
 // DOM
+/** @type {HTMLElement|null} */
 let backBtn = null;
+/** @type {HTMLElement|null} */
 let pathBar = null;
 
 // ─── Initialization ──────────────────────────────────────────────────
@@ -41,7 +43,7 @@ function initNesting() {
     if (e.altKey && e.key === "ArrowLeft") {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const editing =
-        document.activeElement?.isContentEditable ||
+        /** @type {any} */ (document.activeElement)?.isContentEditable ||
         tag === "input" ||
         tag === "textarea" ||
         tag === "select";
@@ -72,6 +74,7 @@ function initNesting() {
 
 // ─── Dive ────────────────────────────────────────────────────────────
 
+/** @param {any} e - NESTING_DIVE_REQUESTED payload */
 async function onDiveRequested(e) {
   const { childRef, nodeId: _nodeId } = e;
   if (!childRef) return;
@@ -118,7 +121,7 @@ async function onDiveRequested(e) {
     emit(EVENTS.NESTING_DID_DIVE, { depth: currentDepth, name: manifest.name });
   } catch (err) {
     console.error("[NESTING] dive failed:", err);
-    alert("Failed to open child asset: " + err.message);
+    alert("Failed to open child asset: " + /** @type {Error} */ (err).message);
   }
 }
 
@@ -128,6 +131,7 @@ async function ascendOneLevel() {
   if (navStack.length === 0) return;
 
   const prev = navStack.pop();
+  if (!prev) return;
   currentDepth = Math.max(0, currentDepth - 1);
   uiState.set({ nestingDepth: currentDepth });
 
@@ -145,10 +149,11 @@ async function ascendOneLevel() {
     emit(EVENTS.NESTING_DID_ASCEND, { depth: currentDepth, name: prev.name });
   } catch (err) {
     console.error("[NESTING] ascend failed:", err);
-    alert("Failed to return to parent asset: " + err.message);
+    alert("Failed to return to parent asset: " + /** @type {Error} */ (err).message);
   }
 }
 
+/** @param {number} targetIndex */
 function ascendToLevel(targetIndex) {
   // Click on a breadcrumb segment to jump directly
   while (navStack.length > targetIndex) {
@@ -160,17 +165,18 @@ function ascendToLevel(targetIndex) {
 // ─── Breadcrumb Rendering ─────────────────────────────────────────────
 
 function renderBreadcrumb() {
-  if (!pathBar) return;
+  const bar = pathBar;
+  if (!bar) return;
 
-  pathBar.innerHTML = "";
+  bar.innerHTML = "";
 
   if (navStack.length === 0) {
-    pathBar.classList.add("hidden");
+    bar.classList.add("hidden");
     if (backBtn) backBtn.classList.add("hidden");
     return;
   }
 
-  pathBar.classList.remove("hidden");
+  bar.classList.remove("hidden");
   if (backBtn) backBtn.classList.remove("hidden");
 
   navStack.forEach((entry, i) => {
@@ -178,7 +184,7 @@ function renderBreadcrumb() {
       const sep = document.createElement("span");
       sep.className = "pathbar-separator";
       sep.textContent = "▸";
-      pathBar.appendChild(sep);
+      bar.appendChild(sep);
     }
 
     const seg = document.createElement("button");
@@ -186,12 +192,13 @@ function renderBreadcrumb() {
     seg.textContent = entry.name || "Asset";
     seg.title = `Go back to ${entry.name}`;
     seg.addEventListener("click", () => ascendToLevel(i));
-    pathBar.appendChild(seg);
+    bar.appendChild(seg);
   });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
+/** @param {any} childRef */
 async function resolveChildManifest(childRef) {
   try {
     let cid = null;

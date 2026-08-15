@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet Popover
  *
@@ -25,7 +24,9 @@ function getElements() {
     popover: document.getElementById("walletPopover"),
     address: document.getElementById("walletPopoverAddress"),
     copyBtn: document.getElementById("walletPopoverCopy"),
-    explorerLink: document.getElementById("walletPopoverExplorer"),
+    explorerLink: /** @type {HTMLAnchorElement|null} */ (
+      document.getElementById("walletPopoverExplorer")
+    ),
     signInBtn: document.getElementById("walletPopoverSignIn"),
     disconnectBtn: document.getElementById("walletPopoverDisconnect"),
     walletBtn: document.getElementById("disconnectWalletBtn"),
@@ -176,19 +177,22 @@ function onDisconnect() {
   disconnectWallet();
 }
 
+/** @param {MouseEvent} e */
 function onDocumentClick(e) {
   const els = getElements();
+  const target = /** @type {Node|null} */ (e.target);
   // Close if click is outside both the popover and the wallet button
   if (
     els.popover &&
-    !els.popover.contains(e.target) &&
+    !els.popover.contains(target) &&
     els.walletBtn &&
-    !els.walletBtn.contains(e.target)
+    !els.walletBtn.contains(target)
   ) {
     closePopover();
   }
 }
 
+/** @param {KeyboardEvent} e */
 function onDocumentKey(e) {
   if (e.key === "Escape") {
     e.preventDefault();

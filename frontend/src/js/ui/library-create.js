@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Optimistic collection-creation flow shared by the toolbar button and the
  * library context menu.
@@ -16,11 +15,13 @@ import { showToast } from "./toasts.js";
 import { showDialog } from "./dialog.js";
 import { createNamedCollection } from "../services/library-ops.js";
 
+/** @param {string} text */
 function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
   if (region) region.textContent = text;
 }
 
+/** @param {string|number} tokenId */
 function collectionCardId(tokenId) {
   return `collection-${tokenId}`;
 }
@@ -28,6 +29,10 @@ function collectionCardId(tokenId) {
 /**
  * Insert an optimistic "minting" collection card at the top of the list without
  * navigating into it. No-op if a card for this token already exists.
+ * @param {object} opts
+ * @param {string|number} opts.tokenId
+ * @param {string} opts.manifestCid
+ * @param {string} opts.name
  * @returns {string} the card id
  */
 function addPendingCollectionCard({ tokenId, manifestCid, name }) {
@@ -55,7 +60,10 @@ function addPendingCollectionCard({ tokenId, manifestCid, name }) {
   return id;
 }
 
-/** Flip a pending collection card to the confirmed (besked) state. */
+/**
+ * Flip a pending collection card to the confirmed (besked) state.
+ * @param {string|number} tokenId
+ */
 function markCollectionConfirmed(tokenId) {
   libraryState.set({
     collections: libraryState
@@ -66,7 +74,10 @@ function markCollectionConfirmed(tokenId) {
   });
 }
 
-/** Remove an optimistic collection card (mint failed or the user cancelled). */
+/**
+ * Remove an optimistic collection card (mint failed or the user cancelled).
+ * @param {string} id
+ */
 function removePendingCollectionCard(id) {
   libraryState.set({
     collections: libraryState.get().collections.filter((c) => c.id !== id),
@@ -87,6 +98,7 @@ export async function createCollectionFlow() {
   );
   if (!name) return;
 
+  /** @type {string|null} */
   let pendingId = null;
 
   // Fire-and-forget: the card is shown via onPending and the result is

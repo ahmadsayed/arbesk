@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk GLB Parser & Direct Decomposer
  *
@@ -27,6 +26,7 @@ const GLB_MAGIC = 0x46546c67; // "glTF"
 const GLB_VERSION = 2;
 const IPFS_URI_PREFIX = "ipfs://";
 
+/** @type {WebIO|null} */
 let _io = null;
 function getIO() {
   if (!_io) _io = new WebIO();
@@ -35,6 +35,8 @@ function getIO() {
 
 /**
  * Check if an ArrayBuffer looks like a GLB v2 container.
+ * @param {ArrayBuffer} arrayBuffer
+ * @returns {boolean}
  */
 export function isGLB(arrayBuffer) {
   if (!arrayBuffer || arrayBuffer.byteLength < 12) return false;
@@ -51,7 +53,7 @@ export function isGLB(arrayBuffer) {
  * custom DataView-based parser has been removed.
  *
  * @param {ArrayBuffer} arrayBuffer
- * @returns {Promise<{ json: object, binaryChunk: ArrayBuffer }>}
+ * @returns {Promise<{ json: any, binaryChunk: ArrayBuffer|null }>}
  */
 export async function parseGLB(arrayBuffer) {
   if (!arrayBuffer) throw new Error("parseGLB: arrayBuffer is required");
@@ -75,9 +77,11 @@ export async function parseGLB(arrayBuffer) {
   );
   const binBytes = resources[GLB_BUFFER];
   const binaryChunk = binBytes
-    ? binBytes.buffer.slice(
-        binBytes.byteOffset,
-        binBytes.byteOffset + binBytes.byteLength
+    ? /** @type {ArrayBuffer} */ (
+        binBytes.buffer.slice(
+          binBytes.byteOffset,
+          binBytes.byteOffset + binBytes.byteLength
+        )
       )
     : null;
 
@@ -86,6 +90,8 @@ export async function parseGLB(arrayBuffer) {
 
 /**
  * Detect image MIME type from magic bytes.
+ * @param {Uint8Array} bytes
+ * @returns {string|null}
  */
 function detectImageMimeType(bytes) {
   if (bytes.length < 4) return null;
@@ -137,9 +143,12 @@ function detectImageMimeType(bytes) {
 
 /**
  * Get file extension from a MIME type.
+ * @param {string|null|undefined} mimeType
+ * @returns {string}
  */
 function extFromMimeType(mimeType) {
   if (!mimeType) return "bin";
+  /** @type {Object<string, string>} */
   const map = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -155,6 +164,15 @@ function extFromMimeType(mimeType) {
  * Write bytes to IPFS using the provided writer or the default project writer.
  * When no writer is supplied, the dedup-aware upload path is used so unchanged
  * components can reuse their previous CID.
+ *
+ * @param {((bytes: Uint8Array|string, filename: string) => Promise<string>)|null|undefined} writer
+ * @param {Uint8Array|string} bytes - Raw bytes (a JSON string only when `writer` is supplied)
+ * @param {string} filename
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential|null} [credential=null]
+ * @param {object} [options={}]
+ * @param {boolean} [options.compress=false]
+ * @param {Map<string, string>|null} [dedupMap=null]
+ * @returns {Promise<{cid: string, meta: object|null, skipped: boolean}>}
  */
 async function writeBytes(
   writer,
@@ -168,11 +186,22 @@ async function writeBytes(
     const cid = await writer(bytes, filename);
     return { cid, meta: null, skipped: false };
   }
-  return uploadWithDedup(bytes, filename, credential, options, dedupMap);
+  // The string form only ever reaches the writer branch above; the default
+  // path always receives Uint8Array component bytes.
+  return uploadWithDedup(
+    /** @type {Uint8Array} */ (bytes),
+    filename,
+    credential,
+    options,
+    dedupMap
+  );
 }
 
 /**
  * Resolve a buffer URI to a Uint8Array.
+ * @param {any} buf - glTF buffer entry (dynamic schema)
+ * @param {ArrayBuffer|null} binaryChunk
+ * @returns {Uint8Array|null}
  */
 function resolveBufferBytes(buf, binaryChunk) {
   if (!buf.uri) {
@@ -204,12 +233,18 @@ function resolveBufferBytes(buf, binaryChunk) {
  * Decompose a GLB in-memory into a composite glTF JSON with IPFS CID references.
  *
  * @param {ArrayBuffer} arrayBuffer - Raw GLB bytes
- * @param {Function} [writer] - Optional IPFS writer `(bytes, filename) => Promise<cid>`
- * @param {{ storeComposite?: boolean }} [options] - When `storeComposite` is
+ * @param {((bytes: Uint8Array|string, filename: string) => Promise<string>)|null} [writer] - Optional IPFS writer `(bytes, filename) => Promise<cid>`
+ * @param {object} [options] - When `storeComposite` is
  *   false, buffers/images are still uploaded but the composite glTF itself is
  *   not written to IPFS (`compositeCid` is null). Use this when the caller
  *   mutates the composite and writes its own final version.
- * @returns {Promise<{ composite: object, compositeCid: string|null }>}
+ * @param {boolean} [options.storeComposite=true]
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential|null} [options.credential=null]
+ * @param {boolean} [options.compress=true]
+ * @param {string} [options.assetName]
+ * @param {string} [options.assetId]
+ * @param {Map<string, string>|null} [options.dedupMap=null]
+ * @returns {Promise<{ composite: any, compositeCid: string|null }>}
  */
 export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
@@ -222,7 +257,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
     dedupMap = null,
   } = options;
 
-  const baseName = sanitizeFileName(assetName || assetId);
+  const baseName = sanitizeFileName(/** @type {string} */ (assetName || assetId));
 
   const { json, binaryChunk } = await parseGLB(arrayBuffer);
   const composite = JSON.parse(JSON.stringify(json));
@@ -230,6 +265,7 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
 
   // Resolve each buffer to bytes, but don't upload yet - images may be
   // extracted from bufferViews and pruned before the final buffer CID is written.
+  /** @type {Array<Uint8Array|undefined>} */
   const bufferBytesByIndex = [];
   const buffers = composite.buffers || [];
 
@@ -251,9 +287,10 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
   // Extract images to IPFS and record buffer ranges that can be pruned.
   // Image extraction is synchronous; the actual uploads run in parallel so
   // GLBs with many textures don't pay a serial upload penalty.
+  /** @type {Map<number, Array<{bufferIndex: number, oldBvIndex: number, start: number, end: number}>>} */
   const imageRemovalsByBuffer = new Map();
   const images = composite.images || [];
-  /** @type {Array<{index: number, img: object, bytes: Uint8Array, mimeType: string|null, removal: {oldBvIndex: number, start: number, end: number}|null}>} */
+  /** @type {Array<{index: number, img: any, bytes: Uint8Array, mimeType: string|null, removal: {bufferIndex: number, oldBvIndex: number, start: number, end: number}|null}>} */
   const imageUploadTasks = [];
 
   for (let i = 0; i < images.length; i++) {
@@ -457,6 +494,10 @@ export async function decomposeGLB(arrayBuffer, writer, options = {}) {
  * Remove image byte ranges from GLB buffers after the images have been extracted
  * to separate IPFS objects. Updates bufferViews, accessors, and buffer byteLength
  * so geometry data is preserved and we don't store the image bytes twice.
+ *
+ * @param {any} composite - Composite glTF JSON being built (mutated; dynamic schema)
+ * @param {Array<Uint8Array|undefined>} bufferBytesByIndex - Resolved buffer bytes (mutated)
+ * @param {Map<number, Array<{bufferIndex: number, oldBvIndex: number, start: number, end: number}>>} removalsByBuffer
  */
 function pruneBufferImageData(composite, bufferBytesByIndex, removalsByBuffer) {
   const allRemovedIndices = new Set();

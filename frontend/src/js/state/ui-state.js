@@ -1,7 +1,13 @@
-// @ts-nocheck
 import { createStore } from "./create-store.js";
 import { EVENTS } from "../events/bus.js";
 
+/**
+ * @typedef {Object} UiState
+ * @property {string|null} selectedNodeId
+ * @property {number} nestingDepth
+ */
+
+/** @type {UiState} */
 const _defaults = {
   selectedNodeId: null,
   nestingDepth: 0,

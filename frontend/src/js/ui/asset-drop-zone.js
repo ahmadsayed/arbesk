@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Viewport drop zone for linked asset composition and OS file drops.
  * The full persistence/rendering path is handled by the linked asset feature
@@ -12,10 +11,12 @@ const MIME = "application/x-arbesk-linked-asset";
 const viewport = document.getElementById("viewport");
 const overlay = document.getElementById("assetDropOverlay");
 
+/** @param {DragEvent} event */
 function hasLinkedAssetPayload(event) {
   return Array.from(event.dataTransfer?.types || []).includes(MIME);
 }
 
+/** @param {DragEvent} event */
 function hasFilePayload(event) {
   return Array.from(event.dataTransfer?.types || []).includes("Files");
 }
@@ -28,6 +29,7 @@ function hideOverlay() {
   overlay?.classList.remove("active");
 }
 
+/** @param {DragEvent} event */
 function parsePayload(event) {
   const raw = event.dataTransfer?.getData(MIME);
   if (!raw) return null;
@@ -51,12 +53,12 @@ if (viewport) {
   viewport.addEventListener("dragover", (event) => {
     if (!hasLinkedAssetPayload(event) && !hasFilePayload(event)) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
     showOverlay();
   });
 
   viewport.addEventListener("dragleave", (event) => {
-    if (!viewport.contains(event.relatedTarget)) hideOverlay();
+    if (!viewport.contains(/** @type {Node|null} */ (event.relatedTarget))) hideOverlay();
   });
 
   viewport.addEventListener("drop", (event) => {

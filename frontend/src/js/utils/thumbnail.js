@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Thumbnail helpers shared by the Studio asset library and the Library grid.
  */

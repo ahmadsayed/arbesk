@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tiny tagged logger for the browser.
  *
@@ -11,7 +10,7 @@
  */
 
 function isDebugEnabled() {
-  if (typeof window !== "undefined" && window.ARBESK_DEBUG === true) return true;
+  if (typeof window !== "undefined" && /** @type {any} */ (window).ARBESK_DEBUG === true) return true;
   try {
     return typeof localStorage !== "undefined" &&
       localStorage.getItem("arbesk-debug") === "true";
@@ -20,15 +19,27 @@ function isDebugEnabled() {
   }
 }
 
+/**
+ * @param {string} tag
+ * @param {...any} args
+ */
 export function log(tag, ...args) {
   if (!isDebugEnabled()) return;
   console.log(`[${tag}]`, ...args);
 }
 
+/**
+ * @param {string} tag
+ * @param {...any} args
+ */
 export function warn(tag, ...args) {
   console.warn(`[${tag}]`, ...args);
 }
 
+/**
+ * @param {string} tag
+ * @param {...any} args
+ */
 export function error(tag, ...args) {
   console.error(`[${tag}]`, ...args);
 }

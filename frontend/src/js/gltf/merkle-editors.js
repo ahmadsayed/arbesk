@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Merkle Editor Tree — backwards-compatible re-export of domain/editors.js.
  */

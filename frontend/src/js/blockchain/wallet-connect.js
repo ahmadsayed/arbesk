@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * WalletConnect v2 Ethereum Provider
  *
@@ -14,8 +13,11 @@
  *   await provider.enable();
  */
 
+/** @type {any} */
 let provider = null;
+/** @type {Promise<any>|null} */
 let initPromise = null;
+/** @type {any} */
 let EthereumProvider = null;
 
 import { SUPPORTED_CHAIN_IDS } from "../../../../constants/chains.js";
@@ -41,32 +43,32 @@ async function loadEthereumProvider() {
 
   // Try esm.sh first (esbuild-based, handles complex packages better)
   try {
-    const mod = await import(
+    const mod = /** @type {any} */ (await import(
       /* webpackIgnore: true */
       "https://esm.sh/@walletconnect/ethereum-provider@2.23.9"
-    );
+    ));
     EthereumProvider = mod.default || mod.EthereumProvider;
     if (EthereumProvider) {
       console.log("[WALLET-CONNECT] loaded from esm.sh");
       return EthereumProvider;
     }
   } catch (err) {
-    console.warn("[WALLET-CONNECT] esm.sh load failed:", err.message);
+    console.warn("[WALLET-CONNECT] esm.sh load failed:", /** @type {Error} */ (err).message);
   }
 
   // Fallback to jsdelivr +esm
   try {
-    const mod = await import(
+    const mod = /** @type {any} */ (await import(
       /* webpackIgnore: true */
       "https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.9/+esm"
-    );
+    ));
     EthereumProvider = mod.default || mod.EthereumProvider;
     if (EthereumProvider) {
       console.log("[WALLET-CONNECT] loaded from jsdelivr");
       return EthereumProvider;
     }
   } catch (err) {
-    console.warn("[WALLET-CONNECT] jsdelivr load failed:", err.message);
+    console.warn("[WALLET-CONNECT] jsdelivr load failed:", /** @type {Error} */ (err).message);
   }
 
   console.error(

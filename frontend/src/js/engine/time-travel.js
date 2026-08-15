@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Time-Travel Engine
  *
@@ -19,6 +18,7 @@ const chainCache = new Map();
  * Clone a mesh's material if it is shared with other meshes.
  * This is required for per-component color overrides so changing one mesh
  * does not bleed into every mesh that originally shared the material.
+ * @param {BABYLON.AbstractMesh} mesh
  */
 function ensureUniqueMaterial(mesh) {
   const mat = mesh.material;
@@ -26,7 +26,7 @@ function ensureUniqueMaterial(mesh) {
 
   const scene = mesh.getScene();
   const isShared = scene.meshes.some(
-    (m) => m !== mesh && !m.isDisposed() && m.material === mat
+    (/** @type {BABYLON.AbstractMesh} */ m) => m !== mesh && !m.isDisposed() && m.material === mat
   );
   if (!isShared) return;
 
@@ -38,7 +38,7 @@ function ensureUniqueMaterial(mesh) {
   if (mat.getSubMeshMaterials && clone.subMaterials) {
     const subs = mat.getSubMeshMaterials();
     if (subs.length > 0) {
-      clone.subMaterials = subs.map((sub, i) =>
+      clone.subMaterials = subs.map((/** @type {any} */ sub, /** @type {number} */ i) =>
         sub && typeof sub.clone === "function"
           ? sub.clone(`${sub.name || "sub"}_iso_${mesh.name}_${i}`)
           : sub
@@ -100,6 +100,8 @@ function applyColor(meshes, colorHex, meshOverrides = null) {
 
 /**
  * Apply scale to meshes.
+ * @param {BABYLON.AbstractMesh[]} meshes
+ * @param {{x?: number, y?: number, z?: number}|null} scale
  */
 function applyScale(meshes, scale) {
   if (!scale) return;
@@ -117,13 +119,14 @@ function applyScale(meshes, scale) {
  *
  * @param {string} startCid - The latest manifest CID to start walking from
  * @param {number} maxDepth - Maximum chain depth to traverse
- * @returns {Promise<Array<{cid: string, version: number, color: string|null, scale: object, sourceCid: string|null, nodes: Record<string, string>, chat: Array|null}>>}
+ * @returns {Promise<Array<{cid: string, version: number, name: string|null, nodeCount: number, timestamp: any, color: string|null, scale: object, sourceCid: string|null, nodes: Record<string, string>, chat: Array<any>|null}>>}
  */
 async function walkManifestChain(startCid, maxDepth = 50) {
   // Check cache first
   const cached = chainCache.get(startCid);
   if (cached) return cached;
 
+  /** @type {Array<{cid: string, version: number, name: string|null, nodeCount: number, timestamp: any, color: string|null, scale: object, sourceCid: string|null, nodes: Record<string, string>, chat: Array<any>|null}>} */
   const chain = [];
   let cid = startCid;
 
@@ -136,6 +139,7 @@ async function walkManifestChain(startCid, maxDepth = 50) {
       // Per-node snapshot for node-level change detection (model clock).
       // A snapshot string changes whenever the node's source, parametric
       // edits, or staged transform change between versions.
+      /** @type {Record<string, string>} */
       const nodeSnapshots = {};
       for (const n of nodes) {
         if (!n.node_id) continue;
@@ -161,9 +165,10 @@ async function walkManifestChain(startCid, maxDepth = 50) {
 
       cid = manifest.prev_asset_manifest_cid || null;
     } catch (err) {
+      const e = /** @type {Error} */ (err);
       console.warn(
         `[TIME] walkManifestChain failed at cid=${cid}:`,
-        err.message
+        e.message
       );
       break;
     }

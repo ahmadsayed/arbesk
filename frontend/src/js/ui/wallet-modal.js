@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Wallet Picker Modal
  *
@@ -17,16 +16,37 @@ import {
 } from "../blockchain/wallet-discovery.js";
 import { escapeHtml } from "../utils/html.js";
 
+/** @typedef {import("../blockchain/wallet-discovery.js").EIP6963Wallet} EIP6963Wallet */
+
+/**
+ * Result the modal promise resolves with. Injected wallets set
+ * walletName/walletRdns; the CDP email flow sets walletAddress/eoaAddress/email.
+ * @typedef {Object} WalletModalResult
+ * @property {any} provider - EIP-1193 provider (or CDP SDK provider object)
+ * @property {string} source - "injected" | "cdp"
+ * @property {string} [walletName]
+ * @property {string} [walletRdns]
+ * @property {string} [walletAddress] - CDP smart account address
+ * @property {string} [eoaAddress] - CDP embedded EOA address
+ * @property {string} [email] - CDP sign-in email
+ */
+
+/** @type {HTMLElement|null} */
 let backdrop = null;
+/** @type {HTMLElement|null} */
 let modal = null;
+/** @type {((result: WalletModalResult) => void)|null} */
 let resolvePromise = null;
+/** @type {((err: Error) => void)|null} */
 let rejectPromise = null;
+/** @type {Function|null} unsubscribe from wallet-discovery (typed as Function there) */
 let removeWalletListener = null;
+/** @type {(() => void)|null} */
 let focusTrapCleanup = null;
 
 /**
  * Show the wallet picker modal.
- * @returns {Promise<{provider: Object, source: string, walletName?: string}>}
+ * @returns {Promise<WalletModalResult>}
  *   Resolves when user selects a wallet.
  *   Rejects when user cancels (Escape, backdrop click, close button).
  */
@@ -50,8 +70,11 @@ export function showWalletModal() {
     backdrop.setAttribute("aria-labelledby", "wallet-modal-title");
 
     modal = document.createElement("div");
-    modal.className = "wallet-modal";
-    modal.innerHTML = `
+    // Local alias: the module-level `modal` is captured by closures below,
+    // which defeats TS narrowing; modalEl stays non-null for this executor.
+    const modalEl = modal;
+    modalEl.className = "wallet-modal";
+    modalEl.innerHTML = `
       <div class="wallet-modal-header">
         <h3 id="wallet-modal-title">Sign in to Arbesk</h3>
         <button class="btn btn-icon btn-sm wallet-modal-close" aria-label="Close" title="Close (Escape)">
@@ -118,28 +141,31 @@ export function showWalletModal() {
       </div>
     `;
 
-    backdrop.appendChild(modal);
+    backdrop.appendChild(modalEl);
     document.body.appendChild(backdrop);
 
     // Focus trap
-    focusTrapCleanup = setupFocusTrap(modal);
+    focusTrapCleanup = setupFocusTrap(modalEl);
 
-    // Wire close handlers
-    const closeBtn = modal.querySelector(".wallet-modal-close");
+    // Wire close handlers — the close button is part of the innerHTML above.
+    const closeBtn = /** @type {HTMLElement} */ (
+      modalEl.querySelector(".wallet-modal-close")
+    );
     closeBtn.addEventListener("click", () => cancelModal());
     backdrop.addEventListener("click", (e) => {
       if (e.target === backdrop) cancelModal();
     });
 
     // Wire email OTP flow
-    const emailSendBtn = modal.querySelector("#walletEmailSendBtn");
+    const emailSendBtn = modalEl.querySelector("#walletEmailSendBtn");
     if (emailSendBtn) {
       emailSendBtn.addEventListener("click", () => selectEmailWallet());
     }
-    const emailInput = modal.querySelector("#walletEmailInput");
+    const emailInput = modalEl.querySelector("#walletEmailInput");
     if (emailInput) {
       emailInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") selectEmailWallet();
+        if (/** @type {KeyboardEvent} */ (e).key === "Enter")
+          selectEmailWallet();
       });
     }
 
@@ -147,16 +173,20 @@ export function showWalletModal() {
     document.addEventListener("keydown", handleKeydown);
 
     // Subscribe to wallet discovery updates
-    removeWalletListener = onWalletsUpdated((wallets) => {
-      renderWalletOptions(wallets);
-    });
+    removeWalletListener = onWalletsUpdated(
+      (/** @type {EIP6963Wallet[]} */ wallets) => {
+        renderWalletOptions(wallets);
+      }
+    );
 
     // Initial render
     renderWalletOptions(getWallets());
 
     // Focus first option
     requestAnimationFrame(() => {
-      const firstOption = modal.querySelector(".wallet-option");
+      const firstOption = /** @type {HTMLElement|null} */ (
+        modalEl.querySelector(".wallet-option")
+      );
       if (firstOption) firstOption.focus();
     });
   });
@@ -261,12 +291,22 @@ function selectInjectedWallet(wallet) {
  */
 async function selectEmailWallet() {
   if (!resolvePromise) return;
+  // Non-null: this flow is only reachable from buttons inside the open modal.
+  const modalEl = /** @type {HTMLElement} */ (modal);
 
-  const emailInput = modal.querySelector("#walletEmailInput");
-  const emailError = modal.querySelector("#walletEmailError");
-  const sendBtn = modal.querySelector("#walletEmailSendBtn");
-  const emailStep = modal.querySelector("#walletEmailStep");
-  const otpStep = modal.querySelector("#walletOtpStep");
+  const emailInput = /** @type {HTMLInputElement|null} */ (
+    modalEl.querySelector("#walletEmailInput")
+  );
+  const emailError = modalEl.querySelector("#walletEmailError");
+  const sendBtn = /** @type {HTMLButtonElement|null} */ (
+    modalEl.querySelector("#walletEmailSendBtn")
+  );
+  const emailStep = /** @type {HTMLElement|null} */ (
+    modalEl.querySelector("#walletEmailStep")
+  );
+  const otpStep = /** @type {HTMLElement|null} */ (
+    modalEl.querySelector("#walletOtpStep")
+  );
 
   const email = emailInput ? emailInput.value.trim() : "";
   if (!email || !email.includes("@")) {
@@ -312,10 +352,16 @@ async function selectEmailWallet() {
     if (otpStep) otpStep.style.display = "";
 
     // Wire OTP verify button
-    const otpVerifyBtn = modal.querySelector("#walletOtpVerifyBtn");
-    const otpInput = modal.querySelector("#walletOtpInput");
-    const otpError = modal.querySelector("#walletOtpError");
-    const otpBackBtn = modal.querySelector("#walletOtpBackBtn");
+    const otpVerifyBtn = /** @type {HTMLButtonElement|null} */ (
+      modalEl.querySelector("#walletOtpVerifyBtn")
+    );
+    const otpInput = /** @type {HTMLInputElement|null} */ (
+      modalEl.querySelector("#walletOtpInput")
+    );
+    const otpError = modalEl.querySelector("#walletOtpError");
+    const otpBackBtn = /** @type {HTMLElement|null} */ (
+      modalEl.querySelector("#walletOtpBackBtn")
+    );
 
     if (otpInput) {
       requestAnimationFrame(() => otpInput.focus());
@@ -359,7 +405,9 @@ async function selectEmailWallet() {
         });
         hideWalletModal();
       } catch (err) {
-        const msg = err.message || "Verification failed. Check your code and try again.";
+        const msg =
+          /** @type {Error} */ (err).message ||
+          "Verification failed. Check your code and try again.";
         if (otpError) otpError.textContent = msg;
         if (otpVerifyBtn) { otpVerifyBtn.disabled = false; otpVerifyBtn.textContent = "Verify"; }
       }
@@ -375,7 +423,8 @@ async function selectEmailWallet() {
     }
 
   } catch (err) {
-    const msg = err.message || "Failed to send code. Please try again.";
+    const msg =
+      /** @type {Error} */ (err).message || "Failed to send code. Please try again.";
     if (emailError) emailError.textContent = msg;
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
   }
@@ -384,15 +433,18 @@ async function selectEmailWallet() {
 /**
  * Setup focus trap within the modal.
  * @param {HTMLElement} container
- * @returns {Function} cleanup function
+ * @returns {() => void} cleanup function
  */
 function setupFocusTrap(container) {
-  const focusable = container.querySelectorAll(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  const focusable = /** @type {NodeListOf<HTMLElement>} */ (
+    container.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
   );
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
 
+  /** @param {KeyboardEvent} e */
   function handleTab(e) {
     if (e.key !== "Tab") return;
     if (e.shiftKey) {
@@ -411,8 +463,9 @@ function setupFocusTrap(container) {
   container.addEventListener("keydown", handleTab);
 
   // Pull focus back if it leaves the modal
+  /** @param {FocusEvent} e */
   function handleFocusIn(e) {
-    if (!container.contains(e.target)) {
+    if (!container.contains(/** @type {Node} */ (e.target))) {
       e.preventDefault();
       first?.focus();
     }

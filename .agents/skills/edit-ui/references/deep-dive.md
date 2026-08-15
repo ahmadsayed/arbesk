@@ -8,7 +8,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 
 | Layer | Tech | Notes |
 |---|---|---|
-| Markup | Pug (`frontend/src/pug/`) | One file (`studio.pug`) — there is no includes/ system |
+| Markup | Pug (`frontend/src/pug/`) | `app.pug` (SPA shell) + `index.pug` (landing) — there is no includes/ system |
 | Styling | Component SCSS (`frontend/src/scss/components/`) | Imported via `styles.scss` with `@use` |
 | Behavior | Vanilla ES modules (`frontend/src/js/`) | **No bundler** — copied as-is into `dist/` |
 | 3D Engine | Babylon.js (CDN) | `BABYLON` is a global — never `import` it |
@@ -18,12 +18,13 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 
 | Path | Role |
 |---|---|
-| `frontend/src/pug/studio.pug` | The **only** Pug file. All markup lives here |
+| `frontend/src/pug/app.pug` | SPA shell — all Studio/Library markup lives here |
+| `frontend/src/pug/index.pug` | Landing/marketing page |
 | `frontend/src/scss/components/_viewport.scss` | 3D viewport + gizmo + drop indicator |
 | `frontend/src/scss/components/_headerbar.scss` | GNOME-style header bar (top) |
 | `frontend/src/scss/components/_sidebar.scss` | Left rail: library, outliner |
 | `frontend/src/scss/components/_inspector.scss` | Right rail: selection inspector |
-| `frontend/src/scss/components/_messagebar.scss` | Prompt input (bottom) |
+| `frontend/src/scss/components/_chat.scss` | Chat panel + prompt input (bottom) |
 | `frontend/src/scss/components/_bottombar.scss` | Status bar |
 | `frontend/src/scss/styles.scss` | Imports all component files |
 | `frontend/src/js/engine/scene-graph.js` | Babylon engine, scene, camera, selection, keyboard |

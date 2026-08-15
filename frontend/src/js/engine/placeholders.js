@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Scene Graph - Placeholders
  *
@@ -12,7 +11,8 @@ import { state, PLACEHOLDER_COLOR, ERROR_PLACEHOLDER_COLOR } from "./state.js";
  * Create a placeholder mesh for token child nodes.
  * @param {string} nodeId
  * @param {BABYLON.TransformNode} parentNode
- * @param {"loading"|"error"} state
+ * @param {"loading"|"error"} placeholderState
+ * @returns {BABYLON.Mesh}
  */
 export function createPlaceholder(nodeId, parentNode, placeholderState) {
   const color =
@@ -65,6 +65,7 @@ export function createPlaceholder(nodeId, parentNode, placeholderState) {
 /**
  * Dispose a placeholder mesh, stopping any running animation first.
  * Also releases the placeholder's material to prevent GPU memory leaks.
+ * @param {BABYLON.Mesh} placeholder
  */
 export function disposePlaceholder(placeholder) {
   if (!placeholder || placeholder.isDisposed()) return;

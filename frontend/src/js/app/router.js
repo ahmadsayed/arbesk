@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Minimal client-side router for the unified Studio + Library SPA.
  *
@@ -79,7 +78,9 @@ export function setView(view, { updateHistory = false, href = null } = {}) {
   document.title = view === "library" ? "Library — Arbesk" : "Studio — Arbesk";
 
   document.querySelectorAll(".page-switcher-tab").forEach((tab) => {
-    const tabView = pathToView(new URL(tab.href, location.origin).pathname);
+    const tabView = pathToView(
+      new URL(/** @type {HTMLAnchorElement} */ (tab).href, location.origin).pathname
+    );
     tab.classList.toggle("active", tabView === view);
   });
 
@@ -110,7 +111,9 @@ export function navigate(path) {
  */
 export function initRouter() {
   document.addEventListener("click", (e) => {
-    const link = e.target.closest?.("a[data-nav]");
+    const link = /** @type {HTMLElement | null} */ (e.target)?.closest?.(
+      "a[data-nav]"
+    );
     if (!link) return;
     // Respect modified clicks (open-in-new-tab, etc.) and already-handled events.
     if (

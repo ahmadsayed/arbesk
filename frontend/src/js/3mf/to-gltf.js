@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO: add JSDoc typedefs and drop this header
 /**
  * Parsed3mf → glTF 2.0 JSON converter.
  *
@@ -17,6 +16,10 @@ const Z_UP_TO_Y_UP_QUATERNION = [
   Math.cos(Math.PI / 4),
 ];
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
 function u8ToBase64(bytes) {
   if (typeof Buffer !== "undefined") {
     return Buffer.from(bytes).toString("base64");
@@ -24,12 +27,19 @@ function u8ToBase64(bytes) {
   let binary = "";
   const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    binary += String.fromCharCode.apply(
+      null,
+      /** @type {any} */ (bytes.subarray(i, i + CHUNK))
+    );
   }
   return btoa(binary);
 }
 
-/** "#RRGGBBAA" → [r, g, b, a] normalized to 0..1. */
+/**
+ * "#RRGGBBAA" → [r, g, b, a] normalized to 0..1.
+ * @param {string|null|undefined} hex
+ * @returns {number[]}
+ */
 function displayColorToFactor(hex) {
   const m = /^#?([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/.exec(hex || "");
   if (!m) return [0.8, 0.8, 0.8, 1];
@@ -49,6 +59,9 @@ function displayColorToFactor(hex) {
  * column vectors (p' = M·p). The row-vector convention and glTF's
  * column-major storage cancel out, so this is a pure re-layout — do NOT
  * transpose the 3×3 part.
+ *
+ * @param {number[]} t
+ * @returns {number[]}
  */
 function transformToMatrix4(t) {
   return [
@@ -60,7 +73,7 @@ function transformToMatrix4(t) {
 }
 
 /**
- * @param {object} parsed - result of parse3mfModel()
+ * @param {import("./parser.js").Parsed3mf} parsed - result of parse3mfModel()
  * @returns {object} glTF 2.0 JSON
  */
 export function parsed3mfToGltf(parsed) {
@@ -150,10 +163,10 @@ export function parsed3mfToGltf(parsed) {
       materialIndex = materialIndexByKey.get(key);
     }
 
-    const primitive = {
+    const primitive = /** @type {{attributes: {POSITION: number}, indices: number, material?: number}} */ ({
       attributes: { POSITION: positionAccessor },
       indices: indexAccessor,
-    };
+    });
     if (materialIndex !== undefined) primitive.material = materialIndex;
     meshes.push({
       name: obj.name || `object_${obj.id}`,
@@ -163,8 +176,11 @@ export function parsed3mfToGltf(parsed) {
 
   // Scene graph: axis-fix root + one node per build item.
   const meshIndexByObjectId = new Map(
-    parsed.objects.map((o, index) => [o.id, index])
+    /** @type {Array<[string, number]>} */ (
+      parsed.objects.map((o, index) => [o.id, index])
+    )
   );
+  /** @type {Array<{name: string, mesh: number, matrix?: number[]}>} */
   const itemNodes = [];
   for (const [i, item] of parsed.items.entries()) {
     const meshIndex = meshIndexByObjectId.get(item.objectId);
@@ -174,10 +190,10 @@ export function parsed3mfToGltf(parsed) {
       );
       continue;
     }
-    const node = {
+    const node = /** @type {{name: string, mesh: number, matrix?: number[]}} */ ({
       name: parsed.objects[meshIndex].name || `item_${i}`,
       mesh: meshIndex,
-    };
+    });
     if (item.transform) node.matrix = transformToMatrix4(item.transform);
     itemNodes.push(node);
   }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk glTF Composer (main thread)
  *
@@ -18,6 +17,11 @@ import { decompress } from "../utils/compression.js";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "./cache-aware-fetch.js";
 import { composeGltfJson } from "./gltf-core.js";
 
+/**
+ * @param {string} cid
+ * @param {any} arbeskMeta
+ * @returns {Promise<string>}
+ */
 async function fetchCIDAsBase64(cid, arbeskMeta) {
   console.log(`[COMPOSE] fetching ipfs://${cid}`);
   return fetchCIDAsBase64Cached(cid, arbeskMeta, {
@@ -33,8 +37,8 @@ async function fetchCIDAsBase64(cid, arbeskMeta) {
  * Resolves all buffer and image URIs to base64 data URIs so that
  * Babylon.js can load the result as a self-contained glTF.
  *
- * @param {object} gltfJson - The glTF JSON (composite ipfs:// refs or standard data URIs)
- * @returns {Promise<object>} Standard glTF JSON with data URI buffers/images
+ * @param {any} gltfJson - The glTF JSON (composite ipfs:// refs or standard data URIs; dynamic schema)
+ * @returns {Promise<any>} Standard glTF JSON with data URI buffers/images
  */
 export async function composeGlTF(gltfJson) {
   if (!gltfJson) throw new Error("composeGlTF: gltfJson is null");

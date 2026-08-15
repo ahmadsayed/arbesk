@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Domain asset store — shared state for domain/asset.js and
  * domain/collection.js. Replaces the legacy state/asset-state.js wrapper.
@@ -8,8 +7,20 @@
 import { createStore } from "../state/create-store.js";
 import { EVENTS } from "../events/bus.js";
 
+/**
+ * @typedef {Object} AssetStoreState
+ * @property {string|null} activeAssetManifestCid
+ * @property {string|null} activeAssetTokenId
+ * @property {string|null} activeAssetName
+ * @property {string|null} latestAssetManifestCid
+ * @property {any} currentManifest
+ * @property {string|null} activeCollectionTokenId
+ * @property {string|null} activeAssetId
+ * @property {string|null} selectedCollectionId
+ */
+
 const { store: assetStore, _resetForTesting } = createStore(
-  {
+  /** @type {AssetStoreState} */ ({
     activeAssetManifestCid: null,
     activeAssetTokenId: null,
     activeAssetName: null,
@@ -18,7 +29,7 @@ const { store: assetStore, _resetForTesting } = createStore(
     activeCollectionTokenId: null,
     activeAssetId: null,
     selectedCollectionId: null,
-  },
+  }),
   EVENTS.ASSET_STATE_CHANGED
 );
 

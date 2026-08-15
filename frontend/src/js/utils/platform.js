@@ -1,4 +1,3 @@
-// @ts-nocheck
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
 export const MOD = isMac ? '⌘' : 'Ctrl';
@@ -11,6 +10,7 @@ export const MOD = isMac ? '⌘' : 'Ctrl';
 export function rewriteShortcutTitles() {
   if (!isMac) return;
   document.querySelectorAll('[title]').forEach(el => {
-    el.title = el.title.replace(/Ctrl\+/g, '⌘');
+    const target = /** @type {HTMLElement} */ (el);
+    target.title = target.title.replace(/Ctrl\+/g, '⌘');
   });
 }

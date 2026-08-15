@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk URL Utilities
  *
@@ -9,8 +8,12 @@
  * Update the browser URL to point to a token ID.
  * Removes ?manifest param, sets ?asset=<tokenId>, optionally preserves ?assetId.
  */
+/**
+ * @param {string|number} tokenId
+ * @param {string|null} [assetId]
+ */
 export function updateUrlAsset(tokenId, assetId = null) {
-  const url = new URL(window.location);
+  const url = new URL(window.location.href);
   url.searchParams.delete("manifest");
   url.searchParams.set("asset", String(tokenId));
   if (assetId) {
@@ -25,8 +28,12 @@ export function updateUrlAsset(tokenId, assetId = null) {
  * Update the browser URL to point to a manifest CID.
  * Sets ?manifest=<cid>, optionally preserves ?asset if tokenId provided.
  */
+/**
+ * @param {string} cid
+ * @param {string|number|null} [tokenId]
+ */
 export function updateUrlManifest(cid, tokenId = null) {
-  const url = new URL(window.location);
+  const url = new URL(window.location.href);
   url.searchParams.set("manifest", cid);
   if (tokenId) {
     url.searchParams.set("asset", String(tokenId));
@@ -40,7 +47,7 @@ export function updateUrlManifest(cid, tokenId = null) {
  * Clear ?asset, ?assetId, and ?manifest query params from the URL without reloading.
  */
 export function clearUrlAssetParams() {
-  const url = new URL(window.location);
+  const url = new URL(window.location.href);
   url.searchParams.delete("asset");
   url.searchParams.delete("assetId");
   url.searchParams.delete("manifest");

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
 import { escapeHtml } from "../utils/html.js";
@@ -9,11 +8,16 @@ import {
   formatBytes,
 } from "../utils/library-items.js";
 
+/** @param {string} text */
 export function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
   if (region) region.textContent = text;
 }
 
+/**
+ * @param {any} item
+ * @param {string} [viewMode]
+ */
 function renderStatus(item, viewMode = "grid") {
   const isGrid = viewMode === "grid";
   if (item.status === "minting") {
@@ -31,6 +35,7 @@ function renderStatus(item, viewMode = "grid") {
     : `<span class="status-badge status-wip">Work in Progress</span>`;
 }
 
+/** @param {string} type */
 function defaultIcon(type) {
   if (type === "collection") {
     return `<svg class="library-item-icon collection-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
@@ -38,6 +43,10 @@ function defaultIcon(type) {
   return `<svg class="library-item-icon asset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`;
 }
 
+/**
+ * @param {any} item
+ * @param {string} viewMode
+ */
 export function createItemElement(item, viewMode) {
   if (viewMode === "list") {
     const el = document.createElement("tr");
@@ -82,17 +91,20 @@ export function createItemElement(item, viewMode) {
   return el;
 }
 
+/** @param {HTMLElement} container */
 function loadVisibleThumbnails(container) {
   container?.querySelectorAll("[data-thumbnail-cid]").forEach((el) => {
-    const cid = el.dataset.thumbnailCid;
+    const itemEl = /** @type {HTMLElement} */ (el);
+    const cid = itemEl.dataset.thumbnailCid;
     if (!cid) return;
-    const name = el
+    const name = itemEl
       .closest("[data-id]")
       ?.querySelector(".library-item-name")?.textContent;
-    loadThumbnailInto(el, cid, name || "Item");
+    loadThumbnailInto(itemEl, cid, name || "Item");
   });
 }
 
+/** @param {string} searchQuery */
 function buildEmptyState(searchQuery) {
   const el = document.createElement("div");
   el.className = "empty-state";
@@ -117,6 +129,11 @@ function buildEmptyState(searchQuery) {
   return el;
 }
 
+/**
+ * @param {HTMLElement} container
+ * @param {any[]} items
+ * @param {string} viewMode
+ */
 export function renderItems(container, items, viewMode) {
   container.innerHTML = "";
 
@@ -143,6 +160,10 @@ export function renderItems(container, items, viewMode) {
   }
 }
 
+/**
+ * @param {any[]} items
+ * @param {string} sortBy
+ */
 function sortItems(items, sortBy) {
   const sorted = [...items];
   if (sortBy === "name") {
@@ -150,6 +171,7 @@ function sortItems(items, sortBy) {
   } else if (sortBy === "date") {
     sorted.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
   } else if (sortBy === "status") {
+    /** @type {Record<string, number>} */
     const rank = { uploading: 0, minting: 1, wip: 2, besked: 3 };
     sorted.sort((a, b) => (rank[a.status] ?? -1) - (rank[b.status] ?? -1));
   }
@@ -165,9 +187,15 @@ function currentItems() {
   return sortItems(filterItems(source, state.searchQuery), state.sortBy);
 }
 
+/**
+ * @param {HTMLElement} container
+ * @param {Array<string|number>} selectedIds
+ */
 function applySelection(container, selectedIds) {
   container.querySelectorAll("[data-id]").forEach((el) => {
-    const selected = selectedIds.includes(el.dataset.id);
+    const selected = selectedIds.includes(
+      /** @type {HTMLElement} */ (el).dataset.id ?? ""
+    );
     el.classList.toggle("selected", selected);
     el.setAttribute("aria-selected", String(selected));
   });
@@ -200,14 +228,19 @@ function render() {
     }`;
 }
 
+/** @type {string|number|null} */
 let lastClickedId = null;
 let lastClickTime = 0;
 const DOUBLE_CLICK_MS = 400;
 
+/**
+ * @param {string|number} tokenId
+ * @param {string|number} [assetId]
+ */
 export function openInStudio(tokenId, assetId) {
   const params = new URLSearchParams();
-  params.set("asset", tokenId);
-  if (assetId) params.set("assetId", assetId);
+  params.set("asset", String(tokenId));
+  if (assetId) params.set("assetId", String(assetId));
   // SPA in-app transition — no full reload, so the wallet/session stay alive.
   // The router activates the Studio view and calls loadFromParams() to open the
   // asset the query string points at.
@@ -216,6 +249,7 @@ export function openInStudio(tokenId, assetId) {
     .catch((err) => console.error("[LIBRARY] open-in-studio failed:", err));
 }
 
+/** @param {string|number} id */
 function openItem(id) {
   const state = libraryState.get();
   const collection = state.collections.find((c) => c.id === id);
@@ -233,16 +267,19 @@ function openItem(id) {
   }
 }
 
+/** @param {MouseEvent} e */
 function handleItemClick(e) {
   const container = document.getElementById("libraryItems");
-  const el = e.target.closest("[data-id]");
+  const target = /** @type {HTMLElement} */ (e.target);
+  const el = target.closest("[data-id]");
 
   if (!el) {
-    if (e.target === container) libraryState.set({ selectedIds: [] });
+    if (target === container) libraryState.set({ selectedIds: [] });
     return;
   }
 
-  const id = el.dataset.id;
+  // [data-id] elements always carry the attribute.
+  const id = /** @type {string} */ (/** @type {HTMLElement} */ (el).dataset.id);
   const now = Date.now();
   const isDoubleClick =
     id === lastClickedId &&
@@ -275,13 +312,14 @@ function handleItemClick(e) {
 }
 
 function isEditingText() {
-  const el = document.activeElement;
+  const el = /** @type {HTMLElement|null} */ (document.activeElement);
   if (!el) return false;
   return (
     el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable
   );
 }
 
+/** @param {KeyboardEvent} e */
 function handleKeydown(e) {
   if (isEditingText()) return;
   const state = libraryState.get();
@@ -319,18 +357,23 @@ function handleKeydown(e) {
 
   if (e.key === "Delete" && state.selectedIds.length > 0) {
     import("./library-context-menu.js").then(({ requestDeleteSelected }) =>
-      requestDeleteSelected(state.selectedIds)
+      // Grid selection ids always originate from dataset strings.
+      requestDeleteSelected(/** @type {string[]} */ (state.selectedIds))
     );
     return;
   }
 
   if (e.key === "F2" && state.selectedIds.length === 1) {
     import("./library-context-menu.js").then(({ requestRename }) =>
-      requestRename(state.selectedIds[0])
+      requestRename(/** @type {string} */ (state.selectedIds[0]))
     );
   }
 }
 
+/**
+ * @param {{left:number, right:number, top:number, bottom:number}} a
+ * @param {{left:number, right:number, top:number, bottom:number}} b
+ */
 function rectsIntersect(a, b) {
   return !(
     a.right < b.left ||
@@ -344,6 +387,7 @@ function initRubberBand() {
   const content = document.getElementById("libraryContent");
   if (!content) return;
 
+  /** @type {HTMLElement|null} */
   let band = null;
   let startX = 0;
   let startY = 0;
@@ -351,7 +395,7 @@ function initRubberBand() {
   let endY = 0;
 
   content.addEventListener("mousedown", (e) => {
-    if (e.target.closest("[data-id]")) return;
+    if (/** @type {HTMLElement} */ (e.target).closest("[data-id]")) return;
     if (e.button !== 0) return;
 
     startX = e.clientX;
@@ -383,10 +427,15 @@ function initRubberBand() {
     band = null;
 
     const container = document.getElementById("libraryItems");
+    /** @type {Array<string|number>} */
     const selectedIds = [];
     container?.querySelectorAll("[data-id]").forEach((el) => {
-      if (rectsIntersect(boxRect, el.getBoundingClientRect()))
-        selectedIds.push(el.dataset.id);
+      const itemEl = /** @type {HTMLElement} */ (el);
+      if (
+        itemEl.dataset.id !== undefined &&
+        rectsIntersect(boxRect, itemEl.getBoundingClientRect())
+      )
+        selectedIds.push(itemEl.dataset.id);
     });
     if (selectedIds.length > 0) {
       libraryState.set({ selectedIds });
@@ -399,6 +448,13 @@ function initRubberBand() {
   });
 }
 
+/**
+ * @param {HTMLElement} band
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} x2
+ * @param {number} y2
+ */
 function positionBand(band, x1, y1, x2, y2) {
   band.style.left = `${Math.min(x1, x2)}px`;
   band.style.top = `${Math.min(y1, y2)}px`;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Comment Thread State
  *
@@ -30,12 +29,17 @@ export class CommentThread {
     this._isConnecting = false;
     this._isReauthenticating = false;
 
+    /** @type {string|number|null} */
     this._currentTokenId = null;
+    /** @type {string|number|null} */
     this._currentChainId = null;
+    /** @type {string|null} */
     this._currentAssetId = null;
+    /** @type {string|null} */
     this._currentArchiveCid = null;
 
     this._knownEventIds = new Set();
+    /** @type {any[]} */
     this._events = [];
   }
 
@@ -57,6 +61,9 @@ export class CommentThread {
 
   // ─── Context & lifecycle ────────────────────────────────────────────────────
 
+  /**
+   * @param {{ tokenId: string|number|null, chainId: string|number|null, manifest?: any, assetId?: string|null }} context
+   */
   async setContext({ tokenId, chainId, manifest, assetId }) {
     const nextAssetId = assetId || manifest?.asset_id || null;
     const contextChanged =
@@ -84,10 +91,15 @@ export class CommentThread {
     }
   }
 
+  /** @param {string} cid */
   async loadArchive(cid) {
     await this._loadArchive(cid);
   }
 
+  /**
+   * @param {any} event
+   * @param {{ source?: string }} [opts]
+   */
   ingest(event, { source = "live" } = {}) {
     if (!event?.id || this._knownEventIds.has(event.id)) return false;
     this._knownEventIds.add(event.id);
@@ -218,6 +230,7 @@ export class CommentThread {
     this._emitStatus();
   }
 
+  /** @param {string} text */
   post(text) {
     if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return false;
     this._ws.send(JSON.stringify({ type: "chat", content: text }));
@@ -226,6 +239,7 @@ export class CommentThread {
 
   // ─── Message handling ───────────────────────────────────────────────────────
 
+  /** @param {any} msg */
   _handleMessage(msg) {
     switch (msg.type) {
       case "ready":
@@ -249,19 +263,25 @@ export class CommentThread {
    * Build a Merkle proof for the current wallet against the token's editor list.
    * Returns null when the wallet is not a listed collaborator.
    */
+  /**
+   * @param {string|number} tokenId
+   * @param {string|number|null} _chainId
+   * @param {string} address
+   */
   async _loadEditorProof(tokenId, _chainId, address) {
     try {
-      const result = await buildEditorProof(tokenId, address);
+      const result = await buildEditorProof(/** @type {string} */ (tokenId), address);
       if (!result) return null;
       return { proof: result.proof, role: result.role };
     } catch (err) {
-      console.warn("[COMMENT_THREAD] could not build editor proof:", err.message);
+      console.warn("[COMMENT_THREAD] could not build editor proof:", /** @type {Error} */ (err).message);
       return null;
     }
   }
 
   // ─── Archive loading ────────────────────────────────────────────────────────
 
+  /** @param {any} manifest */
   async _loadArchiveForCurrentManifest(manifest) {
     const assetId =
       manifest?.asset_id || this._currentAssetId || getActiveAssetId();
@@ -271,7 +291,7 @@ export class CommentThread {
     // manifest from IPFS so we can read its comments_archive_cid.
     if (!archiveCid && assetId) {
       const activeCid = getActiveAssetManifestCid();
-      const cachedManifest = getCurrentManifest();
+      const cachedManifest = /** @type {any} */ (getCurrentManifest());
       if (
         cachedManifest?.asset_id === assetId &&
         cachedManifest?.comments_archive_cid
@@ -286,7 +306,7 @@ export class CommentThread {
         } catch (err) {
           console.warn(
             "[COMMENT_THREAD] failed to fetch manifest for archive CID:",
-            err.message
+            /** @type {Error} */ (err).message
           );
         }
       }
@@ -297,6 +317,10 @@ export class CommentThread {
     }
   }
 
+  /**
+   * @param {string} cid
+   * @param {string|number|null} [assetId]
+   */
   async _loadArchive(cid, assetId) {
     if (!cid || cid === this._currentArchiveCid) return;
 
@@ -318,7 +342,7 @@ export class CommentThread {
         `[COMMENT_THREAD] loaded ${sorted.length} archived event(s) from ${cid}`
       );
     } catch (err) {
-      console.warn(`[COMMENT_THREAD] failed to load archive ${cid}:`, err.message);
+      console.warn(`[COMMENT_THREAD] failed to load archive ${cid}:`, /** @type {Error} */ (err).message);
     }
   }
 
@@ -354,10 +378,12 @@ export class CommentThread {
     return `${protocol}//${window.location.host}`;
   }
 
+  /** @param {{ source?: string, event?: any }} [opts] */
   _emitChange({ source = "live", event } = {}) {
     emit(EVENTS.COMMENT_THREAD_CHANGE, { events: this.events, source, event });
   }
 
+  /** @param {Object<string, any>} [extra] */
   _emitStatus(extra = {}) {
     emit(EVENTS.COMMENT_THREAD_STATUS, { status: this.status, ...extra });
   }

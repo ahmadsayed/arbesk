@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * EIP-6963 Multi-Injected Wallet Discovery
  *
@@ -22,7 +21,7 @@ const listeners = new Set();
  * @property {string} rdns - Reverse domain name (e.g., "io.metamask")
  * @property {string} name - Human-readable name (e.g., "MetaMask")
  * @property {string} icon - Base64 SVG icon
- * @property {Object} provider - EIP-1193 provider instance
+ * @property {any} provider - EIP-1193 provider instance
  */
 
 /**
@@ -41,12 +40,13 @@ function notify() {
 
 /**
  * Handle an EIP-6963 announceProvider event.
- * @param {CustomEvent} event
+ * @param {Event} event
  */
 function onAnnounceProvider(event) {
-  if (!event.detail?.info || !event.detail?.provider) return;
+  const detail = /** @type {CustomEvent} */ (event).detail;
+  if (!detail?.info || !detail?.provider) return;
 
-  const { info, provider } = event.detail;
+  const { info, provider } = detail;
   const rdns = info.rdns;
 
   if (!rdns) {

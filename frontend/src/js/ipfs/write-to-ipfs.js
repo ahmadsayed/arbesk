@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Browser-Side IPFS Writer
  *
@@ -12,6 +11,10 @@ import { compress } from "../utils/compression.js";
 import { sanitizeFileName } from "../utils/uri.js";
 import { uploadToIPFSWithCredential } from "./upload-with-credential.js";
 
+/**
+ * @param {Uint8Array|ArrayBuffer|Blob|string} data
+ * @returns {Promise<Uint8Array>}
+ */
 async function bytesFromData(data) {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
@@ -33,6 +36,10 @@ function ts() {
   return new Date().toLocaleTimeString();
 }
 
+/**
+ * @param {string} filename
+ * @returns {string}
+ */
 function compressedFilename(filename) {
   if (!filename) return "asset.bin.gz";
   return filename.endsWith(".gz") ? filename : `${filename}.gz`;
@@ -42,9 +49,10 @@ function compressedFilename(filename) {
  * Write raw binary/string data to IPFS and return its CID.
  * @param {Uint8Array|ArrayBuffer|Blob|string} data
  * @param {string} [filename="asset.bin"]
- * @param {object} [credential=null] - Optional upload credential. When omitted,
- *   a fresh credential is fetched. Callers reusing a credential must ensure it
- *   is marked `reusable` by the backend.
+ * @param {import("./upload-with-credential.js").UploadCredential|null} [credential=null] -
+ *   Optional upload credential. When omitted, a fresh credential is fetched.
+ *   Callers reusing a credential must ensure it is marked `reusable` by the
+ *   backend.
  * @param {object} [options={}] - Optional write options.
  * @param {boolean} [options.compress=false] - Gzip-compress before uploading.
  * @returns {Promise<string>}
@@ -68,10 +76,11 @@ export async function writeToIPFS(
     );
   }
 
+  const rawPayload = /** @type {any} */ (payload);
   const byteLength =
     payload instanceof Blob
       ? payload.size
-      : payload?.byteLength ?? payload?.length ?? 0;
+      : rawPayload?.byteLength ?? rawPayload?.length ?? 0;
 
   console.log(
     `[${ts()}] ${TAG} uploading ${byteLength} bytes via ${cred.backend} as ${finalFilename}`
@@ -89,8 +98,9 @@ export async function writeToIPFS(
 
 /**
  * Write JSON data to IPFS and return its CID.
- * @param {object} json
- * @param {object} [credential=null] - Optional reusable upload credential.
+ * @param {Record<string, any>} json
+ * @param {import("./upload-with-credential.js").UploadCredential|null} [credential=null] -
+ *   Optional reusable upload credential.
  * @param {object} [options={}] - Optional write options.
  * @param {boolean} [options.compress=false] - Gzip-compress before uploading.
  * @param {string} [options.type] - "collection" or anything else; drives default filename.
@@ -108,7 +118,7 @@ export async function writeJSONToIPFS(json, credential = null, options = {}) {
       assetId || json.asset_id || Date.now()
     )}.json`;
   } else if (type === "editors") {
-    baseName = `editors_${sanitizeFileName(assetId || Date.now())}.json`;
+    baseName = `editors_${sanitizeFileName(String(assetId || Date.now()))}.json`;
   } else {
     baseName = `asset_${sanitizeFileName(
       assetId || json.asset_id || "composite"

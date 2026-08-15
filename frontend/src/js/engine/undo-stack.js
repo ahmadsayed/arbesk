@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Undo Stack
  *

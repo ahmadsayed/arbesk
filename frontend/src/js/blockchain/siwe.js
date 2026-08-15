@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Sign-In with Ethereum (EIP-4361) Message Builder
  *

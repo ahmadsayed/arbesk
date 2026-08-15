@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk AI Generation UI Controller
  *
@@ -60,8 +59,9 @@ import {
 import { selectCollection } from "../domain/collection.js";
 
 // ─── DOM References ───
-const promptInput = document.getElementById("promptInput");
-const generateBtn = document.getElementById("generateBtn");
+// The SPA shell (app.pug) always renders these elements, so non-null casts.
+const promptInput = /** @type {HTMLTextAreaElement} */ (document.getElementById("promptInput"));
+const generateBtn = /** @type {HTMLButtonElement} */ (document.getElementById("generateBtn"));
 const generateHint = document.getElementById("generateHint");
 const clearChatBtn = document.getElementById("clearChatBtn");
 
@@ -77,9 +77,9 @@ const multiviewHint = document.getElementById("multiviewHint");
 
 // Settings
 const assetNameDisplay = document.getElementById("assetNameDisplay");
-const providerSelect = document.getElementById("providerSelect");
-const tierSelect = document.getElementById("tierSelect");
-const collectionSelect = document.getElementById("collectionSelect");
+const providerSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById("providerSelect"));
+const tierSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById("tierSelect"));
+const collectionSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById("collectionSelect"));
 const providerKeyBtn = document.getElementById("providerKeyBtn");
 const providerKeyHint = document.getElementById("providerKeyHint");
 const bottomBarProvider = document.getElementById("bottomBarProvider");
@@ -211,7 +211,7 @@ const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
 /**
  * Attached reference images in canonical view order (front, left, back,
  * right) — the attach-views helpers keep views unique and the array sorted.
- * @type {Array<{base64: string, mime: string, name: string, view: string, dataUrl: string}>}
+ * @type {import("./attach-views.js").AttachedImage[]}
  */
 let attachedImages = [];
 
@@ -250,13 +250,14 @@ function renderAttachChips() {
 
     const thumb = document.createElement("img");
     thumb.className = "image-attach-thumb";
-    thumb.src = image.dataUrl;
+    // Chips are only created from fully-populated entries (attachImageFiles).
+    thumb.src = /** @type {string} */ (image.dataUrl);
     thumb.alt = `Attached source image (${VIEW_LABELS[image.view] || image.view})`;
     chip.appendChild(thumb);
 
     const name = document.createElement("span");
     name.className = "image-attach-name";
-    name.textContent = image.name;
+    name.textContent = image.name ?? null;
     chip.appendChild(name);
 
     if (multiview) {
@@ -646,19 +647,22 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
       clearScene();
     }
 
-    adoptOpenedAsset(record.assetManifestCid);
+    // The Send path only runs for records with a manifest CID (drop bubbles
+    // have their Send button disabled).
+    const recordCid = /** @type {string} */ (record.assetManifestCid);
+    adoptOpenedAsset(recordCid);
 
-    const url = new URL(window.location);
+    const url = new URL(window.location.href);
     const activeTokenId = getActiveAssetTokenId();
     if (activeTokenId) {
       url.searchParams.set("asset", activeTokenId);
       url.searchParams.delete("manifest");
     } else {
-      url.searchParams.set("manifest", record.assetManifestCid);
+      url.searchParams.set("manifest", recordCid);
     }
     window.history.pushState({}, "", url);
 
-    await loadAssetManifest(record.assetManifestCid);
+    await loadAssetManifest(recordCid);
 
     // Restore of an OLDER version: put the chain tip back (SCENE_READY
     // listeners re-asserted it from the loaded manifest during the await)
@@ -713,13 +717,14 @@ async function sendGenerationToStudio(generationId, assetMessage, { restore = fa
     assetMessage.sendButton.disabled = false;
     addChatMessage(
       "system",
-      err.message || "Failed to load the model in the Studio."
+      /** @type {Error} */ (err).message || "Failed to load the model in the Studio."
     );
   }
 }
 
 // ─── Generate Button State ───
 
+/** @param {boolean} active */
 function setGenerating(active) {
   if (!generateBtn) return;
   if (active) {
@@ -794,8 +799,9 @@ function showStopTaskDialog() {
     wrap.innerHTML = `
       <p style="margin:0 0 var(--size-2)">Stop this task? Credits already spent with Tripo 3D are <strong>not</strong> refunded — you will lose them, and the partial result is discarded.</p>
       <button id="stopTaskConfirm" class="btn btn-danger" type="button">Stop task — lose the credits</button>`;
-    wrap.querySelector("#stopTaskConfirm").addEventListener("click", () => {
-      if (typeof wrap.closeDialog === "function") wrap.closeDialog(true);
+    /** @type {HTMLElement} */ (wrap.querySelector("#stopTaskConfirm")).addEventListener("click", () => {
+      const w = /** @type {any} */ (wrap);
+      if (typeof w.closeDialog === "function") w.closeDialog(true);
     });
     showCustomDialog("Stop generation?", wrap).then((v) => resolve(v === true));
   });
@@ -830,6 +836,7 @@ async function confirmStopTask(controller, getTaskId) {
  */
 function addStoppableWorkingMessage(workingText) {
   const controller = new AbortController();
+  /** @type {string|null} */
   let taskId = null;
   const working = addWorkingMessage(workingText, {
     onCancel: () => void confirmStopTask(controller, () => taskId),
@@ -956,6 +963,12 @@ function wireSendButton(generationId, assetMessage) {
   });
 }
 
+/**
+ * @param {any} result - generation result from the backend/provider
+ * @param {{prompt: string, provider: string, task: string,
+ *          prevAssetManifestCid?: string|null, transformMatrix?: number[],
+ *          rigModel?: string}} options
+ */
 function presentGenerationResult(
   result,
   { prompt, provider, task, prevAssetManifestCid, transformMatrix, rigModel },
@@ -1003,6 +1016,7 @@ function presentGenerationResult(
  * comes from followupActionsFor; each action runs against the bubble's own
  * GLB (sourceAssetCid), so any bubble stays actionable indefinitely.
  * @param {string} generationId
+ * @param {HTMLElement|null} [bubbleEl]
  */
 function addFollowupActions(generationId, bubbleEl = null) {
   const record = getPendingGeneration(generationId);
@@ -1015,7 +1029,7 @@ function addFollowupActions(generationId, bubbleEl = null) {
     "auto-rig": { label: "Auto-rig", run: () => void onAutoRig(generationId) },
     animate: { label: "Animate…", run: () => void onAnimate(generationId) },
   };
-  const actions = followupActionsFor(record).map((id) => ({
+  const actions = followupActionsFor(/** @type {any} */ (record)).map((id) => ({
     id,
     label: ACTION_DEFS[id].label,
     onPick: ACTION_DEFS[id].run,
@@ -1103,7 +1117,7 @@ function presentOpenedAssetModel(manifest, manifestCid) {
   if (assetMessages.size > 0) return; // live session bubbles already present
   if (manifest?.metadata?.chat?.length) return; // history covers this asset
   const rootNode = (manifest?.scene?.nodes || []).find(
-    (n) => n.source?.cid && !n.child_ref
+    (/** @type {any} */ n) => n.source?.cid && !n.child_ref
   );
   if (!rootNode) return; // composition-only asset — no model to act on
   presentStagedModel({
@@ -1207,8 +1221,9 @@ function showRigModelDialog(title = "Rig Model") {
       // closeDialog was attached by showCustomDialog; calling it
       // resolves the showCustomDialog promise with val and tears down
       // the modal.
-      if (typeof wrap.closeDialog === "function") {
-        wrap.closeDialog(val);
+      const w = /** @type {any} */ (wrap);
+      if (typeof w.closeDialog === "function") {
+        w.closeDialog(val);
       } else {
         resolve(val);
       }
@@ -1395,11 +1410,12 @@ function showFaceLimitDialog() {
       </div>
       <button id="faceLimitGo" class="btn btn-primary" type="button" style="margin-top:var(--size-2)">Retopo</button>`;
     const input = /** @type {HTMLInputElement} */ (wrap.querySelector("#faceLimitInput"));
-    wrap.querySelector("#faceLimitGo").addEventListener("click", () => {
+    /** @type {HTMLElement} */ (wrap.querySelector("#faceLimitGo")).addEventListener("click", () => {
+      const w = /** @type {any} */ (wrap);
       const raw = input.value.trim();
-      if (raw === "") { wrap.closeDialog(undefined); return; } // adaptive
+      if (raw === "") { w.closeDialog(undefined); return; } // adaptive
       const n = Number(raw);
-      wrap.closeDialog(Number.isInteger(n) && n >= 500 && n <= 20000 ? n : 20000);
+      w.closeDialog(Number.isInteger(n) && n >= 500 && n <= 20000 ? n : 20000);
     });
     showCustomDialog("Retopo — polygon budget", wrap).then(resolve);
   });
@@ -1421,8 +1437,8 @@ function showTexturePromptDialog() {
       </div>
       <button id="texturePromptGo" class="btn btn-primary" type="button" style="margin-top:var(--size-2)">Retexture</button>`;
     const input = /** @type {HTMLTextAreaElement} */ (wrap.querySelector("#texturePromptInput"));
-    wrap.querySelector("#texturePromptGo").addEventListener("click", () => {
-      wrap.closeDialog(input.value.trim() || null);
+    /** @type {HTMLElement} */ (wrap.querySelector("#texturePromptGo")).addEventListener("click", () => {
+      /** @type {any} */ (wrap).closeDialog(input.value.trim() || null);
     });
     showCustomDialog("Retexture — texture prompt", wrap).then(resolve);
   });
@@ -1567,8 +1583,8 @@ async function onRetopo(generationId) {
       } else if (err.message) {
         userMsg = err.message;
       }
-    } else if (err.message) {
-      userMsg = err.message;
+    } else if (/** @type {any} */ (err).message) {
+      userMsg = /** @type {any} */ (err).message;
     }
     addChatMessage("system", userMsg);
   } finally {
@@ -1660,7 +1676,9 @@ async function onAnimate(generationId) {
   if (!record?.sourceAssetCid) return;
 
   // Combined dialog: rig model selector + preset checkboxes + in-place toggle
-  const dialogResult = await new Promise((resolve) => {
+  const dialogResult = await new Promise(
+    /** @param {(v: {presets: string[], rigModel: string|null} | undefined) => void} resolve */
+    (resolve) => {
     const wrap = document.createElement("div");
     // Single scroll region sized to fit INSIDE the dialog shell (which caps
     // at 100vh − 2×--size-10 and keeps its header/actions pinned). Without
@@ -1753,13 +1771,15 @@ async function onAnimate(generationId) {
       const presets = boxes.filter((b) => b.input.checked).map((b) => b.value);
       const rigModelVal = selector.dataset.value || "";
       const result = { presets, rigModel: rigModelVal || null };
-      if (typeof wrap.closeDialog === "function") {
-        wrap.closeDialog(result);
+      const w = /** @type {any} */ (wrap);
+      if (typeof w.closeDialog === "function") {
+        w.closeDialog(result);
       } else {
         resolve(result);
       }
     });
-  });
+  }
+  );
 
   if (!dialogResult) return;
   const { presets, rigModel } = dialogResult;
@@ -1849,8 +1869,8 @@ async function onAnimate(generationId) {
       } else if (err.message) {
         userMsg = err.message;
       }
-    } else if (err.message) {
-      userMsg = err.message;
+    } else if (/** @type {any} */ (err).message) {
+      userMsg = /** @type {any} */ (err).message;
     }
     addChatMessage("system", userMsg);
   } finally {
@@ -1904,12 +1924,13 @@ async function onGenerate() {
   // along for the manifest but is stripped from the POST body by api.js).
   const imagePayload = multiview
     ? {
-        images: attachedImages.map((img) => ({
+        // Entries always carry base64/mime/name/dataUrl (set by attachImageFiles).
+        images: /** @type {any} */ (attachedImages.map((img) => ({
           imageData: img.base64,
           imageMime: img.mime,
           imageName: img.name,
           view: img.view,
-        })),
+        }))),
       }
     : frontImage
       ? {
@@ -1940,11 +1961,11 @@ async function onGenerate() {
     // Show the reference image(s) in the chat, not just filenames — a grid
     // bubble with per-view captions for multiview, the single image as today.
     if (multiview) {
-      addImageMessage("user", frontImage.dataUrl, effectivePrompt, {
-        images: attachedImages.map((img) => ({
+      addImageMessage("user", /** @type {string} */ (frontImage.dataUrl), effectivePrompt, {
+        images: /** @type {any} */ (attachedImages.map((img) => ({
           src: img.dataUrl,
           caption: VIEW_LABELS[img.view] || img.view,
-        })),
+        }))),
       });
     } else {
       addImageMessage(
@@ -2002,7 +2023,7 @@ async function onGenerate() {
     const result = await generateAsset({
       prompt: effectivePrompt,
       nodeId,
-      txHash: null,
+      txHash: /** @type {any} */ (null),
       provider,
       prevAssetManifestCid,
       transformMatrix,
@@ -2048,8 +2069,8 @@ async function onGenerate() {
       } else if (err.message) {
         userMsg = err.message;
       }
-    } else if (err.message) {
-      userMsg = err.message;
+    } else if (/** @type {any} */ (err).message) {
+      userMsg = /** @type {any} */ (err).message;
     }
 
     addChatMessage("system", userMsg);
@@ -2080,6 +2101,7 @@ promptInput.addEventListener("input", () => {
 // Asset identity (manifest asset_id) of the currently open scene. The AI
 // chat fully resets when the open asset changes — generations, refine
 // chains, animate choices, and attached images never leak across assets.
+/** @type {string|null} */
 let openAssetIdentity = null;
 
 on(EVENTS.SCENE_READY, (event) => {

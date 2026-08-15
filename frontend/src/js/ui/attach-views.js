@@ -10,6 +10,7 @@
 
 export const VIEW_ORDER = ["front", "left", "back", "right"];
 
+/** @type {Record<string, string>} */
 export const VIEW_LABELS = {
   front: "Front",
   left: "Left",
@@ -20,9 +21,20 @@ export const VIEW_LABELS = {
 export const MAX_ATTACH_IMAGES = VIEW_ORDER.length;
 
 /**
+ * An attached reference image. `view` is managed here; the remaining fields
+ * (base64, mime, name, dataUrl, …) are owned by the caller and carried through.
+ * @typedef {Object} AttachedImage
+ * @property {string} view
+ * @property {string} [base64]
+ * @property {string} [mime]
+ * @property {string} [name]
+ * @property {string} [dataUrl]
+ */
+
+/**
  * Sort a copy of the images into canonical view order.
- * @param {Array<{view: string}>} images
- * @returns {Array<{view: string}>}
+ * @param {AttachedImage[]} images
+ * @returns {AttachedImage[]}
  */
 export function sortByCanonicalView(images) {
   return [...images].sort(
@@ -32,7 +44,7 @@ export function sortByCanonicalView(images) {
 
 /**
  * Earliest canonical view not currently in use ("front" on an empty set).
- * @param {Array<{view: string}>} images
+ * @param {AttachedImage[]} images
  * @returns {string}
  */
 export function nextAvailableView(images) {
@@ -42,24 +54,24 @@ export function nextAvailableView(images) {
 
 /**
  * Append an image, auto-assigning the earliest free canonical view.
- * @param {Array<{view: string}>} images
+ * @param {AttachedImage[]} images
  * @param {Object} entry - image fields (base64, mime, name, dataUrl); `view` is set here
- * @returns {Array<{view: string}>} new canonical-sorted array
+ * @returns {AttachedImage[]} new canonical-sorted array
  */
 export function addAttachedImage(images, entry) {
   return sortByCanonicalView([
     ...images,
-    { ...entry, view: nextAvailableView(images) },
+    /** @type {AttachedImage} */ ({ ...entry, view: nextAvailableView(images) }),
   ]);
 }
 
 /**
  * Change one chip's view. When the target view is already held by another
  * chip, the two chips SWAP views so uniqueness is preserved.
- * @param {Array<{view: string}>} images
+ * @param {AttachedImage[]} images
  * @param {number} index - index into `images`
  * @param {string} view - target view
- * @returns {Array<{view: string}>} new canonical-sorted array
+ * @returns {AttachedImage[]} new canonical-sorted array
  */
 export function setAttachedImageView(images, index, view) {
   const target = images[index];
@@ -76,9 +88,9 @@ export function setAttachedImageView(images, index, view) {
 /**
  * Remove a chip. When the removed chip held "front", the remaining chip with
  * the earliest canonical view (left → back → right) is promoted to front.
- * @param {Array<{view: string}>} images
+ * @param {AttachedImage[]} images
  * @param {number} index - index into `images`
- * @returns {Array<{view: string}>} new canonical-sorted array
+ * @returns {AttachedImage[]} new canonical-sorted array
  */
 export function removeAttachedImage(images, index) {
   const removed = images[index];

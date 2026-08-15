@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { libraryState } from "../state/library-state.js";
 import { on, EVENTS } from "../events/bus.js";
 import { escapeHtml } from "../utils/html.js";
@@ -11,6 +10,10 @@ async function refreshLibraryData() {
   return doRefresh();
 }
 
+/**
+ * @param {any[]} collections
+ * @param {string|number|null} currentCollectionTokenId
+ */
 export function buildBreadcrumb(collections, currentCollectionTokenId) {
   const path = [{ tokenId: null, name: "Home" }];
   if (currentCollectionTokenId) {
@@ -27,6 +30,11 @@ export function buildBreadcrumb(collections, currentCollectionTokenId) {
   return path;
 }
 
+/**
+ * @param {HTMLElement} container
+ * @param {any[]} collections
+ * @param {string|number|null} currentCollectionTokenId
+ */
 export function renderBreadcrumb(container, collections, currentCollectionTokenId) {
   const path = buildBreadcrumb(collections, currentCollectionTokenId);
   container.innerHTML = path
@@ -55,7 +63,9 @@ function renderToolbar() {
   gridBtn?.classList.toggle("active", state.viewMode === "grid");
   listBtn?.classList.toggle("active", state.viewMode === "list");
 
-  const createBtn = document.getElementById("libraryCreateCollectionBtn");
+  const createBtn = /** @type {HTMLButtonElement|null} */ (
+    document.getElementById("libraryCreateCollectionBtn")
+  );
   if (createBtn) {
     createBtn.disabled = state.currentCollectionTokenId !== null;
     createBtn.title =
@@ -75,7 +85,9 @@ async function handleCreateCollection() {
     return;
   }
 
-  const btn = document.getElementById("libraryCreateCollectionBtn");
+  const btn = /** @type {HTMLButtonElement|null} */ (
+    document.getElementById("libraryCreateCollectionBtn")
+  );
   if (btn) {
     btn.disabled = true;
     btn.title = "Creating…";
@@ -93,6 +105,7 @@ async function handleCreateCollection() {
   }
 }
 
+/** @param {File} file */
 async function handleUploadFile(file) {
   const state = libraryState.get();
   const collectionTokenId = state.currentCollectionTokenId;
@@ -105,7 +118,9 @@ async function handleUploadFile(file) {
     return;
   }
 
-  const btn = document.getElementById("libraryUploadBtn");
+  const btn = /** @type {HTMLButtonElement|null} */ (
+    document.getElementById("libraryUploadBtn")
+  );
   if (btn) {
     btn.disabled = true;
     btn.title = "Uploading…";
@@ -135,7 +150,7 @@ async function handleUploadFile(file) {
     showToast({
       type: "error",
       title: "Upload Failed",
-      message: err.message || "Could not upload the file.",
+      message: /** @type {Error} */ (err).message || "Could not upload the file.",
     });
   } finally {
     if (btn) {
@@ -143,7 +158,9 @@ async function handleUploadFile(file) {
       btn.title = "";
     }
     // Reset the input so the same file can be selected again
-    const input = document.getElementById("libraryUploadInput");
+    const input = /** @type {HTMLInputElement|null} */ (
+      document.getElementById("libraryUploadInput")
+    );
     if (input) input.value = "";
   }
 }
@@ -164,7 +181,8 @@ function initLibraryDropZone() {
   // Nested children each fire dragenter/dragleave — track depth so the
   // overlay only hides when the pointer truly leaves the view.
   let dragDepth = 0;
-  const isFileDrag = (e) => e.dataTransfer?.types?.includes("Files");
+  const isFileDrag = (/** @type {DragEvent} */ e) =>
+    e.dataTransfer?.types?.includes("Files");
 
   const syncLabel = () => {
     if (!label) return;
@@ -183,7 +201,7 @@ function initLibraryDropZone() {
   view.addEventListener("dragover", (e) => {
     if (!isFileDrag(e)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
+    (/** @type {DataTransfer} */ (e.dataTransfer)).dropEffect = "copy";
   });
   view.addEventListener("dragleave", (e) => {
     if (!isFileDrag(e)) return;
@@ -198,7 +216,7 @@ function initLibraryDropZone() {
     e.preventDefault();
     dragDepth = 0;
     overlay.classList.remove("active");
-    const file = e.dataTransfer.files?.[0];
+    const file = (/** @type {DataTransfer} */ (e.dataTransfer)).files?.[0];
     if (file) handleUploadFile(file);
   });
 }
@@ -210,18 +228,20 @@ export function initLibraryToolbar() {
   });
 
   document.getElementById("libraryBreadcrumb")?.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-collection-token-id]");
+    const btn = /** @type {HTMLElement|null} */ (
+      /** @type {HTMLElement} */ (e.target).closest("[data-collection-token-id]")
+    );
     if (!btn) return;
     const tokenId = btn.dataset.collectionTokenId || null;
     libraryState.set({ currentCollectionTokenId: tokenId, selectedIds: [] });
   });
 
   document.getElementById("librarySearchInput")?.addEventListener("input", (e) => {
-    libraryState.set({ searchQuery: e.target.value });
+    libraryState.set({ searchQuery: /** @type {HTMLInputElement} */ (e.target).value });
   });
 
   document.getElementById("librarySortSelect")?.addEventListener("change", (e) => {
-    libraryState.set({ sortBy: e.target.value });
+    libraryState.set({ sortBy: /** @type {HTMLSelectElement} */ (e.target).value });
   });
 
   document.getElementById("libraryGridViewBtn")?.addEventListener("click", () =>
@@ -252,7 +272,7 @@ export function initLibraryToolbar() {
   document
     .getElementById("libraryUploadInput")
     ?.addEventListener("change", (e) => {
-      const file = e.target.files?.[0];
+      const file = /** @type {HTMLInputElement} */ (e.target).files?.[0];
       if (file) handleUploadFile(file);
     });
 
@@ -262,6 +282,7 @@ export function initLibraryToolbar() {
   renderToolbar();
 }
 
+/** @param {string} text */
 function announce(text) {
   const region = document.getElementById("libraryLiveRegion");
   if (region) region.textContent = text;

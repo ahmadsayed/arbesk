@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Browser-safe gzip / gunzip helpers.
  *
@@ -26,6 +25,8 @@ function toUint8Array(data) {
 /**
  * Return the input as a Uint8Array, preserving the original bytes.
  * Unlike toUint8Array, this does NOT re-encode strings.
+ * @param {Uint8Array|ArrayBuffer} data
+ * @returns {Uint8Array}
  */
 function toBytes(data) {
   if (data instanceof Uint8Array) return data;

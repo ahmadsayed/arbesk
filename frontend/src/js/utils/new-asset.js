@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Pure helpers for the Studio "New Asset" action.
  */
@@ -9,8 +8,8 @@
  * collection the user is currently working in instead of falling back to the
  * wallet's default collection.
  *
- * @param {Object} currentState
- * @returns {Object}
+ * @param {Record<string, any>|null|undefined} currentState
+ * @returns {Record<string, any>}
  */
 export function getStateForNewAsset(currentState) {
   return {

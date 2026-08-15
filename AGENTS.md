@@ -98,6 +98,16 @@ When a task is too large for one context, delegate to subagents — but plan bef
 3. **Self-contained prompts** — subagents start with zero context. Give each: exact scope, concrete file paths, constraints ("do NOT touch X"), and the expected return format (findings, files changed, verification run).
 4. **Integrate** — when agents return: review each summary, check for conflicting edits, run the full relevant test suite, and only then report completion.
 
+### Subagent model pool (Kimi Code ≥ 0.36.0)
+
+`~/.kimi-code/config.toml` carries a `[secondary_model]` pool; `Agent`/`AgentSwarm` spawns accept a `model` pick from it. Main model is `kimi-code/k3`; pool default is also `kimi-code/k3`. Pick per task:
+
+- `kimi-code/k3` — hard problems: deep debugging, multi-file architecture, contract/IPFS security work.
+- `kimi-code/kimi-for-coding` — routine feature development.
+- `kimi-code/kimi-for-coding-highspeed` — cheap bulk work: small edits, summaries, explanations.
+
+Experimental and inert until enabled with `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1` (or the master `KIMI_CODE_EXPERIMENTAL_FLAG=1`) at launch, or toggled in `/experiments`. Adjust the pool with `/secondary-model` or by editing `config.toml` — see the Kimi Code config docs (`[secondary_model]`).
+
 ## 7. Key Data Concepts
 
 Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the asset · fractal nesting ("dollhouse") · temporal isolation · parametric edits are first-class versions.

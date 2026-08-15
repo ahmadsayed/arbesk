@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Dialog Utility
  *
@@ -16,8 +15,12 @@ import { escapeHtml } from "../utils/html.js";
 
 // ── Shared infrastructure ────────────────────────────────────────────────────
 
+/**
+ * @param {HTMLElement} dialog
+ * @param {Element|null} [initialFocusEl]
+ */
 function _trapFocus(dialog, initialFocusEl) {
-  const trap = window.focusTrap.createFocusTrap(dialog, {
+  const trap = /** @type {any} */ (window).focusTrap.createFocusTrap(dialog, {
     initialFocus: initialFocusEl,
     escapeDeactivates: false, // Escape is handled by _buildDialog's global keydown
     allowOutsideClick: true, // lets MetaMask overlays receive clicks without breaking the trap
@@ -31,6 +34,8 @@ function _trapFocus(dialog, initialFocusEl) {
  * resolved guard, closeDialog, backdrop-click-to-cancel, and global Escape.
  * Caller appends body/actions to `dialog`, calls _trapFocus, then passes the
  * returned removeTrap to setRemoveTrap.
+ * @param {string} title
+ * @param {(value: any) => void} resolve
  */
 function _buildDialog(title, resolve) {
   const dialogId = "dialog-title-" + Date.now();
@@ -53,6 +58,7 @@ function _buildDialog(title, resolve) {
   let resolved = false;
   let removeTrap = () => {};
 
+  /** @param {KeyboardEvent} e */
   function onGlobalKey(e) {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -60,6 +66,7 @@ function _buildDialog(title, resolve) {
     }
   }
 
+  /** @param {any} value */
   function closeDialog(value) {
     if (resolved) return;
     resolved = true;
@@ -77,6 +84,7 @@ function _buildDialog(title, resolve) {
   return {
     dialog,
     closeDialog,
+    /** @param {() => void} fn */
     setRemoveTrap(fn) {
       removeTrap = fn;
     },
@@ -120,9 +128,9 @@ export function showDialog(title, body, defaultValue = "") {
       dialog.appendChild(bodyDiv);
       dialog.appendChild(actionsDiv);
 
-      const input = dialog.querySelector(".dialog-input");
-      const cancelBtn = dialog.querySelector(".dialog-cancel-btn");
-      const confirmBtn = dialog.querySelector(".dialog-confirm-btn");
+      const input = /** @type {HTMLInputElement} */ (dialog.querySelector(".dialog-input"));
+      const cancelBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-cancel-btn"));
+      const confirmBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-confirm-btn"));
 
       function confirm() {
         closeDialog(input.value.trim() || null);
@@ -197,7 +205,7 @@ export function showConfirmDialog(title, body, buttons = []) {
 
       dialog.querySelectorAll(".dialog-action-btn").forEach((btn) => {
         btn.addEventListener("click", () =>
-          closeDialog(btn.dataset.value || null)
+          closeDialog(/** @type {HTMLElement} */ (btn).dataset.value || null)
         );
       });
 
@@ -223,13 +231,13 @@ export function showConfirmDialog(title, body, buttons = []) {
  */
 export function showForkOrLiveRefDialog(assetID, { allowLiveRef = true } = {}) {
   if (!allowLiveRef) {
-    return showConfirmDialog(
+    return /** @type {Promise<"fork"|"live-ref"|null>} */ (showConfirmDialog(
       "Link Asset",
       `"${assetID}" is the asset currently open, so it can only be added as a frozen copy - a live reference to itself would loop forever.`,
       [{ text: "Fork (copy)", value: "fork", className: "btn btn-primary" }]
-    );
+    ));
   }
-  return showConfirmDialog(
+  return /** @type {Promise<"fork"|"live-ref"|null>} */ (showConfirmDialog(
     "Link Asset",
     `How would you like to include "${assetID}" in your scene?`,
     [
@@ -240,7 +248,7 @@ export function showForkOrLiveRefDialog(assetID, { allowLiveRef = true } = {}) {
         className: "btn btn-primary",
       },
     ]
-  );
+  ));
 }
 
 /**
@@ -270,7 +278,7 @@ export function showInfoDialog(title, bodyHtml) {
       dialog.appendChild(bodyDiv);
       dialog.appendChild(actionsDiv);
 
-      const closeBtn = dialog.querySelector(".dialog-close-btn");
+      const closeBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-close-btn"));
       closeBtn.addEventListener("click", () => closeDialog(null));
 
       setRemoveTrap(_trapFocus(dialog, closeBtn));
@@ -286,7 +294,7 @@ export function showInfoDialog(title, bodyHtml) {
  *
  * @param {string} title
  * @param {string} body - instructional text (plain text, escaped)
- * @param {Array<{value: string, label: string, checked?: boolean}>} options
+ * @param {Array<{value: string, label: string, checked?: boolean, countsTowardMax?: boolean}>} options
  * @param {{max?: number}} [opts] - max selectable; extra checks are refused
  * @returns {Promise<string[]|null>} selected values, or null if cancelled
  */
@@ -338,10 +346,10 @@ export function showCheckboxDialog(title, body, options, { max = Infinity } = {}
       dialog.appendChild(bodyDiv);
       dialog.appendChild(actionsDiv);
 
-      actionsDiv
-        .querySelector('.dialog-action-btn[data-value="cancel"]')
+      /** @type {HTMLElement} */ (actionsDiv
+        .querySelector('.dialog-action-btn[data-value="cancel"]'))
         .addEventListener("click", () => closeDialog(null));
-      const confirmBtn = actionsDiv.querySelector(".dialog-confirm-btn");
+      const confirmBtn = /** @type {HTMLElement} */ (actionsDiv.querySelector(".dialog-confirm-btn"));
       confirmBtn.addEventListener("click", () => {
         const selected = boxes.filter((b) => b.input.checked).map((b) => b.value);
         closeDialog(selected);
@@ -377,7 +385,7 @@ export function showCustomDialog(title, bodyEl) {
       );
 
       // Let body-internal action buttons close the dialog with a result.
-      bodyEl.closeDialog = closeDialog;
+      /** @type {any} */ (bodyEl).closeDialog = closeDialog;
 
       const bodyDiv = document.createElement("div");
       bodyDiv.className = "dialog-body collaborator-dialog-body";
@@ -390,7 +398,7 @@ export function showCustomDialog(title, bodyEl) {
       dialog.appendChild(bodyDiv);
       dialog.appendChild(actionsDiv);
 
-      const closeBtn = dialog.querySelector(".dialog-close-btn");
+      const closeBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-close-btn"));
       closeBtn.addEventListener("click", () => closeDialog(null));
 
       setRemoveTrap(_trapFocus(dialog, closeBtn));
@@ -440,9 +448,9 @@ export function showBurnCollectionDialog(collectionName) {
       dialog.appendChild(bodyDiv);
       dialog.appendChild(actionsDiv);
 
-      const input = dialog.querySelector(".dialog-input");
-      const cancelBtn = dialog.querySelector(".dialog-cancel-btn");
-      const burnBtn = dialog.querySelector(".dialog-burn-btn");
+      const input = /** @type {HTMLInputElement} */ (dialog.querySelector(".dialog-input"));
+      const cancelBtn = /** @type {HTMLElement} */ (dialog.querySelector(".dialog-cancel-btn"));
+      const burnBtn = /** @type {HTMLButtonElement} */ (dialog.querySelector(".dialog-burn-btn"));
 
       input.addEventListener("input", () => {
         burnBtn.disabled =

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Remote IPFS Reader (Gateway-Only)
  *
@@ -27,8 +26,12 @@ const downloadLimiter = createConcurrencyLimiter(DOWNLOAD_CONCURRENCY);
 const _inflightRawDownloads = new Map();
 
 const FALLBACK_GATEWAY = "http://127.0.0.1:8080/ipfs/";
+/** @type {Promise<string> | null} */
 let _gatewayPromise = null;
 
+/**
+ * @returns {Promise<string>}
+ */
 async function gatewayBase() {
   if (!_gatewayPromise) {
     _gatewayPromise = getConfig()
@@ -92,6 +95,11 @@ async function fetchIpfsRawBytes(cid, onProgress) {
   return downloadPromise;
 }
 
+/**
+ * @param {string} cid
+ * @param {(fraction: number) => void} [onProgress]
+ * @returns {Promise<Uint8Array>}
+ */
 async function fetchIpfsBytes(cid, onProgress) {
   const bytes = await fetchIpfsRawBytes(cid, onProgress);
   if (isGzipped(bytes)) {
@@ -104,11 +112,17 @@ async function fetchIpfsBytes(cid, onProgress) {
   return bytes;
 }
 
+/**
+ * @param {string} cid
+ * @param {"json"|"blob"|"text"} kind
+ * @param {(fraction: number) => void} [onProgress]
+ * @returns {Promise<any>}
+ */
 async function fetchIpfsPayload(cid, kind, onProgress) {
   const bytes = await fetchIpfsBytes(cid, onProgress);
 
   if (kind === "blob") {
-    return new Blob([bytes]);
+    return new Blob([/** @type {BlobPart} */ (bytes)]);
   }
 
   const text = new TextDecoder().decode(bytes);
@@ -118,21 +132,41 @@ async function fetchIpfsPayload(cid, kind, onProgress) {
   return text;
 }
 
+/**
+ * @param {string} cid
+ * @returns {Promise<any>}
+ */
 async function getFromRemoteIPFS(cid) {
   const json = await fetchIpfsPayload(cid, "json");
   console.log(`[IPFS] got ${cid} | keys=${Object.keys(json).join(",")}`);
   return json;
 }
 
+/**
+ * @param {string} cid
+ * @returns {Promise<string>}
+ */
 async function getBase64FromRemoteIPFS(cid) {
   const bytes = await fetchIpfsBytes(cid);
-  return arrayBufferToBase64(bytes.buffer);
+  return arrayBufferToBase64(/** @type {ArrayBuffer} */ (bytes.buffer));
 }
 
+/**
+ * @param {string} cid
+ * @param {(fraction: number) => void} [onProgress]
+ * @returns {Promise<Blob>}
+ */
 async function getBlobFromRemoteIPFS(cid, onProgress) {
   return await fetchIpfsPayload(cid, "blob", onProgress);
 }
 
+/**
+ * @param {string} cid
+ * @param {(fraction: number) => void} [onProgress]
+ * @returns {Promise<any>} ArrayBuffer in practice; typed as any because
+ *   out-of-scope callers (services/api.js toBounds) pass the result where a
+ *   Uint8Array is declared.
+ */
 async function getArrayBufferFromRemoteIPFS(cid, onProgress) {
   const bytes = await fetchIpfsBytes(cid, onProgress);
   return bytes.buffer.slice(
@@ -141,6 +175,10 @@ async function getArrayBufferFromRemoteIPFS(cid, onProgress) {
   );
 }
 
+/**
+ * @param {string} cid
+ * @returns {Promise<ArrayBufferLike>}
+ */
 async function getRawArrayBufferFromRemoteIPFS(cid) {
   const bytes = await fetchIpfsRawBytes(cid);
   return bytes.buffer.slice(
@@ -152,8 +190,13 @@ async function getRawArrayBufferFromRemoteIPFS(cid) {
 /**
  * Walk a manifest chain backward via prev_asset_manifest_cid links.
  * Returns an array of { cid, version, name } summaries.
+ *
+ * @param {string} cid
+ * @param {number} [maxDepth=50]
+ * @returns {Promise<Array<{cid: string, version: any, name: string|null, nodeCount: number}>>}
  */
 async function getManifestChain(cid, maxDepth = 50) {
+  /** @type {Array<{cid: string, version: any, name: string|null, nodeCount: number}>} */
   const chain = [];
   let current = cid;
   while (current && chain.length < maxDepth) {
@@ -176,6 +219,9 @@ async function getManifestChain(cid, maxDepth = 50) {
 /**
  * Lightweight reachability probe for a CID on the configured gateway.
  * Returns true only if the gateway responds with a 2xx status.
+ *
+ * @param {string|null|undefined} cid
+ * @returns {Promise<boolean>}
  */
 async function isIpfsCidReachable(cid) {
   if (!cid) return false;

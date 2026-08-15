@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO: add JSDoc typedefs and drop this header
 /**
  * 3MF composer.
  *
@@ -16,9 +15,23 @@ const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const ROOT_RELS_PATH = "_rels/.rels";
 
 /**
+ * Composite 3MF JSON (arbesk_format: composite-3mf): small XML parts carried
+ * verbatim, binary parts referenced by IPFS CID.
+ *
+ * @typedef {object} Composite3mf
+ * @property {string} arbesk_format
+ * @property {string} [modelPath]
+ * @property {string} contentTypes
+ * @property {string} rootRels
+ * @property {string|null} [modelRels]
+ * @property {string} model
+ * @property {Object<string, {cid: string}>} [parts]
+ */
+
+/**
  * Compose a composite 3MF JSON back into raw .3mf ZIP bytes.
  *
- * @param {object} composite - composite 3MF JSON (arbesk_format: composite-3mf)
+ * @param {Composite3mf} composite - composite 3MF JSON (arbesk_format: composite-3mf)
  * @returns {Promise<Uint8Array>}
  */
 export async function compose3mf(composite) {
@@ -26,7 +39,7 @@ export async function compose3mf(composite) {
     throw new Error("[3MF] compose3mf: not a composite 3MF document");
   }
   for (const field of ["contentTypes", "rootRels", "model"]) {
-    if (typeof composite[field] !== "string") {
+    if (typeof (/** @type {Record<string, unknown>} */ (composite))[field] !== "string") {
       throw new Error(`[3MF] compose3mf: composite missing ${field}`);
     }
   }

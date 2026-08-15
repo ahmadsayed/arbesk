@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Outliner - Scene Hierarchy Tree
  *
@@ -18,11 +17,17 @@ import {
 } from "../domain/asset.js";
 import { getManifestNodes } from "../engine/transforms.js";
 
+/** @type {Element|null} */
 let outlinerTree = null;
+/** @type {Element|null} */
 let outlinerFooter = null;
+/** @type {string|null} */
 let selectedNodeId = null;
+/** @type {Set<string>} */
 const selectedNodeIds = new Set();
+/** @type {Set<string>} */
 const collapsedNodeIds = new Set();
+/** @type {string|null} */
 let renderedManifestCid = null;
 
 function getOutlinerTree() {
@@ -60,8 +65,9 @@ function initOutliner() {
   // Drag-and-drop from library
   outlinerTree.addEventListener("dragover", (e) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    showDropTarget(e);
+    const de = /** @type {DragEvent} */ (e);
+    if (de.dataTransfer) de.dataTransfer.dropEffect = "copy";
+    showDropTarget(de);
   });
 
   outlinerTree.addEventListener("dragleave", hideDropTarget);
@@ -94,11 +100,15 @@ function getNodes() {
  * Child-asset nodes (nodes with child_ref) are grouped under the nearest
  * preceding regular node so the outline reflects the parent/child relationship
  * shown in the viewport.
+ * @param {any[]} nodes
+ * @returns {any[]}
  */
 function buildOutlineTree(nodes) {
   if (!Array.isArray(nodes)) return [];
 
+  /** @type {any[]} */
   const tree = [];
+  /** @type {any} */
   let currentParent = null;
 
   nodes.forEach((node) => {
@@ -122,7 +132,7 @@ function buildOutlineTree(nodes) {
 
 async function refreshOutliner() {
   const cid = getActiveAssetManifestCid();
-  const cached = getCurrentManifest();
+  const cached = /** @type {any} */ (getCurrentManifest());
 
   let manifest = null;
   if (cached?._manifestCid === cid) {
@@ -157,6 +167,11 @@ function renderEmpty() {
   if (outlinerFooter) outlinerFooter.textContent = "No items";
 }
 
+/**
+ * @param {any[]} nodes
+ * @param {number} [depth]
+ * @returns {{totalNodes: number, childCount: number}}
+ */
 function renderTree(nodes, depth = 0) {
   const tree = getOutlinerTree();
   if (!tree) return { totalNodes: 0, childCount: 0 };
@@ -201,6 +216,7 @@ function renderTree(nodes, depth = 0) {
   return { totalNodes, childCount };
 }
 
+/** @param {any} node */
 function getNodeDisplayName(node) {
   // If node has a real name (not just a copy of its node_id), use it
   if (node.name && node.name !== node.node_id) {
@@ -219,11 +235,16 @@ function getNodeDisplayName(node) {
   return node.node_id || "Untitled";
 }
 
+/**
+ * @param {any} node
+ * @param {boolean} isChildAsset
+ * @param {number} [depth]
+ */
 function createNodeElement(node, isChildAsset, depth = 0) {
   const el = document.createElement("div");
   el.className = "outliner-node";
   el.dataset.nodeId = node.node_id;
-  el.dataset.depth = depth;
+  el.dataset.depth = String(depth);
   el.draggable = true;
 
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
@@ -257,11 +278,11 @@ function createNodeElement(node, isChildAsset, depth = 0) {
         collapsedNodeIds.add(node.node_id);
       }
       renderTree(buildOutlineTree(getNodes()));
-      getOutlinerTree()
-        ?.querySelector(
+      /** @type {HTMLElement|null} */ (
+        getOutlinerTree()?.querySelector(
           `[data-node-id="${CSS.escape(node.node_id)}"] .outliner-node-toggle`
         )
-        ?.focus();
+      )?.focus();
     });
   } else {
     toggle = document.createElement("span");
@@ -311,6 +332,7 @@ function createNodeElement(node, isChildAsset, depth = 0) {
 
   // Drag start
   el.addEventListener("dragstart", (e) => {
+    if (!e.dataTransfer) return;
     e.dataTransfer.setData("text/plain", node.node_id);
     e.dataTransfer.effectAllowed = "move";
   });
@@ -322,6 +344,10 @@ function getOutlinerFooter() {
   return outlinerFooter || document.querySelector(".outliner-footer");
 }
 
+/**
+ * @param {number} totalNodes
+ * @param {number} childCount
+ */
 function updateFooter(totalNodes, childCount) {
   const footer = getOutlinerFooter();
   if (!footer) return;
@@ -333,6 +359,7 @@ function updateFooter(totalNodes, childCount) {
 
 // ─── Selection ────────────────────────────────────────────────────────
 
+/** @param {string} nodeId */
 function _rowFor(nodeId) {
   return getOutlinerTree()?.querySelector(
     `[data-node-id="${CSS.escape(nodeId)}"]`
@@ -350,6 +377,10 @@ function _syncRowSelectionClasses() {
   }
 }
 
+/**
+ * @param {string} nodeId
+ * @param {boolean} [additive]
+ */
 function selectNode(nodeId, additive = false) {
   if (additive) {
     if (selectedNodeIds.has(nodeId)) {
@@ -381,6 +412,7 @@ function clearSelection() {
  * Mirror an engine-driven selection change (viewport pick, Ctrl+A, Escape)
  * without re-emitting — the engine is the source of truth.
  */
+/** @param {any} e */
 function syncFromEngine(e) {
   const ids = Array.isArray(e?.nodeIds) ? e.nodeIds : [];
   selectedNodeIds.clear();
@@ -391,6 +423,7 @@ function syncFromEngine(e) {
 
 // ─── Actions ──────────────────────────────────────────────────────────
 
+/** @param {any} node */
 function diveIntoChild(node) {
   if (!node.child_ref) return;
   emit(EVENTS.NESTING_DIVE_REQUESTED, {
@@ -411,8 +444,11 @@ async function onRemoveSelected() {
 
 // ─── Drag & Drop from Library ────────────────────────────────────────
 
+/** @param {DragEvent} e */
 function showDropTarget(e) {
-  const target = e.target.closest(".outliner-node");
+  const target = /** @type {HTMLElement} */ (e.target).closest(
+    ".outliner-node"
+  );
   hideDropTarget();
   if (target) {
     target.classList.add("drag-over");
@@ -425,11 +461,14 @@ function hideDropTarget() {
   });
 }
 
+/** @param {Event} e */
 function onDropFromLibrary(e) {
   e.preventDefault();
   hideDropTarget();
 
-  const raw = e.dataTransfer.getData("application/x-arbesk-linked-asset");
+  const raw = /** @type {DragEvent} */ (e).dataTransfer?.getData(
+    "application/x-arbesk-linked-asset"
+  );
   if (!raw) return;
 
   try {

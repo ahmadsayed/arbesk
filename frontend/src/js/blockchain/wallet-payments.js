@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet Payments
  *
@@ -63,7 +62,7 @@ function isFreeTierContract() {
  * @param {string} nodeId - hex or string node identifier
  * @param {string} prompt - generation prompt
  * @param {number} tier - 0=Basic, 1=Standard, 2=Premium, 3=Pro
- * @returns {string|null} txHash on success, null on failure
+ * @returns {Promise<string|null>} txHash on success, null on failure
  */
 async function payForGenerationWithUSDC(nodeId, prompt, tier) {
   return payWithUSDC(nodeId, prompt, tier);
@@ -80,7 +79,7 @@ async function payForGenerationWithUSDC(nodeId, prompt, tier) {
  * @param {string} nodeId - hex-string or human-readable node identifier
  *   (padded to bytes32 on-chain).
  * @param {string} prompt - generation prompt stored in the event.
- * @returns {string|null} transaction hash on success, null on failure.
+ * @returns {Promise<string|null>} transaction hash on success, null on failure.
  */
 async function recordGeneration(nodeId, prompt) {
   const w3 = _getWeb3();
@@ -133,11 +132,11 @@ async function recordGeneration(nodeId, prompt) {
     return receipt.transactionHash;
   } catch (error) {
     console.error("recordGeneration failed:", error);
-    const msg = error.message || "";
+    const msg = /** @type {any} */ (error).message || "";
     if (
       msg.includes("User denied") ||
       msg.includes("rejected") ||
-      error.code === 4001
+      /** @type {any} */ (error).code === 4001
     ) {
       // silent
     } else if (msg.includes("DailyGenerationLimitReached")) {
@@ -161,6 +160,12 @@ async function recordGeneration(nodeId, prompt) {
 
 // ─── Simple USDC Payment ─────────────────────────────────────────────────────
 
+/**
+ * @param {string} nodeId
+ * @param {string} prompt
+ * @param {number} tier
+ * @returns {Promise<string|null>}
+ */
 async function payWithUSDC(nodeId, prompt, tier) {
   const w3 = _getWeb3();
   if (!w3 || !walletState.get().walletAddress) {
@@ -370,11 +375,11 @@ async function payWithUSDC(nodeId, prompt, tier) {
     return receipt.transactionHash;
   } catch (error) {
     console.error("payWithUSDC failed:", error);
-    const msg = error.message || "";
+    const msg = /** @type {any} */ (error).message || "";
     if (
       msg.includes("User denied") ||
       msg.includes("rejected") ||
-      error.code === 4001
+      /** @type {any} */ (error).code === 4001
     ) {
       // silent
     } else if (

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Block Explorer Utilities
  *

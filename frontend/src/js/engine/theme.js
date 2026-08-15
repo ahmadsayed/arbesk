@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Theme Helpers
  *
@@ -12,6 +11,8 @@ import { emit, EVENTS } from "../events/bus.js";
 /**
  * Read a CSS custom property from :root, trimmed of whitespace.
  * Returns the empty string if the variable is undefined.
+ * @param {string} name
+ * @returns {string}
  */
 export function getCssVar(name) {
   if (typeof document === "undefined") return "";
@@ -23,6 +24,8 @@ export function getCssVar(name) {
 /**
  * Parse a 6-digit hex string ("#RRGGBB" or "RRGGBB") to a BABYLON.Color3.
  * Returns the engine fallback if Babylon is unavailable.
+ * @param {string} hex
+ * @returns {BABYLON.Color3|null}
  */
 export function hexToColor3(hex) {
   const h = normalizeHex(hex);
@@ -35,6 +38,9 @@ export function hexToColor3(hex) {
 
 /**
  * Parse a 6-digit hex string to a BABYLON.Color4 with the given alpha.
+ * @param {string} hex
+ * @param {number} [alpha]
+ * @returns {BABYLON.Color4|null}
  */
 export function hexToColor4(hex, alpha = 1) {
   const h = normalizeHex(hex);
@@ -47,6 +53,8 @@ export function hexToColor4(hex, alpha = 1) {
 
 /**
  * Strip a leading "#" and ensure 6 hex digits. Returns null if invalid.
+ * @param {string} hex
+ * @returns {string|null}
  */
 function normalizeHex(hex) {
   if (typeof hex !== "string") return null;
@@ -85,12 +93,13 @@ function applySystemTheme() {
   applyTheme(isDark ? "dark" : "light");
 }
 
+/** @param {'light'|'dark'} theme */
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   emit(EVENTS.THEME_CHANGED, { theme });
 }
 
-/** Persist and apply a specific theme ("light" or "dark"). */
+/** Persist and apply a specific theme ("light" or "dark"). @param {'light'|'dark'} theme */
 export function setTheme(theme) {
   localStorage.setItem(THEME_STORAGE_KEY, theme);
   applyTheme(theme);

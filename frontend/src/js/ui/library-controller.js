@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Library Controller
  *
@@ -26,6 +25,7 @@ function ts() {
   return new Date().toLocaleTimeString();
 }
 
+/** @param {boolean} connected */
 export function applyWalletGate(connected) {
   const gate = document.getElementById("libraryGate");
   const main = document.getElementById("libraryMain");
@@ -39,6 +39,7 @@ export function applyWalletGate(connected) {
   if (uploadBtn) uploadBtn.hidden = !connected;
 }
 
+/** @param {any} err */
 function isNonexistentTokenError(err) {
   const msg = (err?.message || err?.data || "").toString().toLowerCase();
   return (
@@ -49,6 +50,7 @@ function isNonexistentTokenError(err) {
   );
 }
 
+/** @param {string} tokenId */
 async function fetchCollectionMetadata(tokenId) {
   const start = performance.now();
   const c = getActiveContract();
@@ -89,6 +91,10 @@ async function fetchCollectionMetadata(tokenId) {
   }
 }
 
+/**
+ * @param {string} tokenId
+ * @param {string} address
+ */
 async function isTokenOwnedBy(tokenId, address) {
   const c = getActiveContract();
   if (!c || !address) return false;
@@ -100,6 +106,11 @@ async function isTokenOwnedBy(tokenId, address) {
   }
 }
 
+/**
+ * @param {string[]} tokenIds
+ * @param {string} role
+ * @param {string} walletAddr
+ */
 async function buildCollectionEntries(tokenIds, role, walletAddr) {
   const entries = await Promise.all(
     tokenIds.map((tokenId) => fetchCollectionMetadata(tokenId))
@@ -107,8 +118,7 @@ async function buildCollectionEntries(tokenIds, role, walletAddr) {
   const defaultIdHex = deriveDefaultCollectionId(walletAddr);
   // tokenIds come from the contract as decimal strings; soliditySha3 returns hex.
   const defaultId = defaultIdHex ? BigInt(defaultIdHex).toString() : null;
-  return entries
-    .filter(Boolean)
+  return /** @type {any[]} */ (entries.filter(Boolean))
     .map((meta) => {
       const isDefault = defaultId && String(meta.tokenId) === defaultId;
       return {
@@ -143,7 +153,7 @@ export async function loadCurrentAssets() {
       (c) => String(c.tokenId) === String(tokenId)
     );
     const role = collection?.role || "owner";
-    const entries = (await expandTokenToAssets(tokenId)).filter(
+    const entries = /** @type {any[]} */ (await expandTokenToAssets(tokenId)).filter(
       (e) => e.type !== "inaccessible"
     );
 

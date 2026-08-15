@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet Core
  *
@@ -58,16 +57,21 @@ export const NETWORKS = {
 
 // ─── Module-level state ───
 
-/** @type {string|null} 'injected' | 'walletconnect' | 'cdp' | null */
+/** @type {'injected'|'walletconnect'|'cdp'|null} 'injected' | 'walletconnect' | 'cdp' | null */
 let activeConnectionSource = null;
 
 /** @type {string|null} rdns of the injected wallet (e.g., 'io.metamask') */
 let _activeWalletRdns = null;
 
+/** @type {any} */
 let web3Provider = null;
+/** @type {any} */
 let web3 = null;
+/** @type {any} */
 let contract = null;
+/** @type {string|null} */
 let contractAddress = null;
+/** @type {any} */
 let lowBalanceToastId = null;
 
 // ─── Constants ───
@@ -143,8 +147,8 @@ async function _initContract(knownChainId = null) {
       );
     } else {
       log(
-        `[CONTRACT] Using ${network.name} config - ` +
-          `contract=${addr} usdc=${network.usdcToken}`
+        `[CONTRACT] Using ${/** @type {import('./network-config.js').NetworkConfig} */ (network).name} config - ` +
+          `contract=${addr} usdc=${/** @type {import('./network-config.js').NetworkConfig} */ (network).usdcToken}`
       );
     }
     if (!addr) return;
@@ -166,14 +170,14 @@ async function _initContract(knownChainId = null) {
       return;
     }
 
-    const abiData = await abiPromise;
+    const abiData = /** @type {any} */ (await abiPromise);
     if (!abiData?.abi) return;
 
     contractAddress = addr;
     contract = new web3.eth.Contract(abiData.abi, contractAddress);
     walletState.set({ contract, contractAddress });
   } catch (e) {
-    warn("Contract initialization failed:", e.message);
+    warn("Contract initialization failed:", /** @type {Error} */ (e).message);
   }
 }
 
@@ -241,7 +245,7 @@ async function autoConnectWallet() {
       // Try CDP silent restore
       try {
         const _t0 = performance.now();
-        const _mark = (label) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
+        const _mark = (/** @type {string} */ label) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
         const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.js");
         _mark("sdkModuleImport");
         // warmupCdpClient was kicked off at page load (app-init.js) — this
@@ -267,7 +271,7 @@ async function autoConnectWallet() {
         // through to the injected-wallet probe below.
         return;
       } catch (cdpErr) {
-        warn("[WALLET] CDP auto-connect failed:", cdpErr.message);
+        warn("[WALLET] CDP auto-connect failed:", /** @type {Error} */ (cdpErr).message);
         localStorage.removeItem(LAST_WALLET_KEY);
         return;
       }
@@ -337,6 +341,9 @@ async function autoConnectWallet() {
 
 /**
  * Shared setup after provider is established (accounts, chain, contract, listeners).
+ * @param {string} address
+ * @param {string|null} [eoaAddress]
+ * @param {string|null} [email]
  */
 async function _finishWalletSetup(address, eoaAddress = null, email = null) {
   walletState.set({
@@ -350,7 +357,7 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
   walletState.set({ chainId });
   log("Connected wallet:", address, "chainId:", chainId);
   const _tSetup = performance.now();
-  const _markSetup = (label) => console.log(`[LOGIN-TIMING] setup:${label}: ${Math.round(performance.now() - _tSetup)}ms`);
+  const _markSetup = (/** @type {string} */ label) => console.log(`[LOGIN-TIMING] setup:${label}: ${Math.round(performance.now() - _tSetup)}ms`);
 
   // Prompt network switch if not on a supported chain.
   // CDP smart wallets are pinned to Base Sepolia, so this only applies to EOA/WC.
@@ -361,7 +368,7 @@ async function _finishWalletSetup(address, eoaAddress = null, email = null) {
     let preferred =
       localStorage.getItem("arbesk-preferred-network") || "baseSepolia";
     // Guard against stale/unknown network keys stored in localStorage
-    if (!NETWORKS[preferred]) {
+    if (!NETWORKS[/** @type {keyof typeof NETWORKS} */ (preferred)]) {
       warn(
         `[WALLET] Ignoring unknown preferred network "${preferred}". ` +
           `Falling back to baseSepolia.`
@@ -434,7 +441,7 @@ function _attachProviderListeners() {
 
   if (activeConnectionSource === "walletconnect") {
     // WalletConnect uses its own event emitter
-    onWalletConnectEvent("accountsChanged", (accounts) => {
+    onWalletConnectEvent("accountsChanged", (/** @type {string[]} */ accounts) => {
       if (!accounts || accounts.length === 0) {
         disconnectWallet();
       } else {
@@ -456,7 +463,7 @@ function _attachProviderListeners() {
     });
   } else {
     // Injected wallet (EIP-1193)
-    web3Provider.on("accountsChanged", (accounts) => {
+    web3Provider.on("accountsChanged", (/** @type {string[]} */ accounts) => {
       if (accounts.length === 0) {
         disconnectWallet();
       } else {
@@ -495,7 +502,7 @@ async function authenticateUser() {
       session,
     });
   } catch (err) {
-    warn("[AUTH] Session creation failed or rejected:", err.message);
+    warn("[AUTH] Session creation failed or rejected:", /** @type {Error} */ (err).message);
     emit(EVENTS.USER_AUTH_REQUIRED, {
       address: walletState.get().walletAddress,
     });
@@ -509,7 +516,7 @@ async function authenticateUser() {
  */
 async function connectWallet() {
   try {
-    const result = await showWalletModal();
+    const result = /** @type {any} */ (await showWalletModal());
     if (!result) {
       log("User cancelled wallet selection");
       return;
@@ -566,14 +573,14 @@ async function connectWallet() {
   } catch (err) {
     // Closing the picker is a normal action, not a failure — keep it out of
     // the error log so real connection failures stand out.
-    if (err.message?.includes("User cancelled")) {
+    if (/** @type {Error} */ (err).message?.includes("User cancelled")) {
       log("User cancelled wallet selection");
     } else {
       error("Wallet connection failed:", err);
       showToast({
         type: "error",
         title: "Sign In Failed",
-        message: err.message || "Could not sign in.",
+        message: /** @type {Error} */ (err).message || "Could not sign in.",
       });
     }
   }
@@ -604,7 +611,7 @@ async function disconnectWallet() {
         const { disconnectCdpWallet } = await import("./wallet-cdp.js");
         await disconnectCdpWallet();
       } catch (cdpErr) {
-        warn("[WALLET] CDP disconnect failed (non-fatal):", cdpErr.message);
+        warn("[WALLET] CDP disconnect failed (non-fatal):", /** @type {Error} */ (cdpErr).message);
       }
     } else if (web3Provider.removeListener) {
       web3Provider.removeListener("accountsChanged", () => {});

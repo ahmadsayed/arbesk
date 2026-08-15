@@ -14,6 +14,7 @@ declare namespace BABYLON {
   type Engine = any;
   type Scene = any;
   type TransformNode = any;
+  type Matrix = any;
   type Mesh = any;
   type AbstractMesh = any;
   type PointerInfo = any;

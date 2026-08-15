@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO: add JSDoc typedefs and drop this header
 /**
  * 3MF decomposer.
  *
@@ -20,11 +19,19 @@ export const COMPOSITE_3MF_PATH = "composite.3mf.json";
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const ROOT_RELS_PATH = "_rels/.rels";
 
+/**
+ * @param {any} json
+ * @returns {boolean}
+ */
 export function isComposite3mf(json) {
   return json?.arbesk_format === COMPOSITE_3MF_FORMAT;
 }
 
-/** Path of the .rels part belonging to a package part, per OPC rules. */
+/**
+ * Path of the .rels part belonging to a package part, per OPC rules.
+ * @param {string} partPath
+ * @returns {string}
+ */
 export function relsPathFor(partPath) {
   const slash = partPath.lastIndexOf("/");
   const dir = slash >= 0 ? partPath.slice(0, slash) : "";
@@ -39,8 +46,8 @@ export function relsPathFor(partPath) {
  * @param {object} [options]
  * @param {string} [options.assetName]
  * @param {string} [options.assetId]
- * @param {Map<string,string>} [options.dedupMap]
- * @param {object} [options.credential]
+ * @param {Map<string,string>|null} [options.dedupMap]
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential|null} [options.credential]
  * @returns {Promise<{compositeCid: string, composite: object}>}
  */
 export async function decompose3mf(bytes, options = {}) {
@@ -58,6 +65,7 @@ export async function decompose3mf(bytes, options = {}) {
 
   // Every entry that is not core XML goes to IPFS as a binary part.
   const modelRelsPath = relsPathFor(modelPath);
+  /** @type {Object<string, {cid: string, _arbesk: any}>} */
   const parts = {};
   for (const [entryPath, entryBytes] of Object.entries(entries)) {
     if (
@@ -72,9 +80,11 @@ export async function decompose3mf(bytes, options = {}) {
     const { cid, meta } = await uploadWithDedup(
       entryBytes,
       `${sanitizeFileName(assetName || assetId || "3mf")}_${filename}`,
-      credential,
+      // uploadWithDedup (gltf/dedup.js) declares object|undefined and defaults
+      // both parameters to null internally, so ?? undefined is equivalent.
+      credential ?? undefined,
       { compress: false },
-      dedupMap
+      dedupMap ?? undefined
     );
     parts[entryPath] = { cid, _arbesk: meta };
     console.log(`[3MF-DECOMPOSE] part ${entryPath} → ipfs://${cid}`);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Team / Editor Management Service - Merkle Architecture
  *
@@ -7,7 +6,7 @@
  * All writes go through updateEditors (Merkle root update).
  */
 
-import { contract, updateEditors } from "../blockchain/wallet.js";
+import * as wallet from "../blockchain/wallet.js";
 import { walletState } from "../state/wallet-state.js";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
 import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "../gltf/merkle-editors.js";
@@ -33,7 +32,7 @@ export const CollaboratorRole = Object.freeze({
  * @returns {Promise<Array<{address: string, role: number}>>}
  */
 export async function fetchEditors(tokenId) {
-  return loadEditorList(tokenId);
+  return loadEditorList(/** @type {string} */ (tokenId));
 }
 
 /**
@@ -42,11 +41,12 @@ export async function fetchEditors(tokenId) {
  * @returns {Promise<boolean>}
  */
 export async function isOwner(tokenId) {
-  if (!contract || !walletState.get().walletAddress) return false;
+  if (!wallet.contract || !walletState.get().walletAddress) return false;
   try {
-    const owner = await contract.methods.ownerOf(tokenId).call();
+    const owner = await wallet.contract.methods.ownerOf(tokenId).call();
     return (
-      owner.toLowerCase() === walletState.get().walletAddress.toLowerCase()
+      owner.toLowerCase() ===
+        /** @type {string} */ (walletState.get().walletAddress).toLowerCase()
     );
   } catch {
     return false;
@@ -56,6 +56,7 @@ export async function isOwner(tokenId) {
 /** Export for use by asset-save.js */
 export { getEditorSetVersion, saveEditorList as saveEditorListLocally };
 
+/** @param {string} address */
 function _normalizeAddress(address) {
   if (!address || typeof address !== "string" || !address.startsWith("0x")) {
     throw new Error("Invalid Ethereum address");
@@ -63,33 +64,38 @@ function _normalizeAddress(address) {
   return address.toLowerCase();
 }
 
+/**
+ * @param {string|number} tokenId
+ * @param {Array<{address: string, role: number}>} oldEditors
+ * @param {Array<{address: string, role: number}>} newEditors
+ */
 async function _updateEditorRoot(tokenId, oldEditors, newEditors) {
   const { walletAddress } = requireWallet();
 
-  const currentVersion = await getEditorSetVersion(tokenId);
+  const currentVersion = await getEditorSetVersion(/** @type {string} */ (tokenId));
   const nextVersion = currentVersion + 1;
-  const newRoot = computeRoot(newEditors, tokenId, nextVersion);
+  const newRoot = computeRoot(newEditors, /** @type {string} */ (tokenId), nextVersion);
 
   // Proof must be built against the CURRENT editor tree/version.
   const proofResult = getProof(
     oldEditors,
     walletAddress,
-    tokenId,
+    /** @type {string} */ (tokenId),
     currentVersion
   );
   if (!proofResult) {
     throw new Error("Current wallet is not an editor of this token");
   }
 
-  const listCid = await writeJSONToIPFS(newEditors, null, {
+  const listCid = await writeJSONToIPFS(newEditors, /** @type {any} */ (null), {
     compress: true,
     type: "editors",
     assetId: `token_${tokenId}_v${nextVersion}`,
   });
-  saveEditorList(tokenId, newEditors, listCid);
+  saveEditorList(/** @type {string} */ (tokenId), newEditors, listCid);
 
-  const txHash = await updateEditors(
-    tokenId,
+  const txHash = await wallet.updateEditors(
+    /** @type {string} */ (tokenId),
     newRoot,
     listCid,
     proofResult.role,
@@ -121,7 +127,8 @@ export async function resolveCollaboratorInput(input) {
     try {
       result = await resolveUserEmail(value);
     } catch (err) {
-      if (err?.code === "CDP_NOT_CONFIGURED" || err?.status === 503) {
+      const apiErr = /** @type {any} */ (err);
+      if (apiErr?.code === "CDP_NOT_CONFIGURED" || apiErr?.status === 503) {
         throw new Error("Email lookup is not available on this server");
       }
       throw err;

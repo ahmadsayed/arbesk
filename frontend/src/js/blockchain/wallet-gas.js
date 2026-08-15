@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet Gas
  *
@@ -24,7 +23,7 @@ const SMART_ACCOUNT_GAS_LIMIT = 2_000_000;
  * by 20%. For EOA wallets, when estimation fails and `fallbackGas` is given,
  * the padded fallback is used instead of throwing.
  * @param {*} tx web3 contract method
- * @param {string} from sender address
+ * @param {string|null} from sender address
  * @param {number} [fallbackGas] gas to use when EOA estimation fails
  * @returns {Promise<number>}
  */

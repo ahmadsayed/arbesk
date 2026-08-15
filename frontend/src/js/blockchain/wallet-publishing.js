@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet Publishing
  *
@@ -52,13 +51,20 @@ function _canPublishWithCurrentWallet() {
  */
 function _awaitReceiptWithPendingEvent(promiEvent, payload) {
   if (typeof promiEvent.once === "function") {
-    promiEvent.once("transactionHash", (hash) => {
+    promiEvent.once("transactionHash", (/** @type {string} */ hash) => {
       emit(EVENTS.ASSET_PUBLISH_PENDING, { ...payload, txHash: hash });
     });
   }
   return promiEvent;
 }
 
+/**
+ * @param {string} tokenURI
+ * @param {number|string} tokenId
+ * @param {string} editorRoot
+ * @param {string} editorListUri
+ * @returns {Promise<string|null>} txHash on success, null on failure
+ */
 async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
   const c = getActiveContract();
   const w3 = _getWeb3();
@@ -95,7 +101,7 @@ async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
     console.error("publishAsset failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
     const contractAbi =
-      (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
+      (/** @type {any} */ (await getContractArtifact("ArbeskAssetFree")))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
     showToast({
       type: "error",
@@ -106,6 +112,12 @@ async function publishAsset(tokenURI, tokenId, editorRoot, editorListUri) {
   }
 }
 
+/**
+ * @param {number|string} tokenId
+ * @param {string} newTokenURI
+ * @param {string[]} proof
+ * @returns {Promise<string|null>} txHash on success, null on failure
+ */
 async function updateAssetURI(tokenId, newTokenURI, proof) {
   const c = getActiveContract();
   const w3 = _getWeb3();
@@ -134,14 +146,14 @@ async function updateAssetURI(tokenId, newTokenURI, proof) {
     console.error("updateAssetURI failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
     const contractAbi =
-      (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
+      (/** @type {any} */ (await getContractArtifact("ArbeskAssetFree")))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
 
-    const msg = error.message || "";
+    const msg = /** @type {any} */ (error).message || "";
     if (
       msg.includes("User denied") ||
       msg.includes("rejected") ||
-      error.code === 4001
+      /** @type {any} */ (error).code === 4001
     ) {
       return null;
     }
@@ -166,9 +178,10 @@ const CollaboratorRole = Object.freeze({
  * Caller must be a current Editor (proved via callerProof).
  * @param {number|string} tokenId
  * @param {string} newRoot - bytes32 hex string, the new Merkle root
+ * @param {string} newListUri - IPFS URI of the new editor list
  * @param {number} callerRole - CollaboratorRole.Editor (2)
  * @param {string[]} callerProof - Merkle proof for the caller
- * @returns {string|null} txHash on success
+ * @returns {Promise<string|null>} txHash on success
  */
 async function updateEditors(
   tokenId,
@@ -203,6 +216,11 @@ async function updateEditors(
 
 // ── Token Burn ──
 
+/**
+ * @param {number|string} tokenId
+ * @param {string[]} proof
+ * @returns {Promise<string|null>} txHash on success, null on failure
+ */
 async function burn(tokenId, proof) {
   const c = getActiveContract();
   const w3 = _getWeb3();
@@ -222,7 +240,7 @@ async function burn(tokenId, proof) {
   } catch (e) {
     console.warn(
       `[BURN] could not resolve manifest CID for token ${tokenId}:`,
-      e.message
+      /** @type {Error} */ (e).message
     );
     // Continue with burn even if resolution fails - unpin is best-effort
   }
@@ -257,7 +275,7 @@ async function burn(tokenId, proof) {
           console.warn(`[BURN] unpin errors:`, result.errors);
       }
     } catch (err) {
-      console.warn(`[BURN] unpin failed (non-fatal):`, err.message);
+      console.warn(`[BURN] unpin failed (non-fatal):`, /** @type {Error} */ (err).message);
     }
   }
 
@@ -279,7 +297,7 @@ async function burn(tokenId, proof) {
     console.error("burn failed:", error);
     const { decodeRevertReason } = await import("./error-decoder.js");
     const contractAbi =
-      (await getContractArtifact("ArbeskAssetFree"))?.abi || null;
+      (/** @type {any} */ (await getContractArtifact("ArbeskAssetFree")))?.abi || null;
     const decodedMsg = await decodeRevertReason(error, contractAbi);
     showToast({
       type: "error",

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Scene Selection
  *
@@ -23,6 +22,7 @@ function _amberColor() {
   );
 }
 
+/** @param {string} nodeId @param {string|null} [meshName] */
 function _addNodeHighlight(nodeId, meshName = null) {
   const meshes = state.nodeMeshes.get(nodeId);
   if (!meshes || !state.highlightLayer) return;
@@ -34,6 +34,7 @@ function _addNodeHighlight(nodeId, meshName = null) {
   }
 }
 
+/** @param {string|null} nodeId */
 function _removeNodeHighlight(nodeId) {
   if (!state.highlightLayer || !nodeId) return;
   const meshes = state.nodeMeshes.get(nodeId);
@@ -57,6 +58,8 @@ function _emitSelectionChanged() {
 
 /**
  * Single-select: collapse the selection to exactly this node.
+ * @param {string} nodeId
+ * @param {BABYLON.AbstractMesh|null} [mesh]
  */
 function selectNode(nodeId, mesh) {
   const alreadySingle =
@@ -81,6 +84,8 @@ function selectNode(nodeId, mesh) {
  * Ctrl/Cmd+click: toggle a node in/out of the multi-selection. The most
  * recently added node becomes the primary (`highlightedNodeId`); removing the
  * primary promotes the last remaining member.
+ * @param {string} nodeId
+ * @param {BABYLON.AbstractMesh|null} [mesh]
  */
 function toggleNodeSelection(nodeId, mesh) {
   if (state.selectedNodeIds.has(nodeId)) {
@@ -131,6 +136,7 @@ function selectAllNodes(nodeIds) {
   _emitSelectionChanged();
 }
 
+/** @param {string} nodeId @param {string} meshName */
 function selectSubMesh(nodeId, meshName) {
   // Sub-mesh selection is a single-node concept: collapse the set first.
   if (nodeId !== state.highlightedNodeId || state.selectedNodeIds.size > 1) {
@@ -151,6 +157,7 @@ function selectSubMesh(nodeId, meshName) {
 /**
  * Highlight a node by ID alone (from outliner or programmatic selection).
  * Does not re-fire node:selected if already highlighted.
+ * @param {string} nodeId
  */
 function selectNodeById(nodeId) {
   selectNode(nodeId, null);

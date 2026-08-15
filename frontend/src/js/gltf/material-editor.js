@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk glTF Material Editor
  *
@@ -23,7 +22,7 @@ import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.js";
  * Fetch a composite glTF JSON from IPFS by CID.
  *
  * @param {string} compositeCid - IPFS CID of the composite glTF JSON
- * @returns {Promise<object>} Composite glTF JSON
+ * @returns {Promise<any>} Composite glTF JSON
  */
 export async function fetchComposite(compositeCid) {
   if (!compositeCid) throw new Error("fetchComposite: compositeCid is required");
@@ -41,9 +40,9 @@ export async function fetchComposite(compositeCid) {
 /**
  * Find a material by index in the glTF.
  *
- * @param {object} composite - Composite glTF JSON
+ * @param {any} composite - Composite glTF JSON (dynamic schema)
  * @param {number} materialIndex - Index into materials array
- * @returns {object} The material object (mutable reference)
+ * @returns {any} The material object (mutable reference)
  */
 export function getMaterial(composite, materialIndex = 0) {
   if (!composite.materials || !composite.materials[materialIndex]) {
@@ -60,9 +59,9 @@ export function getMaterial(composite, materialIndex = 0) {
  * (e.g. vehicle body + glass window). Returns every match so callers can
  * apply edits to all of them, not just the first.
  *
- * @param {object} composite - Composite glTF JSON
+ * @param {any} composite - Composite glTF JSON (dynamic schema)
  * @param {string} meshName - Name of the mesh to find (e.g., "flowercenter")
- * @returns {{ material: object, meshIndex: number, primitiveIndex: number }[]}
+ * @returns {{ material: any, meshIndex: number, primitiveIndex: number }[]}
  */
 export function findMaterialByMeshName(composite, meshName) {
   if (!composite.meshes || !meshName) return [];
@@ -95,9 +94,9 @@ export function findMaterialByMeshName(composite, meshName) {
  * Set the base color factor of a PBR material.
  * The factor is multiplied with the base color texture (if any).
  *
- * @param {object} material - The material object to modify
+ * @param {any} material - The material object to modify
  * @param {number[]|string} color - RGBA array [r,g,b,a] or hex string "#RRGGBB"
- * @returns {object} The modified material (same reference)
+ * @returns {any} The modified material (same reference)
  */
 export function setBaseColorFactor(material, color) {
   material.pbrMetallicRoughness ||= {};
@@ -127,9 +126,9 @@ export function setBaseColorFactor(material, color) {
  * Apply a mesh-override color map to a composite glTF.
  * For each mesh name in overrides, finds its material and sets baseColorFactor.
  *
- * @param {object} composite - Composite glTF JSON
- * @param {object} meshOverrides - { "meshName": { color: "#RRGGBB" }, ... }
- * @param {string} [defaultColor] - Hex color to apply to all materials as baseline
+ * @param {any} composite - Composite glTF JSON (dynamic schema)
+ * @param {Object<string, {color?: string}>} meshOverrides - { "meshName": { color: "#RRGGBB" }, ... }
+ * @param {string|null} [defaultColor] - Hex color to apply to all materials as baseline
  * @returns {{ modified: number, skipped: number }}
  */
 export function applyMeshOverrideColors(composite, meshOverrides, defaultColor = null) {
@@ -168,6 +167,9 @@ export function applyMeshOverrideColors(composite, meshOverrides, defaultColor =
 
 /**
  * Set metallic factor.
+ * @param {any} material
+ * @param {number} value
+ * @returns {any}
  */
 export function setMetallicFactor(material, value) {
   material.pbrMetallicRoughness ||= {};
@@ -177,6 +179,9 @@ export function setMetallicFactor(material, value) {
 
 /**
  * Set roughness factor.
+ * @param {any} material
+ * @param {number} value
+ * @returns {any}
  */
 export function setRoughnessFactor(material, value) {
   material.pbrMetallicRoughness ||= {};
@@ -186,6 +191,11 @@ export function setRoughnessFactor(material, value) {
 
 /**
  * Set emissive factor.
+ * @param {any} material
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {any}
  */
 export function setEmissiveFactor(material, r, g, b) {
   material.emissiveFactor = [r, g, b];
@@ -194,6 +204,10 @@ export function setEmissiveFactor(material, r, g, b) {
 
 /**
  * Set alpha mode and cutoff.
+ * @param {any} material
+ * @param {string} mode - "OPAQUE", "MASK", "BLEND"
+ * @param {number} [cutoff]
+ * @returns {any}
  */
 export function setAlphaMode(material, mode, cutoff) {
   material.alphaMode = mode; // "OPAQUE", "MASK", "BLEND"
@@ -205,6 +219,9 @@ export function setAlphaMode(material, mode, cutoff) {
 
 /**
  * Set double-sided rendering.
+ * @param {any} material
+ * @param {boolean} value
+ * @returns {any}
  */
 export function setDoubleSided(material, value) {
   material.doubleSided = !!value;
@@ -218,7 +235,7 @@ export function setDoubleSided(material, value) {
  * the new CID reflects only the material edits. Buffers and images
  * remain at their original CIDs.
  *
- * @param {object} composite - Modified composite glTF JSON
+ * @param {any} composite - Modified composite glTF JSON
  * @param {object} [options] - Optional parameters
  * @param {string} [options.assetName] - Asset name for IPFS filename
  * @param {string} [options.assetId] - Asset ID for IPFS filename
@@ -239,8 +256,8 @@ export async function commitCompositeChanges(composite, options = {}) {
  * Full round-trip: fetch composite, apply mesh overrides, commit.
  *
  * @param {string} compositeCid - Current composite CID
- * @param {object} meshOverrides - Per-mesh color overrides
- * @param {string} [defaultColor] - Baseline color for all materials
+ * @param {Object<string, {color?: string}>} meshOverrides - Per-mesh color overrides
+ * @param {string|null} [defaultColor] - Baseline color for all materials
  * @param {object} [options] - Optional parameters
  * @param {string} [options.assetName] - Asset name for IPFS filename
  * @param {string} [options.assetId] - Asset ID for IPFS filename

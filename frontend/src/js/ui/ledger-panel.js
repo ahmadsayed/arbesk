@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk UI Activity Panel (Manifest-Driven)
  *
@@ -23,30 +22,43 @@ const ACTIVITY_CONFIG = {
   LOAD: { label: "Load", icon: "→" },
 };
 
-let body, list, filterSelect, statsEl, anchorBtn;
+/** @type {HTMLElement|null} */
+let body;
+/** @type {HTMLElement|null} */
+let list;
+/** @type {HTMLSelectElement|null} */
+let filterSelect;
+/** @type {HTMLElement|null} */
+let statsEl;
+/** @type {HTMLElement|null} */
+let anchorBtn;
 let initialized = false;
+/** @type {any[]} */
 let activities = [];
 
 function ensureDOM() {
   body = document.getElementById("ledgerBody");
   list = document.getElementById("ledgerList");
-  filterSelect = document.getElementById("ledgerFilter");
+  filterSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById("ledgerFilter"));
   statsEl = document.getElementById("ledgerStats");
   anchorBtn = document.getElementById("ledgerAnchorBtn");
 }
 
+/** @param {number|string} ts */
 function formatTime(ts) {
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/** @param {number|string} ts */
 function formatDate(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+/** @param {any} entry */
 function renderEntry(entry) {
-  const config = ACTIVITY_CONFIG[entry.opType] || {
+  const config = ACTIVITY_CONFIG[/** @type {keyof typeof ACTIVITY_CONFIG} */ (entry.opType)] || {
     label: entry.opType,
     icon: "·",
   };
@@ -102,6 +114,7 @@ function render() {
  * The manifest chain is walked client-side via walkManifestChain() and each
  * manifest is fetched from remote IPFS with getFromRemoteIPFS(); there is no
  * server endpoint such as /api/v1/manifests/:cid/history.
+ * @param {any[]} chain
  */
 function extractActivities(chain) {
   const entries = [];
@@ -190,7 +203,7 @@ async function loadActivities() {
 
     activities = extractActivities(chain);
   } catch (err) {
-    console.warn("[LEDGER] failed to load manifest history:", err.message);
+    console.warn("[LEDGER] failed to load manifest history:", /** @type {Error} */ (err).message);
     activities = [];
   }
 

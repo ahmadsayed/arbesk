@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Solidity Transaction Revert Reason Decoder
  *
@@ -12,8 +11,8 @@
 
 /**
  * Build a map of 4-byte selectors → { name, inputs } from an ABI.
- * @param {Array} abi
- * @returns {Map<string, {name: string, inputs: Array}>}
+ * @param {any[]} abi
+ * @returns {Map<string, {name: string, inputs: any[]}>}
  */
 function buildErrorSelectorMap(abi) {
   const map = new Map();
@@ -23,7 +22,7 @@ function buildErrorSelectorMap(abi) {
     if (item.type !== "error") continue;
 
     // Build signature: ErrorName(param1Type,param2Type,...)
-    const paramTypes = (item.inputs || []).map((i) => i.type).join(",");
+    const paramTypes = (item.inputs || []).map((/** @type {any} */ i) => i.type).join(",");
     const signature = `${item.name}(${paramTypes})`;
 
     // Compute 4-byte selector using Web3.js
@@ -48,7 +47,7 @@ function buildErrorSelectorMap(abi) {
  * Decode a custom error from its 4-byte selector + encoded data.
  * @param {string} selector - 0x-prefixed 4-byte selector
  * @param {string} data - full revert data (includes selector)
- * @param {Map} selectorMap - from buildErrorSelectorMap
+ * @param {Map<string, {name: string, inputs: any[]}>} selectorMap - from buildErrorSelectorMap
  * @returns {string|null} decoded message or null
  */
 function decodeCustomError(selector, data, selectorMap) {
@@ -126,8 +125,8 @@ const abiCache = new WeakMap();
 
 /**
  * Decode a transaction revert reason from an error object.
- * @param {Error} error - The error from a failed transaction
- * @param {Array|null} contractABI - Optional contract ABI for custom error decoding
+ * @param {any} error - The error from a failed transaction
+ * @param {any[]|null} contractABI - Optional contract ABI for custom error decoding
  * @returns {Promise<string>} Human-readable error message
  */
 export async function decodeRevertReason(error, contractABI = null) {
@@ -169,7 +168,7 @@ export async function decodeRevertReason(error, contractABI = null) {
       revertData = hexMatches
         .slice()
         .reverse()
-        .find((h) => h.length >= 10 && h.length !== 42);
+        .find((/** @type {string} */ h) => h.length >= 10 && h.length !== 42);
     }
   }
 

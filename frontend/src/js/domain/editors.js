@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Domain: Editors — Merkle editor-list operations, local cache, and proof commands.
  *
@@ -14,6 +13,14 @@ const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 
 export const MAX_EDITORS_PER_TOKEN = 5000;
 
+/**
+ * @typedef {{address: string, role: number}} EditorEntry
+ */
+
+/**
+ * @param {...any} args
+ * @returns {any} hex string from Web3.utils.soliditySha3
+ */
 function _soliditySha3(...args) {
   const W3 = window.Web3;
   if (!W3 || !W3.utils || !W3.utils.soliditySha3) {
@@ -39,6 +46,10 @@ export function makeLeaf(address, role, tokenId, setVersion) {
   );
 }
 
+/**
+ * @param {string[]} leaves
+ * @returns {any} SimpleMerkleTree instance, or null for an empty list
+ */
 function _buildTree(leaves) {
   if (!leaves || leaves.length === 0) return null;
   return SimpleMerkleTree.of(leaves);
@@ -110,10 +121,19 @@ export function verifyProof(root, leaf, proof) {
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} tag asset tag
+ * @returns {string} localStorage key
+ */
 export function editorListKey(tag) {
   return EDITOR_LIST_PREFIX + tag;
 }
 
+/**
+ * @param {string} tag
+ * @param {EditorEntry[]} list
+ * @param {string|null} [cid]
+ */
 export function saveEditorList(tag, list, cid = null) {
   try {
     localStorage.setItem(
@@ -121,10 +141,14 @@ export function saveEditorList(tag, list, cid = null) {
       JSON.stringify({ list, cid, saved: Date.now() })
     );
   } catch (e) {
-    console.warn("[EDITORS] failed to cache editor list:", e.message);
+    console.warn("[EDITORS] failed to cache editor list:", /** @type {Error} */ (e).message);
   }
 }
 
+/**
+ * @param {string} tag
+ * @returns {EditorEntry[]|null}
+ */
 function _loadCachedEditorList(tag) {
   try {
     const raw = localStorage.getItem(editorListKey(tag));
@@ -137,6 +161,9 @@ function _loadCachedEditorList(tag) {
   return null;
 }
 
+/**
+ * @param {string} tag
+ */
 export function clearEditorCache(tag) {
   try {
     localStorage.removeItem(editorListKey(tag));
@@ -147,6 +174,10 @@ export function clearEditorCache(tag) {
 
 // ─── List / version resolution ─────────────────────────────────────────────
 
+/**
+ * @param {string} tag
+ * @returns {Promise<EditorEntry[]>}
+ */
 export async function loadEditorList(tag) {
   if (!tag) return [];
   try {
@@ -162,12 +193,16 @@ export async function loadEditorList(tag) {
       }
     }
   } catch (err) {
-    console.warn(`[EDITORS] failed to load editor list for ${tag}:`, err.message);
+    console.warn(`[EDITORS] failed to load editor list for ${tag}:`, /** @type {Error} */ (err).message);
   }
   const cached = _loadCachedEditorList(tag);
   return cached || [];
 }
 
+/**
+ * @param {string} tag
+ * @returns {Promise<number>}
+ */
 export async function getEditorSetVersion(tag) {
   const c = getActiveContract();
   if (!c) return 1;
@@ -181,6 +216,11 @@ export async function getEditorSetVersion(tag) {
 
 // ─── Proof command ─────────────────────────────────────────────────────────
 
+/**
+ * @param {string} tag
+ * @param {string} editorAddress
+ * @returns {Promise<{proof: string[], role: number}|null>}
+ */
 export async function buildEditorProof(tag, editorAddress) {
   const [versionResult, listResult] = await Promise.allSettled([
     getEditorSetVersion(tag),

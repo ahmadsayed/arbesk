@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Collaborator Manager - Studio read-only indicator
  *
@@ -12,7 +11,9 @@ import { on, EVENTS } from "../events/bus.js";
 import { getActiveAssetTokenId } from "../domain/asset.js";
 import { walletState } from "../state/wallet-state.js";
 
+/** @type {HTMLElement|null} */
 let teamPanel = null;
+/** @type {(ReturnType<typeof initCollaboratorPanel> & { tokenId?: string }) | null} */
 let currentPanel = null;
 
 function initCollaborators() {
@@ -49,8 +50,8 @@ async function refreshTeamPanel() {
   const tokenIdStr = String(tokenId);
   if (!currentPanel || currentPanel.tokenId !== tokenIdStr) {
     currentPanel?.destroy();
-    const panel = initCollaboratorPanel(teamPanel, tokenIdStr, { editable: false });
-    panel.tokenId = tokenIdStr;
+    const panel = initCollaboratorPanel(/** @type {HTMLElement} */ (teamPanel), tokenIdStr, { editable: false });
+    /** @type {any} */ (panel).tokenId = tokenIdStr;
     currentPanel = panel;
   } else {
     await currentPanel.refresh();

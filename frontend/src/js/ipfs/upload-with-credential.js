@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Worker-safe IPFS upload primitives.
  *
@@ -15,14 +14,29 @@ import { createConcurrencyLimiter } from "../utils/concurrency.js";
 const UPLOAD_CONCURRENCY = 6;
 const uploadLimiter = createConcurrencyLimiter(UPLOAD_CONCURRENCY);
 
+/**
+ * Upload credential minted by the backend (`getUploadCredential()` /
+ * `getUploadCredentials()` in services/api.js).
+ *
+ * @typedef {object} UploadCredential
+ * @property {string} backend - "pinata" or "kubo"
+ * @property {string} [url] - Pinata presigned URL (single-use)
+ * @property {string[]} [urls] - Pooled Pinata URLs, one per file
+ * @property {string} [apiUrl] - Kubo API base URL
+ */
+
 function ts() {
   return new Date().toLocaleTimeString();
 }
 
+/**
+ * @param {Uint8Array|ArrayBuffer|Blob|string} data
+ * @returns {Blob}
+ */
 function toBlob(data) {
   if (data instanceof Blob) return data;
   if (data instanceof ArrayBuffer || data instanceof Uint8Array)
-    return new Blob([data]);
+    return new Blob([/** @type {BlobPart} */ (data)]);
   if (typeof data === "string")
     return new Blob([data], { type: "application/octet-stream" });
   throw new Error("uploadWithCredential: unsupported data type");
@@ -35,6 +49,9 @@ function toBlob(data) {
  * callers still pass a plain `credential.url`. Popping mutates the pool
  * in place, which is safe here because JS is single-threaded and each pop
  * happens synchronously before the upload's first `await`.
+ *
+ * @param {UploadCredential} credential
+ * @returns {string}
  */
 function nextPinataUrl(credential) {
   if (credential.urls) {
@@ -44,9 +61,16 @@ function nextPinataUrl(credential) {
     }
     return url;
   }
-  return credential.url;
+  return /** @type {string} */ (credential.url);
 }
 
+/**
+ * @param {Blob} blob
+ * @param {string} filename
+ * @param {UploadCredential} credential
+ * @param {number} [attempt=1]
+ * @returns {Promise<string>}
+ */
 async function uploadToPinata(blob, filename, credential, attempt = 1) {
   const form = new FormData();
   form.append("file", blob, filename);
@@ -74,21 +98,28 @@ async function uploadToPinata(blob, filename, credential, attempt = 1) {
     );
     return cid;
   } catch (err) {
+    const error = /** @type {Error} */ (err);
     // Retrying against the SAME url would be wrong when the pool has moved on
     // (that url may have already stored the file, turning the retry into a
     // guaranteed 409). Only retry with a pool url on hand; a single-shot
     // credential has no replacement, so it retries the same url as before.
-    if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(err.message)) {
+    if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(error.message)) {
       console.warn(
         `[${ts()}] [UPLOAD] Pinata upload error after ` +
-          `${Math.round(performance.now() - start)}ms, retrying once: ${err.message}`
+          `${Math.round(performance.now() - start)}ms, retrying once: ${error.message}`
       );
       return uploadToPinata(blob, filename, credential, attempt + 1);
     }
-    throw err;
+    throw error;
   }
 }
 
+/**
+ * @param {Blob} blob
+ * @param {string} filename
+ * @param {UploadCredential} credential
+ * @returns {Promise<string>}
+ */
 async function uploadToKubo(blob, filename, credential) {
   const apiUrl = credential.apiUrl || "http://127.0.0.1:5001";
   const form = new FormData();
@@ -125,7 +156,7 @@ async function uploadToKubo(blob, filename, credential) {
  *
  * @param {Uint8Array|ArrayBuffer|Blob|string} data
  * @param {string} filename
- * @param {object} credential - Upload credential (Pinata presigned URL or Kubo API URL).
+ * @param {UploadCredential} credential - Upload credential (Pinata presigned URL or Kubo API URL).
  * @returns {Promise<string>} CID
  */
 export async function uploadToIPFSWithCredential(data, filename, credential) {
@@ -151,7 +182,7 @@ export async function uploadToIPFSWithCredential(data, filename, credential) {
  * filename -> CID.
  *
  * @param {Array<{name: string, data: Uint8Array|string}>} files
- * @param {object} credential
+ * @param {UploadCredential} credential
  * @returns {Promise<Map<string, string>>} filename -> CID
  */
 export async function uploadBatchToIPFSWithCredential(files, credential) {
@@ -180,7 +211,7 @@ export async function uploadBatchToIPFSWithCredential(files, credential) {
  * responses. Each response line contains { Name, Hash, Size } for one file.
  *
  * @param {Array<{name: string, data: Uint8Array|string}>} files
- * @param {object} credential
+ * @param {UploadCredential} credential
  * @returns {Promise<Map<string, string>>}
  */
 async function uploadBatchToKubo(files, credential) {

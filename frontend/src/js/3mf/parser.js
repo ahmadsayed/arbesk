@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO: add JSDoc typedefs for Parsed3mf and drop this header
 /**
  * 3MF core-spec parser: turns the XML of a `.model` part into a neutral
  * Parsed3mf structure. No DOM, Babylon, or IPFS dependencies.
@@ -9,13 +8,48 @@
 
 import { XMLParser } from "fast-xml-parser";
 
+/**
+ * @typedef {object} Parsed3mfObject
+ * @property {string} id
+ * @property {string} name
+ * @property {string|null} pid
+ * @property {number|null} pindex
+ * @property {number[]} vertices
+ * @property {number[]} triangles
+ */
+
+/**
+ * @typedef {object} Parsed3mfBaseMaterial
+ * @property {string} groupId
+ * @property {string} name
+ * @property {string} color
+ */
+
+/**
+ * @typedef {object} Parsed3mfItem
+ * @property {string} objectId
+ * @property {number[]|null} transform
+ */
+
+/**
+ * @typedef {object} Parsed3mf
+ * @property {string} unit
+ * @property {Parsed3mfObject[]} objects
+ * @property {Parsed3mfBaseMaterial[]} basematerials
+ * @property {Parsed3mfItem[]} items
+ */
+
 const PARSER_OPTIONS = {
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
-  isArray: (tagName) =>
+  isArray: (/** @type {string} */ tagName) =>
     ["object", "vertex", "triangle", "item", "basematerial"].includes(tagName),
 };
 
+/**
+ * @param {any} value
+ * @returns {any[]}
+ */
 function toArray(value) {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
@@ -25,19 +59,14 @@ function toArray(value) {
  * Parse a 3MF core model document.
  *
  * @param {string} xml - contents of the `.model` part
- * @returns {{
- *   unit: string,
- *   objects: Array<{id: string, name: string, pid: string|null, pindex: number|null, vertices: number[], triangles: number[]}>,
- *   basematerials: Array<{groupId: string, name: string, color: string}>,
- *   items: Array<{objectId: string, transform: number[]|null}>,
- * }}
+ * @returns {Parsed3mf}
  */
 export function parse3mfModel(xml) {
   let doc;
   try {
     doc = new XMLParser(PARSER_OPTIONS).parse(xml);
   } catch (err) {
-    throw new Error(`[3MF] invalid model XML: ${err.message}`);
+    throw new Error(`[3MF] invalid model XML: ${(/** @type {Error} */ (err)).message}`);
   }
   const model = doc?.model;
   if (!model) throw new Error("[3MF] missing <model> root element");

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Wallet - Re-export Barrel
  *

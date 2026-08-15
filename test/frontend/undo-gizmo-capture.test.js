@@ -66,6 +66,9 @@ beforeEach(() => {
       static Identity() {
         return {};
       }
+      static FromEulerVector() {
+        return {};
+      }
     },
     Matrix: {
       Compose: () => ({ m: [...dragMatrix] }),

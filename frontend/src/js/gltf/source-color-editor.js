@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Direct Source Color Editor
  *
@@ -12,6 +11,8 @@ import { isGLB, decomposeGLB } from "./glb-parser.js";
 
 /**
  * Convert a hex color string to a glTF baseColorFactor RGBA array.
+ * @param {string} hex
+ * @returns {number[]}
  */
 function hexToBaseColorFactor(hex) {
   const clean = hex.replace("#", "");
@@ -25,8 +26,12 @@ function hexToBaseColorFactor(hex) {
 
 /**
  * Find every (node, primitive, materialIndex) tuple that belongs to a named node.
+ * @param {any} gltf - glTF JSON object (dynamic schema)
+ * @param {string} nodeName
+ * @returns {Array<{nodeIndex: number, primitiveIndex: number, materialIndex: number}>}
  */
 function findNodeMaterials(gltf, nodeName) {
+  /** @type {Array<{nodeIndex: number, primitiveIndex: number, materialIndex: number}>} */
   const matches = [];
   if (!gltf.nodes || !gltf.meshes) return matches;
 
@@ -50,16 +55,19 @@ function findNodeMaterials(gltf, nodeName) {
 /**
  * Clone a material and update all relevant primitive references so a color edit
  * only affects the intended nodes, not every node sharing the material.
+ * @param {any} gltf - glTF JSON object (mutated in place; dynamic schema)
+ * @param {Array<{nodeIndex: number, primitiveIndex: number, materialIndex: number}>} matches
+ * @param {string} newMaterialName
  */
 function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
   if (matches.length === 0) return;
 
   const targetMaterialIndex = matches[0].materialIndex;
-  const usedByOthers = gltf.nodes.some((node, ni) => {
+  const usedByOthers = gltf.nodes.some((/** @type {any} */ node, /** @type {number} */ ni) => {
     if (node.mesh === undefined || node.mesh === null) return false;
     const mesh = gltf.meshes[node.mesh];
     if (!mesh || !mesh.primitives) return false;
-    return mesh.primitives.some((prim, pi) => {
+    return mesh.primitives.some((/** @type {any} */ prim, /** @type {number} */ pi) => {
       const isTarget = matches.some(
         (m) => m.nodeIndex === ni && m.primitiveIndex === pi
       );
@@ -88,8 +96,8 @@ function ensureUniqueMaterialForNodes(gltf, matches, newMaterialName) {
 /**
  * Apply color edits directly to a glTF JSON object.
  *
- * @param {object} gltf - glTF JSON object (mutated in place)
- * @param {object} nodeColors - { "nodeName": "#RRGGBB", ... }
+ * @param {any} gltf - glTF JSON object (mutated in place; dynamic schema)
+ * @param {Object<string, string>} nodeColors - { "nodeName": "#RRGGBB", ... }
  * @returns {{ modified: number, skipped: number }}
  */
 export function applyNodeColors(gltf, nodeColors) {
@@ -138,10 +146,11 @@ export function applyNodeColors(gltf, nodeColors) {
  * its content is glTF JSON, or the loader picks the binary-GLB path and fails.
  *
  * @param {string} sourceCid - Current source CID
- * @param {object} nodeColors - { "nodeName": "#RRGGBB", ... }
+ * @param {Object<string, string>} nodeColors - { "nodeName": "#RRGGBB", ... }
  * @param {object} [options] - Optional parameters
  * @param {string} [options.assetName] - Asset name for IPFS filename
  * @param {string} [options.assetId] - Asset ID for IPFS filename
+ * @param {Map<string, string>|null} [options.dedupMap]
  * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
  */
 export async function editSourceColors(sourceCid, nodeColors, options = {}) {
@@ -151,6 +160,7 @@ export async function editSourceColors(sourceCid, nodeColors, options = {}) {
     return { sourceCid, modified: 0, skipped: 0 };
   }
 
+  /** @type {any} */
   let gltf = null;
   let decomposedFromGlb = false;
 
@@ -170,7 +180,7 @@ export async function editSourceColors(sourceCid, nodeColors, options = {}) {
       gltf = await getFromRemoteIPFS(sourceCid);
     }
   } catch (err) {
-    console.warn(`[SRC-COLOR] failed to fetch ${sourceCid}: ${err.message}`);
+    console.warn(`[SRC-COLOR] failed to fetch ${sourceCid}: ${/** @type {Error} */ (err).message}`);
     throw err;
   }
 
@@ -187,6 +197,7 @@ export async function editSourceColors(sourceCid, nodeColors, options = {}) {
   // Stored content is always glTF JSON now. Signal the format so the caller can
   // correct a node that was previously a GLB; only set the composite path when
   // we actually decomposed a GLB (don't clobber an existing glTF source's path).
+  /** @type {{sourceCid: string, format: string, path?: string, modified: number, skipped: number}} */
   const result = { sourceCid: newCid, format: "gltf", ...stats };
   if (decomposedFromGlb) result.path = "composite.gltf";
   return result;

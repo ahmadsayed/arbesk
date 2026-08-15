@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Token Resolver
  *
@@ -23,6 +22,10 @@ const resolutionCache = new Map();
 
 const RESOLUTION_CACHE_TTL_MS = 30_000; // 30 seconds
 
+/**
+ * @param {string} message
+ * @returns {ResolutionResult}
+ */
 function _resolveError(message) {
   return {
     manifestCid: null,
@@ -45,15 +48,17 @@ function _resolveError(message) {
 
 /**
  * @typedef {Object} ResolutionResult
- * @property {string} manifestCid - Resolved IPFS CID
- * @property {Object|null} manifest - The parsed manifest (null if fetch fails)
+ * @property {string|null} manifestCid - Resolved IPFS CID
+ * @property {any} manifest - The parsed manifest (null if fetch fails)
  * @property {boolean} resolved - Whether resolution succeeded
  * @property {string|null} error - Error message if resolution failed
  * @property {boolean} fromCache - Whether the result came from cache
+ * @property {any} [nestedCollectionRef] - Token ref for nested collections
  */
 
 /**
  * Build a deterministic cache key for a child reference.
+ * @param {{chainId: any, contractAddress: string, tokenId: any}} childRef
  */
 function buildCacheKey(childRef) {
   return `${childRef.chainId}:${childRef.contractAddress.toLowerCase()}:${
@@ -63,6 +68,7 @@ function buildCacheKey(childRef) {
 
 /**
  * Get a cached resolution if still valid.
+ * @param {{chainId: any, contractAddress: string, tokenId: any}} childRef
  */
 function getCachedResolution(childRef) {
   const key = buildCacheKey(childRef);
@@ -75,6 +81,8 @@ function getCachedResolution(childRef) {
 
 /**
  * Set a resolution in the cache.
+ * @param {{chainId: any, contractAddress: string, tokenId: any}} childRef
+ * @param {string} manifestCid
  */
 function setCachedResolution(childRef, manifestCid) {
   const key = buildCacheKey(childRef);
@@ -100,9 +108,9 @@ const minERC721ABI = [
  * Uses the current provider for the connected chain, or creates a new
  * provider if the target chain is different and has a known RPC endpoint.
  *
- * @param {number} chainId
- * @param {string} contractAddress
- * @returns {Object|null} Web3 contract instance or null
+ * @param {number|null} chainId
+ * @param {string|null} contractAddress
+ * @returns {any} Web3 contract instance or null
  */
 function getTokenContract(chainId, contractAddress) {
   const provider = walletWeb3 || window.web3 || null;
@@ -176,7 +184,7 @@ export async function resolveChildRef(childRef, options = {}) {
     childRef.contractAddress || walletContractAddress || null;
 
   // Check cache using resolved values
-  const resolvedRef = { ...childRef, chainId, contractAddress };
+  const resolvedRef = /** @type {any} */ ({ ...childRef, chainId, contractAddress });
   const cachedCid = getCachedResolution(resolvedRef);
   if (cachedCid) {
     console.log(
@@ -211,7 +219,7 @@ export async function resolveChildRef(childRef, options = {}) {
   try {
     rawURI = await tokenContract.methods.tokenURI(childRef.tokenId).call();
   } catch (err) {
-    const errMsg = `tokenURI call failed for token #${childRef.tokenId}: ${err.message}`;
+    const errMsg = `tokenURI call failed for token #${childRef.tokenId}: ${/** @type {Error} */ (err).message}`;
     console.error(`[TOKEN] ${errMsg}`);
     return _resolveError(errMsg);
   }
@@ -252,9 +260,9 @@ export async function resolveChildRef(childRef, options = {}) {
 /**
  * Look up an assetID inside a collection's `assets` map.
  *
- * @param {Object|null} assetsMap - The collection manifest's `assets` field
+ * @param {Record<string, any>|null} assetsMap - The collection manifest's `assets` field
  * @param {string} assetID
- * @returns {{kind: "cid"|"collection"|"missing", value: string|Object|null}}
+ * @returns {{kind: "missing", value: null}|{kind: "cid", value: string}|{kind: "collection", value: Object}}
  */
 export function resolveAssetIdFromCollection(assetsMap, assetID) {
   if (!assetsMap || typeof assetsMap !== "object") {
@@ -284,8 +292,8 @@ export function resolveAssetIdFromCollection(assetsMap, assetID) {
  * (resolve that token's collection manifest first, then look up assetID
  * inside it).
  *
- * @param {{collection: "self"|Object, assetID: string}} childRef
- * @param {Object|null} activeCollectionAssets - assets map of the collection
+ * @param {{collection: "self"|any, assetID: string}} childRef
+ * @param {Record<string, any>|null} activeCollectionAssets - assets map of the collection
  *   currently being loaded; required when childRef.collection === "self"
  * @returns {Promise<ResolutionResult>}
  */
@@ -350,12 +358,13 @@ export async function resolveCollectionChildRef(
 
 /**
  * Safely fetch a manifest from IPFS, returning null on failure.
+ * @param {string} cid
  */
 async function fetchManifestSafe(cid) {
   try {
     return await getFromRemoteIPFS(cid);
   } catch (err) {
-    console.warn(`[TOKEN] manifest validation failed for ${cid}:`, err.message);
+    console.warn(`[TOKEN] manifest validation failed for ${cid}:`, /** @type {Error} */ (err).message);
     return null;
   }
 }

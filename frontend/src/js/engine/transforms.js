@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Scene Graph - Transforms & Helpers
  *
@@ -11,18 +10,22 @@ import { DEFAULT_WOOD_COLOR, state } from "./state.js";
 
 /**
  * Extract a CID from a source reference.
+ * @param {string|{cid: string}} src
+ * @returns {string}
  */
 export function extractCid(src) {
   if (src && typeof src === "object" && src.cid) {
     return src.cid;
   }
-  return src;
+  return /** @type {string} */ (src);
 }
 
 export { detectAssetFormat } from "../formats/registry.js";
 
 /**
  * Safely access manifest scene nodes.
+ * @param {any} manifest
+ * @returns {any[]}
  */
 export function getManifestNodes(manifest) {
   return manifest?.scene?.nodes || [];
@@ -30,6 +33,8 @@ export function getManifestNodes(manifest) {
 
 /**
  * Apply a 4x4 column-major transform matrix to a mesh or transform node.
+ * @param {BABYLON.TransformNode|BABYLON.AbstractMesh} meshOrNode
+ * @param {number[]} matrixArray
  */
 export function applyTransformMatrix(meshOrNode, matrixArray) {
   if (!matrixArray || matrixArray.length !== 16) return;
@@ -52,13 +57,18 @@ export function applyTransformMatrix(meshOrNode, matrixArray) {
  * undo capture sites that snapshot a node's TRS before/after a gesture.
  *
  * Returns null when the anchor is missing or disposed.
+ * @param {string} nodeId
+ * @returns {number[]|null}
  */
 export function readNodeTransformMatrix(nodeId) {
   const anchor = state.nodeAnchors.get(nodeId);
   if (!anchor || anchor.isDisposed()) return null;
 
   const rotation =
-    anchor.rotationQuaternion || BABYLON.Quaternion.Identity();
+    anchor.rotationQuaternion ||
+    // Anchors created before the quaternion seeding (or written via the
+    // gizmo's Euler fallback) carry their rotation in `rotation` instead.
+    BABYLON.Quaternion.FromEulerVector(anchor.rotation);
   const matrix = BABYLON.Matrix.Compose(
     anchor.scaling,
     rotation,
@@ -70,6 +80,9 @@ export function readNodeTransformMatrix(nodeId) {
 /**
  * Compare two 16-element transform matrices with an absolute epsilon, used to
  * skip no-op undo entries (click-without-drag, unchanged inspector value).
+ * @param {number[]} a
+ * @param {number[]} b
+ * @param {number} [eps]
  */
 export function matricesEqual(a, b, eps = 1e-6) {
   for (let i = 0; i < 16; i++) {
@@ -84,6 +97,8 @@ export function matricesEqual(a, b, eps = 1e-6) {
  * gizmo (drag end) and the inspector scale fields.
  *
  * Returns true when a transform was staged.
+ * @param {string} nodeId
+ * @returns {boolean}
  */
 export function stageNodeTransform(nodeId) {
   const matrix = readNodeTransformMatrix(nodeId);
@@ -94,6 +109,7 @@ export function stageNodeTransform(nodeId) {
 
 /**
  * Apply default light wooden material to meshes.
+ * @param {BABYLON.AbstractMesh[]} meshes
  */
 export function applyDefaultMaterial(meshes) {
   const woodColor = BABYLON.Color3.FromHexString(DEFAULT_WOOD_COLOR);
@@ -125,6 +141,8 @@ export function applyDefaultMaterial(meshes) {
 
 /**
  * Return renderable meshes that contribute to imported asset bounds.
+ * @param {BABYLON.AbstractMesh[]} meshes
+ * @returns {BABYLON.AbstractMesh[]}
  */
 export function getRenderableMeshes(meshes) {
   return meshes.filter(
@@ -138,6 +156,8 @@ export function getRenderableMeshes(meshes) {
 
 /**
  * Compute world-space bounds for a set of renderable meshes.
+ * @param {BABYLON.AbstractMesh[]} meshes
+ * @returns {{min: BABYLON.Vector3, max: BABYLON.Vector3, center: BABYLON.Vector3, size: BABYLON.Vector3}|null}
  */
 export function getWorldBounds(meshes) {
   let min = new BABYLON.Vector3(
@@ -182,6 +202,10 @@ export function getWorldBounds(meshes) {
 
 /**
  * Shift imported root nodes so the asset's bounding-box center sits on its anchor.
+ * @param {BABYLON.AbstractMesh[]} meshes
+ * @param {Array<BABYLON.TransformNode|BABYLON.AbstractMesh>} importedNodes
+ * @param {BABYLON.TransformNode} parentNode
+ * @param {string} nodeId
  */
 export function centerImportedAsset(meshes, importedNodes, parentNode, nodeId) {
   const renderableMeshes = getRenderableMeshes(meshes);

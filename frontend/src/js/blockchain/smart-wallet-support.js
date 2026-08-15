@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Smart-wallet chain support constants.
  *
@@ -15,7 +14,7 @@ export const SMART_WALLET_SUPPORTED_CHAIN_IDS = [CHAIN_IDS.BASE_TESTNET];
 
 /**
  * Check whether the given chain supports CDP smart wallets.
- * @param {number|string} chainId
+ * @param {number|string|null} chainId
  * @returns {boolean}
  */
 export function isSmartWalletSupported(chainId) {

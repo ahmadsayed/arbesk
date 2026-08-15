@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { showInfoDialog } from "./dialog.js";
 import { MOD } from "../utils/platform.js";
 
@@ -68,8 +67,9 @@ document.getElementById("keyboardHelpBtn")?.addEventListener("click", showKeyboa
 // Ctrl+/ (or ⌘/) opens the help dialog from anywhere
 document.addEventListener("keydown", (e) => {
   if (!((e.ctrlKey || e.metaKey) && e.key === "/")) return;
-  const tag = document.activeElement?.tagName?.toLowerCase();
-  if (document.activeElement?.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return;
+  const active = /** @type {HTMLElement|null} */ (document.activeElement);
+  const tag = active?.tagName?.toLowerCase();
+  if (active?.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return;
   e.preventDefault();
   showKeyboardHelp();
 });

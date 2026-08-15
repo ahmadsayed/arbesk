@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Asset Save/Publish Controller.
  * Phase B: Updated for GNOME headerbar - buttons managed individually, no wrapper div.
@@ -41,11 +40,11 @@ import {
   failTaskProgress,
 } from "./task-progress.js";
 
-const saveBtn = document.getElementById("saveAssetBtn");
+const saveBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("saveAssetBtn"));
 const saveBtnText = document.getElementById("saveAssetBtnText");
-const publishBtn = document.getElementById("publishAssetBtn");
+const publishBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("publishAssetBtn"));
 const publishBtnText = document.getElementById("publishAssetBtnText");
-const downloadBtn = document.getElementById("downloadAssetBtn");
+const downloadBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("downloadAssetBtn"));
 
 let isSaving = false;
 let isPublishing = false;
@@ -60,6 +59,7 @@ function requireWallet() {
   return false;
 }
 
+/** @param {any} err */
 function isRateLimitError(err) {
   if (!err || typeof err.message !== "string") return false;
   return (
@@ -83,7 +83,7 @@ async function onDownloadAsset() {
     showToast({
       type: "error",
       title: "Download Failed",
-      message: err.message || "Could not download the model.",
+      message: /** @type {Error} */ (err).message || "Could not download the model.",
     });
   } finally {
     if (downloadBtn) downloadBtn.disabled = false;
@@ -176,7 +176,7 @@ async function onSaveAssetDraft() {
     announceStatus(
       rateLimited
         ? "Upload rate limit hit. Save aborted."
-        : "Save failed: " + err.message
+        : "Save failed: " + /** @type {Error} */ (err).message
     );
     failTaskProgress(
       rateLimited ? "Save failed — upload rate limit hit." : "Save failed."
@@ -186,7 +186,7 @@ async function onSaveAssetDraft() {
       title: rateLimited ? "Upload Rate Limited" : "Save Failed",
       message: rateLimited
         ? "Too many upload requests. Please wait a moment and try again."
-        : err.message,
+        : /** @type {Error} */ (err).message,
       actions: [{ label: "Retry", onClick: onSaveAssetDraft }],
     });
   } finally {
@@ -225,13 +225,13 @@ async function onPublishAsset() {
       return;
     }
 
-    const chainId = walletState.get().chainId;
+    const chainId = /** @type {number} */ (walletState.get().chainId);
     const outcome = await publishAsset(
       assetName,
       {
-        address: walletState.get().walletAddress,
+        address: /** @type {string} */ (walletState.get().walletAddress),
         chainId,
-        contractAddress: getContractAddress(chainId),
+        contractAddress: /** @type {string} */ (getContractAddress(chainId)),
       },
       {
         verifyCanEdit,
@@ -273,7 +273,7 @@ async function onPublishAsset() {
     announceStatus(
       rateLimited
         ? "Upload rate limit hit. Publish aborted."
-        : "Publish failed: " + err.message
+        : "Publish failed: " + /** @type {Error} */ (err).message
     );
     failTaskProgress(
       rateLimited ? "Publish failed — upload rate limit hit." : "Publish failed."
@@ -283,7 +283,7 @@ async function onPublishAsset() {
       title: rateLimited ? "Upload Rate Limited" : "Publish Failed",
       message: rateLimited
         ? "Too many upload requests. The asset was not anchored on-chain. Please wait a moment and try again."
-        : err.message,
+        : /** @type {Error} */ (err).message,
       actions: [{ label: "Retry", onClick: onPublishAsset }],
     });
   } finally {
@@ -304,9 +304,10 @@ downloadBtn?.addEventListener("click", () => void onDownloadAsset());
 
 document.addEventListener("keydown", (e) => {
   if (!((e.ctrlKey || e.metaKey) && e.key === "s")) return;
-  const tag = document.activeElement?.tagName?.toLowerCase();
+  const active = /** @type {HTMLElement|null} */ (document.activeElement);
+  const tag = active?.tagName?.toLowerCase();
   if (
-    document.activeElement?.isContentEditable ||
+    active?.isContentEditable ||
     tag === "input" ||
     tag === "textarea" ||
     tag === "select"

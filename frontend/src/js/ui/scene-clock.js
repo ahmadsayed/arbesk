@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Scene Clock — fixed version dial, bottom-right of the viewport.
  *
@@ -22,7 +21,7 @@ function initSceneClock() {
   root.hidden = true;
 
   const clock = createVersionClock({
-    onCommit(index) {
+    onCommit(/** @type {number} */ index) {
       const { entries, activeCid } = store.getState();
       const entry = entries[index];
       if (entry && entry.cid !== activeCid) store.loadVersion(entry.cid);
@@ -47,6 +46,9 @@ function initSceneClock() {
     }
   });
 
+  /**
+   * @param {{entries: Array<{cid: string, [key: string]: any}>, activeCid: string|null, publishedCid: string|null, isLoading: boolean}} s
+   */
   function render(s) {
     root.hidden = s.entries.length === 0;
     if (root.hidden) return;

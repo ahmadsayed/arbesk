@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Network-aware contract configuration for Arbesk.
  *
@@ -11,6 +10,17 @@
  */
 
 import { CHAIN_IDS } from "../../../../constants/chains.js";
+
+/**
+ * @typedef {Object} NetworkConfig
+ * @property {string} name
+ * @property {number} chainId
+ * @property {string} contractAddress
+ * @property {string|null} paidContractAddress
+ * @property {string|null} usdcToken
+ * @property {string} rpcUrl
+ * @property {string|null} blockExplorer
+ */
 
 export const NETWORK_CONFIGS = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {
@@ -36,7 +46,7 @@ export const NETWORK_CONFIGS = {
 /**
  * Get the full network config for a chainId.
  * @param {number|string} chainId
- * @returns {Object|null}
+ * @returns {NetworkConfig|null}
  */
 export function getNetworkConfig(chainId) {
   return NETWORK_CONFIGS[Number(chainId)] || null;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Toast Notification System - Notyf wrapper
  *
@@ -12,11 +11,12 @@
 
 import { escapeHtml } from "../utils/html.js";
 
+/** @type {any} Notyf instance (CDN global, no published types) */
 let _notyf = null;
 
 function getNotyf() {
   if (!_notyf) {
-    _notyf = new window.Notyf({
+    _notyf = new (/** @type {any} */ (window).Notyf)({
       duration: 3000,
       ripple: false,
       dismissible: true,
@@ -86,7 +86,7 @@ export function showToast({ type = "info", title, message = "", duration = 3000,
     if (toastEl) {
       toastEl.querySelectorAll(".toast-action").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const idx = Number(btn.dataset.actionIndex);
+          const idx = Number(/** @type {HTMLElement} */ (btn).dataset.actionIndex);
           if (actions[idx]?.onClick) actions[idx].onClick();
           dismissToast(id);
         });

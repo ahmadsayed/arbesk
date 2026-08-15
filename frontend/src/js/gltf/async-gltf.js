@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Async glTF Operations with Web Worker Offload
  *
@@ -26,6 +25,16 @@ import {
 import { decomposeGLB as decomposeGLBMain, isGLB } from "./glb-parser.js";
 import { editSourceColors as editSourceColorsMain } from "./source-color-editor.js";
 
+/**
+ * Upload credential as handled by this module: the backend-minted
+ * UploadCredential plus the `gateway`/`reusable` fields returned alongside it.
+ * @typedef {import("../ipfs/upload-with-credential.js").UploadCredential & {gateway?: string, reusable?: boolean}} PooledUploadCredential
+ */
+
+/**
+ * @param {any} name
+ * @returns {string}
+ */
 function sanitizeAsyncName(name) {
   return (
     String(name || "asset")
@@ -35,8 +44,12 @@ function sanitizeAsyncName(name) {
   );
 }
 
+/** @type {boolean|null} */
 let workerAvailable = null;
 
+/**
+ * @returns {Promise<boolean>}
+ */
 async function checkWorkerAvailable() {
   if (workerAvailable === null) {
     workerAvailable = await isWorkerPoolAvailable();
@@ -50,6 +63,9 @@ async function checkWorkerAvailable() {
  * rather than mirroring decomposeGltf's exact skip logic (already-ipfs://
  * refs, external image URIs) - a few unused pooled credentials just expire
  * unused, while under-counting would starve the pool mid-upload.
+ *
+ * @param {any} gltfJson
+ * @returns {number}
  */
 function estimateUploadCount(gltfJson) {
   return (gltfJson?.buffers?.length || 0) + (gltfJson?.images?.length || 0) + 1;
@@ -63,6 +79,9 @@ const GLB_CHUNK_HEADER_LENGTH = 8;
  * Cheaply peek a GLB's embedded JSON chunk to size the credential pool,
  * without pulling in the full gltf-transform parser on the main thread.
  * Falls back to a conservative fixed estimate if the header can't be read.
+ *
+ * @param {ArrayBuffer} arrayBuffer
+ * @returns {number}
  */
 function estimateGlbUploadCount(arrayBuffer) {
   try {
@@ -98,7 +117,7 @@ const MAX_POOLED_CREDENTIALS = 200;
  * backend + Pinata mint round trips. This mints all N up front instead.
  *
  * @param {number} count
- * @returns {Promise<object>}
+ * @returns {Promise<PooledUploadCredential>}
  */
 async function getPooledUploadCredential(count) {
   const clamped = Math.min(Math.max(count, 1), MAX_POOLED_CREDENTIALS);
@@ -111,7 +130,7 @@ async function getPooledUploadCredential(count) {
   return {
     backend: "pinata",
     gateway: first.gateway,
-    urls: credentials.map((c) => c.url),
+    urls: credentials.map((c) => /** @type {string} */ (c.url)),
     reusable: true,
   };
 }
@@ -135,11 +154,11 @@ async function getPooledUploadCredential(count) {
  * No-op for kubo (or an already single-shot credential) since there's no
  * clone-desync risk to guard against.
  *
- * @param {object} credential
- * @returns {{workerCredential: object, followUpCredential: object}}
+ * @param {PooledUploadCredential} credential
+ * @returns {{workerCredential: PooledUploadCredential, followUpCredential: PooledUploadCredential}}
  */
 function reserveFollowUpCredential(credential) {
-  if (credential?.backend === "pinata" && credential.urls?.length > 1) {
+  if (credential?.backend === "pinata" && credential.urls && credential.urls.length > 1) {
     const urls = credential.urls.slice();
     const reservedUrl = urls.pop();
     return {
@@ -156,18 +175,11 @@ function reserveFollowUpCredential(credential) {
 }
 
 /**
- * Assemble the composite glTF + its buffers/images into one IPFS directory
- * for organizational browsing (Pinata/Kubo show a browsable folder). Purely
- * additive - loading still uses the loose `ipfs://<cid>` refs in the composite.
- *
- * Best-effort: returns null on any failure so the asset still loads without a
- /**
-  * Compose a composite glTF into a renderable glTF with data URIs.
+ * Compose a composite glTF into a renderable glTF with data URIs.
  * Tries worker first; falls back to main-thread composer.js.
  *
- * @param {object} compositeJson
- * @param {string} gatewayBase - IPFS gateway base URL (e.g., "http://127.0.0.1:8080/ipfs")
- * @returns {Promise<object>} composed glTF JSON
+ * @param {any} compositeJson
+ * @returns {Promise<any>} composed glTF JSON
  */
 export async function composeGlTFAsync(compositeJson) {
   if (!compositeJson) throw new Error("composeGlTFAsync: gltfJson is null");
@@ -184,7 +196,7 @@ export async function composeGlTFAsync(compositeJson) {
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] compose worker failed, falling back:",
-        error.message
+        /** @type {Error} */ (error).message
       );
     }
   }
@@ -200,7 +212,7 @@ export async function composeGlTFAsync(compositeJson) {
  * JSON object or pays a giant JSON.stringify. Fallback matches the previous
  * behavior: main-thread composeGlTF() + JSON.stringify wrapped in a Blob.
  *
- * @param {object} compositeJson
+ * @param {any} compositeJson
  * @returns {Promise<Blob>} application/json Blob ready for a blob URL
  */
 export async function composeGlTFToBlobAsync(compositeJson) {
@@ -223,7 +235,7 @@ export async function composeGlTFToBlobAsync(compositeJson) {
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] composeToBytes worker failed, falling back:",
-        error.message
+        /** @type {Error} */ (error).message
       );
     }
   }
@@ -237,8 +249,8 @@ export async function composeGlTFToBlobAsync(compositeJson) {
  * Does NOT upload to IPFS; caller must upload returned bytes and rewrite URIs,
  * or use decomposeAndStoreAsync.
  *
- * @param {object} gltfJson
- * @returns {Promise<{composite: object, buffers: Array, images: Array}>}
+ * @param {any} gltfJson
+ * @returns {Promise<{composite: any, buffers: any[], images: any[]}>}
  */
 export async function decomposeGlTFAsync(gltfJson) {
   if (!gltfJson) throw new Error("decomposeGlTFAsync: gltf is null");
@@ -249,7 +261,7 @@ export async function decomposeGlTFAsync(gltfJson) {
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] decomposeGltf worker failed, falling back:",
-        error.message
+        /** @type {Error} */ (error).message
       );
     }
   }
@@ -262,8 +274,12 @@ export async function decomposeGlTFAsync(gltfJson) {
  * Decompose a standard glTF JSON and store the composite + components on IPFS.
  * Mirrors the original decomposeAndStore signature.
  *
- * @param {object} gltfJson
- * @returns {Promise<{composite: object, compositeCid: string}>}
+ * @param {any} gltfJson
+ * @param {object} [options]
+ * @param {string} [options.assetName]
+ * @param {string} [options.assetId]
+ * @param {Map<string, string>|null} [options.dedupMap]
+ * @returns {Promise<{composite: any, compositeCid: string}>}
  */
 export async function decomposeAndStoreAsync(gltfJson, options = {}) {
   const { assetName, assetId, dedupMap = null } = options;
@@ -301,7 +317,7 @@ export async function decomposeAndStoreAsync(gltfJson, options = {}) {
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] decomposeAndUploadGltf worker failed, falling back:",
-        error.message
+        /** @type {Error} */ (error).message
       );
     }
   }
@@ -324,8 +340,8 @@ export async function decomposeAndStoreAsync(gltfJson, options = {}) {
  * @param {object} [options]
  * @param {string} [options.assetName]
  * @param {string} [options.assetId]
- * @param {Map<string, string>} [options.dedupMap]
- * @returns {Promise<{composite: object, compositeCid: string|null}>}
+ * @param {Map<string, string>|null} [options.dedupMap]
+ * @returns {Promise<{composite: any, compositeCid: string|null}>}
  */
 export async function decomposeGLBAsync(
   arrayBuffer,
@@ -361,7 +377,7 @@ export async function decomposeGLBAsync(
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] decomposeAndUploadGlb worker failed, falling back:",
-        error.message
+        /** @type {Error} */ (error).message
       );
     }
   }
@@ -382,11 +398,11 @@ export async function decomposeGLBAsync(
  * Mirrors editSourceColors but offloads the color baking to a worker.
  *
  * @param {string} sourceCid
- * @param {object} nodeColors
+ * @param {Object<string, string>} nodeColors
  * @param {object} [options] - Optional parameters
  * @param {string} [options.assetName] - Asset name for IPFS filename
  * @param {string} [options.assetId] - Asset ID for IPFS filename
- * @param {Map<string, string>} [options.dedupMap]
+ * @param {Map<string, string>|null} [options.dedupMap]
  * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
  */
 export async function editSourceColorsAsync(
@@ -401,6 +417,7 @@ export async function editSourceColorsAsync(
     return { sourceCid, modified: 0, skipped: 0 };
   }
 
+  /** @type {any} */
   let gltf = null;
   let decomposedFromGlb = false;
 
@@ -416,7 +433,9 @@ export async function editSourceColorsAsync(
       gltf = JSON.parse(new TextDecoder().decode(buffer));
     }
   } catch (err) {
-    console.warn(`[ASYNC-GLTF] failed to fetch ${sourceCid}: ${err.message}`);
+    console.warn(
+      `[ASYNC-GLTF] failed to fetch ${sourceCid}: ${/** @type {Error} */ (err).message}`
+    );
     throw err;
   }
 
@@ -437,6 +456,7 @@ export async function editSourceColorsAsync(
             ? `${assetName || assetId}_colored.gltf`
             : undefined,
       });
+      /** @type {{sourceCid: string, format: string, path?: string, modified: number, skipped: number}} */
       const out = {
         sourceCid: newCid,
         format: "gltf",
@@ -448,7 +468,7 @@ export async function editSourceColorsAsync(
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] bakeSourceColors worker failed, falling back:",
-        error.message
+        /** @type {Error} */ (error).message
       );
     }
   }

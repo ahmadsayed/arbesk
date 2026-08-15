@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Viewport OS file drop — override or create.
  *
@@ -44,13 +43,19 @@ const _inFlightFileDrops = new Set();
  * The root model node is the first manifest node with a source and no
  * child_ref — linked children are never the override target.
  */
+/**
+ * @param {any} manifest
+ * @returns {any}
+ */
 function findRootModelNode(manifest) {
   return (
-    getManifestNodes(manifest).find((n) => n.source?.cid && !n.child_ref) ||
-    null
+    getManifestNodes(manifest).find(
+      (/** @type {any} */ n) => n.source?.cid && !n.child_ref
+    ) || null
   );
 }
 
+/** @param {any} detail */
 async function _handleAssetFileDropped(detail) {
   const file = detail?.file;
   if (!file) return;
@@ -65,7 +70,11 @@ async function _handleAssetFileDropped(detail) {
   try {
     validateUploadFile(file);
   } catch (err) {
-    showToast({ type: "error", title: "Drop Failed", message: err.message });
+    showToast({
+      type: "error",
+      title: "Drop Failed",
+      message: /** @type {Error} */ (err).message,
+    });
     return;
   }
 
@@ -142,6 +151,7 @@ async function _handleAssetFileDropped(detail) {
  * Event-bus entry point for ASSET_FILE_DROPPED. Tracks the async work so
  * save/publish can wait for it via waitForPendingFileDrops().
  */
+/** @param {any} event */
 export function handleAssetFileDropped(event) {
   const p = _handleAssetFileDropped(event)
     .catch((err) => {

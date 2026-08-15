@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Token Service
  *
@@ -21,7 +20,7 @@ export async function getTokenURI(tokenId) {
     const cid = await c.methods.tokenURI(String(tokenId)).call();
     return cid || null;
   } catch (err) {
-    console.warn(`[TOKEN] failed to get tokenURI for ${tokenId}:`, err.message);
+    console.warn(`[TOKEN] failed to get tokenURI for ${tokenId}:`, /** @type {Error} */ (err).message);
     return null;
   }
 }

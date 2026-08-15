@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO: type the fflate wrappers and drop this header
 /**
  * Thin wrappers around fflate so the rest of the 3MF module never imports
  * fflate directly. Works in the browser (importmap), workers, and Node/Jest.

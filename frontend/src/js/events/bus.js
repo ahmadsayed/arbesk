@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Studio Event Bus
  *
@@ -12,6 +11,8 @@
  *   emit(EVENTS.SCENE_READY, { manifest, manifestCid });
  *   unsubscribe();
  */
+
+/** @typedef {(payload?: any) => void} EventHandler */
 
 import mitt from "./mitt.mjs";
 
@@ -66,6 +67,12 @@ export const EVENTS = {
 
 const _bus = mitt();
 
+/**
+ * Subscribe to an event.
+ * @param {string} type - one of the EVENTS values
+ * @param {EventHandler} handler
+ * @returns {() => void} unsubscribe function
+ */
 export function on(type, handler) {
   _bus.on(type, handler);
   return () => _bus.off(type, handler);

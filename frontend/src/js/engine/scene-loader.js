@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Scene Loader
  *
@@ -31,6 +30,13 @@ import { clearScene, disposeNodeContent } from "./cleanup.js";
 import { createAnchorNode } from "./scene-graph.js";
 import { identityMatrix } from "../utils/collections.js";
 
+/**
+ * @param {any} src - source string or `{cid, path?, format?}` reference
+ * @param {BABYLON.TransformNode} parentNode
+ * @param {string} nodeId
+ * @param {((fraction: number) => void)|null} [onProgress]
+ * @returns {Promise<BABYLON.AbstractMesh[]>}
+ */
 async function loadAsset(src, parentNode, nodeId, onProgress = null) {
   const cid = extractCid(src);
   const handler = resolveFormatHandler(src);
@@ -41,7 +47,7 @@ async function loadAsset(src, parentNode, nodeId, onProgress = null) {
       scene: state.scene,
       cid,
       importFromBlob,
-      onProgress,
+      onProgress: onProgress ?? undefined,
     });
     attachMetadata(
       result.meshes,
@@ -65,6 +71,10 @@ async function loadAsset(src, parentNode, nodeId, onProgress = null) {
   }
 }
 
+/**
+ * @param {Blob} blob
+ * @param {string} extension
+ */
 async function importFromBlob(blob, extension) {
   const blobUrl = URL.createObjectURL(blob);
   try {
@@ -86,6 +96,13 @@ async function importFromBlob(blob, extension) {
   }
 }
 
+/**
+ * @param {BABYLON.AbstractMesh[]} meshes
+ * @param {string} nodeId
+ * @param {BABYLON.TransformNode} parentNode
+ * @param {BABYLON.TransformNode[]} [transformNodes]
+ * @param {BABYLON.AnimationGroup[]} [animationGroups]
+ */
 function attachMetadata(meshes, nodeId, parentNode, transformNodes = [], animationGroups = []) {
   const meshArray = [];
   const importedNodes = [...transformNodes, ...meshes];
@@ -125,6 +142,9 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = [], animati
  * Decide how a node's child_ref should be resolved: same-collection lookup
  * or cross-collection asset lookup.
  * Pure decision logic - no I/O.
+ * @param {any} childRef
+ * @param {Record<string, any>|null} activeCollectionAssets
+ * @returns {{kind: "invalid"}|{kind: "same-collection", assetID: string, assetsMap: Record<string, any>|null}|{kind: "cross-collection-asset", collectionRef: any, assetID: string}}
  */
 function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
   if (!childRef) return { kind: "invalid" };
@@ -153,6 +173,13 @@ function buildChildRefResolutionPlan(childRef, activeCollectionAssets) {
 // Token child asset loading
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * @param {any} node
+ * @param {BABYLON.TransformNode} anchor
+ * @param {number} depth
+ * @param {Set<string>} resolvingCids
+ * @returns {Promise<BABYLON.AbstractMesh[]>}
+ */
 async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   const childRef = node.child_ref;
   if (!childRef) return [];
@@ -186,7 +213,7 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   const refKey =
     plan.kind === "cross-collection-asset"
       ? `${plan.collectionRef.chainId}:${plan.collectionRef.contractAddress}:${plan.collectionRef.tokenId}:${plan.assetID}`
-      : `self:${plan.assetID}`;
+      : `self:${/** @type {any} */ (plan).assetID}`;
 
   if (resolvingCids.has(refKey)) {
     console.warn(
@@ -278,6 +305,14 @@ async function loadTokenChildNode(node, anchor, depth, resolvingCids) {
   }
 }
 
+/**
+ * @param {any} node
+ * @param {BABYLON.TransformNode} parentNode
+ * @param {number} depth
+ * @param {Set<string>} resolvingCids
+ * @param {((fraction: number) => void)|null} [onProgress]
+ * @returns {Promise<{anchor: BABYLON.TransformNode, meshes: BABYLON.AbstractMesh[]}>}
+ */
 async function loadNode(node, parentNode, depth, resolvingCids, onProgress = null) {
   console.log(
     `[SCENE] loadNode node_id=${node.node_id} source=${JSON.stringify(
@@ -299,7 +334,7 @@ async function loadNode(node, parentNode, depth, resolvingCids, onProgress = nul
       node,
       anchor,
       depth || 0,
-      resolvingCids || new Set()
+      resolvingCids || /** @type {Set<string>} */ (new Set())
     );
     return { anchor, meshes };
   }
@@ -321,6 +356,14 @@ async function loadNode(node, parentNode, depth, resolvingCids, onProgress = nul
   return { anchor, meshes };
 }
 
+/**
+ * @param {string} manifestCid
+ * @param {BABYLON.TransformNode|null} [parentAnchor]
+ * @param {number} [depth]
+ * @param {Set<string>} [resolvingCids]
+ * @param {{setNodeCount: (count: number) => void, setNodeFraction: (nodeId: string, fraction: number) => void}|null} [reporter]
+ * @returns {Promise<any>} the loaded manifest
+ */
 async function loadAssetManifest(
   manifestCid,
   parentAnchor = null,
@@ -394,7 +437,7 @@ async function loadAssetManifest(
         depth,
         new Set(resolvingCids),
         reporter && depth === 0
-          ? (f) => reporter.setNodeFraction(node.node_id, f)
+          ? (/** @type {number} */ f) => reporter.setNodeFraction(node.node_id, f)
           : null
       ).then((result) => {
         reporter?.setNodeFraction(node.node_id, 1);
@@ -417,7 +460,7 @@ async function loadAssetManifest(
  * of its entries so gallery UI can let the user pick which asset to open.
  *
  * @param {string} collectionCid
- * @param {{chainId: number, contractAddress: string, tokenId: string}} collectionRef
+ * @param {{chainId: number, contractAddress: string, tokenId: string}|null} collectionRef
  * @returns {Promise<{manifest: Object, assetEntries: Array<{assetID: string, kind: string, value: any}>}>}
  */
 async function loadCollectionManifest(collectionCid, collectionRef) {
@@ -450,6 +493,10 @@ async function loadCollectionManifest(collectionCid, collectionRef) {
  * subsequent drops of the same asset get `_2`, `_3`, … (max existing
  * suffix + 1) so each placement is independently keyed in the state maps
  * (anchors, meshes, transform edits) and can be moved on its own.
+ * @param {Set<string>} existingIds
+ * @param {string} tokenId
+ * @param {string} assetID
+ * @returns {string}
  */
 function nextLinkedNodeId(existingIds, tokenId, assetID) {
   const base = `linked_${tokenId}_${assetID}`;
@@ -471,6 +518,12 @@ function nextLinkedNodeId(existingIds, tokenId, assetID) {
  * so future edits there propagate automatically. `nodeId` lets the caller
  * pass a per-instance unique id (see nextLinkedNodeId) so the same asset
  * can be referenced more than once.
+ * @param {"fork"|"live-ref"} choice
+ * @param {{collectionRef: {chainId: number, contractAddress: string, tokenId: string}}} ref
+ * @param {string} assetID
+ * @param {string} resolvedAssetCid
+ * @param {string} [nodeId]
+ * @returns {{node_id: string, transform_matrix: number[], source?: {cid: string}, child_ref?: object}}
  */
 function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid, nodeId) {
   const resolvedNodeId = nodeId || `linked_${ref.collectionRef.tokenId}_${assetID}`;
@@ -495,6 +548,8 @@ function buildForkOrLiveRefNode(choice, ref, assetID, resolvedAssetCid, nodeId) 
 
 /**
  * BigInt-safe token id normalization so "0x2a" and "42" compare equal.
+ * @param {any} id
+ * @returns {string}
  */
 function normalizeTokenId(id) {
   if (id == null) return "";
@@ -509,6 +564,9 @@ function normalizeTokenId(id) {
  * True when a dropped linked asset is the asset currently open in the
  * Studio (same collection token + same assetID). A live-ref to itself is a
  * guaranteed cycle, so such drops must be fork-only.
+ * @param {{chainId: number, contractAddress: string, tokenId: string}} collectionRef
+ * @param {string} assetID
+ * @returns {boolean}
  */
 function isSelfLinkedAssetDrop(collectionRef, assetID) {
   const active = state.activeCollectionRef;
@@ -531,6 +589,7 @@ function isSelfLinkedAssetDrop(collectionRef, assetID) {
  */
 const _inFlightLinkedDrops = new Set();
 
+/** @param {any} event - ASSET_LINKED_DROPPED event detail */
 async function _handleLinkedAssetDropped(event) {
   const detail = event;
   if (!detail) return;
@@ -619,6 +678,8 @@ async function _handleLinkedAssetDropped(event) {
 /**
  * Event-bus entry point for ASSET_LINKED_DROPPED. Tracks the async work so
  * save/publish can wait for it via waitForPendingLinkedDrops().
+ * @param {any} event - ASSET_LINKED_DROPPED event detail
+ * @returns {Promise<void>}
  */
 function handleLinkedAssetDropped(event) {
   const p = _handleLinkedAssetDropped(event)

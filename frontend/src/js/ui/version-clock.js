@@ -1,5 +1,3 @@
-// TODO: tighten types for SVG DOM and strict event typing; currently too dynamic for strict checkJs.
-// @ts-nocheck
 /**
  * Version Clock face — reusable SVG dial for scrubbing the manifest chain.
  *
@@ -10,6 +8,23 @@
  * release, wheel debounce, or keyboard step).
  */
 
+/**
+ * @typedef {object} VersionClockEntry
+ * @property {string} [cid]
+ * @property {string} [name]
+ * @property {number|string} [version]
+ * @property {number} [nodeCount]
+ * @property {string|number} [timestamp]
+ */
+
+/**
+ * @typedef {object} VersionClockView
+ * @property {VersionClockEntry[]} entries
+ * @property {number} activeIndex
+ * @property {number} publishedIndex
+ * @property {boolean} loading
+ */
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 const TICK_OUTER = 44; // viewBox units; viewBox is 0 0 100 100, center (50,50)
 const TICK_INNER = 37;
@@ -17,16 +32,27 @@ const DOT_R = 1.6; // thinned tick dot radius
 const WHEEL_COMMIT_MS = 400;
 const THIN_ABOVE = 24; // start thinning ticks past this many versions
 
-/** Angle in degrees for entry index i of n. Exported for tests. */
+/**
+ * Angle in degrees for entry index i of n. Exported for tests.
+ * @param {number} i
+ * @param {number} n
+ * @returns {number}
+ */
 export function _angleForIndex(i, n) {
   return -90 + ((n - 1 - i) * 360) / n;
 }
 
+/**
+ * @param {number} angleDeg
+ * @param {number} radius
+ * @returns {[number, number]}
+ */
 function polar(angleDeg, radius) {
   const rad = (angleDeg * Math.PI) / 180;
   return [50 + radius * Math.cos(rad), 50 + radius * Math.sin(rad)];
 }
 
+/** @param {VersionClockEntry|undefined} entry */
 function entryDetail(entry) {
   if (!entry) return "";
   const nodes = `${entry.nodeCount} node${entry.nodeCount !== 1 ? "s" : ""}`;
@@ -38,10 +64,18 @@ function entryDetail(entry) {
     .join(" · ");
 }
 
+/**
+ * @param {object} opts
+ * @param {(index: number) => void} opts.onCommit
+ * @returns {{el: HTMLDivElement, update: (next: VersionClockView) => void, destroy: () => void}}
+ */
 export function createVersionClock({ onCommit }) {
+  /** @type {VersionClockView} */
   let view = { entries: [], activeIndex: -1, publishedIndex: -1, loading: false };
-  let previewIndex = null; // non-null while dragging / wheel-stepping
-  let wheelTimer = null;
+  /** @type {number|null} non-null while dragging / wheel-stepping */
+  let previewIndex = null;
+  /** @type {ReturnType<typeof setTimeout>|undefined} */
+  let wheelTimer;
   let dragging = false;
 
   const el = document.createElement("div");
@@ -167,6 +201,7 @@ export function createVersionClock({ onCommit }) {
     el.setAttribute("aria-valuetext", entry ? `Version ${entry.version}` : "");
   }
 
+  /** @param {VersionClockView} next */
   function update(next) {
     view = next;
     if (!dragging) previewIndex = null;
@@ -176,10 +211,12 @@ export function createVersionClock({ onCommit }) {
 
   // ─── Interaction ───
 
+  /** @param {number} i */
   function clamp(i) {
     return Math.max(0, Math.min(view.entries.length - 1, i));
   }
 
+  /** @param {PointerEvent} e */
   function indexForPointer(e) {
     const n = view.entries.length;
     if (n === 0) return -1;
@@ -192,6 +229,7 @@ export function createVersionClock({ onCommit }) {
     return n - 1 - steps;
   }
 
+  /** @param {number} index */
   function commit(index) {
     if (index < 0 || index >= view.entries.length) return;
     if (index === view.activeIndex) {
@@ -202,6 +240,7 @@ export function createVersionClock({ onCommit }) {
     onCommit(index);
   }
 
+  /** @param {PointerEvent} e */
   function onPointerDown(e) {
     if (e.button !== 0) return;
     if (view.entries.length < 2) return;
@@ -212,6 +251,7 @@ export function createVersionClock({ onCommit }) {
     renderIndicators();
   }
 
+  /** @param {PointerEvent} e */
   function onPointerMove(e) {
     if (!dragging) return;
     const idx = clamp(indexForPointer(e));
@@ -229,6 +269,7 @@ export function createVersionClock({ onCommit }) {
     if (idx !== null) commit(idx);
   }
 
+  /** @param {WheelEvent} e */
   function onWheel(e) {
     if (view.entries.length < 2) return;
     e.preventDefault();
@@ -243,6 +284,7 @@ export function createVersionClock({ onCommit }) {
     }, WHEEL_COMMIT_MS);
   }
 
+  /** @param {KeyboardEvent} e */
   function onKeyDown(e) {
     const n = view.entries.length;
     if (n < 2) return;

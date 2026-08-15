@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk glTF Web Worker Pool
  *
@@ -17,10 +16,15 @@ import workerpool from "../vendor/workerpool-10.0.2.mjs";
 // module - fails to evaluate and only workerpool's built-in [run, methods]
 // methods register. Passing a string (via .href) keeps workerpool on the
 // direct-load path with the {type:"module"} workerOpts intact.
+// @ts-ignore TS1470 - NodeNext treats frontend .js as CommonJS output
+// (frontend/package.json has no "type":"module"), but this is browser-native
+// ESM where import.meta is valid.
 const WORKER_SCRIPT = new URL("./gltf-worker.js?v=5", import.meta.url).href;
 const MAX_WORKERS = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
 
+/** @type {any} */
 let pool = null;
+/** @type {boolean | null} */
 let available = null;
 
 function createPool() {
@@ -79,7 +83,7 @@ export async function isWorkerPoolAvailable() {
       console.warn(initError.stack);
     }
   } catch (error) {
-    console.warn("[WORKER-POOL] module workers not available, falling back to main thread:", error.message);
+    console.warn("[WORKER-POOL] module workers not available, falling back to main thread:", (/** @type {Error} */ (error)).message);
   }
 
   available = false;

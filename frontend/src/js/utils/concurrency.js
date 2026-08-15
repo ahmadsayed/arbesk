@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tiny promise-based concurrency limiter.
  *
@@ -32,7 +31,9 @@ export function createConcurrencyLimiter(limit) {
       return;
     }
     running++;
-    const { fn, resolve, reject } = queue.shift();
+    const task = queue.shift();
+    if (!task) return;
+    const { fn, resolve, reject } = task;
     Promise.resolve()
       .then(fn)
       .then(

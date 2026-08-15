@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Shared collection/asset ID helpers.
  *
@@ -42,10 +41,10 @@ export function deriveNamedCollectionId(walletAddr, name) {
  * Merge an asset CID into a collection manifest's `assets` map.
  * Pure function - does not touch IPFS or chain state.
  *
- * @param {Object|null} collectionManifest
+ * @param {Record<string, any>|null} collectionManifest
  * @param {string} assetID
  * @param {string} assetCid
- * @returns {Object} new collection manifest object
+ * @returns {Record<string, any>} new collection manifest object
  */
 export function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) {
   const base = collectionManifest
@@ -56,7 +55,7 @@ export function mergeAssetIntoCollection(collectionManifest, assetID, assetCid) 
         version: 0,
         assets: {},
       };
-  const assets = { ...(base.assets || {}) };
+  const assets = { ...(/** @type {Record<string, string>} */ (base.assets || {})) };
   assets[assetID] = assetCid;
   return {
     ...base,

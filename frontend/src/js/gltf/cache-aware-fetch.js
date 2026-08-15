@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Cache-aware CID → base64 fetch helper.
  *
@@ -22,17 +21,24 @@ import {
   BIG_CONTENT_THRESHOLD_BYTES,
 } from "../utils/content-cache.js";
 
+/**
+ * @param {ArrayBufferLike} buffer
+ * @returns {Uint8Array}
+ */
 function bytesFromBuffer(buffer) {
-  return new Uint8Array(buffer, buffer.byteOffset, buffer.byteLength);
+  // The fetchRaw contract returns whole buffers, so byteOffset is always
+  // absent (0) and byteLength covers the full buffer.
+  const view = /** @type {any} */ (buffer);
+  return new Uint8Array(buffer, view.byteOffset, view.byteLength);
 }
 
 /**
  * Fetch a CID as a base64 string, using the content cache when possible.
  *
  * @param {string} cid
- * @param {object|null} arbeskMeta - `_arbesk` metadata from a composite glTF entry
+ * @param {any} arbeskMeta - `_arbesk` metadata from a composite glTF entry (dynamic shape)
  * @param {object} fetchers
- * @param {function(string): Promise<ArrayBuffer>} fetchers.fetchRaw - returns stored bytes (may be gzipped)
+ * @param {function(string): Promise<ArrayBufferLike>} fetchers.fetchRaw - returns stored bytes (may be gzipped)
  * @param {function(string): Promise<ArrayBuffer>} fetchers.fetchDecompressed - returns uncompressed bytes
  * @param {function(Uint8Array): Uint8Array|Promise<Uint8Array>} fetchers.decompress - decompresses gzipped bytes
  * @returns {Promise<string>} base64-encoded payload
@@ -49,7 +55,7 @@ export async function fetchCIDAsBase64(cid, arbeskMeta, { fetchRaw, fetchDecompr
       const bytes = cached.compressed
         ? await decompress(cached.bytes)
         : cached.bytes;
-      return arrayBufferToBase64(bytes.buffer);
+      return arrayBufferToBase64(/** @type {ArrayBuffer} */ (bytes.buffer));
     }
 
     const rawBuffer = await fetchRaw(cid);
@@ -58,7 +64,7 @@ export async function fetchCIDAsBase64(cid, arbeskMeta, { fetchRaw, fetchDecompr
       (err) => console.warn(`[CACHE-FETCH] cache write failed: ${err.message}`)
     );
     const bytes = arbeskMeta.compressed ? await decompress(rawBytes) : rawBytes;
-    return arrayBufferToBase64(bytes.buffer);
+    return arrayBufferToBase64(/** @type {ArrayBuffer} */ (bytes.buffer));
   }
 
   const buffer = await fetchDecompressed(cid);

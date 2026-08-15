@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Fast, non-cryptographic hash helpers for binary deduplication.
  *
@@ -23,15 +22,28 @@ export const SUPPORTED_HASH_ALGORITHMS = new Set(["murmur3-32", "murmur3-128"]);
 
 /**
  * Convert a 32-bit unsigned integer to an 8-digit hex string.
+ * @param {number} value
+ * @returns {string}
  */
 function u32ToHex(value) {
   return (value >>> 0).toString(16).padStart(8, "0");
 }
 
+/**
+ * Rotate a 32-bit integer left.
+ * @param {number} x
+ * @param {number} r
+ * @returns {number}
+ */
 function rotl32(x, r) {
   return ((x << r) | (x >>> (32 - r))) >>> 0;
 }
 
+/**
+ * MurmurHash3 finalization mix for a 32-bit lane.
+ * @param {number} h
+ * @returns {number}
+ */
 function fmix32(h) {
   h ^= h >>> 16;
   h = Math.imul(h, 0x85ebca6b);

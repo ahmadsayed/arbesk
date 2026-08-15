@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk glTF Decomposer
  *
@@ -34,15 +33,18 @@ export { isComposite };
  *
  * If the glTF is already composite, it is returned as-is.
  *
- * @param {object} gltf - Standard glTF 2.0 JSON (with data-URI buffers/images)
- * @param {object} [credential=null] - Optional reusable upload credential.
+ * @param {any} gltf - Standard glTF 2.0 JSON (with data-URI buffers/images; dynamic schema)
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential|null} [credential=null] - Optional reusable upload credential.
  * @param {object} [options={}] - Decomposition options.
  * @param {boolean} [options.compress=true] - Gzip-compress buffers/images before upload.
- * @returns {Promise<object>} Composite glTF JSON with ipfs:// URI references
+ * @param {string} [options.assetName] - Asset name for IPFS filenames.
+ * @param {string} [options.assetId] - Asset ID for IPFS filenames.
+ * @param {Map<string, string>|null} [options.dedupMap=null] - Existing hash → CID map.
+ * @returns {Promise<any>} Composite glTF JSON with ipfs:// URI references
  */
 export async function decomposeGlTF(gltf, credential = null, options = {}) {
   const { compress = true, assetName, assetId, dedupMap = null } = options;
-  const baseName = sanitizeFileName(assetName || assetId);
+  const baseName = sanitizeFileName(/** @type {string} */ (assetName || assetId));
   if (!gltf) throw new Error("decomposeGlTF: gltf is null");
 
   // Already decomposed - nothing to do
@@ -118,9 +120,14 @@ export async function decomposeGlTF(gltf, credential = null, options = {}) {
  * Decompose a glTF and store the composite JSON on IPFS.
  * Returns { composite, compositeCid }.
  *
- * @param {object} gltf - Standard glTF 2.0 JSON
- * @param {object} [credential=null] - Optional reusable upload credential.
- * @returns {Promise<{composite: object, compositeCid: string}>}
+ * @param {any} gltf - Standard glTF 2.0 JSON (dynamic schema)
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential|null} [credential=null] - Optional reusable upload credential.
+ * @param {object} [options={}] - Decomposition options.
+ * @param {boolean} [options.compress=true] - Gzip-compress buffers/images before upload.
+ * @param {string} [options.assetName] - Asset name for IPFS filenames.
+ * @param {string} [options.assetId] - Asset ID for IPFS filenames.
+ * @param {Map<string, string>|null} [options.dedupMap=null] - Existing hash → CID map.
+ * @returns {Promise<{composite: any, compositeCid: string}>}
  */
 export async function decomposeAndStore(gltf, credential = null, options = {}) {
   const { compress = true, assetName, assetId, dedupMap = null } = options;
@@ -131,7 +138,7 @@ export async function decomposeAndStore(gltf, credential = null, options = {}) {
     dedupMap,
   });
   const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.js");
-  const baseName = sanitizeFileName(assetName || assetId);
+  const baseName = sanitizeFileName(/** @type {string} */ (assetName || assetId));
   const compositeCid = await writeJSONToIPFS(composite, credential, {
     compress,
     assetId,

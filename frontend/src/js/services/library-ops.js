@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Library operations - create collections and upload desktop files.
  *
@@ -66,7 +65,7 @@ export async function createNamedCollection(name, { onPending } = {}) {
 
   const tokenIdHex = deriveNamedCollectionId(walletAddr, trimmed);
   // Library state stores token ids as decimal strings (matching on-chain event values).
-  const tokenId = BigInt(tokenIdHex).toString();
+  const tokenId = BigInt(/** @type {string} */ (tokenIdHex)).toString();
 
   // If this wallet+name collection was already minted, return the existing one
   // instead of failing with TokenAlreadyMinted. Both calls revert for a
@@ -91,7 +90,7 @@ export async function createNamedCollection(name, { onPending } = {}) {
     prev_asset_manifest_cid: null,
   };
 
-  const collectionCid = await writeJSONToIPFS(collectionManifest, null, {
+  const collectionCid = await writeJSONToIPFS(collectionManifest, /** @type {any} */ (null), {
     type: "collection",
     assetId: collectionManifest.asset_id,
   });
@@ -102,7 +101,7 @@ export async function createNamedCollection(name, { onPending } = {}) {
 
   // Persist the editor list to IPFS and record its CID on-chain. localStorage
   // only caches the list; the contract's editorListURI is the source of truth.
-  const editorListUri = await writeJSONToIPFS(editorList, null, {
+  const editorListUri = await writeJSONToIPFS(editorList, /** @type {any} */ (null), {
     compress: true,
     type: "editors",
     assetId: `token_${tokenId}_v1`,
@@ -116,7 +115,7 @@ export async function createNamedCollection(name, { onPending } = {}) {
     try {
       onPending({ tokenId, manifestCid: collectionCid });
     } catch (e) {
-      warn("[LIBRARY-OPS] onPending callback threw:", e.message);
+      warn("[LIBRARY-OPS] onPending callback threw:", /** @type {Error} */ (e).message);
     }
   }
 
@@ -132,17 +131,20 @@ export async function createNamedCollection(name, { onPending } = {}) {
   return { tokenId, manifestCid: collectionCid, isNew: true };
 }
 
+/** @param {string} filename */
 function fileExtension(filename) {
   const parts = (filename || "").split(".");
-  return parts.length > 1 ? parts.pop().toLowerCase() : "";
+  return parts.length > 1 ? (parts.pop() || "").toLowerCase() : "";
 }
 
+/** @param {string} filename */
 export function baseNameWithoutExtension(filename) {
   const ext = fileExtension(filename);
   if (!ext) return filename || "Uploaded Asset";
   return filename.slice(0, -ext.length - 1) || "Uploaded Asset";
 }
 
+/** @param {File} file */
 export function validateUploadFile(file) {
   if (!file) throw new Error("No file selected");
   const ext = fileExtension(file.name);
@@ -162,7 +164,7 @@ export function validateUploadFile(file) {
  * mirroring Studio's save: on failure the raw upload is kept — every handler's
  * load() accepts the raw form, and a later Studio save retries decompose.
  *
- * @param {object} assetManifest - Freshly built single-node upload manifest.
+ * @param {any} assetManifest - Freshly built single-node upload manifest.
  */
 async function decomposeUploadSource(assetManifest) {
   const node = assetManifest.scene?.nodes?.[0];
@@ -184,7 +186,7 @@ async function decomposeUploadSource(assetManifest) {
     log(`[LIBRARY-OPS] decomposed upload → ${result.cid} (${result.path})`);
   } catch (err) {
     warn(
-      `[LIBRARY-OPS] decompose at upload failed, keeping raw source: ${err.message}`
+      `[LIBRARY-OPS] decompose at upload failed, keeping raw source: ${/** @type {Error} */ (err).message}`
     );
   }
 }
@@ -268,7 +270,7 @@ export async function uploadFileToCollection(file, collectionTokenId, { onStage 
     },
   };
 
-  const assetManifestCid = await writeJSONToIPFS(assetManifest, null, {
+  const assetManifestCid = await writeJSONToIPFS(assetManifest, /** @type {any} */ (null), {
     type: "asset",
     assetId,
   });

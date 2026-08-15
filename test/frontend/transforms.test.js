@@ -17,6 +17,9 @@ beforeEach(() => {
       static Identity() {
         return new global.BABYLON.Quaternion();
       }
+      static FromEulerVector() {
+        return new global.BABYLON.Quaternion();
+      }
     },
     Matrix: { Compose: () => FAKE_MATRIX },
   };
@@ -43,6 +46,31 @@ describe("readNodeTransformMatrix", () => {
     expect(readNodeTransformMatrix("nope")).toBe(null);
     state.nodeAnchors.set("n2", { isDisposed: () => true });
     expect(readNodeTransformMatrix("n2")).toBe(null);
+  });
+
+  test("falls back to Euler rotation when rotationQuaternion is null", () => {
+    // Babylon's gizmos write Euler `rotation` on nodes whose rotationQuaternion
+    // is null — staging must convert it, not drop it (child-asset anchors).
+    const eulerRotation = { x: 0.1, y: 0.2, z: 0.3 };
+    const sentinel = { convertedFromEuler: true };
+    global.BABYLON.Quaternion.FromEulerVector = (v) => {
+      expect(v).toBe(eulerRotation);
+      return sentinel;
+    };
+    let composedRotation = null;
+    global.BABYLON.Matrix.Compose = (s, r) => {
+      composedRotation = r;
+      return FAKE_MATRIX;
+    };
+    state.nodeAnchors.set("n3", {
+      scaling: {},
+      rotation: eulerRotation,
+      rotationQuaternion: null,
+      position: {},
+      isDisposed: () => false,
+    });
+    readNodeTransformMatrix("n3");
+    expect(composedRotation).toBe(sentinel);
   });
 });
 

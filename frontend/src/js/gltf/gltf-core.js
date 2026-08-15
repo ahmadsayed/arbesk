@@ -1,5 +1,3 @@
-// TODO: tighten types for the dynamic glTF JSON shapes; currently too dynamic for checkJs.
-// @ts-nocheck
 /**
  * Arbesk glTF Core Transforms
  *
@@ -30,7 +28,7 @@ const GLB_CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0"
  * Packs glTF JSON + optional BIN chunk into a GLB v2 container without
  * decoding/re-encoding mesh data, so content-addressed CIDs remain stable.
  *
- * @param {object} json - glTF JSON object
+ * @param {any} json - glTF JSON object (dynamic schema)
  * @param {ArrayBuffer|Uint8Array|null} binaryChunk - Optional BIN chunk
  * @returns {ArrayBuffer} GLB bytes
  */
@@ -102,7 +100,7 @@ function serializeGLBCustom(json, binaryChunk = null) {
  * This is kept as a utility for GLB export/download; the storage/edit path does
  * not re-serialize to GLB.
  *
- * @param {object} json - glTF JSON object
+ * @param {any} json - glTF JSON object (dynamic schema)
  * @param {ArrayBuffer|Uint8Array|null} binaryChunk - Optional BIN chunk
  * @returns {ArrayBuffer} GLB bytes
  */
@@ -114,7 +112,7 @@ export function serializeGLB(json, binaryChunk = null) {
  * Check if a glTF JSON is already in composite format (any buffer or image
  * referencing `ipfs://<CID>`).
  *
- * @param {object} gltf
+ * @param {any} gltf - glTF JSON object (dynamic schema)
  * @returns {boolean}
  */
 export function isComposite(gltf) {
@@ -152,9 +150,9 @@ export function cidFromIpfsUri(uri) {
 /**
  * Attach Arbesk dedup metadata to a glTF buffer or image entry.
  *
- * @param {object} item
+ * @param {any} item - glTF buffer/image entry (dynamic schema)
  * @param {object} meta
- * @returns {object}
+ * @returns {any}
  */
 export function attachDedupMeta(item, meta) {
   return { ...item, _arbesk: meta };
@@ -164,8 +162,8 @@ export function attachDedupMeta(item, meta) {
  * Remove Arbesk dedup metadata from all buffers/images in a composite glTF.
  * Returns a deep clone; the input is not mutated.
  *
- * @param {object} composite
- * @returns {object} Clean glTF JSON suitable for Babylon.js or serialization
+ * @param {any} composite - Composite glTF JSON (dynamic schema)
+ * @returns {any} Clean glTF JSON suitable for Babylon.js or serialization
  */
 export function stripDedupMeta(composite) {
   const cleaned = JSON.parse(JSON.stringify(composite));
@@ -189,10 +187,10 @@ export function stripDedupMeta(composite) {
  * composite storage form carries both, so the bufferView is dropped from any
  * image that has a uri — strict importers (Blender) reject the file otherwise.
  *
- * @param {object} gltfJson - Composite glTF JSON (not mutated)
- * @param {(cid: string, arbeskMeta: object|undefined) => Promise<string>} fetchBase64
+ * @param {any} gltfJson - Composite glTF JSON (not mutated; dynamic schema)
+ * @param {(cid: string, arbeskMeta: any) => Promise<string>} fetchBase64
  *   Fetches a CID's payload and returns it base64-encoded.
- * @returns {Promise<object>} Standard glTF JSON with data URI buffers/images
+ * @returns {Promise<any>} Standard glTF JSON with data URI buffers/images
  */
 export async function composeGltfJson(gltfJson, fetchBase64) {
   if (!gltfJson) throw new Error("composeGltfJson: gltfJson is null");
@@ -202,10 +200,10 @@ export async function composeGltfJson(gltfJson, fetchBase64) {
 
   if (composed.buffers) {
     await Promise.all(
-      composed.buffers.map(async (buf, i) => {
+      composed.buffers.map(async (/** @type {any} */ buf, /** @type {number} */ i) => {
         if (!buf.uri || !buf.uri.startsWith(IPFS_URI_PREFIX)) return;
         const base64 = await fetchBase64(
-          cidFromIpfsUri(buf.uri),
+          /** @type {string} */ (cidFromIpfsUri(buf.uri)),
           gltfJson.buffers?.[i]?._arbesk
         );
         composed.buffers[i] = {
@@ -218,7 +216,7 @@ export async function composeGltfJson(gltfJson, fetchBase64) {
 
   if (composed.images) {
     await Promise.all(
-      composed.images.map(async (img, i) => {
+      composed.images.map(async (/** @type {any} */ img, /** @type {number} */ i) => {
         if (!img.uri) return;
         const { bufferView: _bufferView, ...rest } = img;
         if (!img.uri.startsWith(IPFS_URI_PREFIX)) {
@@ -227,7 +225,7 @@ export async function composeGltfJson(gltfJson, fetchBase64) {
         }
         const mimeType = img.mimeType || "image/png";
         const base64 = await fetchBase64(
-          cidFromIpfsUri(img.uri),
+          /** @type {string} */ (cidFromIpfsUri(img.uri)),
           gltfJson.images?.[i]?._arbesk
         );
         composed.images[i] = {
@@ -249,12 +247,12 @@ export async function composeGltfJson(gltfJson, fetchBase64) {
  * Already-decomposed (`ipfs://`) and external URIs are left untouched.
  * Returns a deep clone; the input is not mutated.
  *
- * @param {object} gltfJson - Standard glTF 2.0 JSON (not mutated)
- * @param {object} callbacks
- * @param {(index: number, item: object, extracted: {bytes: Uint8Array, mimeType: string}) => Promise<object>|object} callbacks.onBuffer
- * @param {(index: number, item: object, extracted: {bytes: Uint8Array, mimeType: string}) => Promise<object>|object} callbacks.onImage
+ * @param {any} gltfJson - Standard glTF 2.0 JSON (not mutated; dynamic schema)
+ * @param {object} [callbacks]
+ * @param {(index: number, item: any, extracted: {bytes: Uint8Array, mimeType: string}) => Promise<object>|object} [callbacks.onBuffer]
+ * @param {(index: number, item: any, extracted: {bytes: Uint8Array, mimeType: string}) => Promise<object>|object} [callbacks.onImage]
  * @param {string} [callbacks.logPrefix="[DECOMPOSE]"] - Log tag for skipped items
- * @returns {Promise<object>} Composite-shaped glTF JSON with replaced URIs
+ * @returns {Promise<any>} Composite-shaped glTF JSON with replaced URIs
  */
 export async function decomposeGltfJson(
   gltfJson,
@@ -266,7 +264,7 @@ export async function decomposeGltfJson(
 
   if (composite.buffers) {
     await Promise.all(
-      composite.buffers.map(async (buf, i) => {
+      composite.buffers.map(async (/** @type {any} */ buf, /** @type {number} */ i) => {
         if (!buf.uri || buf.uri.startsWith(IPFS_URI_PREFIX)) return;
         const extracted = extractDataURI(buf.uri);
         if (!extracted) {
@@ -275,7 +273,7 @@ export async function decomposeGltfJson(
           );
           return;
         }
-        const next = await onBuffer(i, buf, extracted);
+        const next = await onBuffer?.(i, buf, extracted);
         if (next) composite.buffers[i] = next;
       })
     );
@@ -283,7 +281,7 @@ export async function decomposeGltfJson(
 
   if (composite.images) {
     await Promise.all(
-      composite.images.map(async (img, i) => {
+      composite.images.map(async (/** @type {any} */ img, /** @type {number} */ i) => {
         if (!img.uri || img.uri.startsWith(IPFS_URI_PREFIX)) return;
         if (!img.uri.startsWith("data:")) {
           console.log(`${logPrefix} image[${i}] external URI, keeping as-is`);
@@ -294,7 +292,7 @@ export async function decomposeGltfJson(
           console.warn(`${logPrefix} image[${i}] failed to extract data URI`);
           return;
         }
-        const next = await onImage(i, img, extracted);
+        const next = await onImage?.(i, img, extracted);
         if (next) composite.images[i] = next;
       })
     );

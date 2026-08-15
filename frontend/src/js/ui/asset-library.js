@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Arbesk Asset Library - token-centric browser for owned and shared assets.
  * Phase C: Library is now a sidebar view navigated by the View Switcher.
@@ -84,6 +83,7 @@ function createAssetLoadReporter(label) {
   };
 }
 
+/** @type {HTMLElement|null} */
 let assetLibraryBody = null;
 let libraryRenderInFlight = false;
 let libraryRenderPending = false;
@@ -99,10 +99,18 @@ let _libraryDirty = false;
  */
 const DEFAULT_EVENT_CHUNK_SIZE = 100;
 
+/**
+ * @param {number|string} chainId
+ * @param {string} address
+ */
 function _ownedTokensCacheKey(chainId, address) {
   return `arbesk-owned-tokens-${chainId}-${address.toLowerCase()}`;
 }
 
+/**
+ * @param {number|string} chainId
+ * @param {string} address
+ */
 function _readOwnedTokensCache(chainId, address) {
   try {
     const raw = localStorage.getItem(_ownedTokensCacheKey(chainId, address));
@@ -120,6 +128,12 @@ function _readOwnedTokensCache(chainId, address) {
   return null;
 }
 
+/**
+ * @param {number|string} chainId
+ * @param {string} address
+ * @param {number} lastScannedBlock
+ * @param {string[]} owned
+ */
 function _writeOwnedTokensCache(chainId, address, lastScannedBlock, owned) {
   try {
     localStorage.setItem(
@@ -134,6 +148,10 @@ function _writeOwnedTokensCache(chainId, address, lastScannedBlock, owned) {
 /**
  * Fetch Transfer events for a specific address in small block chunks.
  * Public RPCs like Base Sepolia reject wide eth_getLogs ranges with 413.
+ * @param {any} contract - Web3 contract instance
+ * @param {string} address
+ * @param {"to"|"from"} direction
+ * @param {number} startBlock
  * @param {number} latest - pre-fetched current block number
  */
 async function fetchTransferEvents(contract, address, direction, startBlock, latest) {
@@ -165,7 +183,7 @@ async function fetchTransferEvents(contract, address, direction, startBlock, lat
   } catch (err) {
     console.warn(
       `[ASSET-LIBRARY] Failed to fetch Transfer ${direction} events:`,
-      err.message
+      /** @type {Error} */ (err).message
     );
   }
 
@@ -173,6 +191,12 @@ async function fetchTransferEvents(contract, address, direction, startBlock, lat
 }
 
 
+/**
+ * @param {any} contract - Web3 contract instance
+ * @param {string} address
+ * @param {boolean} [forceIndexer]
+ * @returns {Promise<string[]>}
+ */
 export async function fetchOwnedTokenIds(contract, address, forceIndexer = false) {
   const lowerAddress = address.toLowerCase();
   const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
@@ -233,6 +257,11 @@ export async function fetchOwnedTokenIds(contract, address, forceIndexer = false
   return owned;
 }
 
+/**
+ * @param {string} address
+ * @param {boolean} [forceIndexer]
+ * @returns {Promise<{owned: string[], shared: string[]}>}
+ */
 async function fetchAssetLibrary(address, forceIndexer = false) {
   const contract = getActiveContract();
   if (!contract || !address) {
@@ -243,13 +272,15 @@ async function fetchAssetLibrary(address, forceIndexer = false) {
     return { owned: [], shared: [] };
   }
 
+  /** @type {string[]} */
   let owned = [];
+  /** @type {string[] | null} */
   let shared = [];
 
   try {
     [owned, shared] = await Promise.all([
       fetchOwnedTokenIds(contract, address, forceIndexer),
-      getSharedTokens(address, walletState.get().chainId, forceIndexer),
+      getSharedTokens(address, /** @type {any} */ (walletState.get().chainId), forceIndexer),
     ]);
     if (!Array.isArray(shared)) shared = [];
 
@@ -265,7 +296,7 @@ async function fetchAssetLibrary(address, forceIndexer = false) {
     console.error("Asset library fetch failed:", err);
   }
 
-  return { owned, shared };
+  return { owned, shared: shared ?? [] };
 }
 
 /**
@@ -273,6 +304,8 @@ async function fetchAssetLibrary(address, forceIndexer = false) {
  * - Standalone asset token → one entry.
  * - Collection token → one entry per asset in the collection's `assets` map.
  *   Each card's "Add to Scene" and "Delete" actions operate on its own asset.
+ * @param {string|number} tokenId
+ * @returns {Promise<any[]>} gallery entry records (shape varies by branch; may include `{type:"inaccessible"}` markers)
  */
 export async function expandTokenToAssets(tokenId) {
   const contract = getActiveContract();
@@ -335,12 +368,13 @@ export async function expandTokenToAssets(tokenId) {
       {
         type: "inaccessible",
         tokenId: String(tokenId),
-        errorReason: err.message || "Unknown error",
+        errorReason: /** @type {Error} */ (err).message || "Unknown error",
       },
     ];
   }
 }
 
+/** @param {any} entry - gallery entry from expandTokenToAssets */
 async function openAssetEntry(entry) {
   const contract = getActiveContract();
   if (!contract) {
@@ -360,11 +394,11 @@ async function openAssetEntry(entry) {
       );
       const { assetEntries } = await loadCollectionManifest(
         entry.collectionCid,
-        {
+        /** @type {any} */ ({
           chainId: walletState.get().chainId,
           contractAddress: walletState.get().contractAddress,
           tokenId: entry.tokenId,
-        }
+        })
       );
       emit(EVENTS.COLLECTION_OPENED, {
         tokenId: entry.tokenId,
@@ -420,6 +454,10 @@ async function ensureEngineReady() {
   initEngine();
 }
 
+/**
+ * @param {string|number} tokenId
+ * @param {string|null} [assetId]
+ */
 export async function openAssetByTokenId(tokenId, assetId = null) {
   const contract = getActiveContract();
   if (!contract) {
@@ -453,11 +491,11 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
       const { loadCollectionManifest } = await import(
         "../engine/scene-graph.js"
       );
-      const { assetEntries } = await loadCollectionManifest(cid, {
+      const { assetEntries } = await loadCollectionManifest(cid, /** @type {any} */ ({
         chainId: walletState.get().chainId,
         contractAddress: walletState.get().contractAddress,
         tokenId,
-      });
+      }));
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
 
       const assetIds = Object.keys(manifest.assets || {});
@@ -524,7 +562,7 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
     }
   } catch (err) {
     if (progressStarted) failTaskProgress(`Failed to load asset #${tokenId}.`);
-    console.warn(`[LIBRARY] Failed to open asset #${tokenId}; keeping studio empty:`, err.message);
+    console.warn(`[LIBRARY] Failed to open asset #${tokenId}; keeping studio empty:`, /** @type {Error} */ (err).message);
     clearScene();
     clearUrlAssetParams();
     closeAsset();
@@ -534,10 +572,12 @@ export async function openAssetByTokenId(tokenId, assetId = null) {
 
 /**
  * Build a payload for drag-drop / "Add to Scene" using the card's asset entry.
+ * @param {any} entry
  */
 function buildLinkedAssetPayload(entry) {
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
+  /** @type {Record<string, any>} */
   const payload = {
     type: "linked_asset",
     token_id: String(entry.tokenId),
@@ -550,6 +590,7 @@ function buildLinkedAssetPayload(entry) {
   return payload;
 }
 
+/** @param {any} id */
 function normalizeTokenId(id) {
   if (id == null) return "";
   try {
@@ -559,6 +600,10 @@ function normalizeTokenId(id) {
   }
 }
 
+/**
+ * @param {string[]} owned
+ * @param {string[]} shared
+ */
 async function renderAssetLibrary(owned, shared) {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
@@ -603,6 +648,10 @@ async function renderAssetLibrary(owned, shared) {
   }
 }
 
+/**
+ * @param {string} title
+ * @param {string} sub
+ */
 function createEmptyState(title, sub) {
   const wrap = document.createElement("div");
   wrap.className = "empty-state";
@@ -629,6 +678,10 @@ function createEmptyState(title, sub) {
   return wrap;
 }
 
+/**
+ * @param {string} title
+ * @param {any[]} entries
+ */
 function createSection(title, entries) {
   const section = document.createElement("div");
   section.className = "asset-library-section";
@@ -666,6 +719,7 @@ function createSection(title, entries) {
   return section;
 }
 
+/** @param {any} entry - `{type:"inaccessible"}` entry */
 function createInaccessibleCard(entry) {
   const item = document.createElement("div");
   item.className = "asset-card asset-card--inaccessible";
@@ -712,7 +766,7 @@ function createInaccessibleCard(entry) {
       showToast({ type: "success", title: "Token burned", message: `Token ${label} removed.` });
       item.remove();
     } catch (err) {
-      showToast({ type: "error", title: "Burn failed", message: err.message || "Could not burn token." });
+      showToast({ type: "error", title: "Burn failed", message: /** @type {Error} */ (err).message || "Could not burn token." });
     }
   });
 
@@ -728,6 +782,7 @@ function createInaccessibleCard(entry) {
   return item;
 }
 
+/** @param {any} entry - gallery entry */
 function createAssetCard(entry) {
   const item = document.createElement("div");
   item.className = `asset-card ${
@@ -744,12 +799,14 @@ function createAssetCard(entry) {
 
   item.addEventListener("dragstart", (event) => {
     const payload = buildLinkedAssetPayload(entry);
-    event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData(
+    const dt = (/** @type {DragEvent} */ (event)).dataTransfer;
+    if (!dt) return;
+    dt.effectAllowed = "copy";
+    dt.setData(
       "application/x-arbesk-linked-asset",
       JSON.stringify(payload)
     );
-    event.dataTransfer.setData("text/plain", `${entry.name} Token #${entry.tokenId}`);
+    dt.setData("text/plain", `${entry.name} Token #${entry.tokenId}`);
   });
 
   const thumbnailEl = document.createElement("div");
@@ -780,7 +837,7 @@ function createAssetCard(entry) {
 
   // Click or keyboard activate anywhere on the card (except action buttons) to open.
   item.addEventListener("click", (e) => {
-    if (e.target.closest(".asset-card-actions button")) return;
+    if (/** @type {HTMLElement} */ (e.target).closest(".asset-card-actions button")) return;
     openAssetEntry(entry);
   });
   item.addEventListener("keydown", (e) => {
@@ -828,7 +885,7 @@ function createAssetCard(entry) {
       showToast({
         type: "error",
         title: "Download Failed",
-        message: err.message || "Could not download the model.",
+        message: /** @type {Error} */ (err).message || "Could not download the model.",
       });
     } finally {
       downloadBtn.disabled = false;
@@ -871,10 +928,18 @@ function createAssetCard(entry) {
   return item;
 }
 
+/**
+ * @param {HTMLButtonElement} deleteBtn
+ * @param {string} [role]
+ */
 function resolveDeleteVisibility(deleteBtn, role) {
   deleteBtn.hidden = role !== "owner";
 }
 
+/**
+ * @param {MouseEvent} event
+ * @param {any} entry
+ */
 async function onDeleteAsset(event, entry) {
   event.stopPropagation();
 
@@ -899,11 +964,16 @@ async function onDeleteAsset(event, entry) {
     showToast({
       type: "error",
       title: "Delete Failed",
-      message: err.message || "Could not remove asset from collection.",
+      message: /** @type {Error} */ (err).message || "Could not remove asset from collection.",
     });
   }
 }
 
+/**
+ * @param {any} thumbnail - manifest thumbnail field (string CID or `{cid}` record)
+ * @param {HTMLElement} thumbnailEl
+ * @param {string} [assetName]
+ */
 async function renderAssetThumbnail(thumbnail, thumbnailEl, assetName) {
   const thumbnailCid = extractThumbnailCid(thumbnail);
   if (!thumbnailCid) return;
@@ -951,7 +1021,7 @@ async function updateActiveAssetCard() {
   const assetId = activeAssetId ? String(activeAssetId) : null;
   if (!tokenId || !assetId || !activeAssetManifestCid) return false;
 
-  const currentManifest = getCurrentManifest();
+  const currentManifest = /** @type {any} */ (getCurrentManifest());
   if (
     !currentManifest ||
     currentManifest._manifestCid !== activeAssetManifestCid
@@ -960,7 +1030,7 @@ async function updateActiveAssetCard() {
   }
 
   const selector = `.asset-card[data-token-id="${tokenId}"][data-asset-id="${assetId}"]`;
-  const oldCard = assetLibraryBody.querySelector(selector);
+  const oldCard = /** @type {HTMLElement|null} */ (assetLibraryBody.querySelector(selector));
   if (!oldCard) return false;
 
   const role = oldCard.classList.contains("asset-card--editor")
@@ -992,12 +1062,13 @@ function highlightActiveAsset() {
   const assetIdMatch = activeAssetId ? String(activeAssetId) : null;
 
   assetLibraryBody.querySelectorAll(".asset-card").forEach((el) => {
+    const card = /** @type {HTMLElement} */ (el);
     const matchesToken =
-      tokenIdMatch && normalizeTokenId(el.dataset.tokenId) === tokenIdMatch;
+      tokenIdMatch && normalizeTokenId(card.dataset.tokenId) === tokenIdMatch;
     const matchesAsset = assetIdMatch
-      ? el.dataset.assetId === assetIdMatch
+      ? card.dataset.assetId === assetIdMatch
       : true;
-    el.classList.toggle("active", Boolean(matchesToken && matchesAsset));
+    card.classList.toggle("active", Boolean(matchesToken && matchesAsset));
   });
 }
 
@@ -1029,7 +1100,7 @@ function initAssetLibrary() {
 
   // Delegated: the gallery Connect affordance mirrors the headerbar button.
   assetLibraryBody?.addEventListener("click", (e) => {
-    if (e.target.closest("#galleryConnectBtn")) {
+    if (/** @type {HTMLElement} */ (e.target).closest("#galleryConnectBtn")) {
       document.getElementById("connectWalletBtn")?.click();
     }
   });
@@ -1106,6 +1177,7 @@ on(EVENTS.WALLET_CONNECTED, async () => {
   if (assetTokenId && getActiveContract()) openAssetByTokenId(assetTokenId, assetId);
 })();
 
+/** @type {string|null} */
 let _lastRenderedCollectionTokenId = null;
 on(EVENTS.ASSET_STATE_CHANGED, (state) => {
   const tokenId = state?.activeCollectionTokenId ?? null;

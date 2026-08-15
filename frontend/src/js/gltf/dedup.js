@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Component-level deduplication helpers for glTF decomposition.
  *
@@ -32,12 +31,13 @@ const HASH_ALGORITHM = DEFAULT_HASH_ALGORITHM;
 // Coalesce concurrent uploads of identical payloads so two parallel callers
 // that hash to the same value share one in-flight writeToIPFS promise instead
 // of uploading the same bytes twice.
+/** @type {Map<string, Promise<{cid: string, meta: object, skipped: boolean}>>} */
 const _inflightUploads = new Map();
 
 /**
  * Build a hash → CID map from one or more composite glTF JSONs.
  *
- * @param {object|object[]} composites
+ * @param {any} composites - Composite glTF JSON or array of them (dynamic schema)
  * @returns {Map<string, string>}
  */
 export function buildDedupMap(composites) {
@@ -78,10 +78,10 @@ export function buildDedupMap(composites) {
  *
  * @param {Uint8Array} bytes - Raw component bytes
  * @param {string} filename - Base filename for IPFS storage
- * @param {object} [credential=null] - Reusable upload credential
+ * @param {import("../ipfs/upload-with-credential.js").UploadCredential|null} [credential=null] - Reusable upload credential
  * @param {object} [options={}] - Upload options
  * @param {boolean} [options.compress=false] - Gzip before upload/hash
- * @param {Map<string,string>} [dedupMap=null] - Existing hash → CID map
+ * @param {Map<string,string>|null} [dedupMap=null] - Existing hash → CID map
  * @returns {Promise<{cid: string, meta: object, skipped: boolean}>}
  */
 export async function uploadWithDedup(
@@ -108,7 +108,7 @@ export async function uploadWithDedup(
   };
 
   if (dedupMap?.has(hash)) {
-    const cid = dedupMap.get(hash);
+    const cid = /** @type {string} */ (dedupMap.get(hash));
     return { cid, meta, skipped: true };
   }
 

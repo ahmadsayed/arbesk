@@ -37,7 +37,7 @@ Run one category at a time. For each category, follow the checklist, record find
 
 ### Step 1: Read the source files
 
-For each surface listed in the scope table, read the relevant SCSS and JS files. For markup, read `arabesk/frontend/src/pug/studio.pug`.
+For each surface listed in the scope table, read the relevant SCSS and JS files. For markup, read `frontend/src/pug/app.pug`.
 
 ### Step 2: Open the running app
 
@@ -59,7 +59,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 4. Category A: Color & Theming Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/base/_tokens.scss`
+**Files**: `frontend/src/scss/base/_tokens.scss`
 
 ### A.1 Contrast Ratios (WCAG)
 
@@ -114,7 +114,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 5. Category B: Typography Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/base/_tokens.scss`, `arabesk/frontend/src/pug/studio.pug`
+**Files**: `frontend/src/scss/base/_tokens.scss`, `frontend/src/pug/app.pug`
 
 ### B.1 Font Stack
 
@@ -138,7 +138,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 ### B.4 Heading Hierarchy
 
 - [ ] **B.4.1** Heading elements (`h1`–`h6`) follow a logical nesting order in the Pug template.  
-  *Check*: `studio.pug` has `h2` (Welcome), `h2` (sidebar views), `h5` (Inspector) — skipping `h1`. **FAIL**: GNOME HIG requires `h1` as the page/modal title, descending without gaps.
+  *Check*: `app.pug` has `h2` (Welcome), `h2` (sidebar views), `h5` (Inspector) — skipping `h1`. **FAIL**: GNOME HIG requires `h1` as the page/modal title, descending without gaps.
 
 - [ ] **B.4.2** Welcome overlay uses `h2` with no preceding `h1`. **FAIL**: Should start with `h1`.
 
@@ -153,7 +153,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 6. Category C: Layout & Spacing Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/components/_layout.scss`, `arabesk/frontend/src/scss/base/_tokens.scss`
+**Files**: `frontend/src/scss/components/_layout.scss`, `frontend/src/scss/base/_tokens.scss`
 
 ### C.1 GNOME Shell Conventions
 
@@ -193,7 +193,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 7. Category D: Buttons & Interactive Controls Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/components/_buttons.scss`, `arabesk/frontend/src/pug/studio.pug`
+**Files**: `frontend/src/scss/components/_buttons.scss`, `frontend/src/pug/app.pug`
 
 ### D.1 Touch Targets
 
@@ -221,7 +221,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ### D.4 Icon-Only Buttons
 
-- [ ] **D.4.1** All icon-only buttons have `aria-label` attributes. ✅ (verified in studio.pug)
+- [ ] **D.4.1** All icon-only buttons have `aria-label` attributes. ✅ (verified in app.pug)
 - [ ] **D.4.2** Icon SVGs have `aria-hidden="true"`. ✅
 - [ ] **D.4.3** Icon size is 16–20px for toolbar, consistent within each context. ✅
 
@@ -235,7 +235,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 8. Category E: Keyboard Navigation Audit Checklist
 
-**Files**: `arabesk/frontend/src/js/engine/scene-graph.js`, `arabesk/frontend/src/js/ui/sidebar.js`, `arabesk/frontend/src/js/ui/nesting.js`, `arabesk/frontend/src/js/ui/dialog.js`
+**Files**: `frontend/src/js/engine/scene-graph.js`, `frontend/src/js/ui/sidebar.js`, `frontend/src/js/ui/nesting.js`, `frontend/src/js/ui/dialog.js`
 
 ### E.1 Shortcut Coverage
 
@@ -279,7 +279,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 9. Category F: Accessibility Audit Checklist
 
-**Files**: `arabesk/frontend/src/pug/studio.pug`, `arabesk/frontend/src/scss/base/_tokens.scss`, `arabesk/frontend/src/scss/components/_buttons.scss`, `arabesk/frontend/src/scss/components/_forms.scss`
+**Files**: `frontend/src/pug/app.pug`, `frontend/src/scss/base/_tokens.scss`, `frontend/src/scss/components/_buttons.scss`, `frontend/src/scss/components/_forms.scss`
 
 ### F.1 ARIA Labels (WCAG 2.1 AA — Required)
 
@@ -301,7 +301,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 ### F.3 Reduced Motion
 
 - [ ] **F.3.1** Transitions are set to `0ms` when `prefers-reduced-motion: reduce`. ✅ (`_tokens.scss` line 215–220)
-- [ ] **F.3.2** Animations (dialog backdrop-in, dialog-in, spin) are disabled under `prefers-reduced-motion`. ✅ (dialog has explicit rule), ⚠️ `@keyframes spin` in `_messagebar.scss` is NOT wrapped in a motion query — **FAIL**.
+- [ ] **F.3.2** Animations (dialog backdrop-in, dialog-in, spin) are disabled under `prefers-reduced-motion`. ✅ (dialog has explicit rule), ⚠️ `@keyframes spin` in `_chat.scss` is NOT wrapped in a motion query — **FAIL**.
 
 ### F.4 Screen Reader Support
 
@@ -318,7 +318,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 10. Category G: Forms & Input Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/components/_forms.scss`, `arabesk/frontend/src/scss/components/_messagebar.scss`, `arabesk/frontend/src/pug/studio.pug`
+**Files**: `frontend/src/scss/components/_forms.scss`, `frontend/src/scss/components/_chat.scss`, `frontend/src/pug/app.pug`
 
 ### G.1 Labels
 
@@ -358,7 +358,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 11. Category H: Dialogs & Modals Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/components/_dialog.scss`, `arabesk/frontend/src/js/ui/dialog.js`
+**Files**: `frontend/src/scss/components/_dialog.scss`, `frontend/src/js/ui/dialog.js`
 
 ### H.1 Structure
 
@@ -391,7 +391,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 12. Category I: Responsive Design Audit Checklist
 
-**Files**: `arabesk/frontend/src/scss/utilities/_responsive.scss`
+**Files**: `frontend/src/scss/utilities/_responsive.scss`
 
 ### I.1 Breakpoints
 
@@ -417,7 +417,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 13. Category J: Empty States & Feedback Audit Checklist
 
-**Files**: `arabesk/frontend/src/pug/studio.pug`, `arabesk/frontend/src/js/engine/placeholders.js`
+**Files**: `frontend/src/pug/app.pug`, `frontend/src/js/engine/placeholders.js`
 
 ### J.1 Welcome Screen
 
