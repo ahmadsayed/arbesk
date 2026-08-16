@@ -39,6 +39,10 @@ import {
   loadAssetManifest,
   handleLinkedAssetDropped,
 } from "./scene-loader.ts";
+import {
+  initCameraPersistence,
+  restoreCameraPose,
+} from "./camera-persistence.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Re-exports — backward compatibility
@@ -253,6 +257,7 @@ export function initEngine() {
   camera.pinchDeltaPercentage = 0.01;
   camera.attachControl(canvas, true);
   state.camera = camera;
+  initCameraPersistence(camera);
 
   // Custom ortho-mode wheel zoom. Babylon's default wheel handler changes
   // `radius`, which has no effect on the ortho frustum when the four
@@ -791,6 +796,12 @@ on(EVENTS.OUTLINER_NODE_SELECTED, (e: {nodeId?: string, additive?: boolean}) => 
   } else {
     selectNodeById(nodeId);
   }
+});
+
+// Restore the camera pose stored for this manifest (if any) so reopening an
+// asset in the same browser lands on the view the user left it in.
+on(EVENTS.SCENE_READY, (e: { manifestCid?: string }) => {
+  if (e?.manifestCid) restoreCameraPose(e.manifestCid);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
