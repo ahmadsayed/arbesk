@@ -27,13 +27,11 @@ function frameCameraToBounds(bounds: WorldBounds | null) {
   if (!state.camera || !bounds) return;
 
   const cam = state.camera;
-  const diagonal = Math.sqrt(
-    bounds.size.x * bounds.size.x +
-      bounds.size.y * bounds.size.y +
-      bounds.size.z * bounds.size.z
-  );
+  // Fit the largest dimension, not the 3D diagonal — the diagonal inflates
+  // the radius by up to √3 and leaves the model small in the viewport.
+  const maxDim = Math.max(bounds.size.x, bounds.size.y, bounds.size.z);
   const fov = cam.fov || 0.8; // radians, default ~45°
-  const radius = (diagonal * 0.6) / Math.tan(fov / 2);
+  const radius = (maxDim * 1.2) / (2 * Math.tan(fov / 2));
 
   // Animate to the new target + radius over 300ms
   BABYLON.Animation.CreateAndStartAnimation(
@@ -228,38 +226,24 @@ function updateCameraRangeForScene() {
   const bounds = getWorldBounds(renderable);
   if (!bounds) return;
 
-  const diagonal = Math.sqrt(
-    bounds.size.x * bounds.size.x +
-      bounds.size.y * bounds.size.y +
-      bounds.size.z * bounds.size.z
-  );
+  // Largest single dimension — better basis for camera/chrome scale than the
+  // 3D diagonal, which can be √3 larger and makes the model look far away.
+  const maxDim = Math.max(bounds.size.x, bounds.size.y, bounds.size.z);
 
   const cam = state.camera;
   // Only raise the far limit for large models — keep the near limit small so
-  // users can still zoom in close to details. The previous 5% diagonal floor
-  // made big models feel "locked" because the closest allowed radius was too
-  // far away.
+  // users can still zoom in close to details.
   const minLimit = 0.1;
-  const maxLimit = Math.max(500, diagonal * 5);
+  const maxLimit = Math.max(500, maxDim * 10);
 
   cam.lowerRadiusLimit = minLimit;
   cam.upperRadiusLimit = maxLimit;
-
-  // Largest absolute coordinate that must be visible from the origin.
-  const maxAbs = Math.max(
-    Math.abs(bounds.min.x),
-    Math.abs(bounds.max.x),
-    Math.abs(bounds.min.y),
-    Math.abs(bounds.max.y),
-    Math.abs(bounds.min.z),
-    Math.abs(bounds.max.z)
-  );
 
   // Ground grid is created at 40×40 world units. Scale it so it comfortably
   // covers the loaded model, but never shrink below its default size.
   const groundGrid = state.scene.getMeshByName("groundGrid");
   if (groundGrid) {
-    const targetSize = Math.max(40, maxAbs * 3);
+    const targetSize = Math.max(40, maxDim * 3);
     const scale = targetSize / 40;
     groundGrid.scaling = new BABYLON.Vector3(scale, 1, scale);
   }
@@ -268,14 +252,14 @@ function updateCameraRangeForScene() {
   const axisX = state.scene.getMeshByName("axisX");
   const axisZ = state.scene.getMeshByName("axisZ");
   if (axisX && axisZ) {
-    const targetHalf = Math.max(20, maxAbs * 1.5);
+    const targetHalf = Math.max(20, maxDim * 1.5);
     const scale = targetHalf / 20;
     axisX.scaling = new BABYLON.Vector3(scale, scale, scale);
     axisZ.scaling = new BABYLON.Vector3(scale, scale, scale);
   }
 
   console.log(
-    `[CAMERA] adaptive range | diagonal=${diagonal.toFixed(
+    `[CAMERA] adaptive range | maxDim=${maxDim.toFixed(
       2
     )} lower=${minLimit.toFixed(2)} upper=${maxLimit.toFixed(2)} gridScale=${(
       (groundGrid?.scaling.x as number) ?? 1
