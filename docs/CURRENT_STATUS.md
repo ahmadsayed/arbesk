@@ -154,6 +154,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 frontend/src/js/
 ├── engine/
 │   ├── scene-graph.ts          # Babylon engine, GLB/glTF load, selection, framing, thumbnails, collection load
+│   ├── camera-persistence.ts   # Per-asset camera pose save/restore (localStorage)
 │   ├── time-travel.ts          # Manifest chain walk, apply version
 │   ├── parametric-preview.ts   # Inspector color/scale, live preview, timeline binding
 │   ├── state.ts                # Shared mutable state
@@ -279,6 +280,12 @@ frontend/src/js/
 - `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` dispatcher + `#undoBtn`/`#redoBtn` in the viewport toolbar (disabled-state + label tooltips synced from the stack); shortcut is a silent no-op when stacks are empty and stays out of text fields.
 - Stacks survive Save Draft/Publish (undo past a save point is fine — the next Save serializes the restored state via re-staged `pendingTransformEdits`/`pendingSourceColorEdits`); cleared on `SCENE_CLEARED` (asset open, generate, nesting dive, time-travel `loadVersion()`).
 - Entry contract: `{ type: 'transform'|'color', label, items: [{ nodeId, meshName?, before, after }] }`; other edit types can hook in via `registerUndoApplier(type, fn)`.
+
+**Studio Camera Pose Persistence (`engine/camera-persistence.ts`)**
+- Camera pose (orbit angles, radius, target, ortho frustum) is saved to `localStorage`, keyed by canonical asset identity (`chainId:contractAddress:tokenId:assetId`).
+- Unsaved drafts fall back to a `cid:<manifestCid>` key.
+- Restore happens on `SCENE_READY`; assets with no stored pose reset to the default starting view so they never inherit the previous scene's camera.
+- A 90-frame post-restore "settle" re-enforces the pose to defeat Babylon v9 smooth-transition drift; cancelled immediately on pointer/wheel input.
 
 **3D Engine, Parametric, glTF Pipeline, Comments, Library** — unchanged from previous status; all fully implemented. See sections 3.2/3.3 of the 2026-06-28 snapshot for detail.
 

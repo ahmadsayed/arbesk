@@ -154,6 +154,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | Area | Files | Responsibility |
 |---|---|---|
 | Engine | `engine/scene-graph.ts` | Babylon engine/scene, GLB/glTF load, selection, framing, thumbnail capture, collection load |
+| Engine | `engine/camera-persistence.ts` | Per-asset camera pose save/restore in localStorage; restore on `SCENE_READY` with post-restore settle |
 | Engine | `engine/time-travel.ts` | Manifest chain walking (client-side), version switching, parametric application |
 | Engine | `engine/parametric-preview.ts` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.ts` | Gateway reads with memory + IndexedDB cache |
@@ -726,6 +727,34 @@ The Studio supports deep-linking tokens and individual assets via query params:
 | `?asset=<tokenId>&assetId=<assetID>` (collection token) | Loads the collection manifest into the Gallery and opens the specified asset in the viewport. |
 
 This means a bare collection URL is a "collection overview" state: the user sees all assets in the Gallery and can choose which one to load. Gallery card clicks and "Open in Studio" context-menu items still navigate with an explicit `assetId` when a specific asset is intended.
+
+### 5.7 Studio Viewport Camera Persistence
+
+The Studio remembers the last camera pose for each asset independently, so reopening an asset lands on the exact view the user left it in. Persistence is implemented in `frontend/src/js/engine/camera-persistence.ts` and integrated into `engine/scene-graph.ts`.
+
+**Storage key**
+
+- Saved assets: `<chainId>:<contractAddress>:<tokenId>:<assetId>` (canonical asset identity, lower-cased contract address). The pose follows the asset across publishes and version-history restores, not any single manifest version.
+- Unsaved drafts (no on-chain identity): `cid:<manifestCid>`, keyed to the current draft manifest CID.
+- Prefix: `arbesk:cameraPose:` in `localStorage`.
+
+**Saved pose**
+
+`alpha`, `beta`, `radius`, `target`, `mode`, and (when in orthographic mode) `orthoLeft/Right/Bottom/Top`. Writes are debounced to one per second and flushed on `beforeunload` / `visibilitychange` so the last movement before closing the tab is not lost.
+
+**Restore timing**
+
+`restoreCameraPose()` is called on the `SCENE_READY` event, which fires after the active asset's manifest and model have loaded. If no pose is stored, the camera is reset to the default starting view (`alpha = -π/2`, `beta = π/3`, `radius = 15`, target at origin) so a scene never inherits the previous scene's camera.
+
+**Drift-proofing**
+
+Babylon v9 applies smooth transitions and residual inertia after a restore, which can drag the camera away from the stored pose long enough that the drifted pose gets saved over the good one. The implementation counters this by:
+
+1. Zeroing all `inertial*` offsets and stopping camera animations before applying the pose.
+2. Re-applying the restored pose every frame for 90 frames (~1.5 s) in an `onAfterRenderObservable` callback.
+3. Cancelling the settle enforcement immediately on any pointer down or wheel input so the user is never fought.
+
+Storage failures (private mode, quota) are silently ignored; persistence is best-effort.
 
 ---
 

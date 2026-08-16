@@ -264,6 +264,5 @@ export function restoreCameraPose(fallbackCid?: string): boolean {
 
   _applyPose(camera, pose);
   _settlePose(camera, pose);
-  console.log(`[CAMERA] restored stored pose for ${key}`);
   return true;
 }
