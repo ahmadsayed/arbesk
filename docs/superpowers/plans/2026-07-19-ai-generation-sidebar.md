@@ -64,7 +64,7 @@ describe("AI Generation sidebar", () => {
 
   test("sidebar view order puts chat first", () => {
     const src = readFileSync(
-      resolve(ROOT_DIR, "frontend/src/js/ui/sidebar.js"),
+      resolve(ROOT_DIR, "frontend/src/js/ui/sidebar.ts"),
       "utf-8",
     );
     expect(src).toContain(
@@ -74,7 +74,7 @@ describe("AI Generation sidebar", () => {
 
   test("keyboard help lists all five sidebar shortcuts", () => {
     const src = readFileSync(
-      resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.js"),
+      resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.ts"),
       "utf-8",
     );
     expect(src).toContain("1 – 5");
@@ -611,9 +611,9 @@ git commit -m "refactor(scss): relocate messagebar styles into the AI generation
 ### Task 4: JS — rail order, provider persistence, BYOK key dialog, bottom bar binding
 
 **Files:**
-- Modify: `frontend/src/js/ui/sidebar.js:4-5,10`
-- Modify: `frontend/src/js/ui/keyboard-help.js:19`
-- Modify: `frontend/src/js/ui/create-panel.js:3-6,14,36-37,46-52,63-83,246-256,350-351`
+- Modify: `frontend/src/js/ui/sidebar.ts:4-5,10`
+- Modify: `frontend/src/js/ui/keyboard-help.ts:19`
+- Modify: `frontend/src/js/ui/create-panel.ts:3-6,14,36-37,46-52,63-83,246-256,350-351`
 
 (Line numbers refer to the file before this task; they shift ±a few lines as earlier steps land. The quoted old-code blocks are the source of truth — match on those, not on line numbers.)
 
@@ -931,7 +931,7 @@ Expected: both pass clean.
 - [ ] **Step 11: Commit**
 
 ```bash
-git add frontend/src/js/ui/sidebar.js frontend/src/js/ui/keyboard-help.js frontend/src/js/ui/create-panel.js
+git add frontend/src/js/ui/sidebar.ts frontend/src/js/ui/keyboard-help.ts frontend/src/js/ui/create-panel.ts
 git commit -m "feat(ui): persist provider, BYOK key dialog, live bottom-bar provider, AI-first rail order"
 ```
 

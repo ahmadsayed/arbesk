@@ -25,7 +25,7 @@
 ### Task 1: Per-node snapshots on `walkManifestChain` entries
 
 **Files:**
-- Modify: `frontend/src/js/engine/time-travel.js:123-162` (the `walkManifestChain` function)
+- Modify: `frontend/src/js/engine/time-travel.ts:123-162` (the `walkManifestChain` function)
 - Test: `test/frontend/time-travel-chain.test.js` (create)
 
 **Interfaces:**
@@ -44,19 +44,19 @@ import { jest, expect, test, describe, beforeAll } from "@jest/globals";
 // time-travel.js statically imports scene-graph (engine-heavy) and remote-ipfs;
 // mock both before the dynamic import.
 jest.unstable_mockModule(
-  "../../frontend/src/js/engine/scene-graph.js",
+  "../../frontend/src/js/engine/scene-graph.ts",
   () => ({ getNodeMeshes: () => [] })
 );
 
 const getFromRemoteIPFS = jest.fn();
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.ts", () => ({
   getFromRemoteIPFS,
 }));
 
 let walkManifestChain;
 beforeAll(async () => {
   ({ walkManifestChain } = await import(
-    "../../frontend/src/js/engine/time-travel.js"
+    "../../frontend/src/js/engine/time-travel.ts"
   ));
 });
 
@@ -123,7 +123,7 @@ Expected: FAIL — `chain[0].nodes` is `undefined`.
 
 - [ ] **Step 3: Add the snapshot map in `walkManifestChain`**
 
-In `frontend/src/js/engine/time-travel.js`, inside the `while` loop, after `const firstNode = nodes[0] || {};` and before `chain.unshift({`:
+In `frontend/src/js/engine/time-travel.ts`, inside the `while` loop, after `const firstNode = nodes[0] || {};` and before `chain.unshift({`:
 
 ```js
       // Per-node snapshot for node-level change detection (model clock).
@@ -161,7 +161,7 @@ Expected: PASS (pre-existing suites unaffected; `test/api.test.js` failures are 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/engine/time-travel.js test/frontend/time-travel-chain.test.js
+git add frontend/src/js/engine/time-travel.ts test/frontend/time-travel-chain.test.js
 git commit -m "feat(time-travel): per-node snapshot map on manifest chain entries
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -195,7 +195,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
  * @jest-environment jsdom
  */
 import { jest, expect, test, describe, beforeEach, beforeAll } from "@jest/globals";
-import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { emit, EVENTS } from "../../frontend/src/js/events/bus.ts";
 import {
   assetState,
   _resetForTesting,
@@ -539,7 +539,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 3: Reusable clock-face component
 
 **Files:**
-- Create: `frontend/src/js/ui/version-clock.js`
+- Create: `frontend/src/js/ui/version-clock.ts`
 - Test: `test/frontend/version-clock.test.js` (create)
 
 **Interfaces:**
@@ -577,7 +577,7 @@ import {
 import {
   createVersionClock,
   _angleForIndex,
-} from "../../frontend/src/js/ui/version-clock.js";
+} from "../../frontend/src/js/ui/version-clock.ts";
 
 const ENTRIES = [
   { cid: "c1", version: 1, name: "T", nodeCount: 1, timestamp: null },
@@ -683,7 +683,7 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Write the component**
 
 ```js
-// frontend/src/js/ui/version-clock.js
+// frontend/src/js/ui/version-clock.ts
 // @ts-nocheck
 /**
  * Version Clock face — reusable SVG dial for scrubbing the manifest chain.
@@ -979,7 +979,7 @@ Expected: PASS (5 tests).
 Run: `npm run typecheck:frontend` — expected clean, then:
 
 ```bash
-git add frontend/src/js/ui/version-clock.js test/frontend/version-clock.test.js
+git add frontend/src/js/ui/version-clock.ts test/frontend/version-clock.test.js
 git commit -m "feat(ui): reusable version-clock SVG dial component
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -1211,7 +1211,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 5: Scene clock view
 
 **Files:**
-- Create: `frontend/src/js/ui/scene-clock.js`
+- Create: `frontend/src/js/ui/scene-clock.ts`
 - Test: `test/frontend/scene-clock.test.js` (create)
 
 **Interfaces:**
@@ -1253,7 +1253,7 @@ jest.unstable_mockModule(
 let initSceneClock;
 beforeAll(async () => {
   ({ initSceneClock } = await import(
-    "../../frontend/src/js/ui/scene-clock.js"
+    "../../frontend/src/js/ui/scene-clock.ts"
   ));
 });
 
@@ -1339,7 +1339,7 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Write the view**
 
 ```js
-// frontend/src/js/ui/scene-clock.js
+// frontend/src/js/ui/scene-clock.ts
 // @ts-nocheck
 /**
  * Scene Clock — fixed version dial, bottom-right of the viewport.
@@ -1419,7 +1419,7 @@ Expected: PASS (3 tests).
 Run: `npm run typecheck:frontend` — expected clean, then:
 
 ```bash
-git add frontend/src/js/ui/scene-clock.js test/frontend/scene-clock.test.js
+git add frontend/src/js/ui/scene-clock.ts test/frontend/scene-clock.test.js
 git commit -m "feat(ui): scene clock — collapsed version dial in the viewport
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -1511,13 +1511,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `frontend/src/js/ui/model-clock.js`
-- Modify: `frontend/src/js/engine/state.js` (add `isGizmoDragging` flag)
-- Modify: `frontend/src/js/ui/transform-gizmo.js:208-216` (`ensureDragEndSubscription` sets the flag)
-- Modify: `frontend/src/js/engine/scene-graph.js` (~line 322, after the transform-gizmo dynamic import: add the model-clock dynamic import)
+- Modify: `frontend/src/js/engine/state.ts` (add `isGizmoDragging` flag)
+- Modify: `frontend/src/js/ui/transform-gizmo.ts:208-216` (`ensureDragEndSubscription` sets the flag)
+- Modify: `frontend/src/js/engine/scene-graph.ts` (~line 322, after the transform-gizmo dynamic import: add the model-clock dynamic import)
 - Test: `test/frontend/model-clock.test.js` (create)
 
 **Interfaces:**
-- Consumes: store `versionsForNode`/`getState`/`subscribe`/`loadVersion` (Task 2); `createVersionClock` (Task 3); `state.nodeMeshes`, `state.highlightedNodeId`, `state.isGizmoDragging` from `engine/state.js`; bus `NODE_SELECTED`/`NODE_DESELECTED`/`SCENE_EMPTY`.
+- Consumes: store `versionsForNode`/`getState`/`subscribe`/`loadVersion` (Task 2); `createVersionClock` (Task 3); `state.nodeMeshes`, `state.highlightedNodeId`, `state.isGizmoDragging` from `engine/state.ts`; bus `NODE_SELECTED`/`NODE_DESELECTED`/`SCENE_EMPTY`.
 - Produces: `#modelClock` root in `#viewport`; `initModelClock(scene, camera)` export called by `scene-graph.js`. Reads meshes from `state.nodeMeshes` directly (NOT via `scene-graph.js` imports) to avoid a circular import with its dynamic-import parent.
 
 - [ ] **Step 1: Write the failing test**
@@ -1536,8 +1536,8 @@ import {
   afterEach,
   beforeAll,
 } from "@jest/globals";
-import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
-import { state } from "../../frontend/src/js/engine/state.js";
+import { emit, EVENTS } from "../../frontend/src/js/events/bus.ts";
+import { state } from "../../frontend/src/js/engine/state.ts";
 
 let subscriber = null;
 const ENTRIES = [
@@ -1691,14 +1691,14 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Add the drag flag to engine state**
 
-In `frontend/src/js/engine/state.js`, after `transformMode: null,` add:
+In `frontend/src/js/engine/state.ts`, after `transformMode: null,` add:
 
 ```js
   /** @type {boolean} True while a transform-gizmo drag is in progress (model clock hides). */
   isGizmoDragging: false,
 ```
 
-In `frontend/src/js/ui/transform-gizmo.js`, replace `ensureDragEndSubscription` (lines 210–216) with:
+In `frontend/src/js/ui/transform-gizmo.ts`, replace `ensureDragEndSubscription` (lines 210–216) with:
 
 ```js
 function ensureDragEndSubscription(gizmo) {
@@ -1737,7 +1737,7 @@ Note: `test/frontend/transform-gizmo.test.js` mocks gizmos with only `onDragEndO
  *
  * Positioned each frame by projecting the top-center of the node's bounding
  * box to screen space (constant screen size). Initialized from scene-graph.js
- * after the engine is ready — meshes are read from engine/state.js directly
+ * after the engine is ready — meshes are read from engine/state.ts directly
  * to avoid a circular import with scene-graph.
  */
 
@@ -1895,7 +1895,7 @@ export { initModelClock };
 
 - [ ] **Step 5: Initialize from scene-graph**
 
-In `frontend/src/js/engine/scene-graph.js`, directly after the transform-gizmo dynamic-import block (ends ~line 324), add:
+In `frontend/src/js/engine/scene-graph.ts`, directly after the transform-gizmo dynamic-import block (ends ~line 324), add:
 
 ```js
   // Model clock (version dial above the selected node).
@@ -1920,8 +1920,8 @@ Run: `npm run typecheck:frontend && npm test`
 Expected: clean / PASS. Then:
 
 ```bash
-git add frontend/src/js/ui/model-clock.js frontend/src/js/engine/state.js \
-        frontend/src/js/ui/transform-gizmo.js frontend/src/js/engine/scene-graph.js \
+git add frontend/src/js/ui/model-clock.js frontend/src/js/engine/state.ts \
+        frontend/src/js/ui/transform-gizmo.ts frontend/src/js/engine/scene-graph.ts \
         test/frontend/model-clock.test.js
 git commit -m "feat(ui): model clock — per-node version dial above the selection
 

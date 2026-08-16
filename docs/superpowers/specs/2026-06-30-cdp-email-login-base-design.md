@@ -91,7 +91,7 @@ Y
 
 ### 5.2 Backend verification
 
-`src/api/siwe-verify.js` uses `viem`'s `verifyMessage`, which handles three cases:
+`src/api/siwe-verify.ts` uses `viem`'s `verifyMessage`, which handles three cases:
 
 1. **EOA signatures** — `ecrecover` matches `siwe.address`.
 2. **EIP-1271 contract signatures** — for deployed smart accounts.
@@ -173,15 +173,15 @@ This integration explicitly does **not** change:
 | File | Change |
 |------|--------|
 | `.env.example` | Add `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_EMAIL_DEV_MODE`. |
-| `src/api/index.js` | Expose `cdpProjectId` in `/api/v1/config`; mount `/paymaster`. |
-| `src/index.js` | Add CDP/Base domains to CSP. |
-| `src/api/routes/paymaster.js` | **NEW** — paymaster proxy. |
+| `src/api/index.ts` | Expose `cdpProjectId` in `/api/v1/config`; mount `/paymaster`. |
+| `src/index.ts` | Add CDP/Base domains to CSP. |
+| `src/api/routes/paymaster.ts` | **NEW** — paymaster proxy. |
 | `frontend/src/pug/studio.pug` / `library.pug` | Add `@coinbase/cdp-core` importmap. |
 | `frontend/package.json` | Add `@coinbase/cdp-core`; remove `thirdweb`. |
-| `frontend/src/js/blockchain/wallet-cdp.js` | **NEW** EIP-1193 adapter. |
-| `frontend/src/js/ui/wallet-modal.js` | Add email OTP UI. |
-| `frontend/src/js/blockchain/wallet-core.js` | Handle `source === 'cdp'`, store `eoaAddress`. |
-| `src/api/siwe-verify.js` | Add `eoaAddress` fallback, viem universal verification. |
+| `frontend/src/js/blockchain/wallet-cdp.ts` | **NEW** EIP-1193 adapter. |
+| `frontend/src/js/ui/wallet-modal.ts` | Add email OTP UI. |
+| `frontend/src/js/blockchain/wallet-core.ts` | Handle `source === 'cdp'`, store `eoaAddress`. |
+| `src/api/siwe-verify.ts` | Add `eoaAddress` fallback, viem universal verification. |
 
 **Unchanged:** `wallet-publishing.js`, `wallet-payments.js`, all contracts, all IPFS/manifest code.
 

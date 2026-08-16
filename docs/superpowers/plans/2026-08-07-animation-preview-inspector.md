@@ -27,9 +27,9 @@
 `ImportMeshAsync` already returns `animationGroups`; thread them through `importFromBlob` → `loadAsset` → `attachMetadata` into a new state map, and dispose them with the node/scene.
 
 **Files:**
-- Modify: `frontend/src/js/engine/state.js:19-22`
-- Modify: `frontend/src/js/engine/scene-loader.js:66-116` (`importFromBlob`, `loadAsset`, `attachMetadata`)
-- Modify: `frontend/src/js/engine/cleanup.js:60-78` (`disposeNode`), `:124-140` (`clearScene`)
+- Modify: `frontend/src/js/engine/state.ts:19-22`
+- Modify: `frontend/src/js/engine/scene-loader.ts:66-116` (`importFromBlob`, `loadAsset`, `attachMetadata`)
+- Modify: `frontend/src/js/engine/cleanup.ts:60-78` (`disposeNode`), `:124-140` (`clearScene`)
 - Test: `test/frontend/scene-loader-animations.test.js` (new)
 
 **Interfaces:**
@@ -72,7 +72,7 @@ beforeAll(async () => {
   };
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/events/bus.js",
+    "../../frontend/src/js/events/bus.ts",
     () => ({
       emit: jest.fn(),
       on: jest.fn(),
@@ -84,15 +84,15 @@ beforeAll(async () => {
     () => ({ assetState: { get: jest.fn(() => ({})), set: jest.fn() }, tagManifestCid: jest.fn() })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/state/wallet-state.js",
+    "../../frontend/src/js/state/wallet-state.ts",
     () => ({ walletState: { get: jest.fn(() => ({})) } })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/state/ui-state.js",
+    "../../frontend/src/js/state/ui-state.ts",
     () => ({ uiState: { set: jest.fn() } })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/transforms.js",
+    "../../frontend/src/js/engine/transforms.ts",
     () => ({
       extractCid: (src) => (src && src.cid ? src.cid : src),
       detectAssetFormat: () => "testanim",
@@ -103,20 +103,20 @@ beforeAll(async () => {
     })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/placeholders.js",
+    "../../frontend/src/js/engine/placeholders.ts",
     () => ({ createPlaceholder: jest.fn(), disposePlaceholder: jest.fn() })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/time-travel.js",
+    "../../frontend/src/js/engine/time-travel.ts",
     () => ({ applyColor: jest.fn(), applyScale: jest.fn() })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/scene-graph.js",
+    "../../frontend/src/js/engine/scene-graph.ts",
     () => ({ createAnchorNode: jest.fn(() => ({ parent: null, metadata: {} })) })
   );
 
   ({ registerFormatHandler } = await import(
-    "../../frontend/src/js/formats/index.js"
+    "../../frontend/src/js/formats/index.ts"
   ));
   registerFormatHandler({
     format: "testanim",
@@ -128,9 +128,9 @@ beforeAll(async () => {
     isDedupSource: () => false,
   });
 
-  sceneLoader = await import("../../frontend/src/js/engine/scene-loader.js");
-  cleanup = await import("../../frontend/src/js/engine/cleanup.js");
-  ({ state } = await import("../../frontend/src/js/engine/state.js"));
+  sceneLoader = await import("../../frontend/src/js/engine/scene-loader.ts");
+  cleanup = await import("../../frontend/src/js/engine/cleanup.ts");
+  ({ state } = await import("../../frontend/src/js/engine/state.ts"));
 });
 
 const SRC = { cid: "bafyAnim", path: "model.testanim", format: "testanim" };
@@ -167,14 +167,14 @@ Expected: FAIL — `state.nodeAnimationGroups` is `undefined` (TypeError reading
 
 - [ ] **Step 3: Implement**
 
-`frontend/src/js/engine/state.js` — after the `nodeMeshes` entry (line 22), add:
+`frontend/src/js/engine/state.ts` — after the `nodeMeshes` entry (line 22), add:
 
 ```js
   /** @type {Map<string, BABYLON.AnimationGroup[]>} */
   nodeAnimationGroups: new Map(),
 ```
 
-`frontend/src/js/engine/scene-loader.js` — in `importFromBlob` (line 77-80), return the groups too:
+`frontend/src/js/engine/scene-loader.ts` — in `importFromBlob` (line 77-80), return the groups too:
 
 ```js
     return {
@@ -211,7 +211,7 @@ function attachMetadata(meshes, nodeId, parentNode, transformNodes = [], animati
   state._nonChromeMeshCache = null;
 ```
 
-`frontend/src/js/engine/cleanup.js` — in `disposeNode`, after the `nodeMeshes` block (line 70), add:
+`frontend/src/js/engine/cleanup.ts` — in `disposeNode`, after the `nodeMeshes` block (line 70), add:
 
 ```js
   const animationGroups = state.nodeAnimationGroups.get(nodeId);
@@ -251,7 +251,7 @@ Expected: PASS (3 tests). Also run `npx jest test/frontend/linked-asset-self-add
 - [ ] **Step 5: Commit** (after user confirmation)
 
 ```bash
-git add frontend/src/js/engine/state.js frontend/src/js/engine/scene-loader.js frontend/src/js/engine/cleanup.js test/frontend/scene-loader-animations.test.js
+git add frontend/src/js/engine/state.ts frontend/src/js/engine/scene-loader.ts frontend/src/js/engine/cleanup.ts test/frontend/scene-loader-animations.test.js
 git commit -m "feat(studio): capture glTF animation groups per scene node"
 ```
 
@@ -262,7 +262,7 @@ git commit -m "feat(studio): capture glTF animation groups per scene node"
 Babylon's glTF loader defaults to `animationStartMode = FIRST`, auto-playing the first clip on load. The Studio viewport must stay static until the user picks a clip.
 
 **Files:**
-- Modify: `frontend/src/js/engine/babylon-loader.js:40-50` (`ensureBabylon`)
+- Modify: `frontend/src/js/engine/babylon-loader.ts:40-50` (`ensureBabylon`)
 - Test: `test/frontend/babylon-loader.test.js` (new)
 
 **Interfaces:**
@@ -286,7 +286,7 @@ let registerGltfLoaderDefaults;
 
 beforeAll(async () => {
   ({ registerGltfLoaderDefaults } = await import(
-    "../../frontend/src/js/engine/babylon-loader.js"
+    "../../frontend/src/js/engine/babylon-loader.ts"
   ));
 });
 
@@ -319,13 +319,13 @@ Expected: FAIL — `registerGltfLoaderDefaults is not a function`.
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/engine/babylon-loader.js`, add after the `loadScript` function:
+In `frontend/src/js/engine/babylon-loader.ts`, add after the `loadScript` function:
 
 ```js
 /**
  * Register glTF loader defaults. Babylon's glTF plugin auto-plays the first
  * animation on import; the Studio keeps the viewport static until the user
- * picks a clip in the inspector (see engine/animation-preview.js).
+ * picks a clip in the inspector (see engine/animation-preview.ts).
  */
 export function registerGltfLoaderDefaults() {
   const startModes = BABYLON.GLTF2?.GLTFLoaderAnimationStartMode;
@@ -359,7 +359,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit** (after user confirmation)
 
 ```bash
-git add frontend/src/js/engine/babylon-loader.js test/frontend/babylon-loader.test.js
+git add frontend/src/js/engine/babylon-loader.ts test/frontend/babylon-loader.test.js
 git commit -m "feat(studio): disable glTF animation auto-play on import"
 ```
 
@@ -369,11 +369,11 @@ git commit -m "feat(studio): disable glTF animation auto-play on import"
 
 **Files:**
 - Modify: `frontend/src/pug/app.pug:349` (insert section after `#scaleSection`), `:472` (script tag)
-- Create: `frontend/src/js/engine/animation-preview.js`
+- Create: `frontend/src/js/engine/animation-preview.ts`
 - Test: `test/frontend/animation-preview.test.js` (new)
 
 **Interfaces:**
-- Consumes: `state.nodeAnimationGroups` (Task 1); `EVENTS.NODE_SELECTED` / `SELECTION_CHANGED` / `SCENE_CLEARED` from `frontend/src/js/events/bus.js`; `state.selectedNodeIds` from `state.js`.
+- Consumes: `state.nodeAnimationGroups` (Task 1); `EVENTS.NODE_SELECTED` / `SELECTION_CHANGED` / `SCENE_CLEARED` from `frontend/src/js/events/bus.ts`; `state.selectedNodeIds` from `state.js`.
 - Produces: DOM contract `#animationsSection` (section, `hidden` toggled) and `#animationSelect` (select; `value=""` = None, otherwise the group index as string). E2E (Task 4) drives these.
 
 - [ ] **Step 1: Write the failing test**
@@ -411,9 +411,9 @@ beforeAll(async () => {
         <option value="">None</option>
       </select>
     </section>`;
-  ({ emit, EVENTS } = await import("../../frontend/src/js/events/bus.js"));
-  ({ state } = await import("../../frontend/src/js/engine/state.js"));
-  await import("../../frontend/src/js/engine/animation-preview.js");
+  ({ emit, EVENTS } = await import("../../frontend/src/js/events/bus.ts"));
+  ({ state } = await import("../../frontend/src/js/engine/state.ts"));
+  await import("../../frontend/src/js/engine/animation-preview.ts");
 });
 
 beforeEach(() => {
@@ -516,7 +516,7 @@ Expected: FAIL — module `animation-preview.js` not found.
 
 - [ ] **Step 3: Implement**
 
-Create `frontend/src/js/engine/animation-preview.js`:
+Create `frontend/src/js/engine/animation-preview.ts`:
 
 ```js
 /**
@@ -669,7 +669,7 @@ Expected: PASS (7 tests).
 - [ ] **Step 6: Commit** (after user confirmation)
 
 ```bash
-git add frontend/src/pug/app.pug frontend/src/js/engine/animation-preview.js test/frontend/animation-preview.test.js frontend/dist/
+git add frontend/src/pug/app.pug frontend/src/js/engine/animation-preview.ts test/frontend/animation-preview.test.js frontend/dist/
 git commit -m "feat(studio): animation clip preview dropdown in inspector"
 ```
 

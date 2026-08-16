@@ -31,11 +31,11 @@ Use this skill when you need to:
 
 | File | Role | Details |
 |------|------|---------|
-| `src/api/ipfs-utils.js` | `catManifest()` — backend IPFS read with timeout | [→ Deep Dive](./references/deep-dive.md) |
-| `src/api/manifest-utils.js` | `getSceneNodes()`, `bumpManifestVersion()` | [→ Deep Dive](./references/deep-dive.md) |
-| `frontend/src/js/blockchain/token-resolver.js` | `resolveChildRef()` — frontend token → CID | [→ Deep Dive](./references/deep-dive.md) |
-| `frontend/src/js/blockchain/uri-utils.js` | `normalizeTokenURI()` — CID extraction | [→ Deep Dive](./references/deep-dive.md) |
-| `frontend/src/js/engine/time-travel.js` | `walkManifestChain()` — client-side history walk | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/ipfs-utils.ts` | `catManifest()` — backend IPFS read with timeout | [→ Deep Dive](./references/deep-dive.md) |
+| `src/api/manifest-utils.ts` | `getSceneNodes()`, `bumpManifestVersion()` | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/blockchain/token-resolver.ts` | `resolveChildRef()` — frontend token → CID | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/blockchain/uri-utils.ts` | `normalizeTokenURI()` — CID extraction | [→ Deep Dive](./references/deep-dive.md) |
+| `frontend/src/js/engine/time-travel.ts` | `walkManifestChain()` — client-side history walk | [→ Deep Dive](./references/deep-dive.md) |
 | `blockchain/contracts/ArbeskAssetBase.sol` | `tokenURI(uint256)` — on-chain CID lookup | [→ Deep Dive](./references/deep-dive.md) |
 
 ## Deep Reference

@@ -8,9 +8,9 @@
 
 The codebase is already scaffolded end-to-end for Tripo3D **except** the backend adapter:
 
-- UI: `#providerSelect` with a `tripo3d` option, BYOK key dialog, localStorage persistence (`arbesk-byok-key`, `arbesk-provider`) — `frontend/src/js/ui/create-panel.js`, `frontend/src/pug/app.pug`.
-- Wire contract: `provider` + `providerKey` fields on `POST /api/v1/generations` (Zod-validated, key ≤ 200 chars) — `src/api/schemas.js`.
-- Missing: `src/api/assets/generate-node.js` returns `501 NOT_IMPLEMENTED` for any non-mock provider.
+- UI: `#providerSelect` with a `tripo3d` option, BYOK key dialog, localStorage persistence (`arbesk-byok-key`, `arbesk-provider`) — `frontend/src/js/ui/create-panel.ts`, `frontend/src/pug/app.pug`.
+- Wire contract: `provider` + `providerKey` fields on `POST /api/v1/generations` (Zod-validated, key ≤ 200 chars) — `src/api/schemas.ts`.
+- Missing: `src/api/assets/generate-node.ts` returns `501 NOT_IMPLEMENTED` for any non-mock provider.
 
 Prior design spec (`2026-07-19-ai-generation-sidebar-design.md`) explicitly deferred the Tripo3D backend adapter as a separate effort. This is that effort.
 
@@ -37,7 +37,7 @@ Prior design spec (`2026-07-19-ai-generation-sidebar-design.md`) explicitly defe
 Browser (create-panel → api.js generateAsset)
    │ POST /api/v1/generations {prompt, nodeId, provider:"tripo3d", providerKey}
    ▼
-generate-node.js ── dispatch ──► tripo3d-adapter.createTask(prompt, key)
+generate-node.ts ── dispatch ──► tripo3d-adapter.createTask(prompt, key)
    │                                │ POST api.tripo3d.ai/v2/openapi/task
    │ ◄── tripoTaskId ──────────────┘
    │ generation-tasks.register(taskId → {tripoTaskId, providerKey, userAddress, createdAt})
@@ -60,7 +60,7 @@ GLB output flows through the existing format-handler registry, chat preview, Stu
 
 ## 3. Components
 
-### 3.1 `src/api/adapters/tripo3d-adapter.js` (new)
+### 3.1 `src/api/adapters/tripo3d-adapter.ts` (new)
 
 Plain-`fetch` client for the v2 API. Three exported functions:
 
@@ -74,7 +74,7 @@ Plain-`fetch` client for the v2 API. Three exported functions:
 
 Never logs `providerKey`. Constants: `TRIPO_API_BASE = "https://api.tripo3d.ai/v2/openapi"`, `TRIPO_MODEL_VERSION = "v2.5-20250123"` (overridable via env `TRIPO_3D_MODEL` for ops flexibility — default stays v2.5).
 
-### 3.2 `src/api/generation-tasks.js` (new)
+### 3.2 `src/api/generation-tasks.ts` (new)
 
 In-memory registry, no persistence:
 
@@ -83,7 +83,7 @@ In-memory registry, no persistence:
 - `evict(taskId)`.
 - TTL sweep: entries expire after 1 hour (interval-based sweep, unref'd timer so tests can exit).
 
-### 3.3 `src/api/assets/generate-node.js` (modified)
+### 3.3 `src/api/assets/generate-node.ts` (modified)
 
 Dispatch after validation:
 
@@ -93,9 +93,9 @@ Dispatch after validation:
 
 BYOK gate (400 `MISSING_PROVIDER_KEY`) stays as-is. Tripo errors map to: invalid key → `401 { PROVIDER_AUTH_FAILED }`, `2010` insufficient credits → `402 { PROVIDER_CREDITS_EXHAUSTED }`, other → `502 { PROVIDER_ERROR }`.
 
-### 3.4 `GET /api/v1/generations/:taskId` (new route, defined in `generate-node.js`)
+### 3.4 `GET /api/v1/generations/:taskId` (new route, defined in `generate-node.ts`)
 
-Defined alongside the existing POST in `src/api/assets/generate-node.js` so the whole generation flow (dispatch, registry access, error mapping) stays in one file.
+Defined alongside the existing POST in `src/api/assets/generate-node.ts` so the whole generation flow (dispatch, registry access, error mapping) stays in one file.
 
 Middleware: `authenticate` only (session required; **no** generation rate limit — polling is cheap and local).
 
@@ -107,11 +107,11 @@ Flow:
    - `success` → `downloadModel` → evict entry → `200 { status: "success", assetData: <base64>, format: "glb", path: "asset.glb", provider: "tripo3d" }`.
    - `failed|cancelled` → evict entry → `200 { status: "failed", error: { code: "PROVIDER_TASK_FAILED", message } }`.
 
-### 3.5 `src/api/rate-limiter.js` (modified)
+### 3.5 `src/api/rate-limiter.ts` (modified)
 
 `generationRateLimit` skips (`next()`) when `req.body.provider` is set, `!== "mock"`, and `req.body.providerKey` is non-empty. Mock behavior unchanged.
 
-### 3.6 Frontend: `frontend/src/js/services/api.js` (modified)
+### 3.6 Frontend: `frontend/src/js/services/api.ts` (modified)
 
 `generateAsset()`:
 - POST as today. If response contains `taskId` → poll `GET /generations/:taskId` every 3 s (via `fetchWithSession`), overall timeout 10 min → throw `GENERATION_TIMEOUT`.
@@ -119,7 +119,7 @@ Flow:
 - On `status: "failed"` → throw with the provider message.
 - On `success` → the payload is the same `{ assetData, format, path }` shape as today → existing decode → `writeToIPFS` → manifest flow runs unchanged.
 
-### 3.7 Frontend: `frontend/src/js/ui/create-panel.js` (modified)
+### 3.7 Frontend: `frontend/src/js/ui/create-panel.ts` (modified)
 
 - Remove the "Cloud generation is not yet enabled. Switch to mock mode." 501 special-case; surface real backend errors (insufficient credits, auth failed, timeout) in the chat/status area.
 
@@ -131,7 +131,7 @@ Flow:
   2. **Logging:** the key is never logged in any form — the only permitted log line is the existing masked pattern `key=*** (len=N)`. The adapter must never log request/response bodies or headers (Tripo error payloads don't contain the key, but adapter-thrown errors must be constructed from Tripo's `code`/`message` only, never from raw request data). The global `console.error("[GEN] error:", err.message)` path is safe only if adapter error messages are sanitized — this is a code-review checkpoint.
   3. **Responses:** the key never appears in any API response body or header, including error responses.
   4. **Transport:** the key crosses the wire exactly once per generation (the POST body). Poll requests carry only the session token.
-- **Verified clean today (audit 2026-07-21):** `generate-node.js` logs only `key=*** (len=N)`; `morgan` in `src/index.js` logs method/URL/status/client-IP/response-time only (no body, no auth headers); no route dumps `req.body`; `sessions.js` never touches `providerKey`.
+- **Verified clean today (audit 2026-07-21):** `generate-node.ts` logs only `key=*** (len=N)`; `morgan` in `src/index.ts` logs method/URL/status/client-IP/response-time only (no body, no auth headers); no route dumps `req.body`; `sessions.ts` never touches `providerKey`.
 - **No server-held key:** `TRIPO_3D_KEY` in `.env` is used only by developers for manual/integration testing; the server never reads it.
 - Rate limiting: BYOK task creation is exempt (users spend their own credits); the status endpoint needs no generation limit. Session auth still applies to both.
 

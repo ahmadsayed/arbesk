@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Introduce a `domain/collection.js` module that owns collection-context state writes and the canonical collection-publish seam, and introduce a `domain/editors.js` module that owns Merkle editor-list operations (cache, proof building, localStorage key). Replace duplication of editor/Merkle logic across services.
+**Goal:** Introduce a `domain/collection.ts` module that owns collection-context state writes and the canonical collection-publish seam, and introduce a `domain/editors.ts` module that owns Merkle editor-list operations (cache, proof building, localStorage key). Replace duplication of editor/Merkle logic across services.
 
-**Architecture:** Big structs + module functions (no classes, no inheritance). `domain/asset.js` stays a facade over `assetState` and must NOT import `services/asset-save/*` or `domain/collection.js`. Collection adoption now lives in `domain/collection.js`; the asset facade no longer writes `activeCollectionTokenId` or `selectedCollectionId`. The canonical `publishCollection` command lives in `domain/collection.js`; the existing `services/asset-save/collection-publish.js` becomes a thin orchestrator that injects chain/IPFS/editor deps and uses an `onAdoptIdentity` callback to tell the asset domain to adopt the published identity without a cycle.
+**Architecture:** Big structs + module functions (no classes, no inheritance). `domain/asset.ts` stays a facade over `assetState` and must NOT import `services/asset-save/*` or `domain/collection.ts`. Collection adoption now lives in `domain/collection.ts`; the asset facade no longer writes `activeCollectionTokenId` or `selectedCollectionId`. The canonical `publishCollection` command lives in `domain/collection.ts`; the existing `services/asset-save/collection-publish.ts` becomes a thin orchestrator that injects chain/IPFS/editor deps and uses an `onAdoptIdentity` callback to tell the asset domain to adopt the published identity without a cycle.
 
 **Tech Stack:** ESM JS, Jest (jsdom), Playwright E2E.
 
 **Spec:** `docs/superpowers/specs/2026-08-09-asset-domain-model-design.md` (Phase 3) and `docs/superpowers/plans/2026-08-09-asset-domain-phase2-save-publish.md` (style / global constraints).
 
 **Scope refinements vs spec (controller-noted):**
-- `domain/collection.js` is the collection-state + publish seam, not a full Collection struct/directory-map rewrite. `listCollectionAssets()` and a first-class Collection struct are deferred.
+- `domain/collection.ts` is the collection-state + publish seam, not a full Collection struct/directory-map rewrite. `listCollectionAssets()` and a first-class Collection struct are deferred.
 - `adoptOpenedAsset` loses its collection-context parameters. Combined asset+collection open paths now emit two `ASSET_STATE_CHANGED` events (asset identity, then collection context) because the two domains are separate; no listener depends on the intermediate partial state.
-- `gltf/merkle-editors.js` is kept as a backwards-compatible re-export wrapper so existing unit-test mocks that intercept the wrapper continue to work for consumers that still import merkle functions through it.
+- `gltf/merkle-editors.ts` is kept as a backwards-compatible re-export wrapper so existing unit-test mocks that intercept the wrapper continue to work for consumers that still import merkle functions through it.
 - YAGNI: no schema changes, no terminology cleanup (Phase 4), no library-state rewrite.
 
 ## Global Constraints
@@ -21,9 +21,9 @@
 - Big structs + module functions; **no `class`, no inheritance**; `_`-prefix = module-private by convention.
 - ESM; camelCase; JSDoc on exported functions; `npm run typecheck:frontend` must pass.
 - **Behavior preservation is paramount.** Unchanged: all toast copies, status/progress fractions, button states, `ASSET_DRAFT_SAVED` / `ASSET_PUBLISHED` emissions and payloads, URL updates, publish "no-changes still anchors" path, editor-list caching semantics, Merkle root/proof behavior, 5000-editor cap.
-- `domain/asset.js` must remain the **only** writer of `activeAssetManifestCid`, `latestAssetManifestCid`, `activeAssetTokenId`, `activeAssetId`, `currentManifest`, and the **only** writer of `activeAssetName`.
-- `domain/collection.js` is the **only** writer of `activeCollectionTokenId` and `selectedCollectionId`.
-- `domain/asset.js` must NOT import `services/asset-save/*` or `domain/collection.js` (cycle guard).
+- `domain/asset.ts` must remain the **only** writer of `activeAssetManifestCid`, `latestAssetManifestCid`, `activeAssetTokenId`, `activeAssetId`, `currentManifest`, and the **only** writer of `activeAssetName`.
+- `domain/collection.ts` is the **only** writer of `activeCollectionTokenId` and `selectedCollectionId`.
+- `domain/asset.ts` must NOT import `services/asset-save/*` or `domain/collection.ts` (cycle guard).
 - Event-ordering rule: state writes land **before** event emissions.
 - Persisted manifest field names and internal event names are frozen.
 - **Git commits: pre-authorized by the user for this refactor run (per-task commits, repo conventional style).**
@@ -34,11 +34,11 @@
 ### Task 1: Collection state commands
 
 **Files:**
-- Create: `frontend/src/js/domain/collection.js`
-- Modify: `frontend/src/js/domain/asset.js`
-- Modify: `frontend/src/js/ui/asset-library.js`
-- Modify: `frontend/src/js/ui/create-panel.js`
-- Modify: `frontend/src/js/engine/scene-graph.js`
+- Create: `frontend/src/js/domain/collection.ts`
+- Modify: `frontend/src/js/domain/asset.ts`
+- Modify: `frontend/src/js/ui/asset-library.ts`
+- Modify: `frontend/src/js/ui/create-panel.ts`
+- Modify: `frontend/src/js/engine/scene-graph.ts`
 - Modify: `test/frontend/domain-asset-identity.test.js`
 - Create: `test/frontend/domain-collection.test.js`
 
@@ -52,11 +52,11 @@
   - `clearSelectedCollection()`
   - `clearActiveCollection()`
   - `adoptPublishedCollection(tokenId)`
-- `domain/asset.js`:
+- `domain/asset.ts`:
   - `adoptOpenedAsset(cid, identity)` no longer accepts `collectionTokenId` or `clearSelectedCollection`; it writes only asset identity fields.
   - `adoptPublishedIdentity(tokenId, assetId)` no longer writes `activeCollectionTokenId`.
 
-- [ ] **Step 1: Create `frontend/src/js/domain/collection.js`**
+- [ ] **Step 1: Create `frontend/src/js/domain/collection.ts`**
 
 ```js
 // @ts-check
@@ -130,7 +130,7 @@ export function adoptPublishedCollection(tokenId) {
 }
 ```
 
-- [ ] **Step 2: Strip collection fields from `domain/asset.js`**
+- [ ] **Step 2: Strip collection fields from `domain/asset.ts`**
 
 Replace `adoptOpenedAsset` with:
 
@@ -173,7 +173,7 @@ Remove the Phase-2 transitional comment about collection-context fields.
 
 - [ ] **Step 3: Rewire callers**
 
-`frontend/src/js/engine/scene-graph.js`:
+`frontend/src/js/engine/scene-graph.ts`:
 - Add `import { adoptOpenedCollection } from "../domain/collection.js";`
 - In `loadFromParams` token path:
   ```js
@@ -181,12 +181,12 @@ Remove the Phase-2 transitional comment about collection-context fields.
   adoptOpenedCollection(String(assetTokenId), { clearSelectedCollection: true });
   ```
 
-`frontend/src/js/ui/create-panel.js`:
+`frontend/src/js/ui/create-panel.ts`:
 - Add `import { selectCollection } from "../domain/collection.js";`
 - In `syncCollectionSelect`, replace `assetState.set({ selectedCollectionId: defaultId });` with `selectCollection(defaultId);`
 - In the `change` listener, replace `assetState.set({ selectedCollectionId: collectionSelect.value || defaultId });` with `selectCollection(collectionSelect.value || defaultId);`
 
-`frontend/src/js/ui/asset-library.js`:
+`frontend/src/js/ui/asset-library.ts`:
 - Add `import { adoptOpenedCollection, clearSelectedCollection, clearActiveCollection, getActiveCollectionTokenId } from "../domain/collection.js";`
 - Remove the local `getActiveCollectionTokenId()` helper.
 - `openAssetEntry` collection branch:
@@ -266,7 +266,7 @@ import {
   adoptPublishedCollection,
   getActiveCollectionTokenId,
   getSelectedCollectionId,
-} from "../../frontend/src/js/domain/collection.js";
+} from "../../frontend/src/js/domain/collection.ts";
 import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
 
 beforeEach(() => _resetForTesting());
@@ -309,7 +309,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add frontend/src/js/domain/collection.js frontend/src/js/domain/asset.js frontend/src/js/ui/asset-library.js frontend/src/js/ui/create-panel.js frontend/src/js/engine/scene-graph.js test/frontend/domain-asset-identity.test.js test/frontend/domain-collection.test.js
+git add frontend/src/js/domain/collection.ts frontend/src/js/domain/asset.ts frontend/src/js/ui/asset-library.ts frontend/src/js/ui/create-panel.ts frontend/src/js/engine/scene-graph.ts test/frontend/domain-asset-identity.test.js test/frontend/domain-collection.test.js
 git commit -m "feat(domain): collection state commands own active/selected collection fields"
 ```
 
@@ -318,25 +318,25 @@ git commit -m "feat(domain): collection state commands own active/selected colle
 ### Task 2: Collection publish seam
 
 **Files:**
-- Modify: `frontend/src/js/domain/collection.js`
-- Modify: `frontend/src/js/services/asset-save/collection-publish.js`
-- Modify: `frontend/src/js/domain/asset.js`
+- Modify: `frontend/src/js/domain/collection.ts`
+- Modify: `frontend/src/js/services/asset-save/collection-publish.ts`
+- Modify: `frontend/src/js/domain/asset.ts`
 - Modify: `test/frontend/domain-asset-publish.test.js`
 - Extend: `test/frontend/domain-collection.test.js`
 
 **Interfaces:**
-- `domain/collection.js`:
+- `domain/collection.ts`:
   - `publishCollection(assetCid, assetID, walletAddr, deps) → { tokenId, collectionCid, isNew }`
   - `deps = { getOwnerOf, getTokenURI, getCollectionManifest, writeJSONToIPFS, republishCollection, publishNewToken, onAdoptIdentity? }`
-  - `onAdoptIdentity({ tokenId, assetId, isNew })` is called after the on-chain anchor so the caller can adopt the asset identity without `domain/collection.js` importing `domain/asset.js`.
-- `services/asset-save/collection-publish.js`:
-  - `publishCollectionForAsset(assetCid, assetID, walletAddr)` remains the 3-arg orchestrator used by `ui/asset-save.js`. It injects real chain/IPFS/editor deps and an `onAdoptIdentity` callback that calls `domain/asset.js`'s `adoptPublishedIdentity`.
-- `domain/asset.js`:
+  - `onAdoptIdentity({ tokenId, assetId, isNew })` is called after the on-chain anchor so the caller can adopt the asset identity without `domain/collection.ts` importing `domain/asset.ts`.
+- `services/asset-save/collection-publish.ts`:
+  - `publishCollectionForAsset(assetCid, assetID, walletAddr)` remains the 3-arg orchestrator used by `ui/asset-save.ts`. It injects real chain/IPFS/editor deps and an `onAdoptIdentity` callback that calls `domain/asset.ts`'s `adoptPublishedIdentity`.
+- `domain/asset.ts`:
   - `publishAsset` no longer calls `adoptPublishedIdentity` directly; it relies on the injected `publishCollection` dep to adopt identity via `onAdoptIdentity`. It emits `ASSET_PUBLISHED` using the returned `tokenId`.
 
-- [ ] **Step 1: Add `publishCollection` and `adoptPublishedCollection` to `domain/collection.js`**
+- [ ] **Step 1: Add `publishCollection` and `adoptPublishedCollection` to `domain/collection.ts`**
 
-Append to `frontend/src/js/domain/collection.js`:
+Append to `frontend/src/js/domain/collection.ts`:
 
 ```js
 /**
@@ -432,12 +432,12 @@ export async function publishCollection(assetCid, assetID, walletAddr, deps) {
 }
 ```
 
-- [ ] **Step 2: Replace `services/asset-save/collection-publish.js` with a thin wrapper**
+- [ ] **Step 2: Replace `services/asset-save/collection-publish.ts` with a thin wrapper**
 
 ```js
 // @ts-nocheck
 /**
- * Thin orchestrator around domain/collection.js publishCollection.
+ * Thin orchestrator around domain/collection.ts publishCollection.
  */
 import { publishCollection } from "../../domain/collection.js";
 import { adoptPublishedIdentity } from "../../domain/asset.js";
@@ -462,7 +462,7 @@ export async function publishCollectionForAsset(assetCid, assetID, walletAddr) {
 }
 ```
 
-- [ ] **Step 3: Update `domain/asset.js` `publishAsset`**
+- [ ] **Step 3: Update `domain/asset.ts` `publishAsset`**
 
 Remove the `adoptPublishedIdentity(tokenId, assetID);` line and change the `emit` to use the returned `tokenId` directly:
 
@@ -609,7 +609,7 @@ Expected: PASS — `asset-save.test.js` must remain unmodified and green.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add frontend/src/js/domain/collection.js frontend/src/js/services/asset-save/collection-publish.js frontend/src/js/domain/asset.js test/frontend/domain-asset-publish.test.js test/frontend/domain-collection.test.js
+git add frontend/src/js/domain/collection.ts frontend/src/js/services/asset-save/collection-publish.ts frontend/src/js/domain/asset.ts test/frontend/domain-asset-publish.test.js test/frontend/domain-collection.test.js
 git commit -m "feat(domain): canonical publishCollection seam with onAdoptIdentity callback"
 ```
 
@@ -618,20 +618,20 @@ git commit -m "feat(domain): canonical publishCollection seam with onAdoptIdenti
 ### Task 3: Editor domain core
 
 **Files:**
-- Create: `frontend/src/js/domain/editors.js`
-- Modify: `frontend/src/js/gltf/merkle-editors.js`
+- Create: `frontend/src/js/domain/editors.ts`
+- Modify: `frontend/src/js/gltf/merkle-editors.ts`
 - Test: `test/frontend/merkle-editors.test.js` (should pass unmodified)
 
 **Interfaces:**
-- `domain/editors.js` exports:
+- `domain/editors.ts` exports:
   - `MAX_EDITORS_PER_TOKEN = 5000`
   - `makeLeaf(address, role, tokenId, setVersion)`
   - `computeRoot(editorList, tokenId, setVersion)`
   - `getProof(editorList, targetAddress, tokenId, setVersion)`
   - `verifyProof(root, leaf, proof)`
-- `gltf/merkle-editors.js` becomes a thin re-export wrapper.
+- `gltf/merkle-editors.ts` becomes a thin re-export wrapper.
 
-- [ ] **Step 1: Create `frontend/src/js/domain/editors.js`**
+- [ ] **Step 1: Create `frontend/src/js/domain/editors.ts`**
 
 ```js
 // @ts-nocheck
@@ -716,12 +716,12 @@ export function verifyProof(root, leaf, proof) {
 }
 ```
 
-- [ ] **Step 2: Replace `frontend/src/js/gltf/merkle-editors.js` with a re-export wrapper**
+- [ ] **Step 2: Replace `frontend/src/js/gltf/merkle-editors.ts` with a re-export wrapper**
 
 ```js
 // @ts-nocheck
 /**
- * Merkle Editor Tree — backwards-compatible re-export of domain/editors.js.
+ * Merkle Editor Tree — backwards-compatible re-export of domain/editors.ts.
  */
 export {
   MAX_EDITORS_PER_TOKEN,
@@ -743,8 +743,8 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/domain/editors.js frontend/src/js/gltf/merkle-editors.js
-git commit -m "feat(domain): move Merkle editor helpers to domain/editors.js"
+git add frontend/src/js/domain/editors.ts frontend/src/js/gltf/merkle-editors.ts
+git commit -m "feat(domain): move Merkle editor helpers to domain/editors.ts"
 ```
 
 ---
@@ -752,16 +752,16 @@ git commit -m "feat(domain): move Merkle editor helpers to domain/editors.js"
 ### Task 4: Editor list cache + proof commands
 
 **Files:**
-- Modify: `frontend/src/js/domain/editors.js`
-- Modify: `frontend/src/js/services/team.js`
-- Modify: `frontend/src/js/services/asset-save/editor-publish.js`
-- Modify: `frontend/src/js/services/asset-delete.js`
-- Modify: `frontend/src/js/services/library-ops.js`
+- Modify: `frontend/src/js/domain/editors.ts`
+- Modify: `frontend/src/js/services/team.ts`
+- Modify: `frontend/src/js/services/asset-save/editor-publish.ts`
+- Modify: `frontend/src/js/services/asset-delete.ts`
+- Modify: `frontend/src/js/services/library-ops.ts`
 - Modify: `frontend/src/js/state/comment-thread.js`
 - Create: `test/frontend/domain-editors.test.js`
 
 **Interfaces:**
-- `domain/editors.js` additionally exports:
+- `domain/editors.ts` additionally exports:
   - `editorListKey(tag) → string`
   - `saveEditorList(tag, list, cid?)`
   - `loadEditorList(tag) → Promise<editor[]>`
@@ -769,11 +769,11 @@ git commit -m "feat(domain): move Merkle editor helpers to domain/editors.js"
   - `getEditorSetVersion(tag) → Promise<number>`
   - `getCachedEditorRoot(tag) → string|null`
   - `buildEditorProof(tag, editorAddress, { isOwner?, ownerRoot? }) → {proof, role}|null`
-- Consumers replace duplicated localStorage cache, version lookup, and proof building with calls into `domain/editors.js`.
+- Consumers replace duplicated localStorage cache, version lookup, and proof building with calls into `domain/editors.ts`.
 
-- [ ] **Step 1: Extend `frontend/src/js/domain/editors.js` with cache/version/proof commands**
+- [ ] **Step 1: Extend `frontend/src/js/domain/editors.ts` with cache/version/proof commands**
 
-Append to `frontend/src/js/domain/editors.js`:
+Append to `frontend/src/js/domain/editors.ts`:
 
 ```js
 // ─── Cache ─────────────────────────────────────────────────────────────────
@@ -884,7 +884,7 @@ export async function buildEditorProof(tag, editorAddress, options = {}) {
 }
 ```
 
-- [ ] **Step 2: Refactor `frontend/src/js/services/team.js`**
+- [ ] **Step 2: Refactor `frontend/src/js/services/team.ts`**
 
 Replace the merkle/cache/version imports and helpers:
 
@@ -920,7 +920,7 @@ Replace the re-export block at the bottom with:
 export { getEditorSetVersion, saveEditorList as saveEditorListLocally };
 ```
 
-- [ ] **Step 3: Refactor `frontend/src/js/services/asset-save/editor-publish.js`**
+- [ ] **Step 3: Refactor `frontend/src/js/services/asset-save/editor-publish.ts`**
 
 Replace the team imports with domain imports:
 
@@ -938,7 +938,7 @@ In `buildWalletProof`, replace `fetchEditorsFromTeam(tokenId)` with `loadEditorL
 
 In `prepareInitialEditors`, replace `saveEditorListLocally(tokenId, editorList, editorListUri || null)` with `saveEditorList(tokenId, editorList, editorListUri || null)`.
 
-- [ ] **Step 4: Refactor `frontend/src/js/services/asset-delete.js`**
+- [ ] **Step 4: Refactor `frontend/src/js/services/asset-delete.ts`**
 
 Replace the merkle import with domain imports:
 
@@ -961,7 +961,7 @@ const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
 if (!proofResult) throw new Error("Not an authorized editor");
 ```
 
-- [ ] **Step 5: Refactor `frontend/src/js/services/library-ops.js`**
+- [ ] **Step 5: Refactor `frontend/src/js/services/library-ops.ts`**
 
 Replace the merkle import:
 
@@ -1039,12 +1039,12 @@ jest.unstable_mockModule("@openzeppelin/merkle-tree", () => ({
   SimpleMerkleTree: FakeSimpleMerkleTree,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.ts", () => ({
   getActiveContract: jest.fn(),
   CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.ts", () => ({
   getFromRemoteIPFS: jest.fn(),
 }));
 
@@ -1052,7 +1052,7 @@ let editors;
 
 beforeAll(async () => {
   global.window.Web3 = { utils: { soliditySha3 } };
-  editors = await import("../../frontend/src/js/domain/editors.js");
+  editors = await import("../../frontend/src/js/domain/editors.ts");
 });
 
 beforeEach(() => {
@@ -1079,7 +1079,7 @@ describe("cache", () => {
 describe("buildEditorProof", () => {
   test("returns proof for a listed editor", async () => {
     const { getActiveContract, getFromRemoteIPFS } = await import(
-      "../../frontend/src/js/blockchain/wallet.js"
+      "../../frontend/src/js/blockchain/wallet.ts"
     );
     getActiveContract.mockReturnValue({
       methods: {
@@ -1114,8 +1114,8 @@ Expected: PASS. `team.test.js` and `editor-publish.test.js` should pass with no 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add frontend/src/js/domain/editors.js frontend/src/js/services/team.js frontend/src/js/services/asset-save/editor-publish.js frontend/src/js/services/asset-delete.js frontend/src/js/services/library-ops.js frontend/src/js/state/comment-thread.js test/frontend/domain-editors.test.js
-git commit -m "refactor(domain): centralize editor list cache + proof commands in domain/editors.js"
+git add frontend/src/js/domain/editors.ts frontend/src/js/services/team.ts frontend/src/js/services/asset-save/editor-publish.ts frontend/src/js/services/asset-delete.ts frontend/src/js/services/library-ops.ts frontend/src/js/state/comment-thread.js test/frontend/domain-editors.test.js
+git commit -m "refactor(domain): centralize editor list cache + proof commands in domain/editors.ts"
 ```
 
 ---
@@ -1141,13 +1141,13 @@ Expected: all green.
 grep -rn "assetState\.set(" frontend/src/js | grep -E "activeAssetManifestCid|latestAssetManifestCid|activeAssetTokenId|activeAssetId|currentManifest"
 ```
 
-Expected: only `frontend/src/js/domain/asset.js` matches.
+Expected: only `frontend/src/js/domain/asset.ts` matches.
 
 ```bash
 grep -rn "assetState\.set(" frontend/src/js | grep -E "activeCollectionTokenId|selectedCollectionId"
 ```
 
-Expected: only `frontend/src/js/domain/collection.js` matches (plus the patch object in `utils/new-asset.js`, which is a returned patch, not a direct set).
+Expected: only `frontend/src/js/domain/collection.ts` matches (plus the patch object in `utils/new-asset.ts`, which is a returned patch, not a direct set).
 
 - [ ] **Step 3: E2E regression set**
 
@@ -1177,8 +1177,8 @@ Generate → Save draft → Publish → Republish after a color edit → Dive/as
 
 ## Self-Review Notes
 
-- **Cycle safety:** `domain/asset.js` never imports `domain/collection.js` or `services/asset-save/*`. `services/asset-save/collection-publish.js` imports both `domain/asset.js` and `domain/collection.js` and bridges them via the `onAdoptIdentity` callback, so no import cycle exists.
-- **Behavior parity:** `adoptOpenedAsset` and `adoptPublishedIdentity` no longer touch collection fields; all former callers route collection-context writes through `domain/collection.js`. `publishCollection` reproduces the existing resolve/merge/write/republish-or-mint flow verbatim. `ui/asset-save.js` and `test/frontend/asset-save.test.js` remain unchanged because the wrapper absorbs the new callback.
+- **Cycle safety:** `domain/asset.ts` never imports `domain/collection.ts` or `services/asset-save/*`. `services/asset-save/collection-publish.ts` imports both `domain/asset.ts` and `domain/collection.ts` and bridges them via the `onAdoptIdentity` callback, so no import cycle exists.
+- **Behavior parity:** `adoptOpenedAsset` and `adoptPublishedIdentity` no longer touch collection fields; all former callers route collection-context writes through `domain/collection.ts`. `publishCollection` reproduces the existing resolve/merge/write/republish-or-mint flow verbatim. `ui/asset-save.ts` and `test/frontend/asset-save.test.js` remain unchanged because the wrapper absorbs the new callback.
 - **Event semantics:** Combined asset+collection open paths emit two `ASSET_STATE_CHANGED` events. No listener reads the partial intermediate state; the header snapshot reads only asset identity fields, and the library listener re-renders idempotently on the second event.
-- **Editor centralization:** All editor-list localStorage keys, cache writes, chain version lookups, and Merkle proof generation now live in `domain/editors.js`. `gltf/merkle-editors.js` remains a backwards-compatible wrapper so existing tests that mock the wrapper continue to intercept merkle functions for consumers that import through it.
+- **Editor centralization:** All editor-list localStorage keys, cache writes, chain version lookups, and Merkle proof generation now live in `domain/editors.ts`. `gltf/merkle-editors.ts` remains a backwards-compatible wrapper so existing tests that mock the wrapper continue to intercept merkle functions for consumers that import through it.
 - **Test preservation:** `merkle-editors.test.js`, `editor-publish.test.js`, `team.test.js`, and `asset-save.test.js` are intentionally kept green with no logic changes (only an optional `editorListURI` stub in `asset-delete.test.js` to silence a warning). `asset-delete.test.js` receives its proof through the same mocked `getProof`, backed by the real domain `loadEditorList`/`getEditorSetVersion` running against the existing wallet/remote-ipfs mocks.

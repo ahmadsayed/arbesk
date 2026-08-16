@@ -153,10 +153,10 @@ function _requireEditor(
 
 | File | Change | Details |
 |------|--------|---------|
-| `src/api/abi-router.js` | **None** | Serves compiled ABI by name; no change needed |
-| `src/api/authentication.js` | **None** | No contract function calls — validates sessions only |
-| `src/api/assets/generate-node.js` | **None** | Returns raw asset bytes; does not call contract functions |
-| `src/api/manifest-utils.js` | **None** | Works with IPFS manifests, not contract state |
+| `src/api/abi-router.ts` | **None** | Serves compiled ABI by name; no change needed |
+| `src/api/authentication.ts` | **None** | No contract function calls — validates sessions only |
+| `src/api/assets/generate-node.ts` | **None** | Returns raw asset bytes; does not call contract functions |
+| `src/api/manifest-utils.ts` | **None** | Works with IPFS manifests, not contract state |
 | `src/api/routes/*` | **None** | No Merkle-specific route logic |
 | `.env` (root) | **Update** | New `CONTRACT_ADDRESS` and `PAID_CONTRACT_ADDRESS` after deploy |
 
@@ -164,18 +164,18 @@ function _requireEditor(
 
 | File | Impact | Functions Changed |
 |------|--------|-------------------|
-| `blockchain/wallet.js` | **HIGH** | Backward-compat barrel; logic moved to `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
-| `blockchain/wallet-publishing.js` | **HIGH** | `publishAsset` (+`editorRoot` + `editorListUri`), `updateAssetURI` (+`proof`), `burn` (+`proof`), `updateEditors` (+proof params) |
-| `ui/create-panel.js` | **MEDIUM** | After generation, delegates save/publish; initial Merkle root built by `services/asset-save/editor-publish.js` |
-| `ui/asset-save.js` | **HIGH** | Save/publish UI; delegates manifest building to `services/asset-save/manifest-builder.js` |
-| `services/asset-save/manifest-builder.js` | **MEDIUM** | Manifest versioning, glTF decomposition, comment-archive embedding |
-| `services/asset-save/editor-publish.js` | **NEW** | Build Merkle proofs for republish; prepare initial editor list |
-| `ui/collaborators-panel.js` | **HIGH** | Reusable Merkle editor list UI (add/remove/role, owner-aware) |
-| `services/team.js` | **NEW** | Merkle-based editor add/remove with IPFS persistence |
-| `gltf/merkle-editors.js` | **NEW** | Merkle tree JS library (`computeRoot`, `getProof`, `makeLeaf`) |
-| `services/asset-delete.js` | **NEW** | Remove asset from collection manifest |
-| `blockchain/network-config.js` | **LOW** | Point to new contract addresses |
-| `blockchain/token-resolver.js` | **NONE** | Reads `tokenURI` — still in contract |
+| `blockchain/wallet.ts` | **HIGH** | Backward-compat barrel; logic moved to `wallet-core.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
+| `blockchain/wallet-publishing.ts` | **HIGH** | `publishAsset` (+`editorRoot` + `editorListUri`), `updateAssetURI` (+`proof`), `burn` (+`proof`), `updateEditors` (+proof params) |
+| `ui/create-panel.ts` | **MEDIUM** | After generation, delegates save/publish; initial Merkle root built by `services/asset-save/editor-publish.ts` |
+| `ui/asset-save.ts` | **HIGH** | Save/publish UI; delegates manifest building to `services/asset-save/manifest-builder.ts` |
+| `services/asset-save/manifest-builder.ts` | **MEDIUM** | Manifest versioning, glTF decomposition, comment-archive embedding |
+| `services/asset-save/editor-publish.ts` | **NEW** | Build Merkle proofs for republish; prepare initial editor list |
+| `ui/collaborators-panel.ts` | **HIGH** | Reusable Merkle editor list UI (add/remove/role, owner-aware) |
+| `services/team.ts` | **NEW** | Merkle-based editor add/remove with IPFS persistence |
+| `gltf/merkle-editors.ts` | **NEW** | Merkle tree JS library (`computeRoot`, `getProof`, `makeLeaf`) |
+| `services/asset-delete.ts` | **NEW** | Remove asset from collection manifest |
+| `blockchain/network-config.ts` | **LOW** | Point to new contract addresses |
+| `blockchain/token-resolver.ts` | **NONE** | Reads `tokenURI` — still in contract |
 
 ### 3.3 Tests
 
@@ -195,20 +195,20 @@ function _requireEditor(
 |------|--------|
 | `mock/MockUSDC.sol` | Independent of editor changes |
 | `hardhat.config.js` | Network config unchanged |
-| `src/api/index.js` routes | Routes unchanged (new collection validation only) |
-| `src/api/sessions.js` | SIWE unchanged |
-| `src/api/rate-limiter.js` | Rate limits unchanged |
+| `src/api/index.ts` routes | Routes unchanged (new collection validation only) |
+| `src/api/sessions.ts` | SIWE unchanged |
+| `src/api/rate-limiter.ts` | Rate limits unchanged |
 | `frontend/src/js/engine/*` | Scene graph, 3D engine unchanged |
 | `frontend/src/js/ipfs/*` | IPFS client unchanged |
-| `frontend/src/js/gltf/composer.js` | Unchanged |
-| `frontend/src/js/gltf/decomposer.js` | Unchanged |
-| `frontend/src/js/services/api.js` | Unchanged |
+| `frontend/src/js/gltf/composer.ts` | Unchanged |
+| `frontend/src/js/gltf/decomposer.ts` | Unchanged |
+| `frontend/src/js/services/api.ts` | Unchanged |
 
 ---
 
 ## 4. Merkle Leaf & Proof Format
 
-The JS library in `frontend/src/js/gltf/merkle-editors.js` matches the Solidity leaf:
+The JS library in `frontend/src/js/gltf/merkle-editors.ts` matches the Solidity leaf:
 
 ```javascript
 makeLeaf(address, role, tokenId, setVersion)

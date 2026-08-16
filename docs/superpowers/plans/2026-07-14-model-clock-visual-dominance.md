@@ -4,7 +4,7 @@
 
 **Goal:** Restyle the Time-mode model clock to be "restrained but unmistakable": a thicker track, an accent-blue progress arc replacing the confusing arrow, a round knob handle carrying the version badge, and dimmed tick labels.
 
-**Architecture:** All changes are contained in `frontend/src/js/ui/model-clock-gizmo.js` (Babylon meshes + DOM labels), its Jest suite, and `_version-clock.scss`. The progress arc is a full torus clipped per-fragment by a tiny `BABYLON.ShaderMaterial` (uniforms `startAngle`/`sweep`) so drags update one float per frame with no mesh rebuilds.
+**Architecture:** All changes are contained in `frontend/src/js/ui/model-clock-gizmo.ts` (Babylon meshes + DOM labels), its Jest suite, and `_version-clock.scss`. The progress arc is a full torus clipped per-fragment by a tiny `BABYLON.ShaderMaterial` (uniforms `startAngle`/`sweep`) so drags update one float per frame with no mesh rebuilds.
 
 **Tech Stack:** Babylon.js (utility layer, ShaderMaterial + Effect.ShadersStore), Jest + jsdom with a hand-rolled BABYLON mock, SCSS.
 
@@ -15,7 +15,7 @@
 - Mesh names `versionRing`, `versionTick-<i>`, `versionHandle` MUST be preserved (tests + spec). New mesh names: `versionArc`, `versionHandleRim`, transform node `versionBadgeHost`.
 - The `#modelClockBadge` DOM id/text contract MUST be preserved: visible with text `vN` while Time mode is active, gone when the gizmo is destroyed (E2E `04-parametric-version.spec.js` depends on it).
 - No glow, bloom, or entry animations (explicitly out of scope).
-- `frontend/src/js/ui/model-clock-gizmo.js` keeps its `// @ts-nocheck` header; everything must still pass `npm run typecheck` and `npm run typecheck:frontend` (both run in the pre-commit hook).
+- `frontend/src/js/ui/model-clock-gizmo.ts` keeps its `// @ts-nocheck` header; everything must still pass `npm run typecheck` and `npm run typecheck:frontend` (both run in the pre-commit hook).
 - Drag mechanics, keyboard stepping, billboarding, radius scaling, and lifecycle wiring are UNCHANGED.
 - Run all Jest commands from the repo root: `/home/ahmedh/Projects/arbesk`.
 
@@ -24,7 +24,7 @@
 ### Task 1: Geometry restyle — delete arrow, thicken track, enlarge ticks, knob + rim handle, remove debug logs
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 **Interfaces:**
@@ -38,7 +38,7 @@ In `test/frontend/model-clock-gizmo.test.js`, replace the test `"selecting a nod
 ```js
   test("selecting a node creates face, ring, ticks, knob handle with rim — and no arrow", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -79,7 +79,7 @@ Expected: FAIL — `versionHandleRim` is undefined and `versionArrow` is defined
 
 - [ ] **Step 3: Implement the geometry restyle**
 
-In `frontend/src/js/ui/model-clock-gizmo.js`:
+In `frontend/src/js/ui/model-clock-gizmo.ts`:
 
 3a. Replace the constants block (lines 101–126) — `ARROW_NAME` is deleted, alpha raised, sizing factors added:
 
@@ -189,7 +189,7 @@ Expected: PASS, all tests (the old arrow assertion is gone; drag/dispose/badge t
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): thicker track, larger ticks, knob+rim handle; drop arrow"
 ```
 
@@ -198,7 +198,7 @@ git commit -m "feat(model-clock): thicker track, larger ticks, knob+rim handle; 
 ### Task 2: Progress arc — shader-clipped accent torus
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 **Interfaces:**
@@ -248,7 +248,7 @@ Add to the `"model-clock-gizmo lifecycle"` describe block:
 ```js
   test("progress arc uses the clipping shader and sweeps from v1 to the active version", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -269,7 +269,7 @@ Add to the `"model-clock-gizmo lifecycle"` describe block:
 
   test("dragging the knob updates the arc sweep uniform live", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -302,7 +302,7 @@ Expected: FAIL — no mesh named `versionArc` is created.
 
 - [ ] **Step 4: Implement the arc**
 
-In `frontend/src/js/ui/model-clock-gizmo.js`:
+In `frontend/src/js/ui/model-clock-gizmo.ts`:
 
 4a. Add below the `utilityScene` function:
 
@@ -396,7 +396,7 @@ Expected: PASS. (The material-disposal test also covers the ShaderMaterial: `roo
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): shader-clipped progress arc from v1 to the knob"
 ```
 
@@ -405,7 +405,7 @@ git commit -m "feat(model-clock): shader-clipped progress arc from v1 to the kno
 ### Task 3: Badge travels with the knob; tick label states
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 **Interfaces:**
@@ -432,7 +432,7 @@ Add to the lifecycle describe block:
 ```js
   test("badge is a standalone element following the knob; the coincident tick label hides", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -461,7 +461,7 @@ Add to the lifecycle describe block:
       isLoading: false,
     }));
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -488,7 +488,7 @@ Expected: FAIL — no `published` class is applied.
 
 - [ ] **Step 4: Implement badge host + element and label states**
 
-In `frontend/src/js/ui/model-clock-gizmo.js`:
+In `frontend/src/js/ui/model-clock-gizmo.ts`:
 
 4a. Add to the constants block:
 
@@ -575,7 +575,7 @@ Expected: PASS — including the pre-existing tests `"badge and tick label refle
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): version badge travels with the knob; published label state"
 ```
 

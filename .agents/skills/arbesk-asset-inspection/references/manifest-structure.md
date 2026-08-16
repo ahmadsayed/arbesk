@@ -48,9 +48,10 @@ Each entry in `scene.nodes` is one of two types:
     "format": "gltf"
   },
   "transform_matrix": [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
-  "appearance": {
+  "post_processor": {
     "color": null,
-    "scale": { "x": 1, "y": 1, "z": 1 }
+    "scale": { "x": 1, "y": 1, "z": 1 },
+    "meshOverrides": {}
   },
   "history": [ ... ]                         // Optional version history
 }

@@ -39,31 +39,31 @@ gizmo layer, and the outliner.
 
 ### Selection state
 
-- `state.selectedNodeIds: Set<string>` (new, `engine/state.js`) — the full
+- `state.selectedNodeIds: Set<string>` (new, `engine/state.ts`) — the full
   selection. `state.highlightedNodeId` stays as the **primary** (last-added)
   node so existing single-node consumers (sub-mesh toggle, inspector,
   comments, model clock) keep working untouched when size === 1.
-- `engine/scene-selection.js` gains `toggleNodeSelection(nodeId, mesh)`;
+- `engine/scene-selection.ts` gains `toggleNodeSelection(nodeId, mesh)`;
   `selectNode` resets the set to `{nodeId}`; `deselectAll` clears it.
   Highlight fan-out: every selected node's meshes go into the existing
   `HighlightLayer` (amber). Primary node keeps the current glow; no new
   visual language.
-- New event `SELECTION_CHANGED { nodeIds: string[] }` in `events/bus.js`.
+- New event `SELECTION_CHANGED { nodeIds: string[] }` in `events/bus.ts`.
   `NODE_SELECTED` / `NODE_DESELECTED` keep firing (primary node) so current
   listeners don't need to change.
 
 ### Pointer & outliner
 
-- `engine/scene-graph.js` POINTERPICK handler: if `ctrlKey || metaKey`, call
+- `engine/scene-graph.ts` POINTERPICK handler: if `ctrlKey || metaKey`, call
   `toggleNodeSelection` instead of `selectNode`; modifier + click on an
   already-selected node removes it. The child-world boundary rules (pick
   walks up to the owning `child_ref` anchor) apply unchanged.
-- `ui/outliner.js`: rows track a `Set`; Ctrl/Cmd+click toggles, plain click
+- `ui/outliner.ts`: rows track a `Set`; Ctrl/Cmd+click toggles, plain click
   single-selects; all selected rows get `.selected`.
 
 ### Group gizmo
 
-- `ui/transform-gizmo.js`: when `selectedNodeIds.size > 1` and mode is
+- `ui/transform-gizmo.ts`: when `selectedNodeIds.size > 1` and mode is
   translate/rotate/scale, the `GizmoManager` attaches to a synthetic pivot
   `BABYLON.TransformNode` (not parented to any anchor) placed at the
   selection centroid.
@@ -82,7 +82,7 @@ gizmo layer, and the outliner.
 - `transform-gizmo.js` `setMode()`/`updateToolbarUI()`: Time button disabled
   with a tooltip when selection size > 1; switching into a multi-selection
   while in Time mode falls back to translate.
-- `ui/model-clock-gizmo.js`: build only when `selectedNodeIds.size === 1`
+- `ui/model-clock-gizmo.ts`: build only when `selectedNodeIds.size === 1`
   (existing `transformMode === "time"` gate extended).
 
 ### Frame-selected & Select-All
@@ -96,15 +96,15 @@ gizmo layer, and the outliner.
 
 | File | Change |
 |------|--------|
-| `frontend/src/js/engine/state.js` | `selectedNodeIds` Set |
-| `frontend/src/js/events/bus.js` | `SELECTION_CHANGED` event |
-| `frontend/src/js/engine/scene-selection.js` | toggle/multi-aware select, highlight fan-out |
-| `frontend/src/js/engine/scene-graph.js` | modifier-click picking, `f` framing |
-| `frontend/src/js/ui/transform-gizmo.js` | pivot node, drag fan-out, per-node capture, Time gating |
-| `frontend/src/js/ui/outliner.js` | multi-select rows |
-| `frontend/src/js/ui/model-clock-gizmo.js` | single-selection gate |
-| `frontend/src/js/engine/parametric-preview.js` | multi-select summary state |
-| `frontend/src/js/engine/scene-camera.js` | frame combined bounds |
+| `frontend/src/js/engine/state.ts` | `selectedNodeIds` Set |
+| `frontend/src/js/events/bus.ts` | `SELECTION_CHANGED` event |
+| `frontend/src/js/engine/scene-selection.ts` | toggle/multi-aware select, highlight fan-out |
+| `frontend/src/js/engine/scene-graph.ts` | modifier-click picking, `f` framing |
+| `frontend/src/js/ui/transform-gizmo.ts` | pivot node, drag fan-out, per-node capture, Time gating |
+| `frontend/src/js/ui/outliner.ts` | multi-select rows |
+| `frontend/src/js/ui/model-clock-gizmo.ts` | single-selection gate |
+| `frontend/src/js/engine/parametric-preview.ts` | multi-select summary state |
+| `frontend/src/js/engine/scene-camera.ts` | frame combined bounds |
 
 ## Testing
 

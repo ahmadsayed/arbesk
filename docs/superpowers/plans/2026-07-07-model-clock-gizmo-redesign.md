@@ -4,7 +4,7 @@
 
 **Goal:** Replace the DOM/SVG model clock with a 3D Babylon mesh ring gizmo that orbits the selected node and scrubs its filtered version history.
 
-**Architecture:** A new `frontend/src/js/ui/model-clock-gizmo.js` module creates/destroys a torus ring, tick markers, and a draggable handle sphere around the selected node anchor. Pure helper functions (`_ringRadiusFromBounds`, `_angleForIndex`, `_indexForAngle`) keep the math unit-testable. A thin DOM badge follows the handle for version text. `scene-graph.js` swaps the old `model-clock.js` init call for the new module, and `_version-clock.scss` drops the obsolete `.model-clock` host rules.
+**Architecture:** A new `frontend/src/js/ui/model-clock-gizmo.ts` module creates/destroys a torus ring, tick markers, and a draggable handle sphere around the selected node anchor. Pure helper functions (`_ringRadiusFromBounds`, `_angleForIndex`, `_indexForAngle`) keep the math unit-testable. A thin DOM badge follows the handle for version text. `scene-graph.js` swaps the old `model-clock.js` init call for the new module, and `_version-clock.scss` drops the obsolete `.model-clock` host rules.
 
 **Tech Stack:** JavaScript (ES modules), Babylon.js mesh API (`MeshBuilder`, `TransformNode`, `PointerDragBehavior`, `StandardMaterial`), Jest + jsdom, Playwright E2E.
 
@@ -14,10 +14,10 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `frontend/src/js/ui/model-clock-gizmo.js` | Create | Babylon ring gizmo: mesh creation, positioning, drag interaction, store integration, disposal |
+| `frontend/src/js/ui/model-clock-gizmo.ts` | Create | Babylon ring gizmo: mesh creation, positioning, drag interaction, store integration, disposal |
 | `frontend/src/js/ui/model-clock.js` | Delete | Old DOM projection-based model clock |
 | `frontend/src/scss/components/_version-clock.scss` | Modify | Remove `.model-clock` host rules; keep `.scene-clock` and `.version-clock` face rules |
-| `frontend/src/js/engine/scene-graph.js` | Modify | Replace dynamic `import("../ui/model-clock.js")` with `import("../ui/model-clock-gizmo.js")` |
+| `frontend/src/js/engine/scene-graph.ts` | Modify | Replace dynamic `import("../ui/model-clock.js")` with `import("../ui/model-clock-gizmo.js")` |
 | `test/frontend/model-clock-gizmo.test.js` | Create | Unit tests for ring creation, radius math, angle/index mapping, drag commit, hide/dispose |
 | `test/frontend/model-clock.test.js` | Delete | Obsolete DOM model-clock tests |
 | `e2e/helpers/studio-selectors.mjs` | Modify | Add/update model-clock gizmo selectors/helpers |
@@ -197,7 +197,7 @@ function createBabylonMock() {
 ## Task 1: Pure math helpers — ring radius
 
 **Files:**
-- Create: `frontend/src/js/ui/model-clock-gizmo.js`
+- Create: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 - [ ] **Step 1: Write the failing test**
@@ -208,7 +208,7 @@ Append to `test/frontend/model-clock-gizmo.test.js`:
 describe("model-clock-gizmo math", () => {
   test("_ringRadiusFromBounds clamps and scales", async () => {
     const { _ringRadiusFromBounds } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     expect(_ringRadiusFromBounds({ x: -1, y: 0, z: -1 }, { x: 1, y: 2, z: 1 })).toBeCloseTo(1.4, 5);
     expect(_ringRadiusFromBounds({ x: 0, y: 0, z: 0 }, { x: 0.1, y: 0.1, z: 0.1 })).toBe(0.5);
@@ -227,7 +227,7 @@ Expected: FAIL — `_ringRadiusFromBounds is not exported`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `frontend/src/js/ui/model-clock-gizmo.js`:
+Create `frontend/src/js/ui/model-clock-gizmo.ts`:
 
 ```js
 // @ts-nocheck
@@ -267,7 +267,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): ring radius math with TDD"
 ```
 
@@ -276,7 +276,7 @@ git commit -m "feat(model-clock): ring radius math with TDD"
 ## Task 2: Pure math helpers — angle ↔ index
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 - [ ] **Step 1: Write the failing tests**
@@ -286,7 +286,7 @@ Append to the `describe("model-clock-gizmo math")` block:
 ```js
 test("_angleForIndex places versions clockwise from newest to oldest", async () => {
   const { _angleForIndex } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   // 4 entries: newest at 180°, then 90°, 0°, oldest at -90° (12 o'clock)
   expect(_angleForIndex(0, 4)).toBe(180);
@@ -296,7 +296,7 @@ test("_angleForIndex places versions clockwise from newest to oldest", async () 
 
 test("_indexForAngle snaps to nearest version", async () => {
   const { _indexForAngle } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   // Matches _angleForIndex: newest at 180° (n=4), oldest at -90° (12 o'clock).
   expect(_indexForAngle(180, 4)).toBe(0); // newest
@@ -316,7 +316,7 @@ Expected: FAIL — functions not exported.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Append to `frontend/src/js/ui/model-clock-gizmo.js`:
+Append to `frontend/src/js/ui/model-clock-gizmo.ts`:
 
 ```js
 /** Angle in degrees for entry index i of n. Newest runs clockwise into past. */
@@ -346,7 +346,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): angle/index mapping helpers"
 ```
 
@@ -355,9 +355,9 @@ git commit -m "feat(model-clock): angle/index mapping helpers"
 ## Task 3: Ring mesh creation on node selection
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Modify: `test/frontend/model-clock-gizmo.test.js`
-- Modify: `frontend/src/js/engine/scene-graph.js`
+- Modify: `frontend/src/js/engine/scene-graph.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -403,7 +403,7 @@ describe("model-clock-gizmo lifecycle", () => {
 
   test("selecting a node creates ring, ticks, and handle", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     initModelClockGizmo(scene, camera);
 
@@ -430,7 +430,7 @@ Expected: FAIL — `initModelClockGizmo` not exported or ring not created.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Append to `frontend/src/js/ui/model-clock-gizmo.js`:
+Append to `frontend/src/js/ui/model-clock-gizmo.ts`:
 
 ```js
 import * as store from "../state/version-history-store.js";
@@ -560,7 +560,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Wire into scene-graph**
 
-Edit `frontend/src/js/engine/scene-graph.js` around lines 327–329:
+Edit `frontend/src/js/engine/scene-graph.ts` around lines 327–329:
 
 ```js
 import("../ui/model-clock-gizmo.js")
@@ -573,7 +573,7 @@ import("../ui/model-clock-gizmo.js")
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js frontend/src/js/engine/scene-graph.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js frontend/src/js/engine/scene-graph.ts
 git commit -m "feat(model-clock): create ring/ticks/handle on node selection"
 ```
 
@@ -582,7 +582,7 @@ git commit -m "feat(model-clock): create ring/ticks/handle on node selection"
 ## Task 4: Draggable handle commits version
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 - [ ] **Step 1: Write the failing test**
@@ -592,7 +592,7 @@ Append a test inside `describe("model-clock-gizmo lifecycle")`:
 ```js
 test("dragging handle commits the landed version", async () => {
   const { initModelClockGizmo } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   initModelClockGizmo(scene, camera);
 
@@ -675,7 +675,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): draggable handle snaps and commits version"
 ```
 
@@ -684,7 +684,7 @@ git commit -m "feat(model-clock): draggable handle snaps and commits version"
 ## Task 5: Hide during transform gizmo drag and deselect disposal
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 - [ ] **Step 1: Write the failing tests**
@@ -694,7 +694,7 @@ Append tests inside `describe("model-clock-gizmo lifecycle")`:
 ```js
 test("ring is hidden while transform gizmo is dragging", async () => {
   const { initModelClockGizmo } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   initModelClockGizmo(scene, camera);
 
@@ -713,7 +713,7 @@ test("ring is hidden while transform gizmo is dragging", async () => {
 
 test("deselecting disposes the gizmo", async () => {
   const { initModelClockGizmo } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   initModelClockGizmo(scene, camera);
 
@@ -829,7 +829,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): hide during transform drag and dispose on deselect"
 ```
 
@@ -838,7 +838,7 @@ git commit -m "feat(model-clock): hide during transform drag and dispose on dese
 ## Task 6: Keyboard stepping
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 - [ ] **Step 1: Write the failing test**
@@ -848,7 +848,7 @@ Append a test inside `describe("model-clock-gizmo lifecycle")`:
 ```js
 test("arrow keys step version when a node is selected", async () => {
   const { initModelClockGizmo } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   initModelClockGizmo(scene, camera);
 
@@ -927,7 +927,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): keyboard stepping for version ring"
 ```
 
@@ -936,7 +936,7 @@ git commit -m "feat(model-clock): keyboard stepping for version ring"
 ## Task 7: DOM badge following the handle
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Modify: `frontend/src/scss/components/_version-clock.scss`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
@@ -947,7 +947,7 @@ Append a test inside `describe("model-clock-gizmo lifecycle")`:
 ```js
 test("badge element is created and positioned", async () => {
   const { initModelClockGizmo } = await import(
-    "../../frontend/src/js/ui/model-clock-gizmo.js"
+    "../../frontend/src/js/ui/model-clock-gizmo.ts"
   );
   initModelClockGizmo(scene, camera);
 
@@ -1090,7 +1090,7 @@ Append to `frontend/src/scss/components/_version-clock.scss`:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js frontend/src/scss/components/_version-clock.scss test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts frontend/src/scss/components/_version-clock.scss test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): DOM badge follows the gizmo handle"
 ```
 

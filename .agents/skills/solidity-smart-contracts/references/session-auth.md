@@ -51,7 +51,7 @@ function cacheSession(token, expiresAt, address) {
 ### Backend Session Store
 
 ```javascript
-// src/api/sessions.js
+// src/api/sessions.ts
 const sessions = new Map();  // In-memory, resets on server restart
 const SESSION_TTL = 24 * 60 * 60 * 1000;  // 24 hours
 
@@ -70,7 +70,7 @@ function createSession(address) {
 
 ### SIWE Chain ID Support
 
-`SUPPORTED_CHAIN_IDS` lives in `constants/chains.js` (derived from `CHAIN_IDS` — currently Hardhat Local `31415822` + Base Sepolia `84532`) and is imported by `src/api/siwe-verify.js`. When adding a new network, add the chain ID to `CHAIN_IDS` in `constants/chains.js`:
+`SUPPORTED_CHAIN_IDS` lives in `constants/chains.js` (derived from `CHAIN_IDS` — currently Hardhat Local `31415822` + Base Sepolia `84532`) and is imported by `src/api/siwe-verify.ts`. When adding a new network, add the chain ID to `CHAIN_IDS` in `constants/chains.js`:
 
 ```javascript
 // constants/chains.js

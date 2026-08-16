@@ -46,13 +46,13 @@ description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not
 
 | File | Role |
 |------|------|
-| `frontend/src/js/engine/scene-graph.js` | Engine init, camera, selection, keyboard, asset loading |
-| `frontend/src/js/engine/cleanup.js` | `clearScene()` with chrome preservation |
-| `frontend/src/js/engine/state.js` | Shared `state` object |
-| `frontend/src/js/engine/transforms.js` | `applyDefaultMaterial()`, `centerImportedAsset()` |
-| `frontend/src/js/engine/placeholders.js` | Loading/error placeholders, safe disposal |
-| `frontend/src/js/engine/parametric-preview.js` | Inspector color/scale live editing |
-| `frontend/src/js/ui/viewport-gizmo.js` | 2D X/Y/Z orientation overlay |
+| `frontend/src/js/engine/scene-graph.ts` | Engine init, camera, selection, keyboard, asset loading |
+| `frontend/src/js/engine/cleanup.ts` | `clearScene()` with chrome preservation |
+| `frontend/src/js/engine/state.ts` | Shared `state` object |
+| `frontend/src/js/engine/transforms.ts` | `applyDefaultMaterial()`, `centerImportedAsset()` |
+| `frontend/src/js/engine/placeholders.ts` | Loading/error placeholders, safe disposal |
+| `frontend/src/js/engine/parametric-preview.ts` | Inspector color/scale live editing |
+| `frontend/src/js/ui/viewport-gizmo.ts` | 2D X/Y/Z orientation overlay |
 
 ## Deep Reference
 

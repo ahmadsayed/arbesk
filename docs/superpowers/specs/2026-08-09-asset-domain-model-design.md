@@ -64,18 +64,18 @@ receives frozen snapshots (`Object.freeze(...)`), so an outside write throws
 in dev instead of silently forking state. Module-private fields use the
 `_` prefix convention (e.g. `_listeners`).
 
-**`AssetRef`** (`domain/asset-ref.js`) — struct wrapping today's `child_ref`
+**`AssetRef`** (`domain/asset-ref.ts`) — struct wrapping today's `child_ref`
 shape `{collection, assetID}`. Functions: `assetRefKey(ref)` → canonical
 `chainId:contract:tokenId:assetID`, `assetRefsEqual(a, b)`,
 `resolveAssetRef(ref)` → manifest CID (delegates to
-`blockchain/token-resolver.js`).
+`blockchain/token-resolver.ts`).
 
-**`Node`** (`domain/node.js`) — pure-data struct mirroring a `scene.nodes[]`
+**`Node`** (`domain/node.ts`) — pure-data struct mirroring a `scene.nodes[]`
 entry: `nodeId`, `transformMatrix`, `source?`, `ref?`, `postProcessor?`.
 Engine runtime objects (anchors, meshes, animation groups) are **not** here —
 the engine keeps its own maps keyed by `nodeId`.
 
-**`Asset`** (`domain/asset.js`) — the struct:
+**`Asset`** (`domain/asset.ts`) — the struct:
 
 ```js
 /** @typedef {Object} Asset
@@ -103,7 +103,7 @@ the engine keeps its own maps keyed by `nodeId`.
   - Name/CIDs mutate only via these functions; `assetState.set()` for these
     fields disappears from feature modules.
 
-**`Collection`** (`domain/collection.js`) — struct `{identity {chainId,
+**`Collection`** (`domain/collection.ts`) — struct `{identity {chainId,
 contractAddress, tokenId}, name, publishedManifestCid, assets:
 Map<assetId, AssetRef>, editors: EditorList, thumbnail?}`.
 
@@ -123,7 +123,7 @@ Map<assetId, AssetRef>, editors: EditorList, thumbnail?}`.
 `{address, role}` (role: 0 None / 1 Viewer / 2 Editor); `EditorList` struct
 `{entries: Map<address, Editor>, setVersion}` owned by Collection (Merkle
 root is per token = per collection). Functions: `addEditor`, `removeEditor`,
-`canEdit`, `proofFor` (wraps `gltf/merkle-editors.js`). Rules: an editor is a
+`canEdit`, `proofFor` (wraps `gltf/merkle-editors.ts`). Rules: an editor is a
 granted capability, not a wallet; owner ≠ editor (`canEdit` must not
 special-case ownership).
 
@@ -155,11 +155,11 @@ on-chain anchor. Unchanged: decomposed-vs-monolithic bake rules,
 User-facing copy and code-internal vocabulary only:
 
 - UI copy: `Open This World →` → `Open Asset →` (`app.pug` dive button);
-  dive/ascend wording → open child / back to parent (`ui/nesting.js` toasts,
+  dive/ascend wording → open child / back to parent (`ui/nesting.ts` toasts,
   labels).
 - Constants/logs/comments: `MAX_CHILD_WORLD_DEPTH` → `MAX_CHILD_ASSET_DEPTH`
-  (`engine/state.js` + usages); "child world" log lines in
-  `engine/scene-loader.js`; docs wording in `ARCHITECTURE.md` § golden rules
+  (`engine/state.ts` + usages); "child world" log lines in
+  `engine/scene-loader.ts`; docs wording in `ARCHITECTURE.md` § golden rules
   and `AGENTS.md`.
 - NOT renamed: manifest schema fields (`child_ref` etc.), the `NESTING_*`
   event names (internal bus contract — churn without user benefit), storage
@@ -183,7 +183,7 @@ User-facing copy and code-internal vocabulary only:
    `child_ref` shape in `ARCHITECTURE.md` corrected at the same time.
 
 Engine boundary note: engine runtime maps (`nodeAnchors`, `nodeMeshes`,
-`nodeAnimationGroups`, selection sets) stay in `engine/state.js` — they are
+`nodeAnimationGroups`, selection sets) stay in `engine/state.ts` — they are
 render state, not domain state.
 
 ## Out of scope

@@ -23,17 +23,17 @@ Consolidate the entire AI generation experience into the left sidebar as a first
 | BYOK key configuration | **Configure button + dialog** — the composer keeps a single provider row (select + key icon-button, visible only when Tripo 3D is selected). The key field lives in a `showCustomDialog`-based dialog opened from that button. Missing key → warning-colored icon + "key required" hint; generating without a key opens the dialog directly. Dialog includes a **Clear Key** action. Storage stays `arbesk-byok-key` in localStorage |
 | Element ids / `data-view` values | **Preserved** (`#promptInput`, `#generateBtn`, `#generateHint`, `#chatHistoryList`, `#providerSelect`, `data-view="chat"`) — near-zero E2E selector churn. Exception: `#providerKeyInput`/`#providerKeyToggle` move out of the Pug into the JS-built key dialog (no test references them) |
 | Tier select (`#tierSelect`) | **Stays in Settings** — it is a payment/contract-tier concern, not a provider concern |
-| Backend (`generate-node.js`, `schemas.js`) | **No change** — provider enum validation explicitly deferred |
+| Backend (`generate-node.ts`, `schemas.ts`) | **No change** — provider enum validation explicitly deferred |
 | Client-side key validation | **None** — no way to verify a Tripo key without a live API call. The field stays dumb (store + send); backend adapter errors surface at generation time. No "Test key" button in v1 |
 
 ## Current state (verified)
 
 - Left sidebar (`app.pug:109-246`): icon rail + 5 views — Settings (1st, contains `#providerSelect` with `mock`/`meshy`/`tripo3d`/`hunyuan3d`, `#providerKeyInput`, `#tierSelect`, collection select, team panel), **Chat** (2nd, contains `#chatHistoryList` — already the AI conversation), Outline, Gallery, Activity. `sidebar.js:10` `VIEWS = ["settings","chat","outline","library","ledger"]`; default view is already `"chat"` (`sidebar.js:39-41`); view persisted under `arbesk-sidebar-view`.
 - Prompt input is the `.messagebar` at the bottom of `.main-stage` (`app.pug:265-276`), styles in `frontend/src/scss/components/_messagebar.scss` — physically separated from the conversation it feeds.
-- Backend provider reality: `src/api/adapters/` has only `mock-adapter.js`; non-mock providers return 501 `NOT_IMPLEMENTED` unless `MOCK_3D_GENERATION=true` (`src/api/assets/generate-node.js:80-88`). Tripo 3D remains aspirational until its adapter lands — kept per product direction.
+- Backend provider reality: `src/api/adapters/` has only `mock-adapter.ts`; non-mock providers return 501 `NOT_IMPLEMENTED` unless `MOCK_3D_GENERATION=true` (`src/api/assets/generate-node.ts:80-88`). Tripo 3D remains aspirational until its adapter lands — kept per product direction.
 - Human collaboration (Nostr comments) lives in the right inspector (`app.pug:314-330`, `comments-panel.js`) — untouched by this change.
 - Icons are inline Feather-style SVGs in Pug (`stroke="currentColor"`, 18px in the rail, `_sidebar.scss:103-106`). The sparkle `✦` is already used as the chat welcome icon (`app.pug:188`).
-- Dialogs are JS-built, not Pug: `frontend/src/js/ui/dialog.js` (`showDialog`, `showConfirmDialog`, `showInfoDialog`, `showCustomDialog`) with focus trap, Escape/backdrop cancel, and GNOME-styled surfaces.
+- Dialogs are JS-built, not Pug: `frontend/src/js/ui/dialog.ts` (`showDialog`, `showConfirmDialog`, `showInfoDialog`, `showCustomDialog`) with focus trap, Escape/backdrop cancel, and GNOME-styled surfaces.
 - `.byok-field` / `.byok-toggle` styles live in `frontend/src/scss/components/_settings.scss:161,173` — global classes, reusable inside a dialog body. Warning color token: `--yellow-4` (`_tokens.scss:38`).
 
 ## Design
@@ -65,7 +65,7 @@ Consolidate the entire AI generation experience into the left sidebar as a first
 - `.byok-field` / `.byok-toggle` stay in `_settings.scss` — they are global classes and are now consumed by the key dialog body.
 - New sparkle and key icons need no CSS (inherit `.sidebar-switcher-btn svg` sizing / the button's own sizing).
 
-### JS (`frontend/src/js/ui/create-panel.js`, `sidebar.js`, `keyboard-help.js`)
+### JS (`frontend/src/js/ui/create-panel.ts`, `sidebar.js`, `keyboard-help.js`)
 
 - `create-panel.js` — prompt/chat element lookups unchanged (ids preserved). BYOK moves out of the persistent DOM into a dialog:
   - Provider persistence: read `arbesk-provider` on init (validate against the select's actual options, fall back to `mock`), save on `change`.
@@ -106,7 +106,7 @@ No other code references `meshy`/`hunyuan3d` on the frontend. Backend `generateA
 ## Out of scope
 
 - Tripo 3D backend adapter (separate effort; the option is forward-looking).
-- Backend provider enum validation in `schemas.js`.
+- Backend provider enum validation in `schemas.ts`.
 - Client-side "Test key" validation against the Tripo API.
 - Per-provider key storage map (only one real provider exists; revisit if providers multiply).
 - Moving `#tierSelect` or any other Settings control.

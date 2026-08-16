@@ -12,7 +12,7 @@
 - Private IPFS writes use the Kubo API from `IPFS_API_URL` (default `http://127.0.0.1:5001`) when `IPFS_BACKEND=kubo`.
 - When `IPFS_BACKEND=pinata`, the backend uses the Pinata v3 SDK and serves short-lived presigned upload URLs via `POST /api/v1/ipfs/upload-url`.
 - The browser reads IPFS content through the gateway (`http://127.0.0.1:8080/ipfs/` by default for Kubo, or the configured `PINATA_GATEWAY`).
-- Generation currently supports the mock adapter path. Cloud adapters are planned but return `501` until implemented.
+- Generation adapters: `mock` (default for dev/test) and `tripo3d` v3 BYOK (cloud). Unknown providers return `400 UNKNOWN_PROVIDER` rather than `501`.
 - The default contract is `ArbeskAssetFree` (free tier). `ArbeskAsset` (paid tier) is available via `PAID_CONTRACT_ADDRESS`. The generation route validates the contract configured in `CONTRACT_ADDRESS`.
 - Error responses are simple JSON objects such as `{ "error": { "code": "...", "message": "..." } }`.
 
@@ -24,8 +24,11 @@ The following routes require a valid session token:
 
 - `POST /api/v1/generations`
 - `POST /api/v1/ipfs/upload-url`
+- `POST /api/v1/ipfs/upload-urls`
 - `POST /api/v1/ipfs/unpin`
 - `POST /api/v1/assets/snapshot-comments`
+- `POST /api/v1/paymaster`
+- `POST /api/v1/users/resolve-email`
 - `DELETE /api/v1/sessions`
 
 The WebSocket chat proxy (`/api/v1/chat/ws`) receives the same session token in the query string.
@@ -178,7 +181,7 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 
 - Requires Session auth (`Authorization: Session <token>`).
 - Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
-- Requires `nodeId` and either `prompt`, `imageData`, or `images`.
+- Requires `nodeId` and **one of** `prompt`, `imageData`, `images`, or `sourceAssetCid` (refinement / retexture / retopo / animate).
 - Accepts optional `provider` (`"mock"` or `"tripo3d"`) and optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
 - Accepts optional `imageData` + `imageMime` (`tripo3d` only): a base64-encoded JPEG/PNG/WebP image (max ~10 MB raw) for image-to-3D. The backend uploads the image to Tripo (`POST /files`), starts an image-to-model task, and returns `202` — the polling flow is identical to text-to-3D. An image always starts a fresh model. The browser also pins the reference image to IPFS and records it in the manifest node as `reference_image: {cid, mime, name}` — the provenance chain keeps what the model was made from.
 - Accepts optional `images` (`tripo3d` only) for multiview-to-3D: an array of 2–4 `{ imageData, imageMime, view }` entries (`view` ∈ `front`/`left`/`back`/`right`; unique views, exactly one `front`; mutually exclusive with `imageData`). The backend uploads each view (`POST /files`) and starts a `generation/multiview-to-model` task with view-key `inputs` in canonical order; the `202` polling flow is identical. The browser pins every view to IPFS and records `reference_images: [{cid, mime, name, view}]` in the manifest node (plus `reference_image` = the front view for back-compat).
@@ -230,7 +233,8 @@ The browser (`api.ts` → `generateAsset()`) decodes the base64, uploads the ass
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | `prompt` or `nodeId` missing, or `providerKey` required for non-mock provider |
+| 400 | `prompt` or `nodeId` missing, `providerKey` required for non-mock provider, or `sourceAssetCid` missing for refinement actions |
+| 400 | `MISSING_PROVIDER_KEY` — a non-mock provider was chosen without a `providerKey` |
 | 400 | `SOURCE_ASSET_UNAVAILABLE` — the GLB referenced by `sourceAssetCid` could not be fetched from IPFS |
 | 400 | `SOURCE_ASSET_UNSUPPORTED_FORMAT` — the source is not glTF/GLB (e.g. 3MF) or its glTF has unresolvable external references; glTF JSON is composed to GLB automatically before upload |
 | 401 | Missing, malformed, or invalid Session auth |
@@ -278,7 +282,10 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
 ```json
 {
   "status": "failed",
-  "error": "Upstream generation failed"
+  "error": {
+    "code": "PROVIDER_TASK_FAILED",
+    "message": "Upstream generation failed"
+  }
 }
 ```
 
@@ -416,7 +423,7 @@ Comments are scoped per asset using the canonical tag `<chainId>:<contractAddres
 
 Backend proxy for the CDP Paymaster JSON-RPC endpoint. Forwards UserOperation sponsorship requests to the CDP Paymaster without exposing `CDP_PAYMASTER_URL` to the browser. Used by `wallet-cdp.ts` to sponsor gas for CDP email-login smart accounts on Base Sepolia.
 
-**Auth:** None required.
+**Auth:** Session token required. Rate-limited per wallet (`PAYMASTER_RATE_LIMIT_MAX`, default 30/min).
 
 **Request Body**
 
@@ -528,11 +535,32 @@ Kubo:
 
 ---
 
+### `POST /api/v1/ipfs/upload-urls`
+
+Batch version of `/ipfs/upload-url`. Session-gated and rate-limited per wallet (same budget). Request body `{ "count": 10 }` (1–200, default 1). Returns an array of credentials, one per requested file. Pinata signed URLs are single-use, so a client uploading N files must request N credentials up front; this endpoint lets it do that in one round trip instead of N sequential calls.
+
+---
+
+### `POST /api/v1/ipfs/gc`
+
+Runs the reachability garbage collector. Requires session auth **plus** an admin token in the `X-Admin-Token` header (configured via `GC_ADMIN_TOKEN`). Shared glTF source data (buffers/images) and bundle CIDs that were skipped by `/ipfs/unpin` are reclaimed here when no reachable manifest references them anymore.
+
+Request body (all optional):
+```json
+{
+  "dryRun": true,
+  "maxUnpin": 1000,
+  "chainId": 31337
+}
+```
+
+---
+
 ### `POST /api/v1/ipfs/unpin`
 
-Unpins all IPFS CIDs owned by a manifest chain. Called before token burn or after asset removal from a collection.
+Unpins asset-owned IPFS CIDs from a manifest chain. Called before token burn or after asset removal from a collection.
 
-Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset CIDs, thumbnail CIDs, and comments archive CIDs, then unpins them all so they become eligible for garbage collection.
+Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, thumbnails, and comments archive CIDs, then unpins them so they become eligible for garbage collection. **Shared glTF source data (buffers/images) and bundle CIDs are intentionally skipped:** they can be referenced by multiple assets via deduplication, so they are reported in `skipped` and reclaimed later by `POST /api/v1/ipfs/gc`.**
 
 **Authorization:** the session wallet must own the token or be an editor (Merkle proof), verified on-chain via `checkAssetAccess` while the token is still live — clients must therefore unpin *before* burning. The requested `cid` must also belong to the claimed token: it is accepted when it equals the `tokenURI` CID, or appears in the `assets` map of the collection manifest at `tokenURI` or of up to 5 `prev_asset_manifest_cid` ancestors (the ancestor walk covers the delete-asset flow, where the orphaned asset manifest sits in the previous collection version).
 
@@ -559,6 +587,7 @@ Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, source asset
 ```json
 {
   "unpinned": ["bafy...", "Qm..."],
+  "skipped": [],
   "count": 2
 }
 ```
@@ -568,6 +597,7 @@ If individual unpin attempts fail (e.g. CID was already unpinned), the response 
 ```json
 {
   "unpinned": ["bafy..."],
+  "skipped": ["Qm..."],
   "count": 1,
   "errors": ["unpin Qm...: not pinned"]
 }
@@ -577,7 +607,7 @@ If individual unpin attempts fail (e.g. CID was already unpinned), the response 
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | Missing/invalid `cid` or `tokenId`; `contractAddress` not in the chain's configured contracts (`INVALID_CONTRACT`); `cid` not referenced by the token (`CID_NOT_IN_TOKEN`) |
+| 400 | Missing/invalid `cid` or `tokenId`; `contractAddress` not in the chain's configured contracts (`INVALID_CONTRACT`); `cid` not referenced by the token (`CID_NOT_IN_TOKEN`); invalid token ID or contract (`INVALID_TOKEN`) |
 | 401 | Missing or invalid session |
 | 403 | Session wallet is not the token owner or an editor (`FORBIDDEN`) |
 | 502 | Token's collection manifest unreadable (`COLLECTION_UNREADABLE`) |

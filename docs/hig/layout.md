@@ -179,7 +179,7 @@ Shows document state, depth, node/child counts. Keyboard-shortcuts button lives 
 
 ## Progress Feedback (Save / Besk)
 
-Long-running save/publish operations show a **viewport-top progress banner** (`#taskProgress`, `ui/task-progress.js`) — the GNOME infobar pattern applied to the 3D viewport.
+Long-running save/publish operations show a **viewport-top progress banner** (`#taskProgress`, `ui/task-progress.ts`) — the GNOME infobar pattern applied to the 3D viewport.
 
 - **Placement: top of the viewport, not the bottom bar.** GNOME HIG places transient operation feedback in infobars/banners at the top of the content area; the bottom bar is reserved for persistent state (Draft · node count · depth). Web3 convention likewise keeps staged transaction feedback (sign → confirm → finalize) persistently visible and non-blocking — a top banner survives the user's attention leaving the action button.
 - **Non-blocking:** `pointer-events: none`; the scene stays interactive.

@@ -99,7 +99,7 @@ Y
 
 ### 5.2 Backend verification
 
-`src/api/siwe-verify.js` currently recovers the signer via `ecrecover` and compares it to the SIWE `address` field. For smart accounts this fails because the recovered signer is `X`, not `Y`.
+`src/api/siwe-verify.ts` currently recovers the signer via `ecrecover` and compares it to the SIWE `address` field. For smart accounts this fails because the recovered signer is `X`, not `Y`.
 
 Add an **EIP-1271 fallback**:
 
@@ -195,15 +195,15 @@ This integration explicitly does **not** change:
 | File | Change |
 |------|--------|
 | `.env.example` | Add `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY`. |
-| `src/api/index.js` | Expose `thirdwebClientId` in `/api/v1/config`. |
-| `src/index.js` | Add Thirdweb domains to CSP. |
+| `src/api/index.ts` | Expose `thirdwebClientId` in `/api/v1/config`. |
+| `src/index.ts` | Add Thirdweb domains to CSP. |
 | `frontend/src/pug/studio.pug` | Add Thirdweb v5 importmap entries. |
 | `frontend/package.json` | Add `thirdweb@5` devDependency for Jest resolution. |
 | `frontend/src/js/blockchain/wallet-thirdweb.js` | **New** EIP-1193 adapter. |
-| `frontend/src/js/ui/wallet-modal.js` | Add Google sign-in button. |
-| `frontend/src/js/blockchain/wallet-core.js` | Handle `source === 'thirdweb'`, store `eoaAddress`. |
-| `frontend/src/js/state/wallet-state.js` | Add `eoaAddress` field. |
-| `src/api/siwe-verify.js` | Add EIP-1271 fallback. |
+| `frontend/src/js/ui/wallet-modal.ts` | Add Google sign-in button. |
+| `frontend/src/js/blockchain/wallet-core.ts` | Handle `source === 'thirdweb'`, store `eoaAddress`. |
+| `frontend/src/js/state/wallet-state.ts` | Add `eoaAddress` field. |
+| `src/api/siwe-verify.ts` | Add EIP-1271 fallback. |
 
 **Unchanged:** `wallet-publishing.js`, `wallet-payments.js`, `wallet-network.js`, all contracts, all IPFS/manifest code.
 

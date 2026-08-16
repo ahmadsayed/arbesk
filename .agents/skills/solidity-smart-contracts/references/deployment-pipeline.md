@@ -20,7 +20,7 @@ Compile → deploy → address sync → multi-network config. Adding new network
 
 | Source | File | Used By |
 |--------|------|---------|
-| Root `.env` | `./.env` → `CONTRACT_ADDRESS=0x...` | Backend (`src/config.js`) |
+| Root `.env` | `./.env` → `CONTRACT_ADDRESS=0x...` | Backend (`src/config.ts`) |
 | Blockchain `.env` | `blockchain/.env` → `CONTRACT_ADDRESS=0x...` (local) / `BASE_CONTRACT_ADDRESS=0x...` (baseSepolia) | Hardhat scripts |
 | Deployment artifact | `blockchain/deployments/<network>/ArbeskAssetFree.json` (+ `ArbeskAsset.json` for the paid tier, local only) | Reference only |
 
@@ -45,15 +45,15 @@ Compile → deploy → address sync → multi-network config. Adding new network
 └───────────────────────────────────────────────────────────┘
          │
          ▼
-┌─ src/config.js ───────────────────────────────────────────┐
+┌─ src/config.ts ───────────────────────────────────────────┐
 │ export const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS │
 └───────────────────────────────────────────────────────────┘
          │
-         ├─► Backend: generate-node.js validates receipt.to
+         ├─► Backend: generate-node.ts validates receipt.to
          ├─► Backend: GET /api/v1/config exposes address
          │
          ▼
-┌─ Frontend wallet.js ──────────────────────────────────────┐
+┌─ Frontend wallet-core.ts ─────────────────────────────────┐
 │ _initContract() fetches:                                 │
 │   - GET /api/v1/config → contractAddress                 │
 │   - GET /api/v1/contracts/ArbeskAsset/abi → abi         │
@@ -127,8 +127,8 @@ When asked to add a function:
    ```
 
 6. **Update frontend** if called from browser:
-   - Add wrapper in `frontend/src/js/blockchain/wallet.js`
-   - Export if used by other modules
+   - Add wrapper in `frontend/src/js/blockchain/wallet-core.ts` (or `wallet-publishing.ts` for publish/updateEditors/burn contract writes)
+   - Re-export from `frontend/src/js/blockchain/wallet.ts` barrel if used by other modules
 
 7. **Run full test suite:**
    ```bash
@@ -147,8 +147,8 @@ Different networks have different contract addresses, USDC tokens, and RPC endpo
 ### Network Configurations
 
 ```javascript
-// frontend/src/js/blockchain/network-config.js
-// src/config.js (backend)
+// frontend/src/js/blockchain/network-config.ts
+// src/config.ts (backend)
 export const NETWORK_CONFIGS = {
   31415822: {
     name: "Hardhat Local",
@@ -173,11 +173,11 @@ export const NETWORK_CONFIGS = {
 
 ### Backend Chain-Aware Helpers
 
-The backend resolves the correct RPC and contract address per chain via `src/config.js` (used by `authorization.js`, `token-indexer.js`, `ipfs-gc.js`):
+The backend resolves the correct RPC and contract address per chain via `src/config.ts` (used by `authorization.ts`, `token-indexer.ts`, `ipfs-gc.ts`):
 
 ```javascript
-// src/config.js
-import { getWeb3, getContractAddress } from "../config.js";
+// src/config.ts
+import { getWeb3, getContractAddress } from "../config.ts";
 const txWeb3 = getWeb3(chainId);                   // per-chain cached Web3 instance
 const contractAddr = getContractAddress(chainId);  // falls back to CONTRACT_ADDRESS env
 ```
@@ -196,5 +196,5 @@ const contractAddr = getContractAddress(chainId);  // falls back to CONTRACT_ADD
 1. Add entry to `NETWORK_CONFIGS` in both frontend and backend
 2. Deploy contract to the new network
 3. Update contract address and USDC token in the config
-4. Add chain ID to `CHAIN_IDS` in `constants/chains.js` (`SUPPORTED_CHAIN_IDS` used by `src/api/siwe-verify.js` derives from it)
+4. Add chain ID to `CHAIN_IDS` in `constants/chains.js` (`SUPPORTED_CHAIN_IDS` used by `src/api/siwe-verify.ts` derives from it)
 5. Update `hardhat.config.js` with the new network RPC

@@ -12,7 +12,7 @@ per file).
 { "count": 5 }
 ```
 `count` is optional (default 1), integer, 1–200 (`uploadUrlsSchema` in
-`src/api/schemas.js`).
+`src/api/schemas.ts`).
 
 ### Response (200)
 ```json

@@ -8,7 +8,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 
 | Layer | Tech | Notes |
 |---|---|---|
-| Markup | Pug (`frontend/src/pug/`) | `app.pug` (SPA shell) + `index.pug` (landing) — there is no includes/ system |
+| Markup | Pug (`frontend/src/pug/`) | `app.pug` slim shell that `include`s `frontend/src/pug/includes/*.pug` partials; `index.pug` for landing |
 | Styling | Component SCSS (`frontend/src/scss/components/`) | Imported via `styles.scss` with `@use` |
 | Behavior | Vanilla ES modules (`frontend/src/js/`) | **No bundler** — copied as-is into `dist/` |
 | 3D Engine | Babylon.js (CDN) | `BABYLON` is a global — never `import` it |
@@ -18,7 +18,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 
 | Path | Role |
 |---|---|
-| `frontend/src/pug/app.pug` | SPA shell — all Studio/Library markup lives here |
+| `frontend/src/pug/app.pug` | SPA shell — includes partials from `frontend/src/pug/includes/*.pug`; real markup lives in the partials |
 | `frontend/src/pug/index.pug` | Landing/marketing page |
 | `frontend/src/scss/components/_viewport.scss` | 3D viewport + gizmo + drop indicator |
 | `frontend/src/scss/components/_headerbar.scss` | GNOME-style header bar (top) |
@@ -27,31 +27,33 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/scss/components/_chat.scss` | Chat panel + prompt input (bottom) |
 | `frontend/src/scss/components/_bottombar.scss` | Status bar |
 | `frontend/src/scss/styles.scss` | Imports all component files |
-| `frontend/src/js/engine/scene-graph.js` | Babylon engine, scene, camera, selection, keyboard |
-| `frontend/src/js/engine/state.js` | Shared mutable `state` object |
-| `frontend/src/js/engine/cleanup.js` | `clearScene()` with chrome preservation |
-| `frontend/src/js/engine/parametric-preview.js` | Inspector live editing (color/scale) |
-| `frontend/src/js/engine/time-travel.js` | Version history / manifest chain |
-| `frontend/src/js/engine/placeholders.js` | Loading/error placeholders for token children |
-| `frontend/src/js/ui/viewport-gizmo.js` | 2D X/Y/Z orientation overlay (top-right) |
-| `frontend/src/js/ui/asset-library.js` | Gallery of saved assets (left sidebar) |
-| `frontend/src/js/ui/asset-drop-zone.js` | Drop target for dragged gallery cards |
-| `frontend/src/js/ui/asset-editors.js` | Chat / studio editor surfaces |
-| `frontend/src/js/domain/version-history-store.js` | Version history state store (feeds scene/model clocks) |
-| `frontend/src/js/ui/version-clock.js` | Shared SVG clock face component |
-| `frontend/src/js/ui/scene-clock.js` | Scene-level version clock |
-| `frontend/src/js/ui/model-clock.js` | Per-model version clock |
-| `frontend/src/js/ui/asset-save.js` | Save Draft / Publish wiring |
-| `frontend/src/js/ui/create-panel.js` | "New asset" dialog flow |
-| `frontend/src/js/ui/outliner.js` | Scene graph tree in left sidebar |
-| `frontend/src/js/ui/sidebar.js` | Sidebar show/hide logic |
-| `frontend/src/js/ui/ledger-panel.js` | Micro-ledger audit panel (Phase 5) |
-| `frontend/src/js/blockchain/wallet.js` | MetaMask / Web3Modal connection |
-| `frontend/src/js/blockchain/token-resolver.js` | `child_ref` → manifest CID resolution |
-| `frontend/src/js/services/api.js` | Backend API client (generation, save, publish) |
-| `frontend/src/js/services/url-utils.js` | Query string helpers |
-| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS reads via backend |
-| `frontend/src/js/gltf/uri_to_cid.js` | GLTF buffer URI ↔ CID translation |
+| `frontend/src/js/engine/scene-graph.ts` | Babylon engine, scene, camera, selection, keyboard |
+| `frontend/src/js/engine/state.ts` | Shared mutable `state` object |
+| `frontend/src/js/engine/cleanup.ts` | `clearScene()` with chrome preservation |
+| `frontend/src/js/engine/parametric-preview.ts` | Inspector live editing (color/scale) |
+| `frontend/src/js/engine/time-travel.ts` | Version history / manifest chain |
+| `frontend/src/js/engine/placeholders.ts` | Loading/error placeholders for token children |
+| `frontend/src/js/ui/viewport-gizmo.ts` | 2D X/Y/Z orientation overlay (top-right) |
+| `frontend/src/js/ui/asset-library.ts` | Gallery of saved assets (left sidebar) |
+| `frontend/src/js/ui/asset-drop-zone.ts` | Drop target for dragged gallery cards |
+| `frontend/src/js/ui/chat-messages.ts` | Chat / studio editor surfaces |
+| `frontend/src/js/ui/chat-history.ts` | Chat provenance / history rendering |
+| `frontend/src/js/domain/version-history-store.ts` | Version history state store (feeds scene/model clocks) |
+| `frontend/src/js/ui/version-clock.ts` | Shared SVG clock face component |
+| `frontend/src/js/ui/scene-clock.ts` | Scene-level version clock |
+| `frontend/src/js/ui/model-clock-gizmo.ts` | Per-model version clock gizmo |
+| `frontend/src/js/ui/asset-save.ts` | Save Draft / Publish wiring |
+| `frontend/src/js/ui/create-panel.ts` | "New asset" dialog flow |
+| `frontend/src/js/ui/outliner.ts` | Scene graph tree in left sidebar |
+| `frontend/src/js/ui/sidebar.ts` | Sidebar show/hide logic |
+| `frontend/src/js/ui/ledger-panel.ts` | Micro-ledger audit panel (Phase 5) |
+| `frontend/src/js/blockchain/wallet-core.ts` | MetaMask / WalletConnect / CDP wallet connection logic |
+| `frontend/src/js/blockchain/wallet.ts` | Wallet barrel re-export |
+| `frontend/src/js/blockchain/token-resolver.ts` | `child_ref` → manifest CID resolution |
+| `frontend/src/js/services/api.ts` | Backend API client (generation, save, publish) |
+| `frontend/src/js/services/url-utils.ts` | Query string helpers |
+| `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side IPFS reads via backend |
+| `frontend/src/js/gltf/gltf-core.ts` | GLTF buffer URI ↔ CID translation and manifest compose helpers |
 
 ### Build & Verify Workflow
 
@@ -172,7 +174,7 @@ Camera framing uses `BABYLON.Animation.CreateAndStartAnimation` for smooth 300ms
 
 ## 4. State Management Pattern
 
-All shared mutable state lives in `frontend/src/js/engine/state.js` as fields on a single `state` object (ESM imports are read-only, so we wrap in an object). Always add new fields here, never as module-level `let` variables.
+All shared mutable state lives in `frontend/src/js/engine/state.ts` as fields on a single `state` object (ESM imports are read-only, so we wrap in an object). Always add new fields here, never as module-level `let` variables.
 
 ```js
 export const state = {

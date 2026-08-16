@@ -23,8 +23,8 @@
 ### Task 1: `TRANSFORM_MODE_CHANGED` event + Time toolbar mode
 
 **Files:**
-- Modify: `frontend/src/js/events/bus.js` (EVENTS map, ~line 20)
-- Modify: `frontend/src/js/ui/transform-gizmo.js`
+- Modify: `frontend/src/js/events/bus.ts` (EVENTS map, ~line 20)
+- Modify: `frontend/src/js/ui/transform-gizmo.ts`
 - Test: `test/frontend/transform-gizmo.test.js`
 
 **Interfaces:**
@@ -37,7 +37,7 @@ Append to the `describe` block in `test/frontend/transform-gizmo.test.js`:
 
 ```js
   test("time mode button exists, disables all gizmos, and emits mode event", async () => {
-    const { on, EVENTS } = await import("../../frontend/src/js/events/bus.js");
+    const { on, EVENTS } = await import("../../frontend/src/js/events/bus.ts");
     const modes = [];
     const off = on(EVENTS.TRANSFORM_MODE_CHANGED, (e) => modes.push(e.mode));
 
@@ -80,13 +80,13 @@ Expected: FAIL — `timeBtn` is null (no such button yet) and `TRANSFORM_MODE_CH
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/events/bus.js`, add to the `EVENTS` map (alphabetical, after `THEME_CHANGED`):
+In `frontend/src/js/events/bus.ts`, add to the `EVENTS` map (alphabetical, after `THEME_CHANGED`):
 
 ```js
   TRANSFORM_MODE_CHANGED:     "transform:modeChanged",
 ```
 
-In `frontend/src/js/ui/transform-gizmo.js`:
+In `frontend/src/js/ui/transform-gizmo.ts`:
 
 1. Change the bus import to include `emit`:
 
@@ -134,7 +134,7 @@ Expected: PASS (all tests in file, including the pre-existing one).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/events/bus.js frontend/src/js/ui/transform-gizmo.js test/frontend/transform-gizmo.test.js
+git add frontend/src/js/events/bus.ts frontend/src/js/ui/transform-gizmo.ts test/frontend/transform-gizmo.test.js
 git commit -m "feat(model-clock): add Time (V) transform mode and mode-change event"
 ```
 
@@ -143,7 +143,7 @@ git commit -m "feat(model-clock): add Time (V) transform mode and mode-change ev
 ### Task 2: Pure math helpers `_rayPlaneIntersect` and `_lerpAngle`
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js` (add exports near the other `_` helpers)
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts` (add exports near the other `_` helpers)
 - Test: `test/frontend/model-clock-gizmo.test.js` (add to the `model-clock-gizmo math` describe)
 
 **Interfaces:**
@@ -156,7 +156,7 @@ Add to the `model-clock-gizmo math` describe block:
 ```js
   test("_rayPlaneIntersect hits the plane and rejects parallel/behind rays", async () => {
     const { _rayPlaneIntersect } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     const hit = _rayPlaneIntersect(
       { x: 1, y: 2, z: -10 },
@@ -189,7 +189,7 @@ Add to the `model-clock-gizmo math` describe block:
 
   test("_lerpAngle interpolates along the shortest arc across the wrap", async () => {
     const { _lerpAngle } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     expect(_lerpAngle(0, Math.PI / 2, 0.5)).toBeCloseTo(Math.PI / 4, 5);
     // From 170° to -170° the short way is +20°, not -340°.
@@ -207,7 +207,7 @@ Expected: FAIL — functions are not exported.
 
 - [ ] **Step 3: Implement**
 
-Add to `frontend/src/js/ui/model-clock-gizmo.js` after `_indexForAngle`:
+Add to `frontend/src/js/ui/model-clock-gizmo.ts` after `_indexForAngle`:
 
 ```js
 /**
@@ -262,7 +262,7 @@ Expected: PASS (5 math tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): ray-plane and angle-lerp helpers for gizmo drag"
 ```
 
@@ -273,7 +273,7 @@ git commit -m "feat(model-clock): ray-plane and angle-lerp helpers for gizmo dra
 This task rewrites the build/lifecycle half of `model-clock-gizmo.js`. Drag stays temporarily unwired (removed with the old `PointerDragBehavior`); Task 4 adds the new drag. The Jest Babylon mock gains the pieces the new code needs.
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 **Interfaces:**
@@ -339,7 +339,7 @@ In `test/frontend/model-clock-gizmo.test.js`:
      ```js
      test("switching away from time mode disposes the ring", async () => {
        const { initModelClockGizmo } = await import(
-         "../../frontend/src/js/ui/model-clock-gizmo.js"
+         "../../frontend/src/js/ui/model-clock-gizmo.ts"
        );
        destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -356,7 +356,7 @@ In `test/frontend/model-clock-gizmo.test.js`:
 
      test("no ring is built outside time mode; entering time mode builds it", async () => {
        const { initModelClockGizmo } = await import(
-         "../../frontend/src/js/ui/model-clock-gizmo.js"
+         "../../frontend/src/js/ui/model-clock-gizmo.ts"
        );
        destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -669,7 +669,7 @@ Expected: PASS (with 1 todo), typecheck clean.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): time-mode gating, utility layer, gizmo-style ring/ticks/arrow"
 ```
 
@@ -678,7 +678,7 @@ git commit -m "feat(model-clock): time-mode gating, utility layer, gizmo-style r
 ### Task 4: Drag + hover interaction (rotation-gizmo style)
 
 **Files:**
-- Modify: `frontend/src/js/ui/model-clock-gizmo.js`
+- Modify: `frontend/src/js/ui/model-clock-gizmo.ts`
 - Test: `test/frontend/model-clock-gizmo.test.js`
 
 **Interfaces:**
@@ -692,7 +692,7 @@ Replace the `test.todo("dragging handle commits the landed version")` with:
 ```js
   test("dragging handle commits the landed version and manages camera", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -723,7 +723,7 @@ Replace the `test.todo("dragging handle commits the landed version")` with:
 
   test("hovering the handle swaps to the hover material", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -745,7 +745,7 @@ Replace the `test.todo("dragging handle commits the landed version")` with:
 
   test("disposing the gizmo removes the pointer observer", async () => {
     const { initModelClockGizmo } = await import(
-      "../../frontend/src/js/ui/model-clock-gizmo.js"
+      "../../frontend/src/js/ui/model-clock-gizmo.ts"
     );
     destroyGizmo = initModelClockGizmo(scene, camera);
 
@@ -888,7 +888,7 @@ Expected: PASS, both typechecks clean.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/model-clock-gizmo.js test/frontend/model-clock-gizmo.test.js
+git add frontend/src/js/ui/model-clock-gizmo.ts test/frontend/model-clock-gizmo.test.js
 git commit -m "feat(model-clock): plane-projected drag with hover highlight and camera detach"
 ```
 

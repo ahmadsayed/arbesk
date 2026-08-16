@@ -38,15 +38,15 @@ description: Use for any IPFS read/write/pin/unpin issue, backend or frontend �
 
 | File | Role |
 |------|------|
-| `src/api/routes/ipfs.js` | `POST /ipfs/upload-url`, `/upload-urls` (batch), `/unpin` — all session-gated |
-| `src/api/ipfs-utils.js` | `catManifest()` — read with timeout |
-| `src/api/assets/generate-node.js` | Generation: add, build manifest, pin |
-| `src/api/storage/pinata-adapter.js` | Pinata `add`, pooled `mintUploadCredential(s)`, gateway reads, sign diagnostics |
-| `src/api/storage/index.js` | Kubo/Pinata selection; pool env vars |
-| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side writer |
-| `frontend/src/js/ipfs/upload-with-credential.js` | Worker-safe upload; pool consumption |
-| `frontend/src/js/gltf/async-gltf.js` | Pool sizing/reservation for worker-offloaded decompose |
-| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side reader + cache |
+| `src/api/routes/ipfs.ts` | `POST /ipfs/upload-url`, `/upload-urls` (batch), `/unpin` — all session-gated |
+| `src/api/ipfs-utils.ts` | `catManifest()` — read with timeout |
+| `src/api/assets/generate-node.ts` | Generation: add, build manifest, pin |
+| `src/api/storage/pinata-adapter.ts` | Pinata `add`, pooled `mintUploadCredential(s)`, gateway reads, sign diagnostics |
+| `src/api/storage/index.ts` | Kubo/Pinata selection; pool env vars |
+| `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser-side writer |
+| `frontend/src/js/ipfs/upload-with-credential.ts` | Worker-safe upload; pool consumption |
+| `frontend/src/js/gltf/async-gltf.ts` | Pool sizing/reservation for worker-offloaded decompose |
+| `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side reader + cache |
 | `docker/Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` | Kubo image, init/isolation config, orchestration |
 
 ## Reference Files

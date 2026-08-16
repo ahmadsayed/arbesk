@@ -4,7 +4,7 @@
 
 **Goal:** Add unified undo/redo to Arbesk Studio for transform edits (gizmo move/rotate/scale, single + group, inspector scale fields) and parametric color edits, behind Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y and toolbar buttons.
 
-**Architecture:** In-memory snapshot (memento) stack (`engine/undo-stack.js`) + an applier/dispatcher module (`engine/undo-controller.js`). Capture sites push one entry per completed gesture; the existing color-only stack in `parametric-preview.js` is folded into the shared stack. Stacks survive Save, clear on `SCENE_CLEARED` (scene load + time-travel jumps). Spec: `docs/superpowers/specs/2026-07-26-studio-undo-redo-design.md`.
+**Architecture:** In-memory snapshot (memento) stack (`engine/undo-stack.ts`) + an applier/dispatcher module (`engine/undo-controller.ts`). Capture sites push one entry per completed gesture; the existing color-only stack in `parametric-preview.js` is folded into the shared stack. Stacks survive Save, clear on `SCENE_CLEARED` (scene load + time-travel jumps). Spec: `docs/superpowers/specs/2026-07-26-studio-undo-redo-design.md`.
 
 **Tech Stack:** ESM JS, Babylon.js (CDN global `BABYLON` — never import), Jest (jsdom for DOM tests), Playwright E2E. Conventions: `// @ts-nocheck` at top of engine/ui JS files (matches neighbors), camelCase functions, UPPER_SNAKE module constants, `[TAG]` log prefixes.
 
@@ -27,10 +27,10 @@
 
 ---
 
-### Task 1: `engine/undo-stack.js` — pure stack module
+### Task 1: `engine/undo-stack.ts` — pure stack module
 
 **Files:**
-- Create: `frontend/src/js/engine/undo-stack.js`
+- Create: `frontend/src/js/engine/undo-stack.ts`
 - Test: `test/frontend/undo-stack.test.js`
 
 - [ ] **Step 1: Write the failing test**
@@ -49,7 +49,7 @@ import {
   peekRedoLabel,
   clearUndoStacks,
   onUndoStackChange,
-} from "../../frontend/src/js/engine/undo-stack.js";
+} from "../../frontend/src/js/engine/undo-stack.ts";
 
 const entry = (label) => ({
   type: "transform",
@@ -140,7 +140,7 @@ describe("undo-stack", () => {
 Run: `npx jest test/frontend/undo-stack.test.js`
 Expected: FAIL — module `undo-stack.js` does not exist.
 
-- [ ] **Step 3: Implement `frontend/src/js/engine/undo-stack.js`**
+- [ ] **Step 3: Implement `frontend/src/js/engine/undo-stack.ts`**
 
 ```js
 // @ts-nocheck
@@ -149,7 +149,7 @@ Expected: FAIL — module `undo-stack.js` does not exist.
  *
  * Headless, scene-agnostic undo/redo stacks shared by every Studio edit type
  * (transforms, parametric colors). Capture sites push one snapshot entry per
- * completed gesture; engine/undo-controller.js pops entries and applies them.
+ * completed gesture; engine/undo-controller.ts pops entries and applies them.
  * In-memory only — survives Save Draft/Publish, cleared on scene reload.
  */
 
@@ -252,16 +252,16 @@ Expected: PASS (8 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/undo-stack.js test/frontend/undo-stack.test.js
+git add frontend/src/js/engine/undo-stack.ts test/frontend/undo-stack.test.js
 git commit -m "feat(studio): add shared undo/redo stack module"
 ```
 
 ---
 
-### Task 2: `readNodeTransformMatrix()` in `engine/transforms.js`
+### Task 2: `readNodeTransformMatrix()` in `engine/transforms.ts`
 
 **Files:**
-- Modify: `frontend/src/js/engine/transforms.js:58-71` (`stageNodeTransform`)
+- Modify: `frontend/src/js/engine/transforms.ts:58-71` (`stageNodeTransform`)
 - Test: `test/frontend/transforms.test.js` (create)
 
 - [ ] **Step 1: Write the failing test**
@@ -273,11 +273,11 @@ Create `test/frontend/transforms.test.js`:
  * @jest-environment jsdom
  */
 import { describe, test, expect, beforeEach, afterEach } from "@jest/globals";
-import { state } from "../../frontend/src/js/engine/state.js";
+import { state } from "../../frontend/src/js/engine/state.ts";
 import {
   readNodeTransformMatrix,
   stageNodeTransform,
-} from "../../frontend/src/js/engine/transforms.js";
+} from "../../frontend/src/js/engine/transforms.ts";
 
 const FAKE_MATRIX = { m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 6, 7, 1] };
 
@@ -339,7 +339,7 @@ describe("stageNodeTransform", () => {
 Run: `npx jest test/frontend/transforms.test.js`
 Expected: FAIL — `readNodeTransformMatrix` is not exported.
 
-- [ ] **Step 3: Refactor `stageNodeTransform` in `frontend/src/js/engine/transforms.js`**
+- [ ] **Step 3: Refactor `stageNodeTransform` in `frontend/src/js/engine/transforms.ts`**
 
 Replace the existing `stageNodeTransform` (lines 48–71) with:
 
@@ -391,16 +391,16 @@ Expected: PASS — new tests pass, existing gizmo suites unaffected.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/transforms.js test/frontend/transforms.test.js
+git add frontend/src/js/engine/transforms.ts test/frontend/transforms.test.js
 git commit -m "refactor(studio): extract readNodeTransformMatrix from stageNodeTransform"
 ```
 
 ---
 
-### Task 3: `engine/undo-controller.js` — applier + keyboard dispatcher
+### Task 3: `engine/undo-controller.ts` — applier + keyboard dispatcher
 
 **Files:**
-- Create: `frontend/src/js/engine/undo-controller.js`
+- Create: `frontend/src/js/engine/undo-controller.ts`
 - Test: `test/frontend/undo-controller.test.js`
 
 - [ ] **Step 1: Write the failing test**
@@ -412,19 +412,19 @@ Create `test/frontend/undo-controller.test.js`:
  * @jest-environment jsdom
  */
 import { describe, test, expect, beforeEach, afterEach } from "@jest/globals";
-import { state } from "../../frontend/src/js/engine/state.js";
-import { emit, on, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { state } from "../../frontend/src/js/engine/state.ts";
+import { emit, on, EVENTS } from "../../frontend/src/js/events/bus.ts";
 import {
   pushUndoEntry,
   clearUndoStacks,
   canUndo,
   canRedo,
-} from "../../frontend/src/js/engine/undo-stack.js";
+} from "../../frontend/src/js/engine/undo-stack.ts";
 import {
   undo,
   redo,
   registerUndoApplier,
-} from "../../frontend/src/js/engine/undo-controller.js";
+} from "../../frontend/src/js/engine/undo-controller.ts";
 
 // 16-element matrices; translation lives at indices 12-14 (column-major).
 const BEFORE = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1];
@@ -622,7 +622,7 @@ function popToRedo() {
 Run: `npx jest test/frontend/undo-controller.test.js`
 Expected: FAIL — module `undo-controller.js` does not exist.
 
-- [ ] **Step 3: Implement `frontend/src/js/engine/undo-controller.js`**
+- [ ] **Step 3: Implement `frontend/src/js/engine/undo-controller.ts`**
 
 ```js
 // @ts-nocheck
@@ -702,7 +702,7 @@ export function redo() {
   console.log(`[REDO] ${entry.label}`);
 }
 
-// ── Toolbar button state (buttons live in ui/transform-gizmo.js) ──
+// ── Toolbar button state (buttons live in ui/transform-gizmo.ts) ──
 function _syncToolbarButtons() {
   const undoBtn = document.getElementById("undoBtn");
   if (undoBtn) {
@@ -755,16 +755,16 @@ Expected: PASS (11 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/undo-controller.js test/frontend/undo-controller.test.js
+git add frontend/src/js/engine/undo-controller.ts test/frontend/undo-controller.test.js
 git commit -m "feat(studio): add undo controller with keyboard dispatcher"
 ```
 
 ---
 
-### Task 4: Gizmo capture + toolbar buttons in `ui/transform-gizmo.js`
+### Task 4: Gizmo capture + toolbar buttons in `ui/transform-gizmo.ts`
 
 **Files:**
-- Modify: `frontend/src/js/ui/transform-gizmo.js` (imports :11-13, ICONS :17-26, `createToolbar` :239-274, `captureSelectedTransform` :89-98, `ensureDragEndSubscription` :380-399)
+- Modify: `frontend/src/js/ui/transform-gizmo.ts` (imports :11-13, ICONS :17-26, `createToolbar` :239-274, `captureSelectedTransform` :89-98, `ensureDragEndSubscription` :380-399)
 - Test: `test/frontend/undo-gizmo-capture.test.js` (create)
 
 - [ ] **Step 1: Write the failing test**
@@ -776,16 +776,16 @@ Create `test/frontend/undo-gizmo-capture.test.js`:
  * @jest-environment jsdom
  */
 import { describe, test, expect, beforeEach, afterEach } from "@jest/globals";
-import { state } from "../../frontend/src/js/engine/state.js";
-import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { state } from "../../frontend/src/js/engine/state.ts";
+import { emit, EVENTS } from "../../frontend/src/js/events/bus.ts";
 import {
   clearUndoStacks,
   canUndo,
   canRedo,
   peekUndoLabel,
   popUndoEntry,
-} from "../../frontend/src/js/engine/undo-stack.js";
-import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
+} from "../../frontend/src/js/engine/undo-stack.ts";
+import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.ts";
 
 // Observable stub that stores callbacks so tests can fire them.
 const observable = () => {
@@ -931,7 +931,7 @@ describe("gizmo drag undo capture", () => {
 Run: `npx jest test/frontend/undo-gizmo-capture.test.js`
 Expected: FAIL — no `undoBtn` in toolbar, no entries pushed.
 
-- [ ] **Step 3: Implement the changes in `frontend/src/js/ui/transform-gizmo.js`**
+- [ ] **Step 3: Implement the changes in `frontend/src/js/ui/transform-gizmo.ts`**
 
 **3a. Imports** — replace lines 11–13 with:
 
@@ -1097,16 +1097,16 @@ Expected: PASS — new tests pass and existing gizmo/selection suites are unaffe
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/transform-gizmo.js test/frontend/undo-gizmo-capture.test.js
+git add frontend/src/js/ui/transform-gizmo.ts test/frontend/undo-gizmo-capture.test.js
 git commit -m "feat(studio): capture gizmo drags into undo stack + toolbar buttons"
 ```
 
 ---
 
-### Task 5: Migrate `engine/parametric-preview.js` to the shared stack
+### Task 5: Migrate `engine/parametric-preview.ts` to the shared stack
 
 **Files:**
-- Modify: `frontend/src/js/engine/parametric-preview.js` (imports :13-24, UndoEntry typedef :58-60, undo/redo section :73-135, `_applyUniformScale` :199-208, `_clearUndoRedo()` call sites :319/:340/:393, picker change listener :587-601, keydown handler :604-623)
+- Modify: `frontend/src/js/engine/parametric-preview.ts` (imports :13-24, UndoEntry typedef :58-60, undo/redo section :73-135, `_applyUniformScale` :199-208, `_clearUndoRedo()` call sites :319/:340/:393, picker change listener :587-601, keydown handler :604-623)
 
 No new test file — the moved logic is covered by E2E (Task 7) and the existing inspector suites must keep passing.
 
@@ -1136,7 +1136,7 @@ Delete the `UndoEntry` typedef (:58-60) and the entire `// ── Undo / Redo �
 ```js
 // ── Undo / Redo ──────────────────────────────────────────────────────────────
 // Color and inspector-scale edits push snapshot entries into the shared scene
-// undo stack (engine/undo-stack.js); engine/undo-controller.js applies them
+// undo stack (engine/undo-stack.ts); engine/undo-controller.ts applies them
 // through the applier registered below and owns the Ctrl+Z dispatcher.
 
 /** @type {string|null} */
@@ -1230,7 +1230,7 @@ Expected: PASS. (No suite references the removed `undoColorEdit`/`redoColorEdit`
 - [ ] **Step 8: Commit**
 
 ```bash
-git add frontend/src/js/engine/parametric-preview.js
+git add frontend/src/js/engine/parametric-preview.ts
 git commit -m "refactor(studio): fold color/inspector-scale edits into shared undo stack"
 ```
 
@@ -1239,15 +1239,15 @@ git commit -m "refactor(studio): fold color/inspector-scale edits into shared un
 ### Task 6: Load the controller app-wide + keyboard help
 
 **Files:**
-- Modify: `frontend/src/js/app-init.js:42`
-- Modify: `frontend/src/js/ui/keyboard-help.js:26-30`
+- Modify: `frontend/src/js/app-init.ts:42`
+- Modify: `frontend/src/js/ui/keyboard-help.ts:26-30`
 
-- [ ] **Step 1: Import the controller in `app-init.js`**
+- [ ] **Step 1: Import the controller in `app-init.ts`**
 
-Add after line 42 (`import "./ui/keyboard-help.js";`):
+Add after line 42 (`import "./ui/keyboard-help.ts";`):
 
 ```js
-import "./engine/undo-controller.js";
+import "./engine/undo-controller.ts";
 ```
 
 (Side-effect import: registers the keydown dispatcher, the SCENE_CLEARED clear, and the toolbar sync.)
@@ -1276,7 +1276,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/app-init.js frontend/src/js/ui/keyboard-help.js frontend/dist
+git add frontend/src/js/app-init.ts frontend/src/js/ui/keyboard-help.ts frontend/dist
 git commit -m "feat(studio): load undo controller app-wide, update keyboard help"
 ```
 

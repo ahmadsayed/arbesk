@@ -32,7 +32,7 @@ Frontend application state lives in ~12 mutable `window.*` globals with no singl
 ## Decisions
 
 - **Approach:** Option A — plain-JS store modules, no new dependencies.
-- **Notifications:** piggyback on the existing `events/bus.js` event bus (`emit` / `on`).
+- **Notifications:** piggyback on the existing `events/bus.ts` event bus (`emit` / `on`).
 - **Migration:** clean cut — all read and write sites migrated in one pass, no compatibility shims.
 - **UI isolation:** `selectedNodeId` and `nestingDepth` go into a separate `ui-state.js` so the UI layer has no import-level coupling to asset/wallet stores.
 
@@ -63,7 +63,7 @@ export const xState = {
 
 Listeners receive the full state object directly (no `CustomEvent.detail` wrapper) because the bus is a `mitt()` singleton.
 
-### New event constants (added to `events/bus.js`)
+### New event constants (added to `events/bus.ts`)
 
 ```js
 ASSET_STATE_CHANGED:  "asset:stateChanged",
@@ -101,7 +101,7 @@ nestingDepth    — was window._nestingDepth (underscore dropped)
 ## Migration Steps
 
 1. **Create** `frontend/src/js/state/asset-state.js`, `wallet-state.js`, `ui-state.js`.
-2. **Add** `ASSET_STATE_CHANGED`, `WALLET_STATE_CHANGED`, `UI_STATE_CHANGED` to `events/bus.js`.
+2. **Add** `ASSET_STATE_CHANGED`, `WALLET_STATE_CHANGED`, `UI_STATE_CHANGED` to `events/bus.ts`.
 3. **Replace writes** — every `window.X = value` becomes `xState.set({ X: value })`.
 4. **Replace reads** — every `window.X` becomes `xState.get().X`.
 5. **Replace resets** — null-setting blocks in `cleanup.js` become `assetState.reset()` / `uiState.reset()`.
@@ -123,7 +123,7 @@ nestingDepth    — was window._nestingDepth (underscore dropped)
 
 ## Out of Scope
 
-- Replacing `engine/state.js` (Babylon.js scene objects — separate concern, already clean).
+- Replacing `engine/state.ts` (Babylon.js scene objects — separate concern, already clean).
 - Typed event payloads for the new state-change events (can be added incrementally).
 - Automated E2E tests (no E2E framework currently in the project).
 

@@ -43,11 +43,11 @@ This redesign replaces the DOM model clock with a **true 3D Babylon mesh gizmo**
 
 - `frontend/src/js/ui/model-clock.js` — DOM projection logic removed. The module is rewritten as the Babylon gizmo controller.
 - `frontend/src/scss/components/_version-clock.scss` — `.model-clock` host rules removed; `.scene-clock` rules preserved.
-- `frontend/src/js/engine/scene-graph.js` — replace the dynamic `import("../ui/model-clock.js")` call with `import("../ui/model-clock-gizmo.js")` and call `initModelClockGizmo(scene, camera)` alongside `initTransformGizmo(scene, camera)`.
+- `frontend/src/js/engine/scene-graph.ts` — replace the dynamic `import("../ui/model-clock.js")` call with `import("../ui/model-clock-gizmo.js")` and call `initModelClockGizmo(scene, camera)` alongside `initTransformGizmo(scene, camera)`.
 
 ### New / changed modules
 
-#### 1. `frontend/src/js/ui/model-clock-gizmo.js` (new)
+#### 1. `frontend/src/js/ui/model-clock-gizmo.ts` (new)
 
 Babylon-based version ring gizmo controller.
 
@@ -106,7 +106,7 @@ Disposal:
 - `scene.onBeforeRenderObservable` callback removed on deselect.
 - All created meshes and materials disposed via `dispose()`.
 
-#### 2. `frontend/src/js/ui/version-clock.js` (minor change)
+#### 2. `frontend/src/js/ui/version-clock.ts` (minor change)
 
 Keep the reusable SVG face for the **scene clock**. The model clock no longer uses it. No breaking changes.
 
@@ -114,11 +114,11 @@ Keep the reusable SVG face for the **scene clock**. The model clock no longer us
 
 Remove `.model-clock` host rules. The scene clock styling remains.
 
-#### 4. `frontend/src/js/engine/scene-graph.js` (wiring change)
+#### 4. `frontend/src/js/engine/scene-graph.ts` (wiring change)
 
 Import and call `initModelClockGizmo(scene, camera)` alongside `initTransformGizmo(scene, camera)`. The order should be transform gizmo first, then version ring, so event wiring is predictable.
 
-#### 5. `frontend/src/js/app-init.js`
+#### 5. `frontend/src/js/app-init.ts`
 
 No change; model-clock initialization is already driven from `scene-graph.js`.
 

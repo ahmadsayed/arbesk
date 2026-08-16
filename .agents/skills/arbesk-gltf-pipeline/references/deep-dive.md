@@ -33,19 +33,19 @@ Arbesk stores 3D content on a **private Kubo IPFS node** and renders it in the b
 
 | File | Role | When to touch |
 |------|------|---------------|
-| `frontend/src/js/gltf/composer.js` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
-| `frontend/src/js/gltf/decomposer.js` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
-| `frontend/src/js/gltf/material-editor.js` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
-| `frontend/src/js/engine/transforms.js` | `extractCid()`, `detectAssetFormat()`, `applyDefaultMaterial()` | Add new format detection, change default material |
-| `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatches GLB vs glTF; `loadNode()` applies `post_processor` | Fix loading, add OBJ/FBX support |
-| `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` — runtime color/scale overlays | Fix color application, add new post-processor effects |
-| `frontend/src/js/engine/parametric-preview.js` | Inspector UI: node color, per-component mesh overrides, scale | Add inspector controls |
-| `frontend/src/js/services/asset-save/manifest-builder.js` | `prepareManifestForWrite()` — bakes colors into composite glTF or stores as post_processor | Fix save flow, change edit persistence |
-| `frontend/src/js/gltf/async-gltf.js` | Worker-pool wrappers: `composeGlTFAsync`, `composeGlTFToBlobAsync`, `decomposeGlTFAsync`, `decomposeAndStoreAsync`, `decomposeGLBAsync`, `editSourceColorsAsync` | Add new offloaded operations, change fallback behavior |
-| `frontend/src/js/workers/gltf-worker-pool.js` | `workerpool` manager for `gltf-worker.js`; checks availability and dispatches calls | Tune worker count, debug pool failures |
-| `frontend/src/js/workers/gltf-worker.js` | Web Worker entry point: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` | Add new worker operations |
-| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side IPFS write via `POST /api/v0/add` | Debug upload failures |
-| `frontend/src/js/ipfs/remote-ipfs.js` | Browser-side IPFS read via gateway `GET /ipfs/<CID>` | Debug fetch failures |
+| `frontend/src/js/gltf/composer.ts` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
+| `frontend/src/js/gltf/decomposer.ts` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
+| `frontend/src/js/gltf/material-editor.ts` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
+| `frontend/src/js/engine/transforms.ts` | `extractCid()`, `detectAssetFormat()`, `applyDefaultMaterial()` | Add new format detection, change default material |
+| `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatches GLB vs glTF; `loadNode()` applies `post_processor` | Fix loading, add OBJ/FBX support |
+| `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` — runtime color/scale overlays | Fix color application, add new post-processor effects |
+| `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: node color, per-component mesh overrides, scale | Add inspector controls |
+| `frontend/src/js/services/asset-save/manifest-builder.ts` | `prepareManifestForWrite()` — bakes colors into composite glTF or stores as post_processor | Fix save flow, change edit persistence |
+| `frontend/src/js/gltf/async-gltf.ts` | Worker-pool wrappers: `composeGlTFAsync`, `composeGlTFToBlobAsync`, `decomposeGlTFAsync`, `decomposeAndStoreAsync`, `decomposeGLBAsync`, `editSourceColorsAsync` | Add new offloaded operations, change fallback behavior |
+| `frontend/src/js/workers/gltf-worker-pool.ts` | `workerpool` manager for `gltf-worker.js`; checks availability and dispatches calls | Tune worker count, debug pool failures |
+| `frontend/src/js/workers/gltf-worker.ts` | Web Worker entry point: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` | Add new worker operations |
+| `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser-side IPFS write via `POST /api/v0/add` | Debug upload failures |
+| `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side IPFS read via gateway `GET /ipfs/<CID>` | Debug fetch failures |
 
 ---
 
@@ -109,7 +109,7 @@ Composite glTF JSON with ipfs:// URIs
 decomposeAndStore(gltf) → writeJSONToIPFS(composite) → compositeCid
 ```
 
-**When does decomposition happen?** During `prepareManifestForWrite()` in `services/asset-save/manifest-builder.js`, at both Save Draft and Publish time. Every monolithic glTF node in the manifest is decomposed once. Already-composite nodes are skipped (`isComposite()` check).
+**When does decomposition happen?** During `prepareManifestForWrite()` in `services/asset-save/manifest-builder.ts`, at both Save Draft and Publish time. Every monolithic glTF node in the manifest is decomposed once. Already-composite nodes are skipped (`isComposite()` check).
 
 **Critical details in `decomposer.js`:**
 - `isComposite(gltf)` checks if any `buffers[].uri` or `images[].uri` starts with `ipfs://`
@@ -153,7 +153,7 @@ Standard glTF with data URIs → Babylon.js ImportMeshAsync(".gltf")
 
 ### 4.4 Web Worker Offload (`async-gltf.js` + `workers/gltf-worker-*`)
 
-Heavy glTF operations can run off the main thread via `frontend/src/js/workers/gltf-worker-pool.js` (backed by `workerpool` and `frontend/src/js/workers/gltf-worker.js`). `frontend/src/js/gltf/async-gltf.js` exposes async wrappers that prefer the worker and fall back to the main-thread implementation if the pool is unavailable or the worker throws:
+Heavy glTF operations can run off the main thread via `frontend/src/js/workers/gltf-worker-pool.ts` (backed by `workerpool` and `frontend/src/js/workers/gltf-worker.ts`). `frontend/src/js/gltf/async-gltf.ts` exposes async wrappers that prefer the worker and fall back to the main-thread implementation if the pool is unavailable or the worker throws:
 
 - `composeGlTFAsync(compositeJson)` → worker `compose` → composed glTF JSON
 - `composeGlTFToBlobAsync(compositeJson)` → worker `composeToBytes` → `Blob` of glTF JSON bytes (zero-copy transfer)

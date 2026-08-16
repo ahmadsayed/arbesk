@@ -56,7 +56,7 @@ The logic half of today's `asset-history.js`, moved with behavior preserved:
   `versionsForNode(nodeId)` returning the filtered entry list.
 
 **Chain entry extension.** `walkManifestChain` (in
-`frontend/src/js/engine/time-travel.js`) already fetches every manifest in the
+`frontend/src/js/engine/time-travel.ts`) already fetches every manifest in the
 chain. Each chain entry gains a `nodes` map:
 
 ```js
@@ -67,7 +67,7 @@ nodes: { [node_id]: { sourceCid, postProcessor } } // postProcessor: stable snap
 previous version's snapshot, plus the version where the node first appears.
 A node unchanged since v1 yields exactly one entry (its introduction).
 
-#### 2. `frontend/src/js/ui/version-clock.js` (reusable face component)
+#### 2. `frontend/src/js/ui/version-clock.ts` (reusable face component)
 
 Pure view. Given `{ entries, activeIndex, publishedIndex, loading }`, renders
 the SVG dial and emits callbacks:
@@ -91,7 +91,7 @@ Rendering rules:
   arrow keys step (commit immediately, matching the old range input),
   Home/End jump to oldest/newest.
 
-#### 3. `frontend/src/js/ui/scene-clock.js` (fixed watch face)
+#### 3. `frontend/src/js/ui/scene-clock.ts` (fixed watch face)
 
 - Bottom-right of `#viewport` (bottom-left = transform toolbar, top-right =
   orientation gizmo).
@@ -125,7 +125,7 @@ the pulse/spin animations.
 
 ### Wiring
 
-`frontend/src/js/app-init.js` — replace the `asset-history.js` import with
+`frontend/src/js/app-init.ts` — replace the `asset-history.js` import with
 the store + `scene-clock.js` + `model-clock.js`. (Module side-effect-init
 pattern matches the current codebase.)
 

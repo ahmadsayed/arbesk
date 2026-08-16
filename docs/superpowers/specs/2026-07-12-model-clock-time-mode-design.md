@@ -6,7 +6,7 @@
 
 ## Problem
 
-The current model clock ring (`frontend/src/js/ui/model-clock-gizmo.js`) feels unpolished:
+The current model clock ring (`frontend/src/js/ui/model-clock-gizmo.ts`) feels unpolished:
 
 - Ring, ticks, and handle are lit `StandardMaterial` spheres rendered in the main
   scene — they look like shaded blobs, unlike the flat, unlit, always-on-top

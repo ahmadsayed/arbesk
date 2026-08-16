@@ -4,7 +4,7 @@
 
 **Goal:** Eliminate `frontend/src/js/state/asset-state.js` by moving the shared store into the domain layer and migrating every consumer to domain getters/commands.
 
-**Architecture:** The legacy `assetState` store is currently owned by `state/asset-state.js` and read directly by ~69 call sites across UI, engine, services, and tests. The refactor moves the store into `domain/asset-store.js` (private to the domain layer), exposes focused getters from `domain/asset.js` and `domain/collection.js`, and migrates consumers. `ASSET_STATE_CHANGED` emission is preserved so existing listeners keep working.
+**Architecture:** The legacy `assetState` store is currently owned by `state/asset-state.js` and read directly by ~69 call sites across UI, engine, services, and tests. The refactor moves the store into `domain/asset-store.ts` (private to the domain layer), exposes focused getters from `domain/asset.ts` and `domain/collection.ts`, and migrates consumers. `ASSET_STATE_CHANGED` emission is preserved so existing listeners keep working.
 
 **Tech Stack:** ESM JS, Jest (jsdom), Playwright E2E.
 
@@ -15,9 +15,9 @@
 - Big structs + module functions; no `class`, no inheritance.
 - ESM; camelCase; JSDoc on new public functions; `npm run typecheck:frontend` must pass.
 - **Behavior preservation is paramount.** Unchanged: `ASSET_STATE_CHANGED` event name and payload shape, all toast copies, status/progress fractions, button states, URL updates, publish "no-changes still anchors" path, editor-list caching semantics.
-- `domain/asset.js` remains the **only** writer of `activeAssetManifestCid`, `latestAssetManifestCid`, `activeAssetTokenId`, `activeAssetId`, `currentManifest`, `activeAssetName`.
-- `domain/collection.js` remains the **only** writer of `activeCollectionTokenId` and `selectedCollectionId`.
-- `domain/asset.js` must NOT import `services/asset-save/*` or `domain/collection.js` (cycle guard).
+- `domain/asset.ts` remains the **only** writer of `activeAssetManifestCid`, `latestAssetManifestCid`, `activeAssetTokenId`, `activeAssetId`, `currentManifest`, `activeAssetName`.
+- `domain/collection.ts` remains the **only** writer of `activeCollectionTokenId` and `selectedCollectionId`.
+- `domain/asset.ts` must NOT import `services/asset-save/*` or `domain/collection.ts` (cycle guard).
 - Persisted manifest field names and internal event names are frozen.
 - **Git commits: pre-authorized by the user for this refactor run (per-task commits, repo conventional style).**
 - Run from repo root `/home/ahmedh/Projects/arbesk` (or current phase worktree).
@@ -27,25 +27,25 @@
 ### Task 1: Domain-owned store
 
 **Files:**
-- Create: `frontend/src/js/domain/asset-store.js`
-- Modify: `frontend/src/js/domain/asset.js`
-- Modify: `frontend/src/js/domain/collection.js`
+- Create: `frontend/src/js/domain/asset-store.ts`
+- Modify: `frontend/src/js/domain/asset.ts`
+- Modify: `frontend/src/js/domain/collection.ts`
 
 **Interfaces:**
-- `domain/asset-store.js` exports:
+- `domain/asset-store.ts` exports:
   - `assetStore` — the private store (`{ get, set, reset }`)
   - `_resetForTesting` — for Jest tests
   - `tagManifestCid(manifest, cid)` — moved from `state/asset-state.js`
-- `domain/asset.js` consumes `assetStore` instead of `assetState` from `state/asset-state.js`.
-- `domain/collection.js` consumes `assetStore` instead of `assetState` from `state/asset-state.js`.
+- `domain/asset.ts` consumes `assetStore` instead of `assetState` from `state/asset-state.js`.
+- `domain/collection.ts` consumes `assetStore` instead of `assetState` from `state/asset-state.js`.
 
-- [ ] **Step 1: Create `frontend/src/js/domain/asset-store.js`**
+- [ ] **Step 1: Create `frontend/src/js/domain/asset-store.ts`**
 
 ```js
 // @ts-nocheck
 /**
- * Domain asset store — private shared state for domain/asset.js and
- * domain/collection.js. Replaces the legacy state/asset-state.js wrapper.
+ * Domain asset store — private shared state for domain/asset.ts and
+ * domain/collection.ts. Replaces the legacy state/asset-state.js wrapper.
  */
 import { createStore } from "../state/create-store.js";
 import { EVENTS } from "../events/bus.js";
@@ -79,7 +79,7 @@ export function tagManifestCid(manifest, cid) {
 }
 ```
 
-- [ ] **Step 2: Update `domain/asset.js` to use `assetStore`**
+- [ ] **Step 2: Update `domain/asset.ts` to use `assetStore`**
 
 Replace:
 ```js
@@ -90,9 +90,9 @@ with:
 import { assetStore, tagManifestCid } from "./asset-store.js";
 ```
 
-Then replace every `assetState.get()` with `assetStore.get()` and every `assetState.set(...)` with `assetStore.set(...)` inside `domain/asset.js`.
+Then replace every `assetState.get()` with `assetStore.get()` and every `assetState.set(...)` with `assetStore.set(...)` inside `domain/asset.ts`.
 
-- [ ] **Step 3: Update `domain/collection.js` to use `assetStore`**
+- [ ] **Step 3: Update `domain/collection.ts` to use `assetStore`**
 
 Replace:
 ```js
@@ -103,7 +103,7 @@ with:
 import { assetStore } from "./asset-store.js";
 ```
 
-Then replace every `assetState.get()` with `assetStore.get()` and every `assetState.set(...)` with `assetStore.set(...)` inside `domain/collection.js`.
+Then replace every `assetState.get()` with `assetStore.get()` and every `assetState.set(...)` with `assetStore.set(...)` inside `domain/collection.ts`.
 
 - [ ] **Step 4: Run focused domain tests**
 
@@ -116,8 +116,8 @@ Expected: PASS (tests may need `assetState` → `assetStore` import updates; do 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/domain/asset-store.js frontend/src/js/domain/asset.js frontend/src/js/domain/collection.js test/frontend/domain-asset*.test.js test/frontend/domain-collection.test.js
-git commit -m "refactor(domain): move shared asset store into domain/asset-store.js"
+git add frontend/src/js/domain/asset-store.ts frontend/src/js/domain/asset.ts frontend/src/js/domain/collection.ts test/frontend/domain-asset*.test.js test/frontend/domain-collection.test.js
+git commit -m "refactor(domain): move shared asset store into domain/asset-store.ts"
 ```
 
 ---
@@ -125,10 +125,10 @@ git commit -m "refactor(domain): move shared asset store into domain/asset-store
 ### Task 2: Domain getters
 
 **Files:**
-- Modify: `frontend/src/js/domain/asset.js`
+- Modify: `frontend/src/js/domain/asset.ts`
 
 **Interfaces:**
-- `domain/asset.js` additionally exports:
+- `domain/asset.ts` additionally exports:
   - `getActiveAssetManifestCid() → string|null`
   - `getLatestAssetManifestCid() → string|null`
   - `getActiveAssetTokenId() → string|null`
@@ -137,7 +137,7 @@ git commit -m "refactor(domain): move shared asset store into domain/asset-store
   - `getCurrentManifest() → object|null`
   - `getAssetState() → Readonly<AssetState>` (full snapshot for consumers that need multiple fields)
 
-- [ ] **Step 1: Add getters to `domain/asset.js`**
+- [ ] **Step 1: Add getters to `domain/asset.ts`**
 
 Append after `subscribeAsset`:
 
@@ -197,7 +197,7 @@ export function getAssetState() {
 }
 ```
 
-- [ ] **Step 2: Update tests to import from domain/asset.js where appropriate**
+- [ ] **Step 2: Update tests to import from domain/asset.ts where appropriate**
 
 Replace `import { assetState, _resetForTesting } from "../state/asset-state.js"` in domain tests with `import { assetStore, _resetForTesting } from "../domain/asset-store.js"` where tests directly assert on the store, or with domain getters where they assert behavior.
 
@@ -212,8 +212,8 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/domain/asset.js test/frontend/domain-asset*.test.js test/frontend/domain-collection.test.js
-git commit -m "feat(domain): expose asset-state getters from domain/asset.js"
+git add frontend/src/js/domain/asset.ts test/frontend/domain-asset*.test.js test/frontend/domain-collection.test.js
+git commit -m "feat(domain): expose asset-state getters from domain/asset.ts"
 ```
 
 ---
@@ -221,21 +221,21 @@ git commit -m "feat(domain): expose asset-state getters from domain/asset.js"
 ### Task 3: Migrate UI consumers
 
 **Files:**
-- Modify: `frontend/src/js/ui/outliner.js`
-- Modify: `frontend/src/js/ui/nesting.js`
-- Modify: `frontend/src/js/ui/asset-save.js`
-- Modify: `frontend/src/js/ui/comments-panel.js`
-- Modify: `frontend/src/js/ui/create-panel.js`
-- Modify: `frontend/src/js/ui/collaborators.js`
-- Modify: `frontend/src/js/ui/asset-library.js`
-- Modify: `frontend/src/js/ui/asset-chrome.js`
-- Modify: `frontend/src/js/ui/ledger-panel.js`
+- Modify: `frontend/src/js/ui/outliner.ts`
+- Modify: `frontend/src/js/ui/nesting.ts`
+- Modify: `frontend/src/js/ui/asset-save.ts`
+- Modify: `frontend/src/js/ui/comments-panel.ts`
+- Modify: `frontend/src/js/ui/create-panel.ts`
+- Modify: `frontend/src/js/ui/collaborators.ts`
+- Modify: `frontend/src/js/ui/asset-library.ts`
+- Modify: `frontend/src/js/ui/asset-chrome.ts`
+- Modify: `frontend/src/js/ui/ledger-panel.ts`
 
 **Interfaces:**
 - Consumers replace `assetState.get()` with the getters added in Task 2.
 - `ASSET_STATE_CHANGED` listeners stay unchanged (event still emitted by `assetStore`).
 
-- [ ] **Step 1: Update `ui/outliner.js`**
+- [ ] **Step 1: Update `ui/outliner.ts`**
 
 Replace:
 ```js
@@ -250,7 +250,7 @@ Replace call sites:
 - `assetState.get().activeAssetManifestCid` → `getActiveAssetManifestCid()`
 - `assetState.get().currentManifest` → `getCurrentManifest()`
 
-- [ ] **Step 2: Update `ui/nesting.js`**
+- [ ] **Step 2: Update `ui/nesting.ts`**
 
 Replace:
 ```js
@@ -268,31 +268,31 @@ import {
 
 Replace call sites accordingly. The destructured read `const { activeAssetManifestCid, activeAssetName, activeAssetTokenId } = assetState.get();` can use `getAssetState()` or three getters.
 
-- [ ] **Step 3: Update `ui/asset-save.js`**
+- [ ] **Step 3: Update `ui/asset-save.ts`**
 
 Replace `assetState.get()` with `getActiveAssetName()`, `getActiveAssetTokenId()`, etc.
 
-- [ ] **Step 4: Update `ui/comments-panel.js`**
+- [ ] **Step 4: Update `ui/comments-panel.ts`**
 
 Replace `assetState.get().activeAssetTokenId` → `getActiveAssetTokenId()` and `assetState.get().activeAssetId` → `getActiveAssetId()`.
 
-- [ ] **Step 5: Update `ui/create-panel.js`**
+- [ ] **Step 5: Update `ui/create-panel.ts`**
 
 Replace all `assetState.get()` reads with the appropriate getters. This file has many call sites; use `getAssetState()` where multiple fields are read together.
 
-- [ ] **Step 6: Update `ui/collaborators.js`**
+- [ ] **Step 6: Update `ui/collaborators.ts`**
 
 Replace `assetState.get().activeAssetTokenId` → `getActiveAssetTokenId()`.
 
-- [ ] **Step 7: Update `ui/asset-library.js`**
+- [ ] **Step 7: Update `ui/asset-library.ts`**
 
 Replace reads with getters. The `ASSET_STATE_CHANGED` listener stays.
 
-- [ ] **Step 8: Update `ui/asset-chrome.js`**
+- [ ] **Step 8: Update `ui/asset-chrome.ts`**
 
 Replace `assetState.get()` with `getAssetState()` or individual getters.
 
-- [ ] **Step 9: Update `ui/ledger-panel.js`**
+- [ ] **Step 9: Update `ui/ledger-panel.ts`**
 
 Replace `assetState.get().activeAssetManifestCid` → `getActiveAssetManifestCid()`.
 
@@ -316,22 +316,22 @@ git commit -m "refactor(ui): replace assetState reads with domain getters"
 ### Task 4: Migrate engine + services consumers
 
 **Files:**
-- Modify: `frontend/src/js/engine/scene-loader.js`
-- Modify: `frontend/src/js/engine/scene-graph.js`
+- Modify: `frontend/src/js/engine/scene-loader.ts`
+- Modify: `frontend/src/js/engine/scene-graph.ts`
 - Modify: `frontend/src/js/state/comment-thread.js`
 - Modify: `frontend/src/js/state/version-history-store.js`
-- Modify: `frontend/src/js/services/asset-download.js`
-- Modify: `frontend/src/js/services/asset-delete.js`
-- Modify: `frontend/src/js/services/asset-save/manifest-builder.js`
+- Modify: `frontend/src/js/services/asset-download.ts`
+- Modify: `frontend/src/js/services/asset-delete.ts`
+- Modify: `frontend/src/js/services/asset-save/manifest-builder.ts`
 
 **Interfaces:**
 - Same as Task 3: replace `assetState.get()` with domain getters.
 
-- [ ] **Step 1: Update `engine/scene-loader.js`**
+- [ ] **Step 1: Update `engine/scene-loader.ts`**
 
 Replace `assetState.get().currentManifest` → `getCurrentManifest()`.
 
-- [ ] **Step 2: Update `engine/scene-graph.js`**
+- [ ] **Step 2: Update `engine/scene-graph.ts`**
 
 Replace `assetState.get().activeAssetManifestCid` → `getActiveAssetManifestCid()`.
 
@@ -343,15 +343,15 @@ Replace reads with getters. Note: `comment-thread.js` is in `state/` but is a co
 
 Replace reads with getters.
 
-- [ ] **Step 5: Update `services/asset-download.js`**
+- [ ] **Step 5: Update `services/asset-download.ts`**
 
 Replace reads with getters.
 
-- [ ] **Step 6: Update `services/asset-delete.js`**
+- [ ] **Step 6: Update `services/asset-delete.ts`**
 
 Replace reads with getters.
 
-- [ ] **Step 7: Update `services/asset-save/manifest-builder.js`**
+- [ ] **Step 7: Update `services/asset-save/manifest-builder.ts`**
 
 Replace reads with getters.
 
@@ -379,7 +379,7 @@ git commit -m "refactor(engine/services): replace assetState reads with domain g
 
 **Interfaces:**
 - Tests that imported `assetState` for assertions now import domain getters or `assetStore`.
-- Tests that mocked `state/asset-state.js` now mock `domain/asset-store.js` or the domain getters.
+- Tests that mocked `state/asset-state.js` now mock `domain/asset-store.ts` or the domain getters.
 
 **Test files to update:**
 - `test/state/asset-state.test.js` — likely delete or repurpose
@@ -408,7 +408,7 @@ Replace `import { assetState, _resetForTesting } from "../state/asset-state.js"`
 
 - [ ] **Step 2: Update UI/engine/service tests**
 
-For tests that mock `state/asset-state.js`, change the mock path to `domain/asset-store.js` and export the same shape (`assetStore`, `_resetForTesting`, `tagManifestCid` if needed). For tests that only read state, switch to domain getters.
+For tests that mock `state/asset-state.js`, change the mock path to `domain/asset-store.ts` and export the same shape (`assetStore`, `_resetForTesting`, `tagManifestCid` if needed). For tests that only read state, switch to domain getters.
 
 - [ ] **Step 3: Decide fate of `test/state/asset-state.test.js`**
 

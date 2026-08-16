@@ -5,12 +5,12 @@ Status: Approved (brainstorming), pending implementation plan
 
 ## Problem
 
-The AI generation chat (`frontend/src/js/ui/create-panel.js`) has grown into a
+The AI generation chat (`frontend/src/js/ui/create-panel.ts`) has grown into a
 complex, linear, fragile flow:
 
 1. **Ephemeral task-ID coupling.** Every follow-up (retexture, retopo, rig,
    animate) references the in-memory backend task registry
-   (`src/api/generation-tasks.js`, 1-hour TTL, wallet-bound, holds the transient
+   (`src/api/generation-tasks.ts`, 1-hour TTL, wallet-bound, holds the transient
    BYOK key). After an hour — or a backend restart, or a different BYOK key —
    the follow-up chips die with "source generation expired", even though the
    GLB sits immutable in IPFS and the bubble already holds its CID.
@@ -90,7 +90,7 @@ Every generation bubble is a version card:
 
 ### 3. Backend: GLB is the canonical follow-up input
 
-- **Schema** (`src/api/schemas.js`): `refineTaskId` / `retopoTaskId` /
+- **Schema** (`src/api/schemas.ts`): `refineTaskId` / `retopoTaskId` /
   `animateTaskId` are replaced by:
   - `sourceAssetCid` — CID of the source GLB in IPFS (the bubble's
     `sourceAssetCid`).
@@ -102,7 +102,7 @@ Every generation bubble is a version card:
   - New: `textureQuality` (`standard|detailed|extreme`, default `standard`)
     for text/image generation and retexture. The `highQuality` boolean is
     retired.
-- **Route** (`src/api/assets/generate-node.js`): on any follow-up, the backend
+- **Route** (`src/api/assets/generate-node.ts`): on any follow-up, the backend
   1. fetches the GLB bytes for `sourceAssetCid` via the existing storage layer
      (Kubo locally, Pinata gateway on testnet),
   2. uploads them to Tripo `POST /files` → `file_token`,
@@ -112,18 +112,18 @@ Every generation bubble is a version card:
   accepts `file_token` input). Retarget still consumes the rig task ID —
   internal to one chain, unchanged. The retarget-only path (auto-rig result +
   `Animate…`) is preserved.
-- **Adapter** (`src/api/adapters/tripo3d-adapter.js`):
+- **Adapter** (`src/api/adapters/tripo3d-adapter.ts`):
   - New `uploadModel(bytes, apiKey)` — mirrors `uploadImage`, GLB payload.
   - `createRefineTask` / `decimateTask` / `rigCheckTask` / `rigModelTask` take
     the file token as `input` instead of a generation task ID.
   - `createTask` / `createImageTask` / `createRefineTask` accept
     `textureQuality`; the `highQuality` flag is removed.
-- **Registry** (`src/api/generation-tasks.js`): still tracks *running* tasks
+- **Registry** (`src/api/generation-tasks.ts`): still tracks *running* tasks
   and the transient BYOK key. Source lookups (`getCompletedTask`) and the
   `REFINE_SOURCE_NOT_FOUND` / `RETOPO_SOURCE_NOT_FOUND` /
   `ANIMATE_SOURCE_NOT_FOUND` 404s are deleted — no expiry dead-end, no
   cross-key fragility, works on any bubble or saved asset, after any restart.
-- **Frontend service** (`services/api.js`): the silent
+- **Frontend service** (`services/api.ts`): the silent
   "refine source expired → fresh model" fallback is deleted (expiry is no
   longer possible). `generateAsset` sends `sourceAssetCid` + action fields.
 

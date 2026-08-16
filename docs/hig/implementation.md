@@ -2,7 +2,7 @@
 
 > Part of [GNOME HIG Unification Plan](README.md)
 >
-> **Historical note:** This plan was written before the Studio + Library SPA unification. The current frontend uses a single `frontend/src/pug/app.pug` shell with client-side routing (`frontend/src/js/app/router.js`) instead of separate `/studio.html` and `/library.html` pages. Keep this in mind when reading references to `studio.pug`, `/library.html`, or `/studio.html` below.
+> **Historical note:** This plan was written before the Studio + Library SPA unification. The current frontend uses a single `frontend/src/pug/app.pug` shell with client-side routing (`frontend/src/js/app/router.ts`) instead of separate `/studio.html` and `/library.html` pages. Keep this in mind when reading references to `studio.pug`, `/library.html`, or `/studio.html` below.
 
 ---
 
@@ -91,8 +91,8 @@ frontend/src/scss/
 - All separate collapse/expand code paths
 
 **New modules:**
-- `ui/sidebar.js` — unified 5-view controller
-- `ui/outliner.js` — scene hierarchy tree
+- `ui/sidebar.ts` — unified 5-view controller
+- `ui/outliner.ts` — scene hierarchy tree
 
 **Refactored:**
 - `create-panel.js` → drives Settings and Chat view controls
@@ -180,18 +180,18 @@ Three breakpoints:
 | `studio.pug` | Rewritten (headerbar, pathbar, sidebar, outliner, bottombar) |
 | `studio.scss` | Renamed to `_studio-legacy.scss`; deleted in the 2026-07 cleanup |
 | `styles.scss` | Simplified to `@use` imports |
-| `ui/create-panel.js` | Refactored to drive Settings and Chat view controls |
-| `ui/sidebar.js` | **New** — 5-view controller |
-| `ui/outliner.js` | **New** — scene hierarchy tree |
-| `ui/nesting.js` | **New** — dive/ascend, breadcrumbs |
-| `ui/asset-library.js` | Refactored to `[data-view="library"]` (Gallery) |
-| `ui/ledger-panel.js` | Refactored to `[data-view="ledger"]` (Activity) |
-| `ui/comments-panel.js` | **New** — asset-level comments in inspector |
-| `engine/parametric-preview.js` | **New** — node inspector / parametric color binding |
-| `domain/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clocks |
-| `ui/asset-save.js` | Buttons in headerbar, Publish hidden for non-token nested worlds |
-| `ui/asset-drop-zone.js` | Drop overlay → viewport border + Outliner highlight |
-| `engine/scene-graph.js` | Minor: expose dive/ascend hooks |
+| `ui/create-panel.ts` | Refactored to drive Settings and Chat view controls |
+| `ui/sidebar.ts` | **New** — 5-view controller |
+| `ui/outliner.ts` | **New** — scene hierarchy tree |
+| `ui/nesting.ts` | **New** — dive/ascend, breadcrumbs |
+| `ui/asset-library.ts` | Refactored to `[data-view="library"]` (Gallery) |
+| `ui/ledger-panel.ts` | Refactored to `[data-view="ledger"]` (Activity) |
+| `ui/comments-panel.ts` | **New** — asset-level comments in inspector |
+| `engine/parametric-preview.ts` | **New** — node inspector / parametric color binding |
+| `domain/version-history-store.ts`, `ui/version-clock.ts`, `ui/scene-clock.ts`, `ui/model-clock.js` | Version history store + scene/model clocks |
+| `ui/asset-save.ts` | Buttons in headerbar, Publish hidden for non-token nested worlds |
+| `ui/asset-drop-zone.ts` | Drop overlay → viewport border + Outliner highlight |
+| `engine/scene-graph.ts` | Minor: expose dive/ascend hooks |
 | `services/*.js` | **No changes** |
 | `blockchain/*.js` | **No changes** |
 | `scripts/render-scss.js` | Updated SCSS paths (called by `scripts/build-scss.js`) |

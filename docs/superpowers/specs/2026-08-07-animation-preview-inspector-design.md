@@ -27,20 +27,20 @@ persisted to the manifest.
 - Inspector markup: `frontend/src/pug/app.pug:311-379` — sections follow
   `section.inspector-section` + `details > summary.inspector-section-title`
   (see `#scaleSection`, `app.pug:338-349`). Controller:
-  `frontend/src/js/engine/parametric-preview.js` (`openInspector` at `:312`).
+  `frontend/src/js/engine/parametric-preview.ts` (`openInspector` at `:312`).
 - `ImportMeshAsync` results' `animationGroups` are discarded in
-  `frontend/src/js/engine/scene-loader.js:66-84` (`importFromBlob`). Babylon's
+  `frontend/src/js/engine/scene-loader.ts:66-84` (`importFromBlob`). Babylon's
   glTF loader still adds them to `scene.animationGroups`, but there is no
   per-node handle. No `AnimationGroup` usage exists in app code.
 - Animations survive save: the decomposer keeps `animations`/`skins` inline
-  (`frontend/src/js/gltf/decomposer.js:12`).
+  (`frontend/src/js/gltf/decomposer.ts:12`).
 - Selection events: `EVENTS.NODE_SELECTED` / `SELECTION_CHANGED` on the event
-  bus (`frontend/src/js/events/bus.js:41-48`), emitted from
-  `frontend/src/js/engine/scene-selection.js:52-77`.
+  bus (`frontend/src/js/events/bus.ts:41-48`), emitted from
+  `frontend/src/js/engine/scene-selection.ts:52-77`.
 - Inspector sections hide under multi-select via `showMultiSelectSummary()`
   (`parametric-preview.js:293-305`).
 - Select styling: `.form-select` (`frontend/src/scss/components/_forms.scss:18-62`).
-- State maps live in `frontend/src/js/engine/state.js` (`nodeMeshes`,
+- State maps live in `frontend/src/js/engine/state.ts` (`nodeMeshes`,
   `nodeAnchors` at `:20-22`).
 
 ## Design
@@ -50,7 +50,7 @@ persisted to the manifest.
 - Extend `importFromBlob()` (`scene-loader.js`) to return
   `result.animationGroups` alongside `meshes`/`transformNodes`.
 - Add `nodeAnimationGroups: Map<string, BABYLON.AnimationGroup[]>` to
-  `frontend/src/js/engine/state.js`, next to `nodeMeshes`.
+  `frontend/src/js/engine/state.ts`, next to `nodeMeshes`.
 - Populate it in the `loadAsset`/`attachMetadata` path (`scene-loader.js:86-116`)
   for every loaded node.
 - Clean it up wherever `nodeMeshes` entries are removed (node delete/dispose
@@ -59,7 +59,7 @@ persisted to the manifest.
 - Set `animationStartMode` to `NONE` on the glTF loader plugin (via
   `BABYLON.SceneLoader.OnPluginActivatedObservable` in the engine setup), so
   nothing auto-plays. Verify the exact constant name against the pinned
-  Babylon CDN version (`frontend/src/js/engine/babylon-loader.js:14-15`)
+  Babylon CDN version (`frontend/src/js/engine/babylon-loader.ts:14-15`)
   during implementation.
 
 ### 2. Inspector UI
@@ -77,7 +77,7 @@ persisted to the manifest.
 
 - No SCSS changes expected — `.inspector-section` and `.form-select` cover it.
 
-### 3. Playback controller — `frontend/src/js/engine/animation-preview.js` (new)
+### 3. Playback controller — `frontend/src/js/engine/animation-preview.ts` (new)
 
 Small module, wired from the same place `parametric-preview.js` is wired:
 

@@ -27,7 +27,7 @@
 ### Task 1: Tripo adapter — uploadModel, file_token inputs, textureQuality
 
 **Files:**
-- Modify: `src/api/adapters/tripo3d-adapter.js`
+- Modify: `src/api/adapters/tripo3d-adapter.ts`
 - Test: `test/api/tripo3d-adapter.test.js`
 
 **Interfaces:**
@@ -47,7 +47,7 @@
 Add to `test/api/tripo3d-adapter.test.js` (follow the file's existing `global.fetch` spy pattern):
 
 ```js
-import { uploadModel, createRefineTask, decimateTask, rigCheckTask, rigModelTask } from "../../src/api/adapters/tripo3d-adapter.js";
+import { uploadModel, createRefineTask, decimateTask, rigCheckTask, rigModelTask } from "../../src/api/adapters/tripo3d-adapter.ts";
 
 describe("uploadModel", () => {
   it("POSTs the GLB to /files as multipart and returns file_token", async () => {
@@ -133,7 +133,7 @@ Expected: FAIL — `uploadModel is not a function`, and existing highQuality tes
 
 - [ ] **Step 3: Implement the adapter changes**
 
-In `src/api/adapters/tripo3d-adapter.js`:
+In `src/api/adapters/tripo3d-adapter.ts`:
 
 Add near the top:
 
@@ -206,7 +206,7 @@ Expected: PASS (whole file).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/adapters/tripo3d-adapter.js test/api/tripo3d-adapter.test.js
+git add src/api/adapters/tripo3d-adapter.ts test/api/tripo3d-adapter.test.js
 git commit -m "feat(tripo): GLB file_token inputs for follow-ups + textureQuality option"
 ```
 
@@ -215,12 +215,12 @@ git commit -m "feat(tripo): GLB file_token inputs for follow-ups + textureQualit
 ### Task 2: Request schema + task registry entry shape
 
 **Files:**
-- Modify: `src/api/schemas.js:54-95`
-- Modify: `src/api/generation-tasks.js`
+- Modify: `src/api/schemas.ts:54-95`
+- Modify: `src/api/generation-tasks.ts`
 - Test: `test/api.test.js` (validation cases live with the route tests in Task 3; this task adds pure schema tests)
 
 **Interfaces:**
-- Consumes: `TEXTURE_QUALITIES` concept from Task 1 (duplicated as a Zod enum — schemas.js does not import the adapter).
+- Consumes: `TEXTURE_QUALITIES` concept from Task 1 (duplicated as a Zod enum — schemas.ts does not import the adapter).
 - Produces: `generateAssetSchema` accepting `{ prompt?, nodeId, provider?, providerKey?, sourceAssetCid?, retexture?, retopo?, animate?, rigOnly?, animations?, faceLimit?, textureQuality?, imageData?, imageMime? }`. Registry `registerTask` accepts `sourceFileToken` (replaces `sourceTripoTaskId`); `TaskEntry.sourceFileToken` read by Task 3's poll handler.
 
 - [ ] **Step 1: Write the failing tests**
@@ -292,7 +292,7 @@ Expected: FAIL — the unknown fields are stripped/ignored by the old schema, so
 
 - [ ] **Step 3: Replace the schema and registry field**
 
-In `src/api/schemas.js`, replace the whole `generateAssetSchema` (lines 54–95) with:
+In `src/api/schemas.ts`, replace the whole `generateAssetSchema` (lines 54–95) with:
 
 ```js
 export const generateAssetSchema = z
@@ -360,7 +360,7 @@ export const generateAssetSchema = z
   });
 ```
 
-In `src/api/generation-tasks.js`: rename the `sourceTripoTaskId` field to `sourceFileToken` everywhere (typedef line 16, `registerTask` destructure + JSDoc line 33, spread line 57). Update the JSDoc description to `sourceFileToken - Tripo file_token of the source GLB (animate chain)`. Leave `getCompletedTask`/`markTaskComplete` in place — Task 3 still uses them for the retarget-only shortcut.
+In `src/api/generation-tasks.ts`: rename the `sourceTripoTaskId` field to `sourceFileToken` everywhere (typedef line 16, `registerTask` destructure + JSDoc line 33, spread line 57). Update the JSDoc description to `sourceFileToken - Tripo file_token of the source GLB (animate chain)`. Leave `getCompletedTask`/`markTaskComplete` in place — Task 3 still uses them for the retarget-only shortcut.
 
 - [ ] **Step 4: Run tests to verify the validation gate passes**
 
@@ -370,7 +370,7 @@ Expected: the four 400-validation tests PASS; "accepts auto-rig" may still fail 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/schemas.js src/api/generation-tasks.js test/api.test.js
+git add src/api/schemas.ts src/api/generation-tasks.ts test/api.test.js
 git commit -m "feat(api): sourceAssetCid action schema + registry sourceFileToken"
 ```
 
@@ -379,11 +379,11 @@ git commit -m "feat(api): sourceAssetCid action schema + registry sourceFileToke
 ### Task 3: Generation route — GLB upload + follow-up dispatch
 
 **Files:**
-- Modify: `src/api/assets/generate-node.js`
+- Modify: `src/api/assets/generate-node.ts`
 - Test: `test/api.test.js` (rewrite the tripo3d refine/retopo/animate sub-blocks)
 
 **Interfaces:**
-- Consumes: Task 1 adapter functions; `getStorage().catBytes(cid): Promise<Buffer>` from `src/api/storage/index.js`; Task 2 schema fields and `sourceFileToken` registry field.
+- Consumes: Task 1 adapter functions; `getStorage().catBytes(cid): Promise<Buffer>` from `src/api/storage/index.ts`; Task 2 schema fields and `sourceFileToken` registry field.
 - Produces: `POST /api/v1/generations` follow-up contract — request `{sourceAssetCid, retexture|retopo|animate, …}` → 202 `{taskId, provider:"tripo3d", status:"running", refined?|retopo?|animating?}`. Errors: 400 `SOURCE_ASSET_UNAVAILABLE` (IPFS fetch failed). The GET poll handler is unchanged in shape (status/progress/stage/success+assetData).
 
 - [ ] **Step 1: Rewrite the failing route tests**
@@ -451,9 +451,9 @@ Expected: FAIL — route still expects the old task-ID fields (404 `*_SOURCE_NOT
 
 - [ ] **Step 3: Rewrite the route**
 
-In `src/api/assets/generate-node.js`:
+In `src/api/assets/generate-node.ts`:
 
-1. Update imports: add `uploadModel` to the adapter import; add `import { getStorage } from "../storage/index.js";`; remove `getCompletedTask` usage for refine/retopo sources (keep the import — the retarget-only shortcut still uses it).
+1. Update imports: add `uploadModel` to the adapter import; add `import { getStorage } from "../storage/index.ts";`; remove `getCompletedTask` usage for refine/retopo sources (keep the import — the retarget-only shortcut still uses it).
 2. Replace the destructure at line 67:
 
 ```js
@@ -541,7 +541,7 @@ Expected: PASS (whole file, including the Task 2 validation tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/assets/generate-node.js test/api.test.js
+git add src/api/assets/generate-node.ts test/api.test.js
 git commit -m "feat(api): GLB-canonical follow-up dispatch (retexture/retopo/animate)"
 ```
 
@@ -550,7 +550,7 @@ git commit -m "feat(api): GLB-canonical follow-up dispatch (retexture/retopo/ani
 ### Task 4: Frontend service — generateAsset new contract
 
 **Files:**
-- Modify: `frontend/src/js/services/api.js:469-685`
+- Modify: `frontend/src/js/services/api.ts:469-685`
 - Test: `test/frontend/api.test.js` (update generateAsset cases)
 
 **Interfaces:**
@@ -586,7 +586,7 @@ Expected: FAIL — service still sends the old fields / retries on REFINE_SOURCE
 
 - [ ] **Step 3: Rewrite the service**
 
-In `frontend/src/js/services/api.js`:
+In `frontend/src/js/services/api.ts`:
 
 1. Replace the parameter list (lines 497–517) and JSDoc (469–495): drop `refineTaskId`, `animateTaskId`, `retopoTaskId`, `highQuality`; add `sourceAssetCid`, `sourceTaskId`, `retexture`, `retopo`, `animate`, `textureQuality`. Fix the stale "clean quad topology" JSDoc → "clean triangulated topology (quad output forces FBX, unusable in-app)".
 2. Replace the body builder (lines 523–534):
@@ -621,7 +621,7 @@ Expected: PASS. Typecheck will flag the create-panel callers still passing old f
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/services/api.js test/frontend/api.test.js
+git add frontend/src/js/services/api.ts test/frontend/api.test.js
 git commit -m "feat(frontend): generateAsset sourceAssetCid contract, drop task-id fields"
 ```
 
@@ -631,7 +631,7 @@ git commit -m "feat(frontend): generateAsset sourceAssetCid contract, drop task-
 
 **Files:**
 - Modify: `frontend/src/pug/app.pug:199-201`
-- Modify: `frontend/src/js/ui/create-panel.js` (DOM refs, `syncProviderUI`, `onGenerate`)
+- Modify: `frontend/src/js/ui/create-panel.ts` (DOM refs, `syncProviderUI`, `onGenerate`)
 - Modify: `frontend/src/scss/components/_chat.scss` (only if the select needs layout tweaks — reuse `.form-select` styles first)
 
 **Interfaces:**
@@ -697,7 +697,7 @@ Expected: PASS. (Typecheck errors about old generateAsset fields in create-panel
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/pug/app.pug frontend/src/js/ui/create-panel.js frontend/dist
+git add frontend/src/pug/app.pug frontend/src/js/ui/create-panel.ts frontend/dist
 git commit -m "feat(panel): texture quality selector replaces HD checkbox"
 ```
 
@@ -707,7 +707,7 @@ git commit -m "feat(panel): texture quality selector replaces HD checkbox"
 
 **Files:**
 - Create: `frontend/src/js/state/generation-actions.js`
-- Modify: `frontend/src/js/ui/chat-messages.js` (`addAssetMessage` + new `addAssetActionRow` + `markSaved`)
+- Modify: `frontend/src/js/ui/chat-messages.ts` (`addAssetMessage` + new `addAssetActionRow` + `markSaved`)
 - Modify: `frontend/src/scss/components/_chat.scss` (action-row styles after `.chat-asset-actions` :173)
 - Test: `test/frontend/generation-actions.test.js` (new), `test/frontend/chat-messages.test.js` (extend)
 
@@ -863,7 +863,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/state/generation-actions.js frontend/src/js/ui/chat-messages.js frontend/src/scss/components/_chat.scss test/frontend/generation-actions.test.js test/frontend/chat-messages.test.js
+git add frontend/src/js/state/generation-actions.js frontend/src/js/ui/chat-messages.ts frontend/src/scss/components/_chat.scss test/frontend/generation-actions.test.js test/frontend/chat-messages.test.js
 git commit -m "feat(chat): version-card action row + saved pill + availability helper"
 ```
 
@@ -872,10 +872,10 @@ git commit -m "feat(chat): version-card action row + saved pill + availability h
 ### Task 7: Create panel — follow-up handlers replace choice chips
 
 **Files:**
-- Modify: `frontend/src/js/ui/create-panel.js` (replace `ANIMATE_CHOICES`, `addAnimateChoices`, `onRetopo`, `onAnimate`; add `onRetexture`, `onAutoRig`)
+- Modify: `frontend/src/js/ui/create-panel.ts` (replace `ANIMATE_CHOICES`, `addAnimateChoices`, `onRetopo`, `onAnimate`; add `onRetexture`, `onAutoRig`)
 
 **Interfaces:**
-- Consumes: Task 6 `followupActionsFor` + `addAssetActionRow`; Task 4 generateAsset contract; existing `showCheckboxDialog` / `showCustomDialog` (`frontend/src/js/ui/dialog.js:293,366`).
+- Consumes: Task 6 `followupActionsFor` + `addAssetActionRow`; Task 4 generateAsset contract; existing `showCheckboxDialog` / `showCustomDialog` (`frontend/src/js/ui/dialog.ts:293,366`).
 - Produces: module-private `onRetexture(generationId)`, `onRetopo(generationId)`, `onAutoRig(generationId)`, `onAnimate(generationId)` — all read `getPendingGeneration(generationId)` for `sourceAssetCid` + `backendTaskId` (the latter passed as `sourceTaskId` for the retarget-only shortcut).
 
 - [ ] **Step 1: Replace the choices block**
@@ -1089,7 +1089,7 @@ Expected: clean (create-panel is `@ts-nocheck`, so lint + build are the gate). A
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/ui/create-panel.js frontend/dist
+git add frontend/src/js/ui/create-panel.ts frontend/dist
 git commit -m "feat(panel): version-card follow-up handlers replace choice chips"
 ```
 
@@ -1099,13 +1099,13 @@ git commit -m "feat(panel): version-card follow-up handlers replace choice chips
 
 **Files:**
 - Modify: `frontend/src/pug/app.pug` (refine indicator above `.messagebar-row` :206)
-- Modify: `frontend/src/js/ui/create-panel.js` (active-version state, `onGenerate`, `sendGenerationToStudio`, `restoreGeneration`, event wiring)
-- Modify: `frontend/src/js/ui/chat-history.js` (clickable history versions)
-- Modify: `frontend/src/js/events/bus.js:20-59` (one new event constant)
+- Modify: `frontend/src/js/ui/create-panel.ts` (active-version state, `onGenerate`, `sendGenerationToStudio`, `restoreGeneration`, event wiring)
+- Modify: `frontend/src/js/ui/chat-history.ts` (clickable history versions)
+- Modify: `frontend/src/js/events/bus.ts:20-59` (one new event constant)
 - Test: `test/frontend/chat-history.test.js` (extend)
 
 **Interfaces:**
-- Consumes: `walkManifestChain` entries `{cid, version, chat, sourceCid, …}` (`frontend/src/js/engine/time-travel.js:122`); Task 6 pieces.
+- Consumes: `walkManifestChain` entries `{cid, version, chat, sourceCid, …}` (`frontend/src/js/engine/time-travel.ts:122`); Task 6 pieces.
 - Produces: `EVENTS.HISTORY_VERSION_SELECTED = "asset:historyVersionSelected"`; history bubbles carry `data-manifest-cid`; create-panel module-private `setActiveVersion({sourceAssetCid, manifestCid, name} | null)`.
 
 - [ ] **Step 1: Refine indicator in Pug**
@@ -1254,7 +1254,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/create-panel.js frontend/src/js/ui/chat-history.js frontend/src/js/events/bus.js frontend/src/pug/app.pug frontend/src/scss/components/_chat.scss test/frontend/chat-history.test.js frontend/dist
+git add frontend/src/js/ui/create-panel.ts frontend/src/js/ui/chat-history.ts frontend/src/js/events/bus.ts frontend/src/pug/app.pug frontend/src/scss/components/_chat.scss test/frontend/chat-history.test.js frontend/dist
 git commit -m "feat(chat): active-version retexture + click-to-restore versions"
 ```
 
@@ -1263,13 +1263,13 @@ git commit -m "feat(chat): active-version retexture + click-to-restore versions"
 ### Task 9: Auto-save on Show in Studio + E2E sync + full verification
 
 **Files:**
-- Modify: `frontend/src/js/ui/create-panel.js` (`sendGenerationToStudio`)
+- Modify: `frontend/src/js/ui/create-panel.ts` (`sendGenerationToStudio`)
 - Modify: `e2e/helpers/studio-selectors.mjs:19-26`
 - Create: `e2e/specs/chat-version-restore.spec.js`
 - Modify: `AGENTS.md` (§1 generation bullet: action row, GLB follow-ups, auto-save)
 
 **Interfaces:**
-- Consumes: `onSaveAssetDraft` from `frontend/src/js/ui/asset-save.js:403` (no import cycle: asset-save imports services/api, not create-panel); Task 6 `markSaved`.
+- Consumes: `onSaveAssetDraft` from `frontend/src/js/ui/asset-save.ts:403` (no import cycle: asset-save imports services/api, not create-panel); Task 6 `markSaved`.
 
 - [ ] **Step 1: Auto-save**
 
@@ -1322,7 +1322,7 @@ Expected: all green. If E2E infrastructure is unavailable in the execution envir
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/ui/create-panel.js e2e/ AGENTS.md frontend/dist
+git add frontend/src/js/ui/create-panel.ts e2e/ AGENTS.md frontend/dist
 git commit -m "feat(chat): auto-save on Show in Studio + E2E version-restore coverage"
 ```
 

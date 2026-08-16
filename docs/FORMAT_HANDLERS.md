@@ -4,11 +4,11 @@ Arbesk's 3D asset pipeline is format-agnostic at the dispatch layer. Adding supp
 
 ## Built-in handlers
 
-- `gltf` — loose glTF JSON assets (`frontend/src/js/formats/handlers/gltf-handler.js`)
-- `glb` — binary glTF assets (`frontend/src/js/formats/handlers/glb-handler.js`)
-- `3mf` — 3D Manufacturing Format assets (`frontend/src/js/formats/handlers/3mf-handler.js`)
+- `gltf` — loose glTF JSON assets (`frontend/src/js/formats/handlers/gltf-handler.ts`)
+- `glb` — binary glTF assets (`frontend/src/js/formats/handlers/glb-handler.ts`)
+- `3mf` — 3D Manufacturing Format assets (`frontend/src/js/formats/handlers/3mf-handler.ts`)
 
-All three are registered automatically by `frontend/src/js/formats/index.js`.
+All three are registered automatically by `frontend/src/js/formats/index.ts`.
 
 ## Handler interface
 
@@ -80,7 +80,7 @@ glTF is never persisted. The composer/decomposer/parser live in `frontend/src/js
 2. Implement `load`, `decomposeForSave`, and `isStoredForm` for your format.
 3. Import and register it somewhere in your application bootstrap:
    ```js
-   import { registerFormatHandler } from "./formats/registry.js";
+   import { registerFormatHandler } from "./formats/registry.ts";
    import { myFormatHandler } from "./formats/handlers/my-format-handler.js";
    registerFormatHandler(myFormatHandler);
    ```

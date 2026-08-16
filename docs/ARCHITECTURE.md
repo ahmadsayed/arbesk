@@ -128,7 +128,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 |---|---|
 | `src/index.ts` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
 | `src/api/index.ts` | Route registry — mounts all `/api/v1` routes |
-| `src/api/routes/` | Per-domain route modules (`comments.ts`, `ipfs.ts`, `contracts.ts`, `indexer.ts`, `paymaster.ts`, `openapi.ts`, `test-utils.js`) |
+| `src/api/routes/` | Per-domain route modules (`comments.ts`, `ipfs.ts`, `contracts.ts`, `indexer.ts`, `paymaster.ts`, `openapi.ts`, `test-utils.ts`) |
 | `src/api/assets/generate-node.ts` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
 | `src/api/storage/index.ts` | Storage backend abstraction (`kubo` or `pinata`) |
 | `src/api/storage/pinata-adapter.ts` | Pinata v3 SDK uploads + presigned upload URLs |
@@ -188,7 +188,7 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 | Services | `services/team.ts` | Merkle-based editor add/remove |
 | Services | `services/asset-delete.ts` | Remove an asset from a collection (direct IPFS write) |
 | Services | `services/comment-thread.ts` | Per-asset Nostr WebSocket + archive state |
-| UI | `pug/app.pug` | Unified Studio + Library SPA shell (built to `dist/app.html`) |
+| UI | `pug/includes/*.pug` (shell: `pug/app.pug`) | Unified Studio + Library SPA shell (built to `dist/app.html`) |
 | UI | `ui/library-grid.ts` | Library grid/list rendering, selection, keyboard shortcuts, rubber-band select |
 | UI | `ui/library-toolbar.ts` | Breadcrumb, search, sort, view mode, New Collection, Upload |
 | UI | `ui/library-context-menu.ts` | Right-click actions: Open, Open in Studio, Rename, Manage Collaborators, Burn, Delete, Send to Collection |
@@ -296,12 +296,12 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
         },
         "transform_matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
         "child_ref": {
-          "type": "token",
-          "chainId": 31415822,
-          "contractAddress": "0x1234567890abcdef1234567890abcdef12345678",
-          "tokenId": "42",
-          "standard": "ERC721",
-          "resolution": "latest"
+          "collection": {
+            "chainId": 31415822,
+            "contractAddress": "0x1234567890abcdef1234567890abcdef12345678",
+            "tokenId": "42"
+          },
+          "assetID": "asset-123"
         }
       }
     ]
@@ -662,7 +662,7 @@ Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the sa
 Double-clicking an asset card (or "Open in Studio" from the context menu) navigates to:
 
 ```
-/studio.html?asset=<collectionTokenId>&assetId=<assetId>
+/studio?asset=<collectionTokenId>&assetId=<assetId>
 ```
 
 Studio loads the collection into the Gallery sidebar and opens the specific asset in the 3D viewport.
@@ -685,7 +685,7 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 
 | File | Role |
 |------|------|
-| `frontend/src/pug/app.pug` | Unified Studio + Library SPA template → compiled to `frontend/dist/app.html` |
+| `frontend/src/pug/app.pug` | Slim SPA shell that includes `frontend/src/pug/includes/*.pug` partials → compiled to `frontend/dist/app.html` |
 | `frontend/src/js/app/router.ts` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume |
 | `frontend/src/js/ui/header-wallet-button.ts` | Shared header wallet button; shows email for CDP users and hides the network selector |
 | `frontend/src/js/app-init.ts` | SPA bootstrap incl. Library view wiring: wallet gate, data loading, event wiring |
@@ -715,8 +715,8 @@ Wallet connected
 The Studio supports deep-linking tokens and individual assets via query params:
 
 ```text
-/studio.html?asset=<tokenId>
-/studio.html?asset=<tokenId>&assetId=<assetID>
+/studio?asset=<tokenId>
+/studio?asset=<tokenId>&assetId=<assetID>
 ```
 
 | URL | Behavior |
@@ -796,7 +796,7 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 
 ## 9. Phase 5.1: Token ID-Based Child Assets (Complete)
 
-Child assets are referenced by on-chain token IDs. The parent manifest stores a `child_ref` with `chainId`, `contractAddress`, and `tokenId`; at load time the browser calls `tokenURI()` to resolve the latest collection manifest CID and then loads the relevant asset from the collection's `assets` map.
+Child assets are referenced by on-chain token IDs. The parent manifest stores a `child_ref` with `{ collection: { chainId, contractAddress, tokenId }, assetID }`; at load time the browser resolves the referenced collection manifest CID via `tokenURI()`, then loads the relevant `assetID` from the collection's `assets` map.
 
 Key constraints still in force:
 - Every token child node must have a `transform_matrix`; no local `history` array

@@ -6,7 +6,7 @@
 **Design spec:** `docs/superpowers/specs/2026-06-30-cdp-email-login-base-design.md`  
 **Related (deprecated):** `docs/superpowers/plans/2026-06-28-thirdweb-aa-plan.md`
 
-> **Historical note:** This plan references separate `studio.pug` / `library.pug` templates. The current frontend uses a unified `frontend/src/pug/app.pug` SPA shell with client-side routing (`frontend/src/js/app/router.js`).
+> **Historical note:** This plan references separate `studio.pug` / `library.pug` templates. The current frontend uses a unified `frontend/src/pug/app.pug` SPA shell with client-side routing (`frontend/src/js/app/router.ts`).
 
 ---
 
@@ -40,7 +40,7 @@ Email + OTP
 
 **Files:**
 - `.env.example`
-- `src/api/index.js`
+- `src/api/index.ts`
 
 **Changes:**
 1. In `.env.example`, add:
@@ -49,7 +49,7 @@ Email + OTP
    CDP_PAYMASTER_URL=        # backend only, never served
    CDP_EMAIL_DEV_MODE=       # placeholder for future E2E mock bypass
    ```
-2. In `src/api/index.js`, add to the `GET /api/v1/config` response:
+2. In `src/api/index.ts`, add to the `GET /api/v1/config` response:
    ```js
    cdpProjectId: process.env.CDP_PROJECT_ID || null,
    ```
@@ -84,7 +84,7 @@ Email + OTP
 
 ## Step 3 — Create `wallet-cdp.js` (EIP-1193 Adapter)
 
-**New file:** `frontend/src/js/blockchain/wallet-cdp.js`
+**New file:** `frontend/src/js/blockchain/wallet-cdp.ts`
 
 **Responsibilities:**
 - `initCdpClient(projectId)` — initializes the CDP SDK singleton.
@@ -109,7 +109,7 @@ Email + OTP
 
 ## Step 4 — Add Email Option to `wallet-modal.js`
 
-**File:** `frontend/src/js/ui/wallet-modal.js`
+**File:** `frontend/src/js/ui/wallet-modal.ts`
 
 **Changes:**
 1. Add an email input section above the injected wallet list, labelled "Email (gasless, Base Sepolia)".
@@ -127,7 +127,7 @@ Email + OTP
 
 ## Step 5 — Handle CDP Source in `wallet-core.js`
 
-**File:** `frontend/src/js/blockchain/wallet-core.js`
+**File:** `frontend/src/js/blockchain/wallet-core.ts`
 
 **Changes:**
 1. In `connectWallet()`, handle `source === 'cdp'`:
@@ -153,9 +153,9 @@ Email + OTP
 
 ---
 
-## Step 6 — SIWE with `eoaAddress` Fallback in `siwe-verify.js`
+## Step 6 — SIWE with `eoaAddress` Fallback in `siwe-verify.ts`
 
-**File:** `src/api/siwe-verify.js`
+**File:** `src/api/siwe-verify.ts`
 
 **Changes:**
 1. Parse the SIWE message with the `siwe` package.
@@ -172,7 +172,7 @@ Email + OTP
 
 ## Step 7 — Add CDP Paymaster Proxy Route
 
-**File:** `src/api/routes/paymaster.js`
+**File:** `src/api/routes/paymaster.ts`
 
 **Changes:**
 1. Create `POST /api/v1/paymaster`.
@@ -186,9 +186,9 @@ Email + OTP
 
 ---
 
-## Step 8 — Update CSP in `src/index.js`
+## Step 8 — Update CSP in `src/index.ts`
 
-**File:** `src/index.js`
+**File:** `src/index.ts`
 
 **Changes:**
 1. Add to `connectSrc`:
@@ -208,8 +208,8 @@ Email + OTP
 
 **Files:**
 - `constants/chains.js`
-- `frontend/src/js/blockchain/network-config.js`
-- `src/config.js`
+- `frontend/src/js/blockchain/network-config.ts`
+- `src/config.ts`
 - `blockchain/hardhat.config.js`
 - `blockchain/scripts/deploy.js`
 
@@ -242,15 +242,15 @@ Email + OTP
 | File | Change |
 |------|--------|
 | `.env.example` | + `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_EMAIL_DEV_MODE`; removed Thirdweb vars |
-| `src/api/index.js` | + `cdpProjectId` in config response; + `/paymaster` route |
-| `src/index.js` | + CDP/Base domains in CSP |
-| `src/api/routes/paymaster.js` | **NEW** — paymaster proxy |
+| `src/api/index.ts` | + `cdpProjectId` in config response; + `/paymaster` route |
+| `src/index.ts` | + CDP/Base domains in CSP |
+| `src/api/routes/paymaster.ts` | **NEW** — paymaster proxy |
 | `frontend/src/pug/studio.pug` / `library.pug` | + `@coinbase/cdp-core` importmap |
 | `frontend/package.json` | + `@coinbase/cdp-core`; removed `thirdweb` |
-| `frontend/src/js/blockchain/wallet-cdp.js` | **NEW** — EIP-1193 adapter |
-| `frontend/src/js/ui/wallet-modal.js` | + email OTP UI |
-| `frontend/src/js/blockchain/wallet-core.js` | + `cdp` source handling, `eoaAddress` |
-| `src/api/siwe-verify.js` | + `eoaAddress` fallback, viem universal verification |
+| `frontend/src/js/blockchain/wallet-cdp.ts` | **NEW** — EIP-1193 adapter |
+| `frontend/src/js/ui/wallet-modal.ts` | + email OTP UI |
+| `frontend/src/js/blockchain/wallet-core.ts` | + `cdp` source handling, `eoaAddress` |
+| `src/api/siwe-verify.ts` | + `eoaAddress` fallback, viem universal verification |
 | `constants/chains.js` | Collapsed to Hardhat + Base Sepolia |
 
 **Unchanged:** Solidity contracts, IPFS/manifest code, Nostr comments, library page.

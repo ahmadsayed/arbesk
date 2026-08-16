@@ -4,7 +4,7 @@
 
 **Goal:** Close the `501 NOT_IMPLEMENTED` gap for the `tripo3d` provider on `POST /api/v1/generations` with a wallet-bound, task-based async flow that never logs or persists the user's BYOK key.
 
-**Architecture:** A new `tripo3d-adapter.js` calls the Tripo v2 REST API with plain `fetch`. A tiny in-memory registry (`generation-tasks.js`) maps public `taskId`s to Tripo task IDs and the transient BYOK key (RAM only, TTL, evicted on terminal state), bound to the SIWE wallet address. The existing `generate-node.js` dispatches the adapter and adds a `GET /generations/:taskId` polling endpoint. The frontend `api.js` polls that endpoint and then runs the existing base64→IPFS→manifest flow unchanged.
+**Architecture:** A new `tripo3d-adapter.ts` calls the Tripo v2 REST API with plain `fetch`. A tiny in-memory registry (`generation-tasks.ts`) maps public `taskId`s to Tripo task IDs and the transient BYOK key (RAM only, TTL, evicted on terminal state), bound to the SIWE wallet address. The existing `generate-node.ts` dispatches the adapter and adds a `GET /generations/:taskId` polling endpoint. The frontend `api.js` polls that endpoint and then runs the existing base64→IPFS→manifest flow unchanged.
 
 **Tech Stack:** Node.js ESM, Express, `fetch` (Node 18+), Jest + Supertest, no new npm dependencies.
 
@@ -14,12 +14,12 @@
 
 | File | Responsibility |
 |---|---|
-| `src/api/adapters/tripo3d-adapter.js` | Plain-fetch client for Tripo v2: create, poll, download. Throws typed errors. Never logs the key. |
-| `src/api/generation-tasks.js` | In-memory task registry: create/evict/lookup, wallet ownership, TTL sweep. |
-| `src/api/assets/generate-node.js` | Routes: `POST /generations` dispatches mock vs Tripo; `GET /generations/:taskId` polls registry + adapter. |
-| `src/api/rate-limiter.js` | Skip rate limit when request is BYOK (non-mock + providerKey). |
-| `frontend/src/js/services/api.js` | `generateAsset()` supports `202 taskId` → polling loop with progress callback. |
-| `frontend/src/js/ui/create-panel.js` | Replace the 501 error copy with real Tripo/backend error messages. |
+| `src/api/adapters/tripo3d-adapter.ts` | Plain-fetch client for Tripo v2: create, poll, download. Throws typed errors. Never logs the key. |
+| `src/api/generation-tasks.ts` | In-memory task registry: create/evict/lookup, wallet ownership, TTL sweep. |
+| `src/api/assets/generate-node.ts` | Routes: `POST /generations` dispatches mock vs Tripo; `GET /generations/:taskId` polls registry + adapter. |
+| `src/api/rate-limiter.ts` | Skip rate limit when request is BYOK (non-mock + providerKey). |
+| `frontend/src/js/services/api.ts` | `generateAsset()` supports `202 taskId` → polling loop with progress callback. |
+| `frontend/src/js/ui/create-panel.ts` | Replace the 501 error copy with real Tripo/backend error messages. |
 | Tests (`test/api/tripo3d-adapter.test.js`, `test/api/generation-tasks.test.js`, updates to `test/api.test.js`, `test/api/rate-limiter.test.js`, `test/frontend/api.test.js`) | Adapter/registry/route/rate-limit/frontend polling coverage. |
 | Docs (`docs/API_SPEC.md`, `docs/CURRENT_STATUS.md`, `src/api/openapi.json`, `.env.example`, `AGENTS.md`) | Reflect the new contract and status. |
 
@@ -28,7 +28,7 @@
 ### Task 1: Tripo v2 adapter with typed errors
 
 **Files:**
-- Create: `src/api/adapters/tripo3d-adapter.js`
+- Create: `src/api/adapters/tripo3d-adapter.ts`
 - Test: `test/api/tripo3d-adapter.test.js`
 
 **Constants:**
@@ -44,7 +44,7 @@ import {
   pollTask,
   downloadModel,
   TripoApiError,
-} from "../src/api/adapters/tripo3d-adapter.js";
+} from "../src/api/adapters/tripo3d-adapter.ts";
 
 const key = "tsk_test_secret_key_xyz";
 
@@ -202,7 +202,7 @@ describe("tripo3d adapter", () => {
 NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api/tripo3d-adapter.test.js --runInBand --silent
 ```
 
-Expected: failures because `tripo3d-adapter.js` does not exist / functions are not defined.
+Expected: failures because `tripo3d-adapter.ts` does not exist / functions are not defined.
 
 - [ ] **Step 3: Implement the adapter**
 
@@ -330,7 +330,7 @@ Expected: all tests pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/adapters/tripo3d-adapter.js test/api/tripo3d-adapter.test.js
+git add src/api/adapters/tripo3d-adapter.ts test/api/tripo3d-adapter.test.js
 git commit -m "feat(generation): add Tripo v2 adapter with typed errors and key hygiene"
 ```
 
@@ -339,7 +339,7 @@ git commit -m "feat(generation): add Tripo v2 adapter with typed errors and key 
 ### Task 2: In-memory generation task registry
 
 **Files:**
-- Create: `src/api/generation-tasks.js`
+- Create: `src/api/generation-tasks.ts`
 - Test: `test/api/generation-tasks.test.js`
 
 - [ ] **Step 1: Write the failing registry tests**
@@ -351,7 +351,7 @@ import {
   getTask,
   evictTask,
   _resetRegistry,
-} from "../src/api/generation-tasks.js";
+} from "../src/api/generation-tasks.ts";
 
 jest.useFakeTimers();
 
@@ -405,7 +405,7 @@ describe("generation-tasks registry", () => {
   });
 
   test("registry has no persistence imports", async () => {
-    const mod = await import("../src/api/generation-tasks.js");
+    const mod = await import("../src/api/generation-tasks.ts");
     // Indirect check: the module should not expose a save/load function.
     expect(mod.save).toBeUndefined();
     expect(mod.load).toBeUndefined();
@@ -507,7 +507,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/generation-tasks.js test/api/generation-tasks.test.js
+git add src/api/generation-tasks.ts test/api/generation-tasks.test.js
 git commit -m "feat(generation): add in-memory wallet-bound task registry with TTL"
 ```
 
@@ -516,7 +516,7 @@ git commit -m "feat(generation): add in-memory wallet-bound task registry with T
 ### Task 3: Backend route changes
 
 **Files:**
-- Modify: `src/api/assets/generate-node.js`
+- Modify: `src/api/assets/generate-node.ts`
 - Test: update `test/api.test.js`
 
 - [ ] **Step 1: Write/update the failing route tests**
@@ -525,7 +525,7 @@ In `test/api.test.js`, add or replace the existing "cloud provider" tests with:
 
 ```js
 import { jest } from "@jest/globals";
-import { registerTask, _resetRegistry } from "../src/api/generation-tasks.js";
+import { registerTask, _resetRegistry } from "../src/api/generation-tasks.ts";
 
 // (inside the describe block, with session helpers already present)
 
@@ -641,24 +641,24 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test
 
 Expected: failures because the route does not implement Tripo dispatch or GET endpoint.
 
-- [ ] **Step 3: Modify `generate-node.js`**
+- [ ] **Step 3: Modify `generate-node.ts`**
 
 Replace the top imports with:
 
 ```js
 import express from "express";
-import { mockGenerate } from "../adapters/mock-adapter.js";
+import { mockGenerate } from "../adapters/mock-adapter.ts";
 import {
   createTask,
   pollTask,
   downloadModel,
   TripoApiError,
-} from "../adapters/tripo3d-adapter.js";
-import { registerTask, getTask, evictTask } from "../generation-tasks.js";
-import authenticate from "../authentication.js";
-import { generationRateLimit } from "../rate-limiter.js";
-import { validateBody } from "../validation.js";
-import { generateAssetSchema } from "../schemas.js";
+} from "../adapters/tripo3d-adapter.ts";
+import { registerTask, getTask, evictTask } from "../generation-tasks.ts";
+import authenticate from "../authentication.ts";
+import { generationRateLimit } from "../rate-limiter.ts";
+import { validateBody } from "../validation.ts";
+import { generateAssetSchema } from "../schemas.ts";
 ```
 
 Inside the route factory, add the GET handler after the POST handler. Replace lines 69–88 (the adapter dispatch block) with:
@@ -776,7 +776,7 @@ Expected: route tests pass (other unrelated tests may still pass; full suite run
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/assets/generate-node.js test/api.test.js
+git add src/api/assets/generate-node.ts test/api.test.js
 git commit -m "feat(generation): wire tripo3d provider into POST and add task-poll endpoint"
 ```
 
@@ -785,7 +785,7 @@ git commit -m "feat(generation): wire tripo3d provider into POST and add task-po
 ### Task 4: Rate-limit BYOK skip
 
 **Files:**
-- Modify: `src/api/rate-limiter.js`
+- Modify: `src/api/rate-limiter.ts`
 - Test: `test/api/rate-limiter.test.js` (new) or extend `test/api.test.js`
 
 - [ ] **Step 1: Write the failing tests**
@@ -793,7 +793,7 @@ git commit -m "feat(generation): wire tripo3d provider into POST and add task-po
 ```js
 import { jest } from "@jest/globals";
 import request from "supertest";
-import { _resetRateLimiters, generationRateLimit } from "../src/api/rate-limiter.js";
+import { _resetRateLimiters, generationRateLimit } from "../src/api/rate-limiter.ts";
 import express from "express";
 
 describe("generationRateLimit BYOK skip", () => {
@@ -846,7 +846,7 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api/rate
 
 Expected: BYOK skip test fails.
 
-- [ ] **Step 3: Modify `rate-limiter.js`**
+- [ ] **Step 3: Modify `rate-limiter.ts`**
 
 Replace `generationLimiter` creation and the `generationRateLimit` export with a wrapper that bypasses the limiter for BYOK:
 
@@ -894,7 +894,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/rate-limiter.js test/api/rate-limiter.test.js
+git add src/api/rate-limiter.ts test/api/rate-limiter.test.js
 git commit -m "feat(generation): skip generation rate limit for BYOK providers"
 ```
 
@@ -903,14 +903,14 @@ git commit -m "feat(generation): skip generation rate limit for BYOK providers"
 ### Task 5: Frontend polling in `api.js`
 
 **Files:**
-- Modify: `frontend/src/js/services/api.js`
+- Modify: `frontend/src/js/services/api.ts`
 - Test: `test/frontend/api.test.js` (new or extend existing)
 
 - [ ] **Step 1: Write/update failing frontend tests**
 
 ```js
 import { jest } from "@jest/globals";
-import { generateAsset } from "../../frontend/src/js/services/api.js";
+import { generateAsset } from "../../frontend/src/js/services/api.ts";
 
 jest.setTimeout(10000);
 
@@ -989,7 +989,7 @@ NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/frontend
 
 Expected: failures because `generateAsset` does not poll.
 
-- [ ] **Step 3: Modify `frontend/src/js/services/api.js`**
+- [ ] **Step 3: Modify `frontend/src/js/services/api.ts`**
 
 Insert a helper above `generateAsset`:
 
@@ -1058,7 +1058,7 @@ Expected: pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/services/api.js test/frontend/api.test.js
+git add frontend/src/js/services/api.ts test/frontend/api.test.js
 git commit -m "feat(generation): frontend polls tripo3d task endpoint until completion"
 ```
 
@@ -1067,7 +1067,7 @@ git commit -m "feat(generation): frontend polls tripo3d task endpoint until comp
 ### Task 6: Update frontend error messaging
 
 **Files:**
-- Modify: `frontend/src/js/ui/create-panel.js`
+- Modify: `frontend/src/js/ui/create-panel.ts`
 
 - [ ] **Step 1: Replace the 501 special-case**
 
@@ -1102,7 +1102,7 @@ Expected: build completes with no errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add frontend/src/js/ui/create-panel.js
+git add frontend/src/js/ui/create-panel.ts
 git commit -m "feat(generation): surface tripo3d auth/credit/timeout errors in UI"
 ```
 
@@ -1152,9 +1152,9 @@ TRIPO_3D_KEY=
 - [ ] **Step 5: Update `AGENTS.md`**
 
 Add to the adapter/route table in §3:
-- `src/api/adapters/tripo3d-adapter.js` — Tripo v2 REST adapter
-- `src/api/generation-tasks.js` — in-memory wallet-bound task registry
-- Update `generate-node.js` row to include the `GET /generations/:taskId` polling endpoint
+- `src/api/adapters/tripo3d-adapter.ts` — Tripo v2 REST adapter
+- `src/api/generation-tasks.ts` — in-memory wallet-bound task registry
+- Update `generate-node.ts` row to include the `GET /generations/:taskId` polling endpoint
 
 - [ ] **Step 6: Commit**
 

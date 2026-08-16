@@ -4,7 +4,7 @@
 
 **Goal:** Introduce the `domain/` struct layer (AssetRef, Node, Asset facade) and make the header title/meta + save/publish/download buttons render from exactly one module, eliminating direct DOM writes to the chrome from feature modules.
 
-**Architecture:** Big structs (JSDoc typedefs, plain objects) + module functions, no classes/inheritance. `domain/asset.js` is a facade over the legacy `assetState` store (readers keep working); it is the only writer of the asset *name* and the single subscription point. New `ui/asset-chrome.js` renders the header and buttons purely from store state — no event-ordering dependence.
+**Architecture:** Big structs (JSDoc typedefs, plain objects) + module functions, no classes/inheritance. `domain/asset.ts` is a facade over the legacy `assetState` store (readers keep working); it is the only writer of the asset *name* and the single subscription point. New `ui/asset-chrome.ts` renders the header and buttons purely from store state — no event-ordering dependence.
 
 **Tech Stack:** ESM JS, Jest (jsdom), Pug, Playwright E2E.
 
@@ -26,8 +26,8 @@
 ### Task 1: Domain structs — `asset-ref.js` + `node.js`
 
 **Files:**
-- Create: `frontend/src/js/domain/asset-ref.js`
-- Create: `frontend/src/js/domain/node.js`
+- Create: `frontend/src/js/domain/asset-ref.ts`
+- Create: `frontend/src/js/domain/node.ts`
 - Test: `test/frontend/domain-structs.test.js` (new)
 
 **Interfaces:**
@@ -57,11 +57,11 @@ import {
   assetRefKey,
   assetRefsEqual,
   resolveAssetRef,
-} from "../../frontend/src/js/domain/asset-ref.js";
+} from "../../frontend/src/js/domain/asset-ref.ts";
 import {
   manifestNodeToNode,
   manifestNodes,
-} from "../../frontend/src/js/domain/node.js";
+} from "../../frontend/src/js/domain/node.ts";
 
 describe("normalizeAssetRef", () => {
   test("normalizes the current collection shape", () => {
@@ -187,7 +187,7 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
 
-Create `frontend/src/js/domain/asset-ref.js`:
+Create `frontend/src/js/domain/asset-ref.ts`:
 
 ```js
 // @ts-check
@@ -263,7 +263,7 @@ export function assetRefsEqual(a, b) {
 
 /**
  * Resolve a ref to the manifest CID it currently points at. The resolver is
- * injected (`resolveCollectionChildRef` from blockchain/token-resolver.js in
+ * injected (`resolveCollectionChildRef` from blockchain/token-resolver.ts in
  * the app, a fake in tests).
  * @param {AssetRef} ref
  * @param {{resolve: (childRef: any, selfAssets: any) => Promise<any>, selfAssets?: any}} deps
@@ -281,7 +281,7 @@ export function resolveAssetRef(ref, deps) {
 }
 ```
 
-Create `frontend/src/js/domain/node.js`:
+Create `frontend/src/js/domain/node.ts`:
 
 ```js
 // @ts-check
@@ -338,20 +338,20 @@ Expected: PASS (11 tests). Also `npm run typecheck:frontend` — clean.
 - [ ] **Step 5: Commit** (after user confirmation)
 
 ```bash
-git add frontend/src/js/domain/asset-ref.js frontend/src/js/domain/node.js test/frontend/domain-structs.test.js
+git add frontend/src/js/domain/asset-ref.ts frontend/src/js/domain/node.ts test/frontend/domain-structs.test.js
 git commit -m "feat(domain): AssetRef + Node structs for the asset tree"
 ```
 
 ---
 
-### Task 2: `domain/asset.js` facade — single writer for the asset name
+### Task 2: `domain/asset.ts` facade — single writer for the asset name
 
 **Files:**
-- Create: `frontend/src/js/domain/asset.js`
+- Create: `frontend/src/js/domain/asset.ts`
 - Test: `test/frontend/domain-asset.test.js` (new)
 
 **Interfaces:**
-- Consumes: `assetState` (`state/asset-state.js`), `getStateForNewAsset` (`utils/new-asset.js`), real event bus (mitt — no mocks needed).
+- Consumes: `assetState` (`state/asset-state.js`), `getStateForNewAsset` (`utils/new-asset.ts`), real event bus (mitt — no mocks needed).
 - Produces (Task 3 relies on these exact names):
   - `getAssetSnapshot() → Readonly<{name, assetId, tokenId, activeCid, latestCid}>`
   - `subscribeAsset(fn) → unsubscribe` (fn called immediately with current snapshot, then on every `ASSET_STATE_CHANGED`)
@@ -382,7 +382,7 @@ import {
   isDefaultAssetName,
   resetForNewAsset,
   closeAsset,
-} from "../../frontend/src/js/domain/asset.js";
+} from "../../frontend/src/js/domain/asset.ts";
 import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
 
 beforeEach(() => _resetForTesting());
@@ -480,7 +480,7 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
 
-Create `frontend/src/js/domain/asset.js`:
+Create `frontend/src/js/domain/asset.ts`:
 
 ```js
 // @ts-check
@@ -579,7 +579,7 @@ export function adoptLoadedManifestName(manifest) {
 /**
  * Naming rule for chat-driven auto-saves: adopt the manifest's name only
  * when it is a real name — a default/absent name must not clobber a good
- * session name. (Moved verbatim from ui/asset-save.js.)
+ * session name. (Moved verbatim from ui/asset-save.ts.)
  * @param {any} manifest
  */
 export function adoptManifestName(manifest) {
@@ -623,20 +623,20 @@ Expected: PASS (6 tests). Also `npm run typecheck:frontend` — clean.
 - [ ] **Step 5: Commit** (after user confirmation)
 
 ```bash
-git add frontend/src/js/domain/asset.js test/frontend/domain-asset.test.js
+git add frontend/src/js/domain/asset.ts test/frontend/domain-asset.test.js
 git commit -m "feat(domain): asset facade — single writer for the asset name"
 ```
 
 ---
 
-### Task 3: `ui/asset-chrome.js` — the single chrome renderer + rewiring
+### Task 3: `ui/asset-chrome.ts` — the single chrome renderer + rewiring
 
 **Files:**
-- Create: `frontend/src/js/ui/asset-chrome.js`
+- Create: `frontend/src/js/ui/asset-chrome.ts`
 - Modify: `frontend/src/pug/app.pug:478` (script tag after `asset-save.js`)
-- Modify: `frontend/src/js/ui/asset-save.js` (delete chrome code; use domain functions)
-- Modify: `frontend/src/js/engine/scene-graph.js:839-880` (`startNewAsset` uses domain, no DOM writes)
-- Modify: `frontend/src/js/ui/asset-library.js:1022-1027` (close-out uses `closeAsset()`)
+- Modify: `frontend/src/js/ui/asset-save.ts` (delete chrome code; use domain functions)
+- Modify: `frontend/src/js/engine/scene-graph.ts:839-880` (`startNewAsset` uses domain, no DOM writes)
+- Modify: `frontend/src/js/ui/asset-library.ts:1022-1027` (close-out uses `closeAsset()`)
 - Test: `test/frontend/asset-chrome.test.js` (new)
 
 **Interfaces:**
@@ -675,7 +675,7 @@ function hidden(id) {
 
 beforeAll(async () => {
   await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/cleanup.js",
+    "../../frontend/src/js/engine/cleanup.ts",
     () => ({ getPendingChildRefs: () => [] })
   );
   document.body.innerHTML = `
@@ -690,13 +690,13 @@ beforeAll(async () => {
     "../../frontend/src/js/state/asset-state.js"
   ));
   ({ walletState } = await import(
-    "../../frontend/src/js/state/wallet-state.js"
+    "../../frontend/src/js/state/wallet-state.ts"
   ));
-  ({ emit, EVENTS } = await import("../../frontend/src/js/events/bus.js"));
+  ({ emit, EVENTS } = await import("../../frontend/src/js/events/bus.ts"));
   ({ renameAsset, resetForNewAsset, closeAsset } = await import(
-    "../../frontend/src/js/domain/asset.js"
+    "../../frontend/src/js/domain/asset.ts"
   ));
-  await import("../../frontend/src/js/ui/asset-chrome.js");
+  await import("../../frontend/src/js/ui/asset-chrome.ts");
 });
 
 beforeEach(() => {
@@ -767,7 +767,7 @@ Expected: FAIL — `asset-chrome.js` not found.
 
 - [ ] **Step 3: Implement the chrome module**
 
-Create `frontend/src/js/ui/asset-chrome.js`:
+Create `frontend/src/js/ui/asset-chrome.ts`:
 
 ```js
 // @ts-check
@@ -826,12 +826,12 @@ on(EVENTS.SCENE_EMPTY, renderChrome);
 
 - [ ] **Step 4: Rewire `asset-save.js`**
 
-Delete from `frontend/src/js/ui/asset-save.js`:
+Delete from `frontend/src/js/ui/asset-save.ts`:
 - The `assetStatusName` / `assetStatusMeta` DOM refs (lines 40-41).
 - `updateAssetStatus` (64-67) and `updateButtonState` (69-90) — both functions and **all call sites** (`:242-245`, `:274`, `:300`, `:398`, `:424`, `:460-464` portions, `:471`, plus listener registrations `:473-478` — see below).
 - The `SCENE_EMPTY` listener (467-472) — chrome handles it.
 - The `WALLET_CONNECTED` / `WALLET_DISCONNECTED` / `ASSET_STATE_CHANGED` button listeners (473-478) — chrome handles them.
-- The dead `DEFAULT_NAMES`/`isDefaultName` (118-127) and `adoptManifestName` (129-142) — now in `domain/asset.js`.
+- The dead `DEFAULT_NAMES`/`isDefaultName` (118-127) and `adoptManifestName` (129-142) — now in `domain/asset.ts`.
 
 Rewire the survivors:
 - In `ensureExplicitName` (`:161-181`): replace `assetState.set({ activeAssetName: name })` + the `assetStatusName` DOM write with `renameAsset(name)` (import from `../domain/asset.js`).
@@ -845,12 +845,12 @@ on(EVENTS.SCENE_READY, (e) => {
 
 - Keep `adoptManifestName` re-exported for existing importers: add near the imports:
   `export { adoptManifestName } from "../domain/asset.js";`
-  (Implementer: first `grep -rn "adoptManifestName" frontend/src test` and point every importer at `domain/asset.js` directly instead of re-exporting, if there are any.)
+  (Implementer: first `grep -rn "adoptManifestName" frontend/src test` and point every importer at `domain/asset.ts` directly instead of re-exporting, if there are any.)
 - Save/publish flow internals (`isSaving`/`isPublishing`, disabled toggles, `saveBtnText`/`publishBtnText` "Besking…", toasts, task progress) stay untouched. Delete only the `updateButtonState()` calls in the finally/cancel paths (`:274`, `:300`, `:424`) — visibility is state-derived now.
 
 - [ ] **Step 5: Rewire `startNewAsset` in `scene-graph.js`**
 
-In `frontend/src/js/engine/scene-graph.js` `startNewAsset` (currently ~839-884):
+In `frontend/src/js/engine/scene-graph.ts` `startNewAsset` (currently ~839-884):
 - Replace `assetState.set(getStateForNewAsset(assetState.get()))` with `resetForNewAsset()` (import from `../domain/asset.js`; drop the `getStateForNewAsset` import if unused after).
 - After the dialog resolves: replace `assetState.set({ activeAssetName })` with `renameAsset(activeAssetName)`.
 - Delete the header DOM writes (`assetStatusName` / `assetStatusMeta` gets — keep the `assetNameDisplay` write at ~:869-870; that element is the create-panel name field, not the header chrome).
@@ -883,17 +883,17 @@ Run: `npm run build:frontend` — then `grep -c asset-chrome frontend/dist/app.h
 - [ ] **Step 8: Run tests**
 
 Run: `NODE_OPTIONS=--experimental-vm-modules npx jest test/frontend/asset-chrome.test.js test/frontend/domain-asset.test.js`
-Expected: PASS. Then `npm test` (full suite — watch for suites that imported the deleted `asset-save.js` internals; fix imports to `domain/asset.js`), `npm run lint`, `npm run typecheck:frontend`.
+Expected: PASS. Then `npm test` (full suite — watch for suites that imported the deleted `asset-save.js` internals; fix imports to `domain/asset.ts`), `npm run lint`, `npm run typecheck:frontend`.
 Expected: all green.
 
 - [ ] **Step 9: Commit** (after user confirmation)
 
 ```bash
-git add frontend/src/js/ui/asset-chrome.js frontend/src/js/ui/asset-save.js frontend/src/js/engine/scene-graph.js frontend/src/js/ui/asset-library.js frontend/src/pug/app.pug test/frontend/asset-chrome.test.js
+git add frontend/src/js/ui/asset-chrome.ts frontend/src/js/ui/asset-save.ts frontend/src/js/engine/scene-graph.ts frontend/src/js/ui/asset-library.ts frontend/src/pug/app.pug test/frontend/asset-chrome.test.js
 git commit -m "refactor(ui): single-writer asset chrome via domain facade
 
 Header title/meta and save/publish/download button visibility now render
-from the domain asset snapshot in ui/asset-chrome.js — the only writer.
+from the domain asset snapshot in ui/asset-chrome.ts — the only writer.
 Direct chrome DOM writes removed from asset-save.js and scene-graph.js.
 Drops the dead generatedAsset read (never set anywhere)."
 ```

@@ -5,7 +5,7 @@ description: Use when working with the Tripo3D API (v3) — generation, retopolo
 
 # Tripo3D Expert (v3 API)
 
-Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/api/adapters/tripo3d-adapter.js`). Every rule below was verified against the official docs (developers.tripo3d.com) or reproduced live against the API — dates noted where behavior was observed to differ from docs.
+Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/api/adapters/tripo3d-adapter.ts`). Every rule below was verified against the official docs (developers.tripo3d.com) or reproduced live against the API — dates noted where behavior was observed to differ from docs.
 
 ## Quick Decision Table
 
@@ -60,7 +60,7 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 - `model_seed` / `texture_seed` / `image_seed` — reproducibility; vary `texture_seed` alone for same mesh, new texture.
 - `negative_prompt`, `export_uv`, `compress: "geometry"` (meshopt).
 - Image-to-3D quality is dominated by the source image: prefer 3D-render/photographic look, even lighting, no outlines, plain background, full-body T/A-pose for characters. 2D stylization (line art, cel shading) becomes geometry artifacts that retopo then bakes in.
-- **Multiview**: `POST /generation/multiview-to-model` builds from 2–4 views of the same object — `inputs` is a view-key array (`[{"front": token}, {"back": token}]`, values are file_tokens/URLs; front is REQUIRED, ≥2 images, views ∈ front/left/back/right, server canonicalizes to front/left/back/right order). Same model versions/params as image-to-model; no text prompt. Big geometry/texture-coverage win over single-image guessing. Arbesk: `createMultiviewTask(viewTokens, apiKey, options)` in the adapter, wire field `images[]` on `POST /generations`, frontend chips in `ui/attach-views.js`.
+- **Multiview**: `POST /generation/multiview-to-model` builds from 2–4 views of the same object — `inputs` is a view-key array (`[{"front": token}, {"back": token}]`, values are file_tokens/URLs; front is REQUIRED, ≥2 images, views ∈ front/left/back/right, server canonicalizes to front/left/back/right order). Same model versions/params as image-to-model; no text prompt. Big geometry/texture-coverage win over single-image guessing. Arbesk: `createMultiviewTask(viewTokens, apiKey, options)` in the adapter, wire field `images[]` on `POST /generations`, frontend chips in `ui/attach-views.ts`.
 
 ## Recipes
 
@@ -74,10 +74,10 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 
 ## Key Files (Arbesk)
 
-- `src/api/adapters/tripo3d-adapter.js` — the reference adapter (create/image/refine/decimate/rig/retarget/poll/download, `TripoApiError`)
-- `src/api/assets/generate-node.js` — routes: BYOK gating, task registry, animate chain (rig-check → rig → retarget + retarget-only path), retopo route
-- `src/api/schemas.js` — request validation (`ANIMATION_PRESETS` = the 11 generic v2.5 presets + 16 curated `preset:biped:*` ones; the adapter rejects biped-only presets with a clear 400 when the rig is a known generic/v2.5 task)
-- Frontend: `services/api.js` (`generateAsset`), `ui/create-panel.js` (HQ checkbox, retopo/animate chips)
+- `src/api/adapters/tripo3d-adapter.ts` — the reference adapter (create/image/refine/decimate/rig/retarget/poll/download, `TripoApiError`)
+- `src/api/assets/generate-node.ts` — routes: BYOK gating, task registry, animate chain (rig-check → rig → retarget + retarget-only path), retopo route
+- `src/api/schemas.ts` — request validation (`ANIMATION_PRESETS` = the 11 generic v2.5 presets + 16 curated `preset:biped:*` ones; the adapter rejects biped-only presets with a clear 400 when the rig is a known generic/v2.5 task)
+- Frontend: `services/api.ts` (`generateAsset`), `ui/create-panel.ts` (HQ checkbox, retopo/animate chips)
 
 ## References
 

@@ -4,7 +4,7 @@
 **Status:** Approved — ready for implementation plan  
 **Scope:** Frontend only (backend requires no changes)
 
-> **Implemented as:** Wallet lifecycle and eager SIWE auth live in `frontend/src/js/blockchain/wallet-core.js` (re-exported through `frontend/src/js/blockchain/wallet.js`). State is kept in `frontend/src/js/state/wallet-state.js`, not on `window.*` globals. Auth events are emitted via the event bus (`EVENTS.USER_AUTHENTICATED` / `EVENTS.USER_AUTH_REQUIRED`) rather than `document.dispatchEvent`. The current generation flow uses the free/mock tier and does not require a USDC payment popup; `create-panel.js` calls `getOrCreateSession()` before `generateAsset({ txHash: null })`.
+> **Implemented as:** Wallet lifecycle and eager SIWE auth live in `frontend/src/js/blockchain/wallet-core.ts` (re-exported through `frontend/src/js/blockchain/wallet.ts`). State is kept in `frontend/src/js/state/wallet-state.ts`, not on `window.*` globals. Auth events are emitted via the event bus (`EVENTS.USER_AUTHENTICATED` / `EVENTS.USER_AUTH_REQUIRED`) rather than `document.dispatchEvent`. The current generation flow uses the free/mock tier and does not require a USDC payment popup; `create-panel.js` calls `getOrCreateSession()` before `generateAsset({ txHash: null })`.
 
 ---
 
@@ -117,7 +117,7 @@ const result = await generateAsset({ prompt, nodeId, txHash: null, ... });
 
 ## 6. Frontend Changes
 
-### 6.1 `frontend/src/js/blockchain/wallet-core.js`
+### 6.1 `frontend/src/js/blockchain/wallet-core.ts`
 
 After `_finishWalletSetup(address)`:
 
@@ -146,9 +146,9 @@ async function authenticateUser() {
 }
 ```
 
-> **Note:** `wallet.js` is now a re-export barrel; add or import `authenticateUser` via `frontend/src/js/blockchain/wallet-core.js`.
+> **Note:** `wallet.js` is now a re-export barrel; add or import `authenticateUser` via `frontend/src/js/blockchain/wallet-core.ts`.
 
-### 6.2 `frontend/src/js/ui/create-panel.js`
+### 6.2 `frontend/src/js/ui/create-panel.ts`
 
 **`onGenerate()`** — add auth before generation:
 
@@ -171,7 +171,7 @@ async function onGenerate() {
 }
 ```
 
-### 6.3 `frontend/src/js/services/api.js`
+### 6.3 `frontend/src/js/services/api.ts`
 
 **`getOrCreateSession()`** — logic stays the same, but must be exported:
 - Check `localStorage` cache (with 60s grace period)
@@ -263,10 +263,10 @@ async function authenticateUser(provider = 'web3') {
 
 | File | Change |
 |---|---|
-| `frontend/src/js/blockchain/wallet-core.js` | Add `authenticateUser()`, call it from `_finishWalletSetup()`; `wallet.js` re-exports it |
-| `frontend/src/js/ui/create-panel.js` | Call `getOrCreateSession()` before `generateAsset()` |
+| `frontend/src/js/blockchain/wallet-core.ts` | Add `authenticateUser()`, call it from `_finishWalletSetup()`; `wallet.js` re-exports it |
+| `frontend/src/js/ui/create-panel.ts` | Call `getOrCreateSession()` before `generateAsset()` |
 | `frontend/src/js/engine/studio-init.js` | Add `EVENTS.USER_AUTHENTICATED` / `EVENTS.USER_AUTH_REQUIRED` listeners, update wallet button UI |
-| `frontend/src/js/ui/wallet-popover.js` | Add "Sign In" action to popover for unauthenticated state |
+| `frontend/src/js/ui/wallet-popover.ts` | Add "Sign In" action to popover for unauthenticated state |
 
 ---
 

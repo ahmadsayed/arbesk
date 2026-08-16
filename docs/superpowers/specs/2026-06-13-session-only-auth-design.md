@@ -53,17 +53,17 @@ Authorization: Session <token>
 
 | File | Change |
 |---|---|
-| `src/api/authentication.js` | Accept only `Session <token>`. Remove Bearer parsing, base64 decode, `web3.eth.accounts.recover` for txHash messages, and tx receipt validation from auth middleware. |
+| `src/api/authentication.ts` | Accept only `Session <token>`. Remove Bearer parsing, base64 decode, `web3.eth.accounts.recover` for txHash messages, and tx receipt validation from auth middleware. |
 | `src/api/openapi.json` | Replace `bearerAuth` security scheme with `sessionAuth` describing the `Session <token>` header. |
-| `src/api/rate-limiter.js` | Rewritten on `express-rate-limit`; keys every limiter by `res.locals.userAddress` (set by auth middleware) falling back to `req.ip`. |
+| `src/api/rate-limiter.ts` | Rewritten on `express-rate-limit`; keys every limiter by `res.locals.userAddress` (set by auth middleware) falling back to `req.ip`. |
 
 ### Frontend
 
 | File | Change |
 |---|---|
-| `frontend/src/js/services/api.js` | Remove `signTxHash()`. Remove Bearer fallback inside `generateAsset()`. Remove the `usedSession` retry fallback to Bearer. Keep session creation, caching, and auto-retry on `INVALID_SESSION`. |
-| `frontend/src/js/ui/create-panel.js` | Calls `getOrCreateSession()` before `generateAsset()` to ensure the SIWE sign popup appears before any provider payment/key prompt. |
-| `frontend/src/js/blockchain/wallet.js` | `authenticateUser()` now lives in `frontend/src/js/blockchain/wallet-core.js` and is re-exported through `wallet.js`; it eagerly creates a session after wallet connection. |
+| `frontend/src/js/services/api.ts` | Remove `signTxHash()`. Remove Bearer fallback inside `generateAsset()`. Remove the `usedSession` retry fallback to Bearer. Keep session creation, caching, and auto-retry on `INVALID_SESSION`. |
+| `frontend/src/js/ui/create-panel.ts` | Calls `getOrCreateSession()` before `generateAsset()` to ensure the SIWE sign popup appears before any provider payment/key prompt. |
+| `frontend/src/js/blockchain/wallet.ts` | `authenticateUser()` now lives in `frontend/src/js/blockchain/wallet-core.ts` and is re-exported through `wallet.js`; it eagerly creates a session after wallet connection. |
 
 ### Tests
 
@@ -98,11 +98,11 @@ User clicks Generate
                       ├── validate token against in-memory store
                       ├── set res.locals.userAddress
                       └── next()
-                  └── generate-node.js
+                  └── generate-node.ts
                       ├── rate limit by res.locals.userAddress
                       └── generate, return raw asset bytes
 
-> **Implemented as:** The current generation flow is free/mock tier and does not use `payForGenerationWithUSDC()`. The browser uploads the source asset and manifest to IPFS directly; `generate-node.js` returns raw asset bytes and performs no server-side IPFS writes.
+> **Implemented as:** The current generation flow is free/mock tier and does not use `payForGenerationWithUSDC()`. The browser uploads the source asset and manifest to IPFS directly; `generate-node.ts` returns raw asset bytes and performs no server-side IPFS writes.
 ```
 
 ### Session creation
@@ -142,8 +142,8 @@ User connects wallet / clicks Generate
 - Private keys never leave the wallet.
 - Session tokens are opaque UUIDs, not JWTs, so there is no client-side parseable payload.
 - Tokens are bound to a wallet address and validated server-side.
-- Replay protection for generation remains in `generate-node.js` via the `usedTxHashes` Set.
-- Tx receipt and payment-event validation remain in `generate-node.js`; removing them from auth middleware does not weaken security.
+- Replay protection for generation remains in `generate-node.ts` via the `usedTxHashes` Set.
+- Tx receipt and payment-event validation remain in `generate-node.ts`; removing them from auth middleware does not weaken security.
 
 ---
 
@@ -161,9 +161,9 @@ User connects wallet / clicks Generate
 
 | File | Change Type |
 |---|---|
-| `src/api/authentication.js` | Remove Bearer handling |
+| `src/api/authentication.ts` | Remove Bearer handling |
 | `src/api/openapi.json` | Update security scheme |
-| `frontend/src/js/services/api.js` | Remove `signTxHash` and Bearer fallback |
+| `frontend/src/js/services/api.ts` | Remove `signTxHash` and Bearer fallback |
 | `test/api.test.js` | Use Session auth helper |
 | `docs/API_SPEC.md` | Document Session-only auth |
 | `docs/ARCHITECTURE.md` | Update auth architecture |

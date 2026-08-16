@@ -9,8 +9,8 @@
 ## 1. Problem
 
 Today the browser POSTs binary data directly to the private Kubo node at
-`http://127.0.0.1:5001` (`frontend/src/js/ipfs/write-to-ipfs.js`), and reads
-from the loopback gateway `http://127.0.0.1:8080` (`frontend/src/js/ipfs/remote-ipfs.js`).
+`http://127.0.0.1:5001` (`frontend/src/js/ipfs/write-to-ipfs.ts`), and reads
+from the loopback gateway `http://127.0.0.1:8080` (`frontend/src/js/ipfs/remote-ipfs.ts`).
 This only works because the browser and Kubo share one machine. A tester's
 browser on a different machine cannot reach the loopback node, so nothing they
 store is durable or publicly resolvable.
@@ -19,7 +19,7 @@ This work moves **all** IPFS storage onto **Pinata**, with browser uploads
 performed client-side via **short-lived presigned upload URLs** minted by the
 backend. It is the gating infra dependency for any external pilot, and lands
 *before* the real cloud 3D-generation work (the current `501` path in
-`src/api/assets/generate-node.js`).
+`src/api/assets/generate-node.ts`).
 
 ## 2. Decisions (locked)
 
@@ -44,12 +44,12 @@ path server-side:
 - **`kubo`** (automated E2E suite only): retains today's `ipfs-http-client`
   against the local node. `e2e/` specs and the Docker stack are untouched.
 
-The abstraction is a server-side module (`src/api/storage/index.js`)
+The abstraction is a server-side module (`src/api/storage/index.ts`)
 exposing `add(payload)`, `addDirectory(files)`, `cat(cid)`, `catBytes(cid)`,
 `unpin(cid)`, `listPinned()`, `mintUploadCredential()`, and `gatewayBase()`,
 dispatching on `IPFS_BACKEND`. The `/ipfs/unpin` and `/ipfs/gc` routes call
 through this module; generation and manifest writes happen client-side in the
-browser (`frontend/src/js/ipfs/write-to-ipfs.js`), so `generate-node.js` no
+browser (`frontend/src/js/ipfs/write-to-ipfs.ts`), so `generate-node.ts` no
 longer performs server-side IPFS writes.
 
 ### 3.2 Pinata products — public, not private
@@ -81,17 +81,17 @@ Pinata v3 public uploads return **CIDv1 (`baf…`)** by default (e.g. `bafy…` 
 - **Kubo mode:** unchanged (`ipfs.pin.rm`).
 
 ### 4.3 Backend-originated writes
-- `generate-node.js`: no longer performs IPFS writes. It validates the session,
+- `generate-node.ts`: no longer performs IPFS writes. It validates the session,
   rate-limits, calls the adapter, and returns raw asset bytes to the browser.
   The browser uploads the source asset and manifest via
-  `frontend/src/js/ipfs/write-to-ipfs.js`.
-- `index.js`: manifest/thumbnail writes were removed from the backend; these
+  `frontend/src/js/ipfs/write-to-ipfs.ts`.
+- `index.ts`: manifest/thumbnail writes were removed from the backend; these
   are now client-side operations. The backend only routes `/ipfs/unpin` and
-  `/ipfs/gc` through `src/api/storage/index.js`.
+  `/ipfs/gc` through `src/api/storage/index.ts`.
 
 ## 5. Frontend changes
 
-### 5.1 `frontend/src/js/ipfs/write-to-ipfs.js`
+### 5.1 `frontend/src/js/ipfs/write-to-ipfs.ts`
 - `writeToIPFS` / `writeJSONToIPFS` first call `POST /api/v1/ipfs/upload-url`.
   - `backend === "pinata"`: upload via
     `pinata.upload.public.file(blob).url(signedUrl)` (or equivalent fetch to the
@@ -101,7 +101,7 @@ Pinata v3 public uploads return **CIDv1 (`baf…`)** by default (e.g. `bafy…` 
   expiry. (Each presigned URL is single-target; mint per file or per small burst
   as the SDK allows.)
 
-### 5.2 `frontend/src/js/ipfs/remote-ipfs.js`
+### 5.2 `frontend/src/js/ipfs/remote-ipfs.ts`
 - Gateway base URL becomes runtime-config-driven: the Pinata dedicated gateway
   for dev/prod, `http://127.0.0.1:8080/ipfs/` for E2E. Source the value from the
   `/upload-url` response `gateway` (cached) or a small config endpoint.
@@ -109,14 +109,14 @@ Pinata v3 public uploads return **CIDv1 (`baf…`)** by default (e.g. `bafy…` 
   of scope).
 
 ### 5.3 CID normalization
-- Verify `frontend/src/js/blockchain/uri-utils.js` (`normalizeTokenURI`) and
+- Verify `frontend/src/js/blockchain/uri-utils.ts` (`normalizeTokenURI`) and
   `token-resolver.js` accept CIDv1 (`baf…`). The existing `[A-Za-z0-9]{46,}` regex
   matches CIDv1 by length; add a regression test for a CIDv1 round-trip through
   `normalizeTokenURI`.
 
 ## 6. Rate limiting
 
-`src/api/rate-limiter.js` was rewritten on top of `express-rate-limit` and
+`src/api/rate-limiter.ts` was rewritten on top of `express-rate-limit` and
 already keys every limiter by `res.locals.userAddress` (set by the
 `authenticate` middleware) falling back to `req.ip`. The legacy `req.body.txHash`
 branch no longer exists. The `/upload-url` route uses
@@ -182,14 +182,14 @@ touches the network/third party.
 
 ## 9. Affected files
 
-- `src/api/storage/index.js` (new — backend abstraction)
-- `src/api/routes/ipfs.js` (`/ipfs/upload-url`, `/ipfs/unpin`, `/ipfs/gc`)
-- `src/api/index.js` (mount `/ipfs` router; `/config` exposes storage backend)
-- `src/api/assets/generate-node.js` (returns raw asset bytes; no server-side IPFS writes)
-- `src/api/rate-limiter.js` (rewritten on `express-rate-limit`, wallet-keyed)
-- `frontend/src/js/ipfs/write-to-ipfs.js` (write path)
-- `frontend/src/js/ipfs/remote-ipfs.js` (read gateway)
-- `frontend/src/js/blockchain/uri-utils.js`, `token-resolver.js` (CIDv1 verify + test)
+- `src/api/storage/index.ts` (new — backend abstraction)
+- `src/api/routes/ipfs.ts` (`/ipfs/upload-url`, `/ipfs/unpin`, `/ipfs/gc`)
+- `src/api/index.ts` (mount `/ipfs` router; `/config` exposes storage backend)
+- `src/api/assets/generate-node.ts` (returns raw asset bytes; no server-side IPFS writes)
+- `src/api/rate-limiter.ts` (rewritten on `express-rate-limit`, wallet-keyed)
+- `frontend/src/js/ipfs/write-to-ipfs.ts` (write path)
+- `frontend/src/js/ipfs/remote-ipfs.ts` (read gateway)
+- `frontend/src/js/blockchain/uri-utils.ts`, `token-resolver.js` (CIDv1 verify + test)
 - `test/api.test.js` (rate-limit + branching + unpin tests)
 - `e2e/specs/07-pinata-storage.spec.js` (new), `e2e/playwright.config.js` (project/tag)
 - `docs/CURRENT_STATUS.md §6.5` (config docs)

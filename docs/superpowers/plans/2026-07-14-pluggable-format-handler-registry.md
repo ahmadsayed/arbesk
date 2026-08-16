@@ -4,7 +4,7 @@
 
 **Goal:** Modularize Arbesk's client-side compose/decompose pipeline behind a format-handler registry so adding a new format requires only writing and registering one handler module.
 
-**Architecture:** Introduce a zero-import `frontend/src/js/formats/registry.js` that maintains a map of canonical format keys to handler objects. Built-in `frontend/src/js/formats/handlers/gltf-handler.js` and `glb-handler.js` wrap existing glTF/GLB code; `frontend/src/js/formats/index.js` registers them on import. `frontend/src/js/engine/scene-loader.js` and `frontend/src/js/services/asset-save/manifest-builder.js` dispatch through the registry instead of inline `if (format === "glb")` branches. A dummy `frontend/src/js/formats/handlers/example-format.js` handler proves the extension point in tests.
+**Architecture:** Introduce a zero-import `frontend/src/js/formats/registry.ts` that maintains a map of canonical format keys to handler objects. Built-in `frontend/src/js/formats/handlers/gltf-handler.ts` and `glb-handler.js` wrap existing glTF/GLB code; `frontend/src/js/formats/index.ts` registers them on import. `frontend/src/js/engine/scene-loader.ts` and `frontend/src/js/services/asset-save/manifest-builder.ts` dispatch through the registry instead of inline `if (format === "glb")` branches. A dummy `frontend/src/js/formats/handlers/example-format.js` handler proves the extension point in tests.
 
 **Tech Stack:** ES modules, JSDoc strict `checkJs`, Jest, jsdom, Babylon.js (runtime only).
 
@@ -12,7 +12,7 @@
 
 ## Context & scope
 
-- **Frontend-only change.** The Express backend only passes `result.format` through; `src/api/schemas.js` has no format enum.
+- **Frontend-only change.** The Express backend only passes `result.format` through; `src/api/schemas.ts` has no format enum.
 - **Cycle freedom.** `registry.js` must have zero imports. Handlers import only `gltf/*` and `ipfs/*`. Engine access is injected via context objects, so handlers never import `engine/*`.
 - **Behavioral parity.** Existing no-op-save detection, rate-limit rethrow, `_verifiedCompositeCids` cache, and stored-form conventions (`path: "composite.gltf"`, `format: "gltf"`) must be preserved exactly.
 - **Worker fast paths stay internal.** `gltf-worker.js` remains a glTF/GLB optimization behind `async-gltf.js`; plugins run on the main thread.
@@ -21,14 +21,14 @@
 
 | File | Responsibility |
 |------|----------------|
-| `frontend/src/js/formats/registry.js` | Cycle-proof registry root: register, lookup, detect, resolve, reset. |
-| `frontend/src/js/formats/handlers/gltf-handler.js` | Built-in handler for loose glTF JSON assets. |
-| `frontend/src/js/formats/handlers/glb-handler.js` | Built-in handler for binary GLB assets. |
+| `frontend/src/js/formats/registry.ts` | Cycle-proof registry root: register, lookup, detect, resolve, reset. |
+| `frontend/src/js/formats/handlers/gltf-handler.ts` | Built-in handler for loose glTF JSON assets. |
+| `frontend/src/js/formats/handlers/glb-handler.ts` | Built-in handler for binary GLB assets. |
 | `frontend/src/js/formats/handlers/example-format.js` | Dummy/template handler, registered only in tests. |
-| `frontend/src/js/formats/index.js` | Registers built-ins and re-exports registry API. |
-| `frontend/src/js/engine/transforms.js:25-30` | Re-export `detectAssetFormat` from `formats/registry.js`. |
-| `frontend/src/js/engine/scene-loader.js:37-111` | Refactor `loadAsset` to dispatch through registry. |
-| `frontend/src/js/services/asset-save/manifest-builder.js` | Refactor decompose/dedup/color routes through registry. |
+| `frontend/src/js/formats/index.ts` | Registers built-ins and re-exports registry API. |
+| `frontend/src/js/engine/transforms.ts:25-30` | Re-export `detectAssetFormat` from `formats/registry.ts`. |
+| `frontend/src/js/engine/scene-loader.ts:37-111` | Refactor `loadAsset` to dispatch through registry. |
+| `frontend/src/js/services/asset-save/manifest-builder.ts` | Refactor decompose/dedup/color routes through registry. |
 | `test/frontend/format-registry.test.js` | Registry API + detection tests. |
 | `test/frontend/format-handlers.test.js` | gltf/glb handler delegation tests. |
 | `test/frontend/format-example-handler.test.js` | Extension-point proof with dummy handler. |
@@ -68,10 +68,10 @@ git commit -m "chore: baseline before pluggable format-handler registry"
 ## Task 1: Create `registry.js` and its tests
 
 **Files:**
-- Create: `frontend/src/js/formats/registry.js`
+- Create: `frontend/src/js/formats/registry.ts`
 - Create: `test/frontend/format-registry.test.js`
 
-- [ ] **Step 1.1: Write `frontend/src/js/formats/registry.js`**
+- [ ] **Step 1.1: Write `frontend/src/js/formats/registry.ts`**
 
 ```js
 /**
@@ -185,7 +185,7 @@ import {
   resolveFormatHandler,
   listFormatHandlers,
   _resetFormatRegistry,
-} from "../../frontend/src/js/formats/registry.js";
+} from "../../frontend/src/js/formats/registry.ts";
 
 describe("format registry", () => {
   afterEach(() => {
@@ -272,7 +272,7 @@ npm run typecheck:frontend
 - [ ] **Step 1.5: Commit**
 
 ```bash
-git add frontend/src/js/formats/registry.js test/frontend/format-registry.test.js
+git add frontend/src/js/formats/registry.ts test/frontend/format-registry.test.js
 git commit -m "feat(formats): add format-handler registry and tests"
 ```
 
@@ -281,11 +281,11 @@ git commit -m "feat(formats): add format-handler registry and tests"
 ## Task 2: Create glTF and GLB handlers and their tests
 
 **Files:**
-- Create: `frontend/src/js/formats/handlers/gltf-handler.js`
-- Create: `frontend/src/js/formats/handlers/glb-handler.js`
+- Create: `frontend/src/js/formats/handlers/gltf-handler.ts`
+- Create: `frontend/src/js/formats/handlers/glb-handler.ts`
 - Create: `test/frontend/format-handlers.test.js`
 
-- [ ] **Step 2.1: Read current `gltf/async-gltf.js` exports**
+- [ ] **Step 2.1: Read current `gltf/async-gltf.ts` exports**
 
 Confirm these functions are exported (used in handlers):
 - `composeGlTFToBlobAsync(compositeJson)`
@@ -295,7 +295,7 @@ Confirm these functions are exported (used in handlers):
 
 If signatures differ, adjust handler code below to match.
 
-- [ ] **Step 2.2: Write `frontend/src/js/formats/handlers/gltf-handler.js`**
+- [ ] **Step 2.2: Write `frontend/src/js/formats/handlers/gltf-handler.ts`**
 
 ```js
 // @ts-check
@@ -400,7 +400,7 @@ export const gltfHandler = {
 };
 ```
 
-- [ ] **Step 2.3: Write `frontend/src/js/formats/handlers/glb-handler.js`**
+- [ ] **Step 2.3: Write `frontend/src/js/formats/handlers/glb-handler.ts`**
 
 ```js
 // @ts-check
@@ -494,34 +494,34 @@ export const glbHandler = {
  * @jest-environment jsdom
  */
 import { jest } from "@jest/globals";
-import { gltfHandler } from "../../frontend/src/js/formats/handlers/gltf-handler.js";
-import { glbHandler } from "../../frontend/src/js/formats/handlers/glb-handler.js";
+import { gltfHandler } from "../../frontend/src/js/formats/handlers/gltf-handler.ts";
+import { glbHandler } from "../../frontend/src/js/formats/handlers/glb-handler.ts";
 
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.ts", () => ({
   getFromRemoteIPFS: jest.fn(),
   getBlobFromRemoteIPFS: jest.fn(),
   getArrayBufferFromRemoteIPFS: jest.fn(),
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.ts", () => ({
   composeGlTFToBlobAsync: jest.fn(),
   decomposeAndStoreAsync: jest.fn(),
   decomposeGLBAsync: jest.fn(),
   editSourceColorsAsync: jest.fn(),
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/gltf/decomposer.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/gltf/decomposer.ts", () => ({
   isComposite: jest.fn(),
 }));
 
 const { getFromRemoteIPFS, getBlobFromRemoteIPFS, getArrayBufferFromRemoteIPFS } =
-  await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+  await import("../../frontend/src/js/ipfs/remote-ipfs.ts");
 const {
   composeGlTFToBlobAsync,
   decomposeAndStoreAsync,
   decomposeGLBAsync,
-} = await import("../../frontend/src/js/gltf/async-gltf.js");
-const { isComposite } = await import("../../frontend/src/js/gltf/decomposer.js");
+} = await import("../../frontend/src/js/gltf/async-gltf.ts");
+const { isComposite } = await import("../../frontend/src/js/gltf/decomposer.ts");
 
 describe("gltf handler", () => {
   beforeEach(() => {
@@ -669,12 +669,12 @@ git commit -m "feat(formats): add gltf/glb handlers and tests"
 
 ---
 
-## Task 3: Wire `formats/index.js`
+## Task 3: Wire `formats/index.ts`
 
 **Files:**
-- Create: `frontend/src/js/formats/index.js`
+- Create: `frontend/src/js/formats/index.ts`
 
-- [ ] **Step 3.1: Write `frontend/src/js/formats/index.js`**
+- [ ] **Step 3.1: Write `frontend/src/js/formats/index.ts`**
 
 ```js
 /**
@@ -704,7 +704,7 @@ export {
 - [ ] **Step 3.2: Verify built-ins load without error**
 
 ```bash
-node --check frontend/src/js/formats/index.js
+node --check frontend/src/js/formats/index.ts
 ```
 
 **Expected:** exits 0.
@@ -712,7 +712,7 @@ node --check frontend/src/js/formats/index.js
 - [ ] **Step 3.3: Commit**
 
 ```bash
-git add frontend/src/js/formats/index.js
+git add frontend/src/js/formats/index.ts
 git commit -m "feat(formats): wire built-in handler registration"
 ```
 
@@ -721,8 +721,8 @@ git commit -m "feat(formats): wire built-in handler registration"
 ## Task 4: Refactor `scene-loader.js`
 
 **Files:**
-- Modify: `frontend/src/js/engine/scene-loader.js:10-36` (imports)
-- Modify: `frontend/src/js/engine/scene-loader.js:37-111` (`loadAsset`)
+- Modify: `frontend/src/js/engine/scene-loader.ts:10-36` (imports)
+- Modify: `frontend/src/js/engine/scene-loader.ts:37-111` (`loadAsset`)
 
 - [ ] **Step 4.1: Update imports**
 
@@ -820,7 +820,7 @@ npx jest test/frontend/build.test.js --runInBand
 - [ ] **Step 4.5: Commit**
 
 ```bash
-git add frontend/src/js/engine/scene-loader.js
+git add frontend/src/js/engine/scene-loader.ts
 git commit -m "refactor(scene-loader): dispatch asset load through format handler"
 ```
 
@@ -829,7 +829,7 @@ git commit -m "refactor(scene-loader): dispatch asset load through format handle
 ## Task 5: Refactor `manifest-builder.js`
 
 **Files:**
-- Modify: `frontend/src/js/services/asset-save/manifest-builder.js` (imports, `looksComposite`, `_decomposeOneNode`, `buildDedupMapFromManifests`, pendingColors loop, pp bake)
+- Modify: `frontend/src/js/services/asset-save/manifest-builder.ts` (imports, `looksComposite`, `_decomposeOneNode`, `buildDedupMapFromManifests`, pendingColors loop, pp bake)
 
 - [ ] **Step 5.1: Update imports**
 
@@ -1027,7 +1027,7 @@ npm run typecheck:frontend
 - [ ] **Step 5.11: Commit**
 
 ```bash
-git add frontend/src/js/services/asset-save/manifest-builder.js
+git add frontend/src/js/services/asset-save/manifest-builder.ts
 git commit -m "refactor(manifest-builder): decompose and color edits via format handler"
 ```
 
@@ -1036,7 +1036,7 @@ git commit -m "refactor(manifest-builder): decompose and color edits via format 
 ## Task 6: Re-export `detectAssetFormat` from `transforms.js`
 
 **Files:**
-- Modify: `frontend/src/js/engine/transforms.js:22-30`
+- Modify: `frontend/src/js/engine/transforms.ts:22-30`
 
 - [ ] **Step 6.1: Replace inline function with re-export**
 
@@ -1069,7 +1069,7 @@ npx jest test/scene-graph.test.js test/frontend/scene-graph-new-asset.test.js --
 - [ ] **Step 6.3: Commit**
 
 ```bash
-git add frontend/src/js/engine/transforms.js
+git add frontend/src/js/engine/transforms.ts
 git commit -m "refactor(transforms): re-export detectAssetFormat from formats registry"
 ```
 
@@ -1088,7 +1088,7 @@ git commit -m "refactor(transforms): re-export detectAssetFormat from formats re
 /**
  * Dummy/template format handler.
  *
- * This handler is intentionally NOT imported by `formats/index.js`.
+ * This handler is intentionally NOT imported by `formats/index.ts`.
  * It exists as a copy-paste template for adding real formats (e.g. 3MF)
  * and is registered only inside its own test to prove the extension point.
  */
@@ -1183,15 +1183,15 @@ import { jest } from "@jest/globals";
 import {
   registerFormatHandler,
   _resetFormatRegistry,
-} from "../../frontend/src/js/formats/registry.js";
+} from "../../frontend/src/js/formats/registry.ts";
 import { createExampleFormatHandler } from "../../frontend/src/js/formats/handlers/example-format.js";
 
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.ts", () => ({
   getFromRemoteIPFS: jest.fn(),
 }));
 
 const { getFromRemoteIPFS } = await import(
-  "../../frontend/src/js/ipfs/remote-ipfs.js"
+  "../../frontend/src/js/ipfs/remote-ipfs.ts"
 );
 
 describe("example format handler extension point", () => {
@@ -1200,9 +1200,9 @@ describe("example format handler extension point", () => {
     jest.clearAllMocks();
   });
 
-  it("is not registered by formats/index.js", async () => {
+  it("is not registered by formats/index.ts", async () => {
     const { listFormatHandlers } = await import(
-      "../../frontend/src/js/formats/index.js"
+      "../../frontend/src/js/formats/index.ts"
     );
     const formats = listFormatHandlers().map((h) => h.format);
     expect(formats).toContain("gltf");
@@ -1220,7 +1220,7 @@ describe("example format handler extension point", () => {
     registerFormatHandler(handler);
 
     const { decomposeManifestNodes } = await import(
-      "../../frontend/src/js/services/asset-save/manifest-builder.js"
+      "../../frontend/src/js/services/asset-save/manifest-builder.ts"
     );
 
     const manifest = {
@@ -1279,10 +1279,10 @@ Arbesk's 3D asset pipeline is format-agnostic at the dispatch layer. Adding supp
 
 ## Built-in handlers
 
-- `gltf` — loose glTF JSON assets (`frontend/src/js/formats/handlers/gltf-handler.js`)
-- `glb` — binary glTF assets (`frontend/src/js/formats/handlers/glb-handler.js`)
+- `gltf` — loose glTF JSON assets (`frontend/src/js/formats/handlers/gltf-handler.ts`)
+- `glb` — binary glTF assets (`frontend/src/js/formats/handlers/glb-handler.ts`)
 
-Both are registered automatically by `frontend/src/js/formats/index.js`.
+Both are registered automatically by `frontend/src/js/formats/index.ts`.
 
 ## Handler interface
 
@@ -1353,7 +1353,7 @@ A 3MF handler could either:
 2. Implement `load`, `decomposeForSave`, and `isStoredForm` for your format.
 3. Import and register it somewhere in your application bootstrap:
    ```js
-   import { registerFormatHandler } from "./formats/registry.js";
+   import { registerFormatHandler } from "./formats/registry.ts";
    import { myFormatHandler } from "./formats/handlers/my-format-handler.js";
    registerFormatHandler(myFormatHandler);
    ```
@@ -1434,4 +1434,4 @@ git commit -m "feat(formats): pluggable format-handler registry (GLTF/GLB + exam
 - [ ] File paths are exact and exist in the codebase.
 - [ ] Type names (`FormatHandler`, `FormatLoadContext`, etc.) match between `registry.js`, handlers, and docs.
 - [ ] `_verifiedCompositeCids`, rate-limit rethrow, and `normalizeOnly` semantics are preserved.
-- [ ] `example-format.js` is not imported by `formats/index.js`.
+- [ ] `example-format.js` is not imported by `formats/index.ts`.

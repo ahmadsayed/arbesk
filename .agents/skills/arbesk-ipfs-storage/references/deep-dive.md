@@ -49,7 +49,7 @@ The Kubo node is configured for **zero external connectivity**:
 ### Backend: `ipfs-http-client` v60 (kubo-rpc-client)
 
 ```js
-// src/api/index.js L25
+// src/api/index.ts L25
 import { create } from "ipfs-http-client";
 const ipfs = create(new URL(IPFS_API_URL));  // http://127.0.0.1:5001
 ```
@@ -67,7 +67,7 @@ Key available methods:
 ### Frontend: Direct `fetch` to Kubo HTTP API
 
 ```js
-// frontend/src/js/ipfs/write-to-ipfs.js
+// frontend/src/js/ipfs/write-to-ipfs.ts
 fetch(`${IPFS_API_URL}/api/v0/add`, { method: "POST", body: formData })
 fetch(`${IPFS_API_URL}/api/v0/pin/add?arg=${cid}`, { method: "POST" })
 ```
@@ -114,8 +114,8 @@ Every write path includes both `ipfs.add()` (which pins by default) and an expli
 
 | File | What's written | Pin call |
 |------|---------------|----------|
-| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser-side binary/JSON writes (manifests, thumbnails, glTF parts) | `POST /api/v0/pin/add?arg=...` |
-| `src/api/storage/kubo-adapter.js` | Backend `pin.rm` during unpin | `ipfs.pin.rm(cid)` |
+| `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser-side binary/JSON writes (manifests, thumbnails, glTF parts) | `POST /api/v0/pin/add?arg=...` |
+| `src/api/storage/kubo-adapter.ts` | Backend `pin.rm` during unpin | `ipfs.pin.rm(cid)` |
 
 (All manifest, thumbnail, and asset writes are client-side; the backend only unpins and mints upload credentials.)
 
@@ -129,13 +129,13 @@ Every write path includes both `ipfs.add()` (which pins by default) and an expli
 
 | Function | File | Purpose |
 |----------|------|---------|
-| `catManifest(cid, timeoutMs)` | `src/api/ipfs-utils.js` | Read manifest JSON from IPFS with 15s AbortController timeout (used by unpin + comments archive) |
+| `catManifest(cid, timeoutMs)` | `src/api/ipfs-utils.ts` | Read manifest JSON from IPFS with 15s AbortController timeout (used by unpin + comments archive) |
 
 ### Frontend
 
 | Module | File | Purpose |
 |--------|------|---------|
-| `remote-ipfs.js` | `frontend/src/js/ipfs/remote-ipfs.js` | Browser IPFS reads with on-demand in-memory + IndexedDB cache |
+| `remote-ipfs.js` | `frontend/src/js/ipfs/remote-ipfs.ts` | Browser IPFS reads with on-demand in-memory + IndexedDB cache |
 
 ---
 

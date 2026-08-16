@@ -21,7 +21,7 @@ Common mistakes and anti-patterns to avoid.
 
 6. **Form fields steal keystrokes.** Always check `document.activeElement` before handling shortcut keys.
 
-7. **Pug files have no includes system.** The SPA shell is `app.pug` (plus `index.pug` for the landing page). Don't try to add partials.
+7. **Pug uses include partials.** The SPA shell is `app.pug` (plus `index.pug` for the landing page); real markup fragments live in `frontend/src/pug/includes/*.pug`. Add new fragments there and include them from `app.pug` — don't drop large chunks of markup directly into the shell.
 
 8. **SCSS components need `@use` in `styles.scss`.** A new file won't be built unless imported.
 

@@ -161,6 +161,6 @@ Width: 340px (`--inspector-width`).
 
 | Module | Purpose |
 |---|---|
-| `ui/sidebar.js` | Unified 5-view sidebar controller, collapse state, responsive behavior |
-| `ui/outliner.js` | Scene hierarchy tree, selection sync, dive/ascend triggers |
-| `ui/nesting.js` | Dive/ascend state machine, breadcrumb management, depth gating |
+| `ui/sidebar.ts` | Unified 5-view sidebar controller, collapse state, responsive behavior |
+| `ui/outliner.ts` | Scene hierarchy tree, selection sync, dive/ascend triggers |
+| `ui/nesting.ts` | Dive/ascend state machine, breadcrumb management, depth gating |

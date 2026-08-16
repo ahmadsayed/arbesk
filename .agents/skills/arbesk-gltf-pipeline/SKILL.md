@@ -31,19 +31,19 @@ All row details: `references/deep-dive.md`.
 
 | File | Role |
 |------|------|
-| `frontend/src/js/gltf/gltf-core.js` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
-| `frontend/src/js/gltf/composer.js` | Main-thread compose wrapper (IPFS fetch + cache injection) |
-| `frontend/src/js/gltf/decomposer.js` | Main-thread decompose wrapper (IPFS upload + dedup injection) |
-| `frontend/src/js/gltf/material-editor.js` | PBR prop edits, commits new CID |
-| `frontend/src/js/engine/scene-graph.js` | `loadAsset()` dispatcher, `loadNode()` orchestration |
-| `frontend/src/js/engine/time-travel.js` | `applyColor()`, `applyScale()` runtime overlays |
-| `frontend/src/js/engine/parametric-preview.js` | Inspector UI: color/scale/mesh overrides |
-| `frontend/src/js/services/asset-save/manifest-builder.js` | `prepareManifestForWrite()` — save/publish |
-| `frontend/src/js/gltf/async-gltf.js` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
-| `frontend/src/js/workers/gltf-worker-pool.js` | `workerpool` of `gltf-worker.js` for off-main-thread glTF work |
-| `frontend/src/js/workers/gltf-worker.js` | Worker entry: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` |
-| `frontend/src/js/ipfs/write-to-ipfs.js` | Browser IPFS write |
-| `frontend/src/js/ipfs/remote-ipfs.js` | Browser IPFS read |
+| `frontend/src/js/gltf/gltf-core.ts` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
+| `frontend/src/js/gltf/composer.ts` | Main-thread compose wrapper (IPFS fetch + cache injection) |
+| `frontend/src/js/gltf/decomposer.ts` | Main-thread decompose wrapper (IPFS upload + dedup injection) |
+| `frontend/src/js/gltf/material-editor.ts` | PBR prop edits, commits new CID |
+| `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatcher, `loadNode()` orchestration |
+| `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` runtime overlays |
+| `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: color/scale/mesh overrides |
+| `frontend/src/js/services/asset-save/manifest-builder.ts` | `prepareManifestForWrite()` — save/publish |
+| `frontend/src/js/gltf/async-gltf.ts` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
+| `frontend/src/js/workers/gltf-worker-pool.ts` | `workerpool` of `gltf-worker.js` for off-main-thread glTF work |
+| `frontend/src/js/workers/gltf-worker.ts` | Worker entry: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` |
+| `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser IPFS write |
+| `frontend/src/js/ipfs/remote-ipfs.ts` | Browser IPFS read |
 
 ## References
 

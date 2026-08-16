@@ -25,7 +25,7 @@ The global setup (`e2e/global-setup.mjs`) orchestrates the test infrastructure d
 
 The global teardown (`e2e/global-teardown.mjs`) stops all backends and brings every worker's Docker stack down.
 
-No manual `node src/index.js` is required.
+No manual `node src/index.ts` is required.
 
 ### Parallel workers
 

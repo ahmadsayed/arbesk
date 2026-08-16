@@ -19,7 +19,7 @@ MetaMask's **"Smart Transactions"** feature (and other ERC-4337 wallets) route u
 Instead of validating `receipt.to`, validate that the transaction contains a valid payment event **emitted by the contract**:
 
 ```javascript
-// src/api/assets/generate-node.js
+// src/api/assets/generate-node.ts
 const usdcEventSig = txWeb3.utils.keccak256(
   "AssetGenerationPaidUSDC(address,bytes32,string,uint256,uint256,uint8)"
 );

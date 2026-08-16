@@ -4,14 +4,14 @@ Token resolution, common patterns, and infrastructure dependencies.
 
 ## Token Resolution (Frontend)
 
-On the frontend, `child_ref` tokens are resolved at load time by `frontend/src/js/blockchain/token-resolver.js`:
+On the frontend, `child_ref` tokens are resolved at load time by `frontend/src/js/blockchain/token-resolver.ts`:
 
 1. **Cache check** — 30-second TTL in-memory cache by `chainId:contractAddress:tokenId`
 2. **Contract call** — `tokenURI(tokenId)` on the ERC-721 contract
 3. **URI normalization** — `normalizeTokenURI()` extracts the plain IPFS CID from various URI formats (`ipfs://`, `https://`, bare CID)
 4. **IPFS fetch** — retrieves the manifest from the private IPFS gateway
 
-Supported networks (from `constants/chains.js` / `frontend/src/js/blockchain/network-config.js`):
+Supported networks (from `constants/chains.js` / `frontend/src/js/blockchain/network-config.ts`):
 | Chain ID | Name | RPC |
 |----------|------|-----|
 | 31415822 | Hardhat local | `http://127.0.0.1:8545` |
@@ -21,11 +21,11 @@ Supported networks (from `constants/chains.js` / `frontend/src/js/blockchain/net
 
 | File | Purpose |
 |------|---------|
-| `src/api/ipfs-utils.js` | `catManifest(cid)` — backend IPFS read with timeout |
-| `src/api/manifest-utils.js` | `getSceneNodes(manifest)`, `bumpManifestVersion()` |
-| `frontend/src/js/blockchain/token-resolver.js` | `resolveChildRef()` — frontend token → CID resolution |
-| `frontend/src/js/blockchain/uri-utils.js` | `normalizeTokenURI()` — CID extraction from token URIs |
-| `frontend/src/js/engine/time-travel.js` | `walkManifestChain()` — client-side manifest history walk |
+| `src/api/ipfs-utils.ts` | `catManifest(cid)` — backend IPFS read with timeout |
+| `src/api/manifest-utils.ts` | `getSceneNodes(manifest)`, `bumpManifestVersion()` |
+| `frontend/src/js/blockchain/token-resolver.ts` | `resolveChildRef()` — frontend token → CID resolution |
+| `frontend/src/js/blockchain/uri-utils.ts` | `normalizeTokenURI()` — CID extraction from token URIs |
+| `frontend/src/js/engine/time-travel.ts` | `walkManifestChain()` — client-side manifest history walk |
 | `blockchain/contracts/ArbeskAssetBase.sol` | `tokenURI(uint256)` — on-chain manifest CID lookup |
 
 ## Common Inspection Patterns

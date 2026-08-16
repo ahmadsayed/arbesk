@@ -40,8 +40,8 @@
 | 2 | A. Color | Border color (`--border-color` #b89a7a on `--window-bg` #faf6f2) is ~1.8:1, making panel separators hard to perceive in light mode. | `frontend/src/scss/base/_tokens.scss` | Use `--border-hairline` only for subtle dividers; raise `--border-color` contrast to at least 3:1 against window bg. |
 | 3 | C. Layout | Sidebar and inspector edges show no resize affordance (`col-resize` cursor) or drag-to-resize behavior. | `frontend/src/scss/components/_sidebar.scss`, `_inspector.scss` | Add a 4px drag handle on the sidebar right edge and inspector left edge with `cursor: col-resize`; wire mouse drag to update `--sidebar-width` / `--inspector-width`. |
 | 4 | E. Keyboard | The 3D viewport canvas has no `tabindex`, so keyboard-only users cannot focus it before using view shortcuts. | `frontend/src/pug/studio.pug` | Add `tabindex="0"` to `#renderCanvas` and style `:focus-visible` with a subtle outline or glow. |
-| 5 | E. Keyboard | `Ctrl+/` is the only keyboard-shortcut discovery path; first-time users may never find it. | `frontend/src/pug/studio.pug`, `frontend/src/js/ui/keyboard-help.js` | Add a visible "Keyboard Shortcuts" menu item in the wallet popover or bottom-bar overflow menu. |
-| 6 | J. Feedback | Long operations (IPFS upload, on-chain transactions) show only an indeterminate spinner with no progress percentage or step label. | `frontend/src/js/services/api.js`, `frontend/src/js/ui/asset-save.js` | If the API exposes upload progress, wire a determinate progress bar or step label in the bottom bar. |
+| 5 | E. Keyboard | `Ctrl+/` is the only keyboard-shortcut discovery path; first-time users may never find it. | `frontend/src/pug/studio.pug`, `frontend/src/js/ui/keyboard-help.ts` | Add a visible "Keyboard Shortcuts" menu item in the wallet popover or bottom-bar overflow menu. |
+| 6 | J. Feedback | Long operations (IPFS upload, on-chain transactions) show only an indeterminate spinner with no progress percentage or step label. | `frontend/src/js/services/api.ts`, `frontend/src/js/ui/asset-save.ts` | If the API exposes upload progress, wire a determinate progress bar or step label in the bottom bar. |
 
 ---
 
@@ -51,7 +51,7 @@
 |---|----------|---------|---------|----------------|
 | 1 | B. Typography | `--font-size-4` is missing from the token scale, leaving a gap between `--font-size-3` (1.125rem) and `--font-size-5` (1.5rem). | `frontend/src/scss/base/_tokens.scss` | Add `--font-size-4: 1.25rem` for a complete 6-step scale. |
 | 2 | D. Buttons | The wallet button uses a custom `.headerbar-wallet` class rather than the standard `.btn` system, duplicating transition and focus styles. | `frontend/src/scss/components/_headerbar.scss` | Refactor `.headerbar-wallet` to extend `.btn.btn-sm` via a SCSS placeholder or mixin. |
-| 3 | J. Feedback | Failed generation and network errors may only appear in `console.error()` or as a brief toast with no persistent inline recovery action. | `frontend/src/js/services/api.js`, `frontend/src/js/ui/create-panel.js` | Display inline error banners in the chat or bottom bar with a "Retry" action button. |
+| 3 | J. Feedback | Failed generation and network errors may only appear in `console.error()` or as a brief toast with no persistent inline recovery action. | `frontend/src/js/services/api.ts`, `frontend/src/js/ui/create-panel.ts` | Display inline error banners in the chat or bottom bar with a "Retry" action button. |
 
 ---
 
@@ -150,6 +150,6 @@
 - **#25 (material-editor multi-primitive)**: `findMaterialByMeshName()` now returns all primitives for a mesh, improving color-override correctness on complex glTF models.
 - **#23 (focus-trap library)**: `dialog.js` uses `focus-trap@7.6.2`, resolving shadow-DOM / MetaMask focus-steal issues.
 - **#22 (Notyf toasts)**: `toasts.js` is a thin Notyf wrapper with GNOME-styled glass accents and action buttons.
-- **#20 (mitt event bus)**: `events/bus.js` replaces the hand-rolled `document.dispatchEvent` registry.
+- **#20 (mitt event bus)**: `events/bus.ts` replaces the hand-rolled `document.dispatchEvent` registry.
 
 These changes positively impacted categories **H**, **J**, and **F** compared to the previous audit.

@@ -13,7 +13,7 @@
 **Key facts an implementer must know:**
 - The refine chain (`refineTaskId`) looks up the **backend registry** task ID via `getCompletedTask` — the registry `taskId` returned by `generateAsset()` must NOT be replaced; `providerTaskId` is an additional field. Only `providerTaskId` is persisted.
 - `pending-generations.js` records already carry `prompt`; the store spreads `...data`, so new fields need only typedef docs (plus a contract test).
-- `walkManifestChain` (`engine/time-travel.js`) has a per-session `chainCache` keyed by start CID — tests must use distinct CIDs.
+- `walkManifestChain` (`engine/time-travel.ts`) has a per-session `chainCache` keyed by start CID — tests must use distinct CIDs.
 - Root Jest runs ESM (`@jest/globals`, `jest.unstable_mockModule` + dynamic import after `jest.resetModules()`).
 - `manifest-builder.test.js`: the 3MF test must stay LAST in its describe (its scene-graph mock leaks) — insert new tests before it.
 - CDN/Pug/SCSS: frontend changes require `npm run build:frontend` before E2E.
@@ -23,12 +23,12 @@
 ### Task 1: Manifest schema — add `metadata.chat`, remove `historyEntrySchema`
 
 **Files:**
-- Modify: `src/api/schemas.js:115-176`
+- Modify: `src/api/schemas.ts:115-176`
 - Test: `test/api/validation.test.js` (append a new describe block at end of file)
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `test/api/validation.test.js` (the file already imports `validateManifest` from `../../src/api/schemas.js`):
+Append to `test/api/validation.test.js` (the file already imports `validateManifest` from `../../src/api/schemas.ts`):
 
 ```js
 describe("manifest metadata.chat provenance", () => {
@@ -86,7 +86,7 @@ Expected: FAIL — `metadata.chat` entries are not validated against the new sch
 
 - [ ] **Step 3: Implement the schema change**
 
-In `src/api/schemas.js`:
+In `src/api/schemas.ts`:
 
 a. Delete the `historyEntrySchema` block (lines 123-136):
 
@@ -96,7 +96,7 @@ const historyEntrySchema = z.object({
   node_id: z.string().optional(),
   operation: z.string(),
   params: z.record(z.unknown()).optional(),
-  // Per-version source snapshot (see manifest-chain-walker.js): the glTF CID
+  // Per-version source snapshot (see manifest-chain-walker.ts): the glTF CID
   // is required, the UnixFS bundle directory CID is optional metadata.
   src: z
     .object({
@@ -143,7 +143,7 @@ Expected: PASS (all tests, including pre-existing ones)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/api/schemas.js test/api/validation.test.js
+git add src/api/schemas.ts test/api/validation.test.js
 git commit -m "feat: add metadata.chat provenance schema, drop dormant node.history schema"
 ```
 
@@ -152,7 +152,7 @@ git commit -m "feat: add metadata.chat provenance schema, drop dormant node.hist
 ### Task 2: Backend poll-success response surfaces `providerTaskId`
 
 **Files:**
-- Modify: `src/api/assets/generate-node.js:246-252`
+- Modify: `src/api/assets/generate-node.ts:246-252`
 
 Note: no existing backend test covers the Tripo poll route (it requires a live BYOK provider); the response contract is pinned consumer-side by the Task 3 frontend test. This change is additive and cannot alter existing route behavior.
 
@@ -191,7 +191,7 @@ Expected: PASS (no regressions)
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/api/assets/generate-node.js
+git add src/api/assets/generate-node.ts
 git commit -m "feat: surface provider task id in Tripo3D poll success payload"
 ```
 
@@ -200,7 +200,7 @@ git commit -m "feat: surface provider task id in Tripo3D poll success payload"
 ### Task 3: `generateAsset()` returns `providerTaskId` alongside registry `taskId`
 
 **Files:**
-- Modify: `frontend/src/js/services/api.js:455,603-610`
+- Modify: `frontend/src/js/services/api.ts:455,603-610`
 - Test: `test/frontend/api.test.js` (add a test after the "polls a Tripo3D task until success" test, ~line 773)
 
 - [ ] **Step 1: Write the failing test**
@@ -255,7 +255,7 @@ Expected: FAIL — `result.providerTaskId` is `undefined`.
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/services/api.js`:
+In `frontend/src/js/services/api.ts`:
 
 a. Update the `@returns` JSDoc (line 455) to:
 
@@ -285,7 +285,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/services/api.js test/frontend/api.test.js
+git add frontend/src/js/services/api.ts test/frontend/api.test.js
 git commit -m "feat: return providerTaskId from generateAsset"
 ```
 
@@ -294,7 +294,7 @@ git commit -m "feat: return providerTaskId from generateAsset"
 ### Task 4: Pending-generation record documents provenance fields
 
 **Files:**
-- Modify: `frontend/src/js/state/pending-generations.js:12-23`
+- Modify: `frontend/src/js/state/pending-generations.ts:12-23`
 - Test: `test/frontend/pending-generations.test.js` (append)
 
 The store already spreads `...data`, so this is a typedef + contract test change only.
@@ -326,7 +326,7 @@ test("provenance fields round-trip through add/update", () => {
 
 - [ ] **Step 2: Update the typedef**
 
-In `frontend/src/js/state/pending-generations.js`, extend the `PendingGeneration` typedef (lines 12-23) with:
+In `frontend/src/js/state/pending-generations.ts`, extend the `PendingGeneration` typedef (lines 12-23) with:
 
 ```js
  * @property {string} [provider] - generation provider ("mock", "tripo3d")
@@ -343,7 +343,7 @@ Expected: PASS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/state/pending-generations.js test/frontend/pending-generations.test.js
+git add frontend/src/js/state/pending-generations.ts test/frontend/pending-generations.test.js
 git commit -m "feat: provenance fields on pending-generation records"
 ```
 
@@ -352,7 +352,7 @@ git commit -m "feat: provenance fields on pending-generation records"
 ### Task 5: `create-panel.js` passes provenance fields into the pending record
 
 **Files:**
-- Modify: `frontend/src/js/ui/create-panel.js:461-470`
+- Modify: `frontend/src/js/ui/create-panel.ts:461-470`
 
 Covered end-to-end by the Task 13 E2E (no unit harness exists for create-panel).
 
@@ -401,7 +401,7 @@ Expected: PASS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add frontend/src/js/ui/create-panel.js
+git add frontend/src/js/ui/create-panel.ts
 git commit -m "feat: record provider/task/taskId on pending generations"
 ```
 
@@ -410,7 +410,7 @@ git commit -m "feat: record provider/task/taskId on pending generations"
 ### Task 6: Manifest builder writes version-scoped `metadata.chat`
 
 **Files:**
-- Modify: `frontend/src/js/services/asset-save/manifest-builder.js` (imports at top; new helper above `prepareManifestForWrite`; injection before the return at lines 565-569)
+- Modify: `frontend/src/js/services/asset-save/manifest-builder.ts` (imports at top; new helper above `prepareManifestForWrite`; injection before the return at lines 565-569)
 - Test: `test/frontend/manifest-builder.test.js` (insert two tests inside `describe("prepareManifestForWrite")`, BEFORE the 3MF test which must stay last)
 
 Trade-off note: records are marked `recorded` at collection time (inside `prepareManifestForWrite`). If the subsequent IPFS write fails, that prompt is not re-recorded — same loss semantics as any unsaved state. Accepted per spec.
@@ -422,7 +422,7 @@ In `test/frontend/manifest-builder.test.js`, inside `describe("prepareManifestFo
 ```js
   it("records sent pending generations as version-scoped metadata.chat", async () => {
     const pg = await import(
-      "../../frontend/src/js/state/pending-generations.js"
+      "../../frontend/src/js/state/pending-generations.ts"
     );
     pg._resetPendingGenerations();
     const sentId = pg.addPendingGeneration({
@@ -470,7 +470,7 @@ In `test/frontend/manifest-builder.test.js`, inside `describe("prepareManifestFo
 
   it("omits metadata when no prompts were consumed", async () => {
     const pg = await import(
-      "../../frontend/src/js/state/pending-generations.js"
+      "../../frontend/src/js/state/pending-generations.ts"
     );
     pg._resetPendingGenerations();
 
@@ -498,7 +498,7 @@ Expected: FAIL — `result.manifest.metadata.chat` is undefined / stale metadata
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/services/asset-save/manifest-builder.js`:
+In `frontend/src/js/services/asset-save/manifest-builder.ts`:
 
 a. Add the import alongside the existing state imports at the top of the file:
 
@@ -558,7 +558,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/services/asset-save/manifest-builder.js test/frontend/manifest-builder.test.js
+git add frontend/src/js/services/asset-save/manifest-builder.ts test/frontend/manifest-builder.test.js
 git commit -m "feat: write version-scoped metadata.chat at manifest build time"
 ```
 
@@ -567,7 +567,7 @@ git commit -m "feat: write version-scoped metadata.chat at manifest build time"
 ### Task 7: `walkManifestChain` carries `chat` per chain entry
 
 **Files:**
-- Modify: `frontend/src/js/engine/time-travel.js:114-176`
+- Modify: `frontend/src/js/engine/time-travel.ts:114-176`
 - Test: `test/frontend/time-travel-chain.test.js` (append describe)
 
 - [ ] **Step 1: Write the failing test**
@@ -614,7 +614,7 @@ Expected: FAIL — `chain[1].chat` is `undefined`, not an array.
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/engine/time-travel.js`, inside `walkManifestChain`, add one line to the `chain.unshift({...})` object (lines 149-159), after the `timestamp` line:
+In `frontend/src/js/engine/time-travel.ts`, inside `walkManifestChain`, add one line to the `chain.unshift({...})` object (lines 149-159), after the `timestamp` line:
 
 ```js
         chat: manifest.metadata?.chat || null,
@@ -634,7 +634,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/time-travel.js test/frontend/time-travel-chain.test.js
+git add frontend/src/js/engine/time-travel.ts test/frontend/time-travel-chain.test.js
 git commit -m "feat: carry metadata.chat through walkManifestChain"
 ```
 
@@ -643,7 +643,7 @@ git commit -m "feat: carry metadata.chat through walkManifestChain"
 ### Task 8: `addChatMessage` supports timestamp + extra class options
 
 **Files:**
-- Modify: `frontend/src/js/ui/chat-messages.js:30-64`
+- Modify: `frontend/src/js/ui/chat-messages.ts:30-64`
 - Test: `test/frontend/chat-messages.test.js` (append)
 
 - [ ] **Step 1: Write the failing test**
@@ -671,7 +671,7 @@ Expected: FAIL — no `.chat-bubble-history` element rendered.
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/ui/chat-messages.js`:
+In `frontend/src/js/ui/chat-messages.ts`:
 
 a. Replace `buildTimestamp` (lines 30-43):
 
@@ -728,7 +728,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/ui/chat-messages.js test/frontend/chat-messages.test.js
+git add frontend/src/js/ui/chat-messages.ts test/frontend/chat-messages.test.js
 git commit -m "feat: timestamp/extraClass options for chat bubbles"
 ```
 
@@ -737,8 +737,8 @@ git commit -m "feat: timestamp/extraClass options for chat bubbles"
 ### Task 9: Chat provenance history view (new module + wiring + styles)
 
 **Files:**
-- Create: `frontend/src/js/ui/chat-history.js`
-- Modify: `frontend/src/js/ui/create-panel.js` (import; `clearChat()` lines 242-249; `SCENE_READY` handler lines 531-534; `SCENE_EMPTY` handler lines 536-537)
+- Create: `frontend/src/js/ui/chat-history.ts`
+- Modify: `frontend/src/js/ui/create-panel.ts` (import; `clearChat()` lines 242-249; `SCENE_READY` handler lines 531-534; `SCENE_EMPTY` handler lines 536-537)
 - Modify: `frontend/src/scss/components/_chat.scss` (append)
 - Test: `test/frontend/chat-history.test.js` (create)
 
@@ -763,10 +763,10 @@ async function load() {
     '<div id="chatHistoryList"><div class="chat-welcome" hidden></div></div>';
   const walkManifestChain = jest.fn();
   jest.unstable_mockModule(
-    "../../frontend/src/js/engine/time-travel.js",
+    "../../frontend/src/js/engine/time-travel.ts",
     () => ({ walkManifestChain })
   );
-  const mod = await import("../../frontend/src/js/ui/chat-history.js");
+  const mod = await import("../../frontend/src/js/ui/chat-history.ts");
   return { mod, walkManifestChain };
 }
 
@@ -817,7 +817,7 @@ Expected: FAIL — module `chat-history.js` does not exist.
 
 - [ ] **Step 3: Create the module**
 
-Create `frontend/src/js/ui/chat-history.js`:
+Create `frontend/src/js/ui/chat-history.ts`:
 
 ```js
 /**
@@ -896,7 +896,7 @@ Expected: PASS
 
 - [ ] **Step 5: Wire into create-panel**
 
-In `frontend/src/js/ui/create-panel.js`:
+In `frontend/src/js/ui/create-panel.ts`:
 
 a. Add the import with the other `./chat-messages.js`-adjacent imports:
 
@@ -966,7 +966,7 @@ Expected: PASS
 - [ ] **Step 8: Commit**
 
 ```bash
-git add frontend/src/js/ui/chat-history.js frontend/src/js/ui/create-panel.js frontend/src/scss/components/_chat.scss test/frontend/chat-history.test.js
+git add frontend/src/js/ui/chat-history.ts frontend/src/js/ui/create-panel.ts frontend/src/scss/components/_chat.scss test/frontend/chat-history.test.js
 git commit -m "feat: read-only chat provenance history in the Create panel"
 ```
 
@@ -977,7 +977,7 @@ git commit -m "feat: read-only chat provenance history in the Create panel"
 ### Task 10: Ledger panel reads `metadata.chat` instead of `node.history`
 
 **Files:**
-- Modify: `frontend/src/js/ui/ledger-panel.js:135-162`
+- Modify: `frontend/src/js/ui/ledger-panel.ts:135-162`
 
 - [ ] **Step 1: Replace the node-history extraction loop**
 
@@ -1057,7 +1057,7 @@ Expected: PASS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/ui/ledger-panel.js
+git add frontend/src/js/ui/ledger-panel.ts
 git commit -m "refactor: ledger reads metadata.chat provenance instead of dormant node.history"
 ```
 
@@ -1066,7 +1066,7 @@ git commit -m "refactor: ledger reads metadata.chat provenance instead of dorman
 ### Task 11: Backend chain walker drops `history[].src` handling
 
 **Files:**
-- Modify: `src/api/manifest-chain-walker.js:191-212`
+- Modify: `src/api/manifest-chain-walker.ts:191-212`
 - Test: `test/api/manifest-chain-walker.test.js:129-147,349-366`
 
 - [ ] **Step 1: Update the tests**
@@ -1097,7 +1097,7 @@ b. Replace the test `ignores non-string source/history CIDs gracefully` (lines 3
 
 - [ ] **Step 2: Remove the walker block**
 
-In `src/api/manifest-chain-walker.js`, delete the `if (Array.isArray(node?.history)) { ... }` block (lines 191-212).
+In `src/api/manifest-chain-walker.ts`, delete the `if (Array.isArray(node?.history)) { ... }` block (lines 191-212).
 
 - [ ] **Step 3: Run tests**
 
@@ -1107,7 +1107,7 @@ Expected: PASS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/api/manifest-chain-walker.js test/api/manifest-chain-walker.test.js
+git add src/api/manifest-chain-walker.ts test/api/manifest-chain-walker.test.js
 git commit -m "refactor: drop dormant node.history handling from burn chain walker"
 ```
 

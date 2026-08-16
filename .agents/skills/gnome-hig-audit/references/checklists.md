@@ -235,7 +235,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 8. Category E: Keyboard Navigation Audit Checklist
 
-**Files**: `frontend/src/js/engine/scene-graph.js`, `frontend/src/js/ui/sidebar.js`, `frontend/src/js/ui/nesting.js`, `frontend/src/js/ui/dialog.js`
+**Files**: `frontend/src/js/engine/scene-graph.ts`, `frontend/src/js/ui/sidebar.ts`, `frontend/src/js/ui/nesting.ts`, `frontend/src/js/ui/dialog.ts`
 
 ### E.1 Shortcut Coverage
 
@@ -358,7 +358,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 11. Category H: Dialogs & Modals Audit Checklist
 
-**Files**: `frontend/src/scss/components/_dialog.scss`, `frontend/src/js/ui/dialog.js`
+**Files**: `frontend/src/scss/components/_dialog.scss`, `frontend/src/js/ui/dialog.ts`
 
 ### H.1 Structure
 
@@ -417,7 +417,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 ## 13. Category J: Empty States & Feedback Audit Checklist
 
-**Files**: `frontend/src/pug/app.pug`, `frontend/src/js/engine/placeholders.js`
+**Files**: `frontend/src/pug/app.pug`, `frontend/src/js/engine/placeholders.ts`
 
 ### J.1 Welcome Screen
 

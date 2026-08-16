@@ -40,7 +40,7 @@ Google OAuth
 
 **Files:**
 - `.env.example`
-- `src/api/index.js`
+- `src/api/index.ts`
 
 **Changes:**
 1. In `.env.example`, add:
@@ -48,7 +48,7 @@ Google OAuth
    THIRDWEB_CLIENT_ID=      # served to frontend
    THIRDWEB_SECRET_KEY=     # backend only, never served
    ```
-2. In `src/api/index.js`, add to the `GET /api/v1/config` response:
+2. In `src/api/index.ts`, add to the `GET /api/v1/config` response:
    ```js
    thirdwebClientId: process.env.THIRDWEB_CLIENT_ID || null,
    ```
@@ -122,7 +122,7 @@ const megaethTestnet = defineChain({
 
 ## Step 4 — Add Google option to `wallet-modal.js`
 
-**File:** `frontend/src/js/ui/wallet-modal.js`
+**File:** `frontend/src/js/ui/wallet-modal.ts`
 
 **Changes:**
 1. Add a "Sign in with Google" button, visually separated from injected wallets (follow existing GNOME HIG modal styling).
@@ -143,7 +143,7 @@ const megaethTestnet = defineChain({
 
 ## Step 5 — Handle Thirdweb source in `wallet-core.js`
 
-**File:** `frontend/src/js/blockchain/wallet-core.js`
+**File:** `frontend/src/js/blockchain/wallet-core.ts`
 
 **Changes:**
 1. In `connectWallet()`, handle `source === 'thirdweb'`:
@@ -173,9 +173,9 @@ const megaethTestnet = defineChain({
 
 ---
 
-## Step 6 — Add EIP-1271 support in `siwe-verify.js`
+## Step 6 — Add EIP-1271 support in `siwe-verify.ts`
 
-**File:** `src/api/siwe-verify.js`
+**File:** `src/api/siwe-verify.ts`
 
 **Changes:**
 1. Keep existing `ecrecover` path for EOA wallets.
@@ -197,9 +197,9 @@ const megaethTestnet = defineChain({
 
 ---
 
-## Step 7 — Update CSP in `src/index.js`
+## Step 7 — Update CSP in `src/index.ts`
 
-**File:** `src/index.js`
+**File:** `src/index.ts`
 
 **Changes:**
 1. Add to `connectSrc`:
@@ -217,7 +217,7 @@ const megaethTestnet = defineChain({
 
 ## Step 8 — Update `walletState` schema
 
-**File:** `frontend/src/js/state/wallet-state.js`
+**File:** `frontend/src/js/state/wallet-state.ts`
 
 **Changes:**
 1. Add `eoaAddress: null` to the initial state.
@@ -244,15 +244,15 @@ const megaethTestnet = defineChain({
 | File | Change |
 |------|--------|
 | `.env.example` | + `THIRDWEB_CLIENT_ID`, `THIRDWEB_SECRET_KEY` |
-| `src/api/index.js` | + `thirdwebClientId` in config response |
-| `src/index.js` | + Thirdweb domains in CSP |
+| `src/api/index.ts` | + `thirdwebClientId` in config response |
+| `src/index.ts` | + Thirdweb domains in CSP |
 | `frontend/src/pug/studio.pug` | + Thirdweb importmap entries |
 | `frontend/package.json` | + `thirdweb@5` devDependency for Jest resolution |
 | `frontend/src/js/blockchain/wallet-thirdweb.js` | **NEW** — EIP-1193 adapter |
-| `frontend/src/js/ui/wallet-modal.js` | + Google sign-in button |
-| `frontend/src/js/blockchain/wallet-core.js` | + `thirdweb` source handling, `eoaAddress` |
-| `frontend/src/js/state/wallet-state.js` | + `eoaAddress` field |
-| `src/api/siwe-verify.js` | + EIP-1271 fallback |
+| `frontend/src/js/ui/wallet-modal.ts` | + Google sign-in button |
+| `frontend/src/js/blockchain/wallet-core.ts` | + `thirdweb` source handling, `eoaAddress` |
+| `frontend/src/js/state/wallet-state.ts` | + `eoaAddress` field |
+| `src/api/siwe-verify.ts` | + EIP-1271 fallback |
 
 **Unchanged:** `wallet-publishing.js`, `wallet-payments.js`, `wallet-network.js`, all contracts, all IPFS/manifest code.
 

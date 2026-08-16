@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move save/publish into `domain/asset.js` command functions (`saveDraftAsset`, `publishAsset` with collection-publish coordination) and take the CID/tokenId/manifest fields (`activeAssetManifestCid`, `latestAssetManifestCid`, `activeAssetTokenId`, `activeAssetId`, `currentManifest`) private — every `assetState.set` touching them goes behind a named domain function. `manifest-builder.js` stays the serializer; `asset-save.js` keeps only DOM/toast/progress orchestration.
+**Goal:** Move save/publish into `domain/asset.ts` command functions (`saveDraftAsset`, `publishAsset` with collection-publish coordination) and take the CID/tokenId/manifest fields (`activeAssetManifestCid`, `latestAssetManifestCid`, `activeAssetTokenId`, `activeAssetId`, `currentManifest`) private — every `assetState.set` touching them goes behind a named domain function. `manifest-builder.js` stays the serializer; `asset-save.js` keeps only DOM/toast/progress orchestration.
 
-**Architecture:** Big structs + module functions (no classes). `domain/asset.js` remains a facade over `assetState`: readers keep reading `assetState.get()` directly; only *writes* of the five fields are privatized. Domain commands take injected deps (manifest builder, IPFS-adjacent services, wallet) so they unit-test with the existing jsdom harness style. No `domain/collection.js` yet — `publishAsset` calls the existing `collection-publish.js` through an injected dep (the Phase 3 seam).
+**Architecture:** Big structs + module functions (no classes). `domain/asset.ts` remains a facade over `assetState`: readers keep reading `assetState.get()` directly; only *writes* of the five fields are privatized. Domain commands take injected deps (manifest builder, IPFS-adjacent services, wallet) so they unit-test with the existing jsdom harness style. No `domain/collection.ts` yet — `publishAsset` calls the existing `collection-publish.js` through an injected dep (the Phase 3 seam).
 
 **Tech Stack:** ESM JS, Jest (jsdom), Playwright E2E.
 
@@ -13,13 +13,13 @@
 **Scope refinements vs spec (controller-noted):**
 - Spec signatures are `saveDraftAsset(asset, wallet, deps)` / `publishAsset(asset, wallet, deps)`. Phase 1 shipped a singleton facade (no `Asset` struct instance), so Phase 2 uses `saveDraftAsset(deps)` and `publishAsset(assetName, wallet, deps)` — same behavior, facade style.
 - Collection-context fields (`activeCollectionTokenId`, `selectedCollectionId`) are NOT privatized in Phase 2, but several call sites write them in the same `assetState.set` as privatized fields. Splitting one set into two would double `ASSET_STATE_CHANGED` emissions; instead they ride along as explicit, named parameters of `adoptOpenedAsset` / `adoptPublishedIdentity` — a transitional seam Phase 3 moves to the Collection module.
-- `blockchain/wallet-publishing.js` already exports a low-level `publishAsset` (the chain writer behind `editor-publish.js`). Same name, different module — no conflict; alias on import if ever co-imported.
+- `blockchain/wallet-publishing.ts` already exports a low-level `publishAsset` (the chain writer behind `editor-publish.js`). Same name, different module — no conflict; alias on import if ever co-imported.
 - YAGNI: no `getAssetSnapshot` field additions (`isDraft`, `publishedCid`), no Collection struct, no schema changes, no terminology cleanup (Phase 4).
 
 ## Global Constraints
 
 - Big structs + module functions; **no `class`, no inheritance**; `_`-prefix = module-private by convention.
-- ESM; camelCase; JSDoc on exported functions; `npm run typecheck:frontend` must pass. `domain/asset.js` is `// @ts-check` — keep it that way (JSDoc `any` for manifest shapes).
+- ESM; camelCase; JSDoc on exported functions; `npm run typecheck:frontend` must pass. `domain/asset.ts` is `// @ts-check` — keep it that way (JSDoc `any` for manifest shapes).
 - **Behavior preservation is paramount.** Unchanged: all toast copies/titles/types, `announceStatus` strings, `startTaskProgress`/`setTaskProgress`/`finishTaskProgress`/`failTaskProgress` fractions and messages, rate-limit (HTTP 429) handling, button `disabled`/`title`/text toggles, `isSaving`/`isPublishing` re-entry guards, `ASSET_DRAFT_SAVED` / `ASSET_PUBLISHED` emissions and payloads, URL updates (`updateUrlManifest` for non-tokenized drafts, `updateUrlAsset` on publish), `refreshTeamPanel` on new-collection publish, the keyboard shortcut, `ensureExplicitName` dialog flow. The publish "no-changes still anchors the collection" path is a feature — keep it.
 - Event-ordering rule: state writes land **before** event emissions, exactly as today. `updateUrlManifest` runs before `ASSET_DRAFT_SAVED`; `updateUrlAsset` before `ASSET_PUBLISHED`.
 - Domain functions never import `services/asset-save/*` (deps are injected by the caller) — this keeps `domain/` IO-free and avoids an import cycle with `manifest-builder.js`, which imports the domain for `recordSavedVersion`/`cacheCurrentManifest`.
@@ -33,7 +33,7 @@
 ### Task 1: Domain CID/identity command functions on the asset facade
 
 **Files:**
-- Modify: `frontend/src/js/domain/asset.js`
+- Modify: `frontend/src/js/domain/asset.ts`
 - Test: `test/frontend/domain-asset-identity.test.js` (new)
 
 **Interfaces:**
@@ -70,7 +70,7 @@ import {
   cacheCurrentManifest,
   recordSavedVersion,
   adoptPublishedIdentity,
-} from "../../frontend/src/js/domain/asset.js";
+} from "../../frontend/src/js/domain/asset.ts";
 import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
 
 beforeEach(() => _resetForTesting());
@@ -170,7 +170,7 @@ Expected: FAIL — exports not found.
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/js/domain/asset.js`: add `tagManifestCid` to the asset-state import, then append (also update the module docstring: "ONLY writer of the asset name" → "ONLY writer of the asset name and the CID/tokenId/currentManifest identity fields"):
+In `frontend/src/js/domain/asset.ts`: add `tagManifestCid` to the asset-state import, then append (also update the module docstring: "ONLY writer of the asset name" → "ONLY writer of the asset name and the CID/tokenId/currentManifest identity fields"):
 
 ```js
 // ─── Identity / CID commands (Phase 2) ─────────────────────────────
@@ -227,7 +227,7 @@ export function setLatestManifestCid(cid) {
 
 /**
  * Scene cleared: both CIDs go. Token identity and currentManifest survive
- * (clearScene semantics — preserved verbatim from engine/cleanup.js).
+ * (clearScene semantics — preserved verbatim from engine/cleanup.ts).
  */
 export function clearAssetManifestCids() {
   assetState.set({
@@ -283,7 +283,7 @@ Expected: PASS (8 + 6 tests). Also `npm run typecheck:frontend` — clean.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/domain/asset.js test/frontend/domain-asset-identity.test.js
+git add frontend/src/js/domain/asset.ts test/frontend/domain-asset-identity.test.js
 git commit -m "feat(domain): CID/identity command functions on the asset facade"
 ```
 
@@ -292,11 +292,11 @@ git commit -m "feat(domain): CID/identity command functions on the asset facade"
 ### Task 2: Rewire engine/state writers + manifest-builder
 
 **Files:**
-- Modify: `frontend/src/js/engine/scene-loader.js:~389-395`
-- Modify: `frontend/src/js/engine/cleanup.js:~98, ~199-202`
-- Modify: `frontend/src/js/engine/scene-graph.js:~803-809, ~818-821`
+- Modify: `frontend/src/js/engine/scene-loader.ts:~389-395`
+- Modify: `frontend/src/js/engine/cleanup.ts:~98, ~199-202`
+- Modify: `frontend/src/js/engine/scene-graph.ts:~803-809, ~818-821`
 - Modify: `frontend/src/js/state/version-history-store.js:~89, ~159`
-- Modify: `frontend/src/js/services/asset-save/manifest-builder.js:~705-710, ~742-746`
+- Modify: `frontend/src/js/services/asset-save/manifest-builder.ts:~705-710, ~742-746`
 - Test: existing suites (no new tests — rewires only)
 
 **Interfaces:**
@@ -314,7 +314,7 @@ git commit -m "feat(domain): CID/identity command functions on the asset facade"
 - `manifest-builder.js:705-710` (no-changes path) → `cacheCurrentManifest(prepared.manifest, assetState.get().activeAssetManifestCid);`
 - `manifest-builder.js:742-746` → `recordSavedVersion(cid, prepared.manifest);`
   - Add `import { cacheCurrentManifest, recordSavedVersion } from "../../domain/asset.js";` and drop `tagManifestCid` from the asset-state import if unused after (keep `assetState` — the reads stay).
-  - No import cycle: `domain/asset.js` never imports `services/asset-save/*` (Global Constraints).
+  - No import cycle: `domain/asset.ts` never imports `services/asset-save/*` (Global Constraints).
 
 - [ ] **Step 1: Apply the rewires above.**
 - [ ] **Step 2: Verify no stragglers**
@@ -330,7 +330,7 @@ Expected: all green. Then `npm run lint && npm run typecheck:frontend`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/engine/scene-loader.js frontend/src/js/engine/cleanup.js frontend/src/js/engine/scene-graph.js frontend/src/js/state/version-history-store.js frontend/src/js/services/asset-save/manifest-builder.js
+git add frontend/src/js/engine/scene-loader.ts frontend/src/js/engine/cleanup.ts frontend/src/js/engine/scene-graph.ts frontend/src/js/state/version-history-store.js frontend/src/js/services/asset-save/manifest-builder.ts
 git commit -m "refactor(domain): route engine/state CID writes through asset commands"
 ```
 
@@ -339,10 +339,10 @@ git commit -m "refactor(domain): route engine/state CID writes through asset com
 ### Task 3: Rewire UI writers
 
 **Files:**
-- Modify: `frontend/src/js/ui/nesting.js:~104-108, ~137-141`
-- Modify: `frontend/src/js/ui/create-panel.js:~533-536, ~558, ~1778, ~1780`
-- Modify: `frontend/src/js/ui/asset-library.js:~319-326, ~328-333, ~414-421, ~442-448`
-- Modify: `frontend/src/js/ui/outliner.js:~131`
+- Modify: `frontend/src/js/ui/nesting.ts:~104-108, ~137-141`
+- Modify: `frontend/src/js/ui/create-panel.ts:~533-536, ~558, ~1778, ~1780`
+- Modify: `frontend/src/js/ui/asset-library.ts:~319-326, ~328-333, ~414-421, ~442-448`
+- Modify: `frontend/src/js/ui/outliner.ts:~131`
 - Test: existing suites (no new tests — rewires only)
 
 **Exact rewires:**
@@ -363,7 +363,7 @@ git commit -m "refactor(domain): route engine/state CID writes through asset com
 - [ ] **Step 2: Verify no stragglers**
 
 Run: `grep -n "assetState.set(" frontend/src/js/ui frontend/src/js/services`
-Expected: only `domain/asset.js` writes the five privatized fields repo-wide; remaining UI sets touch collection-context fields only.
+Expected: only `domain/asset.ts` writes the five privatized fields repo-wide; remaining UI sets touch collection-context fields only.
 
 - [ ] **Step 3: Run tests**
 
@@ -373,7 +373,7 @@ Expected: all green (watch `asset-library` / `create-panel` / `outliner` suites)
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/ui/nesting.js frontend/src/js/ui/create-panel.js frontend/src/js/ui/asset-library.js frontend/src/js/ui/outliner.js
+git add frontend/src/js/ui/nesting.ts frontend/src/js/ui/create-panel.ts frontend/src/js/ui/asset-library.ts frontend/src/js/ui/outliner.ts
 git commit -m "refactor(domain): route UI CID writes through asset commands"
 ```
 
@@ -382,8 +382,8 @@ git commit -m "refactor(domain): route UI CID writes through asset commands"
 ### Task 4: `saveDraftAsset` domain command — save path leaves `asset-save.js`
 
 **Files:**
-- Modify: `frontend/src/js/domain/asset.js`
-- Modify: `frontend/src/js/ui/asset-save.js` (save path slims to chrome orchestration)
+- Modify: `frontend/src/js/domain/asset.ts`
+- Modify: `frontend/src/js/ui/asset-save.ts` (save path slims to chrome orchestration)
 - Test: `test/frontend/domain-asset-save.test.js` (new); `test/frontend/asset-save.test.js` must pass **unmodified**
 
 **Interfaces:**
@@ -403,9 +403,9 @@ Create `test/frontend/domain-asset-save.test.js`:
  * emission. IO deps injected; real assetState + real event bus.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
-import { saveDraftAsset } from "../../frontend/src/js/domain/asset.js";
+import { saveDraftAsset } from "../../frontend/src/js/domain/asset.ts";
 import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
-import { on, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { on, EVENTS } from "../../frontend/src/js/events/bus.ts";
 
 function makeDeps(over = {}) {
   return {
@@ -480,7 +480,7 @@ Expected: FAIL — `saveDraftAsset` not exported.
 
 - [ ] **Step 3: Implement the domain command**
 
-Append to `frontend/src/js/domain/asset.js` (add `emit` to the bus import):
+Append to `frontend/src/js/domain/asset.ts` (add `emit` to the bus import):
 
 ```js
 // ─── Save/publish commands (Phase 2) ───────────────────────────────
@@ -488,7 +488,7 @@ Append to `frontend/src/js/domain/asset.js` (add `emit` to the bus import):
 // services/asset-save/* (which imports this module for the state commands).
 
 /**
- * Name resolution for saves (verbatim from ui/asset-save.js): the in-session
+ * Name resolution for saves (verbatim from ui/asset-save.ts): the in-session
  * rename wins; a tokenized asset falls back to its on-chain name; drafts fall
  * back to "My Asset".
  * @param {(tokenId: string) => Promise<string|null>} fetchTokenName
@@ -553,7 +553,7 @@ Expected: PASS — `asset-save.test.js` unmodified. Then `npm test`, `npm run li
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/domain/asset.js frontend/src/js/ui/asset-save.js test/frontend/domain-asset-save.test.js
+git add frontend/src/js/domain/asset.ts frontend/src/js/ui/asset-save.ts test/frontend/domain-asset-save.test.js
 git commit -m "feat(domain): saveDraftAsset command — save path leaves asset-save.js"
 ```
 
@@ -562,8 +562,8 @@ git commit -m "feat(domain): saveDraftAsset command — save path leaves asset-s
 ### Task 5: `publishAsset` domain command + collection coordination
 
 **Files:**
-- Modify: `frontend/src/js/domain/asset.js`
-- Modify: `frontend/src/js/ui/asset-save.js` (publish path slims)
+- Modify: `frontend/src/js/domain/asset.ts`
+- Modify: `frontend/src/js/ui/asset-save.ts` (publish path slims)
 - Test: `test/frontend/domain-asset-publish.test.js` (new); `test/frontend/asset-save.test.js` must pass **unmodified**
 
 **Interfaces:**
@@ -589,9 +589,9 @@ Create `test/frontend/domain-asset-publish.test.js`:
  * progress/status hook sequencing. IO deps injected; real assetState + bus.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
-import { publishAsset } from "../../frontend/src/js/domain/asset.js";
+import { publishAsset } from "../../frontend/src/js/domain/asset.ts";
 import { assetState, _resetForTesting } from "../../frontend/src/js/state/asset-state.js";
-import { on, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { on, EVENTS } from "../../frontend/src/js/events/bus.ts";
 
 const WALLET = { address: "0xOwner", chainId: 31337, contractAddress: "0xC" };
 
@@ -704,7 +704,7 @@ Expected: FAIL — `publishAsset` not exported.
 
 - [ ] **Step 3: Implement the domain command**
 
-Append to `frontend/src/js/domain/asset.js` (new imports: `deriveDefaultAssetId` from `../utils/collections.js`, `log` from `../utils/log.js` — verify the exact module paths/exports of these two in the existing `asset-save.js` imports first and use those):
+Append to `frontend/src/js/domain/asset.ts` (new imports: `deriveDefaultAssetId` from `../utils/collections.js`, `log` from `../utils/log.js` — verify the exact module paths/exports of these two in the existing `asset-save.js` imports first and use those):
 
 ```js
 /**
@@ -712,7 +712,7 @@ Append to `frontend/src/js/domain/asset.js` (new imports: `deriveDefaultAssetId`
  * collection directory on-chain. All IO is injected; the UI owns dialogs,
  * toasts, and button state. Progress/status hooks fire at the exact legacy
  * points. Collection coordination goes through the injected
- * `publishCollection` dep (services/asset-save/collection-publish.js today;
+ * `publishCollection` dep (services/asset-save/collection-publish.ts today;
  * the Collection module in Phase 3).
  * @param {string} assetName - already explicit (UI ran ensureExplicitName)
  * @param {{address: string, chainId: number, contractAddress: string}} wallet
@@ -859,12 +859,12 @@ Expected: PASS — `asset-save.test.js` unmodified (extend its mocks only if a n
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/js/domain/asset.js frontend/src/js/ui/asset-save.js test/frontend/domain-asset-publish.test.js
+git add frontend/src/js/domain/asset.ts frontend/src/js/ui/asset-save.ts test/frontend/domain-asset-publish.test.js
 git commit -m "feat(domain): publishAsset command with collection coordination
 
 Publish orchestration (verifyCanEdit, versioned save, assetID derivation,
 collection anchor, identity adoption, ASSET_PUBLISHED) moves into
-domain/asset.js behind injected deps. asset-save.js keeps dialog/toast/
+domain/asset.ts behind injected deps. asset-save.js keeps dialog/toast/
 progress/button orchestration only."
 ```
 
@@ -882,7 +882,7 @@ Expected: all green.
 - [ ] **Step 2: Final privatization audit**
 
 Run: `grep -rn "assetState.set(" frontend/src | grep -E "activeAssetManifestCid|latestAssetManifestCid|activeAssetTokenId|activeAssetId|currentManifest"`
-Expected: only `frontend/src/js/domain/asset.js` matches.
+Expected: only `frontend/src/js/domain/asset.ts` matches.
 
 - [ ] **Step 3: E2E regression set**
 
@@ -903,5 +903,5 @@ Expected: all pass. 03/05 cover save/publish/republish incl. `ensureExplicitName
 - Type consistency: command names/signatures identical between Task 1's Interfaces/test/implementation and the Task 2–3 rewire tables; `saveDraftAsset`/`publishAsset` identical between Tasks 4–5 Interfaces, tests, and implementations.
 - Behavior-parity traps handled explicitly: `"tokenId" in identity` presence semantics in `adoptOpenedAsset` (explicit nulls written, absent keys untouched — reproduces each legacy patch exactly); `String(tokenId)` coercions preserved; `activateAssetManifest` deliberately does NOT touch `latest` (version-history store owns the tip on SCENE_READY); the no-changes-still-anchors publish path preserved including the dead-but-kept `reason !== "no-changes"` abort branch; progress fractions/messages and hook order pinned by a test; state-before-emit ordering preserved everywhere.
 - Known deviations (documented, reviewed safe): the mid-flow `activeAssetId` write moves post-publish inside `adoptPublishedIdentity` (no reader between the old and new points); publish success-path `announceStatus`/`finishTaskProgress` move after `refreshTeamPanel` + `ASSET_PUBLISHED` (all listeners idempotent; state already written).
-- Cycle safety: `manifest-builder.js` → `domain/asset.js` import is acyclic because the domain never imports `services/asset-save/*` (deps injected); pinned as a Global Constraint.
+- Cycle safety: `manifest-builder.js` → `domain/asset.ts` import is acyclic because the domain never imports `services/asset-save/*` (deps injected); pinned as a Global Constraint.
 - `test/frontend/asset-save.test.js` unmodified is the regression proof for Tasks 4–5; E2E specs 03/04/05/06/11/20 are the integration proof.

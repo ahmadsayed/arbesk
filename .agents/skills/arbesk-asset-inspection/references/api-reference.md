@@ -7,7 +7,7 @@ Asset inspection is **client-side first**. There are no backend routes that prox
 Call `tokenURI(tokenId)` on the ERC-721 contract, then fetch the returned CID from the IPFS gateway.
 
 ```js
-import { normalizeTokenURI } from "frontend/src/js/blockchain/uri-utils.js";
+import { normalizeTokenURI } from "frontend/src/js/blockchain/uri-utils.ts";
 
 const tokenURI = await contract.methods.tokenURI(tokenId).call();
 const cid = normalizeTokenURI(tokenURI);
@@ -18,10 +18,10 @@ For collection tokens, `manifest.type === "collection"` and `manifest.assets` ma
 
 ## Walk the manifest version chain
 
-`frontend/src/js/engine/time-travel.js` provides `walkManifestChain(cid, options)`:
+`frontend/src/js/engine/time-travel.ts` provides `walkManifestChain(cid, options)`:
 
 ```js
-import { walkManifestChain } from "frontend/src/js/engine/time-travel.js";
+import { walkManifestChain } from "frontend/src/js/engine/time-travel.ts";
 
 const chain = await walkManifestChain(cid, { maxDepth: 50 });
 // chain: [{ cid, version, name, timestamp }, ...]
@@ -44,8 +44,8 @@ docker compose exec ipfs ipfs cat <CID>
 In a Node.js test context, fetch content through the storage adapter directly:
 
 ```js
-import { getStorage } from "../src/api/storage/index.js";
-import { maybeDecompress } from "../src/api/ipfs-utils.js";
+import { getStorage } from "../src/api/storage/index.ts";
+import { maybeDecompress } from "../src/api/ipfs-utils.ts";
 
 const raw = await maybeDecompress(await getStorage().catBytes(cid));
 const manifest = JSON.parse(raw);

@@ -71,7 +71,7 @@
 | ES modules (`import`/`export`) | ✅ | All frontend JS is modular |
 | Vanilla JS (no framework bloat) | ✅ | Appropriate for a 3D studio |
 | Clean separation of concerns | ✅ | `engine/`, `ui/`, `blockchain/`, `services/`, `state/` |
-| Typed event bus for decoupling | ✅ | `mitt` singleton in `events/bus.js` with `EVENTS` constants |
+| Typed event bus for decoupling | ✅ | `mitt` singleton in `events/bus.ts` with `EVENTS` constants |
 | Typed state layer | ✅ | `asset-state.js`, `wallet-state.js`, `ui-state.js` replace `window.*` globals |
 | Dynamic `import()` for code splitting | ✅ | `token-resolver.js`, `explorer.js` lazy-loaded |
 | No global namespace pollution | ✅ | Minimal `window.*` exports removed |
@@ -79,7 +79,7 @@
 | Web3.js for blockchain | ✅ | v1.10.0 |
 | TypeScript | ❌ | Pure JS — acceptable for this project |
 | Service Worker | ❌ | None |
-| Web Workers | ✅ (Fixed) | GLTF processing offloaded to `frontend/src/js/workers/gltf-worker.js` via `frontend/src/js/workers/gltf-worker-pool.js` |
+| Web Workers | ✅ (Fixed) | GLTF processing offloaded to `frontend/src/js/workers/gltf-worker.ts` via `frontend/src/js/workers/gltf-worker-pool.ts` |
 
 **Finding**: Excellent modular architecture. The move from `document.dispatchEvent` to `mitt` and the introduction of typed state stores are significant improvements. Web workers now handle heavy GLTF processing; service workers are still not implemented.
 
@@ -130,10 +130,10 @@
 | `rel="noopener noreferrer"` on external links | ✅ | Wallet explorer link has it |
 | No analytics / tracking scripts | ✅ | No Google Analytics, Mixpanel, etc. |
 | No third-party cookies | ✅ | No cookie usage |
-| Content Security Policy (CSP) | ⚠️ | Report-only header added (`src/index.js`), not enforcing |
+| Content Security Policy (CSP) | ⚠️ | Report-only header added (`src/index.ts`), not enforcing |
 | Subresource Integrity (SRI) | ❌ | CDN scripts lack `integrity` attributes |
 | HTTPS enforcement | ❌ | Localhost only — no `upgrade-insecure-requests` |
-| Hardcoded private key in source | ⚠️ (Fixed) | Private key was removed from `wallet.js`; only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.js` for the low-balance warning path |
+| Hardcoded private key in source | ⚠️ (Fixed) | Private key was removed from `wallet.js`; only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.ts` for the low-balance warning path |
 | Input sanitization | ⚠️ | `escapeHtml()` used in dialogs and toasts; API inputs rely on backend validation |
 | `X-Frame-Options` / frame ancestors | ❌ | No clickjacking protection headers |
 | `X-Content-Type-Options: nosniff` | ❌ | Not set |
@@ -315,7 +315,7 @@
 | Auto-clear on disconnect | ✅ | Event listener clears session |
 | Clock skew grace period | ✅ | 60-second buffer |
 | Address-bound sessions | ✅ | Token tied to wallet address |
-| SIWE (EIP-4361 / Sign-In with Ethereum) | ✅ (Fixed) | Implemented using the `siwe` package in `src/api/siwe-verify.js`; frontend builds standard SIWE messages in `frontend/src/js/blockchain/siwe.js` |
+| SIWE (EIP-4361 / Sign-In with Ethereum) | ✅ (Fixed) | Implemented using the `siwe` package in `src/api/siwe-verify.ts`; frontend builds standard SIWE messages in `frontend/src/js/blockchain/siwe.ts` |
 | JWT / structured tokens | ❌ | Opaque UUIDs only |
 | Session revocation API | ✅ | `DELETE /api/v1/sessions` exists |
 
@@ -349,7 +349,7 @@
 | Toast notifications with actions | ✅ | Retry, View on Explorer |
 | User rejection silent handling | ✅ | No spam on cancel |
 | Specific error classification | ✅ | Insufficient funds, wrong network, user denied |
-| Transaction revert reason parsing | ✅ (Fixed) | `frontend/src/js/blockchain/error-decoder.js` decodes string reverts and custom error selectors; used by publishing flows |
+| Transaction revert reason parsing | ✅ (Fixed) | `frontend/src/js/blockchain/error-decoder.ts` decodes string reverts and custom error selectors; used by publishing flows |
 | Automatic retry with backoff | ❌ | Not implemented |
 | Circuit breaker for failed RPC | ❌ | Not implemented |
 | RPC fallback rotation | ❌ | Single RPC per chain |
@@ -367,7 +367,7 @@
 | No cookies | ✅ | |
 | Wallet address not in URL | ✅ | Not exposed in query params |
 | `navigator.clipboard` with fallback | ✅ | Secure context + textarea fallback |
-| Hardcoded dev private key | ⚠️ (Fixed) | Private key removed from `wallet.js`; only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.js` for the low-balance warning path |
+| Hardcoded dev private key | ⚠️ (Fixed) | Private key removed from `wallet.js`; only the dev account **address** remains in `frontend/src/js/blockchain/dev-account.ts` for the low-balance warning path |
 | Privacy policy | ❌ | None |
 | Terms of service | ❌ | None |
 
@@ -402,8 +402,8 @@
 | 1 | **No enforcing CSP / no SRI on CDN scripts** | XSS and supply-chain attack if CDN is compromised | Promote CSP to enforcing. SRI hashes are intentionally omitted per `AGENTS.md` because CDNs rebuild assets; the safer fix is self-hosting or a pinned build pipeline. |
 | 2 | **Hardcoded dev private key in source** (Fixed) | Accidental mainnet deployment could leak funds | Already removed from source; only dev account address remains for the low-balance warning |
 | 3 | **No paid-tier deployment on public testnet** | App cannot use USDC PayGo on MegaETH Testnet | Deploy `ArbeskAsset` paid tier and USDC token on MegaETH Testnet when ready |
-| 4 | **No transaction revert reason decoding** (Fixed) | Users see raw hex/errors instead of human-readable revert reasons | `frontend/src/js/blockchain/error-decoder.js` now parses `error.data` against the ABI |
-| 5 | **No SIWE (EIP-4361)** (Fixed) | Non-standard auth message; not interoperable with SIWE-verifying backends | Standard SIWE verification implemented in `src/api/siwe-verify.js` |
+| 4 | **No transaction revert reason decoding** (Fixed) | Users see raw hex/errors instead of human-readable revert reasons | `frontend/src/js/blockchain/error-decoder.ts` now parses `error.data` against the ABI |
+| 5 | **No SIWE (EIP-4361)** (Fixed) | Non-standard auth message; not interoperable with SIWE-verifying backends | Standard SIWE verification implemented in `src/api/siwe-verify.ts` |
 | 6 | **No PWA / service worker / manifest** | Cannot install as desktop app or work offline | Add `manifest.json` and a minimal service worker for asset caching |
 | 7 | **No bundler / minification / SRI** | 35+ unminified modules served individually in production | Add a production bundler (e.g., Rollup) with SRI generation |
 

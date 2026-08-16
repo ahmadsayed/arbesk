@@ -14,11 +14,11 @@
 
 | File | Change |
 |------|--------|
-| `src/api/token-indexer.js` | Add editor-set indexing: combined ABI, editor log fetching, IPFS editor-list resolution, reverse-map state, `getSharedTokens` query method. |
-| `src/api/routes/indexer.js` | Add `GET /api/v1/indexer/shared` route. |
-| `src/api/schemas.js` | Add `sharedQuerySchema` (same shape as `ownedQuerySchema`). |
-| `frontend/src/js/services/api.js` | Add `getSharedTokens` helper. |
-| `frontend/src/js/ui/asset-library.js` | Use backend shared endpoint in `fetchAssetLibrary`. |
+| `src/api/token-indexer.ts` | Add editor-set indexing: combined ABI, editor log fetching, IPFS editor-list resolution, reverse-map state, `getSharedTokens` query method. |
+| `src/api/routes/indexer.ts` | Add `GET /api/v1/indexer/shared` route. |
+| `src/api/schemas.ts` | Add `sharedQuerySchema` (same shape as `ownedQuerySchema`). |
+| `frontend/src/js/services/api.ts` | Add `getSharedTokens` helper. |
+| `frontend/src/js/ui/asset-library.ts` | Use backend shared endpoint in `fetchAssetLibrary`. |
 | `test/token-indexer-shared.test.js` | New unit tests for editor indexing logic. |
 | `test/api/indexer-shared.test.js` | New API route tests for `/indexer/shared`. |
 | `src/api/openapi.json` | Document `/indexer/shared`. |
@@ -27,17 +27,17 @@
 
 ---
 
-## Task 1: Extend `src/api/token-indexer.js` for editor indexing
+## Task 1: Extend `src/api/token-indexer.ts` for editor indexing
 
 **Files:**
-- Modify: `src/api/token-indexer.js`
+- Modify: `src/api/token-indexer.ts`
 
 - [ ] **Step 1.1: Add imports and constants**
 
-Add at the top of `src/api/token-indexer.js`, immediately after the existing imports:
+Add at the top of `src/api/token-indexer.ts`, immediately after the existing imports:
 
 ```js
-import { getStorage } from "./storage/index.js";
+import { getStorage } from "./storage/index.ts";
 
 const EDITOR_SET_CHANGED_TOPIC0 =
   "0xe04346630a2a402b40ab5f6918205fee5369cca36e2e6c2eebc4188b5f10c8c3";
@@ -413,10 +413,10 @@ Expected: 3 tests pass.
 ## Task 2: Add `GET /api/v1/indexer/shared` route
 
 **Files:**
-- Modify: `src/api/routes/indexer.js`
-- Modify: `src/api/schemas.js`
+- Modify: `src/api/routes/indexer.ts`
+- Modify: `src/api/schemas.ts`
 
-- [ ] **Step 2.1: Add `sharedQuerySchema` to `src/api/schemas.js`**
+- [ ] **Step 2.1: Add `sharedQuerySchema` to `src/api/schemas.ts`**
 
 Add right after `ownedQuerySchema`:
 
@@ -431,14 +431,14 @@ export const sharedQuerySchema = z.object({
 });
 ```
 
-- [ ] **Step 2.2: Update `src/api/routes/indexer.js`**
+- [ ] **Step 2.2: Update `src/api/routes/indexer.ts`**
 
 Replace the imports at the top with:
 
 ```js
-import { getIndexer } from "../token-indexer.js";
-import { validateQuery } from "../validation.js";
-import { ownedQuerySchema, sharedQuerySchema } from "../schemas.js";
+import { getIndexer } from "../token-indexer.ts";
+import { validateQuery } from "../validation.ts";
+import { ownedQuerySchema, sharedQuerySchema } from "../schemas.ts";
 ```
 
 Add the new route inside `indexerRoutes()` after the `/owned` handler:
@@ -491,7 +491,7 @@ Add the new route inside `indexerRoutes()` after the `/owned` handler:
 Run:
 
 ```bash
-npx eslint src/api/routes/indexer.js src/api/schemas.js
+npx eslint src/api/routes/indexer.ts src/api/schemas.ts
 npm test -- test/api.test.js --runInBand
 ```
 
@@ -502,7 +502,7 @@ Expected: ESLint clean; API tests pass.
 ## Task 3: Add frontend API helper
 
 **Files:**
-- Modify: `frontend/src/js/services/api.js`
+- Modify: `frontend/src/js/services/api.ts`
 
 - [ ] **Step 3.1: Add `getSharedTokens`**
 
@@ -542,17 +542,17 @@ export async function getSharedTokens(address, chainId, force = false) {
 Run:
 
 ```bash
-npx eslint frontend/src/js/services/api.js
+npx eslint frontend/src/js/services/api.ts
 ```
 
 Expected: clean.
 
 ---
 
-## Task 4: Update `frontend/src/js/ui/asset-library.js` to use the backend shared endpoint
+## Task 4: Update `frontend/src/js/ui/asset-library.ts` to use the backend shared endpoint
 
 **Files:**
-- Modify: `frontend/src/js/ui/asset-library.js`
+- Modify: `frontend/src/js/ui/asset-library.ts`
 
 - [ ] **Step 4.1: Update imports**
 
@@ -649,17 +649,17 @@ async function loadModule() {
     utils: { toBigInt: (x) => BigInt(x) },
   };
 
-  await jest.unstable_mockModule("../src/config.js", () => ({
+  await jest.unstable_mockModule("../src/config.ts", () => ({
     getWeb3: jest.fn(() => fakeWeb3),
     getContractAddress: jest.fn(() => "0x0000000000000000000000000000000000000001"),
     NETWORK_CONFIGS: {},
   }));
 
-  await jest.unstable_mockModule("../src/api/storage/index.js", () => ({
+  await jest.unstable_mockModule("../src/api/storage/index.ts", () => ({
     getStorage: jest.fn(() => ({ cat: _cat })),
   }));
 
-  return import("../src/api/token-indexer.js");
+  return import("../src/api/token-indexer.ts");
 }
 
 beforeEach(() => {
@@ -752,7 +752,7 @@ Expected: 2 tests pass.
 
 - [ ] **Step 6.1: Write the test file**
 
-Model it on the existing `test/api.test.js` patterns. Use a mocked `token-indexer.js` module so the test does not need a running chain or IPFS.
+Model it on the existing `test/api.test.js` patterns. Use a mocked `token-indexer.ts` module so the test does not need a running chain or IPFS.
 
 ```js
 import { jest } from "@jest/globals";
@@ -767,11 +767,11 @@ async function buildApp() {
     getSharedTokens: jest.fn().mockReturnValue(["7", "42"]),
   };
 
-  await jest.unstable_mockModule("../src/api/token-indexer.js", () => ({
+  await jest.unstable_mockModule("../src/api/token-indexer.ts", () => ({
     getIndexer: jest.fn(() => mockIndexer),
   }));
 
-  const { default: indexerRoutes } = await import("../src/api/routes/indexer.js");
+  const { default: indexerRoutes } = await import("../src/api/routes/indexer.ts");
 
   const app = express();
   app.use("/indexer", indexerRoutes());

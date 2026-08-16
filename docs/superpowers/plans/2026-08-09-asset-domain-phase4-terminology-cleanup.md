@@ -12,8 +12,8 @@
 
 **Scope refinements vs spec (controller-noted):**
 - `MAX_CHILD_WORLD_DEPTH` → `MAX_CHILD_ASSET_DEPTH` in code and comments.
-- UI copy in `app.pug`, `ui/nesting.js`, and related SCSS data attributes.
-- Log lines and comments in `engine/scene-loader.js`, `engine/scene-graph.js` where they say "child world".
+- UI copy in `app.pug`, `ui/nesting.ts`, and related SCSS data attributes.
+- Log lines and comments in `engine/scene-loader.ts`, `engine/scene-graph.ts` where they say "child world".
 - Docs: `AGENTS.md` and `ARCHITECTURE.md` wording corrected; manifest field names (`child_ref`, etc.) are NOT renamed.
 - Internal bus event names (`NESTING_*`) are NOT renamed.
 - Storage keys (`localStorage` / IndexedDB) are NOT renamed.
@@ -32,15 +32,15 @@
 ### Task 1: Constant rename
 
 **Files:**
-- Modify: `frontend/src/js/engine/state.js`
+- Modify: `frontend/src/js/engine/state.ts`
 - Modify: all files importing or comparing `MAX_CHILD_WORLD_DEPTH`
 - Modify: `test/frontend/nesting.test.js` (if it references the constant)
 
 **Interfaces:**
-- Export `MAX_CHILD_ASSET_DEPTH` from `engine/state.js`.
+- Export `MAX_CHILD_ASSET_DEPTH` from `engine/state.ts`.
 - Keep a deprecated re-export alias `MAX_CHILD_WORLD_DEPTH` pointing at `MAX_CHILD_ASSET_DEPTH` if any external/legacy consumer still references it, otherwise replace all usages.
 
-- [ ] **Step 1: Rename in `engine/state.js`**
+- [ ] **Step 1: Rename in `engine/state.ts`**
 
 ```js
 export const MAX_CHILD_ASSET_DEPTH = 5;
@@ -67,7 +67,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/state.js <other changed files> test/frontend/nesting.test.js
+git add frontend/src/js/engine/state.ts <other changed files> test/frontend/nesting.test.js
 git commit -m "refactor(engine): rename MAX_CHILD_WORLD_DEPTH to MAX_CHILD_ASSET_DEPTH"
 ```
 
@@ -76,8 +76,8 @@ git commit -m "refactor(engine): rename MAX_CHILD_WORLD_DEPTH to MAX_CHILD_ASSET
 ### Task 2: Log and comment wording
 
 **Files:**
-- Modify: `frontend/src/js/engine/scene-loader.js`
-- Modify: `frontend/src/js/engine/scene-graph.js`
+- Modify: `frontend/src/js/engine/scene-loader.ts`
+- Modify: `frontend/src/js/engine/scene-graph.ts`
 - Modify: any other files logging "child world" or "world"
 
 **Interfaces:**
@@ -113,7 +113,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/engine/scene-loader.js frontend/src/js/engine/scene-graph.js
+git add frontend/src/js/engine/scene-loader.ts frontend/src/js/engine/scene-graph.ts
 git commit -m "docs(engine): replace world vocabulary with asset in logs and comments"
 ```
 
@@ -123,7 +123,7 @@ git commit -m "docs(engine): replace world vocabulary with asset in logs and com
 
 **Files:**
 - Modify: `frontend/src/pug/app.pug`
-- Modify: `frontend/src/js/ui/nesting.js`
+- Modify: `frontend/src/js/ui/nesting.ts`
 - Modify: `frontend/src/scss/` files if data attributes or aria-labels reference "world"
 - Modify: `e2e/helpers/studio-selectors.mjs` if selectors change
 - Modify: affected E2E specs if assertions change
@@ -137,7 +137,7 @@ git commit -m "docs(engine): replace world vocabulary with asset in logs and com
 
 Find the dive button label and change from "Open This World" to "Open Asset".
 
-- [ ] **Step 2: Update `ui/nesting.js`**
+- [ ] **Step 2: Update `ui/nesting.ts`**
 
 Update toast messages, labels, and any user-visible strings:
 - dive toast: "Opened child asset" (or equivalent)
@@ -168,7 +168,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/pug/app.pug frontend/src/js/ui/nesting.js frontend/src/scss/ e2e/
+git add frontend/src/pug/app.pug frontend/src/js/ui/nesting.ts frontend/src/scss/ e2e/
 git commit -m "refactor(ui): replace world vocabulary with asset in user-facing copy"
 ```
 

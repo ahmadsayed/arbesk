@@ -28,14 +28,14 @@ User email ──► signInWithEmail() ──► verifyEmailOTP() ──► crea
 
 ## Key Files (full detail)
 
-- `frontend/src/js/blockchain/wallet-cdp.js` — CDP SDK wrapper + EIP-1193 shim
-- `frontend/src/js/blockchain/wallet-core.js` — wallet connection orchestration; persists CDP email in `localStorage` under `arbesk-cdp-email`; stores last-used wallet in `arbesk-last-wallet`; auto-restores CDP, EOA, and WalletConnect sessions on page load via silent `eth_accounts` / session checks (no popup)
-- `frontend/src/js/ui/wallet-modal.js` — email OTP UI; clears stale CDP browser state before starting a new OTP flow
-- `frontend/src/js/ui/header-wallet-button.js` — displays CDP user email; hides network selector for CDP sessions
-- `frontend/src/js/blockchain/smart-wallet-support.js` — Base Sepolia chain gating (`isSmartWalletSupported(chainId)`)
-- `frontend/src/js/blockchain/wallet-publishing.js` — publish/updateURI with smart-account gas skipping
-- `src/api/routes/paymaster.js` — backend paymaster proxy (reserved for production custom paymasters)
-- `src/api/siwe-verify.js` — SIWE verification with `eoaAddress` fallback (embedded EOA signs; `message.address` is the smart account)
+- `frontend/src/js/blockchain/wallet-cdp.ts` — CDP SDK wrapper + EIP-1193 shim
+- `frontend/src/js/blockchain/wallet-core.ts` — wallet connection orchestration; persists CDP email in `localStorage` under `arbesk-cdp-email`; stores last-used wallet in `arbesk-last-wallet`; auto-restores CDP, EOA, and WalletConnect sessions on page load via silent `eth_accounts` / session checks (no popup)
+- `frontend/src/js/ui/wallet-modal.ts` — email OTP UI; clears stale CDP browser state before starting a new OTP flow
+- `frontend/src/js/ui/header-wallet-button.ts` — displays CDP user email; hides network selector for CDP sessions
+- `frontend/src/js/blockchain/smart-wallet-support.ts` — Base Sepolia chain gating (`isSmartWalletSupported(chainId)`)
+- `frontend/src/js/blockchain/wallet-publishing.ts` — publish/updateURI with smart-account gas skipping
+- `src/api/routes/paymaster.ts` — backend paymaster proxy (reserved for production custom paymasters)
+- `src/api/siwe-verify.ts` — SIWE verification with `eoaAddress` fallback (embedded EOA signs; `message.address` is the smart account)
 
 ## Required Configuration
 
@@ -84,8 +84,8 @@ Status enum (shared by browser and server SDKs): `pending → signed → broadca
 
 - Base Sepolia user operations are **gasless by default** (CDP SDK README) — `useCdpPaymaster: true` is the supported path, not a workaround.
 - Local dev: `useCdpPaymaster: true` — CDP's bundler must reach the paymaster URL; `localhost` is unreachable from CDP's servers.
-- Production custom paymaster: expose the backend proxy (`src/api/routes/paymaster.js`) on a public absolute HTTPS URL. Custom paymasters must be **ERC-7677** compliant (`paymasterUrl` + optional `paymasterContext`).
+- Production custom paymaster: expose the backend proxy (`src/api/routes/paymaster.ts`) on a public absolute HTTPS URL. Custom paymasters must be **ERC-7677** compliant (`paymasterUrl` + optional `paymasterContext`).
 
 ## SIWE & Undeployed Smart Accounts
 
-A fresh smart account may be **undeployed** at SIWE time; CDP wraps signatures with **EIP-6492** so they remain verifiable pre-deployment. `siwe-verify.js` currently verifies against the embedded EOA signature (with the `eoaAddress` fallback), so nothing to change — but if smart-account SIWE verification ever moves on-chain, keep EIP-6492 unwrapping in mind or verification will fail for undeployed accounts.
+A fresh smart account may be **undeployed** at SIWE time; CDP wraps signatures with **EIP-6492** so they remain verifiable pre-deployment. `siwe-verify.ts` currently verifies against the embedded EOA signature (with the `eoaAddress` fallback), so nothing to change — but if smart-account SIWE verification ever moves on-chain, keep EIP-6492 unwrapping in mind or verification will fail for undeployed accounts.

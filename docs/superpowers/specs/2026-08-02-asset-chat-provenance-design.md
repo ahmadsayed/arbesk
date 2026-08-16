@@ -6,11 +6,11 @@
 
 ## 1. Context
 
-AI chat is currently fully ephemeral: prompt bubbles live in the DOM (`chat-messages.js`), pending generations live in an in-memory `Map` (`state/pending-generations.js` — "no persistence, a page reload drops undecided generations"), and the backend persists nothing. Starting a new project or reloading wipes the conversation. The only trace of a prompt today is the node *name*, truncated to 60 chars (`services/api.js` sets it from `prompt.slice(0, 60)`).
+AI chat is currently fully ephemeral: prompt bubbles live in the DOM (`chat-messages.js`), pending generations live in an in-memory `Map` (`state/pending-generations.ts` — "no persistence, a page reload drops undecided generations"), and the backend persists nothing. Starting a new project or reloading wipes the conversation. The only trace of a prompt today is the node *name*, truncated to 60 chars (`services/api.ts` sets it from `prompt.slice(0, 60)`).
 
 **Decision: Path 2 — first-class in the asset version, not Nostr.** Two paths were considered:
 
-- **Path 1 (Nostr, like comments)** — full transcript via `chat-proxy.js` → relay → IPFS archive → manifest CID. Rejected for this phase: prompts are provenance, not conversation; provenance must load with the asset with zero network dependencies; a second Nostr thread type duplicates WS auth, rate limiting, and archive machinery.
+- **Path 1 (Nostr, like comments)** — full transcript via `chat-proxy.ts` → relay → IPFS archive → manifest CID. Rejected for this phase: prompts are provenance, not conversation; provenance must load with the asset with zero network dependencies; a second Nostr thread type duplicates WS auth, rate limiting, and archive machinery.
 - **Path 2 (manifest)** — chosen. Prompts are small; they belong to the version they produced.
 
 **Key refinement: the chain is the history.** The dormant `scene.nodes[].history[]` array (documented in `ARCHITECTURE.md` §4.1, never implemented, to be removed — see §6) would duplicate every entry across all subsequent snapshots. Instead, each manifest version carries **only its own** chat records; walking `prev_asset_manifest_cid` and concatenating per-version records reconstructs the full conversation, oldest → newest, with each prompt stored exactly once.
@@ -53,7 +53,7 @@ Each version produced by AI chat activity gains:
 Entry fields:
 
 - `prompt` (string, required) — the user's chat text, verbatim.
-- `provider` (string, required) — `"tripo3d"` | `"mock"` | `"parametric"` (matches the provider naming in `generate-node.js`; extensible).
+- `provider` (string, required) — `"tripo3d"` | `"mock"` | `"parametric"` (matches the provider naming in `generate-node.ts`; extensible).
 - `task` (string, required) — `"model"` | `"texture"`; extensible — old clients must ignore unknown values.
 - `taskId` (string, optional) — the **provider's** task ID (e.g., Tripo task ID), not the backend registry ID. Omitted for `mock` and `parametric`.
 - `timestamp` (number, required) — unix seconds, set when the record is written.
@@ -62,14 +62,14 @@ Parametric chat edits (color/scale, client-side) are recorded as `{provider: "pa
 
 `metadata` participates in the manifest semantic diff (`manifest-builder.js` strips only `version`/`timestamp`/`prev_asset_manifest_cid` for no-op detection) — intended: a save that records chat is never a no-op.
 
-Zod: add `metadata.chat` to `manifestSchema` in `src/api/schemas.js`. Non-strict parsing means old clients tolerate the field; add it for cleanliness.
+Zod: add `metadata.chat` to `manifestSchema` in `src/api/schemas.ts`. Non-strict parsing means old clients tolerate the field; add it for cleanliness.
 
 ## 3. Write Path
 
 ```
 Chat prompt → POST /generations → poll → success payload gains providerTaskId
-  → generateAsset() returns {..., taskId, providerTaskId}    (services/api.js)
-  → pending record gains {taskId, provider, task}           (state/pending-generations.js)
+  → generateAsset() returns {..., taskId, providerTaskId}    (services/api.ts)
+  → pending record gains {taskId, provider, task}           (state/pending-generations.ts)
   → "Show in Studio" / apply consumes record into scene
   → save/publish: manifest builder collects records consumed since previous
     version
@@ -78,9 +78,9 @@ Chat prompt → POST /generations → poll → success payload gains providerTas
 
 Concrete changes:
 
-1. **Backend surfaces the provider task ID** — `src/api/assets/generate-node.js` poll-success response (currently `generate-node.js:246`) gains `providerTaskId: entry.tripoTaskId`. This amends decision #3 of `2026-07-22-clear-chat-refine-design.md` ("the Tripo task ID never reaches the browser") for this field only: the ID is tied to the user's own BYOK Tripo account, so exposing it to that user's browser is low-risk, and cross-session enhance flows require it. The internal registry `taskId` remains the polling handle and is never stored.
-2. **`services/api.js` `generateAsset()`** — return `providerTaskId` **alongside** the existing registry `taskId`. The registry ID must stay unchanged: the in-session refine chain (`refineTaskId`) looks it up in the backend task registry (`getCompletedTask`). Only `providerTaskId` is persisted in manifests.
-3. **`state/pending-generations.js`** — pending records gain `taskId` (provider task ID), `provider`, `task`, and a `recorded` flag (set once written into a saved version).
+1. **Backend surfaces the provider task ID** — `src/api/assets/generate-node.ts` poll-success response (currently `generate-node.ts:246`) gains `providerTaskId: entry.tripoTaskId`. This amends decision #3 of `2026-07-22-clear-chat-refine-design.md` ("the Tripo task ID never reaches the browser") for this field only: the ID is tied to the user's own BYOK Tripo account, so exposing it to that user's browser is low-risk, and cross-session enhance flows require it. The internal registry `taskId` remains the polling handle and is never stored.
+2. **`services/api.ts` `generateAsset()`** — return `providerTaskId` **alongside** the existing registry `taskId`. The registry ID must stay unchanged: the in-session refine chain (`refineTaskId`) looks it up in the backend task registry (`getCompletedTask`). Only `providerTaskId` is persisted in manifests.
+3. **`state/pending-generations.ts`** — pending records gain `taskId` (provider task ID), `provider`, `task`, and a `recorded` flag (set once written into a saved version).
 4. **`create-panel.js`** — passes the new fields through when registering the pending record; `task` is `"texture"` when the generation was a refine, else `"model"`.
 5. **Manifest build** (`manifest-builder.js` / `services/asset-save/`) — at save time, append the consumed records as `metadata.chat` entries. Parametric `{provider: "parametric"}` entries are supported by the schema but no current UI path produces chat-prompt parametric commands, so none are written this phase.
 
@@ -105,9 +105,9 @@ Opening an asset shows its prompt history as a **read-only chat-like bubble view
 ## 6. Cleanup: Remove Dormant `node.history[]`
 
 - `docs/ARCHITECTURE.md` §4.1 — remove the `history` array from the manifest example and the provenance-log sentence in the §4.1 closing note; document `metadata.chat` in its place.
-- `src/api/schemas.js` — delete `historyEntrySchema` and `history` from `nodeSchema`.
-- `frontend/src/js/ui/ledger-panel.js` — remove the dead node-history extraction loop (`extractActivities`, ~lines 135-141); optionally surface `metadata.chat` entries as "AI: prompt…" activity lines (nice-to-have, keep if trivial).
-- Check burn chain-walker for `history[].src` consumption and remove/adjust (`manifest-chain-walker.js`).
+- `src/api/schemas.ts` — delete `historyEntrySchema` and `history` from `nodeSchema`.
+- `frontend/src/js/ui/ledger-panel.ts` — remove the dead node-history extraction loop (`extractActivities`, ~lines 135-141); optionally surface `metadata.chat` entries as "AI: prompt…" activity lines (nice-to-have, keep if trivial).
+- Check burn chain-walker for `history[].src` consumption and remove/adjust (`manifest-chain-walker.ts`).
 
 ## 7. Testing
 

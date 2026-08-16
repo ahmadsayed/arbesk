@@ -114,7 +114,7 @@ Experimental and inert until enabled with `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODE
 Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the asset · fractal nesting ("dollhouse") · temporal isolation · parametric edits are first-class versions.
 
 - **Manifests**: content-addressed JSON on IPFS, chained backward via `prev_manifest_cid` (immutable chain).
-- **`child_ref` token children**: `{ type, chainId, contractAddress, tokenId, standard, resolution }` — never a static CID; always include `transform_matrix` (identity default); no local `history`; `MAX_CHILD_ASSET_DEPTH = 5`, cycle protection in `scene-graph.ts`.
+- **`child_ref` token children**: `{ collection: { chainId, contractAddress, tokenId }, assetID }` — never a static CID; always include `transform_matrix` (identity default); no local `history`; `MAX_CHILD_ASSET_DEPTH = 5`, cycle protection in `scene-graph.ts`.
 - **Collections**: `tokenURI()` → `type: "collection"` manifest with `assets: { assetID: cid }`. Default token ID from wallet address; named collections from `keccak256(address, name)`. Updates write a new collection manifest + `updateAssetURI()` — no remint.
 - **Thumbnails**: best-effort — all code must tolerate missing thumbnails.
 - **Comments archive** (`comments_archive_cid`): asset-scoped (Nostr tag = asset tag). Republish snapshots via `POST /api/v1/assets/snapshot-comments`; frontend loads archive before live relay events, dedups by `event.id`; archive unpinned on burn.
@@ -142,7 +142,7 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E | Playwright | `e2e/specs/*.spec.js` |
 
-~1468 Jest tests / 110 suites; E2E 19 specs / 39 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
+~1468 Jest tests / 110 suites; E2E 22 specs / 68 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
 
 **Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child assets · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `npm test` is **not enough** for these.
 

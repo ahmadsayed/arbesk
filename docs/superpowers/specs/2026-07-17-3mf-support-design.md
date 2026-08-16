@@ -48,9 +48,9 @@ Pure functions, no DOM/Babylon/IPFS-client globals where avoidable — written w
 }
 ```
 
-### Format handler: `frontend/src/js/formats/handlers/3mf-handler.js`
+### Format handler: `frontend/src/js/formats/handlers/3mf-handler.ts`
 
-Registered alongside glTF/GLB in `frontend/src/js/formats/index.js`.
+Registered alongside glTF/GLB in `frontend/src/js/formats/index.ts`.
 
 - `format: "3mf"`, `extensions: [".3mf"]`
 - `sniff(bytes)` — ZIP magic `PK\x03\x04` and the entry list contains `3D/3dmodel.model`.
@@ -63,8 +63,8 @@ Registered alongside glTF/GLB in `frontend/src/js/formats/index.js`.
 ### Mock service
 
 - Download `examples/core/box.3mf` from the BSD-licensed [`3MFConsortium/3mf-samples`](https://github.com/3MFConsortium/3mf-samples) repo into `mock-gltf-assets/box.3mf`; verify the repo LICENSE at download time and add `mock-gltf-assets/ATTRIBUTION.md` with source + license.
-- `src/api/adapters/mock-adapter.js`: one new branch — prompt (lowercased) contains `3mf` → `fs.readFileSync` → `{ buffer, format: "3mf", provider: "mock" }`. Existing keyword routes unchanged.
-- `src/api/assets/generate-node.js`: **no change** — `format`/`path` already flow through; the browser uploads `asset.3mf` to IPFS and the manifest node gets `source: { cid, path: "asset.3mf", format: "3mf" }` (`frontend/src/js/services/api.js`).
+- `src/api/adapters/mock-adapter.ts`: one new branch — prompt (lowercased) contains `3mf` → `fs.readFileSync` → `{ buffer, format: "3mf", provider: "mock" }`. Existing keyword routes unchanged.
+- `src/api/assets/generate-node.ts`: **no change** — `format`/`path` already flow through; the browser uploads `asset.3mf` to IPFS and the manifest node gets `source: { cid, path: "asset.3mf", format: "3mf" }` (`frontend/src/js/services/api.ts`).
 
 ### Dependencies
 

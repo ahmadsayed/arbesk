@@ -98,7 +98,7 @@ Add `#burnAssetBtn` to the bottom of `.asset-def-body`, after the team panel.
 - Update `getElementById` calls: `saveAssetBtn` and `publishAssetBtn` still reference the same IDs — no change needed as long as the IDs are preserved in the new headerbar location. `saveBtnText` now resolves to the `#saveAssetBtnText` span in the headerbar.
 
 ### `create-panel.js`
-- The New Asset button is wired in `frontend/src/js/engine/scene-graph.js` (via `document.getElementById("newAssetBtn")`). `create-panel.js` does not need to wire it.
+- The New Asset button is wired in `frontend/src/js/engine/scene-graph.ts` (via `document.getElementById("newAssetBtn")`). `create-panel.js` does not need to wire it.
 
 ### `sidebar.js`
 - No action-row show/hide logic is required; the sidebar tabs are Settings, Chat, Outline, Gallery, and Activity.
@@ -148,9 +148,9 @@ Verify `.btn-sm` sizing is appropriate for headerbar (target height ~30px to sit
 |------|--------|
 | `frontend/src/pug/studio.pug` | Add headerbar doc-action group; remove sidebar action rows; place Burn inside Settings view |
 | `frontend/src/scss/components/_headerbar.scss` | Add `.headerbar-divider`, `.headerbar-doc-actions` |
-| `frontend/src/js/engine/scene-graph.js` | Wire `#newAssetBtn` click handler |
-| `frontend/src/js/ui/asset-save.js` | No logic change; IDs preserved |
-| `frontend/src/js/ui/sidebar.js` | No action-row refs needed |
+| `frontend/src/js/engine/scene-graph.ts` | Wire `#newAssetBtn` click handler |
+| `frontend/src/js/ui/asset-save.ts` | No logic change; IDs preserved |
+| `frontend/src/js/ui/sidebar.ts` | No action-row refs needed |
 
 ---
 

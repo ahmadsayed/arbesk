@@ -34,13 +34,13 @@ CDP email-login smart wallets: sign-in failures, transaction submission, EIP-119
 
 ## Key Files
 
-- `frontend/src/js/blockchain/wallet-cdp.js` — CDP SDK wrapper + EIP-1193 shim
-- `frontend/src/js/blockchain/wallet-core.js` — orchestration; `localStorage` `arbesk-cdp-email` / `arbesk-last-wallet`; silent auto-restore on page load
-- `frontend/src/js/ui/wallet-modal.js` — email OTP UI; clears stale CDP state first
-- `frontend/src/js/ui/header-wallet-button.js` — shows CDP email; hides network selector for CDP sessions
-- `frontend/src/js/blockchain/wallet-publishing.js` — publish/updateURI with smart-account gas skipping
-- `src/api/routes/paymaster.js` — backend paymaster proxy (production custom paymasters)
-- `src/api/siwe-verify.js` — SIWE verification with `eoaAddress` fallback
+- `frontend/src/js/blockchain/wallet-cdp.ts` — CDP SDK wrapper + EIP-1193 shim
+- `frontend/src/js/blockchain/wallet-core.ts` — orchestration; `localStorage` `arbesk-cdp-email` / `arbesk-last-wallet`; silent auto-restore on page load
+- `frontend/src/js/ui/wallet-modal.ts` — email OTP UI; clears stale CDP state first
+- `frontend/src/js/ui/header-wallet-button.ts` — shows CDP email; hides network selector for CDP sessions
+- `frontend/src/js/blockchain/wallet-publishing.ts` — publish/updateURI with smart-account gas skipping
+- `src/api/routes/paymaster.ts` — backend paymaster proxy (production custom paymasters)
+- `src/api/siwe-verify.ts` — SIWE verification with `eoaAddress` fallback
 
 ## References
 

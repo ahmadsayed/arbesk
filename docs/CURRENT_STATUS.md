@@ -71,7 +71,7 @@ src/
     │   ├── ipfs.ts             # POST /ipfs/upload-url + /ipfs/unpin
     │   ├── openapi.ts          # GET /openapi.json + /docs
     │   ├── paymaster.ts        # POST /paymaster — CDP Paymaster JSON-RPC proxy
-    │   └── test-utils.js       # Test-only reset helpers
+    │   └── test-utils.ts       # Test-only reset helpers
     ├── sessions.ts             # SIWE session create/delete (24h TTL)
     ├── siwe-verify.ts          # EIP-4361 message verification
     └── openapi.json            # Static OpenAPI spec
@@ -148,7 +148,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 
 ### 3.1 Actual File Layout
 
-**JavaScript (48+ files)**
+**TypeScript (frontend `frontend/src/js/` + backend `src/`); plain JS only in `frontend/src/js/vendor/` and build scripts**
 
 ```
 frontend/src/js/
@@ -316,7 +316,7 @@ frontend/src/js/
 | Suite | Count | Status |
 |-------|-------|--------|
 | Jest unit (all) | 1468 across 110 suites | ✅ All passing (verified 2026-08-03) |
-| E2E Playwright specs | 19 specs / 39 tests | ✅ Chromium (manual run against local stack) |
+| E2E Playwright specs | 22 specs / 68 tests | ✅ Chromium (manual run against local stack) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**

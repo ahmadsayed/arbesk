@@ -8,8 +8,8 @@ say whether signed URLs are reusable — you have to test it).
 
 ## 1. Architecture
 
-`src/api/storage/pinata-adapter.js` wraps the Pinata v3 SDK (`PinataSDK`).
-Selected in `src/api/storage/index.js` when `IPFS_BACKEND=pinata`, reading
+`src/api/storage/pinata-adapter.ts` wraps the Pinata v3 SDK (`PinataSDK`).
+Selected in `src/api/storage/index.ts` when `IPFS_BACKEND=pinata`, reading
 `PINATA_JWT`, `PINATA_GATEWAY`, `PINATA_UPLOAD_TTL` from `.env`.
 
 - **Backend writes** (`add`, `addDirectory`): use the master JWT directly, server-side only.
@@ -54,7 +54,7 @@ reused across files.
 
 Before this pattern existed, every component file (glTF buffer, texture,
 composite JSON) minted its own credential one at a time —
-`frontend/src/js/ipfs/write-to-ipfs.js`'s `credential || await getUploadCredential()`
+`frontend/src/js/ipfs/write-to-ipfs.ts`'s `credential || await getUploadCredential()`
 fallback — turning a 10-file asset publish into 10 serialized
 backend-round-trip + Pinata-sign-call pairs. Steady-state a single mint is
 ~0.4–0.6s warm (~1–2s cold-TLS first call of a session); it multiplies badly.
@@ -65,13 +65,13 @@ The fix: mint the whole batch of signed URLs in **one** backend round trip,
 parallelized server-side, then hand one URL to each file.
 
 - **Backend**: `StorageAdapter.mintUploadCredentials(count)` —
-  `pinata-adapter.js` runs `Promise.all` of N `createSignedURL()` calls;
-  `kubo-adapter.js` returns N copies of the same reusable credential (no-op,
+  `pinata-adapter.ts` runs `Promise.all` of N `createSignedURL()` calls;
+  `kubo-adapter.ts` returns N copies of the same reusable credential (no-op,
   Kubo doesn't need pooling). Route: `POST /api/v1/ipfs/upload-urls`
-  `{ count }` (1–200, `uploadUrlsSchema` in `src/api/schemas.js`) →
+  `{ count }` (1–200, `uploadUrlsSchema` in `src/api/schemas.ts`) →
   `{ credentials: [...] }`. Session-gated, rate-limited like `/upload-url`.
-- **Frontend**: `getUploadCredentials(count)` in `services/api.js` hits the
-  batch route. `frontend/src/js/gltf/async-gltf.js` wraps it in
+- **Frontend**: `getUploadCredentials(count)` in `services/api.ts` hits the
+  batch route. `frontend/src/js/gltf/async-gltf.ts` wraps it in
   `getPooledUploadCredential(count)`, which for Pinata reshapes the array
   into a single pool-credential object: `{ backend: 'pinata', urls: [...],
   gateway, reusable: true }` (kubo passes through unchanged — already
@@ -79,7 +79,7 @@ parallelized server-side, then hand one URL to each file.
   (`buffers.length + images.length + 1`, clamped to 200) via
   `estimateUploadCount`/`estimateGlbUploadCount` — over-minting is harmless
   (unused signed URLs just expire), under-minting would starve mid-upload.
-- **Consumption**: `frontend/src/js/ipfs/upload-with-credential.js`'s
+- **Consumption**: `frontend/src/js/ipfs/upload-with-credential.ts`'s
   `uploadToPinata()` calls `nextPinataUrl(credential)`, which does
   `credential.urls.shift()` for a pool credential (or returns the plain
   `credential.url` for a legacy single-shot credential). Safe without a lock
@@ -137,7 +137,7 @@ not inferred from behavior: `node_modules/pinata/dist/index.mjs` (search
 `Source: "sdk/createSignURL"`) retries `POST .../v3/files/sign` up to 3 times
 on retryable failures (network errors, 5xx, 429 — 4xx auth errors throw
 immediately, no retry) with `delay = Math.min(1000 * 2**attempt, 4000)`ms —
-i.e. 1s, 2s, 4s between attempts. `pinata-adapter.js`'s
+i.e. 1s, 2s, 4s between attempts. `pinata-adapter.ts`'s
 `installSignedUrlDiagnostics()` (see §5) caught a live instance of exactly
 this on the first real run after being added: attempt #1 failed with a raw
 `fetch failed` (no HTTP status — a network-level failure, e.g. DNS/TCP/TLS,
@@ -149,7 +149,7 @@ each time (see §5).
 
 ## 5. Signed-URL Diagnostic Logging
 
-`pinata-adapter.js` installs a scoped `fetch` wrapper (`installSignedUrlDiagnostics`,
+`pinata-adapter.ts` installs a scoped `fetch` wrapper (`installSignedUrlDiagnostics`,
 called once from `createPinataAdapter`, idempotent, lazy - never installed in
 Kubo-only deployments) that intercepts only URLs containing `/files/sign` and
 logs each individual attempt the SDK's internal retry loop makes - the ones
@@ -207,18 +207,18 @@ is the reliable path, and even it occasionally needs one retry per id
 
 Even with the batch-mint fix (§3), every mint - single or batch - still pays
 Pinata's `/files/sign` latency (§4: 0.4-6s+, occasionally ~9-10s with SDK
-retries) *on the request path*, because it mints on demand. `pinata-adapter.js`
+retries) *on the request path*, because it mints on demand. `pinata-adapter.ts`
 closes that gap: a small pool of already-signed URLs, kept warm in the
 background, so `mintUploadCredential(s)` usually just pops from an array -
 sub-millisecond, verified live (0-5ms per pop against the real account).
 
 - **Config**: `PINATA_POOL_SIZE` (default 20, 0 disables pooling entirely -
   falls back to minting on demand, byte-for-byte the pre-pool behavior) and
-  `PINATA_POOL_EXPIRY_MARGIN` (default 60s) via `storage/index.js`. A pooled
+  `PINATA_POOL_EXPIRY_MARGIN` (default 60s) via `storage/index.ts`. A pooled
   entry is discarded once `Date.now() - mintedAt > uploadTtl - margin` -
   don't hand the browser a URL that might expire mid-upload.
   **`PINATA_UPLOAD_TTL` must comfortably exceed the margin** or pooling does
-  nothing (every entry is stale the instant it's minted) - `pinata-adapter.js`
+  nothing (every entry is stale the instant it's minted) - `pinata-adapter.ts`
   logs a `pool misconfigured` warning at construction if so.
 - **Serving**: `mintUploadCredential()`/`mintUploadCredentials(count)` prune
   expired entries, pop what's available, mint only the shortfall inline (same

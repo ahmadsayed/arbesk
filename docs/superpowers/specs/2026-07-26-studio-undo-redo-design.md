@@ -18,15 +18,15 @@ Explicitly **not** backed by time travel / version history: that machinery is pe
 
 ## Existing primitives reused
 
-- `stageNodeTransform(nodeId)` / `applyTransformMatrix(anchor, matrix)` (`frontend/src/js/engine/transforms.js`) — serialize/restore local TRS as a 16-element column-major matrix, and sync `state.pendingTransformEdits`.
-- `ensureDragEndSubscription()` (`frontend/src/js/ui/transform-gizmo.js:380`) — `onDragStartObservable`/`onDragEndObservable` give clean gesture boundaries, including group drags via `_startGroupDrag()`/`_endGroupDrag()`.
-- Color undo internals in `frontend/src/js/engine/parametric-preview.js` (`_applyUndoEntry`, push-on-picker-close behavior) — kept, but its private `undoStack`/`redoStack` and its Ctrl+Z keydown handler (:604) are removed in favor of the shared stack/dispatcher.
-- `state.isGizmoDragging` guard, `state.nodeAnchors`, `state.pendingTransformEdits`, `state.pendingPostProcessorEdits` (`frontend/src/js/engine/state.js`).
-- Store/event pattern in `frontend/src/js/state/create-store.js` for change notification.
+- `stageNodeTransform(nodeId)` / `applyTransformMatrix(anchor, matrix)` (`frontend/src/js/engine/transforms.ts`) — serialize/restore local TRS as a 16-element column-major matrix, and sync `state.pendingTransformEdits`.
+- `ensureDragEndSubscription()` (`frontend/src/js/ui/transform-gizmo.ts:380`) — `onDragStartObservable`/`onDragEndObservable` give clean gesture boundaries, including group drags via `_startGroupDrag()`/`_endGroupDrag()`.
+- Color undo internals in `frontend/src/js/engine/parametric-preview.ts` (`_applyUndoEntry`, push-on-picker-close behavior) — kept, but its private `undoStack`/`redoStack` and its Ctrl+Z keydown handler (:604) are removed in favor of the shared stack/dispatcher.
+- `state.isGizmoDragging` guard, `state.nodeAnchors`, `state.pendingTransformEdits`, `state.pendingPostProcessorEdits` (`frontend/src/js/engine/state.ts`).
+- Store/event pattern in `frontend/src/js/state/create-store.ts` for change notification.
 
 ## Components
 
-### 1. `frontend/src/js/engine/undo-stack.js` (new)
+### 1. `frontend/src/js/engine/undo-stack.ts` (new)
 
 Headless, scene-agnostic stack — single source of truth:
 
@@ -42,7 +42,7 @@ onChange(cb)  // notifies toolbar button state
 - Entry: `{ type: 'transform' | 'color', label, nodeIds: [...], before: [...], after: [...] }`; `before`/`after` hold one item per node (16-float matrix, or RGBA color object for color entries).
 - `MAX_UNDO = 50` (module constant, UPPER_SNAKE per conventions; matrices are 16 floats so memory is negligible).
 
-### 2. `frontend/src/js/engine/undo-controller.js` (new)
+### 2. `frontend/src/js/engine/undo-controller.ts` (new)
 
 Glue that applies entries to the live scene:
 

@@ -6,10 +6,10 @@
 > - ~~`/api/v1/ipfs/unpin` ownership check~~ — **IMPLEMENTED (2026-07-18, post-audit):** the route now verifies on-chain ownership/editor rights via `checkAssetAccess` (session wallet, optional Merkle proof) and requires the CID to belong to the claimed token's collection; the frontend burn flow unpins *before* the burn tx (§1 item 4). Caller-supplied `contractAddress` is allowlisted against the chain's configured contracts (free + paid) to block fake-contract spoofing; when omitted, both tiers are tried in order.
 > - `/api/v1/ipfs/unpin` residual anchor-spoofing risk — accepted + documented in the route docstring: membership anchors (tokenURI, collection `assets` map) are attacker-settable for the attacker's OWN token at gas cost with on-chain attribution (`updateAssetURI` does no URI validation; fork mode legitimately shares asset CIDs). Full closure needs reachability-based deletion (GC semantics) — mainnet follow-up, no route-level fix planned.
 > - ~~`/api/v1/paymaster` gating~~ — IMPLEMENTED (2026-07-18): session auth + wallet-keyed rate limit (`PAYMASTER_RATE_LIMIT_MAX`, default 30/min) + `pm_*` method allowlist.
-> - ~~`MAX_EDITORS_PER_TOKEN`~~ — RESOLVED (2026-07-18, option B+C): on-chain constant kept as documentation (no redeploy churn); client-side cap of 5000 enforced in `frontend/src/js/gltf/merkle-editors.js` (`computeRoot` throws above the cap) and `frontend/src/js/services/team.js` (`addTeamMember` early error). Not a security boundary — proof cost is O(log n) at any size; the cap guards browser/IPFS practicality.
+> - ~~`MAX_EDITORS_PER_TOKEN`~~ — RESOLVED (2026-07-18, option B+C): on-chain constant kept as documentation (no redeploy churn); client-side cap of 5000 enforced in `frontend/src/js/gltf/merkle-editors.ts` (`computeRoot` throws above the cap) and `frontend/src/js/services/team.ts` (`addTeamMember` early error). Not a security boundary — proof cost is O(log n) at any size; the cap guards browser/IPFS practicality.
 > - ~~`Pausable` scope~~ — RESOLVED (2026-07-18): keep payment-only pause (already documented in contract NatSpec). Full-surface pause rejected — freezing `burn` during an incident is worse than the disease. Contingency if an NFT-surface exploit ever appears: pause mint/editor ops only, keep burn live, bundled into whatever redeploy follows.
 > - `@ts-nocheck` burn-down (94% of frontend files) — policy decision, untouched.
-> - ~~`ipfs/remote-ipfs.js` disabled LRU cache~~ — RESOLVED (2026-07-18): dead cache code deleted. Redundant with the browser HTTP cache (Kubo serves immutable cache headers for CID content), inflight request coalescing, and the glTF pipeline's `content-cache.js`.
+> - ~~`ipfs/remote-ipfs.ts` disabled LRU cache~~ — RESOLVED (2026-07-18): dead cache code deleted. Redundant with the browser HTTP cache (Kubo serves immutable cache headers for CID content), inflight request coalescing, and the glTF pipeline's `content-cache.js`.
 > - web3→viem consolidation — noted as optional long-term refactor, not started.
 > - Address-sync dedup between `scripts/sync-deployed-addresses.mjs` and `e2e/global-setup.mjs` (§6 item 5) — left as-is; the two implementations still drift independently.
 > - ~~E2E suite~~ — RUN (2026-07-18): 35/35 Playwright tests passed on a single worker (6.5 min) covering the full browser → wallet → backend → blockchain → IPFS chain after both contract-change rounds. Note: the testnet indexer state carries 19 tokens from the OLD contract address — reset the indexer state (`.data/`) if you want a clean testnet view after the no-migration redeploy.
@@ -32,8 +32,8 @@ The architecture is in good shape. The client-side-first / thin-gatekeeper split
 Latent breakages, not style issues:
 
 1. **Phantom dependencies — imports of packages not declared in any package.json.** They work today only via hoisting and will break under pnpm or a transitive tree change:
-   - `viem` — imported by `src/config.js:12` and `src/api/siwe-verify.js:11` (hoisted via CDP/Reown deps)
-   - `web3-utils` — `src/api/merkle-editors-node.js:9` (hoisted via `web3`)
+   - `viem` — imported by `src/config.ts:12` and `src/api/siwe-verify.ts:11` (hoisted via CDP/Reown deps)
+   - `web3-utils` — `src/api/merkle-editors-node.ts:9` (hoisted via `web3`)
    - `istanbul-lib-coverage`, `istanbul-lib-report`, `istanbul-reports` — `scripts/merge-e2e-coverage.mjs:4-8`, `scripts/merge-all-coverage.mjs`, `e2e/fixtures/coverage.mjs` (hoisted via `jest`)
    - `playwright` — `frontend/scripts/render-landing-models.js:29` (hoisted via `@playwright/test`)
 
@@ -41,9 +41,9 @@ Latent breakages, not style issues:
 
 3. **`blockchain/SECURITY.md` is entirely stale and now misleading** — every finding describes removed code (`usedPayments`, `ERC721Enumerable`, `MAX_TOKENS_PER_EDITOR`, on-chain editor arrays, 2-arg `publishAsset`). A wrong security doc is worse than none. Rewrite for the Merkle design or delete; only the multisig recommendation (§4) remains valid.
 
-4. **`POST /api/v1/ipfs/unpin` has no ownership check** — `src/api/routes/ipfs.js:113`. Any session holder can unpin any CID's manifest chain, making it GC-eligible (cross-user data deletion). The ownership/Merkle machinery already exists in `src/api/authorization.js`. The frontend only calls it after burning its own token, so it is a missing defense-in-depth check — but `AGENTS.md §2` itself lists unpin as *the* canonical cross-user action.
+4. **`POST /api/v1/ipfs/unpin` has no ownership check** — `src/api/routes/ipfs.ts:113`. Any session holder can unpin any CID's manifest chain, making it GC-eligible (cross-user data deletion). The ownership/Merkle machinery already exists in `src/api/authorization.ts`. The frontend only calls it after burning its own token, so it is a missing defense-in-depth check — but `AGENTS.md §2` itself lists unpin as *the* canonical cross-user action.
 
-5. **Manifest Zod schema drifted from reality** — `src/api/schemas.js:88-135`: `thumbnail` is typed as a string but is actually an object `{cid, ...}` (written at `frontend/src/js/services/asset-save/manifest-builder.js:587`, read at `src/api/manifest-chain-walker.js:157`). Consequence: spurious `[WALK]` validation warnings on every unpin/GC walk. `historyEntrySchema` also lacks the `src: {cid, bundleCid}` shape, and the schema keeps both `prev_manifest_cid` and `prev_asset_manifest_cid` while only the latter is used.
+5. **Manifest Zod schema drifted from reality** — `src/api/schemas.ts:88-135`: `thumbnail` is typed as a string but is actually an object `{cid, ...}` (written at `frontend/src/js/services/asset-save/manifest-builder.ts:587`, read at `src/api/manifest-chain-walker.ts:157`). Consequence: spurious `[WALK]` validation warnings on every unpin/GC walk. `historyEntrySchema` also lacks the `src: {cid, bundleCid}` shape, and the schema keeps both `prev_manifest_cid` and `prev_asset_manifest_cid` while only the latter is used.
 
 6. **`test:e2e:setup` npm script points to a missing file** (`e2e/setup.mjs` does not exist) — `package.json:24`. Running it fails with `Cannot find module`.
 
@@ -53,24 +53,24 @@ Latent breakages, not style issues:
 
 ### Backend — clean layering, but:
 
-- **Error-shape inconsistency**: `src/api/routes/indexer.js:67,108` returns `error` as a **string**; every other route uses the structured `sendError` shape. `authentication.js`, `sessions.js`, `generate-node.js` hand-roll the same JSON inline instead of calling `sendError` (4 copies).
-- **Magic chain IDs** in the files that should know better (`AGENTS.md` mandates `CHAIN_IDS` from `constants/chains.js`): `src/api/authorization.js:42-44`, `src/api/chat-proxy.js:66`, `src/api/routes/comments.js:55` all hardcode `31415822`.
-- `src/api/routes/indexer.js` `/owned` and `/shared` are ~40 lines of verbatim copy-paste (the entire catch-up throttle block) — extract a `withFreshIndexer()` helper.
-- `src/api/routes/contracts.js:13-19` constructs a new `abiRouter()` per request behind a `@ts-ignore`; mount once instead.
-- Dormant `/api/v1/paymaster` route (`src/api/routes/paymaster.js:23`) has no auth and no rate limit — gate it *before* ever exposing it publicly (it would spend the deployment's CDP paymaster quota).
-- `src/api/ipfs-gc.js:69` uses the default web3 instance for `endBlock` while scanning a chain-specific contract — cross-chain inconsistency bug waiting for the first testnet GC run.
-- Per-call `await import("./storage/index.js")` in `token-indexer.js:206` is unjustified indirection (static import is safe there).
-- Indexer files prefix logs with `toLocaleTimeString()`; nothing else does. `siwe-verify.js:192-193` uses `console.log` for exceptions where the convention is `console.error`.
+- **Error-shape inconsistency**: `src/api/routes/indexer.ts:67,108` returns `error` as a **string**; every other route uses the structured `sendError` shape. `authentication.ts`, `sessions.ts`, `generate-node.ts` hand-roll the same JSON inline instead of calling `sendError` (4 copies).
+- **Magic chain IDs** in the files that should know better (`AGENTS.md` mandates `CHAIN_IDS` from `constants/chains.js`): `src/api/authorization.ts:42-44`, `src/api/chat-proxy.ts:66`, `src/api/routes/comments.ts:55` all hardcode `31415822`.
+- `src/api/routes/indexer.ts` `/owned` and `/shared` are ~40 lines of verbatim copy-paste (the entire catch-up throttle block) — extract a `withFreshIndexer()` helper.
+- `src/api/routes/contracts.ts:13-19` constructs a new `abiRouter()` per request behind a `@ts-ignore`; mount once instead.
+- Dormant `/api/v1/paymaster` route (`src/api/routes/paymaster.ts:23`) has no auth and no rate limit — gate it *before* ever exposing it publicly (it would spend the deployment's CDP paymaster quota).
+- `src/api/ipfs-gc.ts:69` uses the default web3 instance for `endBlock` while scanning a chain-specific contract — cross-chain inconsistency bug waiting for the first testnet GC run.
+- Per-call `await import("./storage/index.ts")` in `token-indexer.ts:206` is unjustified indirection (static import is safe there).
+- Indexer files prefix logs with `toLocaleTimeString()`; nothing else does. `siwe-verify.ts:192-193` uses `console.log` for exceptions where the convention is `console.error`.
 
 ### Frontend — clean SPA bootstrap, but:
 
-- `ui/asset-library.js` (1039 lines) is both the sidebar gallery view **and** the token data service; `fetchOwnedTokenIds` / `fetchTransferEvents` / `fetchAssetLibrary` / `expandTokenToAssets` are pure data-layer functions imported by `library-controller.js` from a sibling UI module — they belong in `services/`.
+- `ui/asset-library.ts` (1039 lines) is both the sidebar gallery view **and** the token data service; `fetchOwnedTokenIds` / `fetchTransferEvents` / `fetchAssetLibrary` / `expandTokenToAssets` are pure data-layer functions imported by `library-controller.js` from a sibling UI module — they belong in `services/`.
 - Browser log-scan duplicates the backend indexer with a **contradicting** chunk size: `asset-library.js:45` hardcodes `EVENT_CHUNK_SIZE = 100` while `constants/chains.js` defines per-chain `LOG_CHUNK_SIZES` (10000 hardhat / 2000 Base Sepolia) precisely because Base Sepolia rejects wide spans.
 - The `contract || walletState.get().contract` fallback is copy-pasted in 8 places across 7 files — one `getActiveContract()` in `wallet-core.js` ends the drift (one site, `version-history-store.js:31`, already diverged).
 - **`// @ts-nocheck` on ~94% of frontend files** (106/113 non-vendor) — the `strict: true` typecheck gate is nearly inert for the frontend. Either burn it down file-by-file or state the policy explicitly.
-- `services/api.js`: the session-fetch + 401-reauth pattern is copy-pasted 5× (`generateAsset:392`, `snapshotCommentsArchive:530`, `getUploadCredential:580`, `getUploadCredentials:624`, `unpinAssetCids:667`, ~25 lines each) — one `fetchWithSession()` helper removes ~100 lines.
+- `services/api.ts`: the session-fetch + 401-reauth pattern is copy-pasted 5× (`generateAsset:392`, `snapshotCommentsArchive:530`, `getUploadCredential:580`, `getUploadCredentials:624`, `unpinAssetCids:667`, ~25 lines each) — one `fetchWithSession()` helper removes ~100 lines.
 - Over-long files: `asset-library.js` (1039), `scene-graph.js` (883), `model-clock-gizmo.js` (834), `gltf-worker.js` (827), `api.js` (707).
-- `requireWallet` name collision — throwing guard (`blockchain/wallet-guard.js:18`) vs toast-based UI check (`asset-save.js:37`); different semantics, same name.
+- `requireWallet` name collision — throwing guard (`blockchain/wallet-guard.ts:18`) vs toast-based UI check (`asset-save.js:37`); different semantics, same name.
 
 ### Blockchain — contracts are solid, but:
 
@@ -103,40 +103,40 @@ OZ primitives used throughout, tight storage (4 slots/token, packed quota struct
 
 | Symbol | Location | Note |
 |---|---|---|
-| `validateParams` | `src/api/validation.js:57-70` | Zero imports anywhere |
-| `hexStringSchema` | `src/api/schemas.js:16` | Zero references |
-| `ASSETS_IPFS`, `IPFS_API_URL` exports | `src/config.js:152-153` | Callers re-read `process.env` directly |
-| `getUsdcToken` | `src/config.js:90-96` | Only in a test's defensive module mock |
-| `validateSession` re-export | `src/api/authorization.js:157` | Only importer uses `authorizeAssetAccess` |
-| `apiAny._getFromIPFS` test hook | `src/api/index.js:95-98` | No test calls it; referenced only in a skill doc |
-| Unreachable 400 checks | `src/api/assets/generate-node.js:43-51,61` | Zod schema already enforces (`min(1)`, `max(200)`) |
-| Unused `_storage` param | `src/api/assets/generate-node.js:13` | — |
-| Constant-true condition | `src/api/storage/kubo-adapter.js:50` | `result.cid` is always truthy |
-| `INDEXER_DISABLE_TESTNET` | `src/config.js:54` | Read but set nowhere — undocumented kill-switch |
+| `validateParams` | `src/api/validation.ts:57-70` | Zero imports anywhere |
+| `hexStringSchema` | `src/api/schemas.ts:16` | Zero references |
+| `ASSETS_IPFS`, `IPFS_API_URL` exports | `src/config.ts:152-153` | Callers re-read `process.env` directly |
+| `getUsdcToken` | `src/config.ts:90-96` | Only in a test's defensive module mock |
+| `validateSession` re-export | `src/api/authorization.ts:157` | Only importer uses `authorizeAssetAccess` |
+| `apiAny._getFromIPFS` test hook | `src/api/index.ts:95-98` | No test calls it; referenced only in a skill doc |
+| Unreachable 400 checks | `src/api/assets/generate-node.ts:43-51,61` | Zod schema already enforces (`min(1)`, `max(200)`) |
+| Unused `_storage` param | `src/api/assets/generate-node.ts:13` | — |
+| Constant-true condition | `src/api/storage/kubo-adapter.ts:50` | `result.cid` is always truthy |
+| `INDEXER_DISABLE_TESTNET` | `src/config.ts:54` | Read but set nowhere — undocumented kill-switch |
 
-Test-only production exports (consider moving or accepting): `bumpManifestVersion` (`manifest-utils.js:27` — header comment is also stale), `parseSiweMessage` (`siwe-verify.js:37`), `createRateLimitMiddleware` (`rate-limiter.js:71`), `computeRoot` / `getProof` (`merkle-editors-node.js:50,72` — ~50 lines; production needs only `makeLeaf`/`verifyProof`).
+Test-only production exports (consider moving or accepting): `bumpManifestVersion` (`manifest-utils.ts:27` — header comment is also stale), `parseSiweMessage` (`siwe-verify.ts:37`), `createRateLimitMiddleware` (`rate-limiter.ts:71`), `computeRoot` / `getProof` (`merkle-editors-node.ts:50,72` — ~50 lines; production needs only `makeLeaf`/`verifyProof`).
 
 ### Safe deletes — frontend
 
-**Legacy Library folder-model helpers (highest value):** `utils/library-items.js` — 4 of 8 exports (`isSupportedFile`, `getChildItems`, `sortItems`, `buildBreadcrumb`) operate on a `{folders, files}` state shape that `state/library-state.js` no longer has; production grew private same-named duplicates in `library-grid.js:168` and `library-toolbar.js:14` (drift trap). Its test file tests dead code.
+**Legacy Library folder-model helpers (highest value):** `utils/library-items.ts` — 4 of 8 exports (`isSupportedFile`, `getChildItems`, `sortItems`, `buildBreadcrumb`) operate on a `{folders, files}` state shape that `state/library-state.ts` no longer has; production grew private same-named duplicates in `library-grid.js:168` and `library-toolbar.js:14` (drift trap). Its test file tests dead code.
 
 | Symbol | Location |
 |---|---|
 | `scss/_studio-legacy.scss` | 1879 lines, not imported (only `styles.scss` compiles) |
 | `scss/components/_timeline.scss` | Entire partial dead — `.version-badge` matches nothing; header admits the timeline was removed |
-| `getNetworkName`, `getTxExplorerUrl`, `getTokenExplorerUrl`, `openExplorer` | `blockchain/explorer.js:29-84` |
-| `getBlockExplorer`, `getSupportedChainIds` | `blockchain/network-config.js:68,85` |
-| `isCdpInitialized`, `isCdpConnected`, `signSiweMessageWithCdp` | `blockchain/wallet-cdp.js:101,297,535` |
-| `isWalletConnectConnected` | `blockchain/wallet-connect.js:193` |
-| `clearWallets`, `stopDiscovery` | `blockchain/wallet-discovery.js:123,131` |
-| `compressString`, `decompressToString` | `utils/compression.js:69,78` |
-| `sha256Hex` | `utils/hash.js:249` |
-| `TIER_NAMES`, `TIER_COSTS_USDC` exports | `blockchain/wallet-payments.js:461-462` |
-| `applyManifestVersion` export | `engine/time-travel.js:201` |
-| `registerMockNode` export | `engine/scene-graph.js:730` |
-| `loadEditorListForToken`, `getEditorSetVersionForToken` | `services/asset-delete.js:198,202` |
+| `getNetworkName`, `getTxExplorerUrl`, `getTokenExplorerUrl`, `openExplorer` | `blockchain/explorer.ts:29-84` |
+| `getBlockExplorer`, `getSupportedChainIds` | `blockchain/network-config.ts:68,85` |
+| `isCdpInitialized`, `isCdpConnected`, `signSiweMessageWithCdp` | `blockchain/wallet-cdp.ts:101,297,535` |
+| `isWalletConnectConnected` | `blockchain/wallet-connect.ts:193` |
+| `clearWallets`, `stopDiscovery` | `blockchain/wallet-discovery.ts:123,131` |
+| `compressString`, `decompressToString` | `utils/compression.ts:69,78` |
+| `sha256Hex` | `utils/hash.ts:249` |
+| `TIER_NAMES`, `TIER_COSTS_USDC` exports | `blockchain/wallet-payments.ts:461-462` |
+| `applyManifestVersion` export | `engine/time-travel.ts:201` |
+| `registerMockNode` export | `engine/scene-graph.ts:730` |
+| `loadEditorListForToken`, `getEditorSetVersionForToken` | `services/asset-delete.ts:198,202` |
 | `COMMENT_THREAD_EVENTS` | `state/comment-thread.js:369` |
-| `IPFS_CACHE_ENABLED = false` + ~50 lines LRU | `ipfs/remote-ipfs.js:27,85-135` — permanently-disabled cache path |
+| `IPFS_CACHE_ENABLED = false` + ~50 lines LRU | `ipfs/remote-ipfs.ts:27,85-135` — permanently-disabled cache path |
 | `formats/handlers/example-format.js` | Copy-paste template shipped to `dist/` on every build; belongs in docs/fixtures |
 
 Plus ~30 internal-only UI exports (`toggleSidebar`, `refreshOutliner`, `refreshLedger`, `addChatMessage`, `setTheme`/`getTheme`/`clearTheme`, `ascendOneLevel`/`resetNesting`, `openPopover`/`closePopover`, etc.) — harmless but inflate the public surface; E2E uses none of them.
@@ -173,16 +173,16 @@ Honest assessment: **very little left to replace** — the usual suspects were a
 
 | Finding | Recommendation |
 |---|---|
-| `body-parser` (`src/index.js:6,143-144`) | Drop — Express ≥4.16 ships `express.json()` / `express.urlencoded()`. Zero-behavior-change dep removal. |
-| `utils/compression.js` (pako) | Replace with `fflate` (`gzipSync`/`gunzipSync`) — **already a frontend dependency** (used by `3mf/zip.js`). One less runtime dep + importmap entry. |
+| `body-parser` (`src/index.ts:6,143-144`) | Drop — Express ≥4.16 ships `express.json()` / `express.urlencoded()`. Zero-behavior-change dep removal. |
+| `utils/compression.ts` (pako) | Replace with `fflate` (`gzipSync`/`gunzipSync`) — **already a frontend dependency** (used by `3mf/zip.ts`). One less runtime dep + importmap entry. |
 | `mitt` / `workerpool` shadowed by vendored copies | Pick one strategy. Vendoring is justified for workers (documented in `vendor/README.md`) → the npm deps are dead weight; reconcile placement/docs. |
 | Hand-rolled `.env.pinata` parser (`run-pinata-benchmark-from-env.mjs:22-42`) | `dotenv` is already a declared dep — two lines replace it. |
 | `commander` (only in `run-ipfs-gc.mjs`) | Node ≥18 built-in `util.parseArgs` covers these four flags. Minor. |
-| Custom p-limit (`utils/concurrency.js`, 72 lines) | **Keep** — tiny and test-covered. |
-| Custom LRU + IndexedDB (`utils/content-cache.js`, 200 lines) | **Keep** — clean, test-covered; revisit only if IndexedDB edge cases bite. |
-| Custom murmur3-32/128 (`utils/hash.js`, ~180 lines) | **Keep** — has dedicated parity tests (`hash-murmur128.test.js`, `dedup-hash-parity.test.js`); replacing trades tested code for a dep. |
-| Custom session store (`src/api/sessions.js`, Map + interval sweep) | **Keep** — 15 lines of obvious code beats a dependency; only revisit for multi-process sharing (then Redis, not lru-cache). |
-| Hand-rolled token indexer (`token-indexer.js`, 458 lines) | **Keep** — The Graph/Ponder/Envio are infrastructure commitments unjustified for two contracts on two chains. The real fixes are the route dedup and GC `endBlock` bug, not replacement. |
+| Custom p-limit (`utils/concurrency.ts`, 72 lines) | **Keep** — tiny and test-covered. |
+| Custom LRU + IndexedDB (`utils/content-cache.ts`, 200 lines) | **Keep** — clean, test-covered; revisit only if IndexedDB edge cases bite. |
+| Custom murmur3-32/128 (`utils/hash.ts`, ~180 lines) | **Keep** — has dedicated parity tests (`hash-murmur128.test.js`, `dedup-hash-parity.test.js`); replacing trades tested code for a dep. |
+| Custom session store (`src/api/sessions.ts`, Map + interval sweep) | **Keep** — 15 lines of obvious code beats a dependency; only revisit for multi-process sharing (then Redis, not lru-cache). |
+| Hand-rolled token indexer (`token-indexer.ts`, 458 lines) | **Keep** — The Graph/Ponder/Envio are infrastructure commitments unjustified for two contracts on two chains. The real fixes are the route dedup and GC `endBlock` bug, not replacement. |
 | Custom frontend build pipeline (~150 lines of trivial render/copy scripts) | **Keep** — no-framework app with import maps + CDN globals + vendored worker bundles; a bundler fights the design for zero payload benefit. Only prune the browser-sync leftovers. |
 | `web3.js` + `viem` duality in backend | Optional long-term: viem-only would shrink the dep footprint substantially (web3 is huge), but it is a real refactor of the indexer and GC. Note, do not do now. |
 | Hand-rolled Merkle helpers in contract tests (`ArbeskAsset.test.js:8-88`) | Replace with `@openzeppelin/merkle-tree` (the frontend's library) — real byte-compatibility drift risk, cheap fix. |
@@ -191,12 +191,12 @@ Honest assessment: **very little left to replace** — the usual suspects were a
 
 ## 5. Doc drift worth fixing alongside
 
-- `AGENTS.md` file map references non-existent files: `frontend/src/pug/library.pug` → `dist/library.html`, `frontend/src/js/library-init.js`, `ui/model-clock.js` (actual: `ui/model-clock-gizmo.js`), "Bootstrap 5 with custom Sass overrides" (live `styles.scss` explicitly replaces Bootstrap), `prev_manifest_cid` (code uses `prev_asset_manifest_cid`), stale spec-07 "material editor multi-primitive" description. Same staleness in `docs/ARCHITECTURE.md:478,519,689` and `docs/CURRENT_STATUS.md:25,276`.
+- `AGENTS.md` file map references non-existent files: `frontend/src/pug/library.pug` → `dist/library.html`, `frontend/src/js/library-init.js`, `ui/model-clock.js` (actual: `ui/model-clock-gizmo.ts`), "Bootstrap 5 with custom Sass overrides" (live `styles.scss` explicitly replaces Bootstrap), `prev_manifest_cid` (code uses `prev_asset_manifest_cid`), stale spec-07 "material editor multi-primitive" description. Same staleness in `docs/ARCHITECTURE.md:478,519,689` and `docs/CURRENT_STATUS.md:25,276`.
 - `e2e/README.md:189-197` documents `07-material-editor-multi-primitive.spec.js` — the file does not exist; the regression test for issue #25 lives only as Jest `material-editor.test.js`.
 - `docker/nostr-relay.toml:38` sets `pubkey_whitelist` but `:33` has `restricted_writes = false` — the whitelist is inert.
 - `@types/express@^5.0.6` vs `express@^4.18.2` — type/runtime major-version skew.
 - Root `tsconfig.json` excludes `test/**` and `e2e/specs/**` from typechecking — tests are the least-checked code despite the strict-convention claim; state the policy explicitly.
-- Minor schema/doc mismatches: `routes/ipfs.js:71` docstring says count "(1-50, default 1)" but `uploadUrlsSchema` allows `.max(200)`; `eoaAddress` regex duplicates `ethereumAddressSchema`; duplicated JSDoc block in `ipfs-gc.js:54-67`.
+- Minor schema/doc mismatches: `routes/ipfs.ts:71` docstring says count "(1-50, default 1)" but `uploadUrlsSchema` allows `.max(200)`; `eoaAddress` regex duplicates `ethereumAddressSchema`; duplicated JSDoc block in `ipfs-gc.ts:54-67`.
 
 ---
 

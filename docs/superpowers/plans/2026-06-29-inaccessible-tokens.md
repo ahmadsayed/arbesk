@@ -22,7 +22,7 @@
 ### Task 1: Add `trimTokenId` to `library-items.js` with a test
 
 **Files:**
-- Modify: `frontend/src/js/utils/library-items.js` (append export at end of file)
+- Modify: `frontend/src/js/utils/library-items.ts` (append export at end of file)
 - Test: `test/frontend/asset-library.test.js` (add describe block before closing)
 
 **Interfaces:**
@@ -35,7 +35,7 @@
 Add this describe block at the end of `test/frontend/asset-library.test.js` (before the final closing newline):
 
 ```js
-import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
+import { trimTokenId } from "../../frontend/src/js/utils/library-items.ts";
 
 describe("trimTokenId", () => {
   test("short id is returned with hash prefix", () => {
@@ -66,7 +66,7 @@ Expected: FAIL — `trimTokenId is not a function` or import error.
 
 - [ ] **Step 3: Implement `trimTokenId`**
 
-Append to `frontend/src/js/utils/library-items.js` (after `formatBytes`):
+Append to `frontend/src/js/utils/library-items.ts` (after `formatBytes`):
 
 ```js
 export function trimTokenId(tokenId) {
@@ -87,7 +87,7 @@ Expected: PASS for all `trimTokenId` tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/js/utils/library-items.js test/frontend/asset-library.test.js
+git add frontend/src/js/utils/library-items.ts test/frontend/asset-library.test.js
 git commit -m "feat: add trimTokenId helper to library-items"
 ```
 
@@ -96,7 +96,7 @@ git commit -m "feat: add trimTokenId helper to library-items"
 ### Task 2: Return inaccessible sentinel from `expandTokenToAssets` catch
 
 **Files:**
-- Modify: `frontend/src/js/ui/asset-library.js` lines 272–275 (the catch block of `expandTokenToAssets`)
+- Modify: `frontend/src/js/ui/asset-library.ts` lines 272–275 (the catch block of `expandTokenToAssets`)
 - Test: `test/frontend/asset-library.test.js` (add a test inside `describe("renderAssetLibrary")`)
 
 **Interfaces:**
@@ -137,7 +137,7 @@ Expected: FAIL — `.asset-card--inaccessible` is null (nothing renders for the 
 
 - [ ] **Step 3: Change the catch block in `expandTokenToAssets`**
 
-In `frontend/src/js/ui/asset-library.js`, replace lines 272–275:
+In `frontend/src/js/ui/asset-library.ts`, replace lines 272–275:
 
 ```js
   } catch (err) {
@@ -172,7 +172,7 @@ Expected: FAIL — `.asset-card--inaccessible` still null because `createSection
 - [ ] **Step 5: Commit the data-layer change**
 
 ```bash
-git add frontend/src/js/ui/asset-library.js test/frontend/asset-library.test.js
+git add frontend/src/js/ui/asset-library.ts test/frontend/asset-library.test.js
 git commit -m "feat: expandTokenToAssets returns inaccessible sentinel on IPFS failure"
 ```
 
@@ -181,7 +181,7 @@ git commit -m "feat: expandTokenToAssets returns inaccessible sentinel on IPFS f
 ### Task 3: Render inaccessible card in `createSection` + add SCSS
 
 **Files:**
-- Modify: `frontend/src/js/ui/asset-library.js` — import `trimTokenId`, add `createInaccessibleCard`, update `createSection` dispatch
+- Modify: `frontend/src/js/ui/asset-library.ts` — import `trimTokenId`, add `createInaccessibleCard`, update `createSection` dispatch
 - Modify: `frontend/src/scss/components/_cards.scss` — add `.asset-card--inaccessible` rule at the end of the file
 
 **Interfaces:**
@@ -199,7 +199,7 @@ Confirm it still fails with `.asset-card--inaccessible` being null.
 
 - [ ] **Step 2: Add `trimTokenId` import to `asset-library.js`**
 
-At the top of `frontend/src/js/ui/asset-library.js`, after the existing imports, add:
+At the top of `frontend/src/js/ui/asset-library.ts`, after the existing imports, add:
 
 ```js
 import { trimTokenId } from "../utils/library-items.js";
@@ -207,7 +207,7 @@ import { trimTokenId } from "../utils/library-items.js";
 
 - [ ] **Step 3: Update `createSection` to dispatch inaccessible entries**
 
-In `frontend/src/js/ui/asset-library.js`, replace line 580:
+In `frontend/src/js/ui/asset-library.ts`, replace line 580:
 
 ```js
   for (const entry of entries) list.appendChild(createAssetCard(entry));
@@ -335,7 +335,7 @@ Expected: Build completes without errors.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add frontend/src/js/ui/asset-library.js frontend/src/scss/components/_cards.scss
+git add frontend/src/js/ui/asset-library.ts frontend/src/scss/components/_cards.scss
 git commit -m "feat: render inaccessible token cards with Burn Token action"
 ```
 

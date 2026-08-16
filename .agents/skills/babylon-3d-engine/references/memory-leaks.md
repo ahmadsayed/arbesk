@@ -116,11 +116,11 @@ if (state.defaultWoodMaterial) {
 
 | File | Role |
 |------|------|
-| `frontend/src/js/engine/cleanup.js` | `clearScene()` — batch scene cleanup with shared-material-aware disposal |
-| `frontend/src/js/engine/placeholders.js` | `disposePlaceholder()` — captures material reference before mesh disposal |
-| `frontend/src/js/engine/transforms.js` | `applyDefaultMaterial()` — creates/modifies the shared `defaultWoodMaterial` |
-| `frontend/src/js/engine/scene-graph.js` | `loadAsset()` — calls `ImportMeshAsync`, `applyDefaultMaterial`, and `attachMetadata` |
-| `frontend/src/js/engine/state.js` | `state.defaultWoodMaterial` — the shared material reference |
+| `frontend/src/js/engine/cleanup.ts` | `clearScene()` — batch scene cleanup with shared-material-aware disposal |
+| `frontend/src/js/engine/placeholders.ts` | `disposePlaceholder()` — captures material reference before mesh disposal |
+| `frontend/src/js/engine/transforms.ts` | `applyDefaultMaterial()` — creates/modifies the shared `defaultWoodMaterial` |
+| `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` — calls `ImportMeshAsync`, `applyDefaultMaterial`, and `attachMetadata` |
+| `frontend/src/js/engine/state.ts` | `state.defaultWoodMaterial` — the shared material reference |
 
 ## Verification Checklist
 

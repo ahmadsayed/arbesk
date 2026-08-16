@@ -16,12 +16,12 @@
 
 | File | Responsibility |
 |---|---|
-| `src/api/generation-tasks.js` | Add `status`, `markTaskComplete`, `getCompletedTask`. |
-| `src/api/adapters/tripo3d-adapter.js` | Add `createRefineTask` (texture_model). |
-| `src/api/schemas.js` | `refineTaskId` field on `generateAssetSchema`. |
-| `src/api/assets/generate-node.js` | POST refine dispatch; GET marks complete on success. |
-| `frontend/src/js/services/api.js` | `generateAsset` accepts `refineTaskId`, returns `taskId`. |
-| `frontend/src/js/ui/create-panel.js` | `lastTripoTaskId` chain, fallback retry, `clearChat()`. |
+| `src/api/generation-tasks.ts` | Add `status`, `markTaskComplete`, `getCompletedTask`. |
+| `src/api/adapters/tripo3d-adapter.ts` | Add `createRefineTask` (texture_model). |
+| `src/api/schemas.ts` | `refineTaskId` field on `generateAssetSchema`. |
+| `src/api/assets/generate-node.ts` | POST refine dispatch; GET marks complete on success. |
+| `frontend/src/js/services/api.ts` | `generateAsset` accepts `refineTaskId`, returns `taskId`. |
+| `frontend/src/js/ui/create-panel.ts` | `lastTripoTaskId` chain, fallback retry, `clearChat()`. |
 | `frontend/src/pug/app.pug` | `#clearChatBtn` in chat pane header. |
 | `e2e/helpers/studio-selectors.mjs` | `clearChatBtn` selector. |
 
@@ -30,7 +30,7 @@
 ### Task 1: Registry running/complete status
 
 **Files:**
-- Modify: `src/api/generation-tasks.js`
+- Modify: `src/api/generation-tasks.ts`
 - Test: `test/api/generation-tasks.test.js`
 
 - [ ] **Step 1: Add failing tests**
@@ -43,7 +43,7 @@ import {
   markTaskComplete,
   evictTask,
   _resetRegistry,
-} from "../../src/api/generation-tasks.js";
+} from "../../src/api/generation-tasks.ts";
 
 // inside the describe:
 test("new tasks are running; completed tasks are hidden from getTask", () => {
@@ -80,7 +80,7 @@ Run: `NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/ap
 
 - [ ] **Step 3: Implement**
 
-In `src/api/generation-tasks.js`:
+In `src/api/generation-tasks.ts`:
 - `TaskEntry` typedef gains `@property {"running"|"complete"} status`.
 - `registerTask` sets `status: "running"`.
 - `getTask` adds `if (entry.status !== "running") return undefined;` after the TTL check.
@@ -128,7 +128,7 @@ export function getCompletedTask(taskId, userAddress) {
 ### Task 2: Adapter `createRefineTask`
 
 **Files:**
-- Modify: `src/api/adapters/tripo3d-adapter.js`
+- Modify: `src/api/adapters/tripo3d-adapter.ts`
 - Test: `test/api/tripo3d-adapter.test.js`
 
 - [ ] **Step 1: Failing test**
@@ -200,8 +200,8 @@ export async function createRefineTask(prompt, originalTripoTaskId, apiKey) {
 ### Task 3: Schema + route refine path
 
 **Files:**
-- Modify: `src/api/schemas.js`
-- Modify: `src/api/assets/generate-node.js`
+- Modify: `src/api/schemas.ts`
+- Modify: `src/api/assets/generate-node.ts`
 - Test: `test/api.test.js`
 
 - [ ] **Step 1: Schema**
@@ -256,7 +256,7 @@ it("completed task poll endpoint returns 404 after success delivery", async () =
 ```
 
 - [ ] **Step 3: Run, expect failures**
-- [ ] **Step 4: Implement in `generate-node.js`**
+- [ ] **Step 4: Implement in `generate-node.ts`**
 
 Imports: add `createRefineTask` to the adapter import; add `getCompletedTask` to the registry import.
 
@@ -309,7 +309,7 @@ In the GET route success branch, replace `evictTask(taskId);` with `markTaskComp
 ### Task 4: Frontend `api.js` refineTaskId + fallback
 
 **Files:**
-- Modify: `frontend/src/js/services/api.js`
+- Modify: `frontend/src/js/services/api.ts`
 - Test: `test/frontend/api.test.js`
 
 - [ ] **Step 1: Failing tests**
@@ -369,7 +369,7 @@ Return `taskId` in the result: `...(data.taskId && { taskId: data.taskId })` —
 
 **Files:**
 - Modify: `frontend/src/pug/app.pug` (chat pane header, ~line 168)
-- Modify: `frontend/src/js/ui/create-panel.js`
+- Modify: `frontend/src/js/ui/create-panel.ts`
 - Modify: `e2e/helpers/studio-selectors.mjs`
 - Test: `test/frontend/chat-messages.test.js` (or new `test/frontend/clear-chat.test.js`)
 

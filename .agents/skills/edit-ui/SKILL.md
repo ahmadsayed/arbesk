@@ -29,13 +29,13 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 | `frontend/src/pug/app.pug` | unified SPA shell — includes only; real markup in `src/pug/includes/` |
 | `frontend/src/pug/index.pug` | landing/marketing page |
 | `frontend/src/scss/styles.scss` | imports all component files |
-| `frontend/src/js/engine/scene-graph.js` | Babylon engine, camera, selection, keyboard |
-| `frontend/src/js/engine/state.js` | shared mutable `state` object |
-| `frontend/src/js/engine/parametric-preview.js` | inspector live editing |
-| `frontend/src/js/ui/asset-library.js` | gallery of saved assets |
-| `frontend/src/js/ui/asset-drop-zone.js` | drop target for dragged cards |
-| `frontend/src/js/ui/asset-save.js` | Save Draft / Publish wiring |
-| `frontend/src/js/ui/outliner.js` | scene graph tree |
+| `frontend/src/js/engine/scene-graph.ts` | Babylon engine, camera, selection, keyboard |
+| `frontend/src/js/engine/state.ts` | shared mutable `state` object |
+| `frontend/src/js/engine/parametric-preview.ts` | inspector live editing |
+| `frontend/src/js/ui/asset-library.ts` | gallery of saved assets |
+| `frontend/src/js/ui/asset-drop-zone.ts` | drop target for dragged cards |
+| `frontend/src/js/ui/asset-save.ts` | Save Draft / Publish wiring |
+| `frontend/src/js/ui/outliner.ts` | scene graph tree |
 
 ## Supporting Files (read on demand)
 

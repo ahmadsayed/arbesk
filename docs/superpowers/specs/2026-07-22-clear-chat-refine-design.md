@@ -47,19 +47,19 @@ Refine chain (provider=tripo3d only)
 
 ## 3. Components
 
-### 3.1 `src/api/generation-tasks.js` (modified)
+### 3.1 `src/api/generation-tasks.ts` (modified)
 
 - Entries gain `status: "running" | "complete"`.
 - `getTask(taskId, userAddress)` — unchanged contract: returns only `"running"` entries (GET poll route behavior preserved).
 - `markTaskComplete(taskId, userAddress)` — sets `status: "complete"` and refreshes `createdAt` (1h refine window from completion).
 - `getCompletedTask(taskId, userAddress)` — returns entry only if `status === "complete"` (used by the refine path).
 
-### 3.2 `src/api/adapters/tripo3d-adapter.js` (modified)
+### 3.2 `src/api/adapters/tripo3d-adapter.ts` (modified)
 
 - New `createRefineTask(prompt, originalTripoTaskId, apiKey) → taskId` — POST `{type:"texture_model", original_model_task_id, texture_prompt: {text: prompt}, texture:true, pbr:true}`. (The prompt **must** be wrapped in `texture_prompt.text`; a flat `text_prompt` field is silently ignored by the v2 API — verified live 2026-07-22.)
 - `pollTask` already falls back to `output.model` when `pbr_model` is absent (texture_model output) — no change needed.
 
-### 3.3 `src/api/assets/generate-node.js` (modified)
+### 3.3 `src/api/assets/generate-node.ts` (modified)
 
 - POST accepts optional `refineTaskId`:
   - Only honored when `provider === "tripo3d"`; ignored otherwise.
@@ -67,15 +67,15 @@ Refine chain (provider=tripo3d only)
   - `createRefineTask(prompt, entry.tripoTaskId, key)` → register new task → `202 {taskId, provider:"tripo3d", status:"running", refined:true}`.
 - GET poll route: on success calls `markTaskComplete` instead of `evictTask`; subsequent GETs of a completed task → `404 GENERATION_TASK_NOT_FOUND` (unchanged client-visible behavior).
 
-### 3.4 `src/api/schemas.js` (modified)
+### 3.4 `src/api/schemas.ts` (modified)
 
 - `generateAssetSchema` gains `refineTaskId: z.string().max(64).optional()`.
 
-### 3.5 Frontend `frontend/src/js/services/api.js` (modified)
+### 3.5 Frontend `frontend/src/js/services/api.ts` (modified)
 
 - `generateAsset()` accepts `refineTaskId`; includes it in the POST body when present; the returned result includes `taskId` (from the 202 response) so the caller can chain.
 
-### 3.6 Frontend `frontend/src/js/ui/create-panel.js` (modified)
+### 3.6 Frontend `frontend/src/js/ui/create-panel.ts` (modified)
 
 - Module-level `lastTripoTaskId`.
 - On successful tripo3d generation: `lastTripoTaskId = result.taskId`; system chat note when a refine was used ("Refined previous model — texture/material only, geometry unchanged").

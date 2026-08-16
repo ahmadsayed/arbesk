@@ -87,7 +87,7 @@ const paidEvents = events.filter(e => e.name === 'AssetGenerationPaidUSDC');
 
 ### On-Chain State Inspection (Backend Side)
 
-The backend (`src/api/assets/generate-node.js`) does NOT validate payment transactions — generation is gated by session auth + rate limit, and the browser sends the on-chain `recordGeneration` / `payForGenerationWithUSDC` tx itself (BYOK providers bypass the on-chain gate entirely). To debug a rejected generation:
+The backend (`src/api/assets/generate-node.ts`) does NOT validate payment transactions — generation is gated by session auth + rate limit, and the browser sends the on-chain `recordGeneration` / `payForGenerationWithUSDC` tx itself (BYOK providers bypass the on-chain gate entirely). To debug a rejected generation:
 
 1. Check the backend logs for `[GEN]` prefix
 2. Look for which step failed:
