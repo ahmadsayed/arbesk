@@ -157,6 +157,33 @@ function _updateOrthoFrustumOnResize() {
 }
 
 /**
+ * Zoom-adaptive panning. Babylon's panningSensibility is a fixed divisor
+ * (default 1000), so a right-drag pans by the same screen-to-world rate
+ * regardless of zoom — feels normal far out but far too fast when zoomed in.
+ * Scale it with the visible extent so one drag always covers the same
+ * fraction of the viewport. 200/3 preserves the default feel at the initial
+ * radius (15). In ortho mode the radius is decoupled from the frustum, so
+ * derive the equivalent extent from the ortho bounds instead.
+ */
+const PAN_SENSIBILITY_PER_UNIT = 200 / 3;
+
+function _updatePanSensibility() {
+  const cam = state.camera;
+  if (!cam) return;
+  let extent = cam.radius;
+  if (
+    cam.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA &&
+    cam.orthoTop != null &&
+    cam.orthoBottom != null
+  ) {
+    // Visible half-height of a perspective frustum at the target is
+    // radius * tan(fov/2) — invert that to get the equivalent extent.
+    extent = (cam.orthoTop - cam.orthoBottom) / 2 / Math.tan(cam.fov / 2);
+  }
+  cam.panningSensibility = Math.max(extent, 0.5) * PAN_SENSIBILITY_PER_UNIT;
+}
+
+/**
  * @param {string} name
  * @param {BABYLON.Scene} scene
  * @returns {BABYLON.TransformNode | BABYLON.Mesh}
@@ -367,6 +394,7 @@ export function initEngine() {
   state.renderLoopFn = () => {
     state.engine.resize();
     _updateOrthoFrustumOnResize();
+    _updatePanSensibility();
     state.scene.render();
   };
   state.engine.runRenderLoop(state.renderLoopFn);
