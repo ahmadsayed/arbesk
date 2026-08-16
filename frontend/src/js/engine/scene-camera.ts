@@ -210,4 +210,81 @@ function snapView(preset: ViewPreset) {
   );
 }
 
-export { frameAll, frameSelected, snapView, VIEW_FRONT, VIEW_RIGHT, VIEW_TOP };
+/**
+ * Resize the camera zoom range and viewport chrome (ground grid / axes) to
+ * match the currently-loaded scene. Large models need a much larger max zoom
+ * (radius) than the default 50, and the grid/axes must grow so they still
+ * frame the model instead of disappearing inside it.
+ */
+function updateCameraRangeForScene() {
+  if (!state.camera || !state.scene) return;
+
+  const allMeshes = state.scene.meshes.filter(
+    (m: BABYLON.AbstractMesh) => m && !m.isDisposed() && !m.metadata?.isViewportChrome
+  );
+  const renderable = getRenderableMeshes(allMeshes);
+  if (renderable.length === 0) return;
+
+  const bounds = getWorldBounds(renderable);
+  if (!bounds) return;
+
+  const diagonal = Math.sqrt(
+    bounds.size.x * bounds.size.x +
+      bounds.size.y * bounds.size.y +
+      bounds.size.z * bounds.size.z
+  );
+
+  const cam = state.camera;
+  const minLimit = Math.max(0.1, diagonal * 0.05);
+  const maxLimit = Math.max(500, diagonal * 5);
+
+  cam.lowerRadiusLimit = minLimit;
+  cam.upperRadiusLimit = maxLimit;
+
+  // Largest absolute coordinate that must be visible from the origin.
+  const maxAbs = Math.max(
+    Math.abs(bounds.min.x),
+    Math.abs(bounds.max.x),
+    Math.abs(bounds.min.y),
+    Math.abs(bounds.max.y),
+    Math.abs(bounds.min.z),
+    Math.abs(bounds.max.z)
+  );
+
+  // Ground grid is created at 40×40 world units. Scale it so it comfortably
+  // covers the loaded model, but never shrink below its default size.
+  const groundGrid = state.scene.getMeshByName("groundGrid");
+  if (groundGrid) {
+    const targetSize = Math.max(40, maxAbs * 3);
+    const scale = targetSize / 40;
+    groundGrid.scaling = new BABYLON.Vector3(scale, 1, scale);
+  }
+
+  // In-scene axes are created at ±20 units. Scale them to match the grid.
+  const axisX = state.scene.getMeshByName("axisX");
+  const axisZ = state.scene.getMeshByName("axisZ");
+  if (axisX && axisZ) {
+    const targetHalf = Math.max(20, maxAbs * 1.5);
+    const scale = targetHalf / 20;
+    axisX.scaling = new BABYLON.Vector3(scale, scale, scale);
+    axisZ.scaling = new BABYLON.Vector3(scale, scale, scale);
+  }
+
+  console.log(
+    `[CAMERA] adaptive range | diagonal=${diagonal.toFixed(
+      2
+    )} lower=${minLimit.toFixed(2)} upper=${maxLimit.toFixed(2)} gridScale=${(
+      (groundGrid?.scaling.x as number) ?? 1
+    ).toFixed(2)}`
+  );
+}
+
+export {
+  frameAll,
+  frameSelected,
+  snapView,
+  updateCameraRangeForScene,
+  VIEW_FRONT,
+  VIEW_RIGHT,
+  VIEW_TOP,
+};

@@ -31,6 +31,7 @@ import {
   frameAll,
   frameSelected,
   snapView,
+  updateCameraRangeForScene,
   VIEW_FRONT,
   VIEW_RIGHT,
   VIEW_TOP,
@@ -788,6 +789,14 @@ on(EVENTS.OUTLINER_NODE_SELECTED, (e: {nodeId?: string, additive?: boolean}) => 
   } else {
     selectNodeById(nodeId);
   }
+});
+
+// After a manifest finishes loading, adapt the camera zoom range and viewport
+// chrome to the model's real-world size, then frame it. This keeps tiny models
+// zoomable and huge models from getting clipped by the default radius limits.
+on(EVENTS.SCENE_READY, () => {
+  updateCameraRangeForScene();
+  frameAll();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
