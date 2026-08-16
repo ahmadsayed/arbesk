@@ -255,6 +255,20 @@ describe("team service", () => {
     });
   });
 
+  describe("collaboratorInputEmail", () => {
+    it("returns the normalized email for email input", () => {
+      expect(team.collaboratorInputEmail("  Alice@Example.COM ")).toBe(
+        "alice@example.com",
+      );
+    });
+
+    it("returns undefined for 0x addresses and non-email input", () => {
+      expect(team.collaboratorInputEmail("0xNewEditor")).toBeUndefined();
+      expect(team.collaboratorInputEmail("alice")).toBeUndefined();
+      expect(team.collaboratorInputEmail("")).toBeUndefined();
+    });
+  });
+
   describe("addTeamMember", () => {
     it("adds a new editor and updates the Merkle root", async () => {
       const txHash = await team.addTeamMember("42", "0xNewEditor");
@@ -266,6 +280,24 @@ describe("team service", () => {
         2,
         ["0xabc"],
       );
+    });
+
+    it("stores the invite email on the new editor entry when provided", async () => {
+      await team.addTeamMember("42", "0xNewEditor", "alice@example.com");
+      const saved = writeJSONToIPFSMock.mock.calls[0][0];
+      const added = saved.find((e) => e.address === "0xneweditor");
+      expect(added).toEqual({
+        address: "0xneweditor",
+        role: 2,
+        email: "alice@example.com",
+      });
+    });
+
+    it("omits the email field for plain 0x-address invites", async () => {
+      await team.addTeamMember("42", "0xNewEditor");
+      const saved = writeJSONToIPFSMock.mock.calls[0][0];
+      const added = saved.find((e) => e.address === "0xneweditor");
+      expect(added).toEqual({ address: "0xneweditor", role: 2 });
     });
 
     it("throws when the address is invalid", async () => {

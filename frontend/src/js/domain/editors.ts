@@ -16,6 +16,8 @@ export const MAX_EDITORS_PER_TOKEN = 5000;
 export interface EditorEntry {
   address: string;
   role: number;
+  /** Email the editor was invited by (CDP email-login users only). */
+  email?: string;
 }
 
 /**

@@ -12,10 +12,12 @@ import {
   removeTeamMember,
   changeTeamMemberRole,
   resolveCollaboratorInput,
+  collaboratorInputEmail,
   isOwner,
   CollaboratorRole,
 } from "../services/team.ts";
 import { truncateAddress } from "../utils/format.ts";
+import { walletState } from "../state/wallet-state.ts";
 import { showToast } from "./toasts.ts";
 
 const instances = new Map<HTMLElement, CollaboratorPanelState>();
@@ -115,7 +117,7 @@ export function initCollaboratorPanel(
       if (!raw) return;
       try {
         const addr = await resolveCollaboratorInput(raw);
-        await addTeamMember(tokenId, addr);
+        await addTeamMember(tokenId, addr, collaboratorInputEmail(raw));
         input.value = "";
         await refresh();
       } catch (err) {
@@ -180,6 +182,11 @@ function renderList(state: CollaboratorPanelState, editorList: any[]): void {
   ownerBadge.hidden = !state.isOwner;
   controls.hidden = !editable;
 
+  // The connected CDP user's own email is known locally — display it for
+  // their own entry even if it predates email tagging on invite.
+  const selfAddress = (walletState.get().walletAddress || "").toLowerCase();
+  const selfEmail = walletState.get().email || null;
+
   const fragment = document.createDocumentFragment();
 
   for (const entry of editorList) {
@@ -196,7 +203,13 @@ function renderList(state: CollaboratorPanelState, editorList: any[]): void {
 
     const addrSpan = document.createElement("span");
     addrSpan.className = "team-addr";
-    addrSpan.textContent = truncateAddress(entry.address);
+    // CDP email-login users were invited by email — show it instead of the
+    // smart-account address; keep the full address on hover either way.
+    const displayEmail =
+      entry.email ||
+      (el.dataset.address === selfAddress ? selfEmail : null);
+    addrSpan.textContent = displayEmail || truncateAddress(entry.address);
+    addrSpan.title = entry.address;
 
     el.appendChild(roleBadge);
     el.appendChild(addrSpan);

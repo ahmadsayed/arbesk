@@ -21,6 +21,16 @@ import { resolveUserEmail } from "./api.ts";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Return the normalized email when a collaborator input is an email address,
+ * undefined for 0x addresses and other input. Used to tag editor entries
+ * with their invite email for display.
+ */
+export function collaboratorInputEmail(input: string): string | undefined {
+  const value = (input || "").trim();
+  return EMAIL_RE.test(value) ? value.toLowerCase() : undefined;
+}
+
 export const CollaboratorRole = Object.freeze({
   None: 0,
   Viewer: 1,
@@ -146,9 +156,10 @@ export async function resolveCollaboratorInput(input: string): Promise<string> {
 
 /**
  * Add a new editor to a token. Caller must already be an editor.
+ * @param email - invite email for CDP email-login users (display only)
  * @returns transaction hash
  */
-export async function addTeamMember(tokenId: string | number, address: string): Promise<string> {
+export async function addTeamMember(tokenId: string | number, address: string, email?: string): Promise<string> {
   const normalized = _normalizeAddress(address);
   const editors = await fetchEditors(tokenId);
 
@@ -164,7 +175,7 @@ export async function addTeamMember(tokenId: string | number, address: string): 
 
   const nextEditors = [
     ...editors,
-    { address: normalized, role: CollaboratorRole.Editor },
+    { address: normalized, role: CollaboratorRole.Editor, ...(email ? { email } : {}) },
   ];
   return _updateEditorRoot(tokenId, editors, nextEditors);
 }
