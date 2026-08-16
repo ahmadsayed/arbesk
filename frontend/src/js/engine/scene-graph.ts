@@ -158,14 +158,16 @@ function _updateOrthoFrustumOnResize() {
 
 /**
  * Zoom-adaptive panning. Babylon's panningSensibility is a fixed divisor
- * (default 1000), so a right-drag pans by the same screen-to-world rate
- * regardless of zoom — feels normal far out but far too fast when zoomed in.
- * Scale it with the visible extent so one drag always covers the same
- * fraction of the viewport. 200/3 preserves the default feel at the initial
- * radius (15). In ortho mode the radius is decoupled from the frustum, so
- * derive the equivalent extent from the ortho bounds instead.
+ * (default 1000): a right-drag pans by (pixels / sensibility) world units
+ * regardless of zoom, so the same drag covers a much larger fraction of the
+ * viewport when zoomed in — far too fast. Scale the divisor with the
+ * INVERSE of the visible extent (higher sensibility = slower pan), so one
+ * drag always covers the same fraction of the viewport. A product of 15000
+ * preserves the default feel at the initial radius (15 → 1000). In ortho
+ * mode the radius is decoupled from the frustum, so derive the equivalent
+ * extent from the ortho bounds instead.
  */
-const PAN_SENSIBILITY_PER_UNIT = 200 / 3;
+const PAN_SENSIBILITY_RADIUS_PRODUCT = 15000;
 
 function _updatePanSensibility() {
   const cam = state.camera;
@@ -180,7 +182,7 @@ function _updatePanSensibility() {
     // radius * tan(fov/2) — invert that to get the equivalent extent.
     extent = (cam.orthoTop - cam.orthoBottom) / 2 / Math.tan(cam.fov / 2);
   }
-  cam.panningSensibility = Math.max(extent, 0.5) * PAN_SENSIBILITY_PER_UNIT;
+  cam.panningSensibility = PAN_SENSIBILITY_RADIUS_PRODUCT / Math.max(extent, 0.5);
 }
 
 /**
