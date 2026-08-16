@@ -235,11 +235,7 @@ function updateCameraRangeForScene() {
   );
 
   const cam = state.camera;
-  // Only raise the far limit for large models — keep the near limit small so
-  // users can still zoom in close to details. The previous 5% diagonal floor
-  // made big models feel "locked" because the closest allowed radius was too
-  // far away.
-  const minLimit = 0.1;
+  const minLimit = Math.max(0.1, diagonal * 0.05);
   const maxLimit = Math.max(500, diagonal * 5);
 
   cam.lowerRadiusLimit = minLimit;
