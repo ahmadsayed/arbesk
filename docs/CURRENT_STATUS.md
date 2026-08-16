@@ -12,24 +12,24 @@
 
 | Phase | Status | Evidence in Code |
 |-------|--------|------------------|
-| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.js`, `src/api/adapters/mock-adapter.js`, `docker-compose.yml`, `src/api/storage/` |
-| Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.js`, `frontend/src/js/engine/time-travel.js` |
-| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.js` |
+| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.ts`, `src/api/adapters/mock-adapter.ts`, `docker-compose.yml`, `src/api/storage/` |
+| Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.ts`, `frontend/src/js/engine/time-travel.ts` |
+| Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.ts` |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/app.pug` (unified Studio + Library SPA), 29 SCSS partials, sidebar/outliner/nesting |
-| Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.js`, browser-side thumbnail upload to IPFS, unpin lifecycle |
-| Phase 5.1: Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.js`, depth/cycle protection in `scene-graph.js` |
+| Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.ts`, browser-side thumbnail upload to IPFS, unpin lifecycle |
+| Phase 5.1: Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.ts`, depth/cycle protection in `scene-graph.ts` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
-| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.js`, `frontend/src/js/services/team.js` |
-| Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.js`, collection expansion in `asset-library.js`, collection loading in `scene-graph.js` |
-| Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.js`, `ui/comments-panel.js`, `src/api/chat-proxy.js`, `src/api/comments-archive.js`, E2E specs 14 + 15 |
-| Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.js`, `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, `services/library-ops.js`, E2E specs 09–12 |
-| CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.js`, SIWE with `eoaAddress` fallback in `siwe-verify.js`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
-| Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.js`, deployed `ArbeskAssetFree` on Base Sepolia |
-| Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.js`, `src/api/routes/indexer.js`, per-chain `LOG_CHUNK_SIZES` |
-| Optimistic Collection Create UI | ✅ Complete | `ui/library-create.js`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
-| Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.js`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
-| Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.js` (v3 REST, BYOK), `src/api/generation-tasks.js` (wallet-bound task registry), `src/api/assets/generate-node.js` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.js` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
-| Phase 5: Micro-Ledger | ❌ Not implemented / client-side only | `ledger-panel.js` derives activity from manifest chain; `anchorManifest()` is stubbed |
+| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.ts`, `frontend/src/js/services/team.ts` |
+| Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.ts`, collection expansion in `asset-library.ts`, collection loading in `scene-graph.ts` |
+| Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.ts`, `ui/comments-panel.ts`, `src/api/chat-proxy.ts`, `src/api/comments-archive.ts`, E2E specs 14 + 15 |
+| Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.ts`, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, `services/library-ops.ts`, E2E specs 09–12 |
+| CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.ts`, SIWE with `eoaAddress` fallback in `siwe-verify.ts`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
+| Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.ts`, deployed `ArbeskAssetFree` on Base Sepolia |
+| Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.ts`, `src/api/routes/indexer.ts`, per-chain `LOG_CHUNK_SIZES` |
+| Optimistic Collection Create UI | ✅ Complete | `ui/library-create.ts`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
+| Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.ts`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
+| Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.ts` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
+| Phase 5: Micro-Ledger | ❌ Not implemented / client-side only | `ledger-panel.ts` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
 
@@ -39,41 +39,41 @@
 
 ```
 src/
-├── index.js                    # Express bootstrap, CSP, request logging
-├── config.js                   # Multi-network Web3 config (Hardhat local, Base Sepolia Testnet)
+├── index.ts                    # Express bootstrap, CSP, request logging
+├── config.ts                   # Multi-network Web3 config (Hardhat local, Base Sepolia Testnet)
 └── api/
-    ├── index.js                # Main router — all v1 routes
+    ├── index.ts                # Main router — all v1 routes
     ├── assets/
-    │   └── generate-node.js    # 3D generation entrypoint (mock + Tripo3D task-based; sourceAssetCid retexture/retopo/rig/animate follow-ups)
-    ├── generation-tasks.js     # In-memory wallet-bound generation task registry (TTL, phase tracking)
+    │   └── generate-node.ts    # 3D generation entrypoint (mock + Tripo3D task-based; sourceAssetCid retexture/retopo/rig/animate follow-ups)
+    ├── generation-tasks.ts     # In-memory wallet-bound generation task registry (TTL, phase tracking)
     ├── adapters/
-    │   ├── mock-adapter.js     # Reads local .gltf files
-    │   └── tripo3d-adapter.js  # Tripo3D v3 REST adapter (BYOK, async task polling)
+    │   ├── mock-adapter.ts     # Reads local .gltf files
+    │   └── tripo3d-adapter.ts  # Tripo3D v3 REST adapter (BYOK, async task polling)
     ├── storage/
-    │   ├── index.js            # Storage backend factory (kubo/pinata)
-    │   ├── kubo-adapter.js     # Local Kubo add/cat/pin/directory/unpin
-    │   └── pinata-adapter.js   # Pinata v3 SDK + presigned upload URLs
-    ├── abi-router.js           # Serves compiled ABI from blockchain/artifacts/
-    ├── authentication.js       # Session token validation middleware (SIWE)
-    ├── authorization.js        # On-chain asset access checks for chat proxy
-    ├── chat-proxy.js           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
-    ├── comments-archive.js     # Asset-level Nostr comment thread → IPFS archive; returns empty archive if relay is unreachable
-    ├── errors.js               # Standardized error response helper
-    ├── ipfs-utils.js           # catManifest() with timeout/abort
-    ├── manifest-utils.js       # getSceneNodes, bumpManifestVersion
-    ├── nostr-relay.js          # Shared relay primitives (used by chat-proxy + comments-archive)
-    ├── rate-limiter.js         # In-memory per-wallet rate limiter
-    ├── token-indexer.js        # Chunked eth_getLogs backfill for owned + editor-shared token discovery
+    │   ├── index.ts            # Storage backend factory (kubo/pinata)
+    │   ├── kubo-adapter.ts     # Local Kubo add/cat/pin/directory/unpin
+    │   └── pinata-adapter.ts   # Pinata v3 SDK + presigned upload URLs
+    ├── abi-router.ts           # Serves compiled ABI from blockchain/artifacts/
+    ├── authentication.ts       # Session token validation middleware (SIWE)
+    ├── authorization.ts        # On-chain asset access checks for chat proxy
+    ├── chat-proxy.ts           # WebSocket bridge: browser ↔ Nostr relay (session-gated, rate-limited)
+    ├── comments-archive.ts     # Asset-level Nostr comment thread → IPFS archive; returns empty archive if relay is unreachable
+    ├── errors.ts               # Standardized error response helper
+    ├── ipfs-utils.ts           # catManifest() with timeout/abort
+    ├── manifest-utils.ts       # getSceneNodes, bumpManifestVersion
+    ├── nostr-relay.ts          # Shared relay primitives (used by chat-proxy + comments-archive)
+    ├── rate-limiter.ts         # In-memory per-wallet rate limiter
+    ├── token-indexer.ts        # Chunked eth_getLogs backfill for owned + editor-shared token discovery
     ├── routes/                 # Per-domain route modules
-    │   ├── comments.js         # POST /assets/snapshot-comments
-    │   ├── contracts.js        # GET /contracts/:name/abi
-    │   ├── indexer.js          # GET /indexer/owned + /indexer/shared — token ownership & editor-shared lookup
-    │   ├── ipfs.js             # POST /ipfs/upload-url + /ipfs/unpin
-    │   ├── openapi.js          # GET /openapi.json + /docs
-    │   ├── paymaster.js        # POST /paymaster — CDP Paymaster JSON-RPC proxy
+    │   ├── comments.ts         # POST /assets/snapshot-comments
+    │   ├── contracts.ts        # GET /contracts/:name/abi
+    │   ├── indexer.ts          # GET /indexer/owned + /indexer/shared — token ownership & editor-shared lookup
+    │   ├── ipfs.ts             # POST /ipfs/upload-url + /ipfs/unpin
+    │   ├── openapi.ts          # GET /openapi.json + /docs
+    │   ├── paymaster.ts        # POST /paymaster — CDP Paymaster JSON-RPC proxy
     │   └── test-utils.js       # Test-only reset helpers
-    ├── sessions.js             # SIWE session create/delete (24h TTL)
-    ├── siwe-verify.js          # EIP-4361 message verification
+    ├── sessions.ts             # SIWE session create/delete (24h TTL)
+    ├── siwe-verify.ts          # EIP-4361 message verification
     └── openapi.json            # Static OpenAPI spec
 ```
 
@@ -104,26 +104,26 @@ src/
 **Single session type — SIWE for all wallet kinds:**
 
 - **EOA wallets** (MetaMask/Rabby/WalletConnect): standard EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
-- **CDP email-login smart accounts**: the embedded EOA signer signs the SIWE message; the SIWE `address` field contains the smart account address; `eoaAddress` in the POST body provides the actual signer for fallback verification in `siwe-verify.js`.
+- **CDP email-login smart accounts**: the embedded EOA signer signs the SIWE message; the SIWE `address` field contains the smart account address; `eoaAddress` in the POST body provides the actual signer for fallback verification in `siwe-verify.ts`.
 
-Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL. `authentication.js` validates the SIWE-issued token for all request types.
+Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL. `authentication.ts` validates the SIWE-issued token for all request types.
 
 ### 2.4 What Works
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
 - ✅ Tripo3D BYOK generation (task-based, v3 API, default model `v3.1-20260211`) with `POST /generations` + `GET /generations/:taskId` polling; `auto_size` is passed so models arrive at estimated real-world meter scale; panel-level "Texture quality" selector (Tripo3D only, persisted in localStorage) sends `texture_quality: detailed`
-- ✅ Version-card action row: every Tripo3D generation bubble carries a compact action row — `Retexture` (texture-prompt dialog) · `Retopo` (polygon-budget dialog) · `Auto-rig` (no dialog) · `Animate…` (preset dialog) — via `domain/generation-actions.js`; actions run against the bubble's own GLB, so they never expire. Animated results are terminal (no actions); rig-only results keep only `Animate…`; mock provider gets none
+- ✅ Version-card action row: every Tripo3D generation bubble carries a compact action row — `Retexture` (texture-prompt dialog) · `Retopo` (polygon-budget dialog) · `Auto-rig` (no dialog) · `Animate…` (preset dialog) — via `domain/generation-actions.ts`; actions run against the bubble's own GLB, so they never expire. Animated results are terminal (no actions); rig-only results keep only `Animate…`; mock provider gets none
 - ✅ Tripo3D `sourceAssetCid` GLB follow-ups: the backend fetches the bubble's GLB from IPFS and uploads it to Tripo (`POST /files` → `file_token`) as the source for retexture (`models/texture`, flat `text_prompt`), retopo (`mesh/decimate`), and rig/animate. glTF JSON sources (composite `ipfs://` refs or embedded data URIs — gzipped storage is decompressed first, components honor `_arbesk.compressed`) are composed to GLB before upload via the shared gltf-core pipeline (`composeGltfJson` + `serializeGLB`); other formats (3MF, …) or glTF with unresolvable external refs → 400 `SOURCE_ASSET_UNSUPPORTED_FORMAT` (rig-check accepts GLB only — upstream code 1004). Unreadable or empty GLB → 400 `SOURCE_ASSET_UNAVAILABLE`; GLB over Tripo's 150 MB file limit → 400 `SOURCE_ASSET_TOO_LARGE`
 - ✅ Typed-prompt retexture targets the "active version": a visible `Refining: <name> ×` indicator above the input, set on generation result, Show in Studio, and bubble/history restore; cleared by detach, Clear Chat, asset switch, or restoring a chat-less (e.g. parametric-edit) version
 - ✅ Show in Studio auto-saves a draft (existing asset-save flow) and annotates the bubble "Saved" — publish stays a separate manual action. The button is the only way a bubble's model enters the Studio (the preview is orbit-only) and stays live after sending — re-clicking it restores that version; the manifest-chain tip is preserved across the restore so the auto-save chains linearly onto the prior tip (no fork)
 - ✅ Tripo3D image-to-3D: attach a JPEG/PNG/WebP in the create panel (image attach button, Tripo3D provider only) → backend uploads via `POST /files` → image-to-model task; same polling flow, starts a fresh model. The reference image shows as an image bubble in chat and is pinned to IPFS with its CID recorded in the manifest node (`reference_image`)
-- ✅ Tripo3D multiview-to-3D: attach up to 4 views of the same object (the attach input is multi-select; each chip gets a swappable Front/Left/Back/Right badge, auto-assigned in attach order with swap-on-conflict and front promotion on remove — pure logic in `ui/attach-views.js`) → request field `images: [{imageData, imageMime, view}]` (2–4, unique views, exactly one front, mutually exclusive with `imageData`) → backend uploads each view → `generation/multiview-to-model` (`createMultiviewTask` in the adapter, view-key `inputs` in canonical front/left/back/right order). Chat shows a 2-column thumbnail grid bubble (`addImageMessage` `options.images`); the manifest node records `reference_images: [{cid, mime, name, view}]` plus `reference_image` = the front view for back-compat. One attached image keeps the single-image path byte-for-byte
+- ✅ Tripo3D multiview-to-3D: attach up to 4 views of the same object (the attach input is multi-select; each chip gets a swappable Front/Left/Back/Right badge, auto-assigned in attach order with swap-on-conflict and front promotion on remove — pure logic in `ui/attach-views.ts`) → request field `images: [{imageData, imageMime, view}]` (2–4, unique views, exactly one front, mutually exclusive with `imageData`) → backend uploads each view → `generation/multiview-to-model` (`createMultiviewTask` in the adapter, view-key `inputs` in canonical front/left/back/right order). Chat shows a 2-column thumbnail grid bubble (`addImageMessage` `options.images`); the manifest node records `reference_images: [{cid, mime, name, view}]` plus `reference_image` = the front view for back-compat. One attached image keeps the single-image path byte-for-byte
 - ✅ Tripo3D credit balance display: `POST /generations/balance` (BYOK key, session-gated) powers the "Tripo 3D credits" caption under the provider select + in the BYOK key dialog; refreshes on key change, wallet connect, and after each generation
 - ✅ Model download: header download button in Studio (active asset) + per-card Download action in the Library; GLB downloads raw from IPFS, composite glTF is inlined (data URIs) first so the file is self-contained — no wallet/session needed (read-only)
-- ✅ Tripo3D rig & animate: `Auto-rig` action chains rig-check → rig and stops (rigged GLB, Tripo-native skeleton — retarget rejects `spec: "mixamo"` rigs with code 1004, no baked animation); `Animate…` opens the preset dialog (max 5) then chains rig-check → rig → retarget (`animate` + `animations`/`rigOnly` on `POST /generations`). The picker is a curated, categorized set — Basics/Combat/Reactions/Emotes/Daily Life: the 11 generic v2.5 presets (short form) plus 16 from the v1.0 biped library (`preset:biped:*`, pass-through in the adapter; a known generic-rig task rejects them with a clear 400). Animating an already-rigged bubble takes the retarget-only path, skipping rig-check/rig, driven by the backend registry task id (`sourceTaskId`). Poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Rig endpoint uses its own model version (`TRIPO_3D_RIG_MODEL`, default `v2.5-20260210`). Tripo rig/retarget re-normalize model size (~×0.5 per stage), so follow-up manifests bake a compensating uniform `post_processor.scale` from source/result mesh bounds (`gltf/bounds.js` + `followupScaleCompensation` in `services/api.js`) — versions keep visual size through the chain
+- ✅ Tripo3D rig & animate: `Auto-rig` action chains rig-check → rig and stops (rigged GLB, Tripo-native skeleton — retarget rejects `spec: "mixamo"` rigs with code 1004, no baked animation); `Animate…` opens the preset dialog (max 5) then chains rig-check → rig → retarget (`animate` + `animations`/`rigOnly` on `POST /generations`). The picker is a curated, categorized set — Basics/Combat/Reactions/Emotes/Daily Life: the 11 generic v2.5 presets (short form) plus 16 from the v1.0 biped library (`preset:biped:*`, pass-through in the adapter; a known generic-rig task rejects them with a clear 400). Animating an already-rigged bubble takes the retarget-only path, skipping rig-check/rig, driven by the backend registry task id (`sourceTaskId`). Poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Rig endpoint uses its own model version (`TRIPO_3D_RIG_MODEL`, default `v2.5-20260210`). Tripo rig/retarget re-normalize model size (~×0.5 per stage), so follow-up manifests bake a compensating uniform `post_processor.scale` from source/result mesh bounds (`gltf/bounds.ts` + `followupScaleCompensation` in `services/api.ts`) — versions keep visual size through the chain
 - ✅ Tripo3D smart retopology: `Retopo` action with polygon-budget dialog (500–20,000 triangles, default 20,000, blank = adaptive) → `POST /mesh/decimate` (model v2.0, clean triangulated topology + baked textures, GLB output, optional `faceLimit`); `quad` stays `false` on purpose — quad output forces FBX, which the frontend cannot load. The retopo result can itself enter the rig chain
-- ✅ Generation task progress: GNOME infobar-style banner on the viewport top (`ui/task-progress.js`) for Save/Besk and generation tasks, with stage hints, success fade, and error state
-- ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.js`, `pending-generations.js`); chat session resets on asset switch (keyed on manifest `asset_id`) while history bubbles still render per asset
+- ✅ Generation task progress: GNOME infobar-style banner on the viewport top (`ui/task-progress.ts`) for Save/Besk and generation tasks, with stage hints, success fade, and error state
+- ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.ts`, `pending-generations.ts`); chat session resets on asset switch (keyed on manifest `asset_id`) while history bubbles still render per asset
 - ✅ Rate limiting (10/hour per wallet, 429 + `Retry-After`; 1000/hr in mock mode)
 - ✅ Thumbnail capture + direct IPFS upload from browser
 - ✅ Manifest save/publish entirely client-side
@@ -153,82 +153,82 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 ```
 frontend/src/js/
 ├── engine/
-│   ├── scene-graph.js          # Babylon engine, GLB/glTF load, selection, framing, thumbnails, collection load
-│   ├── time-travel.js          # Manifest chain walk, apply version
-│   ├── parametric-preview.js   # Inspector color/scale, live preview, timeline binding
-│   ├── state.js                # Shared mutable state
-│   ├── transforms.js           # CID extraction, format detection, bounds, centering
-│   ├── cleanup.js              # Node/scene disposal
-│   ├── placeholders.js         # Loading/error meshes
-│   ├── studio-init.js          # Studio bootstrap
-│   ├── theme.js / theme-init.js# CSS → Babylon color mapping
-│   └── viewport-gizmo.js       # Corner orientation gizmo
+│   ├── scene-graph.ts          # Babylon engine, GLB/glTF load, selection, framing, thumbnails, collection load
+│   ├── time-travel.ts          # Manifest chain walk, apply version
+│   ├── parametric-preview.ts   # Inspector color/scale, live preview, timeline binding
+│   ├── state.ts                # Shared mutable state
+│   ├── transforms.ts           # CID extraction, format detection, bounds, centering
+│   ├── cleanup.ts              # Node/scene disposal
+│   ├── placeholders.ts         # Loading/error meshes
+│   ├── app-init.ts             # Studio + Library bootstrap (replaces studio-init.js/library-init.js)
+│   ├── theme.ts / theme-init.ts# CSS → Babylon color mapping
+│   └── viewport-gizmo.ts       # Corner orientation gizmo
 ├── app/
-│   └── router.js               # Unified SPA view router: Studio ⇄ Library
+│   └── router.ts               # Unified SPA view router: Studio ⇄ Library
 ├── ui/
-│   ├── create-panel.js         # Chat-style prompt flow, PayGo, tier/provider dropdowns
-│   ├── asset-save.js           # Save Draft / Publish UI; delegates building to services/asset-save/
-│   ├── asset-library.js        # Token gallery (owned + shared), collection expansion, thumbnails, drag; inaccessible token cards with Burn action
-│   ├── asset-drop-zone.js      # Viewport drag/drop overlay
-│   ├── scene-clock.js / model-clock-gizmo.js / version-clock.js  # Viewport version clock gizmos (scene + selected-node 3D ring)
-│   ├── collaborators-panel.js  # Team panel (add/remove editors, owner badge)
-│   ├── comments-panel.js       # Asset-level comment thread UI
-│   ├── ledger-panel.js         # Activity feed derived from manifest chain
-│   ├── outliner.js             # Scene hierarchy tree, select, double-click dive
-│   ├── nesting.js              # Breadcrumbs, dive/ascend, depth gating
-│   ├── sidebar.js              # 5-view switcher (AI Generation/Settings/Outline/Gallery/Activity)
-│   ├── library-controller.js   # Library view orchestration, data loading, and Studio handoff
-│   ├── library-grid.js         # Library grid/list rendering, selection, keyboard, rubber-band; minting/besked/wip status badges
-│   ├── library-toolbar.js      # Breadcrumb, search, sort, view toggle, New Collection, Upload
-│   ├── library-context-menu.js # Library right-click actions (Open, Rename, Burn, Delete, Send to Collection…)
-│   ├── library-create.js       # Shared optimistic collection-create flow (both EOA + social)
-│   ├── collaborators.js        # Burn button visibility helper
-│   ├── dialog.js / toasts.js / wallet-modal.js / wallet-popover.js
+│   ├── create-panel.ts         # Chat-style prompt flow, PayGo, tier/provider dropdowns
+│   ├── asset-save.ts           # Save Draft / Publish UI; delegates building to services/asset-save/
+│   ├── asset-library.ts        # Token gallery (owned + shared), collection expansion, thumbnails, drag; inaccessible token cards with Burn action
+│   ├── asset-drop-zone.ts      # Viewport drag/drop overlay
+│   ├── scene-clock.ts / model-clock-gizmo.ts / version-clock.ts  # Viewport version clock gizmos (scene + selected-node 3D ring)
+│   ├── collaborators-panel.ts  # Team panel (add/remove editors, owner badge)
+│   ├── comments-panel.ts       # Asset-level comment thread UI
+│   ├── ledger-panel.ts         # Activity feed derived from manifest chain
+│   ├── outliner.ts             # Scene hierarchy tree, select, double-click dive
+│   ├── nesting.ts              # Breadcrumbs, dive/ascend, depth gating
+│   ├── sidebar.ts              # 5-view switcher (AI Generation/Settings/Outline/Gallery/Activity)
+│   ├── library-controller.ts   # Library view orchestration, data loading, and Studio handoff
+│   ├── library-grid.ts         # Library grid/list rendering, selection, keyboard, rubber-band; minting/besked/wip status badges
+│   ├── library-toolbar.ts      # Breadcrumb, search, sort, view toggle, New Collection, Upload
+│   ├── library-context-menu.ts # Library right-click actions (Open, Rename, Burn, Delete, Send to Collection…)
+│   ├── library-create.ts       # Shared optimistic collection-create flow (both EOA + social)
+│   ├── collaborators.ts        # Burn button visibility helper
+│   ├── dialog.ts / toasts.ts / wallet-modal.ts / wallet-popover.ts
 │   └── ...
 ├── blockchain/
-│   ├── wallet.js               # Backward-compat barrel; re-exports the split wallet modules
-│   ├── wallet-core.js          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA/WalletConnect), account state; 250ms polling
-│   ├── wallet-network.js       # Network switching
-│   ├── wallet-payments.js      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
-│   ├── wallet-publishing.js    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
-│   ├── wallet-guard.js         # Guards / helpers for publishing auth
-│   ├── wallet-cdp.js           # CDP email OTP → embedded EOA → ERC-4337 smart account; EIP-1193 shim
-│   ├── smart-wallet-support.js # SMART_WALLET_SUPPORTED_CHAIN_IDS (Base Sepolia only)
-│   ├── token-resolver.js       # Resolve child_ref tokens to manifest CIDs
-│   ├── uri-utils.js            # Normalize tokenURIs to plain CIDs
-│   ├── siwe.js                 # EIP-4361 message builder
-│   ├── wallet-discovery.js     # EIP-6963 multi-wallet
-│   ├── wallet-connect.js       # WalletConnect v2
-│   ├── network-config.js       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
-│   ├── error-decoder.js        # Revert reason decoding
-│   └── explorer.js             # Block explorer links
+│   ├── wallet.ts               # Backward-compat barrel; re-exports the split wallet modules
+│   ├── wallet-core.ts          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA/WalletConnect), account state; 250ms polling
+│   ├── wallet-network.ts       # Network switching
+│   ├── wallet-payments.ts      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
+│   ├── wallet-publishing.ts    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
+│   ├── wallet-guard.ts         # Guards / helpers for publishing auth
+│   ├── wallet-cdp.ts           # CDP email OTP → embedded EOA → ERC-4337 smart account; EIP-1193 shim
+│   ├── smart-wallet-support.ts # SMART_WALLET_SUPPORTED_CHAIN_IDS (Base Sepolia only)
+│   ├── token-resolver.ts       # Resolve child_ref tokens to manifest CIDs
+│   ├── uri-utils.ts            # Normalize tokenURIs to plain CIDs
+│   ├── siwe.ts                 # EIP-4361 message builder
+│   ├── wallet-discovery.ts     # EIP-6963 multi-wallet
+│   ├── wallet-connect.ts       # WalletConnect v2
+│   ├── network-config.ts       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
+│   ├── error-decoder.ts        # Revert reason decoding
+│   └── explorer.ts             # Block explorer links
 ├── ipfs/
-│   ├── remote-ipfs.js          # Gateway reads (cache currently disabled)
-│   └── write-to-ipfs.js        # Direct Kubo/Pinata writes + pin
+│   ├── remote-ipfs.ts          # Gateway reads (cache currently disabled)
+│   └── write-to-ipfs.ts        # Direct Kubo/Pinata writes + pin
 ├── gltf/
-│   ├── decomposer.js           # Break buffers/images into separate IPFS CIDs (web-worker backed)
-│   ├── async-gltf.js           # Async decompose helpers
-│   ├── composer.js             # Resolve ipfs:// URIs back to base64 for Babylon
-│   ├── material-editor.js      # PBR material color edits, multi-primitive aware, bake to composite
-│   ├── merkle-editors.js       # Merkle tree/proof library for editor authorization
-│   ├── source-color-editor.js  # Per-mesh color editor integration
-│   └── glb-parser.js           # Binary glTF container parsing
+│   ├── decomposer.ts           # Break buffers/images into separate IPFS CIDs (web-worker backed)
+│   ├── async-gltf.ts           # Async decompose helpers
+│   ├── composer.ts             # Resolve ipfs:// URIs back to base64 for Babylon
+│   ├── material-editor.ts      # PBR material color edits, multi-primitive aware, bake to composite
+│   ├── merkle-editors.ts       # Merkle tree/proof library for editor authorization
+│   ├── source-color-editor.ts  # Per-mesh color editor integration
+│   └── glb-parser.ts           # Binary glTF container parsing
 ├── domain/
-│   ├── asset-store.js          # Shared asset store (domain-only import); emits ASSET_STATE_CHANGED with full-state payload
-│   ├── asset.js                # Asset facade — single writer of asset identity/name/CID fields; getters + save/publish commands
-│   ├── collection.js           # Collection state commands (single writer of active/selected collection) + publishCollection seam
-│   ├── editors.js              # Merkle editor helpers, editor-list cache, proof commands
-│   ├── version-history-store.js # Headless manifest-chain store (entries, active/published CIDs) feeding the scene/model clocks
-│   └── generation-actions.js   # Pure follow-up-action policy for generation bubbles (retexture/retopo/auto-rig/animate)
+│   ├── asset-store.ts          # Shared asset store (domain-only import); emits ASSET_STATE_CHANGED with full-state payload
+│   ├── asset.ts                # Asset facade — single writer of asset identity/name/CID fields; getters + save/publish commands
+│   ├── collection.ts           # Collection state commands (single writer of active/selected collection) + publishCollection seam
+│   ├── editors.ts              # Merkle editor helpers, editor-list cache, proof commands
+│   ├── version-history-store.ts # Headless manifest-chain store (entries, active/published CIDs) feeding the scene/model clocks
+│   └── generation-actions.ts   # Pure follow-up-action policy for generation bubbles (retexture/retopo/auto-rig/animate)
 ├── state/
-│   ├── wallet-state.js / ui-state.js / library-state.js
-│   └── create-store.js         # Generic createStore factory
+│   ├── wallet-state.ts / ui-state.ts / library-state.ts
+│   └── create-store.ts         # Generic createStore factory
 └── services/
-    ├── api.js                  # API client: sessions (SIWE), generate, comments archive, unpin, upload-url, paymaster
-    ├── asset-save/             # manifest-builder.js, collection-publish.js, editor-publish.js
-    ├── library-ops.js          # Create named collection (with onPending hook), upload glTF/GLB/3MF (decomposed at upload)
-    ├── comment-thread.js       # Per-asset Nostr WebSocket + archive comment thread
-    ├── team.js / asset-delete.js / url-utils.js
+    ├── api.ts                  # API client: sessions (SIWE), generate, comments archive, unpin, upload-url, paymaster
+    ├── asset-save/             # manifest-builder.ts, collection-publish.ts, editor-publish.ts
+    ├── library-ops.ts          # Create named collection (with onPending hook), upload glTF/GLB/3MF (decomposed at upload)
+    ├── comment-thread.ts       # Per-asset Nostr WebSocket + archive comment thread
+    ├── team.ts / asset-delete.ts / url-utils.ts
     └── ...
 ```
 
@@ -236,9 +236,9 @@ frontend/src/js/
 
 **CDP Email Login (Account Abstraction)**
 - Email OTP → CDP Embedded Wallet (`@coinbase/cdp-core`) → ERC-4337 smart account on Base Sepolia.
-- Provider exposed as an EIP-1193 shim (`wallet-cdp.js`) so all existing Web3.js code is unchanged.
+- Provider exposed as an EIP-1193 shim (`wallet-cdp.ts`) so all existing Web3.js code is unchanged.
 - Gas is sponsored by the CDP Paymaster (`useCdpPaymaster: true`); low-balance toast is suppressed for smart accounts.
-- Auth: embedded EOA signs the SIWE message; `eoaAddress` in the POST body enables fallback verification in `siwe-verify.js`. Same SIWE session token format as EOA wallets.
+- Auth: embedded EOA signs the SIWE message; `eoaAddress` in the POST body enables fallback verification in `siwe-verify.ts`. Same SIWE session token format as EOA wallets.
 - **Chain constraint:** Smart wallets only work on Base Sepolia (`SMART_WALLET_SUPPORTED_CHAIN_IDS`). EOA wallets (MetaMask/Rabby) work on all supported chains.
 - **Verified end-to-end 2026-07-01:** OTP sign-in → SIWE session → collection mint via sponsored UserOperation on Base Sepolia.
 - **Implementation notes / gotchas fixed:**
@@ -247,7 +247,7 @@ frontend/src/js/
   - `sepolia.base.org` blocks browser-origin RPC requests; use `https://base-sepolia-rpc.publicnode.com` for RPC passthrough.
   - CDP rejects relative `paymasterUrl`; local dev uses `useCdpPaymaster: true`. The backend proxy at `/api/v1/paymaster` is reserved for production deployments with a public HTTPS custom paymaster; it is session-gated, wallet-keyed rate limited (`PAYMASTER_RATE_LIMIT_MAX`, default 30/min), and forwards only `pm_*` methods.
 
-**Token Indexer (`src/api/token-indexer.js`)**
+**Token Indexer (`src/api/token-indexer.ts`)**
 - Chunked `eth_getLogs` backfill scans for `Transfer` events (ownership) and `EditorSetChanged` events (editor-shared tokens) per chain.
 - Editor list CIDs are read from chain (`editorListURI`) and resolved from IPFS to build a reverse index of editor address → token IDs.
 - Per-chain chunk sizes in `constants/chains.js`: Hardhat=10000, Base Sepolia=2000.
@@ -255,25 +255,25 @@ frontend/src/js/
 - Base Sepolia deployment block pinned in `constants/chains.js` to avoid scanning from genesis.
 - Exposes `GET /api/v1/indexer/owned` and `GET /api/v1/indexer/shared`.
 
-**Optimistic Collection Create UI (`ui/library-create.js`)**
+**Optimistic Collection Create UI (`ui/library-create.ts`)**
 - Shared `createCollectionFlow()` used by both toolbar button and right-click context menu.
 - Card appears with a spinner badge immediately after the manifest write (before the mint tx); `onPending` hook in `createNamedCollection` fires the callback at that moment.
-- On success: card flips to checkmark (`besked`) instantly and stays in place. `app-init.js` no longer subscribes to `ASSET_PUBLISHED`, so there is no full background refresh.
+- On success: card flips to checkmark (`besked`) instantly and stays in place. `app-init.ts` no longer subscribes to `ASSET_PUBLISHED`, so there is no full background refresh.
 - On failure/wallet-reject: optimistic card is removed automatically (toast). Works identically for EOA (card shows just before the wallet popup; rejecting removes it) and CDP email login.
 
-**Library Burn Action (`ui/library-context-menu.js`)**
+**Library Burn Action (`ui/library-context-menu.ts`)**
 - `requestBurnCollection()` removes the collection from local state directly after a successful on-chain burn; no full page refresh is triggered.
 
 **Performance (smart-account publish path)**
-- `_resolveGas()` in `wallet-publishing.js` skips `eth_estimateGas` entirely for CDP smart accounts (bundler re-estimates, paymaster sponsors) — saves one RPC round trip on every publish/updateURI/updateEditors/burn.
+- `_resolveGas()` in `wallet-publishing.ts` skips `eth_estimateGas` entirely for CDP smart accounts (bundler re-estimates, paymaster sponsors) — saves one RPC round trip on every publish/updateURI/updateEditors/burn.
 - `ownerOf` + `tokenURI` pre-mint existence check now runs via `Promise.all` (parallel).
 - `newWeb3()` sets `transactionPollingInterval = 250ms` (down from 1000ms default) across all 7 Web3 instance sites.
 - Background smart-account pre-warm via no-op sponsored UserOperation at connect time.
 
 **Inaccessible Token Cards**
-- Studio gallery (`asset-library.js`) and library page now show tokens the user owns on-chain but can't read (e.g. wrong network, IPFS unavailable) as card skeletons with a **Burn** action, rather than silently dropping them.
+- Studio gallery (`asset-library.ts`) and library page now show tokens the user owns on-chain but can't read (e.g. wrong network, IPFS unavailable) as card skeletons with a **Burn** action, rather than silently dropping them.
 
-**Studio Undo/Redo (`engine/undo-stack.js`, `engine/undo-controller.js`)**
+**Studio Undo/Redo (`engine/undo-stack.ts`, `engine/undo-controller.ts`)**
 - Single chronological in-memory snapshot stack (cap 50) shared by all scene edits: gizmo move/rotate/scale (single + group), inspector scale fields, and parametric color edits (the old color-only private stack was folded in).
 - Capture per completed gesture: gizmo drag start/end matrix snapshots (unchanged drags and no-op inspector commits filtered via `matricesEqual`); color pushes on picker close.
 - `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` dispatcher + `#undoBtn`/`#redoBtn` in the viewport toolbar (disabled-state + label tooltips synced from the stack); shortcut is a silent no-op when stacks are empty and stays out of text fields.
@@ -285,7 +285,7 @@ frontend/src/js/
 ### 3.3 What Does NOT Work / Is Missing
 
 - ❌ **IPFS browser cache hardcoded disabled** — every read hits the gateway directly.
-- ❌ `anchorManifest()` stubbed in `ledger-panel.js` — "not available in current contract".
+- ❌ `anchorManifest()` stubbed in `ledger-panel.ts` — "not available in current contract".
 - ❌ CDP email login (smart accounts) only supported on Base Sepolia — not on Hardhat local.
 - ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
 
@@ -384,8 +384,8 @@ frontend/src/js/
 
 | Gap | Where | Priority |
 |-----|-------|----------|
-| CDP email login on Hardhat | `smart-wallet-support.js` | 🟡 Smart wallets only supported on Base Sepolia |
-| Micro-ledger (`anchorManifest`) | `ledger-panel.js` | 🟡 Post-beta |
+| CDP email login on Hardhat | `smart-wallet-support.ts` | 🟡 Smart wallets only supported on Base Sepolia |
+| Micro-ledger (`anchorManifest`) | `ledger-panel.ts` | 🟡 Post-beta |
 | Health check endpoint | — | 🟢 Ops convenience |
 | OpenSCAD WASM | — | ⚪ Explicitly deferred |
 

@@ -35,9 +35,10 @@ module.exports = async function renderTs() {
             module: { type: 'es6' },
         });
         // Emitted files load in the browser: relative .ts specifiers must
-        // point at the emitted .js files instead.
+        // point at the emitted .js files instead. Covers static `from`
+        // imports, dynamic import(), and bare side-effect imports.
         const code = result.code.replace(
-            /(from\s+['"]|import\s*\(\s*['"])(\.{1,2}\/[^'"]+)\.ts(['"])/g,
+            /(from\s+['"]|import\s*\(\s*['"]|import\s+['"])(\.{1,2}\/[^'"]+)\.ts(['"])/g,
             '$1$2.js$3'
         );
         sh.mkdir('-p', upath.dirname(outFile));

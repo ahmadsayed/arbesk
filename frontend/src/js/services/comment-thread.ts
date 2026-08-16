@@ -1,0 +1,367 @@
+/**
+ * Arbesk Comment Thread State
+ *
+ * Owns a single Nostr comment thread's transport, deduplication, and ordered
+ * event list. Emits changes through the global mitt bus so UI layers can
+ * subscribe without touching WebSocket or IPFS details.
+ */
+
+import { emit, EVENTS } from "../events/bus.ts";
+import { walletState } from "../state/wallet-state.ts";
+import {
+  getActiveAssetId,
+  getActiveAssetManifestCid,
+  getCurrentManifest,
+} from "../domain/asset.ts";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
+import { clearSession, createSession, getCachedSession } from "./api.ts";
+import { buildEditorProof } from "../domain/editors.ts";
+
+const RELAY_PATH = "/api/v1/chat/ws";
+const RECONNECT_DELAY_MS = 3000;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+export class CommentThread {
+  _ws: WebSocket | null = null;
+  _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  _reconnectAttempts = 0;
+  _isConnecting = false;
+  _isReauthenticating = false;
+
+  _currentTokenId: string | number | null = null;
+  _currentChainId: string | number | null = null;
+  _currentAssetId: string | null = null;
+  _currentArchiveCid: string | null = null;
+
+  _knownEventIds = new Set<string>();
+  _events: any[] = [];
+
+  // ─── Public read API ────────────────────────────────────────────────────────
+
+  get events(): any[] {
+    return [...this._events];
+  }
+
+  get status(): {
+    connected: boolean;
+    connecting: boolean;
+    tokenId: string | number | null;
+    chainId: string | number | null;
+    assetId: string | null;
+  } {
+    return {
+      connected: this._ws?.readyState === WebSocket.OPEN,
+      connecting: this._isConnecting,
+      tokenId: this._currentTokenId,
+      chainId: this._currentChainId,
+      assetId: this._currentAssetId,
+    };
+  }
+
+  // ─── Context & lifecycle ────────────────────────────────────────────────────
+
+  async setContext({ tokenId, chainId, manifest, assetId }: { tokenId: string | number | null; chainId: string | number | null; manifest?: any; assetId?: string | null }): Promise<void> {
+    const nextAssetId = assetId || manifest?.asset_id || null;
+    const contextChanged =
+      tokenId !== this._currentTokenId ||
+      chainId !== this._currentChainId ||
+      nextAssetId !== this._currentAssetId;
+
+    if (contextChanged) {
+      this.disconnect();
+      this._clearEvents();
+      this._currentTokenId = tokenId;
+      this._currentChainId = chainId;
+      this._currentAssetId = nextAssetId;
+      this._currentArchiveCid = null;
+    }
+
+    // Always reload the archive: the manifest may have been republished even when
+    // the token/chain context is unchanged. loadArchiveForCurrentManifest no-ops
+    // when the archive CID hasn't changed.
+    await this._loadArchiveForCurrentManifest(manifest);
+
+    if (contextChanged) {
+      this._emitStatus();
+      this.connect();
+    }
+  }
+
+  async loadArchive(cid: string): Promise<void> {
+    await this._loadArchive(cid);
+  }
+
+  ingest(event: any, { source = "live" }: { source?: string } = {}): boolean {
+    if (!event?.id || this._knownEventIds.has(event.id)) return false;
+    this._knownEventIds.add(event.id);
+    this._events.push(event);
+    this._sortEvents();
+    this._emitChange({ source, event });
+    return true;
+  }
+
+  async connect(): Promise<void> {
+    if (this._ws || this._isConnecting) return;
+
+    const tokenId = this._currentTokenId;
+    const chainId = this._currentChainId;
+    const assetId = this._currentAssetId;
+    const address = walletState.get().walletAddress;
+    if (!tokenId || !address || !assetId) return;
+
+    const session = getCachedSession();
+    if (!session) return;
+
+    this._isConnecting = true;
+    this._reconnectAttempts = 0;
+    this._emitStatus();
+
+    // Build a Merkle editor proof for non-owner collaborators. Owners are
+    // authorized by ownership and do not need a proof, but if a proof can be
+    // built (e.g. owner is also in the editor list) we send it anyway.
+    const proofData = await this._loadEditorProof(tokenId, chainId, address);
+
+    // Abort if the context changed while we were loading the proof.
+    if (
+      tokenId !== this._currentTokenId ||
+      chainId !== this._currentChainId ||
+      assetId !== this._currentAssetId ||
+      !this._isConnecting
+    ) {
+      this._isConnecting = false;
+      this._emitStatus();
+      return;
+    }
+
+    const token = encodeURIComponent(session.token);
+    const encTokenId = encodeURIComponent(tokenId);
+    const encChainId = chainId ? encodeURIComponent(chainId) : "";
+    const encAssetId = encodeURIComponent(assetId);
+    let url = `${this._getWsBase()}${RELAY_PATH}?token=${token}&tokenId=${encTokenId}&chainId=${encChainId}&assetId=${encAssetId}`;
+    if (proofData) {
+      url += `&proof=${encodeURIComponent(JSON.stringify(proofData.proof))}&role=${encodeURIComponent(proofData.role)}`;
+    }
+
+    try {
+      this._ws = new WebSocket(url);
+    } catch (err) {
+      console.error("[COMMENT_THREAD] WebSocket creation failed:", err);
+      this._isConnecting = false;
+      this._emitStatus();
+      this._scheduleReconnect();
+      return;
+    }
+
+    this._ws.onopen = () => {
+      this._isConnecting = false;
+      this._reconnectAttempts = 0;
+      console.log("[COMMENT_THREAD] connected");
+      this._emitStatus();
+    };
+
+    this._ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      this._handleMessage(msg);
+    };
+
+    this._ws.onclose = (event) => {
+      this._ws = null;
+      this._isConnecting = false;
+      this._emitStatus();
+
+      // 4401 = invalid session (server restarted, in-memory store cleared, etc.)
+      if (event.code === 4401 && !this._isReauthenticating) {
+        this._isReauthenticating = true;
+        console.log("[COMMENT_THREAD] session rejected by proxy - re-authenticating…");
+        clearSession();
+        createSession()
+          .then(() => {
+            this._isReauthenticating = false;
+            this.connect();
+          })
+          .catch((err) => {
+            this._isReauthenticating = false;
+            console.warn("[COMMENT_THREAD] re-auth failed:", err.message);
+            this._scheduleReconnect();
+          });
+        return;
+      }
+
+      this._scheduleReconnect();
+    };
+
+    this._ws.onerror = (err) => {
+      console.warn("[COMMENT_THREAD] WebSocket error:", err);
+      this._isConnecting = false;
+      this._emitStatus();
+    };
+  }
+
+  disconnect(): void {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    if (this._ws) {
+      const s = this._ws;
+      this._ws = null;
+      try {
+        s.close(1000, "Panel closed");
+      } catch {
+        // ignore
+      }
+    }
+    this._isConnecting = false;
+    this._reconnectAttempts = 0;
+    this._emitStatus();
+  }
+
+  post(text: string): boolean {
+    if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return false;
+    this._ws.send(JSON.stringify({ type: "chat", content: text }));
+    return true;
+  }
+
+  // ─── Message handling ───────────────────────────────────────────────────────
+
+  _handleMessage(msg: any): void {
+    switch (msg.type) {
+      case "ready":
+        this._emitStatus();
+        break;
+      case "event":
+        this.ingest(msg.event, { source: "live" });
+        break;
+      case "error":
+        this._emitStatus({ error: msg.message });
+        break;
+      case "eose":
+        // Historical backlog finished loading
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Build a Merkle proof for the current wallet against the token's editor list.
+   * Returns null when the wallet is not a listed collaborator.
+   */
+  async _loadEditorProof(tokenId: string | number, _chainId: string | number | null, address: string): Promise<{ proof: string[]; role: number } | null> {
+    try {
+      const result = await buildEditorProof(tokenId as string, address);
+      if (!result) return null;
+      return { proof: result.proof, role: result.role };
+    } catch (err) {
+      console.warn("[COMMENT_THREAD] could not build editor proof:", (err as Error).message);
+      return null;
+    }
+  }
+
+  // ─── Archive loading ────────────────────────────────────────────────────────
+
+  async _loadArchiveForCurrentManifest(manifest: any): Promise<void> {
+    const assetId =
+      manifest?.asset_id || this._currentAssetId || getActiveAssetId();
+    let archiveCid = manifest?.comments_archive_cid;
+
+    // If no manifest was passed in the event, try to fetch the currently loaded
+    // manifest from IPFS so we can read its comments_archive_cid.
+    if (!archiveCid && assetId) {
+      const activeCid = getActiveAssetManifestCid();
+      const cachedManifest = getCurrentManifest() as any;
+      if (
+        cachedManifest?.asset_id === assetId &&
+        cachedManifest?.comments_archive_cid
+      ) {
+        archiveCid = cachedManifest.comments_archive_cid;
+      } else if (activeCid) {
+        try {
+          const fetched = await getFromRemoteIPFS(activeCid);
+          if (fetched?.asset_id === assetId) {
+            archiveCid = fetched?.comments_archive_cid;
+          }
+        } catch (err) {
+          console.warn(
+            "[COMMENT_THREAD] failed to fetch manifest for archive CID:",
+            (err as Error).message
+          );
+        }
+      }
+    }
+
+    if (archiveCid) {
+      await this._loadArchive(archiveCid, assetId);
+    }
+  }
+
+  async _loadArchive(cid: string, assetId?: string | number | null): Promise<void> {
+    if (!cid || cid === this._currentArchiveCid) return;
+
+    const assetIdWhenStarted = assetId || this._currentAssetId;
+    try {
+      const archive = await getFromRemoteIPFS(cid);
+      // Drop stale results if the user switched assets while the archive was loading.
+      if (this._currentAssetId !== assetIdWhenStarted) return;
+      this._currentArchiveCid = cid;
+      const events = Array.isArray(archive?.events) ? archive.events : [];
+      // Render oldest first so the thread reads top-to-bottom.
+      const sorted = [...events].sort(
+        (a, b) => (a.created_at || 0) - (b.created_at || 0)
+      );
+      for (const event of sorted) {
+        this.ingest(event, { source: "archive" });
+      }
+      console.log(
+        `[COMMENT_THREAD] loaded ${sorted.length} archived event(s) from ${cid}`
+      );
+    } catch (err) {
+      console.warn(`[COMMENT_THREAD] failed to load archive ${cid}:`, (err as Error).message);
+    }
+  }
+
+  // ─── Internal helpers ───────────────────────────────────────────────────────
+
+  _clearEvents(): void {
+    this._knownEventIds.clear();
+    this._events = [];
+    this._emitChange({ source: "clear" });
+  }
+
+  _sortEvents(): void {
+    this._events.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+  }
+
+  _scheduleReconnect(): void {
+    if (this._reconnectTimer || !this._currentTokenId) return;
+    const address = walletState.get().walletAddress;
+    if (!address) return;
+    if (this._reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn("[COMMENT_THREAD] max reconnect attempts reached");
+      return;
+    }
+    this._reconnectAttempts++;
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      this.connect();
+    }, RECONNECT_DELAY_MS);
+  }
+
+  _getWsBase(): string {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}`;
+  }
+
+  _emitChange({ source = "live", event }: { source?: string; event?: any } = {}): void {
+    emit(EVENTS.COMMENT_THREAD_CHANGE, { events: this.events, source, event });
+  }
+
+  _emitStatus(extra: Record<string, any> = {}): void {
+    emit(EVENTS.COMMENT_THREAD_STATUS, { status: this.status, ...extra });
+  }
+}

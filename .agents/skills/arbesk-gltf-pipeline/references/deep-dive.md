@@ -15,7 +15,9 @@ Arbesk stores 3D content on a **private Kubo IPFS node** and renders it in the b
 │    RemoteIPFS → blob URL           ─ Monolithic: buffers/      │
 │  • BABYLON.SceneLoader.              images are data URIs       │
 │    ImportMeshAsync(".glb")         ─ Composite: buffers/       │
-│  • No decomposition needed           images are ipfs:// CIDs   │
+│  • Decomposed on save →              images are ipfs:// CIDs   │
+│    composite glTF (in-memory,                                 │
+│    no .gltf conversion step)                                  │
 │  • post_processor overlay           • composeGlTF() resolves   │
 │    applied at runtime                 CIDs → data URIs          │
 │                                    • decomposeGlTF() stores    │
@@ -323,7 +325,7 @@ Key rules:
 - Decomposition happens on **both Save Draft and Publish**
 - Already-composite nodes are skipped (`isComposite()` check)
 - `decomposeManifestNodes()` fetches each node's glTF from IPFS, checks if it's valid glTF (`gltf.asset.version`), skips if already composite, decomposes and updates `node.source.cid` + `node.source.path = "composite.gltf"`
-- GLB nodes are explicitly skipped in decomposition (`node.source.format === "glb"`)
+- GLB nodes are decomposed too: the GLB format handler's `decomposeForSave()` runs `decomposeGLB()` (`glb-parser.ts`), which parses the GLB container in-memory, uploads buffers/images to IPFS, and writes a composite glTF directly — no intermediate `.gltf` conversion step. The node comes back as `{ path: "composite.gltf", format: "gltf" }`.
 
 ---
 
@@ -338,9 +340,9 @@ Key rules:
 
 ## 11. Golden Rules
 
-1. **GLB is never decomposed.** GLB assets load as raw binary blobs. All edits go through `post_processor` runtime overlays.
+1. **GLB is decomposed on save, not at load.** GLB assets load as raw binary blobs and runtime edits go through `post_processor` overlays. But on save/publish the GLB is decomposed directly — `decomposeGLB()` parses the container in-memory and emits a composite glTF (`path: "composite.gltf"`); there is no "convert to .gltf first" step. Source-color edits also bake into GLB sources via `decomposeGLB`.
 
-2. **glTF is converted to composite on first save.** This is a one-way door — once decomposed, a glTF node stays composite forever.
+2. **glTF and GLB become composite on first save.** This is a one-way door — once decomposed, a node stays composite forever.
 
 3. **Material edits = new composite CID.** Changing a color only changes the composite JSON CID. Buffer and image CIDs stay the same. This is the core efficiency of the composite format.
 

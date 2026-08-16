@@ -2,7 +2,7 @@
  * Thumbnail helpers shared by the Studio asset library and the Library grid.
  */
 
-import { getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { getBlobFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 
 /**
  * Extract the CID from a manifest thumbnail field.

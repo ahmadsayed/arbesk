@@ -10,7 +10,7 @@
  * at call time so unit tests can stub them without loading BABYLON.
  */
 
-import { on, EVENTS } from "../events/bus.js";
+import { on, EVENTS } from "../events/bus.ts";
 import {
   setLatestManifestCid,
   getLatestAssetManifestCid,
@@ -22,19 +22,19 @@ export type VersionHistoryEntry = { cid: string; [key: string]: any };
 
 export const _deps = {
   walkChain: async (cid: string) => {
-    const { walkManifestChain } = await import("../engine/time-travel.js");
+    const { walkManifestChain } = await import("../engine/time-travel.ts");
     return walkManifestChain(cid);
   },
   clearScene: async () => {
-    const { clearScene } = await import("../engine/scene-graph.js");
+    const { clearScene } = await import("../engine/scene-graph.ts");
     clearScene();
   },
   loadAssetManifest: async (cid: string) => {
-    const { loadAssetManifest } = await import("../engine/scene-graph.js");
+    const { loadAssetManifest } = await import("../engine/scene-graph.ts");
     return loadAssetManifest(cid);
   },
   fetchPublishedCid: async (tokenId: string | number) => {
-    const { getActiveContract } = await import("../blockchain/wallet.js");
+    const { getActiveContract } = await import("../blockchain/wallet.ts");
     const contract = getActiveContract();
     if (!contract) return null;
     const cid = await contract.methods.tokenURI(tokenId).call();

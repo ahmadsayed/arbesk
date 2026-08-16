@@ -16,7 +16,7 @@ description: Use when working with glTF/GLB loading, materials, or the compose/d
 
 ## Key Rules
 
-1. **GLB is never decomposed** — raw binary blob; all edits via `post_processor` overlays.
+1. **GLB is decomposed on save, not at load** — loads as a raw blob; runtime edits via `post_processor` overlays; on save/publish `decomposeGLB()` turns it into a composite glTF directly (no `.gltf` conversion step).
 2. **glTF → composite on first save** — one-way; stays composite once decomposed.
 3. **Material edits = new composite CID only** — buffers/images keep original CIDs.
 4. **Scale is always `post_processor`** — geometry transform, not material, even for decomposed nodes.

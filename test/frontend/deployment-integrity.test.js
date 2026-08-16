@@ -413,7 +413,7 @@ describe("Deployment Pipeline Integrity", () => {
     );
     const WORKER_PATH = resolve(
       ROOT_DIR,
-      "frontend/src/js/workers/gltf-worker.js",
+      "frontend/src/js/workers/gltf-worker.ts",
     );
     const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
 
@@ -462,7 +462,7 @@ describe("Deployment Pipeline Integrity", () => {
   describe("worker gateway HTTP caching", () => {
     const WORKER_PATH = resolve(
       ROOT_DIR,
-      "frontend/src/js/workers/gltf-worker.js",
+      "frontend/src/js/workers/gltf-worker.ts",
     );
 
     test("worker gateway fetches use the browser HTTP cache, not no-store", () => {
@@ -731,7 +731,7 @@ describe("AI Generation sidebar", () => {
 
   test("sidebar view order puts chat first", () => {
     const src = readFileSync(
-      resolve(ROOT_DIR, "frontend/src/js/ui/sidebar.js"),
+      resolve(ROOT_DIR, "frontend/src/js/ui/sidebar.ts"),
       "utf-8",
     );
     expect(src).toContain(
@@ -741,7 +741,7 @@ describe("AI Generation sidebar", () => {
 
   test("keyboard help lists all five sidebar shortcuts", () => {
     const src = readFileSync(
-      resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.js"),
+      resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.ts"),
       "utf-8",
     );
     expect(src).toContain("1 – 5");

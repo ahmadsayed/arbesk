@@ -103,7 +103,7 @@ Validates the full wallet-discovery and authentication path:
 - Confirms the Studio connects via the Login / Signup picker and authenticates via SIWE.
 - Asserts the **Login / Signup** button opens the wallet picker, selecting the injected wallet connects, and the wallet menu button shows the connected address.
 
-**Why it matters:** Any change to `wallet-discovery.js`, `wallet-connect.js`, `siwe.js`, the headerbar wallet buttons, or the SIWE session flow can break this. If this spec fails, every subsequent spec fails because they all depend on being logged in.
+**Why it matters:** Any change to `wallet-discovery.ts`, `wallet-connect.ts`, `siwe.ts`, the headerbar wallet buttons, or the SIWE session flow can break this. If this spec fails, every subsequent spec fails because they all depend on being logged in.
 
 ### 2. Asset generation (`e2e/specs/02-generate-asset.spec.js`)
 
@@ -147,7 +147,7 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 5. Scrubs the scene clock back to the oldest version and asserts the badge follows to `v1` (and forward again to `v2`).
 6. Selects the outliner node, asserts the model-clock badge (`#modelClockBadge`) shows `v2`, presses `Home` to step the 3D gizmo to the oldest version, and returns to the newest scene version before publishing.
 
-**Why it matters:** Colour/scale edits are first-class versions, and the scene/model clocks are the app's version-control surfaces. Changes to `parametric-preview.js`, `version-history-store.js`, `scene-clock.js`, `model-clock.js`, the outliner selection path, or version-chain logic can break it.
+**Why it matters:** Colour/scale edits are first-class versions, and the scene/model clocks are the app's version-control surfaces. Changes to `parametric-preview.ts`, `version-history-store.ts`, `scene-clock.ts`, `model-clock-gizmo.ts`, the outliner selection path, or version-chain logic can break it.
 
 ### 5. Republish existing token (`e2e/specs/05-republish.spec.js`)
 
@@ -158,7 +158,7 @@ Validates the edit → **republish** branch (no new mint):
 3. Clicks **Besk it** again — an already-named token skips the dialog and calls `updateAssetURI` instead of minting.
 4. Polls the on-chain collection manifest until the asset's manifest CID changes; asserts the same name, a newer version, and an unchanged `?asset=<tokenId>` anchor.
 
-**Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.js` / `services/asset-save/` publish branch or collection manifest resolution can break it.
+**Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.ts` / `services/asset-save/` publish branch or collection manifest resolution can break it.
 
 ### 6. Nesting / linked child assets (`e2e/specs/06-nesting.spec.js`)
 
@@ -171,7 +171,7 @@ Validates the "dollhouse architecture" — linking a token as a child asset and 
 5. Selects the child node and **dives** (`#inspectorDiveBtn`) — asserts the back button reveals and the `nesting:didDive` event fires at depth 1.
 6. **Ascends** via the back button — asserts it hides and `nesting:didAscend` fires at depth 0.
 
-**Why it matters:** Token child nodes (`child_ref`, `transform_matrix`, depth gating) are the core fractal-nesting data model. Changes to `nesting.js`, `scene-graph.js` linked-asset handling, the token resolver, or the child-node manifest shape can break it.
+**Why it matters:** Token child nodes (`child_ref`, `transform_matrix`, depth gating) are the core fractal-nesting data model. Changes to `nesting.ts`, `scene-graph.ts` linked-asset handling, the token resolver, or the child-node manifest shape can break it.
 
 > **Note:** the outliner only renders a linked child node **after a save** (it refreshes on `ASSET_DRAFT_SAVED`, not on `SCENE_TOKEN_CHILD_ADDED`), so the spec saves before locating the child node.
 
@@ -186,17 +186,17 @@ Validates that every ERC-721 token is a collection manifest containing one or mo
 5. Reloads `?asset=TOKENID` and asserts the viewport restores the first asset.
 6. Asserts the collection selector populates on wallet connect with the wallet-derived default collection ID.
 
-**Why it matters:** This is the only spec that exercises the collection manifest shape end-to-end, the `activeAssetId` → collection `assets` map, and the gallery asset-card deep-link into the Studio. Changes to `asset-save.js`, `collection-publish.js`, the collection selector, or the gallery card rendering can break it.
+**Why it matters:** This is the only spec that exercises the collection manifest shape end-to-end, the `activeAssetId` → collection `assets` map, and the gallery asset-card deep-link into the Studio. Changes to `asset-save.ts`, `collection-publish.ts`, the collection selector, or the gallery card rendering can break it.
 
 ### 7b. Material editor: multi-primitive mesh color override (Jest, not E2E)
 
 Regression coverage for issue #25 lives in `test/frontend/material-editor.test.js` (a Playwright spec once existed and was retired): `applyMeshOverrideColors()` must update **all** primitives of a mesh, not just the first matching one.
 
-- Runs `material-editor.js` against a minimal two-primitive, two-material glTF fixture.
+- Runs `material-editor.ts` against a minimal two-primitive, two-material glTF fixture.
 - Asserts both materials receive the override color.
 - Also validates the `defaultColor` baseline branch.
 
-**Why it matters:** A pure-JS regression test that protects the color-editing pipeline without requiring wallet setup or IPFS writes. Changes to `material-editor.js`, especially `findMaterialByMeshName()` or `applyMeshOverrideColors()`, can break it.
+**Why it matters:** A pure-JS regression test that protects the color-editing pipeline without requiring wallet setup or IPFS writes. Changes to `material-editor.ts`, especially `findMaterialByMeshName()` or `applyMeshOverrideColors()`, can break it.
 
 ### 8. Fork vs live reference (`e2e/specs/08-fork-live-ref.spec.js`)
 
@@ -207,7 +207,7 @@ Validates the two ways to reuse another collection's asset inside a parent scene
 3. **Fork (copy)** — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
 4. **Live reference** — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
 
-**Why it matters:** Fork/live-ref is the core fractal-reuse mechanism. Changes to `nesting.js`, the gallery card actions, the fork/live-ref dialog, or the `child_ref` schema can break it.
+**Why it matters:** Fork/live-ref is the core fractal-reuse mechanism. Changes to `nesting.ts`, the gallery card actions, the fork/live-ref dialog, or the `child_ref` schema can break it.
 
 ### 9. Library basics (`e2e/specs/09-library-basics.spec.js`)
 
@@ -220,7 +220,7 @@ Validates the Nautilus-style collection browser on `/library`:
 5. Tests search filtering (matching and empty states).
 6. Tests grid/list view toggle and sort-by-name.
 
-**Why it matters:** The library is a view inside the unified SPA (`app.html` served at `/library`) with its own state and selection model. Changes to `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, or the wallet gate can break this.
+**Why it matters:** The library is a view inside the unified SPA (`app.html` served at `/library`) with its own state and selection model. Changes to `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, or the wallet gate can break this.
 
 ### 10. Library asset actions (`e2e/specs/10-library-asset-actions.spec.js`)
 
@@ -231,7 +231,7 @@ Validates the context-menu actions available on library assets:
 3. **Open in Studio** — navigates to `/studio?asset=TOKEN&assetId=ID` and asserts the asset loads.
 4. **Send to Collection…** — with only the default collection present, asserts a warning toast explains that another collection is required.
 
-**Why it matters:** These actions exercise `library-context-menu.js`, `services/asset-delete.js`, collection manifest updates, and the Studio deep-link handling.
+**Why it matters:** These actions exercise `library-context-menu.ts`, `services/asset-delete.ts`, collection manifest updates, and the Studio deep-link handling.
 
 ### 11. Library ↔ Studio round-trip (`e2e/specs/11-library-studio-roundtrip.spec.js`)
 
@@ -256,7 +256,7 @@ Validates the new Library toolbar flows for collection creation and desktop file
 8. Repeats the flow with `mock-gltf-assets/box.3mf`: asserts the asset manifest's source was decomposed to `composite.3mf.json` / `format: "3mf"`, and that it opens in Studio (compose-on-load).
 9. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
 
-**Why it matters:** These flows exercise `library-toolbar.js`, `library-ops.js`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads, and they pin the decompose-at-upload guarantee: every upload (GLB/glTF/3MF) lands in the collection in the same canonical decomposed stored form a Studio save would produce.
+**Why it matters:** These flows exercise `library-toolbar.ts`, `library-ops.ts`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads, and they pin the decompose-at-upload guarantee: every upload (GLB/glTF/3MF) lands in the collection in the same canonical decomposed stored form a Studio save would produce.
 
 ### 13. Editor collaboration (`e2e/specs/13-editor-collaboration.spec.js`)
 
@@ -267,7 +267,7 @@ Validates the Merkle-editor authorization flow across three wallets:
 3. **Editor** opens the shared asset, edits a node colour, and republishes — asserts the on-chain collection manifest version increases.
 4. **Outsider** (third wallet) opens the same asset, attempts to republish, and is rejected with `Not an authorized editor`; asserts the on-chain version does **not** advance.
 
-**Why it matters:** This is the only multi-wallet E2E coverage for the Merkle editor-list feature. Changes to `editor-publish.js`, `team.js`, `merkle-editors.js`, the collaborator UI, or the republish authorization path can break it.
+**Why it matters:** This is the only multi-wallet E2E coverage for the Merkle editor-list feature. Changes to `editor-publish.ts`, `team.ts`, `merkle-editors.ts`, the collaborator UI, or the republish authorization path can break it.
 
 ### 14. Collaborative comments (`e2e/specs/14-collaborative-comments.spec.js`)
 
@@ -279,7 +279,7 @@ Validates live asset-level comments across an owner and an editor:
 4. **Editor** opens the shared asset and sees the owner's comment.
 5. **Editor** replies; the owner's session sees the reply live.
 
-**Why it matters:** This is the only multi-wallet coverage for the Nostr chat proxy and comment thread state. Changes to `comment-thread.js`, `comments-panel.js`, `chat-proxy.js`, Merkle editor proof wiring in comments, or the comments archive snapshot can break it.
+**Why it matters:** This is the only multi-wallet coverage for the Nostr chat proxy and comment thread state. Changes to `comment-thread.ts`, `comments-panel.ts`, `chat-proxy.ts`, Merkle editor proof wiring in comments, or the comments archive snapshot can break it.
 
 ### 15. Asset-level comment isolation (`e2e/specs/15-asset-level-comments.spec.js`)
 
@@ -291,7 +291,7 @@ Validates that comments do not leak between assets in the same collection:
 4. Switches to asset `B` and asserts the comment is not present and the count is `0`.
 5. Switches back to asset `A` and asserts the comment is still present.
 
-**Why it matters:** Comments are keyed by asset, not by collection or token. Any regression in `comment-thread.js` context reset, the chat proxy `assetTag`, or the archive snapshot `assetId` would cause cross-asset leakage.
+**Why it matters:** Comments are keyed by asset, not by collection or token. Any regression in `comment-thread.ts` context reset, the chat proxy `assetTag`, or the archive snapshot `assetId` would cause cross-asset leakage.
 
 ### 16. 3MF generation (`e2e/specs/16-3mf-generation.spec.js`)
 
@@ -305,7 +305,7 @@ Validates the 3MF format path end to end:
 
 ### 99. Viewport resize regression (`e2e/specs/99-resize-regression.spec.js`)
 
-Guards the Babylon engine resize pattern: the viewport must never stretch during window resize or sidebar collapse/expand. The engine resizes inside `runRenderLoop` immediately before `scene.render()` (see `frontend/src/js/engine/scene-graph.js`).
+Guards the Babylon engine resize pattern: the viewport must never stretch during window resize or sidebar collapse/expand. The engine resizes inside `runRenderLoop` immediately before `scene.render()` (see `frontend/src/js/engine/scene-graph.ts`).
 
 **Why it matters:** Resize handled synchronously in the resize event (or a throttled render loop) causes visible viewport stretching. This spec is the only automated coverage for that regression.
 
@@ -316,14 +316,14 @@ Guards the Babylon engine resize pattern: the viewport must never stretch during
 Run the E2E suite **before merging** any PR that changes:
 
 - **Studio UI/UX:** headerbar buttons, chat history, prompt input, settings panel, dialogs, wallet controls.
-- **Library page:** the `/library` SPA view, `app-init.js`, `library-controller.js`, `library-grid.js`, `library-toolbar.js`, `library-context-menu.js`, collection/asset rendering, search/sort/view controls.
-- **Wallet integration:** EIP-1193/EIP-6963 discovery, `wallet.js`, `wallet-connect.js`, `wallet-discovery.js`, `siwe.js`, session auth.
-- **Generation flow:** `create-panel.js`, generation API, transaction validation, mock adapter, provider selection.
-- **Save/publish logic:** `asset-save.js`, `dialog.js`, manifest versioning, thumbnail capture.
+- **Library page:** the `/library` SPA view, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, collection/asset rendering, search/sort/view controls.
+- **Wallet integration:** EIP-1193/EIP-6963 discovery, `wallet.ts`, `wallet-connect.ts`, `wallet-discovery.ts`, `siwe.ts`, session auth.
+- **Generation flow:** `create-panel.ts`, generation API, transaction validation, mock adapter, provider selection.
+- **Save/publish logic:** `asset-save.ts`, `dialog.ts`, manifest versioning, thumbnail capture.
 - **Smart contracts or ABI:** `ArbeskAssetFree.sol`, `ArbeskAsset.sol`, deployment scripts, contract addresses.
 - **Manifest schema:** `scene.nodes`, `source_asset`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `child_ref`, `comments_archive_cid`.
 - **IPFS integration:** storage format, CID encoding, pin/unpin behavior.
-- **Asset-level comments:** `comments-panel.js`, `comment-thread.js`, chat proxy, comments archive.
+- **Asset-level comments:** `comments-panel.ts`, `comment-thread.ts`, chat proxy, comments archive.
 
 Running `npm test` (unit/Jest) and `npm run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
 

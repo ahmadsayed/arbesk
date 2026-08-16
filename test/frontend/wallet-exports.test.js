@@ -20,11 +20,11 @@ const BLOCKCHAIN = resolve(__dirname, "../../frontend/src/js/blockchain");
 
 const read = (file) => readFileSync(resolve(BLOCKCHAIN, file), "utf-8");
 
-const WALLET = read("wallet.js");
-const CORE = read("wallet-core.js");
-const NETWORK = read("wallet-network.js");
-const PAYMENTS = read("wallet-payments.js");
-const PUBLISHING = read("wallet-publishing.js");
+const WALLET = read("wallet.ts");
+const CORE = read("wallet-core.ts");
+const NETWORK = read("wallet-network.ts");
+const PAYMENTS = read("wallet-payments.ts");
+const PUBLISHING = read("wallet-publishing.ts");
 
 /**
  * Extract the names from `export { ... }` or `export { ... } from "..."` blocks.

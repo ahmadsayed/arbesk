@@ -4,7 +4,7 @@
  * CID/tokenId/currentManifest identity fields, and the single subscription
  * point for chrome rendering.
  */
-import { on, emit, EVENTS } from "../events/bus.js";
+import { on, emit, EVENTS } from "../events/bus.ts";
 import { assetStore, tagManifestCid } from "./asset-store.ts";
 import { getStateForNewAsset } from "../utils/new-asset.ts";
 import { deriveDefaultAssetId } from "../utils/collections.ts";

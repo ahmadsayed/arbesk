@@ -6,8 +6,8 @@
  * delete, library, and comment flows.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
-import { getActiveContract } from "../blockchain/wallet.js";
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.js";
+import { getActiveContract } from "../blockchain/wallet.ts";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 

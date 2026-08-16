@@ -8,7 +8,7 @@
 
 ## Implementation Notes
 
-- The backend is mounted from `src/index.js` at `/api`.
+- The backend is mounted from `src/index.ts` at `/api`.
 - Private IPFS writes use the Kubo API from `IPFS_API_URL` (default `http://127.0.0.1:5001`) when `IPFS_BACKEND=kubo`.
 - When `IPFS_BACKEND=pinata`, the backend uses the Pinata v3 SDK and serves short-lived presigned upload URLs via `POST /api/v1/ipfs/upload-url`.
 - The browser reads IPFS content through the gateway (`http://127.0.0.1:8080/ipfs/` by default for Kubo, or the configured `PINATA_GATEWAY`).
@@ -38,7 +38,7 @@ Protected routes use this header:
 Authorization: Session <opaque-token>
 ```
 
-`POST /api/v1/sessions` accepts a SIWE proof from any wallet type and issues an opaque session token (24-hour TTL). `authentication.js` validates the issued token.
+`POST /api/v1/sessions` accepts a SIWE proof from any wallet type and issues an opaque session token (24-hour TTL). `authentication.ts` validates the issued token.
 
 Session restoration behavior:
 - **CDP email-login smart accounts**, **EOA wallets** (MetaMask/Rabby), and **WalletConnect** sessions are all automatically restored on page reload when their underlying session/provider is still available.
@@ -54,9 +54,9 @@ Body: { message: string, signature: string, eoaAddress?: string }
 ```
 
 - `message` / `signature`: a SIWE message (EIP-4361) and its signature.
-- `eoaAddress` *(optional)*: for CDP email-login smart accounts — the embedded EOA address that actually signed the message. The `message.address` field contains the smart account address; `eoaAddress` triggers fallback signature verification in `siwe-verify.js`.
+- `eoaAddress` *(optional)*: for CDP email-login smart accounts — the embedded EOA address that actually signed the message. The `message.address` field contains the smart account address; `eoaAddress` triggers fallback signature verification in `siwe-verify.ts`.
 
-Server-side verification is performed by `siwe-verify.js` using `viem`'s `verifyMessage` (supporting EIP-1271 and ERC-6492 signatures) with an EOA fallback path when `eoaAddress` is provided.
+Server-side verification is performed by `siwe-verify.ts` using `viem`'s `verifyMessage` (supporting EIP-1271 and ERC-6492 signatures) with an EOA fallback path when `eoaAddress` is provided.
 
 **EOA wallets (MetaMask/Rabby):**
 
@@ -146,7 +146,7 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
 }
 ```
 
-> **Note:** The `rpcUrl` returned for Base Sepolia (`https://sepolia.base.org`) is the backend's direct RPC config. CDP smart-wallet browser passthrough in `wallet-cdp.js` uses `https://base-sepolia-rpc.publicnode.com` because `sepolia.base.org` blocks browser-origin requests.
+> **Note:** The `rpcUrl` returned for Base Sepolia (`https://sepolia.base.org`) is the backend's direct RPC config. CDP smart-wallet browser passthrough in `wallet-cdp.ts` uses `https://base-sepolia-rpc.publicnode.com` because `sepolia.base.org` blocks browser-origin requests.
 
 ---
 
@@ -184,10 +184,10 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 - Accepts optional `images` (`tripo3d` only) for multiview-to-3D: an array of 2–4 `{ imageData, imageMime, view }` entries (`view` ∈ `front`/`left`/`back`/`right`; unique views, exactly one `front`; mutually exclusive with `imageData`). The backend uploads each view (`POST /files`) and starts a `generation/multiview-to-model` task with view-key `inputs` in canonical order; the `202` polling flow is identical. The browser pins every view to IPFS and records `reference_images: [{cid, mime, name, view}]` in the manifest node (plus `reference_image` = the front view for back-compat).
 - Accepts optional `sourceAssetCid` + `animate` + `animations` (`tripo3d` only): the IPFS CID of a previously generated GLB, plus 1–5 retarget presets (`preset:idle`, `preset:walk`, `preset:run`, `preset:dive`, `preset:climb`, `preset:jump`, `preset:slash`, `preset:shoot`, `preset:hurt`, `preset:fall`, `preset:turn`). The backend fetches the GLB from IPFS and uploads it to Tripo (`POST /files` → `file_token`), so the reference never expires. With `"rigOnly": true` instead of `animations`, the chain stops after the rig step and returns the rigged GLB (Tripo-native skeleton) with no baked animation. With optional `sourceTaskId` (backend registry id of a completed rig-only task), the chain takes the retarget-only path, skipping rig-check/rig — Tripo retarget requires a rig task id and cannot take a mesh input. The backend returns `202` with `"animating": true`. While polling, `GET /generations/:taskId` returns a `stage` label ("Checking rig compatibility" / "Rigging skeleton" / "Baking animations"); if Tripo reports the model is not riggable, the task fails with `MODEL_NOT_RIGGABLE`. The final success payload is the animated (or rigged) GLB.
 - Accepts optional `sourceAssetCid` + `retexture` (`tripo3d` only): re-textures the referenced GLB via Tripo's v3 re-texture endpoint (`POST /models/texture`; texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream). Requires `prompt` as the texture description; the `202` response includes `"refined": true`. Accepts optional `sourceAssetCid` + `retopo` for smart retopology (`mesh/decimate` v2.0, optional `faceLimit` 500–20000, adaptive when omitted); the `202` response includes `"retopo": true`. `sourceAssetCid` requires exactly one of `retexture`, `retopo`, or `animate`. A CID that cannot be fetched from IPFS → `400 SOURCE_ASSET_UNAVAILABLE`. Optional `textureQuality` (`standard`/`detailed`/`extreme`) applies to generation and retexture.
-- If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses `src/api/adapters/mock-adapter.js` and returns the raw asset bytes immediately (`200`).
+- If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses `src/api/adapters/mock-adapter.ts` and returns the raw asset bytes immediately (`200`).
 - If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v3 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
-- **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.js` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
+- **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.ts` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
 **Request Body**
 
@@ -224,7 +224,7 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 
 (`refined` is present only when the request included `sourceAssetCid` + `retexture`; `retopo` and `animating` likewise mark their respective follow-up actions.)
 
-The browser (`api.js` → `generateAsset()`) decodes the base64, uploads the asset to IPFS, constructs the manifest, uploads the manifest, and returns `{ assetManifestCid, sourceAssetCid }` to the UI.
+The browser (`api.ts` → `generateAsset()`) decodes the base64, uploads the asset to IPFS, constructs the manifest, uploads the manifest, and returns `{ assetManifestCid, sourceAssetCid }` to the UI.
 
 **Errors**
 
@@ -360,8 +360,8 @@ Returns the Tripo3D credit balance for a user-supplied BYOK key.
 **How parametric edits actually work:**
 
 1. User selects a node and changes color/scale in the inspector.
-2. `parametric-preview.js` applies the change live to Babylon.js meshes.
-3. On save, `services/asset-save/manifest-builder.js` either:
+2. `parametric-preview.ts` applies the change live to Babylon.js meshes.
+3. On save, `services/asset-save/manifest-builder.ts` either:
    - bakes color edits into a new composite glTF CID and updates `node.source.cid`, or
    - stores scale/color overlays in `node.post_processor` for monolithic assets.
 4. The browser writes the full updated manifest directly to IPFS via `writeJSONToIPFS()`.
@@ -414,7 +414,7 @@ Comments are scoped per asset using the canonical tag `<chainId>:<contractAddres
 
 ### `POST /api/v1/paymaster`
 
-Backend proxy for the CDP Paymaster JSON-RPC endpoint. Forwards UserOperation sponsorship requests to the CDP Paymaster without exposing `CDP_PAYMASTER_URL` to the browser. Used by `wallet-cdp.js` to sponsor gas for CDP email-login smart accounts on Base Sepolia.
+Backend proxy for the CDP Paymaster JSON-RPC endpoint. Forwards UserOperation sponsorship requests to the CDP Paymaster without exposing `CDP_PAYMASTER_URL` to the browser. Used by `wallet-cdp.ts` to sponsor gas for CDP email-login smart accounts on Base Sepolia.
 
 **Auth:** None required.
 
@@ -480,10 +480,10 @@ Minimal shape: `{ "exists": false }` for unknown emails; `{ "exists": true, "add
 
 > **These backend routes do not exist.** The browser handles all manifest and thumbnail operations directly:
 >
-> - **Manifest writes:** `writeJSONToIPFS()` in `services/asset-save/manifest-builder.js` and `asset-delete.js`
-> - **Thumbnail upload:** `captureAssetThumbnail()` → `writeToIPFS()` in `scene-graph.js`
-> - **History chain walk:** `walkManifestChain()` in `time-travel.js` (IPFS gateway reads)
-> - **Token resolution:** `resolveChildRef()` in `token-resolver.js` (Web3 + IPFS gateway)
+> - **Manifest writes:** `writeJSONToIPFS()` in `services/asset-save/manifest-builder.ts` and `asset-delete.ts`
+> - **Thumbnail upload:** `captureAssetThumbnail()` → `writeToIPFS()` in `scene-graph.ts`
+> - **History chain walk:** `walkManifestChain()` in `time-travel.ts` (IPFS gateway reads)
+> - **Token resolution:** `resolveChildRef()` in `token-resolver.ts` (Web3 + IPFS gateway)
 > - **Bundle directories:** Removed — each file is individually addressable by `ipfs://<cid>`
 
 ---
@@ -617,7 +617,7 @@ blockchain/artifacts/contracts/<Name>.sol/<Name>.json
 
 ### `GET /api/v1/indexer/owned`
 
-Returns the token IDs **owned** by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.js`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 2000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
+Returns the token IDs **owned** by an address on a given chain. Backs the asset library's gallery: instead of walking the chain from genesis in the browser, the backend token indexer (`src/api/token-indexer.ts`) maintains an in-memory ownership map populated by chunked `eth_getLogs` backfill of ERC-721 `Transfer` events. Chunk size is per-chain (`LOG_CHUNK_SIZES` in `constants/chains.js`: Hardhat 10000, Base Sepolia 2000), and scanning starts at the contract's `DEPLOYMENT_BLOCKS` height rather than genesis.
 
 A background poll catches up every ~15s. The route also runs an inline catch-up before responding if the last one was more than 30s ago, or always when `force=true` is passed — letting the frontend request an immediate refresh right after publishing.
 
@@ -700,7 +700,7 @@ Like `/indexer/owned`, a background poll runs every ~15s and the route performs 
 9. The asset CID is merged into the collection manifest, which is also saved to IPFS.
 10. Frontend calls `publishAsset(collectionCid, tokenId, editorRoot, editorListUri)` for new collections or `updateAssetURI(tokenId, newCollectionCid, proof)` for existing collections.
 11. Gallery fetches token URIs from the contract, loads collection manifests, expands them into individual assets, and displays names/thumbnails.
-12. Editors manage the off-chain editor list via `services/team.js`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
+12. Editors manage the off-chain editor list via `services/team.ts`; changes are anchored on-chain with `updateEditors(tokenId, newRoot, newListUri, callerRole, callerProof)`.
 13. Editors burn tokens via `burn(tokenId, proof)`; because the owner is the initial editor, they can produce a valid proof. Burning triggers non-blocking IPFS unpin via `POST /api/v1/ipfs/unpin`.
 14. Asset-level live comments travel through `/api/v1/chat/ws`; the proxy checks the SIWE session and either owner status or a Merkle editor proof before bridging to the Nostr relay.
 
@@ -733,7 +733,7 @@ The contract does **not** store per-address roles. It stores a Merkle root of th
 
 The token **owner** has no special bypass. The owner can call `updateAssetURI` and `burn` only by proving Editor membership in the current Merkle tree. In practice the owner is included as the initial editor when a token is minted.
 
-**Merkle leaf format (matches `merkle-editors.js`):**
+**Merkle leaf format (matches `merkle-editors.ts`):**
 
 ```solidity
 keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))

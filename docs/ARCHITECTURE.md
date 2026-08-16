@@ -44,33 +44,33 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 │  └─ Activity ledger (client-side chain walk)                         │
 │                                                                      │
 │  Frontend services                                                   │
-│  ├─ wallet-core.js / wallet-connect.js / wallet-discovery.js /       │
-│  │  wallet-payments.js / wallet-publishing.js:                        │
+│  ├─ wallet-core.ts / wallet-connect.ts / wallet-discovery.ts /       │
+│  │  wallet-payments.ts / wallet-publishing.ts:                        │
 │  │  custom wallet picker (EIP-6963 + WalletConnect v2), network       │
 │  │  switching, free/paid generation, mint/update/                     │
-│  │  editor/burn calls (re-exported via wallet.js barrel);             │
+│  │  editor/burn calls (re-exported via wallet.ts barrel);             │
 │  │  auto-restore on reload for CDP, EOA, and WalletConnect via silent  │
 │  │  eth_accounts / session checks — no popup is shown                  │
-│  ├─ remote-ipfs.js: gateway reads + memory/IndexedDB cache           │
-│  ├─ write-to-ipfs.js: direct browser→IPFS writes (Kubo/Pinata)       │
-│  ├─ asset-save.js + services/asset-save/:                            │
+│  ├─ remote-ipfs.ts: gateway reads + memory/IndexedDB cache           │
+│  ├─ write-to-ipfs.ts: direct browser→IPFS writes (Kubo/Pinata)       │
+│  ├─ asset-save.ts + services/asset-save/:                            │
 │  │  save/publish, manifest builder, collection merge, thumbnail capture│
-│  ├─ asset-library.js: token gallery with collection expansion        │
-│  ├─ token-resolver.js: on-chain child_ref resolution (no server)     │
-│  ├─ time-travel.js: manifest chain walking (no server)              │
-│  ├─ team.js: Merkle editor list add/remove                           │
-│  ├─ merkle-editors.js: computeRoot / getProof / makeLeaf             │
-│  ├─ comment-thread.js: per-asset Nostr thread state                  │
-│  ├─ comments-panel.js: asset comment UI                              │
-│  ├─ library-controller.js + library-grid.js / library-toolbar.js     │
-│  │  / library-context-menu.js: Library view inside unified SPA       │
-│  └─ library-ops.js: create collection, upload glTF/GLB file          │
+│  ├─ asset-library.ts: token gallery with collection expansion        │
+│  ├─ token-resolver.ts: on-chain child_ref resolution (no server)     │
+│  ├─ time-travel.ts: manifest chain walking (no server)              │
+│  ├─ team.ts: Merkle editor list add/remove                           │
+│  ├─ merkle-editors.ts: computeRoot / getProof / makeLeaf             │
+│  ├─ comment-thread.ts: per-asset Nostr thread state                  │
+│  ├─ comments-panel.ts: asset comment UI                              │
+│  ├─ library-controller.ts + library-grid.ts / library-toolbar.ts     │
+│  │  / library-context-menu.ts: Library view inside unified SPA       │
+│  └─ library-ops.ts: create collection, upload glTF/GLB file          │
 │                                                                      │
 │  IPFS writes happen directly from the browser:                       │
 │  ├─ Thumbnails: captureAssetThumbnail() → writeToIPFS()              │
-│  ├─ Manifests: writeJSONToIPFS() in services/api.js (generation) and │
-│  │  services/asset-save/manifest-builder.js (save/publish)           │
-│  ├─ Generation: api.js receives bytes, uploads to IPFS               │
+│  ├─ Manifests: writeJSONToIPFS() in services/api.ts (generation) and │
+│  │  services/asset-save/manifest-builder.ts (save/publish)           │
+│  ├─ Generation: api.ts receives bytes, uploads to IPFS               │
 │  └─ glTF parts: decomposer uploads buffers/textures directly         │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │ HTTP (auth + adapter calls only)
@@ -126,74 +126,74 @@ A server-side Phase 5 micro-ledger for durable auditability is not implemented; 
 
 | File | Responsibility |
 |---|---|
-| `src/index.js` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
-| `src/api/index.js` | Route registry — mounts all `/api/v1` routes |
-| `src/api/routes/` | Per-domain route modules (`comments.js`, `ipfs.js`, `contracts.js`, `indexer.js`, `paymaster.js`, `openapi.js`, `test-utils.js`) |
-| `src/api/assets/generate-node.js` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
-| `src/api/storage/index.js` | Storage backend abstraction (`kubo` or `pinata`) |
-| `src/api/storage/pinata-adapter.js` | Pinata v3 SDK uploads + presigned upload URLs |
-| `src/api/storage/kubo-adapter.js` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
-| `src/api/authorization.js` | On-chain asset access checks for chat proxy (owner or Merkle editor proof) |
+| `src/index.ts` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
+| `src/api/index.ts` | Route registry — mounts all `/api/v1` routes |
+| `src/api/routes/` | Per-domain route modules (`comments.ts`, `ipfs.ts`, `contracts.ts`, `indexer.ts`, `paymaster.ts`, `openapi.ts`, `test-utils.js`) |
+| `src/api/assets/generate-node.ts` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
+| `src/api/storage/index.ts` | Storage backend abstraction (`kubo` or `pinata`) |
+| `src/api/storage/pinata-adapter.ts` | Pinata v3 SDK uploads + presigned upload URLs |
+| `src/api/storage/kubo-adapter.ts` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
+| `src/api/authorization.ts` | On-chain asset access checks for chat proxy (owner or Merkle editor proof) |
 | *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, manifest-chain walks, token resolution — all browser-side |
-| `src/api/authentication.js` | Session token validation, sets `res.locals.userAddress` |
-| `src/api/sessions.js` | SIWE session create/delete (24h TTL) |
-| `src/api/siwe-verify.js` | EIP-4361 message verification (supports `eoaAddress` for CDP smart accounts) |
-| `src/api/routes/paymaster.js` | CDP Paymaster JSON-RPC proxy (keeps `CDP_PAYMASTER_URL` server-side) |
-| `src/api/rate-limiter.js` | In-memory route rate limiter |
-| `src/api/abi-router.js` | Serves compiled contract artifacts by name |
-| `src/api/adapters/mock-adapter.js` | Deterministic local asset generation for development/tests |
-| `src/api/comments-archive.js` | Snapshots Nostr comment threads to IPFS on republish |
-| `src/api/chat-proxy.js` | WebSocket bridge: browser ↔ Nostr relay (session-gated) |
-| `src/api/nostr-relay.js` | Shared relay primitives (used by chat-proxy + comments-archive) |
-| `src/api/manifest-utils.js` | getSceneNodes (used by the manifest chain walker) |
-| `src/api/ipfs-utils.js` | catManifest() with timeout/abort |
-| `src/config.js` | Multi-network Web3 config (Hardhat local, Base Sepolia Testnet) |
+| `src/api/authentication.ts` | Session token validation, sets `res.locals.userAddress` |
+| `src/api/sessions.ts` | SIWE session create/delete (24h TTL) |
+| `src/api/siwe-verify.ts` | EIP-4361 message verification (supports `eoaAddress` for CDP smart accounts) |
+| `src/api/routes/paymaster.ts` | CDP Paymaster JSON-RPC proxy (keeps `CDP_PAYMASTER_URL` server-side) |
+| `src/api/rate-limiter.ts` | In-memory route rate limiter |
+| `src/api/abi-router.ts` | Serves compiled contract artifacts by name |
+| `src/api/adapters/mock-adapter.ts` | Deterministic local asset generation for development/tests |
+| `src/api/comments-archive.ts` | Snapshots Nostr comment threads to IPFS on republish |
+| `src/api/chat-proxy.ts` | WebSocket bridge: browser ↔ Nostr relay (session-gated) |
+| `src/api/nostr-relay.ts` | Shared relay primitives (used by chat-proxy + comments-archive) |
+| `src/api/manifest-utils.ts` | getSceneNodes (used by the manifest chain walker) |
+| `src/api/ipfs-utils.ts` | catManifest() with timeout/abort |
+| `src/config.ts` | Multi-network Web3 config (Hardhat local, Base Sepolia Testnet) |
 
 ### 3.2 Frontend (`frontend/src/js/`)
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Engine | `engine/scene-graph.js` | Babylon engine/scene, GLB/glTF load, selection, framing, thumbnail capture, collection load |
-| Engine | `engine/time-travel.js` | Manifest chain walking (client-side), version switching, parametric application |
-| Engine | `engine/parametric-preview.js` | Live color/scale inspector preview and save |
-| IPFS | `ipfs/remote-ipfs.js` | Gateway reads with memory + IndexedDB cache |
-| IPFS | `ipfs/write-to-ipfs.js` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
-| glTF | `gltf/decomposer.js` / `async-gltf.js` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
-| glTF | `gltf/material-editor.js` | Edits PBR material properties on composite glTFs and commits new CIDs |
-| glTF | `gltf/composer.js` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
-| glTF | `gltf/merkle-editors.js` | Merkle tree/proof library for editor authorization |
-| Blockchain | `blockchain/wallet.js` | Backward-compat barrel re-exporting `wallet-core.js`, `wallet-connect.js`, `wallet-network.js`, `wallet-payments.js`, `wallet-publishing.js`, `wallet-guard.js` |
-| Blockchain | `blockchain/wallet-core.js` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |
-| Blockchain | `blockchain/wallet-connect.js` | WalletConnect v2 integration |
-| Blockchain | `blockchain/wallet-discovery.js` | EIP-6963 injected wallets + WalletConnect v2 discovery |
-| Blockchain | `blockchain/wallet-network.js` | Network switching |
-| Blockchain | `blockchain/wallet-payments.js` | Free-tier `recordGeneration()`, USDC PayGo `payForGenerationWithUSDC()` |
-| Blockchain | `blockchain/wallet-publishing.js` | Mint, `updateAssetURI()`, `updateEditors()`, `burn()` |
-| Blockchain | `blockchain/wallet-cdp.js` | CDP email-OTP login, ERC-4337 smart account, EIP-1193 shim for Web3.js |
-| Blockchain | `blockchain/network-config.js` | Per-network contract/USDC/RPC configuration |
-| Blockchain | `blockchain/token-resolver.js` | Resolve `child_ref` tokens to manifest CIDs (client-side, no server) |
-| UI | `ui/wallet-modal.js` | Custom email/Web3 wallet picker modal (not Web3Modal) |
-| UI | `ui/header-wallet-button.js` | Header wallet button; shows email for CDP users, hides network selector |
-| UI | `ui/create-panel.js` | Prompt flow, asset definition controls, generation trigger |
-| UI | `ui/asset-save.js` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
-| UI | `ui/asset-library.js` | Token gallery, collection expansion, thumbnail rendering |
-| Domain / UI | `domain/version-history-store.js`, `ui/version-clock.js`, `ui/scene-clock.js`, `ui/model-clock.js` | Version history store + scene/model clock UIs |
-| UI | `ui/collaborators-panel.js` | Editor list / add/remove UI |
-| UI | `ui/comments-panel.js` | Asset-level comment thread UI |
-| UI | `ui/ledger-panel.js` | Activity feed — walks manifest chain client-side, fetches full manifests |
-| Services | `services/api.js` | API client: sessions, generation, comments archive snapshot, upload credential, unpin |
-| Services | `services/asset-save/manifest-builder.js` | Manifest assembly, version bumping, comment archive embedding |
-| Services | `services/asset-save/collection-publish.js` | New collection mint / existing collection URI update |
-| Services | `services/asset-save/editor-publish.js` | Republish authorization for editors (Merkle proof) |
-| Services | `services/team.js` | Merkle-based editor add/remove |
-| Services | `services/asset-delete.js` | Remove an asset from a collection (direct IPFS write) |
-| Services | `services/comment-thread.js` | Per-asset Nostr WebSocket + archive state |
+| Engine | `engine/scene-graph.ts` | Babylon engine/scene, GLB/glTF load, selection, framing, thumbnail capture, collection load |
+| Engine | `engine/time-travel.ts` | Manifest chain walking (client-side), version switching, parametric application |
+| Engine | `engine/parametric-preview.ts` | Live color/scale inspector preview and save |
+| IPFS | `ipfs/remote-ipfs.ts` | Gateway reads with memory + IndexedDB cache |
+| IPFS | `ipfs/write-to-ipfs.ts` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
+| glTF | `gltf/decomposer.ts` / `async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
+| glTF | `gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
+| glTF | `gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
+| glTF | `gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
+| Blockchain | `blockchain/wallet.ts` | Backward-compat barrel re-exporting `wallet-core.ts`, `wallet-connect.ts`, `wallet-network.ts`, `wallet-payments.ts`, `wallet-publishing.ts`, `wallet-guard.ts` |
+| Blockchain | `blockchain/wallet-core.ts` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |
+| Blockchain | `blockchain/wallet-connect.ts` | WalletConnect v2 integration |
+| Blockchain | `blockchain/wallet-discovery.ts` | EIP-6963 injected wallets + WalletConnect v2 discovery |
+| Blockchain | `blockchain/wallet-network.ts` | Network switching |
+| Blockchain | `blockchain/wallet-payments.ts` | Free-tier `recordGeneration()`, USDC PayGo `payForGenerationWithUSDC()` |
+| Blockchain | `blockchain/wallet-publishing.ts` | Mint, `updateAssetURI()`, `updateEditors()`, `burn()` |
+| Blockchain | `blockchain/wallet-cdp.ts` | CDP email-OTP login, ERC-4337 smart account, EIP-1193 shim for Web3.js |
+| Blockchain | `blockchain/network-config.ts` | Per-network contract/USDC/RPC configuration |
+| Blockchain | `blockchain/token-resolver.ts` | Resolve `child_ref` tokens to manifest CIDs (client-side, no server) |
+| UI | `ui/wallet-modal.ts` | Custom email/Web3 wallet picker modal (not Web3Modal) |
+| UI | `ui/header-wallet-button.ts` | Header wallet button; shows email for CDP users, hides network selector |
+| UI | `ui/create-panel.ts` | Prompt flow, asset definition controls, generation trigger |
+| UI | `ui/asset-save.ts` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
+| UI | `ui/asset-library.ts` | Token gallery, collection expansion, thumbnail rendering |
+| Domain / UI | `domain/version-history-store.ts`, `ui/version-clock.ts`, `ui/scene-clock.ts`, `ui/model-clock-gizmo.ts` | Version history store + scene/model clock UIs |
+| UI | `ui/collaborators-panel.ts` | Editor list / add/remove UI |
+| UI | `ui/comments-panel.ts` | Asset-level comment thread UI |
+| UI | `ui/ledger-panel.ts` | Activity feed — walks manifest chain client-side, fetches full manifests |
+| Services | `services/api.ts` | API client: sessions, generation, comments archive snapshot, upload credential, unpin |
+| Services | `services/asset-save/manifest-builder.ts` | Manifest assembly, version bumping, comment archive embedding |
+| Services | `services/asset-save/collection-publish.ts` | New collection mint / existing collection URI update |
+| Services | `services/asset-save/editor-publish.ts` | Republish authorization for editors (Merkle proof) |
+| Services | `services/team.ts` | Merkle-based editor add/remove |
+| Services | `services/asset-delete.ts` | Remove an asset from a collection (direct IPFS write) |
+| Services | `services/comment-thread.ts` | Per-asset Nostr WebSocket + archive state |
 | UI | `pug/app.pug` | Unified Studio + Library SPA shell (built to `dist/app.html`) |
-| UI | `ui/library-grid.js` | Library grid/list rendering, selection, keyboard shortcuts, rubber-band select |
-| UI | `ui/library-toolbar.js` | Breadcrumb, search, sort, view mode, New Collection, Upload |
-| UI | `ui/library-context-menu.js` | Right-click actions: Open, Open in Studio, Rename, Manage Collaborators, Burn, Delete, Send to Collection |
-| Services | `services/library-ops.js` | `createNamedCollection()`, `uploadFileToCollection()` |
-| Services | `utils/library-items.js` | Filter, sort, range selection, bytes formatter |
+| UI | `ui/library-grid.ts` | Library grid/list rendering, selection, keyboard shortcuts, rubber-band select |
+| UI | `ui/library-toolbar.ts` | Breadcrumb, search, sort, view mode, New Collection, Upload |
+| UI | `ui/library-context-menu.ts` | Right-click actions: Open, Open in Studio, Rename, Manage Collaborators, Burn, Delete, Send to Collection |
+| Services | `services/library-ops.ts` | `createNamedCollection()`, `uploadFileToCollection()` |
+| Services | `utils/library-items.ts` | Filter, sort, range selection, bytes formatter |
 
 ### 3.3 Smart Contracts (`blockchain/contracts/`)
 
@@ -315,7 +315,7 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 - `format` — `"glb"` or `"gltf"`.
 - `bundleCid` *(optional)* — an IPFS UnixFS directory root CID grouping the composite glTF + its `.bin` buffers + textures under their friendly names (`composite.gltf`, `buffer_0.bin`, `texture_0.png`). **Organizational only** — exists so Pinata/Kubo show a browsable folder for the asset. Loading ignores it. Dropped on color-bake edits (JSON-only changes), since re-bundling isn't worth the upload. Burn unpins it alongside `cid`.
 
-**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `services/comment-thread.js` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
+**`comments_archive_cid`.** Holds the CID of a JSON archive of Nostr comments for this specific asset. Comments are scoped per asset using the tag `<chainId>:<contractAddress>:<tokenId>:<assetId>`; switching assets inside the same collection shows a different thread. The archive is created on republish by `POST /api/v1/assets/snapshot-comments` and loaded by `services/comment-thread.ts` before live relay events are merged. If the relay is unreachable during republish, the endpoint returns an empty archive (`eventCount: 0`) instead of failing, so republish stays resilient.
 
 **Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides asset-level history.
 
@@ -372,8 +372,8 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 
 | Consumer | Description |
 |---|---|
-| Version clock UI | Frontend (`time-travel.js` / `domain/version-history-store.js` / `ui/scene-clock.js` / `ui/model-clock.js`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
-| Activity ledger | Frontend (`ledger-panel.js`) walks the chain to render the activity feed |
+| Version clock UI | Frontend (`time-travel.ts` / `domain/version-history-store.ts` / `ui/scene-clock.ts` / `ui/model-clock-gizmo.ts`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
+| Activity ledger | Frontend (`ledger-panel.ts`) walks the chain to render the activity feed |
 | Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |
 | Micro-ledger (Phase 5) | **Not implemented.** No append-only log or `anchorManifest()` anchoring exists; the ledger panel derives activity from this same chain walk client-side |
@@ -391,11 +391,11 @@ Every entry in the manifest chain is a complete snapshot. The difference between
 
 During publish:
 
-1. `scene-graph.js` captures the Babylon canvas into a WebP blob.
+1. `scene-graph.ts` captures the Babylon canvas into a WebP blob.
 2. `captureAssetThumbnail()` uploads the blob directly to IPFS via `writeToIPFS()` and returns CID metadata (no `dataUrl` — the browser writes to IPFS directly, same as glTF buffer uploads).
-3. `services/asset-save/manifest-builder.js` places the CID metadata into `manifest.thumbnail`.
+3. `services/asset-save/manifest-builder.ts` places the CID metadata into `manifest.thumbnail`.
 4. The stored manifest contains only thumbnail metadata + CID.
-5. `asset-library.js` reads `manifest.thumbnail.cid` and renders it through the IPFS gateway.
+5. `asset-library.ts` reads `manifest.thumbnail.cid` and renders it through the IPFS gateway.
 
 ---
 
@@ -405,7 +405,7 @@ During publish:
 
 ```text
 User prompt
-  → services/api.js#getOrCreateSession() → POST /api/v1/sessions → Session token
+  → services/api.ts#getOrCreateSession() → POST /api/v1/sessions → Session token
   → (free tier) wallet.recordGeneration(nodeId, prompt)  (on-chain)
   → (paid tier)  wallet.payForGenerationWithUSDC(nodeId, prompt, tier)  (on-chain)
   → POST /api/v1/generations (Authorization: Session <token>)
@@ -457,7 +457,7 @@ The collection token's `tokenURI` always points to the latest collection manifes
 
 ### 5.4 Library View (inside the unified SPA)
 
-The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). `frontend/src/js/app/router.js` swaps visibility between `#studioView` and `#libraryView`; the Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is bootstrapped by `app-init.js` and rendered by `library-controller.js`, `library-grid.js`, `library-toolbar.js`, and `library-context-menu.js`.
+The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). `frontend/src/js/app/router.ts` swaps visibility between `#studioView` and `#libraryView`; the Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is bootstrapped by `app-init.ts` and rendered by `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, and `library-context-menu.ts`.
 
 ---
 
@@ -498,13 +498,13 @@ The page has two mutually exclusive sections:
 - **`#libraryGate`** — shown when no wallet is connected. Displays a wallet icon, "Sign in to continue", and a "Login / Signup" button that opens the wallet modal.
 - **`#libraryMain`** — shown after wallet connect. Contains the toolbar, content area, and status bar.
 
-The gate is toggled by `applyWalletGate()` in `library-controller.js` in response to `WALLET_STATE_CHANGED` events.
+The gate is toggled by `applyWalletGate()` in `library-controller.ts` in response to `WALLET_STATE_CHANGED` events.
 
 ---
 
 #### 5.4.3 Two-level navigation (Collections → Assets)
 
-The Library operates as a two-level browser. State is held in `library-state.js` (`currentCollectionTokenId`).
+The Library operates as a two-level browser. State is held in `library-state.ts` (`currentCollectionTokenId`).
 
 **Level 1 — Collections list** (`currentCollectionTokenId === null`):
 
@@ -552,7 +552,7 @@ The `minting` badge appears immediately when the user creates a new collection, 
 
 #### 5.4.6 Grid vs List view
 
-Toggled by the ⊞/☰ buttons in the status bar. Persisted in `library-state.js`.
+Toggled by the ⊞/☰ buttons in the status bar. Persisted in `library-state.ts`.
 
 - **Grid** — thumbnail cards (`library-item` divs) with the folder/file icon, name, and corner status badge.
 - **List** — `<table>` with columns: Name, Status (text badge), Date modified, Size.
@@ -612,7 +612,7 @@ Context menu opens on right-click. Content varies by target:
 
 1. User clicks **+ New Collection** or "New Collection" from the context menu.
 2. A dialog prompts for a name.
-3. As soon as the user confirms, `createCollectionFlow()` (`ui/library-create.js`) fires:
+3. As soon as the user confirms, `createCollectionFlow()` (`ui/library-create.ts`) fires:
    - The collection manifest is written to IPFS (`writeJSONToIPFS`).
    - `onPending` is called immediately — a folder card with the `minting` spinner appears at the top of the list. The user can see the card in under a second.
    - The mint transaction is sent in the background (`publishAsset`).
@@ -635,7 +635,7 @@ For EOA wallets (MetaMask/Rabby), the spinner card appears just before the walle
 6. A new collection manifest CID is written; `updateAssetURI` publishes it on-chain.
 7. `refreshLibraryData` is called; the new asset card appears.
 
-Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the same stage/decompose helper (`stageUploadSource` in `services/library-ops.js`) at drop time, then routes through `services/asset-file-drop.js`: with an asset open it replaces the root model node's source in place (staged as a `pendingSourceOverrides` entry — linked children, transforms, and history survive); with no asset open it creates a new unsaved draft named after the file. The normal Save Draft / Publish pipeline bakes the override into the next manifest version. Both paths then emit `ASSET_FILE_STAGED`, and the create panel presents the staged model as a version-card chat bubble with the standard follow-up action row (Retopo/Retexture/Auto-rig/Animate run off the staged `sourceAssetCid`; known non-glTF formats get no row).
+Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the same stage/decompose helper (`stageUploadSource` in `services/library-ops.ts`) at drop time, then routes through `services/asset-file-drop.ts`: with an asset open it replaces the root model node's source in place (staged as a `pendingSourceOverrides` entry — linked children, transforms, and history survive); with no asset open it creates a new unsaved draft named after the file. The normal Save Draft / Publish pipeline bakes the override into the next manifest version. Both paths then emit `ASSET_FILE_STAGED`, and the create panel presents the staged model as a version-card chat bubble with the standard follow-up action row (Retopo/Retexture/Auto-rig/Animate run off the staged `sourceAssetCid`; known non-glTF formats get no row).
 
 ---
 
@@ -668,17 +668,17 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 | File | Role |
 |------|------|
 | `frontend/src/pug/app.pug` | Unified Studio + Library SPA template → compiled to `frontend/dist/app.html` |
-| `frontend/src/js/app/router.js` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume |
-| `frontend/src/js/ui/header-wallet-button.js` | Shared header wallet button; shows email for CDP users and hides the network selector |
-| `frontend/src/js/app-init.js` | SPA bootstrap incl. Library view wiring: wallet gate, data loading, event wiring |
-| `frontend/src/js/ui/library-controller.js` | Library view orchestration and Studio handoff |
-| `frontend/src/js/ui/library-grid.js` | Grid/list rendering, selection, keyboard handling, rubber-band |
-| `frontend/src/js/ui/library-toolbar.js` | Toolbar rendering and event handlers |
-| `frontend/src/js/ui/library-context-menu.js` | Right-click menu construction and actions |
-| `frontend/src/js/ui/library-create.js` | Optimistic collection-create flow (shared by toolbar + context menu) |
-| `frontend/src/js/services/library-ops.js` | `createNamedCollection(name, { onPending })`, `uploadFileToCollection` |
-| `frontend/src/js/state/library-state.js` | Reactive store: collections, assets, currentCollectionTokenId, selection, view, sort, search |
-| `frontend/src/js/utils/library-items.js` | Filter, sort, range selection, bytes formatter |
+| `frontend/src/js/app/router.ts` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume |
+| `frontend/src/js/ui/header-wallet-button.ts` | Shared header wallet button; shows email for CDP users and hides the network selector |
+| `frontend/src/js/app-init.ts` | SPA bootstrap incl. Library view wiring: wallet gate, data loading, event wiring |
+| `frontend/src/js/ui/library-controller.ts` | Library view orchestration and Studio handoff |
+| `frontend/src/js/ui/library-grid.ts` | Grid/list rendering, selection, keyboard handling, rubber-band |
+| `frontend/src/js/ui/library-toolbar.ts` | Toolbar rendering and event handlers |
+| `frontend/src/js/ui/library-context-menu.ts` | Right-click menu construction and actions |
+| `frontend/src/js/ui/library-create.ts` | Optimistic collection-create flow (shared by toolbar + context menu) |
+| `frontend/src/js/services/library-ops.ts` | `createNamedCollection(name, { onPending })`, `uploadFileToCollection` |
+| `frontend/src/js/state/library-state.ts` | Reactive store: collections, assets, currentCollectionTokenId, selection, view, sort, search |
+| `frontend/src/js/utils/library-items.ts` | Filter, sort, range selection, bytes formatter |
 
 ### 5.5 Gallery Flow
 
@@ -736,7 +736,7 @@ The backend selects the storage implementation via `IPFS_BACKEND`:
 
 ### Browser Cache
 
-`frontend/src/js/ipfs/remote-ipfs.js` caches on demand only:
+`frontend/src/js/ipfs/remote-ipfs.ts` caches on demand only:
 
 - memory map for fast repeat reads in a session
 - IndexedDB object store for persistence
@@ -783,8 +783,8 @@ Child assets are referenced by on-chain token IDs. The parent manifest stores a 
 Key constraints still in force:
 - Every token child node must have a `transform_matrix`; no local `history` array
 - Token child nodes do not contain a local `source`; their state is resolved from the referenced token's manifest chain
-- `MAX_CHILD_ASSET_DEPTH = 5`; cycle detection enforced in `scene-graph.js`
-- Resolver: `frontend/src/js/blockchain/token-resolver.js`
+- `MAX_CHILD_ASSET_DEPTH = 5`; cycle detection enforced in `scene-graph.ts`
+- Resolver: `frontend/src/js/blockchain/token-resolver.ts`
 
 ---
 
@@ -792,7 +792,7 @@ Key constraints still in force:
 
 The server-side micro-ledger described in earlier roadmaps is **not implemented**. The contract's `anchorManifest()` is stubbed and unavailable, and there is no append-only JSONL store, ledger query API, or on-chain manifest anchoring.
 
-The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives activity entirely from the client-side manifest chain walk. It reads `prev_asset_manifest_cid` links to render the activity feed. Future durable auditability would require implementing the ledger as a display-agnostic layer independent from Babylon.js and DOM state so XR clients can consume the same trail.
+The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.ts`) derives activity entirely from the client-side manifest chain walk. It reads `prev_asset_manifest_cid` links to render the activity feed. Future durable auditability would require implementing the ledger as a display-agnostic layer independent from Babylon.js and DOM state so XR clients can consume the same trail.
 
 ---
 
@@ -802,7 +802,7 @@ The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.js`) derives act
 - OpenSCAD WASM integration is schema-compatible but deferred.
 - Phase 5 server-side micro-ledger is not implemented (`anchorManifest()` stubbed; ledger panel derives activities from manifest chain only).
 - `GET /api/health` is a planned route, not a current backend route.
-- IPFS browser reads rely on the browser HTTP cache (immutable CID responses) + request coalescing; the glTF pipeline adds memory + IndexedDB caching (`utils/content-cache.js`). There is no app-level gateway read cache.
+- IPFS browser reads rely on the browser HTTP cache (immutable CID responses) + request coalescing; the glTF pipeline adds memory + IndexedDB caching (`utils/content-cache.ts`). There is no app-level gateway read cache.
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.
-- Contract addresses are hardcoded in 3 places (`src/config.js`, `frontend/src/js/blockchain/network-config.js`, `blockchain/.env`). Chain IDs are consolidated in `constants/chains.js`.
+- Contract addresses are hardcoded in 3 places (`src/config.ts`, `frontend/src/js/blockchain/network-config.ts`, `blockchain/.env`). Chain IDs are consolidated in `constants/chains.js`.
 - Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).

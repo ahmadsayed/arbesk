@@ -51,9 +51,9 @@ function syncNetworkConfigWithDeployedAddresses(hardhatRpc) {
     "src",
     "js",
     "blockchain",
-    "network-config.js",
+    "network-config.ts",
   );
-  const backendConfigPath = path.join(ROOT, "src", "config.js");
+  const backendConfigPath = path.join(ROOT, "src", "config.ts");
 
   const freeAddress = readEnvVar(blockchainEnvPath, "CONTRACT_ADDRESS");
   const paidAddress = readEnvVar(blockchainEnvPath, "PAID_CONTRACT_ADDRESS");
@@ -68,13 +68,13 @@ function syncNetworkConfigWithDeployedAddresses(hardhatRpc) {
 
   patchConfigFile(networkConfigPath, freeAddress, paidAddress, usdcAddress, hardhatRpc);
   log(
-    `Patched network-config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
+    `Patched network-config.ts for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
   );
 
   if (fs.existsSync(backendConfigPath)) {
     patchConfigFile(backendConfigPath, freeAddress, paidAddress, usdcAddress, hardhatRpc);
     log(
-      `Patched src/config.js for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
+      `Patched src/config.ts for Hardhat Local: free=${freeAddress} paid=${paidAddress}`,
     );
   }
 }
@@ -373,7 +373,7 @@ export default async function globalSetup() {
 
   // Phase 4: sync addresses and build frontend once. Contract addresses are
   // identical across workers, so a single build serves all workers.
-  log("Syncing network-config.js with deployed contract addresses...");
+  log("Syncing network-config.ts with deployed contract addresses...");
   syncNetworkConfigWithDeployedAddresses(ports0.hardhatRpc);
   log("Rebuilding frontend with synced contract addresses...");
   execSync("npm run build:frontend", {

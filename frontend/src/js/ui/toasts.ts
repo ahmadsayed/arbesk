@@ -1,0 +1,136 @@
+/**
+ * Arbesk Toast Notification System - Notyf wrapper
+ *
+ * Thin adapter over window.Notyf (loaded via CDN in studio.pug).
+ * Preserves the same public API as the previous hand-rolled implementation.
+ *
+ * Usage:
+ *   import { showToast, dismissToast, dismissAllToasts } from './ui/toasts.ts';
+ *   showToast({ type: 'error', title: 'Payment Failed', message: '...', duration: 0 });
+ */
+
+import { escapeHtml } from "../utils/html.ts";
+
+export type ToastType = "info" | "success" | "warning" | "error" | "pending";
+
+export interface ToastAction {
+  label: string;
+  onClick?: () => void;
+}
+
+export interface ToastOptions {
+  type?: ToastType;
+  /** Short heading (required) */
+  title: string;
+  /** Optional body text */
+  message?: string;
+  /** ms until auto-dismiss. 0 = persist until manual close. */
+  duration?: number;
+  /** Inline action buttons */
+  actions?: ToastAction[];
+}
+
+/** Notyf instance (CDN global, no published types) */
+let _notyf: any = null;
+
+function getNotyf(): any {
+  if (!_notyf) {
+    _notyf = new ((window as any).Notyf)({
+      duration: 3000,
+      ripple: false,
+      dismissible: true,
+      position: { x: "right", y: "top" },
+      // Register every type with an explicit className. Notyf only adds its
+      // own --success / --error modifier classes for the two built-in types;
+      // custom types get no modifier, so we attach our own class to each so
+      // the SCSS can apply per-type accent borders. icon: false keeps Notyf's
+      // default check/cross glyphs out - our toasts are text-only.
+      types: [
+        { type: "info",    className: "toast--info",    icon: false, dismissible: true },
+        { type: "success", className: "toast--success", icon: false, dismissible: true },
+        { type: "warning", className: "toast--warning", icon: false, dismissible: true },
+        { type: "error",   className: "toast--error",   icon: false, dismissible: true },
+        { type: "pending", className: "toast--pending", icon: false, dismissible: true },
+      ],
+    });
+  }
+  return _notyf;
+}
+
+let toastIdCounter = 0;
+const activeToasts = new Map<string, any>(); // id → Notyf notification reference
+
+const MAX_TOASTS = 5;
+
+/**
+ * Show a toast notification.
+ *
+ * @returns toastId
+ */
+export function showToast({ type = "info", title, message = "", duration = 3000, actions = [] }: ToastOptions): string {
+  const notyf = getNotyf();
+
+  // Enforce max visible toasts - evict oldest
+  if (activeToasts.size >= MAX_TOASTS) {
+    const oldestId = activeToasts.keys().next().value;
+    dismissToast(oldestId!);
+  }
+
+  const id = `toast-${++toastIdCounter}`;
+
+  // Compose HTML content: bold title, optional message, optional action buttons
+  const parts = [`<strong>${escapeHtml(title)}</strong>`];
+  if (message) {
+    parts.push(`<span>${escapeHtml(message)}</span>`);
+  }
+  if (actions.length) {
+    const btns = actions
+      .map((a, i) => `<button class="toast-action" data-action-index="${i}">${escapeHtml(a.label)}</button>`)
+      .join("");
+    parts.push(`<span class="toast-actions">${btns}</span>`);
+  }
+
+  const notification = notyf.open({ type, message: parts.join("<br>"), duration });
+
+  // Wire action button click handlers via the synchronously-created toast element
+  if (actions.length) {
+    const toastEls = document.querySelectorAll(".notyf__toast");
+    const toastEl = toastEls[toastEls.length - 1];
+    if (toastEl) {
+      toastEl.querySelectorAll(".toast-action").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number((btn as HTMLElement).dataset.actionIndex);
+          if (actions[idx]?.onClick) actions[idx].onClick();
+          dismissToast(id);
+        });
+      });
+    }
+  }
+
+  // Keep the map clean when Notyf auto-dismisses by timer
+  notification.on("dismiss", () => activeToasts.delete(id));
+
+  activeToasts.set(id, notification);
+  return id;
+}
+
+/**
+ * Dismiss a toast by ID.
+ */
+export function dismissToast(id: string): void {
+  const notification = activeToasts.get(id);
+  if (!notification) return;
+  // Delete synchronously so callers (e.g. MAX_TOASTS eviction loop) see the
+  // updated size immediately.
+  activeToasts.delete(id);
+  getNotyf().dismiss(notification);
+}
+
+/**
+ * Dismiss all active toasts.
+ */
+export function dismissAllToasts(): void {
+  for (const id of Array.from(activeToasts.keys())) {
+    dismissToast(id);
+  }
+}

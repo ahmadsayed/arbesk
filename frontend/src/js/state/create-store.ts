@@ -1,4 +1,4 @@
-import { emit } from "../events/bus.js";
+import { emit } from "../events/bus.ts";
 
 /**
  * Create a small event-emitting state store.

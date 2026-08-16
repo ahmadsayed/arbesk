@@ -5,7 +5,7 @@
  * the store directly for setup/assertions.
  */
 import { createStore } from "../state/create-store.ts";
-import { EVENTS } from "../events/bus.js";
+import { EVENTS } from "../events/bus.ts";
 
 export interface AssetStoreState {
   activeAssetManifestCid: string | null;

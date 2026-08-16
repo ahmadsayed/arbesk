@@ -1,0 +1,777 @@
+/**
+ * Arbesk Scene Loader
+ *
+ * Extracted from scene-graph.js - handles IPFS asset loading, manifest parsing,
+ * token child asset resolution, collection manifest loading, and drag/drop
+ * linked asset composition.
+ */
+
+import { resolveFormatHandler } from "../formats/index.ts";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
+import {
+  resolveChildRef,
+  resolveCollectionChildRef,
+  clearResolutionCache,
+} from "../blockchain/token-resolver.ts";
+import { emit, EVENTS } from "../events/bus.ts";
+import { activateAssetManifest, getCurrentManifest } from "../domain/asset.ts";
+import { walletState } from "../state/wallet-state.ts";
+import { state, MAX_CHILD_ASSET_DEPTH } from "./state.ts";
+import type { CollectionRef } from "./state.ts";
+import {
+  extractCid,
+  getManifestNodes,
+  applyTransformMatrix,
+  applyDefaultMaterial,
+  centerImportedAsset,
+} from "./transforms.ts";
+import { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
+import { applyColor, applyScale } from "./time-travel.ts";
+import { clearScene, disposeNodeContent } from "./cleanup.ts";
+import { createAnchorNode } from "./scene-graph.ts";
+import { identityMatrix } from "../utils/collections.ts";
+
+/**
+ * @param src - source string or `{cid, path?, format?}` reference
+ */
+async function loadAsset(
+  src: any,
+  parentNode: BABYLON.TransformNode,
+  nodeId: string,
+  onProgress: ((fraction: number) => void) | null = null
+): Promise<BABYLON.AbstractMesh[]> {
+  const cid = extractCid(src);
+  const handler = resolveFormatHandler(src);
+  console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${handler.format}`);
+
+  try {
+    const result = await handler.load(src, {
+      scene: state.scene,
+      cid,
+      importFromBlob,
+      onProgress: onProgress ?? undefined,
+    });
+    attachMetadata(
+      result.meshes,
+      nodeId,
+      parentNode,
+      result.transformNodes || [],
+      result.animationGroups || []
+    );
+    return result.meshes;
+  } catch (error) {
+    console.error(`[SCENE] FAILED to load asset for node ${nodeId}:`, error);
+    const box = BABYLON.MeshBuilder.CreateBox(
+      `placeholder_${nodeId}`,
+      { size: 1 },
+      state.scene
+    );
+    box.parent = parentNode;
+    box.metadata = { nodeId };
+    applyDefaultMaterial([box]);
+    return [box];
+  }
+}
+
+async function importFromBlob(blob: Blob, extension: string) {
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync(
+      "",
+      blobUrl,
+      "",
+      state.scene,
+      null,
+      extension
+    );
+    return {
+      meshes: result.meshes,
+      transformNodes: result.transformNodes || [],
+      animationGroups: result.animationGroups || [],
+    };
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
+function attachMetadata(
+  meshes: BABYLON.AbstractMesh[],
+  nodeId: string,
+  parentNode: BABYLON.TransformNode,
+  transformNodes: BABYLON.TransformNode[] = [],
+  animationGroups: BABYLON.AnimationGroup[] = []
+) {
+  const meshArray: BABYLON.AbstractMesh[] = [];
+  const importedNodes = [...transformNodes, ...meshes];
+
+  for (const transformNode of transformNodes) {
+    if (transformNode.parent === null) {
+      transformNode.parent = parentNode;
+    }
+    transformNode.metadata = {
+      ...(transformNode.metadata || {}),
+      nodeId,
+      isNodeRoot: transformNode.parent === parentNode,
+    };
+  }
+
+  for (const mesh of meshes) {
+    if (mesh.parent === null) {
+      mesh.parent = parentNode;
+    }
+    mesh.metadata = {
+      ...(mesh.metadata || {}),
+      nodeId,
+      isNodeRoot: mesh.parent === parentNode,
+    };
+    meshArray.push(mesh);
+  }
+
+  centerImportedAsset(meshArray, importedNodes, parentNode, nodeId);
+  state.nodeMeshes.set(nodeId, meshArray);
+  if (animationGroups.length > 0) {
+    state.nodeAnimationGroups.set(nodeId, animationGroups);
+  }
+  state._nonChromeMeshCache = null;
+}
+
+export type ChildRefResolutionPlan =
+  | { kind: "invalid" }
+  | {
+      kind: "same-collection";
+      assetID: string;
+      assetsMap: Record<string, any> | null;
+    }
+  | {
+      kind: "cross-collection-asset";
+      collectionRef: any;
+      assetID: string;
+    };
+
+/**
+ * Decide how a node's child_ref should be resolved: same-collection lookup
+ * or cross-collection asset lookup.
+ * Pure decision logic - no I/O.
+ */
+function buildChildRefResolutionPlan(
+  childRef: any,
+  activeCollectionAssets: Record<string, any> | null
+): ChildRefResolutionPlan {
+  if (!childRef) return { kind: "invalid" };
+
+  if (childRef.assetID) {
+    if (childRef.collection === "self") {
+      return {
+        kind: "same-collection",
+        assetID: childRef.assetID,
+        assetsMap: activeCollectionAssets,
+      };
+    }
+    if (childRef.collection && childRef.collection.tokenId) {
+      return {
+        kind: "cross-collection-asset",
+        collectionRef: childRef.collection,
+        assetID: childRef.assetID,
+      };
+    }
+  }
+
+  return { kind: "invalid" };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Token child asset loading
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadTokenChildNode(
+  node: any,
+  anchor: BABYLON.TransformNode,
+  depth: number,
+  resolvingCids: Set<string>
+): Promise<BABYLON.AbstractMesh[]> {
+  const childRef = node.child_ref;
+  if (!childRef) return [];
+
+  if (depth >= MAX_CHILD_ASSET_DEPTH) {
+    console.warn(
+      `[SCENE] max child asset depth (${MAX_CHILD_ASSET_DEPTH}) reached at node ${node.node_id}`
+    );
+    const placeholder = createPlaceholder(node.node_id, anchor, "error");
+    return [placeholder];
+  }
+
+  const plan = buildChildRefResolutionPlan(
+    childRef,
+    state.activeCollectionAssets
+  );
+
+  // Same-collection self-reference cycle: a node referencing its own
+  // assetID via collection:"self" is always a cycle, independent of depth.
+  if (
+    plan.kind === "same-collection" &&
+    plan.assetID === state.activeCollectionCurrentAssetID
+  ) {
+    console.warn(
+      `[SCENE] self-referencing same-collection child_ref rejected at node ${node.node_id}`
+    );
+    const placeholder = createPlaceholder(node.node_id, anchor, "error");
+    return [placeholder];
+  }
+
+  const refKey =
+    plan.kind === "cross-collection-asset"
+      ? `${plan.collectionRef.chainId}:${plan.collectionRef.contractAddress}:${plan.collectionRef.tokenId}:${plan.assetID}`
+      : `self:${(plan as any).assetID}`;
+
+  if (resolvingCids.has(refKey)) {
+    console.warn(
+      `[SCENE] circular child_ref detected at node ${node.node_id}, ref=${refKey}`
+    );
+    const placeholder = createPlaceholder(node.node_id, anchor, "error");
+    return [placeholder];
+  }
+
+  const loadingPlaceholder = createPlaceholder(node.node_id, anchor, "loading");
+
+  resolvingCids.add(refKey);
+  try {
+    console.log(
+      `[SCENE] resolving child node ${node.node_id} depth=${depth} kind=${plan.kind}`
+    );
+
+    let resolution: any;
+    if (plan.kind === "invalid") {
+      resolution = { resolved: false, error: "Invalid child_ref shape" };
+    } else {
+      resolution = await resolveCollectionChildRef(
+        plan.kind === "same-collection"
+          ? { collection: "self", assetID: plan.assetID }
+          : { collection: plan.collectionRef, assetID: plan.assetID },
+        plan.kind === "same-collection" ? plan.assetsMap : null
+      );
+    }
+
+    if (resolution.nestedCollectionRef) {
+      // assetID resolved to a nested collection, not a direct asset CID:
+      // recurse via the cross-collection token path.
+      resolution = await resolveChildRef({
+        type: "token",
+        chainId: resolution.nestedCollectionRef.chainId,
+        contractAddress: resolution.nestedCollectionRef.contractAddress,
+        tokenId: resolution.nestedCollectionRef.tokenId,
+        standard: "ERC721",
+        resolution: "latest",
+      });
+    }
+
+    if (!resolution.resolved || !resolution.manifestCid) {
+      console.warn(
+        `[SCENE] child resolution failed for node ${node.node_id}: ${resolution.error}`
+      );
+      disposePlaceholder(loadingPlaceholder);
+      const errorPlaceholder = createPlaceholder(node.node_id, anchor, "error");
+      return [errorPlaceholder];
+    }
+
+    console.log(
+      `[SCENE] child node ${node.node_id} resolved → ${resolution.manifestCid}`
+    );
+
+    const childAnchor = createAnchorNode(
+      `child_anchor_${node.node_id}`,
+      state.scene
+    );
+    childAnchor.parent = anchor;
+    childAnchor.metadata = {
+      childRef,
+      resolvedCid: resolution.manifestCid,
+      loaded: true,
+      nodeId: node.node_id,
+    };
+
+    if (!state.nodeAnchors.has(node.node_id)) {
+      state.nodeAnchors.set(node.node_id, childAnchor);
+    }
+
+    disposePlaceholder(loadingPlaceholder);
+
+    await loadAssetManifest(
+      resolution.manifestCid,
+      childAnchor,
+      depth + 1,
+      resolvingCids
+    );
+
+    return [];
+  } catch (err) {
+    console.error(`[SCENE] failed to load child node ${node.node_id}:`, err);
+    disposePlaceholder(loadingPlaceholder);
+    const errorPlaceholder = createPlaceholder(node.node_id, anchor, "error");
+    return [errorPlaceholder];
+  } finally {
+    resolvingCids.delete(refKey);
+  }
+}
+
+async function loadNode(
+  node: any,
+  parentNode: BABYLON.TransformNode,
+  depth: number,
+  resolvingCids: Set<string>,
+  onProgress: ((fraction: number) => void) | null = null
+): Promise<{ anchor: BABYLON.TransformNode; meshes: BABYLON.AbstractMesh[] }> {
+  console.log(
+    `[SCENE] loadNode node_id=${node.node_id} source=${JSON.stringify(
+      node.source
+    )} childRef=${!!node.child_ref}`
+  );
+  const anchor = createAnchorNode(`anchor_${node.node_id}`, state.scene);
+  anchor.parent = parentNode;
+  applyTransformMatrix(anchor, node.transform_matrix);
+  state.nodeAnchors.set(node.node_id, anchor);
+
+  let meshes: BABYLON.AbstractMesh[] = [];
+
+  if (node.child_ref) {
+    // Tag the outer anchor with the child_ref so the inspector / dive button
+    // can resolve it directly from the manifest node_id.
+    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref };
+    meshes = await loadTokenChildNode(
+      node,
+      anchor,
+      depth || 0,
+      resolvingCids || new Set<string>()
+    );
+    return { anchor, meshes };
+  }
+
+  if (node.source) {
+    meshes = await loadAsset(node.source, anchor, node.node_id, onProgress);
+  } else {
+    console.warn(
+      `[SCENE] node ${node.node_id} has no source - no geometry to load`
+    );
+  }
+
+  const pp = node.post_processor;
+  if (meshes.length > 0 && pp) {
+    applyColor(meshes, pp.color, pp.meshOverrides || null);
+    applyScale(meshes, pp.scale);
+  }
+
+  return { anchor, meshes };
+}
+
+export interface LoadProgressReporter {
+  setNodeCount: (count: number) => void;
+  setNodeFraction: (nodeId: string, fraction: number) => void;
+}
+
+/**
+ * @returns the loaded manifest
+ */
+async function loadAssetManifest(
+  manifestCid: string,
+  parentAnchor: BABYLON.TransformNode | null = null,
+  depth = 0,
+  resolvingCids: Set<string> = new Set(),
+  reporter: LoadProgressReporter | null = null
+): Promise<any> {
+  console.log(`[SCENE] loadAssetManifest cid=${manifestCid} depth=${depth}`);
+
+  if (
+    !parentAnchor &&
+    depth === 0 &&
+    (state.rootSceneAnchor ||
+      state.nodeMeshes.size > 0 ||
+      state.nodeAnchors.size > 0)
+  ) {
+    clearScene();
+  }
+
+  if (depth === 0) {
+    clearResolutionCache();
+  }
+
+  const manifest = await getFromRemoteIPFS(manifestCid);
+
+  // Collection manifests don't have scene.nodes - delegate to
+  // loadCollectionManifest and auto-load the first asset.
+  if (manifest?.type === "collection") {
+    const { assetEntries } = await loadCollectionManifest(manifestCid, null);
+    const firstAsset = assetEntries.find((e) => e.kind === "asset");
+    if (firstAsset) {
+      return loadAssetManifest(
+        firstAsset.value,
+        parentAnchor,
+        depth,
+        resolvingCids,
+        reporter
+      );
+    }
+    return manifest;
+  }
+
+  console.log(
+    `[SCENE] manifest loaded | nodes=${
+      getManifestNodes(manifest).length
+    } version=${manifest?.version}`
+  );
+  if (!manifest || getManifestNodes(manifest).length === 0) {
+    console.warn("[SCENE] Asset manifest has no scene nodes:", manifestCid);
+    return manifest;
+  }
+
+  const rootAnchor =
+    parentAnchor || createAnchorNode("root_anchor", state.scene);
+  if (!parentAnchor) {
+    state.rootSceneAnchor = rootAnchor;
+  }
+
+  const manifestNodes = getManifestNodes(manifest);
+  if (reporter && depth === 0) reporter.setNodeCount(manifestNodes.length);
+
+  await Promise.all(
+    manifestNodes.map((node) =>
+      // Each sibling branch gets its own copy of the in-progress resolution
+      // set: cycle detection only cares about the root→node path, and a
+      // shared set would falsely flag two siblings referencing the same
+      // asset (duplicate live-ref instances) as circular.
+      loadNode(
+        node,
+        rootAnchor,
+        depth,
+        new Set(resolvingCids),
+        reporter && depth === 0
+          ? (f: number) => reporter.setNodeFraction(node.node_id, f)
+          : null
+      ).then((result) => {
+        reporter?.setNodeFraction(node.node_id, 1);
+        return result;
+      })
+    )
+  );
+
+  if (!parentAnchor) {
+    activateAssetManifest(manifestCid, manifest);
+    emit(EVENTS.SCENE_READY, { manifest, manifestCid });
+  }
+
+  return manifest;
+}
+
+export interface CollectionAssetEntry {
+  assetID: string;
+  kind: string;
+  value: any;
+}
+
+/**
+ * Load a collection manifest and populate the active-collection state.
+ * Does NOT render any 3D content - returns the manifest plus a flat list
+ * of its entries so gallery UI can let the user pick which asset to open.
+ */
+async function loadCollectionManifest(
+  collectionCid: string,
+  collectionRef: CollectionRef | null
+): Promise<{ manifest: any; assetEntries: CollectionAssetEntry[] }> {
+  const manifest = await getFromRemoteIPFS(collectionCid);
+  if (!manifest || manifest.type !== "collection") {
+    throw new Error(`CID ${collectionCid} is not a collection manifest`);
+  }
+
+  state.activeCollectionAssets = manifest.assets || {};
+  state.activeCollectionRef = collectionRef || null;
+
+  const assetEntries = Object.entries(manifest.assets || {}).map(
+    ([assetID, value]) => ({
+      assetID,
+      kind: typeof value === "string" ? "asset" : "collection",
+      value,
+    })
+  );
+
+  return { manifest, assetEntries };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Drag/drop - linked asset composition
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Compute a unique node_id for a newly dropped linked asset. The first
+ * instance keeps the deterministic `linked_<tokenId>_<assetID>` id;
+ * subsequent drops of the same asset get `_2`, `_3`, … (max existing
+ * suffix + 1) so each placement is independently keyed in the state maps
+ * (anchors, meshes, transform edits) and can be moved on its own.
+ */
+function nextLinkedNodeId(
+  existingIds: Set<string>,
+  tokenId: string,
+  assetID: string
+): string {
+  const base = `linked_${tokenId}_${assetID}`;
+  if (!existingIds.has(base)) return base;
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const suffixRe = new RegExp(`^${escaped}_(\\d+)$`);
+  let max = 1;
+  for (const id of existingIds) {
+    const m = suffixRe.exec(id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `${base}_${max + 1}`;
+}
+
+export interface LinkedSceneNode {
+  node_id: string;
+  transform_matrix: number[];
+  source?: { cid: string };
+  child_ref?: object;
+}
+
+/**
+ * Build the scene node to add when a user pulls in another collection's
+ * asset. "fork" freezes the asset's current CID into a plain source node;
+ * "live-ref" embeds a child_ref pointing back at the original collection,
+ * so future edits there propagate automatically. `nodeId` lets the caller
+ * pass a per-instance unique id (see nextLinkedNodeId) so the same asset
+ * can be referenced more than once.
+ */
+function buildForkOrLiveRefNode(
+  choice: "fork" | "live-ref",
+  ref: { collectionRef: CollectionRef },
+  assetID: string,
+  resolvedAssetCid: string,
+  nodeId?: string
+): LinkedSceneNode {
+  const resolvedNodeId = nodeId || `linked_${ref.collectionRef.tokenId}_${assetID}`;
+  const baseNode = {
+    node_id: resolvedNodeId,
+    transform_matrix: identityMatrix(),
+  };
+  if (choice === "fork") {
+    return {
+      ...baseNode,
+      source: { cid: resolvedAssetCid },
+    };
+  }
+  if (choice === "live-ref") {
+    return {
+      ...baseNode,
+      child_ref: { collection: ref.collectionRef, assetID },
+    };
+  }
+  throw new Error(`Unknown fork/live-ref choice: ${choice}`);
+}
+
+/**
+ * BigInt-safe token id normalization so "0x2a" and "42" compare equal.
+ */
+function normalizeTokenId(id: any): string {
+  if (id == null) return "";
+  try {
+    return BigInt(id).toString();
+  } catch {
+    return String(id);
+  }
+}
+
+/**
+ * True when a dropped linked asset is the asset currently open in the
+ * Studio (same collection token + same assetID). A live-ref to itself is a
+ * guaranteed cycle, so such drops must be fork-only.
+ */
+function isSelfLinkedAssetDrop(
+  collectionRef: CollectionRef,
+  assetID: string
+): boolean {
+  const active = state.activeCollectionRef;
+  if (!active || !state.activeCollectionCurrentAssetID) return false;
+  if (assetID !== state.activeCollectionCurrentAssetID) return false;
+  if (Number(active.chainId) !== Number(collectionRef.chainId)) return false;
+  const activeContract = (active.contractAddress || "").toLowerCase();
+  const droppedContract = (collectionRef.contractAddress || "").toLowerCase();
+  if (activeContract !== droppedContract) return false;
+  return (
+    normalizeTokenId(active.tokenId) === normalizeTokenId(collectionRef.tokenId)
+  );
+}
+
+/**
+ * In-flight linked-asset drop operations. The ASSET_LINKED_DROPPED event is
+ * fire-and-forget, so a Save that happens right after "Add to Scene" could
+ * read pendingChildRefs before the drop handler pushed its node. Save/publish
+ * awaits waitForPendingLinkedDrops() to close that race.
+ */
+const _inFlightLinkedDrops = new Set<Promise<void>>();
+
+/** @param event - ASSET_LINKED_DROPPED event detail */
+async function _handleLinkedAssetDropped(event: any) {
+  const detail = event;
+  if (!detail) return;
+
+  const {
+    token_id: tokenId,
+    _standard = "ERC721",
+    resolution: _resolutionMode = "latest",
+    chainId: eventChainId,
+    contractAddress: eventContractAddress,
+  } = detail;
+  if (!tokenId) return;
+
+  if (detail.assetID) {
+    const collectionRef = {
+      chainId: Number(eventChainId || walletState.get().chainId),
+      contractAddress:
+        eventContractAddress || walletState.get().contractAddress,
+      tokenId,
+    };
+    const isSelfDrop = isSelfLinkedAssetDrop(collectionRef, detail.assetID);
+
+    const { showForkOrLiveRefDialog } = await import("../ui/dialog.ts");
+    const choice = await showForkOrLiveRefDialog(detail.assetID, {
+      allowLiveRef: !isSelfDrop,
+    });
+    if (!choice) return; // user cancelled
+    if (isSelfDrop && choice === "live-ref") {
+      console.warn(
+        `[SCENE] live-ref self-add rejected for asset ${detail.assetID}`
+      );
+      return;
+    }
+
+    const { resolveCollectionChildRef } = await import(
+      "../blockchain/token-resolver.ts"
+    );
+    const resolution = await resolveCollectionChildRef(
+      { collection: collectionRef, assetID: detail.assetID },
+      null
+    );
+    if (!resolution.resolved || !resolution.manifestCid) {
+      console.warn(
+        `[SCENE] could not resolve dropped asset ${detail.assetID}: ${resolution.error}`
+      );
+      return;
+    }
+
+    // Gather every node_id already in play (saved manifest, pending drops,
+    // loaded scene) so a repeat drop of the same asset gets its own id and
+    // becomes an independent instance instead of replacing the first one.
+    const currentManifest = getCurrentManifest();
+    const existingIds = new Set([
+      ...(currentManifest
+        ? getManifestNodes(currentManifest).map((n) => n.node_id)
+        : []),
+      ...state.pendingChildRefs.map((n) => n.node_id),
+      ...state.nodeAnchors.keys(),
+    ]);
+    const nodeEntry = buildForkOrLiveRefNode(
+      choice,
+      { collectionRef },
+      detail.assetID,
+      resolution.manifestCid,
+      nextLinkedNodeId(existingIds, tokenId, detail.assetID)
+    );
+    state.pendingChildRefs.push(nodeEntry);
+
+    const parentNode = state.rootSceneAnchor || state.scene;
+    if (choice === "live-ref") {
+      await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
+    } else {
+      await loadAsset(nodeEntry.source, parentNode, nodeEntry.node_id);
+    }
+    return;
+  }
+
+  // Legacy drops without assetID are no longer supported - the caller must
+  // include an assetID so the drop handler can route through the collection
+  // resolution path above.
+  console.warn(
+    `[SCENE] linked asset drop ignored: no assetID for token #${tokenId}`
+  );
+}
+
+/**
+ * Event-bus entry point for ASSET_LINKED_DROPPED. Tracks the async work so
+ * save/publish can wait for it via waitForPendingLinkedDrops().
+ * @param event - ASSET_LINKED_DROPPED event detail
+ */
+function handleLinkedAssetDropped(event: any): Promise<void> {
+  const p = _handleLinkedAssetDropped(event)
+    .catch((err) => {
+      console.warn("[SCENE] linked asset drop failed:", err?.message || err);
+    })
+    .finally(() => {
+      _inFlightLinkedDrops.delete(p);
+    });
+  _inFlightLinkedDrops.add(p);
+  return p;
+}
+
+/**
+ * Resolve once every linked-asset drop started so far has finished (node
+ * pushed to pendingChildRefs and scene load settled). Awaited by the
+ * save/publish manifest builder before it snapshots pendingChildRefs.
+ */
+async function waitForPendingLinkedDrops() {
+  await Promise.all([..._inFlightLinkedDrops]);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Drag/drop - OS file source override
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface AssetSourceRef {
+  cid: string;
+  path: string;
+  format: string;
+}
+
+/**
+ * Replace the model of an existing root node in place: disposes the node's
+ * meshes/animation groups (keeping its anchor, which carries the transform)
+ * and loads the new source under the same node_id.
+ *
+ * @returns false when the node has no live anchor
+ */
+async function replaceRootModelSource(
+  nodeId: string,
+  source: AssetSourceRef
+): Promise<boolean> {
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!anchor) {
+    console.warn(`[SCENE] file-drop override ignored: no anchor for ${nodeId}`);
+    return false;
+  }
+  disposeNodeContent(nodeId);
+  await loadAsset(source, anchor, nodeId);
+  return true;
+}
+
+/**
+ * Create a fresh single-node draft scene from a dropped file: ensures a
+ * root anchor exists, creates `anchor_<nodeId>` under it, and loads the
+ * source. Used when a file is dropped with no asset open.
+ */
+async function createRootDraftSource(nodeId: string, source: AssetSourceRef) {
+  if (!state.rootSceneAnchor) {
+    state.rootSceneAnchor = createAnchorNode("root_anchor", state.scene);
+  }
+  const anchor = createAnchorNode(`anchor_${nodeId}`, state.scene);
+  anchor.parent = state.rootSceneAnchor;
+  state.nodeAnchors.set(nodeId, anchor);
+  await loadAsset(source, anchor, nodeId);
+}
+
+export {
+  loadAsset,
+  loadNode,
+  loadAssetManifest,
+  loadCollectionManifest,
+  buildForkOrLiveRefNode,
+  nextLinkedNodeId,
+  handleLinkedAssetDropped,
+  waitForPendingLinkedDrops,
+  replaceRootModelSource,
+  createRootDraftSource,
+};
