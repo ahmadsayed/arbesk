@@ -2,13 +2,21 @@
  * Camera pose persistence
  *
  * Stores the viewport camera pose (orbit angles, radius, target, ortho
- * frustum) in localStorage, keyed per asset manifest CID. Reopening the same
- * asset in the same browser restores the exact view the user left it in.
- * Best-effort: storage failures (private mode, quota) are silently ignored.
+ * frustum) in localStorage, keyed per ASSET (chain:contract:token:assetId),
+ * not per manifest version — the pose follows the asset across publishes and
+ * version-history restores. Reopening the same asset in the same browser
+ * restores the exact view the user left it in. Unsaved drafts (no on-chain
+ * identity) fall back to a per-manifest-CID key. Best-effort: storage
+ * failures (private mode, quota) are silently ignored.
  */
 
 import { state } from "./state.ts";
-import { getActiveAssetManifestCid } from "../domain/asset.ts";
+import {
+  getActiveAssetManifestCid,
+  getActiveAssetTokenId,
+  getActiveAssetId,
+} from "../domain/asset.ts";
+import { walletState } from "../state/wallet-state.ts";
 
 const STORAGE_PREFIX = "arbesk:cameraPose:";
 const SAVE_DEBOUNCE_MS = 1000;
@@ -25,9 +33,29 @@ interface StoredCameraPose {
   orthoTop?: number | null;
 }
 
-function _readPose(manifestCid: string): StoredCameraPose | null {
+/**
+ * Storage key for the currently-open asset: the canonical asset identity
+ * when it has one, otherwise the manifest CID of the unsaved draft.
+ *
+ * @param fallbackCid - manifest CID to use when no asset identity exists
+ */
+function _poseStorageKey(fallbackCid: string | null): string | null {
+  const tokenId = getActiveAssetTokenId();
+  if (tokenId) {
+    const { chainId, contractAddress } = walletState.get();
+    const assetId = getActiveAssetId() || "root";
+    if (chainId && contractAddress) {
+      return `${chainId}:${contractAddress.toLowerCase()}:${tokenId}:${assetId}`;
+    }
+    return `token:${tokenId}:${assetId}`;
+  }
+  const cid = getActiveAssetManifestCid() || fallbackCid;
+  return cid ? `cid:${cid}` : null;
+}
+
+function _readPose(key: string): StoredCameraPose | null {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + manifestCid);
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return null;
     const pose = JSON.parse(raw);
     if (
@@ -46,9 +74,9 @@ function _readPose(manifestCid: string): StoredCameraPose | null {
   }
 }
 
-function _writePose(manifestCid: string, pose: StoredCameraPose) {
+function _writePose(key: string, pose: StoredCameraPose) {
   try {
-    localStorage.setItem(STORAGE_PREFIX + manifestCid, JSON.stringify(pose));
+    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(pose));
   } catch {
     // Quota exceeded or storage disabled — persistence is best-effort.
   }
@@ -67,8 +95,8 @@ export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
       saveTimer = null;
       // Key the pose to the asset open at save time, not at camera-create
       // time — the camera outlives individual assets in the SPA.
-      const manifestCid = getActiveAssetManifestCid();
-      if (!manifestCid) return;
+      const key = _poseStorageKey(null);
+      if (!key) return;
 
       const pose: StoredCameraPose = {
         alpha: camera.alpha,
@@ -83,22 +111,28 @@ export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
         pose.orthoBottom = camera.orthoBottom;
         pose.orthoTop = camera.orthoTop;
       }
-      _writePose(manifestCid, pose);
+      _writePose(key, pose);
     }, SAVE_DEBOUNCE_MS);
   });
 }
 
 /**
- * Restore the stored camera pose for a manifest, if any. Snaps instantly
- * (no animation) so the view lands exactly where the user left it.
+ * Restore the stored camera pose for the currently-open asset, if any.
+ * Snaps instantly (no animation) so the view lands exactly where the user
+ * left it.
  *
+ * @param fallbackCid - manifest CID to fall back on when the asset has no
+ *                      on-chain identity yet
  * @returns true when a stored pose was applied
  */
-export function restoreCameraPose(manifestCid: string): boolean {
+export function restoreCameraPose(fallbackCid?: string): boolean {
   const camera = state.camera;
-  if (!camera || !manifestCid) return false;
+  if (!camera) return false;
 
-  const pose = _readPose(manifestCid);
+  const key = _poseStorageKey(fallbackCid ?? null);
+  if (!key) return false;
+
+  const pose = _readPose(key);
   if (!pose) return false;
 
   camera.alpha = pose.alpha;
@@ -126,6 +160,6 @@ export function restoreCameraPose(manifestCid: string): boolean {
     camera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
   }
 
-  console.log(`[CAMERA] restored stored pose for ${manifestCid}`);
+  console.log(`[CAMERA] restored stored pose for ${key}`);
   return true;
 }
