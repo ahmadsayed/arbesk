@@ -82,8 +82,8 @@ export function initCollaboratorPanel(
   input.id = "collaboratorAddInput";
   input.type = "text";
   input.className = "form-control";
-  input.placeholder = "0x… address or email";
-  input.setAttribute("aria-label", "Wallet address or email");
+  input.placeholder = "Email or 0x address";
+  input.setAttribute("aria-label", "Email or wallet address");
 
   const roleSelect = document.createElement("select");
   roleSelect.id = "collaboratorRoleSelect";
