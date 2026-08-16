@@ -245,9 +245,12 @@ export function initEngine() {
   );
   camera.lowerRadiusLimit = 2;
   camera.upperRadiusLimit = 500;
-  // Wheel zoom: Babylon's default wheelPrecision (3) jumps ~1/3 of the radius
-  // per wheel tick. 50 matches the chat-preview feel — a gentle per-tick step.
-  camera.wheelPrecision = 50;
+  // Proportional wheel zoom: the step is a percentage of the current radius,
+  // so zoom speed scales with how far out the camera is — large models get
+  // large steps, small models keep a gentle feel. wheelPrecision (an absolute
+  // step in world units) is ignored once wheelDeltaPercentage is set.
+  camera.wheelDeltaPercentage = 0.01;
+  camera.pinchDeltaPercentage = 0.01;
   camera.attachControl(canvas, true);
   state.camera = camera;
 
