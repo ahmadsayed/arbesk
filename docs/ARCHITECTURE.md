@@ -378,6 +378,24 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |
 | Micro-ledger (Phase 5) | **Not implemented.** No append-only log or `anchorManifest()` anchoring exists; the ledger panel derives activity from this same chain walk client-side |
 
+### Design Advantage: Provenance Lives in the Asset, Not the Contract
+
+The system deliberately splits state by durability requirement:
+
+| Layer | Contents | Property |
+|---|---|---|
+| **IPFS manifest chain** (the provenance chain / micro-ledger) | Full version history, parametric edit history, chat provenance (`metadata.chat` per version), thumbnails | Immutable, content-addressed, survives any contract migration |
+| **On-chain (contract)** | Three pointers per token: owner, tip CID (`tokenURI`), editor root + version | Mutable, minimal, replaceable |
+
+The contract is a **pointer registry, not a database**. Everything that makes an asset's history valuable is already committed to IPFS at save time — the chain only records *who* owns the tip and *which* CID is current.
+
+Consequences worth calling out (good demo/presentation talking points):
+
+- **Contracts become replaceable infrastructure.** Migrating to a new contract version moves only three small values per token; the entire provenance chain comes along for free because the new contract points at the same tip CID. (This is the basis of the v2 migration plan in issue #50.)
+- **History can never be lost to on-chain failure or upgrade.** Worst case during a migration is a *stale pointer*, never lost history — and a stale pointer is repaired by re-reading the old contract.
+- **Verification is trustless and client-side.** Anyone can walk `prev_asset_manifest_cid` from the tip and re-hash every step; no server or contract vouches for the chain — the CIDs are the proof.
+- **Cheap writes.** Provenance doesn't pay gas: every save/draft/version is an IPFS write; only publish touches the chain.
+
 ### Version Snapshot Types
 
 Every entry in the manifest chain is a complete snapshot. The difference between snapshot types is in how the node content changes:
