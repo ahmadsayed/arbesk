@@ -104,6 +104,18 @@ function _writePose(key: string, pose: StoredCameraPose) {
 }
 
 function _applyPose(camera: BABYLON.ArcRotateCamera, pose: StoredCameraPose) {
+  // Cancel leftover inertia and in-flight camera animations FIRST. Babylon
+  // ADDS inertial offsets to the camera every frame (decaying at 0.9), so a
+  // gesture from the previous asset/view would otherwise keep dragging the
+  // camera away from the restored pose — and the drifted pose then gets
+  // saved over the good one.
+  camera.inertialAlphaOffset = 0;
+  camera.inertialBetaOffset = 0;
+  camera.inertialRadiusOffset = 0;
+  camera.inertialPanningX = 0;
+  camera.inertialPanningY = 0;
+  camera.getScene()?.stopAnimation(camera);
+
   camera.alpha = pose.alpha;
   camera.beta = pose.beta;
   camera.radius = pose.radius;
@@ -128,6 +140,44 @@ function _applyPose(camera: BABYLON.ArcRotateCamera, pose: StoredCameraPose) {
   } else {
     camera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
   }
+}
+
+/**
+ * Frames to keep enforcing a freshly restored pose. Babylon v9's smooth
+ * wheel-zoom transitions (and other per-frame camera writers) are not covered
+ * by stopAnimation/inertia zeroing and can keep dragging the camera for over
+ * a second after a restore — long enough that the drifted pose gets saved
+ * over the good one. Re-applying for ~1.5s stomps every such writer; any real
+ * pointer/wheel input cancels immediately so the user is never fought.
+ */
+const SETTLE_FRAMES = 90;
+
+function _settlePose(camera: BABYLON.ArcRotateCamera, pose: StoredCameraPose) {
+  const scene = camera.getScene();
+  if (!scene) return;
+
+  let frames = 0;
+  const stop = () => {
+    if (renderObs) scene.onAfterRenderObservable.remove(renderObs);
+    if (pointerObs) scene.onPointerObservable.remove(pointerObs);
+    renderObs = null;
+    pointerObs = null;
+  };
+  let renderObs: any = scene.onAfterRenderObservable.add(() => {
+    if (++frames > SETTLE_FRAMES) {
+      stop();
+      return;
+    }
+    _applyPose(camera, pose);
+  });
+  let pointerObs: any = scene.onPointerObservable.add((pi: any) => {
+    if (
+      pi.type === BABYLON.PointerEventTypes.POINTERDOWN ||
+      pi.type === BABYLON.PointerEventTypes.POINTERWHEEL
+    ) {
+      stop();
+    }
+  });
 }
 
 /** Pose captured at move time, waiting for the debounce window to elapse. */
@@ -200,13 +250,20 @@ export function restoreCameraPose(fallbackCid?: string): boolean {
   const key = _poseStorageKey(fallbackCid ?? null);
   if (!key) return false;
 
+  // Land the PREVIOUS asset's pending pose BEFORE applying the restore —
+  // _applyPose fires onViewMatrixChanged, whose echo capture would otherwise
+  // overwrite that pending write and silently lose the user's last movement.
+  _flushPendingSave();
+
   const pose = _readPose(key);
   if (!pose) {
     _applyPose(camera, DEFAULT_POSE);
+    _settlePose(camera, DEFAULT_POSE);
     return false;
   }
 
   _applyPose(camera, pose);
+  _settlePose(camera, pose);
   console.log(`[CAMERA] restored stored pose for ${key}`);
   return true;
 }

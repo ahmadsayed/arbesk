@@ -52,6 +52,7 @@ description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not
 | `frontend/src/js/engine/transforms.ts` | `applyDefaultMaterial()`, `centerImportedAsset()` |
 | `frontend/src/js/engine/placeholders.ts` | Loading/error placeholders, safe disposal |
 | `frontend/src/js/engine/parametric-preview.ts` | Inspector color/scale live editing |
+| `frontend/src/js/engine/camera-persistence.ts` | Per-asset camera pose in localStorage (debounced save; restore on SCENE_READY + 90-frame settle to defeat post-restore camera drift) |
 | `frontend/src/js/ui/viewport-gizmo.ts` | 2D X/Y/Z orientation overlay |
 
 ## Deep Reference
