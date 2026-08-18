@@ -223,5 +223,4 @@ Three breakpoints:
 3. **Child world permissions**: Read-only when nested in someone else's world?
 4. **Settings visibility**: Always-visible or simple/advanced toggle?
 5. **New Asset**: `Ctrl+N` with inline form instead of `prompt()` dialog?
-6. **Ledger anchor**: In ledger view, or in Save/Publish flow?
-7. **Narrow screens**: Sidebar overlay or bottom sheet?
+6. **Narrow screens**: Sidebar overlay or bottom sheet?

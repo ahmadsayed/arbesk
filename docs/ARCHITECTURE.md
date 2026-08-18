@@ -1,6 +1,6 @@
 # Arbesk System Architecture
 
-> Status: Current v0.9 — Phases 1–5.4 complete (token child assets, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented. Phase 5 server-side micro-ledger is not implemented; the ledger panel is client-side manifest-driven only.
+> Status: Current v0.9 — Phases 1–5.4 complete (token child assets, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented.
 > Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child assets, collection manifests, and studio publishing
 
 ---
@@ -23,8 +23,6 @@ The system currently combines:
 - **Base Sepolia Testnet** as the public testnet target (Hardhat local for dev)
 - **Optional WebP publish thumbnails** stored as separate IPFS assets and referenced by manifest metadata
 - **On-demand browser IPFS cache** using memory + IndexedDB
-
-A server-side Phase 5 micro-ledger for durable auditability is not implemented; the ledger panel is client-side manifest-driven only.
 
 ---
 
@@ -377,7 +375,6 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 | Activity ledger | Frontend (`ledger-panel.ts`) walks the chain to render the activity feed |
 | Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |
-| Micro-ledger (Phase 5) | **Not implemented.** No append-only log or `anchorManifest()` anchoring exists; the ledger panel derives activity from this same chain walk client-side |
 
 ### Design Advantage: Provenance Lives in the Asset, Not the Contract
 
@@ -385,7 +382,7 @@ The system deliberately splits state by durability requirement:
 
 | Layer | Contents | Property |
 |---|---|---|
-| **IPFS manifest chain** (the provenance chain / micro-ledger) | Full version history, parametric edit history, chat provenance (`metadata.chat` per version), thumbnails | Immutable, content-addressed, survives any contract migration |
+| **IPFS manifest chain** (the provenance chain) | Full version history, parametric edit history, chat provenance (`metadata.chat` per version), thumbnails | Immutable, content-addressed, survives any contract migration |
 | **On-chain (contract)** | Three pointers per token: owner, tip CID (`tokenURI`), editor root + version | Mutable, minimal, replaceable |
 
 The contract is a **pointer registry, not a database**. Everything that makes an asset's history valuable is already committed to IPFS at save time — the chain only records *who* owns the tip and *which* CID is current.
@@ -798,14 +795,13 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 | Risk | Current Mitigation | Planned Improvement |
 |---|---|---|
 | Unpaid generation | Backend validates session auth + rate limit; on-chain payment/quota is enforced by the contract (`recordGeneration` / `payForGenerationWithUSDC`) | Verify signer/tx sender/event payload alignment |
-| Replay generation | In-memory `usedTxHashes` plus manifest-chain walk | Future: durable ledger-backed replay index (requires Phase 5 ledger) |
+| Replay generation | In-memory `usedTxHashes` plus manifest-chain walk | Durable replay index |
 | Private keys/API keys | `.env` files ignored by Git | Secret scanning / deployment secret management |
 | IPFS public exposure | Docker ports bound to loopback, no DHT/bootstrap | Deployment hardening checklist |
 | Mock assets in prod | `MOCK_3D_GENERATION` env flag | Explicit production adapter config validation |
 | Embedded thumbnail bloat | Backend strips `dataUrl` and stores CID only | Optional thumbnail size/crop UI |
 | Unauthorized URI update/burn | Merkle proof required | Multi-sig owner for high-value collections |
 | Editor list tampering | On-chain Merkle root verifies IPFS list integrity | Periodic root consistency checks |
-| Ledger tampering | Not implemented — no server-side ledger | Client-side manifest chain only; no current plan for JSONL/SQLite + anchors |
 
 ---
 
@@ -835,19 +831,10 @@ Key constraints still in force:
 
 ---
 
-## 10. Phase 5 Micro-Ledger (Not Implemented)
-
-The server-side micro-ledger described in earlier roadmaps is **not implemented**. The contract's `anchorManifest()` is stubbed and unavailable, and there is no append-only JSONL store, ledger query API, or on-chain manifest anchoring.
-
-The **Activity ledger panel** (`frontend/src/js/ui/ledger-panel.ts`) derives activity entirely from the client-side manifest chain walk. It reads `prev_asset_manifest_cid` links to render the activity feed. Future durable auditability would require implementing the ledger as a display-agnostic layer independent from Babylon.js and DOM state so XR clients can consume the same trail.
-
----
-
-## 11. Known Gaps
+## 10. Known Gaps
 
 - Production cloud 3D adapters are not implemented (mock-only, returns 501 when disabled).
 - OpenSCAD WASM integration is schema-compatible but deferred.
-- Phase 5 server-side micro-ledger is not implemented (`anchorManifest()` stubbed; ledger panel derives activities from manifest chain only).
 - `GET /api/health` is a planned route, not a current backend route.
 - IPFS browser reads rely on the browser HTTP cache (immutable CID responses) + request coalescing; the glTF pipeline adds memory + IndexedDB caching (`utils/content-cache.ts`). There is no app-level gateway read cache.
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.

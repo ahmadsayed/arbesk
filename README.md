@@ -6,7 +6,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
-- Current status: Phases 1–5.4 are complete, including Phase 5.1 (token child worlds), Phase 5.2 (free-tier contract), Phase 5.3 (Merkle editor proofs), and Phase 5.4 (collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented. Server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
+- Current status: Phases 1–5.4 are complete, including Phase 5.1 (token child worlds), Phase 5.2 (free-tier contract), Phase 5.3 (Merkle editor proofs), and Phase 5.4 (collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented.
 
 ---
 
@@ -265,7 +265,5 @@ The gallery expands collection tokens into one card per `assets` entry.
 | 5.4+ | Asset-level Nostr comments with IPFS archive snapshot |
 | 5.4+ | Token indexer — chunked `eth_getLogs` ownership backfill |
 | 5.4+ | Tripo3D v3 BYOK generation — text/image-to-3D, HD texture, refine, smart retopology, rig & animate |
-
-The server-side micro-ledger is not implemented; activity tracking is client-side manifest-driven only.
 
 See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for deferred items and known gaps.

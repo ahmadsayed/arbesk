@@ -46,7 +46,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/js/ui/create-panel.ts` | "New asset" dialog flow |
 | `frontend/src/js/ui/outliner.ts` | Scene graph tree in left sidebar |
 | `frontend/src/js/ui/sidebar.ts` | Sidebar show/hide logic |
-| `frontend/src/js/ui/ledger-panel.ts` | Micro-ledger audit panel (Phase 5) |
+| `frontend/src/js/ui/ledger-panel.ts` | Activity feed panel (client-side manifest chain walk) |
 | `frontend/src/js/blockchain/wallet-core.ts` | MetaMask / WalletConnect / CDP wallet connection logic |
 | `frontend/src/js/blockchain/wallet.ts` | Wallet barrel re-export |
 | `frontend/src/js/blockchain/token-resolver.ts` | `child_ref` → manifest CID resolution |

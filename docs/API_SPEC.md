@@ -797,13 +797,6 @@ The following are planned backend routes not currently implemented. Note that Ph
 |---|---|---|
 | `GET /api/resolve-token?chainId=&contract=&tokenId=` | Resolve a token reference to its latest manifest CID (back-end fallback for front-end resolver) | 📋 Planned |
 
-### Phase 5 — Micro-Ledger
-
-| Endpoint | Purpose | Status |
-|---|---|---|
-| `GET /api/ledger?manifestId=` | Query operation history for a manifest | 📋 Planned |
-| `GET /api/ledger/stats` | Aggregate analytics across all manifests | 📋 Planned |
-
 ### General
 
 | Endpoint | Purpose | Status |

@@ -29,7 +29,6 @@
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.ts`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
 | Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.ts`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
 | Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.ts` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
-| Phase 5: Micro-Ledger | ❌ Not implemented / client-side only | `ledger-panel.ts` derives activity from manifest chain; `anchorManifest()` is stubbed |
 
 ---
 
@@ -292,7 +291,6 @@ frontend/src/js/
 ### 3.3 What Does NOT Work / Is Missing
 
 - ❌ **IPFS browser cache hardcoded disabled** — every read hits the gateway directly.
-- ❌ `anchorManifest()` stubbed in `ledger-panel.ts` — "not available in current contract".
 - ❌ CDP email login (smart accounts) only supported on Base Sepolia — not on Hardhat local.
 - ❌ No OpenSCAD WASM integration (explicitly deferred post-MVP).
 
@@ -392,7 +390,6 @@ frontend/src/js/
 | Gap | Where | Priority |
 |-----|-------|----------|
 | CDP email login on Hardhat | `smart-wallet-support.ts` | 🟡 Smart wallets only supported on Base Sepolia |
-| Micro-ledger (`anchorManifest`) | `ledger-panel.ts` | 🟡 Post-beta |
 | Health check endpoint | — | 🟢 Ops convenience |
 | OpenSCAD WASM | — | ⚪ Explicitly deferred |
 
