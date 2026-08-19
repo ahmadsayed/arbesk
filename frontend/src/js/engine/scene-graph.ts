@@ -161,32 +161,44 @@ function _updateOrthoFrustumOnResize() {
 }
 
 /**
- * Zoom-adaptive panning. Babylon's panningSensibility is a fixed divisor
- * (default 1000): a right-drag pans by (pixels / sensibility) world units
- * regardless of zoom, so the same drag covers a much larger fraction of the
- * viewport when zoomed in — far too fast. Scale the divisor with the
- * INVERSE of the visible extent (higher sensibility = slower pan), so one
- * drag always covers the same fraction of the viewport. A product of 15000
- * preserves the default feel at the initial radius (15 → 1000). In ortho
- * mode the radius is decoupled from the frustum, so derive the equivalent
- * extent from the ortho bounds instead.
+ * Viewport-relative panning with damped zoom-out. Babylon's pan step is a
+ * CONSTANT world distance per pixel (pixels / panningSensibility — no
+ * radius factor anywhere in the input→movement→camera chain, verified
+ * against 9.12.0 sources), so on a large model a drag covers a vanishing
+ * fraction of the viewport. Scale the step to the VISIBLE extent instead:
+ * - at/below PAN_TRACK_EXTENT: exact cursor tracking (1px drag moves the
+ *   world point under the cursor by 1px worth of world units);
+ * - above it: sublinear (power PAN_OUT_EXPONENT) so zoomed-out panning
+ *   stays tame instead of jumping in huge world steps.
+ * In ortho mode the radius is decoupled from the frustum, so the extent
+ * comes from the ortho bounds directly.
  */
-const PAN_SENSIBILITY_RADIUS_PRODUCT = 15000;
+const PAN_TRACK_EXTENT = 100; // world units of visible height
+const PAN_OUT_EXPONENT = 0.35; // damping curve above the tracking threshold
 
 function _updatePanSensibility() {
   const cam = state.camera;
   if (!cam) return;
-  let extent = cam.radius;
+  let extent;
   if (
     cam.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA &&
     cam.orthoTop != null &&
     cam.orthoBottom != null
   ) {
-    // Visible half-height of a perspective frustum at the target is
-    // radius * tan(fov/2) — invert that to get the equivalent extent.
-    extent = (cam.orthoTop - cam.orthoBottom) / 2 / Math.tan(cam.fov / 2);
+    extent = cam.orthoTop - cam.orthoBottom;
+  } else {
+    // Vertical extent of the perspective frustum at the target distance.
+    extent = 2 * cam.radius * Math.tan(cam.fov / 2);
   }
-  cam.panningSensibility = PAN_SENSIBILITY_RADIUS_PRODUCT / Math.max(extent, 0.5);
+  extent = Math.max(extent, 0.0001);
+  const canvas = state.engine?.getRenderingCanvas();
+  const cssHeight = canvas?.clientHeight || 1;
+  const stepPerPixel =
+    extent <= PAN_TRACK_EXTENT
+      ? extent / cssHeight
+      : (PAN_TRACK_EXTENT / cssHeight) *
+        Math.pow(extent / PAN_TRACK_EXTENT, PAN_OUT_EXPONENT);
+  cam.panningSensibility = 1 / stepPerPixel;
 }
 
 /**
@@ -255,6 +267,10 @@ export function initEngine() {
   // step in world units) is ignored once wheelDeltaPercentage is set.
   camera.wheelDeltaPercentage = 0.01;
   camera.pinchDeltaPercentage = 0.01;
+  // Tame post-release glide: with viewport-scaled pan steps (see
+  // _updatePanSensibility) the default 0.9 inertia overshoots badly when
+  // zoomed out, where each pixel is a large world step.
+  camera.panningInertia = 0.6;
   camera.attachControl(canvas, true);
   state.camera = camera;
   initCameraPersistence(camera);

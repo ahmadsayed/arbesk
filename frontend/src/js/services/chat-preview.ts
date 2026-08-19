@@ -20,6 +20,8 @@ import { resolveFormatHandler } from "../formats/index.ts";
 
 /** Maximum simultaneously live previews; the oldest is auto-collapsed beyond this. */
 const MAX_LIVE_PREVIEWS = 3;
+/** Pan speed relative to exact cursor tracking; 0.2 = gentle drag. */
+const PREVIEW_PAN_SPEED = 0.2;
 
 export interface PreviewHandle {
   id: string;
@@ -84,6 +86,13 @@ function frameCameraOnMeshes(camera: any, meshes: any[]): void {
   if (!Number.isFinite(size) || size === 0) return;
   camera.setTarget(center);
   camera.radius = size * 1.5;
+  // Scale the clipping planes to the model: a fixed near/far clips huge
+  // models (default maxZ 1000) and wrecks depth precision on tiny ones.
+  camera.minZ = Math.max(size / 1000, 0.001);
+  camera.maxZ = size * 100;
+  // Zoom limits relative to the framed size, not absolute world units.
+  camera.lowerRadiusLimit = size * 0.05;
+  camera.upperRadiusLimit = size * 10;
 }
 
 /**
@@ -147,7 +156,15 @@ export async function createChatPreview(
       scene
     );
     camera.attachControl(canvas, true);
-    camera.wheelPrecision = 50;
+    // Proportional zoom, same as the Studio viewport (scene-graph.ts):
+    // the step is a percentage of the current radius, so it scales with
+    // model size. wheelPrecision (an absolute world-unit step) feels dead
+    // on large models — see ad7bdaf.
+    camera.wheelDeltaPercentage = 0.01;
+    camera.pinchDeltaPercentage = 0.01;
+    // Tame the post-release glide — with viewport-scaled pan steps the
+    // default 0.9 inertia overshoots noticeably in a small preview pane.
+    camera.panningInertia = 0.5;
     camera.minZ = 0.01;
 
     new BABYLON.HemisphericLight(
@@ -166,6 +183,16 @@ export async function createChatPreview(
 
     const renderLoop = () => {
       engine.resize();
+      // Viewport-relative panning. Babylon's pan step is a CONSTANT world
+      // distance per pixel (pixels / panningSensibility — no radius factor
+      // anywhere in the input→movement→camera chain, verified against
+      // 9.12.0 sources), which is imperceptible on large models. Scale the
+      // step to the visible extent instead; PAN_VIEWPORT_FRACTION tunes the
+      // feel: 1 = the world point under the cursor tracks it exactly.
+      const visibleWidth = 2 * camera.radius * Math.tan(camera.fov / 2);
+      const cssWidth = canvas.clientWidth || 1;
+      camera.panningSensibility =
+        cssWidth / (Math.max(visibleWidth, 0.001) * PREVIEW_PAN_SPEED);
       scene.render();
     };
     if (typeof IntersectionObserver !== "undefined") {
