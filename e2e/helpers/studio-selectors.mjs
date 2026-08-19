@@ -129,6 +129,10 @@ export const SELECTORS = {
   libraryDropOverlay: "#libraryDropOverlay",
   libraryItemCount: "#libraryItemCount",
   libraryLiveRegion: "#libraryLiveRegion",
+  libraryDetailsToggleBtn: "#libraryDetailsToggleBtn",
+  libraryDetails: "#libraryDetails",
+  libraryDetailsEmpty: "#libraryDetailsEmpty",
+  libraryDetailsTitle: "#libraryDetailsTitle",
   contextMenu: ".context-menu",
   contextMenuItem: ".context-menu-item",
 };

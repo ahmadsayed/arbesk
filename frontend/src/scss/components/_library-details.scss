@@ -1,0 +1,144 @@
+// ═══════════════════════════════════════════════════════════════════
+// Library Details Pane — left-docked sidebar for the full-page Library
+// view (docs/mockups/library-details-sidebar.html). Selection-driven,
+// read-only; the 3D preview reuses the chat-bubble preview pipeline.
+// ═══════════════════════════════════════════════════════════════════
+
+// Horizontal row below the toolbar: details pane + grid content. The
+// toolbar above and the statusbar below stay full-width.
+.library-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+// .library-content is now a row-flex child; keep it shrinkable so the
+// pane's fixed width always wins.
+.library-body .library-content {
+  min-width: 0;
+}
+
+.library-details {
+  flex: 0 0 280px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: var(--view-bg);
+  border-right: var(--border-size-1) solid var(--border-color);
+
+  // The pane sets display types that would defeat the `hidden` attribute.
+  [hidden] {
+    display: none !important;
+  }
+}
+
+.library-details-preview {
+  position: relative;
+  margin: var(--size-3);
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background-color: var(--viewport-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-2);
+  color: var(--dim-fg);
+
+  canvas,
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.library-details-orbit-hint {
+  position: absolute;
+  bottom: var(--size-1);
+  right: var(--size-2);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.library-details-title {
+  padding: 0 var(--size-3) var(--size-1);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-6);
+  overflow-wrap: anywhere;
+}
+
+.library-details-badge {
+  display: inline-block;
+  width: fit-content;
+  margin: 0 var(--size-3) var(--size-2);
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--font-size-0);
+  background-color: var(--card-bg);
+  color: var(--dim-fg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-round);
+}
+
+.library-details-rows {
+  padding: 0 var(--size-3);
+}
+
+.library-details-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-3);
+  padding: var(--size-2) 0;
+  border-top: var(--border-size-1) solid var(--border-color);
+  font-size: var(--font-size-1);
+
+  .k {
+    color: var(--dim-fg);
+    flex-shrink: 0;
+  }
+
+  .v {
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .v button {
+    background: none;
+    border: none;
+    color: var(--dim-fg);
+    cursor: pointer;
+    font: inherit;
+    padding: 0 0 0 var(--size-1);
+    vertical-align: middle;
+
+    &:hover {
+      color: var(--accent-fg);
+    }
+  }
+}
+
+// Empty / multi-select message; hidden while a single item is shown.
+.library-details-empty {
+  display: none;
+  flex: 1;
+  place-items: center;
+  text-align: center;
+  padding: var(--size-5);
+  color: var(--dim-fg);
+  font-size: var(--font-size-1);
+}
+
+.library-details[data-state="empty"],
+.library-details[data-state="multi"] {
+  .library-details-empty {
+    display: grid;
+  }
+
+  .library-details-preview,
+  .library-details-body {
+    display: none;
+  }
+}

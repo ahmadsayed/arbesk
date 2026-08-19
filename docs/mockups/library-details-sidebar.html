@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Library details sidebar — mock</title>
+<style>
+  /* Arbesk design tokens (from scss/base/_tokens.scss, dark) */
+  :root {
+    --choco-2:#f0e6d8; --choco-3:#e0d0bc; --choco-6:#a28060;
+    --choco-9:#664a30; --choco-10:#523a22; --choco-11:#3d2a18; --choco-12:#2a1a0e;
+    --gold-6:#8c673c;
+    --window-bg:var(--choco-12); --window-fg:var(--choco-2);
+    --view-bg:var(--choco-11); --view-fg:var(--choco-2);
+    --card-bg:var(--choco-10); --card-fg:var(--choco-3);
+    --border-color:var(--choco-9); --accent-bg:var(--gold-6); --accent-fg:#fff;
+    --dim-fg:var(--choco-6); --viewport-bg:#1e1e1e;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font: 14px/1.45 system-ui, sans-serif;
+    background: var(--window-bg); color: var(--window-fg);
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* ── toolbar (existing, abridged) ── */
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: var(--view-bg); border-bottom: 1px solid var(--border-color);
+  }
+  .toolbar .crumb { color: var(--dim-fg); }
+  .toolbar .crumb b { color: var(--view-fg); font-weight: 600; }
+  .toolbar .spacer { flex: 1; }
+  .tbtn {
+    background: transparent; color: var(--view-fg); border: 1px solid var(--border-color);
+    border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer;
+  }
+  .tbtn.active { background: var(--accent-bg); color: var(--accent-fg); border-color: transparent; }
+
+  /* ── main row: content + NEW details pane ── */
+  .main { flex: 1; display: flex; min-height: 0; }
+
+  .content { flex: 1 1 auto; overflow-y: auto; padding: 16px; }
+  .grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .item {
+    background: var(--card-bg); color: var(--card-fg);
+    border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 10px; cursor: pointer; text-align: center;
+  }
+  .item .thumb {
+    aspect-ratio: 4/3; border-radius: 6px; margin-bottom: 8px;
+    background: var(--viewport-bg); display: grid; place-items: center;
+    font-size: 28px; color: var(--dim-fg);
+  }
+  .item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item.selected { outline: 2px solid var(--accent-bg); }
+
+  /* ── NEW: details pane ── */
+  .details {
+    flex: 0 0 280px; min-width: 280px;
+    background: var(--view-bg); border-left: 1px solid var(--border-color);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .details.hidden { display: none; }
+
+  .preview {
+    margin: 12px; aspect-ratio: 1; border-radius: 8px;
+    background: var(--viewport-bg); border: 1px solid var(--border-color);
+    position: relative; display: grid; place-items: center;
+    color: var(--dim-fg); overflow: hidden;
+  }
+  .preview .orbit-hint {
+    position: absolute; bottom: 6px; right: 8px;
+    font-size: 11px; color: var(--dim-fg); opacity: .8;
+  }
+  .preview .cube { font-size: 56px; animation: spin 14s linear infinite; }
+  @keyframes spin { from { transform: rotateY(0) } to { transform: rotateY(360deg) } }
+
+  .dtitle { padding: 0 12px 4px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .dbadge {
+    display: inline-block; margin: 0 12px 10px; padding: 1px 8px; font-size: 11px;
+    border-radius: 999px; background: var(--card-bg); color: var(--dim-fg);
+    border: 1px solid var(--border-color); width: fit-content;
+  }
+  .drows { padding: 0 12px; }
+  .drow {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-top: 1px solid var(--border-color); font-size: 13px;
+  }
+  .drow .k { color: var(--dim-fg); flex-shrink: 0; }
+  .drow .v { text-align: right; overflow-wrap: anywhere; }
+  .drow .v button {
+    background: none; border: none; color: var(--dim-fg); cursor: pointer;
+    font: inherit; font-size: 12px; padding: 0 0 0 6px;
+  }
+  .drow .v button:hover { color: var(--accent-fg); }
+
+  /* empty + multi states (toggled by demo buttons) */
+  .empty {
+    flex: 1; display: none; place-items: center; text-align: center;
+    color: var(--dim-fg); padding: 24px; font-size: 13px;
+  }
+  .details[data-state="empty"] .empty { display: grid; }
+  .details[data-state="empty"] > :not(.empty) { display: none; }
+  .details[data-state="multi"] .empty { display: grid; }
+  .details[data-state="multi"] > :not(.empty) { display: none; }
+
+  .statusbar {
+    padding: 5px 12px; font-size: 12px; color: var(--dim-fg);
+    border-top: 1px solid var(--border-color); background: var(--view-bg);
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="tbtn">↑ Up</button>
+  <span class="crumb">Library / <b>My Collection</b></span>
+  <span class="spacer"></span>
+  <button class="tbtn">New Collection</button>
+  <button class="tbtn">Upload</button>
+  <button class="tbtn active" id="togglePane" title="Toggle details pane">☰ Details</button>
+</div>
+
+<div class="main">
+  <div class="content">
+    <div class="grid">
+      <div class="item selected" data-sel="1"><div class="thumb">🤖</div><div class="name">Robot Scout</div></div>
+      <div class="item"><div class="thumb">🏰</div><div class="name">Castle Tower</div></div>
+      <div class="item"><div class="thumb">🌳</div><div class="name">Low-poly Tree</div></div>
+      <div class="item"><div class="thumb">📦</div><div class="name">Crate</div></div>
+      <div class="item"><div class="thumb">🗂️</div><div class="name">Props Pack</div></div>
+      <div class="item"><div class="thumb">🚀</div><div class="name">Shuttle</div></div>
+    </div>
+  </div>
+
+  <!-- NEW SIDEBAR -->
+  <aside class="details" id="details" data-state="asset" aria-label="Details">
+    <div class="preview" title="Orbitable 3D preview (Babylon, same as chat bubbles)">
+      <span class="cube">🧊</span>
+      <span class="orbit-hint">drag to orbit</span>
+    </div>
+    <div class="dtitle">Robot Scout</div>
+    <span class="dbadge">Asset · token #7</span>
+    <div class="drows">
+      <div class="drow"><span class="k">Owner</span>
+        <span class="v">0x8f3C…9b2E <button title="Copy address">⧉</button></span></div>
+      <div class="drow"><span class="k">Modified</span><span class="v">Aug 17, 2026</span></div>
+      <div class="drow"><span class="k">Size</span><span class="v">2.4 MB</span></div>
+      <div class="drow"><span class="k">Children</span><span class="v">3 nodes</span></div>
+      <div class="drow"><span class="k">Role</span><span class="v">Owner</span></div>
+    </div>
+    <div class="empty">Select an item to see details.<br><br><i>(multi-select: “4 items selected”)</i></div>
+  </aside>
+</div>
+
+<div class="statusbar">6 items · demo: <a href="#" style="color:var(--dim-fg)" onclick="return setState('asset')">asset</a> · <a href="#" style="color:var(--dim-fg)" onclick="return setState('empty')">no selection</a> · <a href="#" style="color:var(--dim-fg)" onclick="return setState('multi')">multi-select</a></div>
+
+<script>
+  const pane = document.getElementById('details');
+  document.getElementById('togglePane').onclick = (e) => {
+    pane.classList.toggle('hidden'); e.target.classList.toggle('active');
+  };
+  function setState(s) { pane.dataset.state = s; return false; }
+  document.querySelectorAll('.item').forEach(el =>
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.item').forEach(i => i.classList.remove('selected'));
+      el.classList.add('selected'); setState('asset');
+    }));
+</script>
+</body>
+</html>

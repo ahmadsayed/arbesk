@@ -9,6 +9,16 @@
   min-height: 0;
 }
 
+// Main region (toolbar / body / statusbar) must stretch to fill the
+// layout — otherwise the grid shrinks to its content height and leaves
+// dead space below.
+#libraryMain {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 // Signed-out gate — center the empty state in the viewport instead of
 // leaving it stranded at the top of an otherwise blank page.
 #libraryGate {

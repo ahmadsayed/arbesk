@@ -45,6 +45,7 @@ import "./engine/undo-controller.ts";
 import { initLibraryGrid } from "./ui/library-grid.ts";
 import { initLibraryToolbar } from "./ui/library-toolbar.ts";
 import { initLibraryContextMenu } from "./ui/library-context-menu.ts";
+import { initLibraryDetails } from "./ui/library-details.ts";
 import {
   applyWalletGate,
   loadCurrentAssets,
@@ -122,6 +123,7 @@ document
 initLibraryGrid();
 initLibraryToolbar();
 initLibraryContextMenu();
+initLibraryDetails();
 applyWalletGate(Boolean(walletState.get().walletAddress));
 
 let _lastLoadedCollectionTokenId: string | number | null = null;
