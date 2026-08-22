@@ -5,6 +5,8 @@
  * Uses an object wrapper because ESM imported bindings are read-only.
  */
 
+import type { WorldBounds } from "./transforms.ts";
+
 export const DEFAULT_WOOD_COLOR = "#C19A6B";
 export const MAX_CHILD_ASSET_DEPTH = 5;
 // Deprecated alias — kept for backwards compatibility during migration.
@@ -103,6 +105,12 @@ export interface EngineState {
   activeCollectionCurrentAssetID: string | null;
   /** Cached non-chrome meshes for frameAll/snapView */
   _nonChromeMeshCache: BABYLON.AbstractMesh[] | null;
+  /**
+   * World bounds of the loaded content, cached by updateCameraRangeForScene()
+   * and read per-frame by clampOrthoCameraDistance() to keep an ortho camera
+   * clear of the model's extent along the view axis.
+   */
+  _sceneContentBounds: WorldBounds | null;
 }
 
 export const state: EngineState = {
@@ -133,4 +141,5 @@ export const state: EngineState = {
   activeCollectionRef: null,
   activeCollectionCurrentAssetID: null,
   _nonChromeMeshCache: null,
+  _sceneContentBounds: null,
 };

@@ -31,6 +31,9 @@ import {
   frameAll,
   frameSelected,
   snapView,
+  updateCameraRangeForScene,
+  updateGridCoverage,
+  clampOrthoCameraDistance,
   VIEW_FRONT,
   VIEW_RIGHT,
   VIEW_TOP,
@@ -42,6 +45,7 @@ import {
 import {
   initCameraPersistence,
   restoreCameraPose,
+  hasStoredCameraPose,
 } from "./camera-persistence.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -261,6 +265,12 @@ export function initEngine() {
   );
   camera.lowerRadiusLimit = 2;
   camera.upperRadiusLimit = 500;
+  // Near plane must stay far below the closest reachable camera distance:
+  // updateCameraRangeForScene() drops lowerRadiusLimit to 0.1 for large
+  // models, and with the Babylon default minZ of 1 the near plane then
+  // slices through walls the camera hugs (straight screen-parallel cuts).
+  // Matches the chat-preview cameras.
+  camera.minZ = 0.01;
   // Proportional wheel zoom: the step is a percentage of the current radius,
   // so zoom speed scales with how far out the camera is — large models get
   // large steps, small models keep a gentle feel. wheelPrecision (an absolute
@@ -421,6 +431,8 @@ export function initEngine() {
     state.engine.resize();
     _updateOrthoFrustumOnResize();
     _updatePanSensibility();
+    updateGridCoverage();
+    clampOrthoCameraDistance();
     state.scene.render();
   };
   state.engine.runRenderLoop(state.renderLoopFn);
@@ -814,10 +826,18 @@ on(EVENTS.OUTLINER_NODE_SELECTED, (e: {nodeId?: string, additive?: boolean}) => 
   }
 });
 
-// Restore the camera pose stored for this manifest (if any) so reopening an
-// asset in the same browser lands on the view the user left it in.
+// After a manifest finishes loading, adapt the camera zoom range and viewport
+// chrome to the model's real-world size (huge models are unviewable within
+// the default radius limit of 500). Then: assets with a saved camera pose
+// restore it; assets without one get framed whole. Framing unconditionally
+// here once stomped the restored pose — keep the two paths exclusive.
 on(EVENTS.SCENE_READY, (e: { manifestCid?: string }) => {
-  if (e?.manifestCid) restoreCameraPose(e.manifestCid);
+  updateCameraRangeForScene();
+  if (e?.manifestCid && hasStoredCameraPose(e.manifestCid)) {
+    restoreCameraPose(e.manifestCid);
+  } else {
+    frameAll();
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

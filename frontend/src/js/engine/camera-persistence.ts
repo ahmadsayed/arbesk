@@ -234,6 +234,20 @@ export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
 }
 
 /**
+ * True when a stored pose exists for the currently-open asset (same key
+ * resolution as restoreCameraPose). Read-only — does not apply, flush, or
+ * settle. Used to decide whether a freshly loaded scene should restore the
+ * saved view or frame the model instead.
+ *
+ * @param fallbackCid - manifest CID to fall back on when the asset has no
+ *                      on-chain identity yet
+ */
+export function hasStoredCameraPose(fallbackCid?: string): boolean {
+  const key = _poseStorageKey(fallbackCid ?? null);
+  return key ? _readPose(key) !== null : false;
+}
+
+/**
  * Restore the stored camera pose for the currently-open asset, if any.
  * Snaps instantly (no animation) so the view lands exactly where the user
  * left it. Assets with no stored pose get the default starting view, so a
