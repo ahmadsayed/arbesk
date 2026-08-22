@@ -18,7 +18,10 @@ path = "/usr/src/app/db/nostr.db"
 [network]
 address = "0.0.0.0"
 port = 7777
-remote_ip_header = "x-forwarded-for"
+# No remote_ip_header: the relay is exposed directly (no trusted reverse
+# proxy), so X-Forwarded-For would be client-controlled and let callers
+# spoof the IP the per-IP limits below key on. The socket peer address is
+# the only non-spoofable source. (GitHub issue #28)
 
 [limits]
 # Dev-friendly limits; tighten for any shared/testnet-facing deployment.
