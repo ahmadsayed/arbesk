@@ -865,3 +865,58 @@ describe("cancelTask", () => {
     await expect(cancelTask("", key)).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe("verbose upstream failure errors", () => {
+  beforeEach(() => {
+    jest.spyOn(global, "fetch").mockReset();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const timeoutError = () => {
+    const err = new Error("The operation was aborted due to timeout");
+    err.name = "TimeoutError";
+    return err;
+  };
+
+  it("tripoFetch timeout names the endpoint and budget (decimate, 240s)", async () => {
+    global.fetch = jest.fn().mockRejectedValue(timeoutError());
+    await expect(decimateTask("file_glb_1", key)).rejects.toMatchObject({
+      name: "TripoApiError",
+      status: 502,
+      message: "Tripo API timed out after 240s on POST /mesh/decimate",
+    });
+  });
+
+  it("tripoFetch timeout on a poll reports the 60s default and the task path", async () => {
+    global.fetch = jest.fn().mockRejectedValue(timeoutError());
+    await expect(pollTask("task_1", key)).rejects.toMatchObject({
+      name: "TripoApiError",
+      status: 502,
+      message: "Tripo API timed out after 60s on GET /tasks/task_1",
+    });
+  });
+
+  it("network-level failures name the endpoint too", async () => {
+    global.fetch = jest.fn().mockRejectedValue(new TypeError("fetch failed"));
+    await expect(createTask("a red cube", key)).rejects.toMatchObject({
+      name: "TripoApiError",
+      status: 502,
+      message:
+        "Tripo API unreachable on POST /generation/text-to-model: fetch failed",
+    });
+  });
+
+  it("downloadModel timeout never leaks the signed URL", async () => {
+    global.fetch = jest.fn().mockRejectedValue(timeoutError());
+    const signedUrl =
+      "https://cdn.tripo3d.ai/model.glb?Policy=secret&Signature=secret";
+    await expect(downloadModel(signedUrl)).rejects.toMatchObject({
+      name: "TripoApiError",
+      status: 502,
+      message: "Tripo model download timed out after 240s",
+    });
+  });
+});

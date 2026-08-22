@@ -20,9 +20,9 @@ export const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
  * Upstream timeout for calls that make Tripo ingest an uploaded model
  * server-side (file upload, texture, decimate, rig-check, rig). On a large
  * GLB (tens of MB) the task-creation response itself can exceed the default
- * 30s — observed live with a 41 MB rig-check source (2026-08-06).
+ * 60s — observed live with a 41 MB rig-check source (2026-08-06).
  */
-const TRIPO_INGEST_TIMEOUT_MS = 120_000;
+const TRIPO_INGEST_TIMEOUT_MS = 240_000;
 
 /** Options shared by generation task creators. */
 export interface TextureQualityOptions {
@@ -93,7 +93,7 @@ async function tripoFetch(
   apiKey: string,
   method: "GET" | "POST" = "GET",
   body?: object | FormData,
-  timeoutMs = 30_000,
+  timeoutMs = 60_000,
 ): Promise<any> {
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   const opts: RequestInit = {
@@ -108,7 +108,29 @@ async function tripoFetch(
   };
   if (body) opts.body = isForm ? body : JSON.stringify(body);
 
-  const res = await fetch(`${TRIPO_API_BASE}/${path}`, opts);
+  let res: Response;
+  try {
+    res = await fetch(`${TRIPO_API_BASE}/${path}`, opts);
+  } catch (e) {
+    const err = e as Error;
+    // AbortSignal.timeout rejects with a DOMException named "TimeoutError"
+    // ("The operation was aborted due to timeout") — name the endpoint and
+    // budget so [GEN] logs and the UI show WHICH Tripo call stalled instead
+    // of the raw abort text.
+    if (err.name === "TimeoutError" || err.name === "AbortError") {
+      throw new TripoApiError(
+        `Tripo API timed out after ${Math.round(timeoutMs / 1000)}s on ${method} /${path}`,
+        0,
+        502,
+      );
+    }
+    // Network-level failure (DNS, TLS, connection reset) — no HTTP status.
+    throw new TripoApiError(
+      `Tripo API unreachable on ${method} /${path}: ${err.message}`,
+      0,
+      502,
+    );
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     const preview = text.slice(0, 200);
@@ -692,7 +714,18 @@ export async function downloadModel(glbUrl: string): Promise<Buffer> {
     throw new TripoApiError("glbUrl is required", 0, 400);
   }
   console.log(`[GEN] Tripo download url_len=${glbUrl.length}`);
-  const res = await fetch(glbUrl, { signal: AbortSignal.timeout(120_000) });
+  // NOTE: never put glbUrl in an error message — it is a signed URL whose
+  // query string carries the access credentials.
+  let res: Response;
+  try {
+    res = await fetch(glbUrl, { signal: AbortSignal.timeout(240_000) });
+  } catch (e) {
+    const err = e as Error;
+    if (err.name === "TimeoutError" || err.name === "AbortError") {
+      throw new TripoApiError("Tripo model download timed out after 240s", 0, 502);
+    }
+    throw new TripoApiError(`Tripo model download failed: ${err.message}`, 0, 502);
+  }
   if (!res.ok) {
     throw new TripoApiError(`Model download failed: HTTP ${res.status}`, 0, 502);
   }
