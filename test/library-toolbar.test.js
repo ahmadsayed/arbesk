@@ -3,6 +3,7 @@
  */
 import { jest } from "@jest/globals";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
+import { DIALOG_HOST_FRAGMENT, flushDialog } from "./helpers/dialog-host.js";
 
 // The optimistic flow renders the card from the onPending callback, then
 // resolves with the mint result, so the mock invokes onPending before resolving.
@@ -56,6 +57,7 @@ beforeEach(() => {
     <button id="libraryListViewBtn" data-view="list"></button>
     <div id="libraryItems"></div>
     <span id="libraryLiveRegion"></span>
+    ${DIALOG_HOST_FRAGMENT}
   `;
 });
 
@@ -153,7 +155,7 @@ describe("create collection button", () => {
     const btn = document.getElementById("libraryCreateCollectionBtn");
     btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    await new Promise((r) => setTimeout(r, 0));
+    await flushDialog();
 
     const input = document.querySelector(".dialog-input");
     const confirmBtn = document.querySelector(".dialog-confirm-btn");
@@ -161,8 +163,7 @@ describe("create collection button", () => {
     input.value = "My Collection";
     confirmBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    await new Promise((r) => setTimeout(r, 0));
-    await new Promise((r) => setTimeout(r, 0));
+    await flushDialog();
 
     expect(_createNamedCollection).toHaveBeenCalledWith(
       "My Collection",

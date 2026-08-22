@@ -3,6 +3,7 @@
  */
 import { jest, expect, test, beforeEach, afterEach } from "@jest/globals";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
+import { DIALOG_HOST_FRAGMENT, flushDialog } from "./helpers/dialog-host.js";
 
 // The optimistic flow renders the card from the onPending callback, then
 // resolves with the mint result, so the mock invokes onPending before resolving.
@@ -34,6 +35,7 @@ beforeEach(() => {
   document.body.innerHTML = `
     <div id="libraryItems"></div>
     <div id="libraryLiveRegion"></div>
+    ${DIALOG_HOST_FRAGMENT}
   `;
 });
 
@@ -70,7 +72,7 @@ test("context-menu New Collection stays at the collections list level", async ()
 
   newCollectionItem.click();
   closeContextMenu();
-  await new Promise((r) => setTimeout(r, 0));
+  await flushDialog();
 
   const input = document.querySelector(".dialog-input");
   const confirmBtn = document.querySelector(".dialog-confirm-btn");
@@ -78,8 +80,7 @@ test("context-menu New Collection stays at the collections list level", async ()
   input.value = "My Collection";
   confirmBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+  await flushDialog();
 
   expect(_createNamedCollection).toHaveBeenCalledWith(
     "My Collection",

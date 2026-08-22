@@ -13,6 +13,7 @@ import {
   libraryState,
   _resetForTesting,
 } from "../frontend/src/js/state/library-state.js";
+import { DIALOG_HOST_FRAGMENT, flushDialog } from "./helpers/dialog-host.js";
 
 let lastTrapDeactivate;
 
@@ -33,6 +34,7 @@ beforeEach(() => {
       <div class="library-item" data-id="collection-1" data-type="collection"></div>
     </div>
     <div id="libraryLiveRegion"></div>
+    ${DIALOG_HOST_FRAGMENT}
   `;
   libraryState.set({
     collections: [{ id: "collection-1", tokenId: "1", name: "Weapons", status: "besked" }],
@@ -147,9 +149,13 @@ describe("openContextMenu / closeContextMenu", () => {
 describe("requestRename", () => {
   test("opens the rename dialog for the selected item", async () => {
     requestRename("asset-1-asset-a");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushDialog();
     expect(document.querySelector(".dialog-title").textContent).toBe("Rename");
     expect(document.querySelector(".dialog-input").value).toBe("a.glb");
+    // Close what we opened: the Alpine dialog store persists across tests,
+    // and a dangling open dialog re-renders into every later fixture.
+    document.querySelector(".dialog-cancel-btn").click();
+    await flushDialog();
   });
 });
 
