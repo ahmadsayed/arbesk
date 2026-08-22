@@ -219,6 +219,28 @@ export function hasStoredCameraPose(fallbackCid?: string): boolean {
 }
 
 /**
+ * Forget the stored camera pose for the currently-open asset (same key
+ * resolution as restoreCameraPose). Used by the "0" reset-view shortcut:
+ * after clearing, the next load treats the asset as never viewed and frames
+ * it whole. Any pending debounced write is dropped too, so it cannot rewrite
+ * the pose right after the clear.
+ */
+export function clearStoredCameraPose(): void {
+  if (_saveTimer) {
+    clearTimeout(_saveTimer);
+    _saveTimer = null;
+  }
+  _pendingSave = null;
+  const key = _poseStorageKey(null);
+  if (!key) return;
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + key);
+  } catch {
+    // Best-effort, same as writes — storage may be unavailable.
+  }
+}
+
+/**
  * Restore the stored camera pose for the currently-open asset, if any.
  * Snaps instantly (no animation) so the view lands exactly where the user
  * left it. Assets with no stored pose get the default starting view, so a

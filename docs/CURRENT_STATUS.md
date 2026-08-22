@@ -284,6 +284,7 @@ frontend/src/js/
 - Camera pose (orbit angles, radius, target) is saved to `localStorage`, keyed by canonical asset identity (`chainId:contractAddress:tokenId:assetId`).
 - Unsaved drafts fall back to a `cid:<manifestCid>` key.
 - Restore happens on `SCENE_READY`; assets with no stored pose reset to the default starting view so they never inherit the previous scene's camera.
+- `0` in the viewport forgets the stored pose and re-frames the scene — the same view as a first load.
 - A 90-frame post-restore "settle" re-enforces the pose to defeat Babylon v9 smooth-transition drift; cancelled immediately on pointer/wheel input.
 
 **3D Engine, Parametric, glTF Pipeline, Comments, Library** — unchanged from previous status; all fully implemented. See sections 3.2/3.3 of the 2026-06-28 snapshot for detail.

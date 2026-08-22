@@ -41,6 +41,7 @@ import {
   initCameraPersistence,
   restoreCameraPose,
   hasStoredCameraPose,
+  clearStoredCameraPose,
 } from "./camera-persistence.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -506,6 +507,12 @@ export function initEngine() {
         break;
       case "Home":
         e.preventDefault();
+        frameAll();
+        break;
+      case "0":
+        e.preventDefault();
+        // Forget the saved pose, then re-frame — same view as a first load.
+        clearStoredCameraPose();
         frameAll();
         break;
       case "f":

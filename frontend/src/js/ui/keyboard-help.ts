@@ -7,6 +7,7 @@ const SECTIONS = [
     rows: [
       ["F", "Frame selected"],
       ["Home", "Frame all"],
+      ["0", "Reset view (forget saved camera position)"],
       ["G", "Toggle grid & axes"],
       ["Esc", "Deselect"],
     ],
