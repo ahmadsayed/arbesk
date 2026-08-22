@@ -7,7 +7,6 @@ const SECTIONS = [
     rows: [
       ["F", "Frame selected"],
       ["Home", "Frame all"],
-      ["1 / 3 / 7", "Front / Side / Top view"],
       ["G", "Toggle grid & axes"],
       ["Esc", "Deselect"],
     ],

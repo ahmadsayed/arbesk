@@ -1,6 +1,6 @@
 ---
 name: babylon-3d-engine
-description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not rendering", "viewport is blank", "mesh disappeared", "tab crashes after load", camera wrong or clipping, black meshes, memory leaks, "clearScene breaks the grid", "orthographic view is broken", or scene lifecycle/disposal questions.
+description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not rendering", "viewport is blank", "mesh disappeared", "tab crashes after load", camera wrong or clipping, black meshes, memory leaks, "clearScene breaks the grid", or scene lifecycle/disposal questions.
 ---
 
 # Babylon.js 3D Engine — Arbesk Studio
@@ -11,10 +11,9 @@ description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not
 |---------|--------------|
 | Tab crashes after repeated loads | GPU leak → `references/memory-leaks.md` |
 | Mesh renders black | Light/material/normals → `references/asset-loading.md` |
-| Camera wrong/zoomed/clipping | Ortho corners or framing → `references/camera-and-views.md` |
+| Camera wrong/zoomed/clipping | Clip planes or framing → `references/camera-and-views.md` |
 | `clearScene()` removes grid/gizmo | Missing `metadata.isViewportChrome = true` → `references/scene-lifecycle.md` |
 | Resize breaks aspect / model stretches | Resize inside `runRenderLoop` pre-`scene.render()`; `engine.resize()` in handler or throttled loop → `references/scene-lifecycle.md` |
-| Ortho stretches on resize | Frustum not rebalanced → `references/camera-and-views.md` |
 | GLTF fails silently | Blob URL lifecycle/CORS/bad JSON → `references/asset-loading.md` |
 | Child transform not saved | Pointer walk stops at nodeId, not childRef → `references/child-world-transforms.md` |
 | Child world jumps after reload | `nodeAnchors` → inner, not outer anchor → `references/child-world-transforms.md` |
@@ -28,12 +27,11 @@ description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not
 4. Viewport chrome needs `metadata.isViewportChrome = true` or `clearScene()` removes it.
 5. Engine: `stencil: true` (HighlightLayer), `preserveDrawingBuffer: true` (thumbnails).
 6. Resize inside `runRenderLoop` before `scene.render()`; handler-only resize races one frame.
-7. Ortho mode: set `orthoLeft/Right/Top/Bottom` explicitly — never `radius`.
-8. Rebalance ortho frustum on every resize, else front/right/top views stretch.
-9. GLB/glTF load as blob URLs (glTF = composed JSON); `ImportMeshAsync` then `revokeObjectURL`.
-10. Attach `metadata.nodeId` to imported meshes — pointer observables walk the parent chain.
-11. Camera framing: 300ms animation — never snap instantly.
-12. Capture shared `defaultWoodMaterial` pre-disposal; dispose once at end.
+7. Perspective-only viewport: no ortho mode, no view snap presets (removed — one projection path, same as the library/chat previews).
+8. GLB/glTF load as blob URLs (glTF = composed JSON); `ImportMeshAsync` then `revokeObjectURL`.
+9. Attach `metadata.nodeId` to imported meshes — pointer observables walk the parent chain.
+10. Camera framing: 300ms animation — never snap instantly.
+11. Capture shared `defaultWoodMaterial` pre-disposal; dispose once at end.
 
 ## Debugging Order
 
@@ -60,6 +58,6 @@ description: Use for 3D viewport/engine problems in Arbesk Studio — "scene not
 - Read `references/memory-leaks.md` when GPU leaks/disposal/shared materials.
 - Read `references/scene-lifecycle.md` when engine init/cleanup/resize/chrome.
 - Read `references/asset-loading.md` when GLTF/GLB/blob URLs/metadata/placeholders.
-- Read `references/camera-and-views.md` when ArcRotateCamera/ortho/view presets/framing.
+- Read `references/camera-and-views.md` when ArcRotateCamera/clip planes/framing.
 - Read `references/child-world-transforms.md` when anchors/pointer walk/transform persistence.
 - Read `references/official-resources.md` for Babylon.js doc/forum links.

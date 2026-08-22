@@ -281,7 +281,7 @@ frontend/src/js/
 - Entry contract: `{ type: 'transform'|'color', label, items: [{ nodeId, meshName?, before, after }] }`; other edit types can hook in via `registerUndoApplier(type, fn)`.
 
 **Studio Camera Pose Persistence (`engine/camera-persistence.ts`)**
-- Camera pose (orbit angles, radius, target, ortho frustum) is saved to `localStorage`, keyed by canonical asset identity (`chainId:contractAddress:tokenId:assetId`).
+- Camera pose (orbit angles, radius, target) is saved to `localStorage`, keyed by canonical asset identity (`chainId:contractAddress:tokenId:assetId`).
 - Unsaved drafts fall back to a `cid:<manifestCid>` key.
 - Restore happens on `SCENE_READY`; assets with no stored pose reset to the default starting view so they never inherit the previous scene's camera.
 - A 90-frame post-restore "settle" re-enforces the pose to defeat Babylon v9 smooth-transition drift; cancelled immediately on pointer/wheel input.

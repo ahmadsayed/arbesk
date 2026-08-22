@@ -33,14 +33,12 @@ The safe pattern is to resize the engine **inside `runRenderLoop`, immediately b
 ```js
 state.engine.runRenderLoop(() => {
   state.engine.resize();
-  updateOrthoFrustumOnResize();
   state.scene.render();
 });
 ```
 
 Why this works:
 - `engine.resize()` sets the WebGL drawing buffer to the current CSS size and updates the camera aspect ratio.
-- `updateOrthoFrustumOnResize()` rebalances `orthoLeft/Right/Top/Bottom` when the camera is in orthographic mode.
 - `scene.render()` then uses a projection matrix that matches the canvas exactly.
 
 Keep the window/ResizeObserver handlers as well so non-render-loop code sees the updated size immediately:
@@ -49,7 +47,6 @@ Keep the window/ResizeObserver handlers as well so non-render-loop code sees the
 function resizeEngine() {
   if (!state.engine || !state.scene) return;
   state.engine.resize();
-  updateOrthoFrustumOnResize();
 }
 
 state.resizeEngineHandler = resizeEngine;

@@ -108,18 +108,6 @@ test.describe("resize regression", () => {
     await page.keyboard.press("Control+b");
     await resizeAndCheck(page, "05-sidebar-expanded");
 
-    await page.keyboard.press("1");
-    await resizeAndCheck(page, "06-ortho-baseline");
-    await resizeAndCheck(page, "07-ortho-wide", { width: 1400, height: 900 });
-    await resizeAndCheck(page, "08-ortho-narrow", { width: 900, height: 700 });
-
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.click("#sidebarToggle");
-    await resizeAndCheck(page, "09-ortho-sidebar-collapsed");
-
-    await page.keyboard.press("Control+b");
-    await resizeAndCheck(page, "10-ortho-sidebar-expanded");
-
     const info = await logCanvasState(page, "final");
     if (info) {
       expect(info.buffer.width).toBe(info.css.clientWidth);

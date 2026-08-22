@@ -737,7 +737,7 @@ The Studio remembers the last camera pose for each asset independently, so reope
 
 **Saved pose**
 
-`alpha`, `beta`, `radius`, `target`, `mode`, and (when in orthographic mode) `orthoLeft/Right/Bottom/Top`. Writes are debounced to one per second and flushed on `beforeunload` / `visibilitychange` so the last movement before closing the tab is not lost.
+`alpha`, `beta`, `radius`, `target`. Writes are debounced to one per second and flushed on `beforeunload` / `visibilitychange` so the last movement before closing the tab is not lost.
 
 **Restore timing**
 

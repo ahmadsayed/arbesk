@@ -1,8 +1,8 @@
 /**
  * Camera pose persistence
  *
- * Stores the viewport camera pose (orbit angles, radius, target, ortho
- * frustum) in localStorage, keyed per ASSET (chain:contract:token:assetId),
+ * Stores the viewport camera pose (orbit angles, radius, target) in
+ * localStorage, keyed per ASSET (chain:contract:token:assetId),
  * not per manifest version — the pose follows the asset across publishes and
  * version-history restores. Reopening the same asset in the same browser
  * restores the exact view the user left it in. Unsaved drafts (no on-chain
@@ -35,11 +35,6 @@ interface StoredCameraPose {
   beta: number;
   radius: number;
   target: [number, number, number];
-  mode: number;
-  orthoLeft?: number | null;
-  orthoRight?: number | null;
-  orthoBottom?: number | null;
-  orthoTop?: number | null;
 }
 
 /**
@@ -51,7 +46,6 @@ const DEFAULT_POSE: StoredCameraPose = {
   beta: Math.PI / 3,
   radius: 15,
   target: [0, 0, 0],
-  mode: 0, // BABYLON.Camera.PERSPECTIVE_CAMERA
 };
 
 /**
@@ -124,22 +118,6 @@ function _applyPose(camera: BABYLON.ArcRotateCamera, pose: StoredCameraPose) {
     pose.target[1],
     pose.target[2]
   );
-
-  if (
-    pose.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA &&
-    pose.orthoLeft != null &&
-    pose.orthoRight != null &&
-    pose.orthoBottom != null &&
-    pose.orthoTop != null
-  ) {
-    camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-    camera.orthoLeft = pose.orthoLeft;
-    camera.orthoRight = pose.orthoRight;
-    camera.orthoBottom = pose.orthoBottom;
-    camera.orthoTop = pose.orthoTop;
-  } else {
-    camera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
-  }
 }
 
 /**
@@ -211,14 +189,7 @@ export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
       beta: camera.beta,
       radius: camera.radius,
       target: [camera.target.x, camera.target.y, camera.target.z],
-      mode: camera.mode,
     };
-    if (camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
-      pose.orthoLeft = camera.orthoLeft;
-      pose.orthoRight = camera.orthoRight;
-      pose.orthoBottom = camera.orthoBottom;
-      pose.orthoTop = camera.orthoTop;
-    }
     _pendingSave = { key, pose };
 
     if (_saveTimer) clearTimeout(_saveTimer);

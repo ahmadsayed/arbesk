@@ -30,13 +30,8 @@ import {
 import {
   frameAll,
   frameSelected,
-  snapView,
   updateCameraRangeForScene,
   updateGridCoverage,
-  clampOrthoCameraDistance,
-  VIEW_FRONT,
-  VIEW_RIGHT,
-  VIEW_TOP,
 } from "./scene-camera.ts";
 import {
   loadAssetManifest,
@@ -122,49 +117,6 @@ on(EVENTS.THEME_CHANGED, _syncViewportBackground);
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * When the canvas aspect ratio changes while the camera is in orthographic
- * mode, the explicitly-set frustum becomes stale and the scene stretches.
- * Re-balance the frustum so the smaller dimension is preserved and the larger
- * one is expanded to match the new canvas aspect ratio.
- */
-function _updateOrthoFrustumOnResize() {
-  const cam = state.camera;
-  if (
-    !cam ||
-    cam.mode !== BABYLON.Camera.ORTHOGRAPHIC_CAMERA ||
-    cam.orthoLeft == null ||
-    cam.orthoRight == null ||
-    cam.orthoBottom == null ||
-    cam.orthoTop == null
-  ) {
-    return;
-  }
-
-  const canvas = state.engine.getRenderingCanvas();
-  if (!canvas || canvas.height === 0) return;
-
-  const halfW = (cam.orthoRight - cam.orthoLeft) / 2;
-  const halfH = (cam.orthoTop - cam.orthoBottom) / 2;
-  if (halfW === 0 || halfH === 0) return;
-
-  const canvasAspect = canvas.width / canvas.height;
-  const frustumAspect = halfW / halfH;
-
-  let newHalfW = halfW;
-  let newHalfH = halfH;
-  if (canvasAspect > frustumAspect) {
-    newHalfW = halfH * canvasAspect;
-  } else {
-    newHalfH = halfW / canvasAspect;
-  }
-
-  cam.orthoLeft = -newHalfW;
-  cam.orthoRight = newHalfW;
-  cam.orthoBottom = -newHalfH;
-  cam.orthoTop = newHalfH;
-}
-
-/**
  * Viewport-relative panning with damped zoom-out. Babylon's pan step is a
  * CONSTANT world distance per pixel (pixels / panningSensibility — no
  * radius factor anywhere in the input→movement→camera chain, verified
@@ -174,8 +126,6 @@ function _updateOrthoFrustumOnResize() {
  *   world point under the cursor by 1px worth of world units);
  * - above it: sublinear (power PAN_OUT_EXPONENT) so zoomed-out panning
  *   stays tame instead of jumping in huge world steps.
- * In ortho mode the radius is decoupled from the frustum, so the extent
- * comes from the ortho bounds directly.
  */
 const PAN_TRACK_EXTENT = 100; // world units of visible height
 const PAN_OUT_EXPONENT = 0.35; // damping curve above the tracking threshold
@@ -183,18 +133,8 @@ const PAN_OUT_EXPONENT = 0.35; // damping curve above the tracking threshold
 function _updatePanSensibility() {
   const cam = state.camera;
   if (!cam) return;
-  let extent;
-  if (
-    cam.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA &&
-    cam.orthoTop != null &&
-    cam.orthoBottom != null
-  ) {
-    extent = cam.orthoTop - cam.orthoBottom;
-  } else {
-    // Vertical extent of the perspective frustum at the target distance.
-    extent = 2 * cam.radius * Math.tan(cam.fov / 2);
-  }
-  extent = Math.max(extent, 0.0001);
+  // Vertical extent of the perspective frustum at the target distance.
+  const extent = Math.max(2 * cam.radius * Math.tan(cam.fov / 2), 0.0001);
   const canvas = state.engine?.getRenderingCanvas();
   const cssHeight = canvas?.clientHeight || 1;
   const stepPerPixel =
@@ -284,30 +224,6 @@ export function initEngine() {
   camera.attachControl(canvas, true);
   state.camera = camera;
   initCameraPersistence(camera);
-
-  // Custom ortho-mode wheel zoom. Babylon's default wheel handler changes
-  // `radius`, which has no effect on the ortho frustum when the four
-  // orthoLeft/Right/Top/Bottom properties are set explicitly. We scale
-  // those four bounds proportionally instead.
-  canvas.addEventListener(
-    "wheel",
-    (e) => {
-      if (
-        state.camera &&
-        state.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA
-      ) {
-        e.preventDefault();
-        // Smooth exponential zoom: deltaY ~100 per tick → ~10% step
-        const factor = Math.exp(e.deltaY * 0.0015);
-        const cam = state.camera;
-        cam.orthoLeft *= factor;
-        cam.orthoRight *= factor;
-        cam.orthoTop *= factor;
-        cam.orthoBottom *= factor;
-      }
-    },
-    { passive: false }
-  );
 
   const hemiLight = new BABYLON.HemisphericLight(
     "hemiLight",
@@ -429,10 +345,8 @@ export function initEngine() {
   // toggling between the Studio and Library views.
   state.renderLoopFn = () => {
     state.engine.resize();
-    _updateOrthoFrustumOnResize();
     _updatePanSensibility();
     updateGridCoverage();
-    clampOrthoCameraDistance();
     state.scene.render();
   };
   state.engine.runRenderLoop(state.renderLoopFn);
@@ -442,7 +356,6 @@ export function initEngine() {
   function resizeEngine() {
     if (!state.engine || !state.scene) return;
     state.engine.resize();
-    _updateOrthoFrustumOnResize();
   }
 
   state.resizeEngineHandler = resizeEngine;
@@ -600,18 +513,6 @@ export function initEngine() {
           e.preventDefault();
           frameSelected();
         }
-        break;
-      case "1":
-        e.preventDefault();
-        snapView(VIEW_FRONT);
-        break;
-      case "3":
-        e.preventDefault();
-        snapView(VIEW_RIGHT);
-        break;
-      case "7":
-        e.preventDefault();
-        snapView(VIEW_TOP);
         break;
       case "g":
         e.preventDefault();
@@ -875,7 +776,6 @@ export function resumeRenderLoop() {
   state.engine.stopRenderLoop();
   state.engine.runRenderLoop(state.renderLoopFn);
   state.engine.resize();
-  _updateOrthoFrustumOnResize();
 }
 
 /**

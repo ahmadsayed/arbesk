@@ -62,7 +62,7 @@ function fakeChrome() {
   return { scaling: new V3(1, 1, 1) };
 }
 
-let state, updateCameraRangeForScene, updateGridCoverage, clampOrthoCameraDistance;
+let state, updateCameraRangeForScene, updateGridCoverage;
 
 beforeAll(async () => {
   globalThis.BABYLON = {
@@ -73,13 +73,11 @@ beforeAll(async () => {
   ({
     updateCameraRangeForScene,
     updateGridCoverage,
-    clampOrthoCameraDistance,
   } = await import("../../frontend/src/js/engine/scene-camera.js"));
 });
 
 beforeEach(() => {
   state._nonChromeMeshCache = null;
-  state._sceneContentBounds = null;
   const chrome = { groundGrid: fakeChrome(), axisX: fakeChrome(), axisZ: fakeChrome() };
   state.scene = {
     meshes: [],
@@ -193,114 +191,4 @@ test("grid coverage: shallow view angles extend the grid further", () => {
   state.camera.beta = 1.2;
   updateGridCoverage();
   expect(grid.scaling.x).toBe(8); // 100/0.932/20 = 5.4 → pow2
-});
-
-test("ortho guard: camera stranded inside the model is pushed outside", () => {
-  // The "dissolving goat" state: ortho camera at radius 0.109 with the model
-  // spanning ±0.5 — Babylon's wheel input shrinks radius invisibly in ortho.
-  state.camera.mode = 1; // ORTHOGRAPHIC_CAMERA
-  state.camera.minZ = 0.01;
-  state.camera.maxZ = 200;
-  state.camera.orthoTop = 0.45;
-  state.camera.orthoBottom = -0.45;
-  state.camera.radius = 0.109;
-
-  clampOrthoCameraDistance();
-
-  // perspective-equivalent radius: span/(2·tan(fov/2)) = 0.9/0.8456 ≈ 1.0644,
-  // plus the 0.1 margin — still well outside the ±0.5 model
-  expect(state.camera.radius).toBeCloseTo(1.1644, 3);
-  expect(state.camera.maxZ).toBe(200); // already sufficient, untouched
-});
-
-test("ortho guard: far plane grows when ortho zoom-out outruns it", () => {
-  state.camera.mode = 1;
-  state.camera.minZ = 0.01;
-  state.camera.maxZ = 10;
-  state.camera.orthoTop = 100;
-  state.camera.orthoBottom = -100;
-  state.camera.radius = 5;
-
-  clampOrthoCameraDistance();
-
-  // perspective-equivalent: 200/0.84559 ≈ 236.622, plus margin
-  expect(state.camera.radius).toBeCloseTo(236.622, 2);
-  // No cached scene bounds → conservative fallback: camera→target distance
-  // plus the same extent behind the target, plus the near margin.
-  expect(state.camera.maxZ).toBeCloseTo(236.622 + 100 + 0.1, 2);
-});
-
-test("ortho guard: zoomed-in ortho of a deep model slices into it (breakthrough)", () => {
-  // Deep model with the cave's proportions: 1200 along X, 200 in Y/Z.
-  state.scene.meshes = [fakeMesh([-600, -100, -100], [600, 100, 100])];
-  updateCameraRangeForScene(); // caches content bounds; maxZ=120000, minZ=1.2
-
-  // Ortho RIGHT view (looking down -X), zoomed IN: frustum span 100 is
-  // tighter than the model's 200 height, so the model no longer fits and the
-  // radius tracks the frustum — the near plane slices into the model as the
-  // user zooms, matching the perspective preview's "break through" feel.
-  state.camera.mode = 1;
-  state.camera.orthoTop = 50;
-  state.camera.orthoBottom = -50;
-  state.camera.target = new V3(0, 0, 0);
-  state.camera.position = new V3(652, 0, 0);
-  state.camera.radius = 30;
-
-  clampOrthoCameraDistance();
-
-  // Zoomed branch: the radius ramps down from the surface distance in
-  // proportion to the zoom — fwd·(span/2)/upExtent = 600·0.5 = 300 dominates
-  // the perspective-equivalent 118.26 — plus margin minZ*10 = 12.
-  expect(state.camera.radius).toBeCloseTo(312, 3);
-  expect(state.camera.maxZ).toBe(120000); // already ample, untouched
-});
-
-test("ortho guard: fit view of a deep model keeps the camera outside", () => {
-  state.scene.meshes = [fakeMesh([-600, -100, -100], [600, 100, 100])];
-  updateCameraRangeForScene();
-
-  // Same view, but the frustum shows the WHOLE model (span 1304 ≥ height
-  // 200): the camera must stay clear of the 600-deep extent or the snap view
-  // would slice the model it is meant to frame.
-  state.camera.mode = 1;
-  state.camera.orthoTop = 652;
-  state.camera.orthoBottom = -652;
-  state.camera.target = new V3(0, 0, 0);
-  state.camera.position = new V3(652, 0, 0);
-  state.camera.radius = 30; // decayed by Babylon's wheel input
-
-  clampOrthoCameraDistance();
-
-  // Fit branch: max(perspective-equivalent 1304/0.8456 ≈ 1542.1, depth 600)
-  // plus margin 12 — well outside the model.
-  expect(state.camera.radius).toBeCloseTo(1554.1, 1);
-  expect(state.camera.maxZ).toBe(120000);
-});
-
-test("ortho guard: perspective camera is never touched", () => {
-  state.camera.mode = 0; // PERSPECTIVE_CAMERA
-  state.camera.radius = 0.109;
-  state.camera.orthoTop = 0.45;
-  state.camera.orthoBottom = -0.45;
-
-  clampOrthoCameraDistance();
-
-  expect(state.camera.radius).toBe(0.109);
-});
-
-test("ortho guard: radius is pinned to the frustum even when larger", () => {
-  // Radius is invisible in ortho, so any value a writer leaves behind (a
-  // decayed pose restore, snapView's initial estimate) is replaced by the
-  // frustum-derived one — hidden radius state can no longer accumulate.
-  state.camera.mode = 1;
-  state.camera.minZ = 0.01;
-  state.camera.maxZ = 200;
-  state.camera.orthoTop = 0.45;
-  state.camera.orthoBottom = -0.45;
-  state.camera.radius = 3;
-
-  clampOrthoCameraDistance();
-
-  // pinned to the perspective-equivalent of the span, not left at 3
-  expect(state.camera.radius).toBeCloseTo(1.1644, 3);
 });
