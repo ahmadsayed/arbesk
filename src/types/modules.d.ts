@@ -29,7 +29,7 @@ declare module "ipfs-http-client" {
     };
     cat(
       cid: string,
-      options?: { signal?: AbortSignal },
+      options?: { signal?: AbortSignal; timeout?: number },
     ): AsyncIterable<Uint8Array | string>;
   }
 
@@ -128,4 +128,25 @@ declare module "nostr-tools" {
   export const utils: {
     hexToBytes(hex: string): Uint8Array;
   };
+}
+
+declare module "nostr-tools/abstract-pool" {
+  import type { NostrEvent } from "nostr-tools";
+
+  export class AbstractSimplePool {
+    constructor(opts: {
+      websocketImplementation?: typeof import("ws").WebSocket;
+      verifyEvent?: (event: NostrEvent) => boolean;
+      enablePing?: boolean;
+      enableReconnect?: boolean;
+      maxWaitForConnection?: number;
+      [key: string]: unknown;
+    });
+    querySync(
+      relays: string[],
+      filter: Record<string, unknown>,
+      params?: { maxWait?: number },
+    ): Promise<NostrEvent[]>;
+    close(relays: string[]): void;
+  }
 }

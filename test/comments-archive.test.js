@@ -23,6 +23,13 @@ describe("Comments Archive Service", () => {
 
       // Fire onopen on the next tick so connect() can resolve.
       setTimeout(() => {
+        if (MockWebSocket.failConnect) {
+          // Simulate an unreachable relay: error + close, never open.
+          this.readyState = 3;
+          if (this.onerror) this.onerror(new Error("connect ECONNREFUSED"));
+          if (this.onclose) this.onclose({ message: "connection refused" });
+          return;
+        }
         this.readyState = 1; // OPEN
         if (this.onopen) this.onopen();
       }, 0);
@@ -132,5 +139,17 @@ describe("Comments Archive Service", () => {
     expect(result.eventCount).toBe(0);
     const archivePayload = JSON.parse(mockStorage.add.mock.calls[0][0]);
     expect(archivePayload.events).toEqual([]);
+  });
+
+  test("returns empty archive when the relay is unreachable", async () => {
+    MockWebSocket.failConnect = true;
+    try {
+      const result = await archiveCommentsForAsset("31337:0xabc:4:asset_4", mockStorage);
+      expect(result.eventCount).toBe(0);
+      const archivePayload = JSON.parse(mockStorage.add.mock.calls[0][0]);
+      expect(archivePayload.events).toEqual([]);
+    } finally {
+      MockWebSocket.failConnect = false;
+    }
   });
 });

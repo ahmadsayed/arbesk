@@ -12,6 +12,8 @@
 
 import { WebSocket } from "ws";
 import { Relay } from "nostr-tools";
+import type { NostrEvent } from "nostr-tools";
+import { AbstractSimplePool } from "nostr-tools/abstract-pool";
 
 /** Nostr kind for Arbesk asset chat/comment events. */
 export const KIND_CHAT = 1;
@@ -26,7 +28,7 @@ export const TAG_ASSET = "asset";
  * skip verification here while still relying on nostr-tools for wire protocol
  * handling and event serialization/signing.
  */
-const SKIP_VERIFY = () => true;
+const SKIP_VERIFY = (_event: NostrEvent): boolean => true;
 
 /**
  * Create a nostr-tools Relay wired to the Node `ws` implementation.
@@ -37,6 +39,23 @@ export function createRelay(url: string, opts: Record<string, unknown> = {}): Re
     verifyEvent: SKIP_VERIFY,
     enableReconnect: false,
     ...opts,
+  });
+}
+
+/**
+ * Create a nostr-tools pool wired to the Node `ws` implementation and the
+ * same skip-verify policy as {@link createRelay}. Use this for one-shot
+ * queries (`pool.querySync`) instead of hand-rolling the REQ/EOSE lifecycle
+ * on a bare Relay. Note: `SimplePool` itself is not used because its
+ * constructor type only accepts ping/reconnect options — `AbstractSimplePool`
+ * takes `websocketImplementation`/`verifyEvent` directly.
+ */
+export function createPool(): AbstractSimplePool {
+  return new AbstractSimplePool({
+    websocketImplementation: WebSocket,
+    verifyEvent: SKIP_VERIFY,
+    enableReconnect: false,
+    maxWaitForConnection: 3000,
   });
 }
 

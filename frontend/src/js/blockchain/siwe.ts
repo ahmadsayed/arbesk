@@ -1,29 +1,32 @@
 /**
- * Sign-In with Ethereum (EIP-4361) Message Builder
+ * Sign-In with Ethereum (EIP-4361) message builder.
  *
- * Builds standard SIWE messages for wallet authentication.
- * No external dependencies - pure string formatting.
+ * Thin wrapper over the official `siwe` package — the same library the
+ * backend verifies with (`src/api/siwe-verify.ts`) — so the emitted message
+ * round-trips through `new SiweMessage(...)` by construction. The address is
+ * EIP-55 checksummed with viem's `getAddress` because siwe's ABNF parser
+ * rejects non-checksummed addresses (previously this piggybacked on the
+ * Web3 CDN global, which is not guaranteed to be loaded at sign-in time).
+ *
+ * Both packages are loaded via the importmap in `pug/includes/head.pug`.
  *
  * Usage:
  *   import { buildSiweMessage, generateNonce } from './siwe.ts';
  *   const message = buildSiweMessage(domain, address, nonce, chainId);
  */
 
-/**
- * Generate a random nonce for SIWE.
- * @returns 16-character alphanumeric nonce
- */
-export function generateNonce(): string {
-  const array = new Uint8Array(16);
-  crypto.getRandomValues(array);
-  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
-}
+import { SiweMessage, generateNonce } from "siwe";
+import { getAddress } from "viem/utils";
+
+export { generateNonce };
 
 /**
  * Build a standard EIP-4361 SIWE message.
  *
- * @param domain - The domain requesting the signature (e.g., "localhost:9090")
- * @param address - The Ethereum address (0x-prefixed)
+ * @param domain - The domain requesting the signature (callers pass the full
+ *   origin, e.g. "http://localhost:9090"; the backend strips the scheme when
+ *   comparing against the request host)
+ * @param address - The Ethereum address (0x-prefixed; checksummed here)
  * @param nonce - A random nonce for replay protection
  * @param chainId - The Ethereum chain ID
  * @param statement - Human-readable statement
@@ -34,74 +37,18 @@ export function buildSiweMessage(
   address: string,
   nonce: string,
   chainId: number,
-  statement = "Sign in to Arbesk Studio"
+  statement = "Sign in to Arbesk Studio",
 ): string {
-  const issuedAt = new Date().toISOString();
-  // Use the full origin (scheme + host) as the SIWE URI so strict parsers
-  // accept it even when the host is an IP address like 127.0.0.1:9090.
-  const uri = typeof window !== "undefined" ? window.location.origin : "";
-  // Ensure the address is EIP-55 checksummed so strict SIWE parsers
-  // (e.g., the official `siwe` package) accept the message.
-  const checksumAddress =
-    typeof window !== "undefined" && window.Web3?.utils?.toChecksumAddress
-      ? window.Web3.utils.toChecksumAddress(address)
-      : address;
-
-  return `${domain} wants you to sign in with your Ethereum account:\n${checksumAddress}\n\n${statement}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
-}
-
-/** Fields extracted from a SIWE message by {@link parseSiweMessage}. */
-export interface SiweMessageFields {
-  domain: string | null;
-  address: string | null;
-  statement: string | null;
-  uri: string | null;
-  version: string | null;
-  chainId: number | null;
-  nonce: string | null;
-  issuedAt: string | null;
-}
-
-/**
- * Parse a SIWE message to extract its fields.
- */
-export function parseSiweMessage(message: string): SiweMessageFields | null {
-  if (!message || typeof message !== "string") return null;
-
-  try {
-    const lines = message.split("\n");
-
-    // First line: "{domain} wants you to sign in with your Ethereum account:"
-    const domainMatch = lines[0]?.match(/^(.+?) wants you to sign in/);
-    const domain = domainMatch ? domainMatch[1] : null;
-
-    // Second line: address
-    const address = lines[1]?.trim() || null;
-
-    // Find statement (line after blank line, before URI)
-    let statement: string | null = null;
-    let uri: string | null = null;
-    let version: string | null = null;
-    let chainId: number | null = null;
-    let nonce: string | null = null;
-    let issuedAt: string | null = null;
-
-    for (const line of lines) {
-      if (line.startsWith("URI: ")) uri = line.slice(5);
-      if (line.startsWith("Version: ")) version = line.slice(9);
-      if (line.startsWith("Chain ID: ")) chainId = parseInt(line.slice(10), 10);
-      if (line.startsWith("Nonce: ")) nonce = line.slice(7);
-      if (line.startsWith("Issued At: ")) issuedAt = line.slice(11);
-    }
-
-    // Statement is the line between the blank line and URI
-    const blankLineIdx = lines.indexOf("");
-    if (blankLineIdx >= 0 && lines[blankLineIdx + 1] && !lines[blankLineIdx + 1].includes(":")) {
-      statement = lines[blankLineIdx + 1];
-    }
-
-    return { domain, address, statement, uri, version, chainId, nonce, issuedAt };
-  } catch {
-    return null;
-  }
+  return new SiweMessage({
+    domain,
+    address: getAddress(address as `0x${string}`),
+    statement,
+    // Full origin (scheme + host) as the URI so strict parsers accept it
+    // even when the host is an IP address like 127.0.0.1:9090.
+    uri: typeof window !== "undefined" ? window.location.origin : "",
+    version: "1",
+    chainId,
+    nonce,
+    issuedAt: new Date().toISOString(),
+  }).toMessage();
 }

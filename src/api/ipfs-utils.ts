@@ -69,7 +69,7 @@ export async function maybeDecompress(
  *
  * @param ipfs - ipfs-http-client instance
  * @param cid - IPFS CID to read
- * @param timeoutMs - AbortController timeout in ms
+ * @param timeoutMs - read timeout in ms (native `AbortOptions.timeout` of ipfs-http-client)
  * @returns Decoded manifest text
  * @throws {Error} If the CID is not found or the operation times out
  */
@@ -79,30 +79,23 @@ export async function catManifest(
   timeoutMs = 15000,
 ): Promise<string> {
   console.log(`[IPFS] cat ${cid}`);
-  const catController = new AbortController();
-  const catTimeoutId = setTimeout(() => catController.abort(), timeoutMs);
-
-  try {
-    const chunks: (Uint8Array | string)[] = [];
-    for await (const chunk of ipfs.cat(cid, { signal: catController.signal })) {
-      chunks.push(chunk);
-    }
-
-    const data = chunks
-      .map((chunk) => {
-        if (chunk instanceof Uint16Array) {
-          return String.fromCharCode(...(chunk as Uint16Array));
-        }
-        if (typeof chunk === "string") return chunk;
-        return new TextDecoder().decode(chunk);
-      })
-      .join("");
-
-    console.log(`[IPFS] cat ${cid} → ${data.length} chars`);
-    return data;
-  } finally {
-    clearTimeout(catTimeoutId);
+  const chunks: (Uint8Array | string)[] = [];
+  for await (const chunk of ipfs.cat(cid, { timeout: timeoutMs })) {
+    chunks.push(chunk);
   }
+
+  const data = chunks
+    .map((chunk) => {
+      if (chunk instanceof Uint16Array) {
+        return String.fromCharCode(...(chunk as Uint16Array));
+      }
+      if (typeof chunk === "string") return chunk;
+      return new TextDecoder().decode(chunk);
+    })
+    .join("");
+
+  console.log(`[IPFS] cat ${cid} → ${data.length} chars`);
+  return data;
 }
 
 /**
@@ -112,7 +105,7 @@ export async function catManifest(
  *
  * @param ipfs - ipfs-http-client instance
  * @param cid - IPFS CID to read
- * @param timeoutMs - AbortController timeout in ms
+ * @param timeoutMs - read timeout in ms (native `AbortOptions.timeout` of ipfs-http-client)
  * @returns Raw bytes
  * @throws {Error} If the CID is not found or the operation times out
  */
@@ -122,25 +115,18 @@ export async function catBytes(
   timeoutMs = 15000,
 ): Promise<Buffer> {
   console.log(`[IPFS] catBytes ${cid}`);
-  const catController = new AbortController();
-  const catTimeoutId = setTimeout(() => catController.abort(), timeoutMs);
-
-  try {
-    const chunks: Buffer[] = [];
-    for await (const chunk of ipfs.cat(cid, { signal: catController.signal })) {
-      if (chunk instanceof Uint16Array) {
-        // Test-mock path: char codes that encode a UTF-8 string.
-        chunks.push(Buffer.from(String.fromCharCode(...(chunk as Uint16Array)), "utf-8"));
-      } else {
-        chunks.push(toBuffer(chunk));
-      }
+  const chunks: Buffer[] = [];
+  for await (const chunk of ipfs.cat(cid, { timeout: timeoutMs })) {
+    if (chunk instanceof Uint16Array) {
+      // Test-mock path: char codes that encode a UTF-8 string.
+      chunks.push(Buffer.from(String.fromCharCode(...(chunk as Uint16Array)), "utf-8"));
+    } else {
+      chunks.push(toBuffer(chunk));
     }
-    const buffer = Buffer.concat(chunks);
-    console.log(`[IPFS] catBytes ${cid} → ${buffer.length} bytes`);
-    return buffer;
-  } finally {
-    clearTimeout(catTimeoutId);
   }
+  const buffer = Buffer.concat(chunks);
+  console.log(`[IPFS] catBytes ${cid} → ${buffer.length} bytes`);
+  return buffer;
 }
 
 const IPFS_URI_RE = /ipfs:\/\/([a-zA-Z0-9]+)/g;

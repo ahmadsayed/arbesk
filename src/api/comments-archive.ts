@@ -15,7 +15,7 @@
  */
 
 import { NOSTR_RELAY_URL } from "../config.ts";
-import { KIND_CHAT, TAG_ASSET, createRelay } from "./nostr-relay.ts";
+import { KIND_CHAT, TAG_ASSET, createPool } from "./nostr-relay.ts";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -73,40 +73,24 @@ export async function archiveCommentsForAsset(
 
 /**
  * Query the private Nostr relay for all kind:1 events carrying the given asset
- * tag. Uses nostr-tools SimplePool to handle the REQ/EVENT/EOSE lifecycle.
+ * tag. The pool's `querySync` handles the REQ/EVENT/EOSE lifecycle and resolves
+ * with the collected events at EOSE (or after `maxWait`); it never rejects —
+ * an unreachable relay simply yields an empty list, which the catch below also
+ * covers for any residual failure.
  */
 async function queryRelayForAsset(assetTag: string): Promise<object[]> {
-  const relay = createRelay(NOSTR_RELAY_URL);
-  const filter = {
-    kinds: [KIND_CHAT],
-    [`#${TAG_ASSET}`]: [assetTag],
-    limit: RELAY_EVENT_LIMIT,
-  };
+  const pool = createPool();
 
   try {
-    await relay.connect();
-    const events = await new Promise<any[]>((resolve, _reject) => {
-      const collected: any[] = [];
-      let finished = false;
-      const sub = relay.subscribe([filter], {
-        onevent(event) {
-          collected.push(event);
-        },
-        oneose() {
-          if (finished) return;
-          finished = true;
-          sub.close();
-          resolve(collected);
-        },
-        onclose() {
-          if (finished) return;
-          finished = true;
-          resolve(collected);
-        },
-        eoseTimeout: RELAY_QUERY_TIMEOUT_MS,
-      });
-    });
-    return events;
+    return await pool.querySync(
+      [NOSTR_RELAY_URL],
+      {
+        kinds: [KIND_CHAT],
+        [`#${TAG_ASSET}`]: [assetTag],
+        limit: RELAY_EVENT_LIMIT,
+      },
+      { maxWait: RELAY_QUERY_TIMEOUT_MS },
+    );
   } catch (err) {
     const e = err as Error;
     const message = e.message || String(err);
@@ -116,6 +100,6 @@ async function queryRelayForAsset(assetTag: string): Promise<object[]> {
     // the route testable without a live relay.
     return [];
   } finally {
-    relay.close();
+    pool.close([NOSTR_RELAY_URL]);
   }
 }
