@@ -9,7 +9,7 @@ import {
 import {
   decomposeGLBAsync,
   editSourceColorsAsync,
-} from "../../gltf/async-gltf.ts";
+} from "../../asset-core/gltf/async-gltf.ts";
 import type {
   FormatHandler,
   FormatLoadContext,

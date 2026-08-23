@@ -13,7 +13,7 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
-import { composeGlTFToBlobAsync } from "../gltf/async-gltf.ts";
+import { composeGlTFToBlobAsync } from "../asset-core/gltf/async-gltf.ts";
 import { getAssetState } from "../domain/asset.ts";
 import { announceStatus } from "./api.ts";
 

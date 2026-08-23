@@ -39,7 +39,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/gltf/async-gltf.js",
+    "../../frontend/src/js/asset-core/gltf/async-gltf.js",
     () => ({
       composeGlTFAsync: jest.fn(),
       composeGlTFToBlobAsync: jest

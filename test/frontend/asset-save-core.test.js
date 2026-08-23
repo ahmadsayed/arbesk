@@ -75,8 +75,12 @@ async function load() {
   );
   jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
+    // Imported (unused) by asset-core/executor/inline.ts — the mock must
+    // satisfy the full link-time surface of the decomposer module.
+    decomposeGlTF: jest.fn(),
+    decomposeAndStore: jest.fn(),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFAsync: jest.fn(),
     composeGlTFToBlobAsync: jest.fn(),
     decomposeGlTFAsync: jest.fn(),

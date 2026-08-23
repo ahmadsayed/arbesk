@@ -17,7 +17,7 @@ async function load() {
     isIpfsCidReachable: jest.fn(),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFAsync: jest.fn(),
     composeGlTFToBlobAsync: jest.fn(),
     decomposeGlTFAsync: jest.fn(),
@@ -40,7 +40,7 @@ async function load() {
     "../../frontend/src/js/formats/handlers/glb-handler.js"
   );
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
-  const asyncGltf = await import("../../frontend/src/js/gltf/async-gltf.js");
+  const asyncGltf = await import("../../frontend/src/js/asset-core/gltf/async-gltf.js");
   const decomposer = await import("../../frontend/src/js/asset-core/gltf/decomposer.js");
   return {
     gltfHandler: gltf.gltfHandler,

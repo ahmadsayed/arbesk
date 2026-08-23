@@ -3,37 +3,40 @@
  *
  * composeGlTFToBlobAsync tests
  *
- * The worker path must return a Blob built from bytes stringified/encoded in
- * the worker (zero-copy transfer, no main-thread JSON.stringify of a huge
- * base64 glTF). When the worker is unavailable or fails, the fallback must
- * produce a Blob identical to main-thread composeGlTF() + JSON.stringify().
+ * The executor path must return a Blob built from bytes stringified/encoded
+ * by the executor (a worker transfers them zero-copy, so the main thread pays
+ * no JSON.stringify of a huge base64 glTF). When the executor is unavailable
+ * or fails, the fallback must produce a Blob identical to main-thread
+ * composeGlTF() + JSON.stringify().
+ *
+ * Seam: the ExecutorPort is injected via initRuntime (fake executor below);
+ * the worker pool is no longer imported by async-gltf directly.
  */
 import { jest } from "@jest/globals";
 
-async function load({ workerAvailable, execImpl } = {}) {
+async function load({ executorAvailable, execImpl } = {}) {
   jest.resetModules();
 
-  const exec = jest.fn(execImpl || (() => Promise.reject(new Error("no exec"))));
-  jest.unstable_mockModule(
-    "../../frontend/src/js/workers/gltf-worker-pool.js",
-    () => ({
-      getGlTFWorkerPool: () => ({ exec }),
-      isWorkerPoolAvailable: jest.fn().mockResolvedValue(!!workerAvailable),
-      terminateGlTFWorkerPool: jest.fn(),
-    })
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.ts"
   );
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
-    gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
-    getFromRemoteIPFS: jest.fn(),
-    getBase64FromRemoteIPFS: jest.fn(),
-    getBlobFromRemoteIPFS: jest.fn(),
-    getArrayBufferFromRemoteIPFS: jest.fn(),
-    getRawArrayBufferFromRemoteIPFS: jest.fn(),
-    getManifestChain: jest.fn(),
-    isIpfsCidReachable: jest.fn(),
-  }));
+  const { createMemoryIpfs } = await import(
+    "../../frontend/src/js/asset-core/testing/memory-ipfs.ts"
+  );
 
-  const mod = await import("../../frontend/src/js/gltf/async-gltf.js");
+  const exec = jest.fn(
+    execImpl || (() => Promise.reject(new Error("no exec")))
+  );
+  const { read, write } = createMemoryIpfs();
+  initRuntime({
+    ipfsRead: read,
+    ipfsWrite: write,
+    executor: { available: async () => !!executorAvailable, exec },
+  });
+
+  const mod = await import(
+    "../../frontend/src/js/asset-core/gltf/async-gltf.js"
+  );
   return { mod, exec };
 }
 
@@ -58,11 +61,11 @@ function makeMonolithicGltf() {
 }
 
 describe("composeGlTFToBlobAsync", () => {
-  it("worker path returns a Blob from worker-encoded bytes without re-stringifying", async () => {
-    const composed = { asset: { version: "2.0" }, marker: "from-worker" };
+  it("executor path returns a Blob from executor-encoded bytes without re-stringifying", async () => {
+    const composed = { asset: { version: "2.0" }, marker: "from-executor" };
     const composedBytes = new TextEncoder().encode(JSON.stringify(composed));
     const { mod, exec } = await load({
-      workerAvailable: true,
+      executorAvailable: true,
       execImpl: (method) => {
         if (method === "composeToBytes") {
           return Promise.resolve({ composedBytes });
@@ -78,8 +81,8 @@ describe("composeGlTFToBlobAsync", () => {
     expect(JSON.parse(await blobText(blob))).toEqual(composed);
   });
 
-  it("falls back to main-thread compose when the worker is unavailable", async () => {
-    const { mod, exec } = await load({ workerAvailable: false });
+  it("falls back to main-thread compose when the executor is unavailable", async () => {
+    const { mod, exec } = await load({ executorAvailable: false });
     const gltf = makeMonolithicGltf();
 
     const blob = await mod.composeGlTFToBlobAsync(gltf);
@@ -92,10 +95,10 @@ describe("composeGlTFToBlobAsync", () => {
     expect(parsed.images[0].uri).toBe(gltf.images[0].uri);
   });
 
-  it("falls back to main-thread compose when the worker call fails", async () => {
+  it("falls back to main-thread compose when the executor call fails", async () => {
     const { mod, exec } = await load({
-      workerAvailable: true,
-      execImpl: () => Promise.reject(new Error("worker exploded")),
+      executorAvailable: true,
+      execImpl: () => Promise.reject(new Error("executor exploded")),
     });
     const gltf = makeMonolithicGltf();
 
@@ -107,7 +110,7 @@ describe("composeGlTFToBlobAsync", () => {
   });
 
   it("rejects on null input", async () => {
-    const { mod } = await load({ workerAvailable: false });
+    const { mod } = await load({ executorAvailable: false });
     await expect(mod.composeGlTFToBlobAsync(null)).rejects.toThrow(
       /gltfJson is null/
     );

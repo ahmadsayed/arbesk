@@ -32,7 +32,8 @@ export interface IpfsWritePort {
 }
 
 export interface CredentialPort {
-  getUploadCredentials(count?: number): Promise<UploadCredential>;
+  /** Mint `count` upload credentials in one round trip (backend /ipfs/upload-urls). */
+  getUploadCredentials(count?: number): Promise<UploadCredential[]>;
 }
 
 export interface ChainPort {
@@ -54,7 +55,21 @@ export interface StoragePort {
   removeItem(key: string): void;
 }
 
-export type ExecutorOp = "compose" | "decomposeGltf" | "decomposeGlb" | "bakeSourceColors";
+/**
+ * Ops dispatched through the ExecutorPort. The set mirrors exactly what the
+ * glTF Web Worker registers (gltf-worker.ts) minus `ping` — async-gltf.ts
+ * dispatches these same op names with a single payload object per call, so
+ * an ExecutorPort implementation is either a thin pass-through to the worker
+ * pool (browser) or the inline main-thread op table (executor/inline.ts).
+ */
+export type ExecutorOp =
+  | "compose"
+  | "composeToBytes"
+  | "decomposeGltf"
+  | "decomposeGlb"
+  | "decomposeAndUploadGltf"
+  | "decomposeAndUploadGlb"
+  | "bakeSourceColors";
 
 export interface ExecutorPort {
   available(): Promise<boolean>;
