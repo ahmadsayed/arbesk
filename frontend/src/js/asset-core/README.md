@@ -1,5 +1,7 @@
 # @arbesk/asset-core
 
+**Consumer guide: `docs/ASSET_CORE_SDK.md`** — quickstarts per environment, port reference, facade API, boundary rules.
+
 Environment-agnostic Arbesk asset pipeline: manifests, glTF compose/decompose,
 asset domain state, and Merkle editor helpers. Consumed as TypeScript source by
 both the Node backend and the browser frontend — there is no build step and no

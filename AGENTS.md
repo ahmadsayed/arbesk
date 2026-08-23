@@ -1,6 +1,6 @@
 # AGENTS.md — Arbesk Developer Guide
 
-Conventions for AI agents and developers. Deep reference (load on demand): `docs/ARCHITECTURE.md` · `docs/CURRENT_STATUS.md` (definitive status — check before roadmap claims) · `docs/API_SPEC.md`. Project skills in `.agents/skills/` — read the relevant one before working in its area.
+Conventions for AI agents and developers. Deep reference (load on demand): `docs/ARCHITECTURE.md` · `docs/CURRENT_STATUS.md` (definitive status — check before roadmap claims) · `docs/API_SPEC.md` · `docs/ASSET_CORE_SDK.md` (using the asset-core SDK). Project skills in `.agents/skills/` — read the relevant one before working in its area.
 
 ## 1. Identity & Key Constraints
 
