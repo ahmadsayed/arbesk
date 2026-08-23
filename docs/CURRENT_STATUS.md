@@ -29,7 +29,7 @@
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.ts`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
 | Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.ts`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
 | Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.ts` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
-| Asset-Core Externalization (SDK facade + ports) | ✅ Complete | `frontend/src/js/asset-core/` (facade, runtime ports, manifest schema, domain, gltf pipeline, kernels, bench), browser adapters in `ipfs/`/`blockchain/`/`workers/`, backend `src/api/asset-core-adapters.ts` |
+| Asset-Core Externalization (SDK facade + ports) | ✅ Complete | `frontend/src/js/asset-core/` (facade, runtime ports, manifest schema, domain, gltf pipeline, kernels, bench), browser adapters in `ipfs/`/`blockchain/`/`workers/`, backend `src/api/asset-core-adapters.ts`; see `docs/ASSET_CORE_SDK.md` |
 
 ---
 

@@ -39,7 +39,7 @@ All row details: `references/deep-dive.md`.
 | `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` runtime overlays |
 | `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: color/scale/mesh overrides |
 | `frontend/src/js/services/asset-save/manifest-builder.ts` | `prepareManifestForWrite()` — save/publish |
-| `frontend/src/js/gltf/async-gltf.ts` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
+| `frontend/src/js/asset-core/gltf/async-gltf.ts` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
 | `frontend/src/js/workers/gltf-worker-pool.ts` | `workerpool` of `gltf-worker.js` for off-main-thread glTF work |
 | `frontend/src/js/workers/gltf-worker.ts` | Worker entry: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` |
 | `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser IPFS write |
@@ -49,3 +49,4 @@ All row details: `references/deep-dive.md`.
 
 - Read `references/deep-dive.md` when working on architecture, URI formats, compose/decompose, scene graph, post-processor, materials, or the save flow.
 - Read `references/troubleshooting.md` when debugging loading/colors, adding properties or formats, or forcing re-decomposition.
+- For embedding the glTF pipeline in another host (backend/script/desktop), see `docs/ASSET_CORE_SDK.md`; the pipeline is part of the `frontend/src/js/asset-core/` SDK and is consumed through `createArbeskCore()` ports.

@@ -212,7 +212,7 @@ curl -s https://carrot.megaeth.com/rpc \
 | `blockchain/contracts/ArbeskAssetFree.sol` | Updated for Merkle editor ABI |
 | `blockchain/test/ArbeskAsset.test.js` | Updated for per-user nonce, Merkle authorization, non-Enumerable ABI (covers both paid and free tiers) |
 | `frontend/src/js/ui/asset-library.ts` | Replaced `tokenOfOwnerByIndex` with off-chain `Transfer` event scanning |
-| `frontend/src/js/gltf/merkle-editors.ts` · `frontend/src/js/services/team.ts` | Merkle tree/proof library + editor service |
+| `frontend/src/js/asset-core/gltf/merkle-editors.ts` · `frontend/src/js/services/team.ts` | Merkle tree/proof library + editor service |
 | `docs/cost-projection.csv` | Replaced invalid token-count→m projection with per-1M-gas + m=1 per-operation costs across 4 chains |
 
 **Compilation:** Clean on Solidity 0.8.24, Cancun EVM

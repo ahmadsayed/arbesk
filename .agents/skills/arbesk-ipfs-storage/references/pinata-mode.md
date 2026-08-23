@@ -71,7 +71,7 @@ parallelized server-side, then hand one URL to each file.
   `{ count }` (1–200, `uploadUrlsSchema` in `src/api/schemas.ts`) →
   `{ credentials: [...] }`. Session-gated, rate-limited like `/upload-url`.
 - **Frontend**: `getUploadCredentials(count)` in `services/api.ts` hits the
-  batch route. `frontend/src/js/gltf/async-gltf.ts` wraps it in
+  batch route. `frontend/src/js/asset-core/gltf/async-gltf.ts` wraps it in
   `getPooledUploadCredential(count)`, which for Pinata reshapes the array
   into a single pool-credential object: `{ backend: 'pinata', urls: [...],
   gateway, reusable: true }` (kubo passes through unchanged — already
