@@ -17,12 +17,12 @@ import {
   ipfsUriFromCid,
 } from "./dedup.ts";
 import type { DedupMeta } from "./dedup.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 
 // serializeGLB lives in gltf-core.js (shared with the backend, which packs
 // composed composites to GLB for Tripo uploads) — re-exported here so
 // existing glb-parser consumers keep working.
-export { serializeGLB } from "./gltf-core.ts";
+export { serializeGLB } from "../asset-core/gltf/gltf-core.ts";
 
 const GLB_MAGIC = 0x46546c67; // "glTF"
 const GLB_VERSION = 2;

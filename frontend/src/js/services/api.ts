@@ -526,7 +526,7 @@ async function followupScaleCompensation(sourceCid: string, resultBytes: Uint8Ar
       "../ipfs/remote-ipfs.ts"
     );
     const { boundsFromGlbBytes, computeGltfBounds, compensationScale } =
-      await import("../gltf/bounds.ts");
+      await import("../asset-core/gltf/bounds.ts");
     const toBounds = (bytes: Uint8Array) =>
       boundsFromGlbBytes(bytes) ??
       computeGltfBounds(JSON.parse(new TextDecoder().decode(bytes)));

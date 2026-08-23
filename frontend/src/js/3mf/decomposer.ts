@@ -11,7 +11,7 @@
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
 import { uploadWithDedup } from "../gltf/dedup.ts";
 import { sanitizeFileName } from "../asset-core/utils/uri.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 import { unzipBytes, strFromU8 } from "./zip.ts";
 
 export const COMPOSITE_3MF_FORMAT = "composite-3mf";

@@ -7,7 +7,7 @@
  * getUploadCredential()).
  */
 
-import { createConcurrencyLimiter } from "../asset-core/utils/concurrency.ts";
+import { createConcurrencyLimiter } from "../utils/concurrency.ts";
 
 // Keep concurrent uploads bounded near the browser's per-origin connection
 // limit so many small buffers/images don't queue/retire behind each other.

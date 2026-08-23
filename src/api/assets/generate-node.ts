@@ -4,7 +4,7 @@ import { mockGenerate } from "../adapters/mock-adapter.ts";
 import {
   composeGltfJson,
   serializeGLB,
-} from "../../../frontend/src/js/gltf/gltf-core.ts";
+} from "../../../frontend/src/js/asset-core/gltf/gltf-core.ts";
 import {
   isGzipped,
   decompress,

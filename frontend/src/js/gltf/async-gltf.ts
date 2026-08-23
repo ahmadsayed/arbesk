@@ -16,7 +16,7 @@ import {
   getArrayBufferFromRemoteIPFS,
   gatewayBase,
 } from "../ipfs/remote-ipfs.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 import { composeGlTF } from "./composer.ts";
 import {
   decomposeGlTF as decomposeGlTFMain,

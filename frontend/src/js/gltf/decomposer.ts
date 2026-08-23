@@ -23,8 +23,8 @@ import {
   ipfsUriFromCid,
   attachDedupMeta,
   decomposeGltfJson,
-} from "./gltf-core.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+} from "../asset-core/gltf/gltf-core.ts";
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 
 export { isComposite };
 

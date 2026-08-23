@@ -17,14 +17,14 @@
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
 import { extractDataURI } from "../asset-core/utils/uri.ts";
-import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../gltf/cache-aware-fetch.ts";
+import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../asset-core/gltf/cache-aware-fetch.ts";
 import { createConcurrencyLimiter } from "../asset-core/utils/concurrency.ts";
 import { hashBytes, DEFAULT_HASH_ALGORITHM } from "../asset-core/utils/hash.ts";
 import {
   uploadBatchToIPFSWithCredential,
   uploadToIPFSWithCredential,
-} from "../ipfs/upload-with-credential.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+} from "../asset-core/ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 import {
   IPFS_URI_PREFIX,
   isComposite,
@@ -32,7 +32,7 @@ import {
   attachDedupMeta,
   composeGltfJson,
   decomposeGltfJson,
-} from "../gltf/gltf-core.ts";
+} from "../asset-core/gltf/gltf-core.ts";
 
 const downloadLimiter = createConcurrencyLimiter(6);
 

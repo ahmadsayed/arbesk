@@ -14,8 +14,8 @@ import {
   getRawArrayBufferFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
 import { decompress } from "../asset-core/utils/compression.ts";
-import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "./cache-aware-fetch.ts";
-import { composeGltfJson } from "./gltf-core.ts";
+import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../asset-core/gltf/cache-aware-fetch.ts";
+import { composeGltfJson } from "../asset-core/gltf/gltf-core.ts";
 
 async function fetchCIDAsBase64(cid: string, arbeskMeta: any): Promise<string> {
   console.log(`[COMPOSE] fetching ipfs://${cid}`);
