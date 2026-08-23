@@ -25,7 +25,7 @@ Conventions for AI agents and developers. Deep reference (load on demand): `docs
 ## 3. Repo Layout
 
 - **Backend** `src/api/` (all `.ts`): routes `index.ts` + `routes/` · generation `assets/` (`generate-node.ts`, `generation-tasks.ts`, `adapters/`) · storage `storage/` (kubo/pinata) · auth `authentication.ts`, `sessions.ts`, `siwe-verify.ts` · `token-indexer.ts` · `comments-archive.ts` · `chat-proxy.ts` (WS) · `nostr-relay.ts` · `manifest-utils.ts` · `asset-tag.ts` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
-- **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, token-resolver, `asset-core-adapter.ts` browser Hash/Storage/Chain ports) · `ipfs/` · `asset-core/` (env-agnostic core: gltf compose/decompose pipeline + `async-gltf.ts` executor-dispatch orchestration, `executor/inline.ts`, utils, runtime ports, `events/` bus, `state/create-store.ts`, `domain/` asset domain model (see §3.1), `gltf/merkle-editors.ts`) · `workers/` (gltf worker pool, `worker-executor.ts` browser ExecutorPort) · `3mf/` · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · templates `frontend/src/pug/` · styles `frontend/src/scss/`
+- **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, token-resolver, `asset-core-adapter.ts` browser Hash/Storage/Chain ports) · `ipfs/` · `asset-core/` (env-agnostic core: gltf compose/decompose pipeline + `async-gltf.ts` executor-dispatch orchestration, `executor/inline.ts`, utils, runtime ports, `events/` bus, `state/create-store.ts`, `domain/` asset domain model (see §3.1), `gltf/merkle-editors.ts`, `bench/run.ts`; boundary rule: asset-core imports no environment modules — UI/engine/services should prefer `index.ts`/`facade.ts`) · `asset-core-init.ts` (frontend composition root) · `workers/` (gltf worker pool, `worker-executor.ts` browser ExecutorPort) · `3mf/` · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · templates `frontend/src/pug/` · styles `frontend/src/scss/`
 
 ### 3.1 Frontend Domain Layer (single-writer discipline)
 
@@ -61,6 +61,7 @@ npm run test:all                       # lint → typecheck → frontend → api
 npm run test:api                       # test/api.test.js alone
 npm run test:frontend                  # test/frontend/ + deployment integrity
 npm run test:contracts                 # Hardhat tests in Docker
+npm run bench:asset-core               # asset-core pipeline benchmark → test-results/asset-core-bench.json
 npm run test:e2e -- --project=chromium # Playwright critical path (:ui = visible browser)
 
 # Contract workflow — MANDATORY after any .sol change
