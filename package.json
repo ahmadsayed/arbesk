@@ -36,7 +36,7 @@
   "license": "ISC",
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.53.0",
-    "@gltf-transform/core": "^4.1.2",
+    "@gltf-transform/core": "4.1.2",
     "@openzeppelin/merkle-tree": "^1.0.8",
     "commander": "^15.0.0",
     "dotenv": "^16.0.3",
