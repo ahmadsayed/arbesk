@@ -92,7 +92,18 @@ export default [
     rules: {
       "no-restricted-imports": ["error", {
         patterns: [{
-          group: ["../ipfs/*", "../services/*", "../blockchain/*", "../workers/*", "../engine/*", "../ui/*", "**/ipfs/remote-ipfs*", "**/services/api*", "**/blockchain/*", "**/workers/*"],
+          group: [
+            "**/ipfs/remote-ipfs*",
+            "**/ipfs/write-to-ipfs*",
+            "**/ipfs/asset-core-adapter*",
+            "**/services/*",
+            "**/blockchain/*",
+            "**/workers/*",
+            "**/engine/*",
+            "**/ui/*",
+            "**/formats/*",
+            "**/3mf/*",
+          ],
           message: "asset-core must stay environment-agnostic — consume these via injected ports (see docs/superpowers/specs/2026-08-23-asset-core-externalization-design.md §3).",
         }],
       }],
