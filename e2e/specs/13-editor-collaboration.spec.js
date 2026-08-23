@@ -22,6 +22,12 @@ const EDITOR_COLOR = "#00aa55";
 const OUTSIDER_COLOR = "#5500aa";
 
 test.describe("editor collaboration", () => {
+  // This spec packs three full wallet flows (owner publish → editor
+  // republish → outsider rejection) into one test. Measured at ~78s on main
+  // vs a 90s budget; the asset-core refactor adds ~10-20s of per-page module
+  // loading (more, smaller ES modules), which tipped it over. Bump the
+  // budget; trimming per-page load time is a tracked follow-up.
+  test.setTimeout(150_000);
   test("owner adds editor → editor republishes → non-editor is rejected", async ({
     browser,
   }) => {
