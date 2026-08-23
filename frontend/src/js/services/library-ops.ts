@@ -12,12 +12,12 @@
  */
 
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import {
   publishAsset,
   CollaboratorRole,
 } from "../blockchain/wallet.ts";
-import { computeRoot, saveEditorList } from "../domain/editors.ts";
+import { computeRoot, saveEditorList } from "../asset-core/domain/editors.ts";
 import { updateCollectionManifest } from "./asset-delete.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {

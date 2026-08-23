@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { jest, expect, test, beforeEach, describe } from "@jest/globals";
-import { assetStore, _resetForTesting as resetAssetState } from "../../frontend/src/js/domain/asset-store.js";
+import { assetStore, _resetForTesting as resetAssetState } from "../../frontend/src/js/asset-core/domain/asset-store.js";
 import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 
 let _tokenURIs = {};
@@ -91,7 +91,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/domain/asset.js",
+    "../../frontend/src/js/asset-core/domain/asset.js",
     () => ({
       closeAsset: closeAssetSpy,
       renameAsset: (name) => assetStore.set({ activeAssetName: name }),

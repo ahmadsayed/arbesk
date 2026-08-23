@@ -9,13 +9,13 @@
 import * as wallet from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "../gltf/merkle-editors.ts";
+import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "../asset-core/gltf/merkle-editors.ts";
 import {
   loadEditorList,
   saveEditorList,
   getEditorSetVersion,
-} from "../domain/editors.ts";
-import type { EditorEntry } from "../domain/editors.ts";
+} from "../asset-core/domain/editors.ts";
+import type { EditorEntry } from "../asset-core/domain/editors.ts";
 import { requireWallet } from "../blockchain/wallet-guard.ts";
 import { resolveUserEmail } from "./api.ts";
 

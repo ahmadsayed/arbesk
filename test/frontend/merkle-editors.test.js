@@ -48,14 +48,24 @@ jest.unstable_mockModule("@openzeppelin/merkle-tree", () => ({
 }));
 
 let merkleEditors;
+let initRuntime;
+let _resetRuntimeForTesting;
 
 describe("merkle-editors", () => {
   beforeAll(async () => {
-    global.window.Web3 = { utils: { soliditySha3 } };
-    merkleEditors = await import("../../frontend/src/js/gltf/merkle-editors.js");
+    ({ initRuntime, _resetRuntimeForTesting } = await import(
+      "../../frontend/src/js/asset-core/runtime.ts"
+    ));
+    merkleEditors = await import("../../frontend/src/js/asset-core/gltf/merkle-editors.js");
   });
 
   beforeEach(() => {
+    _resetRuntimeForTesting();
+    initRuntime({
+      ipfsRead: { getJSON: async () => ({}) },
+      ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+      hash: { soliditySha3, keccak256: () => "0x" },
+    });
     soliditySha3.mockClear();
   });
 

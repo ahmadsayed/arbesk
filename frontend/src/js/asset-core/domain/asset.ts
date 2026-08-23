@@ -6,9 +6,9 @@
  */
 import { on, emit, EVENTS } from "../events/bus.ts";
 import { assetStore, tagManifestCid } from "./asset-store.ts";
-import { getStateForNewAsset } from "../utils/new-asset.ts";
-import { deriveDefaultAssetId } from "../utils/collections.ts";
-import { log } from "../utils/log.ts";
+import { getStateForNewAsset } from "../../utils/new-asset.ts";
+import { deriveDefaultAssetId } from "../../utils/collections.ts";
+import { log } from "../../utils/log.ts";
 
 export interface AssetSnapshot {
   name: string | null;

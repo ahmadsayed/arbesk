@@ -1,5 +1,5 @@
-import { createStore } from "./create-store.ts";
-import { EVENTS } from "../events/bus.ts";
+import { createStore } from "../asset-core/state/create-store.ts";
+import { EVENTS } from "../asset-core/events/bus.ts";
 
 /**
  * A collection card in the library grid. Built by

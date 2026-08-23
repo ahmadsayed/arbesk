@@ -18,7 +18,7 @@ async function load() {
     "../../frontend/src/js/engine/time-travel.js",
     () => ({ walkManifestChain })
   );
-  jest.unstable_mockModule("../../frontend/src/js/events/bus.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/events/bus.js", () => ({
     emit,
     EVENTS: {
       HISTORY_VERSION_SELECTED: "asset:historyVersionSelected",

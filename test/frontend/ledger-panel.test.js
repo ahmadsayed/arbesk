@@ -59,7 +59,7 @@ const mockGetActiveAssetManifestCid = jest.fn();
 const mockWalkManifestChain = jest.fn();
 const mockGetFromRemoteIPFS = jest.fn();
 
-jest.unstable_mockModule("../../frontend/src/js/domain/asset.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/asset-core/domain/asset.js", () => ({
   getActiveAssetManifestCid: mockGetActiveAssetManifestCid,
 }));
 jest.unstable_mockModule("../../frontend/src/js/engine/time-travel.js", () => ({
@@ -99,7 +99,7 @@ function seedChain() {
 let ledgerMod;
 /** @type {typeof import("../../frontend/src/js/state/wallet-state.js")} */
 let walletStateMod;
-/** @type {typeof import("../../frontend/src/js/events/bus.js")} */
+/** @type {typeof import("../../frontend/src/js/asset-core/events/bus.js")} */
 let busMod;
 
 async function setup() {
@@ -107,7 +107,7 @@ async function setup() {
   document.body.innerHTML = FRAGMENT;
   walletStateMod = await import("../../frontend/src/js/state/wallet-state.js");
   walletStateMod.walletState.set({ walletAddress: ADDRESS });
-  busMod = await import("../../frontend/src/js/events/bus.js");
+  busMod = await import("../../frontend/src/js/asset-core/events/bus.js");
   ledgerMod = await import("../../frontend/src/js/ui/ledger-panel.js");
   ledgerMod.initLedgerPanel();
   await flush();

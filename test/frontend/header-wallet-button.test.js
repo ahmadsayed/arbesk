@@ -36,7 +36,7 @@ jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
 let mod;
 /** @type {typeof import("../../frontend/src/js/state/wallet-state.js")} */
 let walletStateMod;
-/** @type {typeof import("../../frontend/src/js/events/bus.js")} */
+/** @type {typeof import("../../frontend/src/js/asset-core/events/bus.js")} */
 let bus;
 
 /**
@@ -47,7 +47,7 @@ async function setup(preState) {
   jest.resetModules();
   document.body.innerHTML = FRAGMENT;
   walletStateMod = await import("../../frontend/src/js/state/wallet-state.js");
-  bus = await import("../../frontend/src/js/events/bus.js");
+  bus = await import("../../frontend/src/js/asset-core/events/bus.js");
   if (preState) walletStateMod.walletState.set(preState);
   mod = await import("../../frontend/src/js/ui/header-wallet-button.js");
   await flush();

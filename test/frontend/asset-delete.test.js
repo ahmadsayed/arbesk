@@ -99,7 +99,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/domain/asset.js",
+    "../../frontend/src/js/asset-core/domain/asset.js",
     () => ({
       getActiveAssetTokenId: jest.fn(() => _activeAssetTokenId),
       getActiveAssetId: jest.fn(() => _activeAssetId),
@@ -128,7 +128,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/gltf/merkle-editors.js",
+    "../../frontend/src/js/asset-core/gltf/merkle-editors.js",
     () => ({
       getProof: jest.fn((_list, _address, _tokenId, _version) => _getProof()),
     })
@@ -161,6 +161,7 @@ async function loadModule() {
     "../../frontend/src/js/services/api.js",
     () => ({
       unpinAssetCids: jest.fn().mockResolvedValue(_unpinResult),
+      resolveUserEmail: jest.fn(),
     })
   );
 
@@ -182,7 +183,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/events/bus.js",
+    "../../frontend/src/js/asset-core/events/bus.js",
     () => ({
       emit: jest.fn(),
       on: jest.fn(),
@@ -195,6 +196,27 @@ async function loadModule() {
       },
     })
   );
+
+  // asset-core runtime seam for the real domain/editors.ts (ports replace
+  // window.Web3 + localStorage + direct wallet/remote-ipfs imports).
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.ts"
+  );
+  const { getFromRemoteIPFS } = await import(
+    "../../frontend/src/js/ipfs/remote-ipfs.js"
+  );
+  const {
+    createBrowserHashPort,
+    createBrowserStoragePort,
+    createBrowserChainPort,
+  } = await import("../../frontend/src/js/blockchain/asset-core-adapter.ts");
+  initRuntime({
+    ipfsRead: { getJSON: (cid) => getFromRemoteIPFS(cid) },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: createBrowserHashPort(),
+    storage: createBrowserStoragePort(),
+    chain: createBrowserChainPort(),
+  });
 
   const mod = await import("../../frontend/src/js/services/asset-delete.js");
   return mod;
@@ -225,7 +247,7 @@ describe("deleteAssetFromCollection", () => {
     const { unpinAssetCids } = await import(
       "../../frontend/src/js/services/api.js"
     );
-    const { emit, EVENTS } = await import("../../frontend/src/js/events/bus.js");
+    const { emit, EVENTS } = await import("../../frontend/src/js/asset-core/events/bus.js");
 
     const result = await deleteAssetFromCollection({
       tokenId: TOKEN_ID,

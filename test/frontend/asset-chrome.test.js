@@ -36,14 +36,14 @@ beforeAll(async () => {
     <button id="publishAssetBtnText"></button>
     <button id="downloadAssetBtn" hidden></button>`;
   ({ assetStore, _resetForTesting: _resetAssets } = await import(
-    "../../frontend/src/js/domain/asset-store.js"
+    "../../frontend/src/js/asset-core/domain/asset-store.js"
   ));
   ({ walletState } = await import(
     "../../frontend/src/js/state/wallet-state.js"
   ));
-  ({ emit, EVENTS } = await import("../../frontend/src/js/events/bus.js"));
+  ({ emit, EVENTS } = await import("../../frontend/src/js/asset-core/events/bus.js"));
   ({ renameAsset, resetForNewAsset, closeAsset } = await import(
-    "../../frontend/src/js/domain/asset.js"
+    "../../frontend/src/js/asset-core/domain/asset.js"
   ));
   await import("../../frontend/src/js/ui/asset-chrome.js");
 });

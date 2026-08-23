@@ -1,13 +1,12 @@
 /**
  * Domain: Editors — Merkle editor-list operations, local cache, and proof commands.
  *
- * Centralizes editor list localStorage caching, on-chain version lookup,
- * Merkle root computation, and proof generation for the publish, team,
- * delete, library, and comment flows.
+ * Centralizes editor list caching (StoragePort), on-chain version lookup
+ * (ChainPort), Merkle root computation (HashPort), and proof generation for
+ * the publish, team, delete, library, and comment flows.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
-import { getActiveContract } from "../blockchain/wallet.ts";
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
+import { getRuntime } from "../runtime.ts";
 
 const EDITOR_LIST_PREFIX = "arbesk_editor_list_";
 
@@ -21,14 +20,16 @@ export interface EditorEntry {
 }
 
 /**
- * @returns hex string from Web3.utils.soliditySha3
+ * ABI-packed keccak256 via the injected HashPort — same semantics (and
+ * `{type, value}` arguments) as Web3.utils.soliditySha3.
+ * @returns hex string from the HashPort
  */
 function _soliditySha3(...args: any[]): any {
-  const W3 = window.Web3;
-  if (!W3 || !W3.utils || !W3.utils.soliditySha3) {
-    throw new Error("Web3.js not loaded from CDN");
+  const h = getRuntime().hash;
+  if (!h) {
+    throw new Error("asset-core: editor ops require a HashPort");
   }
-  return W3.utils.soliditySha3(...args);
+  return h.soliditySha3(...args);
 }
 
 /**
@@ -137,7 +138,7 @@ export function saveEditorList(
   cid: string | null = null
 ) {
   try {
-    localStorage.setItem(
+    getRuntime().storage.setItem(
       editorListKey(tag),
       JSON.stringify({ list, cid, saved: Date.now() })
     );
@@ -148,7 +149,7 @@ export function saveEditorList(
 
 function _loadCachedEditorList(tag: string): EditorEntry[] | null {
   try {
-    const raw = localStorage.getItem(editorListKey(tag));
+    const raw = getRuntime().storage.getItem(editorListKey(tag));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed.list)) return parsed.list;
@@ -160,7 +161,7 @@ function _loadCachedEditorList(tag: string): EditorEntry[] | null {
 
 export function clearEditorCache(tag: string) {
   try {
-    localStorage.removeItem(editorListKey(tag));
+    getRuntime().storage.removeItem(editorListKey(tag));
   } catch {
     /* ignore */
   }
@@ -171,15 +172,15 @@ export function clearEditorCache(tag: string) {
 export async function loadEditorList(tag: string): Promise<EditorEntry[]> {
   if (!tag) return [];
   try {
-    const c = getActiveContract();
-    if (c) {
-      const cid = await c.methods.editorListURI(tag).call();
-      if (cid) {
-        const fresh = await getFromRemoteIPFS(cid);
-        if (Array.isArray(fresh)) {
-          saveEditorList(tag, fresh, cid);
-          return fresh;
-        }
+    const chain = getRuntime().chain;
+    const cid = chain?.getEditorListURI
+      ? await chain.getEditorListURI(tag)
+      : null;
+    if (cid) {
+      const fresh = await getRuntime().ipfsRead.getJSON(cid);
+      if (Array.isArray(fresh)) {
+        saveEditorList(tag, fresh, cid);
+        return fresh;
       }
     }
   } catch (err) {
@@ -190,10 +191,10 @@ export async function loadEditorList(tag: string): Promise<EditorEntry[]> {
 }
 
 export async function getEditorSetVersion(tag: string): Promise<number> {
-  const c = getActiveContract();
-  if (!c) return 1;
+  const chain = getRuntime().chain;
+  if (!chain?.getEditorListVersion) return 1;
   try {
-    const version = await c.methods.editorSetVersion(tag).call();
+    const version = await chain.getEditorListVersion(tag);
     return Number(version);
   } catch {
     return 1;

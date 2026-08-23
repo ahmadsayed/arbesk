@@ -10,7 +10,7 @@
  * wallet-network.ts).
  */
 
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { getContractAddress, getContractArtifact } from "../services/api.ts";
 import { showToast, dismissToast } from "../ui/toasts.ts";

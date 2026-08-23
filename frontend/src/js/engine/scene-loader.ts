@@ -13,8 +13,8 @@ import {
   resolveCollectionChildRef,
   clearResolutionCache,
 } from "../blockchain/token-resolver.ts";
-import { emit, EVENTS } from "../events/bus.ts";
-import { activateAssetManifest, getCurrentManifest } from "../domain/asset.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { activateAssetManifest, getCurrentManifest } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { state, MAX_CHILD_ASSET_DEPTH } from "./state.ts";
 import type { CollectionRef } from "./state.ts";

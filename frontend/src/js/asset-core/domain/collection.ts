@@ -8,7 +8,7 @@ import { assetStore } from "./asset-store.ts";
 import {
   deriveDefaultCollectionId,
   mergeAssetIntoCollection,
-} from "../utils/collections.ts";
+} from "../../utils/collections.ts";
 
 export function getActiveCollectionTokenId(): string | null {
   return assetStore.get().activeCollectionTokenId || null;

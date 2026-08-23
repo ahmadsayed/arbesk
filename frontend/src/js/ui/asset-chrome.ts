@@ -5,8 +5,8 @@
  * elements, so render order can never clobber a name (the SCENE_EMPTY
  * header bug).
  */
-import { on, EVENTS } from "../events/bus.ts";
-import { subscribeAsset, getAssetState } from "../domain/asset.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { subscribeAsset, getAssetState } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { getPendingChildRefs, getPendingSourceOverrides } from "../engine/cleanup.ts";
 

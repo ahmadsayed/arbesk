@@ -16,7 +16,7 @@ import { showDialog } from "./dialog.ts";
 import { updateUrlAsset, updateUrlManifest } from "../services/url-utils.ts";
 import { getAssetName } from "../services/token.ts";
 import { showToast } from "./toasts.ts";
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
   renameAsset,
@@ -26,7 +26,7 @@ import {
   publishAsset,
   getActiveAssetName,
   getActiveAssetTokenId,
-} from "../domain/asset.ts";
+} from "../asset-core/domain/asset.ts";
 import { error } from "../utils/log.ts";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.ts";
 import { verifyCanEdit } from "../services/asset-save/editor-publish.ts";

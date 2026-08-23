@@ -36,25 +36,40 @@ jest.unstable_mockModule("@openzeppelin/merkle-tree", () => ({
   SimpleMerkleTree: FakeSimpleMerkleTree,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
-  getActiveContract: jest.fn(),
-  CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
-}));
-
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
-  getFromRemoteIPFS: jest.fn(),
-}));
-
 let editors;
+let initRuntime;
+let _resetRuntimeForTesting;
+
+// Port seams (previously: window.Web3 + mocked blockchain/wallet + ipfs/remote-ipfs).
+const getEditorListURI = jest.fn(async () => null);
+const getEditorListVersion = jest.fn(async () => 1);
+const ipfsGetJSON = jest.fn(async () => ({}));
 
 beforeAll(async () => {
-  global.window.Web3 = { utils: { soliditySha3 } };
-  editors = await import("../../frontend/src/js/domain/editors.js");
+  ({ initRuntime, _resetRuntimeForTesting } = await import(
+    "../../frontend/src/js/asset-core/runtime.ts"
+  ));
+  editors = await import("../../frontend/src/js/asset-core/domain/editors.js");
 });
 
 beforeEach(() => {
   localStorage.clear();
   jest.clearAllMocks();
+  getEditorListURI.mockResolvedValue(null);
+  getEditorListVersion.mockResolvedValue(1);
+  ipfsGetJSON.mockResolvedValue({});
+  _resetRuntimeForTesting();
+  initRuntime({
+    ipfsRead: { getJSON: ipfsGetJSON },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: { soliditySha3, keccak256: () => "0x" },
+    storage: {
+      getItem: (k) => localStorage.getItem(k),
+      setItem: (k, v) => localStorage.setItem(k, v),
+      removeItem: (k) => localStorage.removeItem(k),
+    },
+    chain: { getEditorListURI, getEditorListVersion },
+  });
 });
 
 describe("cache", () => {
@@ -75,19 +90,9 @@ describe("cache", () => {
 
 describe("buildEditorProof", () => {
   test("returns proof for a listed editor", async () => {
-    const { getActiveContract } = await import(
-      "../../frontend/src/js/blockchain/wallet.js"
-    );
-    const { getFromRemoteIPFS } = await import(
-      "../../frontend/src/js/ipfs/remote-ipfs.js"
-    );
-    getActiveContract.mockReturnValue({
-      methods: {
-        editorListURI: () => ({ call: () => Promise.resolve("bafyEditors") }),
-        editorSetVersion: () => ({ call: () => Promise.resolve("3") }),
-      },
-    });
-    getFromRemoteIPFS.mockResolvedValue([
+    getEditorListURI.mockResolvedValue("bafyEditors");
+    getEditorListVersion.mockResolvedValue(3);
+    ipfsGetJSON.mockResolvedValue([
       { address: "0xA", role: 2 },
       { address: "0xB", role: 2 },
     ]);

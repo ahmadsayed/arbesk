@@ -19,7 +19,7 @@
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.ts`, browser-side thumbnail upload to IPFS, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.ts`, depth/cycle protection in `scene-graph.ts` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
-| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.ts`, `frontend/src/js/services/team.ts` |
+| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/asset-core/gltf/merkle-editors.ts`, `frontend/src/js/services/team.ts` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.ts`, collection expansion in `asset-library.ts`, collection loading in `scene-graph.ts` |
 | Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.ts`, `ui/comments-panel.ts`, `src/api/chat-proxy.ts`, `src/api/comments-archive.ts`, E2E specs 14 + 15 |
 | Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.ts`, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, `services/library-ops.ts`, E2E specs 09–12 |

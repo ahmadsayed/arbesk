@@ -12,15 +12,15 @@ import {
   burn,
 } from "../blockchain/wallet.ts";
 import { requireWallet } from "../blockchain/wallet-guard.ts";
-import { loadEditorList, getEditorSetVersion } from "../domain/editors.ts";
-import { getProof } from "../gltf/merkle-editors.ts";
+import { loadEditorList, getEditorSetVersion } from "../asset-core/domain/editors.ts";
+import { getProof } from "../asset-core/gltf/merkle-editors.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
 import { unpinAssetCids } from "./api.ts";
 import { showConfirmDialog } from "../ui/dialog.ts";
 import { showToast } from "../ui/toasts.ts";
-import { emit, EVENTS } from "../events/bus.ts";
-import { getActiveAssetTokenId, getActiveAssetId } from "../domain/asset.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { getActiveAssetTokenId, getActiveAssetId } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { identityMatrix } from "../utils/collections.ts";
 

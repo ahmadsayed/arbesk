@@ -16,8 +16,8 @@ import { showToast } from "./toasts.ts";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.ts";
 import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage } from "./chat-messages.ts";
 import type { AssetMessageHandle, WorkingMessageHandle } from "./chat-messages.ts";
-import { followupActionsFor } from "../domain/generation-actions.ts";
-import type { FollowupAction } from "../domain/generation-actions.ts";
+import { followupActionsFor } from "../asset-core/domain/generation-actions.ts";
+import type { FollowupAction } from "../asset-core/domain/generation-actions.ts";
 import {
   VIEW_LABELS,
   MAX_ATTACH_IMAGES,
@@ -39,7 +39,7 @@ import {
   disposeChatPreview,
   disposeAllChatPreviews,
 } from "../services/chat-preview.ts";
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
   addPendingGeneration,
@@ -58,8 +58,8 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
   getActiveAssetName,
-} from "../domain/asset.ts";
-import { selectCollection } from "../domain/collection.ts";
+} from "../asset-core/domain/asset.ts";
+import { selectCollection } from "../asset-core/domain/collection.ts";
 
 // ─── DOM References ───
 // The SPA shell (app.pug) always renders these elements, so non-null casts.

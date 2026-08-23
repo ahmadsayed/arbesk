@@ -6,8 +6,10 @@
  * Logic extracted from the retired ui/asset-history.js; the scene clock and
  * model clock views subscribe here and render it as clock dials.
  *
- * Heavy dependencies (engine, wallet) are dynamically imported via `_deps`
- * at call time so unit tests can stub them without loading BABYLON.
+ * Heavy dependencies (engine, wallet) are injected through the `_deps` seam
+ * (`configureVersionHistoryDeps`) so the package stays environment-agnostic
+ * and unit tests can stub them without loading BABYLON. The browser wiring
+ * lives in `frontend/src/js/engine/version-history-deps.ts`.
  */
 
 import { on, EVENTS } from "../events/bus.ts";
@@ -20,27 +22,38 @@ import {
 
 export type VersionHistoryEntry = { cid: string; [key: string]: any };
 
-export const _deps = {
-  walkChain: async (cid: string) => {
-    const { walkManifestChain } = await import("../engine/time-travel.ts");
-    return walkManifestChain(cid);
-  },
-  clearScene: async () => {
-    const { clearScene } = await import("../engine/scene-graph.ts");
-    clearScene();
-  },
-  loadAssetManifest: async (cid: string) => {
-    const { loadAssetManifest } = await import("../engine/scene-graph.ts");
-    return loadAssetManifest(cid);
-  },
-  fetchPublishedCid: async (tokenId: string | number) => {
-    const { getActiveContract } = await import("../blockchain/wallet.ts");
-    const contract = getActiveContract();
-    if (!contract) return null;
-    const cid = await contract.methods.tokenURI(tokenId).call();
-    return cid || null;
-  },
+export interface VersionHistoryDeps {
+  walkChain: (cid: string) => Promise<VersionHistoryEntry[]>;
+  clearScene: () => Promise<void>;
+  loadAssetManifest: (cid: string) => Promise<any>;
+  fetchPublishedCid: (tokenId: string | number) => Promise<string | null>;
+}
+
+function _unconfigured(name: string): () => Promise<never> {
+  return () =>
+    Promise.reject(
+      new Error(
+        `asset-core: version-history dep "${name}" not configured — the host app must call configureVersionHistoryDeps()`
+      )
+    );
+}
+
+export const _deps: VersionHistoryDeps = {
+  walkChain: _unconfigured("walkChain"),
+  clearScene: _unconfigured("clearScene"),
+  loadAssetManifest: _unconfigured("loadAssetManifest"),
+  fetchPublishedCid: _unconfigured("fetchPublishedCid"),
 };
+
+/**
+ * Install the environment-specific dependency implementations (browser:
+ * engine/time-travel + engine/scene-graph + blockchain/wallet). Called once
+ * from the host app's boot wiring; tests may still assign `_deps` fields
+ * directly.
+ */
+export function configureVersionHistoryDeps(deps: Partial<VersionHistoryDeps>) {
+  Object.assign(_deps, deps);
+}
 
 // ─── State ───
 let entries: VersionHistoryEntry[] = []; // oldest → newest, from walkManifestChain (incl. nodes map)

@@ -37,6 +37,8 @@ export interface CredentialPort {
 }
 
 export interface ChainPort {
+  /** On-chain editor-list manifest CID for an asset tag (null when none/no contract). */
+  getEditorListURI?(assetTag: string): Promise<string | null>;
   /** On-chain editor-list version for an asset tag (merkle-editors flow). */
   getEditorListVersion?(assetTag: string): Promise<number>;
   /** Resolve an email login to a wallet address (backend /users/resolve-email). */

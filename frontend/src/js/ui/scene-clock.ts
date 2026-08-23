@@ -6,8 +6,8 @@
  * chain via the version-history store. Hidden when no chain is loaded.
  */
 
-import * as store from "../domain/version-history-store.ts";
-import type { VersionHistoryState } from "../domain/version-history-store.ts";
+import * as store from "../asset-core/domain/version-history-store.ts";
+import type { VersionHistoryState } from "../asset-core/domain/version-history-store.ts";
 import { createVersionClock } from "./version-clock.ts";
 
 const ROOT_ID = "sceneClock";

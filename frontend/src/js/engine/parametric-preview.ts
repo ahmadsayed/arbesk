@@ -10,7 +10,7 @@
  * captured when the inspector opened.
  */
 
-import { emit, on, EVENTS } from "../events/bus.ts";
+import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
 import { applyColor } from "./time-travel.ts";
 import { stageNodeTransform, readNodeTransformMatrix, matricesEqual } from "./transforms.ts";
 import { pushUndoEntry } from "./undo-stack.ts";

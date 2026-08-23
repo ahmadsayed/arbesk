@@ -98,7 +98,7 @@ async function load() {
   const mod = await import(
     "../../frontend/src/js/services/asset-save/manifest-builder.js"
   );
-  const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+  const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
   stateMod._resetForTesting();
   return { mod, mocks, assetStore: stateMod.assetStore };
 }

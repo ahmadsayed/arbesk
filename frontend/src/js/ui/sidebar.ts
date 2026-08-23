@@ -6,7 +6,7 @@
  * The width is user-resizable (drag handle, persisted) on wide layouts.
  */
 
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 
 const VIEWS = ["chat", "settings", "outline", "library", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";

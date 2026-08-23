@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { uiState, _resetForTesting } from "../../frontend/src/js/state/ui-state.js";
-import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { on, off, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 

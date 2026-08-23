@@ -8,13 +8,13 @@
 
 import { switchView } from "./sidebar.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { emit, on, EVENTS } from "../events/bus.ts";
+import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
 import { uiState } from "../state/ui-state.ts";
 import {
   cacheCurrentManifest,
   getActiveAssetManifestCid,
   getCurrentManifest,
-} from "../domain/asset.ts";
+} from "../asset-core/domain/asset.ts";
 import { getManifestNodes } from "../engine/transforms.ts";
 
 let outlinerTree: Element | null = null;

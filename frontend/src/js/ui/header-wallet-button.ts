@@ -16,7 +16,7 @@
 import { truncateAddress } from "../utils/format.ts";
 import { getCachedSession } from "../services/api.ts";
 import { walletState } from "../state/wallet-state.ts";
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { Alpine, registerAlpineComponent } from "./alpine.ts";
 
 export interface HeaderWalletState {

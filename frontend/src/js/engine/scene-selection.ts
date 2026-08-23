@@ -10,7 +10,7 @@
  * has exactly one entry.
  */
 
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { uiState } from "../state/ui-state.ts";
 import { state } from "./state.ts";
 import { getCssVar, hexToColor3 } from "./theme.ts";

@@ -82,7 +82,7 @@ describe("buildCdpEip1193Provider eth_sendTransaction — UserOperation confirma
     _getUserOperationImpl = async () => ({ status: "broadcast" });
 
     const { buildCdpEip1193Provider } = await loadModule();
-    const { on, EVENTS } = await import("../../frontend/src/js/events/bus.js");
+    const { on, EVENTS } = await import("../../frontend/src/js/asset-core/events/bus.js");
     const pending = jest.fn();
     const off = on(EVENTS.ASSET_PUBLISH_PENDING, pending);
 

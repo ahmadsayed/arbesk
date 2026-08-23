@@ -11,7 +11,7 @@
 
 import { walkManifestChain } from "../engine/time-travel.ts";
 import { addChatMessage } from "./chat-messages.ts";
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { addPendingGeneration } from "../state/pending-generations.ts";
 
 const chatHistoryList = document.getElementById("chatHistoryList");

@@ -37,7 +37,7 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
   getCurrentManifest,
-} from "../../domain/asset.ts";
+} from "../../asset-core/domain/asset.ts";
 import {
   listPendingGenerations,
   updatePendingGeneration,

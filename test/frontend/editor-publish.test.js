@@ -81,7 +81,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/gltf/merkle-editors.js",
+    "../../frontend/src/js/asset-core/gltf/merkle-editors.js",
     () => ({
       MAX_EDITORS_PER_TOKEN: 5000,
       computeRoot: jest.fn((list, _tokenId, _version) => {
@@ -105,6 +105,31 @@ async function loadModule() {
       verifyProof: jest.fn().mockReturnValue(true),
     })
   );
+
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/services/api.js",
+    () => ({
+      resolveUserEmail: jest.fn(),
+    })
+  );
+
+  // asset-core runtime seam for the real domain/editors.ts (ports replace
+  // window.Web3 + localStorage + direct wallet/remote-ipfs imports).
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.ts"
+  );
+  const {
+    createBrowserHashPort,
+    createBrowserStoragePort,
+    createBrowserChainPort,
+  } = await import("../../frontend/src/js/blockchain/asset-core-adapter.ts");
+  initRuntime({
+    ipfsRead: { getJSON: async () => _editorList },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: createBrowserHashPort(),
+    storage: createBrowserStoragePort(),
+    chain: createBrowserChainPort(),
+  });
 
   const mod = await import("../../frontend/src/js/services/asset-save/editor-publish.js");
   return mod;

@@ -22,7 +22,7 @@
 import { libraryState } from "../state/library-state.ts";
 import type { LibraryItem } from "../state/library-state.ts";
 import { walletState } from "../state/wallet-state.ts";
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { loadThumbnailInto } from "../utils/thumbnail.ts";
 import { getActiveContract } from "../blockchain/wallet.ts";

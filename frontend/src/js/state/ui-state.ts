@@ -1,5 +1,5 @@
-import { createStore } from "./create-store.ts";
-import { EVENTS } from "../events/bus.ts";
+import { createStore } from "../asset-core/state/create-store.ts";
+import { EVENTS } from "../asset-core/events/bus.ts";
 
 export interface UiState {
   selectedNodeId: string | null;

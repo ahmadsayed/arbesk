@@ -8,7 +8,7 @@
  * from the URL. Top-level script → no CSP 'unsafe-inline' needed.
  */
 
-import { on, EVENTS } from "./events/bus.ts";
+import { on, EVENTS } from "./asset-core/events/bus.ts";
 import {
   initWallet,
   connectWallet,
@@ -19,6 +19,9 @@ import { libraryState } from "./state/library-state.ts";
 import { initTheme, toggleTheme } from "./engine/theme.ts";
 import { initWalletPopover } from "./ui/wallet-popover.ts";
 import { hideWalletModal } from "./ui/wallet-modal.ts";
+// Installs the engine/wallet-backed deps of the asset-core version-history
+// store (side effect) before any scene/history events can fire.
+import "./engine/version-history-deps.ts";
 import {
   updateHeaderWalletButton,
   updateHeaderWalletButtonFromState,

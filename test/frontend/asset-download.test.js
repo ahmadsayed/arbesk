@@ -28,7 +28,7 @@ beforeAll(async () => {
   jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFToBlobAsync,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/domain/asset.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/domain/asset.js", () => ({
     getAssetState: jest.fn(() => _assetState),
   }));
   jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({

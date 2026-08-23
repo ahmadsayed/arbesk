@@ -6,8 +6,8 @@
  * this module only renders what the thread emits.
  */
 
-import { on, EVENTS } from "../events/bus.ts";
-import { getActiveAssetTokenId, getActiveAssetId } from "../domain/asset.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { getActiveAssetTokenId, getActiveAssetId } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { CommentThread } from "../services/comment-thread.ts";
 import { truncateAddress } from "../utils/format.ts";

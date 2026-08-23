@@ -10,8 +10,8 @@ import {
   buildOutlineTree,
   getNodes,
 } from "../frontend/src/js/ui/outliner.js";
-import { on, off, EVENTS } from "../frontend/src/js/events/bus.js";
-import { assetStore, _resetForTesting as resetAssetState } from "../frontend/src/js/domain/asset-store.js";
+import { on, off, EVENTS } from "../frontend/src/js/asset-core/events/bus.js";
+import { assetStore, _resetForTesting as resetAssetState } from "../frontend/src/js/asset-core/domain/asset-store.js";
 
 // jsdom does not implement CSS.escape, but outliner.js uses it for selectors.
 if (typeof CSS === "undefined" || !CSS.escape) {

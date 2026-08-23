@@ -5,7 +5,7 @@
  * parametric version saving, and standardized error handling.
  */
 
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import * as wallet from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {

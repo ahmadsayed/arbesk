@@ -247,7 +247,7 @@ describe("prepareManifestForWrite", () => {
 
   beforeEach(async () => {
     ctx = await load();
-    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
     assetStore = stateMod.assetStore;
     stateMod._resetForTesting();
   });
@@ -442,7 +442,7 @@ describe("prepareManifestForWrite", () => {
         format: "3mf",
       }),
     ]);
-    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
     stateMod._resetForTesting();
     stateMod.assetStore.set({
       activeAssetManifestCid: "bafyManifest",
@@ -502,7 +502,7 @@ describe("prepareManifestForWrite", () => {
       })
     );
     const ctx = await load();
-    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
     stateMod._resetForTesting();
     const { writeJSONToIPFS } = await import(
       "../../frontend/src/js/ipfs/write-to-ipfs.js"
@@ -567,7 +567,7 @@ describe("prepareManifestForWrite", () => {
       })
     );
     const ctx = await load();
-    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
     stateMod._resetForTesting();
     const { writeJSONToIPFS } = await import(
       "../../frontend/src/js/ipfs/write-to-ipfs.js"
@@ -634,7 +634,7 @@ describe("prepareManifestForWrite", () => {
       })
     );
     const ctx = await load();
-    const stateMod = await import("../../frontend/src/js/domain/asset-store.js");
+    const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
     stateMod._resetForTesting();
     const { writeJSONToIPFS } = await import(
       "../../frontend/src/js/ipfs/write-to-ipfs.js"

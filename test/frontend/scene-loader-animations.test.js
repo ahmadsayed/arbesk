@@ -27,7 +27,7 @@ beforeAll(async () => {
   };
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/events/bus.js",
+    "../../frontend/src/js/asset-core/events/bus.js",
     () => ({
       emit: jest.fn(),
       on: jest.fn(),
@@ -35,7 +35,7 @@ beforeAll(async () => {
     })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/domain/asset-store.js",
+    "../../frontend/src/js/asset-core/domain/asset-store.js",
     () => ({ assetStore: { get: jest.fn(() => ({})), set: jest.fn() }, tagManifestCid: jest.fn() })
   );
   await jest.unstable_mockModule(

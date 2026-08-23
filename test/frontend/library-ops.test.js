@@ -112,7 +112,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/gltf/merkle-editors.js",
+    "../../frontend/src/js/asset-core/gltf/merkle-editors.js",
     () => ({
       computeRoot: jest.fn((...args) => _computeRoot(...args)),
       getProof: jest.fn((...args) => _getProof(...args)),
@@ -135,6 +135,35 @@ async function loadModule() {
       })),
     })
   );
+
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/services/api.js",
+    () => ({
+      resolveUserEmail: jest.fn(),
+    })
+  );
+
+  // asset-core runtime seam for the real domain/editors.ts (ports replace
+  // window.Web3 + localStorage + direct wallet/remote-ipfs imports). The hash
+  // port delegates to the fake window.Web3 set in beforeEach so root values
+  // stay byte-identical with the pre-port behavior.
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.ts"
+  );
+  const {
+    createBrowserStoragePort,
+    createBrowserChainPort,
+  } = await import("../../frontend/src/js/blockchain/asset-core-adapter.ts");
+  initRuntime({
+    ipfsRead: { getJSON: (...args) => _getFromRemoteIPFS(...args) },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: {
+      soliditySha3: (...args) => window.Web3.utils.soliditySha3(...args),
+      keccak256: () => "0x",
+    },
+    storage: createBrowserStoragePort(),
+    chain: createBrowserChainPort(),
+  });
 
   const mod = await import("../../frontend/src/js/services/library-ops.js");
   return mod;

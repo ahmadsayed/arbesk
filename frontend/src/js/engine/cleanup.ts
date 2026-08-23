@@ -5,10 +5,10 @@
  * are properly released when clearing the scene or removing nodes.
  */
 
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { state } from "./state.ts";
 import type { PendingSourceOverride } from "./state.ts";
-import { setActiveManifestCid, clearAssetManifestCids } from "../domain/asset.ts";
+import { setActiveManifestCid, clearAssetManifestCids } from "../asset-core/domain/asset.ts";
 import { uiState } from "../state/ui-state.ts";
 
 export function clearPendingChildRefs() {
