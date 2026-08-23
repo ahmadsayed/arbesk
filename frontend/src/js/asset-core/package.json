@@ -1,0 +1,7 @@
+{
+  "name": "@arbesk/asset-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Environment-agnostic Arbesk asset pipeline: manifests, glTF compose/decompose, domain state, Merkle editors. Consumed as TS source by both the Node backend and the browser frontend."
+}

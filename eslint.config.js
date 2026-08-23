@@ -87,6 +87,27 @@ export default [
   },
 
   {
+    name: "arbesk/asset-core",
+    files: ["frontend/src/js/asset-core/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: ["../ipfs/*", "../services/*", "../blockchain/*", "../workers/*", "../engine/*", "../ui/*", "**/ipfs/remote-ipfs*", "**/services/api*", "**/blockchain/*", "**/workers/*"],
+          message: "asset-core must stay environment-agnostic — consume these via injected ports (see docs/superpowers/specs/2026-08-23-asset-core-externalization-design.md §3).",
+        }],
+      }],
+      "no-restricted-globals": ["error",
+        { name: "window", message: "asset-core is environment-agnostic; inject via ports." },
+        { name: "document", message: "asset-core is environment-agnostic; inject via ports." },
+        { name: "BABYLON", message: "asset-core must not touch the 3D engine." },
+        { name: "Web3", message: "use the HashPort/ChainPort instead of the Web3 CDN global." },
+        { name: "navigator", message: "asset-core is environment-agnostic; inject via ports." },
+        { name: "localStorage", message: "use the StoragePort instead." },
+      ],
+    },
+  },
+
+  {
     name: "arbesk/typescript-declarations",
     files: ["**/*.d.ts"],
     rules: {
