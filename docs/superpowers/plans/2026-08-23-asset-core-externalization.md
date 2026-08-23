@@ -38,7 +38,7 @@
 - Consumes: nothing (first task).
 - Produces: `ArbeskCoreConfig`, `ArbeskRuntime`, `IpfsReadPort`, `IpfsWritePort`, `WriteJsonOptions`, `CredentialPort`, `ChainPort`, `HashPort`, `StoragePort`, `ExecutorPort`, `ExecutorOp`, `Kernels` (types); `initRuntime(config)`, `getRuntime()`, `_resetRuntimeForTesting()`; `memoryStorage()`. Every later task relies on these exact names.
 
-- [ ] **Step 1: Write the failing runtime test**
+- [x] **Step 1: Write the failing runtime test**
 
 `test/frontend/asset-core-runtime.test.js`:
 
@@ -76,12 +76,12 @@ test("memoryStorage round-trips and removes", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- test/frontend/asset-core-runtime.test.js`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Create skeleton files**
+- [x] **Step 3: Create skeleton files**
 
 `frontend/src/js/asset-core/package.json`:
 
@@ -305,7 +305,7 @@ export { initRuntime, getRuntime, _resetRuntimeForTesting } from "./runtime.ts";
 export { memoryStorage } from "./storage/memory.ts";
 ```
 
-- [ ] **Step 4: Add the boundary eslint block**
+- [x] **Step 4: Add the boundary eslint block**
 
 Append to the exported array in `eslint.config.js`, after the `arbesk/typescript` block:
 
@@ -332,12 +332,12 @@ Append to the exported array in `eslint.config.js`, after the `arbesk/typescript
   },
 ```
 
-- [ ] **Step 5: Run test + lint to verify they pass**
+- [x] **Step 5: Run test + lint to verify they pass**
 
 Run: `npm test -- test/frontend/asset-core-runtime.test.js && npx eslint frontend/src/js/asset-core && npm run typecheck:frontend`
 Expected: test PASS (3 tests), eslint clean, typecheck clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/js/asset-core eslint.config.js test/frontend/asset-core-runtime.test.js
@@ -357,7 +357,7 @@ git commit -m "feat(asset-core): package skeleton with runtime, ports, boundary 
 - Consumes: Task 1 skeleton (none of these modules use the runtime).
 - Produces: same exported symbols as before (`sanitizeFileName`, `extractDataURI`, `arrayBufferToBase64`, `base64ToBytes`, `hashBytes`, `DEFAULT_HASH_ALGORITHM`, `SUPPORTED_HASH_ALGORITHMS`, `murmur3_32`, `murmur3_128`, `isGzipped`, `compress`, `decompress`, `createConcurrencyLimiter`, `ContentCache`, `getPayload`, `putPayload`, `clearCache`, `BIG_CONTENT_THRESHOLD_BYTES`, …) now under `asset-core/utils/`.
 
-- [ ] **Step 1: List all importers (ground truth for the rewire)**
+- [x] **Step 1: List all importers (ground truth for the rewire)**
 
 Run:
 ```bash
@@ -365,7 +365,7 @@ grep -rl -E "utils/(uri|encoding|hash|compression|concurrency|content-cache)\.ts
 ```
 Save the list; every file on it gets its specifier rewritten in Step 3.
 
-- [ ] **Step 2: Move the files**
+- [x] **Step 2: Move the files**
 
 ```bash
 mkdir -p frontend/src/js/asset-core/utils
@@ -374,7 +374,7 @@ for f in uri encoding hash compression concurrency content-cache; do
 done
 ```
 
-- [ ] **Step 3: Rewrite import specifiers**
+- [x] **Step 3: Rewrite import specifiers**
 
 For each importer from Step 1, replace the `utils/…` path segment with the correct relative path to `asset-core/utils/…`, preserving the importer's depth. Work file by file with the editor; for each, the change is purely the path segment, e.g. in `frontend/src/js/gltf/composer.ts`:
 
@@ -385,12 +385,12 @@ For each importer from Step 1, replace the `utils/…` path segment with the cor
 
 Also fix imports *inside* the moved files themselves (e.g. `content-cache.ts` importing `./hash.ts` stays `./hash.ts` — same dir — but any moved file importing a non-moved sibling must be adjusted; `compression.ts`, `hash.ts`, `encoding.ts`, `uri.ts`, `concurrency.ts` have zero or intra-dir imports, `content-cache.ts` imports only guarded globals + hash — verify with `grep -n "^import" frontend/src/js/asset-core/utils/*.ts`).
 
-- [ ] **Step 4: Run verification**
+- [x] **Step 4: Run verification**
 
 Run: `npm run typecheck:frontend && npm run typecheck && npm test`
 Expected: all green. TS "cannot find module" errors enumerate any missed importer — fix and re-run.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -412,7 +412,7 @@ git commit -m "refactor(asset-core): move pure utils into the package"
 - Consumes: Task 2 utils (moved files import `../utils/*` → now `../utils/*` inside asset-core — i.e. `asset-core/gltf/gltf-core.ts` imports `../utils/uri.ts`, resolving inside the package).
 - Produces: `UploadCredential`, `uploadToIPFSWithCredential`, `uploadBatchToIPFSWithCredential` from `asset-core/ipfs/upload-with-credential.ts`; everything `gltf-core.ts` exports (`composeGltfJson`, `decomposeGltfJson`, `IPFS_URI_PREFIX`, `isComposite`, `ipfsUriFromCid`, `cidFromIpfsUri`, `attachDedupMeta`, `stripDedupMeta`, `serializeGLB`, …); `computeGltfBounds`; `fetchCIDAsBase64` from their new paths.
 
-- [ ] **Step 1: Move the files**
+- [x] **Step 1: Move the files**
 
 ```bash
 mkdir -p frontend/src/js/asset-core/ipfs frontend/src/js/asset-core/gltf
@@ -422,14 +422,14 @@ git mv frontend/src/js/gltf/bounds.ts frontend/src/js/asset-core/gltf/bounds.ts
 git mv frontend/src/js/gltf/cache-aware-fetch.ts frontend/src/js/asset-core/gltf/cache-aware-fetch.ts
 ```
 
-- [ ] **Step 2: Fix imports inside moved files**
+- [x] **Step 2: Fix imports inside moved files**
 
 `asset-core/gltf/gltf-core.ts`: `../utils/uri.ts` already correct (now resolves to `asset-core/utils/uri.ts`).
 `asset-core/gltf/cache-aware-fetch.ts`: `../utils/encoding.ts`, `../utils/hash.ts`, `../utils/content-cache.ts` already correct by the same mechanism.
 `asset-core/ipfs/upload-with-credential.ts`: `../utils/concurrency.ts` already correct.
 Verify: `grep -n "^import" frontend/src/js/asset-core/{gltf,ipfs}/*.ts` — every specifier must resolve inside `asset-core/`.
 
-- [ ] **Step 3: Replace the stub credential module and update types.ts**
+- [x] **Step 3: Replace the stub credential module and update types.ts**
 
 ```bash
 git rm frontend/src/js/asset-core/ipfs/upload-credential.ts
@@ -440,7 +440,7 @@ In `frontend/src/js/asset-core/types.ts`:
 +import type { UploadCredential } from "./ipfs/upload-with-credential.ts";
 ```
 
-- [ ] **Step 4: Rewire external importers**
+- [x] **Step 4: Rewire external importers**
 
 Known edits:
 - `frontend/src/js/workers/gltf-worker.ts`: `../gltf/cache-aware-fetch.ts` → `../asset-core/gltf/cache-aware-fetch.ts`; `../gltf/gltf-core.ts` → `../asset-core/gltf/gltf-core.ts`.
@@ -450,12 +450,12 @@ Known edits:
 
 Note `dedup.ts` re-exports gltf-core symbols "for legacy import sites" — leave those re-exports in place; they keep working after the path fix.
 
-- [ ] **Step 5: Run verification**
+- [x] **Step 5: Run verification**
 
 Run: `npm run typecheck:frontend && npm run typecheck && npm test && npx eslint frontend/src/js/asset-core`
 Expected: green. (`src/api/assets/generate-node.ts` still imports the OLD `frontend/src/js/gltf/gltf-core.ts` path — it must be updated in Step 4's sweep; the root typecheck catches it if missed.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -475,7 +475,7 @@ git commit -m "refactor(asset-core): move gltf-core, bounds, cache-aware-fetch, 
 - Consumes: `IpfsReadPort`/`IpfsWritePort` from Task 1; existing `ipfs/remote-ipfs.ts` + `ipfs/write-to-ipfs.ts` (unchanged).
 - Produces: `createMemoryIpfs()` (test/backend-double: returns `{ read: IpfsReadPort, write: IpfsWritePort, dump: () => Map<string,Uint8Array> }`); `createBrowserIpfsPorts()` (returns `{ read, write }` wrapping today's modules). Task 5's moved pipeline modules call `getRuntime().ipfsRead/.ipfsWrite`; Task 11's facade config consumes both factories.
 
-- [ ] **Step 1: Write the failing contract test**
+- [x] **Step 1: Write the failing contract test**
 
 `test/frontend/asset-core-ipfs-ports.test.js`:
 
@@ -509,12 +509,12 @@ function ipfsContract(name, makePorts) {
 ipfsContract("memory adapter", () => createMemoryIpfs());
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- test/frontend/asset-core-ipfs-ports.test.js`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the memory adapter**
+- [x] **Step 3: Implement the memory adapter**
 
 `frontend/src/js/asset-core/testing/memory-ipfs.ts`:
 
@@ -584,12 +584,12 @@ export function createMemoryIpfs(): {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- test/frontend/asset-core-ipfs-ports.test.js`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Implement the browser adapter**
+- [x] **Step 5: Implement the browser adapter**
 
 `frontend/src/js/ipfs/asset-core-adapter.ts`:
 
@@ -623,7 +623,7 @@ export function createBrowserIpfsPorts(): { read: IpfsReadPort; write: IpfsWrite
 
 Add a smoke test appended to `asset-core-ipfs-ports.test.js` asserting `createBrowserIpfsPorts()` returns objects with the three read methods and two write methods (jsdom environment; no network calls).
 
-- [ ] **Step 6: Run verification + commit**
+- [x] **Step 6: Run verification + commit**
 
 Run: `npm test -- test/frontend/asset-core-ipfs-ports.test.js && npm run lint && npm run typecheck:frontend`
 Expected: green.
@@ -650,7 +650,7 @@ git commit -m "feat(asset-core): IPFS port adapters (browser + in-memory) with c
 - Consumes: `getRuntime().ipfsRead/.ipfsWrite` (Task 1 + Task 4 adapters).
 - Produces: from `asset-core/gltf/`: `composeGltfJson` pipeline entry `composeGLTF`/`composeGltf` (existing composer exports, names unchanged), `decomposeAndStore` + `isComposite` re-export (decomposer), `isGLB`, `decomposeGLB`, `serializeGLB` (glb-parser), `uploadWithDedup`, `buildDedupMap`, `DedupMeta` (dedup), `editCompositeColors` (material-editor), source-color editor entries. From `asset-core/manifest/chain.ts`: `getManifestChain(cid: string, maxDepth?: number): Promise<ManifestChainEntry[]>` and `export interface ManifestChainEntry { cid: string; version: any; name: string | null; nodeCount: number }` (now exported — it wasn't before).
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 ```bash
 npm install @gltf-transform/core@^4.1.2
@@ -658,7 +658,7 @@ npm install fflate && npm uninstall --save-dev fflate   # moves it to dependenci
 ```
 Verify `frontend/package.json` still pins its own copies (browser import map is untouched).
 
-- [ ] **Step 2: Move the six gltf modules**
+- [x] **Step 2: Move the six gltf modules**
 
 ```bash
 for f in composer decomposer glb-parser dedup material-editor source-color-editor; do
@@ -666,7 +666,7 @@ for f in composer decomposer glb-parser dedup material-editor source-color-edito
 done
 ```
 
-- [ ] **Step 3: Rewire moved files to ports**
+- [x] **Step 3: Rewire moved files to ports**
 
 Inside each moved file, replace direct IPFS imports with runtime port calls. Exact substitutions:
 
@@ -683,7 +683,7 @@ and at call sites: `getArrayBufferFromRemoteIPFS(cid)` → `getRuntime().ipfsRea
 
 - `asset-core/gltf/material-editor.ts`, `source-color-editor.ts`: `getFromRemoteIPFS(cid)` → `getRuntime().ipfsRead.getJSON(cid)`; `getArrayBufferFromRemoteIPFS(cid)` → `getRuntime().ipfsRead.getBytes(cid)`; `writeJSONToIPFS(...)` → port.
 
-- [ ] **Step 4: Move the manifest-chain walk into the package**
+- [x] **Step 4: Move the manifest-chain walk into the package**
 
 Create `frontend/src/js/asset-core/manifest/chain.ts` by moving the body of `getManifestChain` (and the `ManifestChainEntry` shape, now exported) out of `frontend/src/js/ipfs/remote-ipfs.ts`, replacing its internal fetch helper with `getRuntime().ipfsRead.getJSON(cid)`. In `remote-ipfs.ts`, keep a re-export so its current consumers are untouched:
 
@@ -692,19 +692,19 @@ export { getManifestChain } from "../asset-core/manifest/chain.ts";
 export type { ManifestChainEntry } from "../asset-core/manifest/chain.ts";
 ```
 
-- [ ] **Step 5: Rewire external importers**
+- [x] **Step 5: Rewire external importers**
 
 ```bash
 grep -rl -E "gltf/(composer|decomposer|glb-parser|dedup|material-editor|source-color-editor)\.ts" frontend/src src test --include='*.ts' --include='*.js'
 ```
 Update each to the `asset-core/gltf/` path (e.g. `formats/handlers/glb-handler.ts`: `../../gltf/async-gltf.ts` stays for now — Task 6 — but `../gltf/decomposer.ts` → `../asset-core/gltf/decomposer.ts`). Update `src/api/assets/generate-node.ts:7` to `frontend/src/js/asset-core/gltf/gltf-core.ts`. Update `test/frontend/glb-parser.test.js`, `glb-parser.bench.mjs`.
 
-- [ ] **Step 6: Run verification**
+- [x] **Step 6: Run verification**
 
 Run: `npm run lint && npm run typecheck && npm run typecheck:frontend && npm test`
 Expected: green. The eslint boundary block must pass on the moved files — if it flags a missed `services/` or `ipfs/` import, that import was overlooked in Step 3; fix via the port, never by exempting the rule.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -727,7 +727,7 @@ git commit -m "refactor(asset-core): move compose/decompose pipeline behind IPFS
 - Consumes: Task 5 pipeline modules; `CredentialPort` (Task 1) for credential pooling — `async-gltf.ts`'s `getUploadCredentials(n)` call becomes `getRuntime().credentials!.getUploadCredentials(n)` with a guard error if the port is absent.
 - Produces: `composeGlTFAsync`, `composeGlTFToBlobAsync`, `decomposeGlTFAsync`, `decomposeAndStoreAsync`, `decomposeGLBAsync`, `editSourceColorsAsync` (unchanged names/signatures, new path); real `inlineExecutor` (op table dispatching to main-thread implementations); `createWorkerExecutor()` in frontend workers/.
 
-- [ ] **Step 1: Write the failing inline-executor test**
+- [x] **Step 1: Write the failing inline-executor test**
 
 `test/frontend/asset-core-executor.test.js`:
 
@@ -756,12 +756,12 @@ test("inline executor reports available", async () => {
 
 (Adjust the asserted result field names to the real return shape of the moved `decomposeGLB` once wired in Step 3 — the round-trip assertion is the contract.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- test/frontend/asset-core-executor.test.js`
 Expected: FAIL — "inline executor not wired yet".
 
-- [ ] **Step 3: Move async-gltf and wire the inline executor**
+- [x] **Step 3: Move async-gltf and wire the inline executor**
 
 ```bash
 git mv frontend/src/js/gltf/async-gltf.ts frontend/src/js/asset-core/gltf/async-gltf.ts
@@ -806,7 +806,7 @@ export const inlineExecutor: ExecutorPort = {
 
 (Use the actual exported names from the moved modules; if the composer/decomposer entries differ, map them in `OPS` — the op-name contract `"compose" | "decomposeGltf" | "decomposeGlb" | "bakeSourceColors"` is fixed because the worker already exposes exactly these.)
 
-- [ ] **Step 4: Create the browser worker executor**
+- [x] **Step 4: Create the browser worker executor**
 
 `frontend/src/js/workers/worker-executor.ts`:
 
@@ -825,14 +825,14 @@ export function createWorkerExecutor(): ExecutorPort {
 
 Bump the cache-buster in `gltf-worker-pool.ts`: `new URL("./gltf-worker.js?v=5", import.meta.url)` → `?v=6` (worker entry imports changed paths in Task 3).
 
-- [ ] **Step 5: Rewire importers + run verification**
+- [x] **Step 5: Rewire importers + run verification**
 
 Update `services/asset-download.ts`, `formats/handlers/glb-handler.ts`, `gltf-handler.ts`, `test/frontend/async-gltf-credential-pool.test.js` to the new `asset-core/gltf/async-gltf.ts` path. The credential-pool test previously stubbed `services/api#getUploadCredentials` — re-stub via `initRuntime({ credentials: fakePort })` instead (test edit allowed: same behavior, new seam).
 
 Run: `npm run lint && npm run typecheck && npm run typecheck:frontend && npm test`
 Expected: green, including the new executor test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -854,7 +854,7 @@ git commit -m "refactor(asset-core): move async pipeline orchestration behind Ex
 - Consumes: zod (root dep), nothing from moved pipeline.
 - Produces: `ManifestSchema` (zod), `validateManifest(manifest): { valid: boolean; issues?: any[] }` (match the current `src/api/schemas.ts` return contract — backend routes depend on it), `getSceneNodes(manifest)`, `bumpManifestVersion(manifest, prevCid?)`.
 
-- [ ] **Step 1: Write the failing schema test**
+- [x] **Step 1: Write the failing schema test**
 
 `test/frontend/asset-core-manifest.test.js`:
 
@@ -889,16 +889,16 @@ test("bumpManifestVersion increments and chains prev cid", () => {
 
 IMPORTANT: before finalizing Step 1, read the CURRENT `src/api/schemas.ts#validateManifest` and the manifests in `test/` fixtures; the new zod schema must accept exactly what the current validator accepts (same required fields, same tolerance for extra fields). If the current validator is stricter/looser than the sketch above, the test follows the CURRENT behavior — the wire format does not change.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- test/frontend/asset-core-manifest.test.js`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement schema + utils**
+- [x] **Step 3: Implement schema + utils**
 
 `manifest/schema.ts`: zod object mirroring the current validator's rules (`.passthrough()` if the current validator tolerates unknown keys). `manifest/utils.ts`: move `getSceneNodes`/`bumpManifestVersion` verbatim from `src/api/manifest-utils.ts`; implement `validateManifest` as `ManifestSchema.safeParse` mapped to the existing `{ valid, issues }` contract.
 
-- [ ] **Step 4: Rewire backend**
+- [x] **Step 4: Rewire backend**
 
 `src/api/manifest-utils.ts` becomes:
 
@@ -909,7 +909,7 @@ export { validateManifest } from "../../frontend/src/js/asset-core/manifest/util
 
 `src/api/schemas.ts`: remove its local manifest validator; `export { validateManifest } from ...asset-core...` (or delegate), keeping every other schema untouched.
 
-- [ ] **Step 5: Run verification + commit**
+- [x] **Step 5: Run verification + commit**
 
 Run: `npm test -- test/frontend/asset-core-manifest.test.js && npm run test:api && npm run lint && npm run typecheck`
 Expected: green (backend suite proves the re-export contract).
@@ -936,7 +936,7 @@ git commit -m "refactor(asset-core): canonical manifest schema + utils in the pa
 - Consumes: `HashPort`, `StoragePort`, `ChainPort` from runtime (Task 1); viem.
 - Produces: `EVENTS`, `on`, `off`, `emit` from `asset-core/events/bus.ts`; `createStore` from `asset-core/state/create-store.ts`; all domain exports (`adoptOpenedAsset`, `renameAsset`, `saveDraftAsset`, `publishAsset`, `getAssetState`, `getActiveAssetManifestCid`, `getCurrentManifest`, `publishCollection`, editor helpers, `version-history-store` API, `generation-actions` policy) at their new paths; merkle-editors API (`MAX_CHILD_ASSET_DEPTH`-adjacent editor helpers, proof commands) at new path. `createBrowserPlatformPorts()` returning `{ hash, storage, chain }`.
 
-- [ ] **Step 1: Move bus + store + domain + merkle-editors**
+- [x] **Step 1: Move bus + store + domain + merkle-editors**
 
 ```bash
 mkdir -p frontend/src/js/asset-core/events frontend/src/js/asset-core/state frontend/src/js/asset-core/domain
@@ -948,7 +948,7 @@ git mv frontend/src/js/gltf/merkle-editors.ts frontend/src/js/asset-core/gltf/me
 
 Leave `frontend/src/js/events/` and `state/` dirs behind only if other unmoved files remain (check first; if empty, `git rm` the dirs).
 
-- [ ] **Step 2: Rewire domain/editors.ts to ports**
+- [x] **Step 2: Rewire domain/editors.ts to ports**
 
 In `asset-core/domain/editors.ts`:
 - Replace `const W3 = window.Web3; … W3.utils.soliditySha3(...)` with `getRuntime().hash` — guard: `const h = getRuntime().hash; if (!h) throw new Error("asset-core: editor ops require a HashPort")`. Call sites: `h.soliditySha3(...)`.
@@ -957,7 +957,7 @@ In `asset-core/domain/editors.ts`:
 - Replace `getFromRemoteIPFS` with `getRuntime().ipfsRead.getJSON`.
 - Update `../gltf/merkle-editors.ts` ↔ `../domain/editors.ts` cross-imports to their in-package relative paths.
 
-- [ ] **Step 3: Browser platform adapter**
+- [x] **Step 3: Browser platform adapter**
 
 `frontend/src/js/blockchain/asset-core-adapter.ts`:
 
@@ -993,19 +993,19 @@ export function createBrowserChainPort(): ChainPort {
 
 `inferType` maps JS values to abi types the way `soliditySha3` infers them (`address` for 0x-strings of 40 hex chars, `uint256` for numbers, `string` otherwise) — implement by mirroring the ONE usage pattern in the old `editors.ts` (if it only ever hashes addresses, the mapper is one line; do not build a general ABI encoder — YAGNI).
 
-- [ ] **Step 4: Rewire all importers**
+- [x] **Step 4: Rewire all importers**
 
 ```bash
 grep -rl -E "(events/bus|state/create-store|domain/(asset|asset-store|collection|editors|node|asset-ref|generation-actions|version-history-store)|gltf/merkle-editors)\.ts" frontend/src src test --include='*.ts' --include='*.js'
 ```
 Rewrite each to the `asset-core/…` path. Known hot spots from exploration: `engine/{cleanup,scene-loader,camera-persistence,scene-graph}.ts`, `services/{asset-save/*,team,asset-delete,asset-file-drop,comment-thread,library-ops}.ts`, `ui/*` (12 files), `workers/gltf-worker.ts`, tests listed above. The single-writer discipline (only `domain/asset.ts` mutates identity fields) is unchanged — moves only.
 
-- [ ] **Step 5: Run verification**
+- [x] **Step 5: Run verification**
 
 Run: `npm run lint && npm run typecheck && npm run typecheck:frontend && npm test`
 Expected: green. The boundary block now guards the domain files — any flagged import means a missed port rewire in Step 2.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -1049,7 +1049,7 @@ export interface ArbeskCore {
 export function createArbeskCore(config: ArbeskCoreConfig): ArbeskCore;
 ```
 
-- [ ] **Step 1: Write the failing facade test**
+- [x] **Step 1: Write the failing facade test**
 
 `test/frontend/asset-core-facade.test.js`:
 
@@ -1087,12 +1087,12 @@ test("addEditor with email but no chain port rejects with guidance", async () =>
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- test/frontend/asset-core-facade.test.js`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the facade**
+- [x] **Step 3: Implement the facade**
 
 `frontend/src/js/asset-core/facade.ts` — `createArbeskCore` calls `initRuntime(config)` then returns thin compositions:
 
@@ -1149,12 +1149,12 @@ export function createArbeskCore(config: ArbeskCoreConfig) {
 
 (`toBytes` handles Blob/ArrayBuffer/Uint8Array/string. The `editors.*Command` names are placeholders ONLY in the sense that they must be the real exported command names from the Task-8-moved `domain/editors.ts` — use those verbatim; if `domain/editors.ts` exposes lower-level helpers, compose them here: load list (StoragePort/chain version) → add/remove address → rebuild Merkle root (merkle-editors) → persist. The facade contains no logic of its own beyond identity resolution and format sniffing.)
 
-- [ ] **Step 4: Switch the two proof sites**
+- [x] **Step 4: Switch the two proof sites**
 
 - `src/api/assets/generate-node.ts`: construct a backend core at module init — `createArbeskCore({ ipfsRead: kuboAdapter, ipfsWrite: kuboAdapter })` where the kubo adapter maps `getJSON/getBytes/getRawBytes/write/writeJSON` onto the existing `src/api/storage/` kubo functions (create `src/api/asset-core-adapters.ts`); replace the direct `gltf-core` usage with the facade/core call equivalent.
 - `frontend/src/js/services/asset-download.ts`: route its download through a frontend core built once in an init module (see Task 10 wiring) — for this task, construct with `createBrowserIpfsPorts()` + `createWorkerExecutor()`.
 
-- [ ] **Step 5: Run verification + commit**
+- [x] **Step 5: Run verification + commit**
 
 Run: `npm test -- test/frontend/asset-core-facade.test.js && npm run test:api && npm run lint && npm run typecheck && npm run typecheck:frontend && npm test`
 Expected: green.
@@ -1179,7 +1179,7 @@ git commit -m "feat(asset-core): SDK facade (upload/download/editors/manifests) 
 - Consumes: all adapters from Tasks 4/6/8.
 - Produces: `initAssetCoreBrowser(): ArbeskCore` (frontend one-liner); real `defaultKernels` (base64 ↔ `utils/encoding.ts`, murmur3 ↔ `utils/hash.ts`, sha256 ↔ `crypto.subtle`, `isGLB` ↔ `gltf-core`/glb-parser magic check).
 
-- [ ] **Step 1: Extend the runtime test (failing)**
+- [x] **Step 1: Extend the runtime test (failing)**
 
 Append to `test/frontend/asset-core-runtime.test.js`:
 
@@ -1198,9 +1198,9 @@ test("default kernels: murmur3 matches utils/hash", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm test -- test/frontend/asset-core-runtime.test.js` → FAIL ("not wired yet").
+- [x] **Step 2: Run to verify it fails** — `npm test -- test/frontend/asset-core-runtime.test.js` → FAIL ("not wired yet").
 
-- [ ] **Step 3: Implement real kernels + browser init**
+- [x] **Step 3: Implement real kernels + browser init**
 
 `kernels/index.ts` delegates to the moved utils; `asset-core-init.ts`:
 
@@ -1232,7 +1232,7 @@ export function initAssetCoreBrowser(): ArbeskCore {
 
 Call `initAssetCoreBrowser()` from the Studio bootstrap before any domain/gltf module use (find the exact boot file: `grep -rn "DOMContentLoaded\|Alpine.start" frontend/src/js/index.ts frontend/src/js/ui/alpine.ts`).
 
-- [ ] **Step 4: Run verification + commit**
+- [x] **Step 4: Run verification + commit**
 
 Run: `npm test && npm run lint && npm run typecheck && npm run typecheck:frontend && npm run build:frontend`
 Expected: green; build emits `dist/js/asset-core/**` (spot-check `ls frontend/dist/js/asset-core`).
@@ -1256,7 +1256,7 @@ git commit -m "feat(asset-core): browser bootstrap wiring + real kernel defaults
 - Consumes: facade + memory adapters.
 - Produces: `npm run bench:asset-core` → stdout table + `test-results/asset-core-bench.json`.
 
-- [ ] **Step 1: Write the failing bench smoke test**
+- [x] **Step 1: Write the failing bench smoke test**
 
 ```js
 import { runBench } from "../../frontend/src/js/asset-core/bench/run.ts";
@@ -1271,24 +1271,24 @@ test("bench returns timing rows for the smallest fixture", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** — `npm test -- test/frontend/asset-core-bench-smoke.test.js` → module not found.
+- [x] **Step 2: Run to verify it fails** — `npm test -- test/frontend/asset-core-bench-smoke.test.js` → module not found.
 
-- [ ] **Step 3: Implement the bench runner**
+- [x] **Step 3: Implement the bench runner**
 
 `bench/run.ts`: builds a core over `createMemoryIpfs()`; for each fixture GLB (default: all of `mock-gltf-assets/*.glb` sorted by size) times `decomposeGLB`, `compose`, a 1 MiB base64 encode/decode loop, and a murmur3 loop; `{ fixture, op, ms, bytes }` rows; CLI entry (`import.meta.url` main check) prints a table and writes the JSON artifact. Export `runBench({ fixtures, iterations })` for the smoke test.
 
 Add to root `package.json` scripts: `"bench:asset-core": "node frontend/src/js/asset-core/bench/run.ts"`.
 
-- [ ] **Step 4: Docs**
+- [x] **Step 4: Docs**
 
 `asset-core/README.md`: 30-line usage doc — createArbeskCore config, facade verbs, port list, boundary rule, bench command. `AGENTS.md` §3: add the `asset-core/` bullet (single-writer discipline unchanged; note the boundary lint rule and that `index.ts`/facade is the only sanctioned import surface).
 
-- [ ] **Step 5: Full gate**
+- [x] **Step 5: Full gate**
 
 Run: `npm run test:all && npm run bench:asset-core && npm run test:e2e -- --project=chromium`
 Expected: `test:all` green; bench prints a table; E2E passes (save/publish, version history, manifest paths — repo §10 requirement for manifest-schema + save/publish changes). Dev stack must be running for E2E: `./scripts/start-dev.sh --setup-only`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
