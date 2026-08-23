@@ -77,10 +77,116 @@
   margin: 0 var(--size-3) var(--size-2);
   padding: var(--size-1) var(--size-2);
   font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   background-color: var(--card-bg);
   color: var(--dim-fg);
   border: var(--border-size-1) solid var(--border-color);
   border-radius: var(--radius-round);
+}
+
+.library-details-actions {
+  display: flex;
+  gap: var(--size-2);
+  padding: 0 var(--size-3) var(--size-2);
+}
+
+.library-details-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  padding: 1px var(--size-1);
+  background-color: var(--card-bg);
+  border: var(--border-size-1) solid var(--border-color);
+  border-radius: var(--radius-1);
+}
+
+.library-details-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-0);
+}
+
+.library-details-disclose {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin: var(--size-1) var(--size-3);
+  padding: var(--size-1) 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+
+  &:hover {
+    color: var(--accent-bg);
+  }
+
+  svg {
+    transition: transform 0.15s ease;
+  }
+
+  &[aria-expanded="true"] svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-details-disclose svg {
+    transition: none;
+  }
+}
+
+// Collection preview: 2×2 mosaic of asset thumbnails (+ "+N" overflow).
+// The preview slot's dark viewport bg suits 3D canvases; the mosaic and the
+// empty-collection hint cover it with light surfaces instead.
+.library-details-mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  background-color: var(--card-bg);
+
+  > div {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background-color: var(--surface-overlay-hover);
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.library-details-mosaic-more {
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+}
+
+.library-details-mosaic-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-1);
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  padding: 0 var(--size-3);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+  background-color: var(--card-bg);
+
+  strong {
+    color: var(--view-fg);
+    font-weight: var(--font-weight-6);
+  }
 }
 
 .library-details-rows {
@@ -120,21 +226,42 @@
   }
 }
 
-// Empty / multi-select message; hidden while a single item is shown.
+// Empty / multi-select state; hidden while a single item is shown. Reuses
+// the details view's title/badge/row classes so both states read the same;
+// the hint and prompt are subdued lines below the overview row.
 .library-details-empty {
   display: none;
   flex: 1;
-  place-items: center;
-  text-align: center;
-  padding: var(--size-5);
   color: var(--dim-fg);
   font-size: var(--font-size-1);
+}
+
+.library-details-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2);
+  margin: var(--size-2) var(--size-3) 0;
+  padding-top: var(--size-2);
+  border-top: var(--border-size-1) solid var(--border-color);
+  font-size: var(--font-size-0);
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+}
+
+.library-details-prompt {
+  margin: var(--size-2) var(--size-3) 0;
+  padding-top: var(--size-2);
+  border-top: var(--border-size-1) solid var(--border-color);
+  font-size: var(--font-size-0);
 }
 
 .library-details[data-state="empty"],
 .library-details[data-state="multi"] {
   .library-details-empty {
-    display: grid;
+    display: block;
   }
 
   .library-details-preview,
