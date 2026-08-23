@@ -185,7 +185,70 @@ npm run bench:asset-core   # timing table + test-results/asset-core-bench.json
 Note: kernels apply to main-thread execution; the Web Worker path does its
 own fetching/encoding internally and does not see custom kernels.
 
-## 6. Rules for contributors (the boundary that keeps this portable)
+## 6. Web Worker integration (browser)
+
+Heavy pipeline ops (compose, decompose) should not run on the UI thread in a
+browser. The package's answer is the `ExecutorPort` — the package never
+touches `Worker` itself; the host injects the execution backend:
+
+```ts
+const core = createArbeskCore({
+  ipfsRead, ipfsWrite, /* … */
+  executor: createWorkerExecutor(), // browser: Web Worker pool
+  // omitting executor → inlineExecutor: same ops, calling thread (fine for Node/scripts)
+});
+```
+
+How the production browser wiring works (copy this pattern):
+
+1. **The port** (`frontend/src/js/workers/worker-executor.ts`) is a thin
+   pass-through to a `workerpool` pool (`workers/gltf-worker-pool.ts`: module
+   workers, `maxWorkers = min(4, hardwareConcurrency)`, cache-busted script
+   URL — bump the `?v=` whenever the worker's imports change). Its one
+   environment job: inject `gatewayBase` into `compose*` payloads, because
+   the worker fetches `ipfs://` references over HTTP itself and asset-core
+   deliberately does not know what a gateway is.
+2. **The worker entry** (`workers/gltf-worker.ts`) imports the *same*
+   asset-core pipeline modules (composer, decomposer, glb-parser,
+   source-color-editor) and registers them with `workerpool.worker({ … })`.
+   The worker has **no runtime and no ports** — the pure pipeline functions
+   take fetchers/credentials as arguments, so they are worker-safe by
+   construction.
+3. **The op set** is fixed by the worker's registered methods:
+   `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`,
+   `decomposeAndUploadGltf`, `decomposeAndUploadGlb`, `bakeSourceColors`
+   (`ExecutorOp` in `types.ts`). `async-gltf.ts` dispatches these op names
+   with a single payload object per call — an ExecutorPort is either this
+   pass-through or the inline op table (`asset-core/executor/inline.ts`)
+   mapping the same names to the same functions on the calling thread.
+4. **Availability probe + automatic fallback**: `available()` execs the
+   built-in `methods` op and checks the required methods registered (this
+   detects a worker script that failed to evaluate — a classic
+   non-module-worker trap, documented in `gltf-worker-pool.ts`). If the pool
+   is unavailable or an exec fails, `async-gltf.ts` logs and re-runs the op
+   on the main thread. Callers never handle this.
+
+Rules of the road for worker integration:
+
+- **Payloads must be structured-cloneable** — one plain object per op, no
+  functions, no class instances.
+- **Single-use upload credentials**: the workerpool structured-clones the
+  credential into the worker, so a pooled Pinata URL would be double-spent
+  (HTTP 409). The credential-pooling logic in `async-gltf.ts`
+  (`estimateUploadCount`, `reserveFollowUpCredential`,
+  `MAX_POOLED_CREDENTIALS = 200`) exists for exactly this — if you build your
+  own executor, preserve that behavior for upload-bearing ops.
+- **Kernels don't cross the boundary** (see §5): a custom kernel only affects
+  main-thread/inline execution. If a benchmark ever justifies a WASM kernel,
+  the worker entry must load it too.
+
+To integrate in another browser app: serve the transpiled asset-core modules,
+create a module-worker entry that registers the pipeline functions, wrap the
+pool in an `ExecutorPort`, pass it to `createArbeskCore({ executor })`. A
+non-browser host (desktop shell) does the same with threads/actors — the
+package cannot tell the difference.
+
+## 7. Rules for contributors (the boundary that keeps this portable)
 
 `asset-core/` must stay environment-agnostic:
 
@@ -205,7 +268,7 @@ Verify with: `npm run lint && npm run typecheck && npm run typecheck:frontend &&
 If your change touches save/publish, manifest schema, or editor flows, also
 run E2E: `npm run test:e2e -- --project=chromium`.
 
-## 7. FAQ
+## 8. FAQ
 
 **Do I need the backend running to use the SDK?**
 No. The SDK never calls the Express API directly — only your ports. With the
