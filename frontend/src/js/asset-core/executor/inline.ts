@@ -42,7 +42,7 @@ const OPS: Record<ExecutorOp, (payload: any) => Promise<any>> = {
   },
 
   decomposeGlb: async (payload) => {
-    const { arrayBuffer, credential = null, ...options } = payload || {};
+    const { arrayBuffer, credential = null, options = {} } = payload || {};
     if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
     return decomposeGLB(arrayBuffer, undefined, { credential, ...options });
   },

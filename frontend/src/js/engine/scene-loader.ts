@@ -29,7 +29,7 @@ import { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
 import { applyColor, applyScale } from "./time-travel.ts";
 import { clearScene, disposeNodeContent } from "./cleanup.ts";
 import { createAnchorNode } from "./scene-graph.ts";
-import { identityMatrix } from "../utils/collections.ts";
+import { identityMatrix } from "../asset-core/utils/collections.ts";
 
 /**
  * @param src - source string or `{cid, path?, format?}` reference

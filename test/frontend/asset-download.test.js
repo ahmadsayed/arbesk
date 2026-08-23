@@ -24,6 +24,11 @@ beforeAll(async () => {
   jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     getFromRemoteIPFS,
     getBlobFromRemoteIPFS,
+    // Extra names referenced (but never called here) by the facade proof-site
+    // wiring: ipfs/asset-core-adapter.ts and workers/worker-executor.ts.
+    getArrayBufferFromRemoteIPFS: jest.fn(),
+    getRawArrayBufferFromRemoteIPFS: jest.fn(),
+    gatewayBase: jest.fn(),
   }));
   jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFToBlobAsync,
@@ -33,6 +38,8 @@ beforeAll(async () => {
   }));
   jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
     announceStatus: jest.fn(),
+    // Referenced (never called) by ipfs/write-to-ipfs.ts via the adapter.
+    getUploadCredential: jest.fn(),
   }));
   global.URL.createObjectURL = jest.fn(() => "blob:mock");
   global.URL.revokeObjectURL = jest.fn();

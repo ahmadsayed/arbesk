@@ -10,7 +10,9 @@ export const defaultKernels: Kernels = {
     decode: () => { throw new Error("asset-core: base64 kernel not wired yet (Task 10)"); },
   },
   hash: {
-    sha256: async (bytes) => new Uint8Array(await crypto.subtle.digest("SHA-256", bytes as BufferSource)),
+    // `as any`: BufferSource is a DOM-lib name; the backend typecheck (ES2022
+    // lib) pulls this module in transitively via the facade.
+    sha256: async (bytes) => new Uint8Array(await crypto.subtle.digest("SHA-256", bytes as any)),
     murmur3_128: () => { throw new Error("asset-core: hash kernel not wired yet (Task 10)"); },
   },
   glb: {

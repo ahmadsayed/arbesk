@@ -32,7 +32,7 @@ test("inline executor decomposeGlb + compose round-trips triangle.glb", async ()
   initRuntime({ ipfsRead: read, ipfsWrite: write, executor: inlineExecutor });
 
   const result = await inlineExecutor.exec("decomposeGlb", [
-    { arrayBuffer: triangleGlbArrayBuffer(), assetName: "triangle" },
+    { arrayBuffer: triangleGlbArrayBuffer(), options: { assetName: "triangle" } },
   ]);
   expect(result.compositeCid).toMatch(/^bafymem/);
   expect(result.composite.buffers[0].uri).toMatch(/^ipfs:\/\/bafymem/);

@@ -47,7 +47,7 @@ import {
   updatePendingGeneration,
   _resetPendingGenerations,
 } from "../state/pending-generations.ts";
-import { deriveDefaultCollectionId, identityMatrix } from "../utils/collections.ts";
+import { deriveDefaultCollectionId, identityMatrix } from "../asset-core/utils/collections.ts";
 import { onSaveAssetDraft } from "./asset-save.ts";
 import {
   adoptManifestName,

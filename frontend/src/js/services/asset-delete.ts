@@ -22,7 +22,7 @@ import { showToast } from "../ui/toasts.ts";
 import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { getActiveAssetTokenId, getActiveAssetId } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
-import { identityMatrix } from "../utils/collections.ts";
+import { identityMatrix } from "../asset-core/utils/collections.ts";
 
 /**
  * Remove an asset from its parent collection.

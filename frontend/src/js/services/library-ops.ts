@@ -23,7 +23,7 @@ import { walletState } from "../state/wallet-state.ts";
 import {
   deriveNamedCollectionId,
   identityMatrix,
-} from "../utils/collections.ts";
+} from "../asset-core/utils/collections.ts";
 import { log, warn } from "../utils/log.ts";
 
 function ts(): string {

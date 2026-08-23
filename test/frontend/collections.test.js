@@ -1,13 +1,13 @@
 /**
  * Collection helper unit tests.
  *
- * Tests the shared pure functions in frontend/src/js/utils/collections.js.
+ * Tests the shared pure functions in frontend/src/js/asset-core/utils/collections.js.
  */
 
 import {
   mergeAssetIntoCollection,
   deriveDefaultAssetId,
-} from "../../frontend/src/js/utils/collections.js";
+} from "../../frontend/src/js/asset-core/utils/collections.js";
 
 describe("collections - mergeAssetIntoCollection", () => {
   it("creates a fresh collection manifest when none exists yet (default collection lazy-mint)", () => {

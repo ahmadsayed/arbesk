@@ -1,14 +1,12 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { mockGenerate } from "../adapters/mock-adapter.ts";
-import {
-  composeGltfJson,
-  serializeGLB,
-} from "../../../frontend/src/js/asset-core/gltf/gltf-core.ts";
+import { serializeGLB } from "../../../frontend/src/js/asset-core/gltf/gltf-core.ts";
 import {
   isGzipped,
   decompress,
 } from "../../../frontend/src/js/asset-core/utils/compression.ts";
+import { createBackendCore } from "../asset-core-adapters.ts";
 import {
   createTask,
   createImageTask,
@@ -75,30 +73,20 @@ function looksLikeGltfJson(buf: Buffer): boolean {
 }
 
 /**
- * Injected fetcher for the shared compose pipeline (gltf-core.js): fetch a
- * CID's payload from IPFS and return it base64-encoded. Honors the
- * composite entry's `_arbesk.compressed` storage flag, with a gzip-magic
- * sniff as fallback — decomposed components are stored gzipped
- * (`compress: true` in decomposer.js / async-gltf.js) and `catBytes`
- * returns the raw stored bytes.
- * @param arbeskMeta - `_arbesk` dedup metadata from the composite entry
- * @returns base64-encoded (decompressed) payload
+ * Backend asset-core facade (module singleton): compose/decompose pipeline
+ * reading IPFS through the storage adapter via the injected ports.
  */
-async function fetchCidAsBase64(cid: string, arbeskMeta?: any): Promise<string> {
-  console.log(`[GEN] composite compose fetch ipfs://${cid}`);
-  const raw = await getStorage().catBytes(cid);
-  const bytes = arbeskMeta?.compressed || isGzipped(raw) ? decompress(raw) : raw;
-  return Buffer.from(bytes).toString("base64");
-}
+const arbeskCore = createBackendCore();
 
 /**
  * Resolve a glTF JSON document into a self-contained GLB binary buffer
- * suitable for Tripo upload, via the shared pipeline in gltf-core.js:
- * `composeGltfJson` inlines `ipfs://<CID>` refs as base64 data URIs and
- * strips dedup metadata; `serializeGLB` packs the result. Data URIs pass
- * through; any other external URI (relative path, http(s)) cannot be
- * inlined here and fails fast with a 400 TripoApiError instead of
- * producing a corrupt GLB.
+ * suitable for Tripo upload, via the asset-core compose pipeline (facade):
+ * `compose` inlines `ipfs://<CID>` refs as base64 data URIs and strips dedup
+ * metadata (reading through the backend IpfsReadPort, with the same
+ * gzip/dedup-metadata handling as the browser composer); `serializeGLB` packs
+ * the result. Data URIs pass through; any other external URI (relative path,
+ * http(s)) cannot be inlined here and fails fast with a 400 TripoApiError
+ * instead of producing a corrupt GLB.
  *
  * We only run this for the Tripo file_token path — browser rendering uses
  * the frontend compose (composer.js).
@@ -115,7 +103,11 @@ async function resolveCompositeToGlb(compositeBuf: Buffer): Promise<Buffer> {
     throw new TripoApiError(MSG_SOURCE_UNSUPPORTED, 0, 400);
   }
 
-  const composed = (await composeGltfJson(gltf, fetchCidAsBase64)) as any;
+  // The facade compose returns a Blob of the composed glTF JSON (application/
+  // json); parse it back for the GLB packing step below.
+  const composed = JSON.parse(
+    await (await arbeskCore.compose(gltf)).text()
+  ) as any;
 
   // Fail fast on references that are neither ipfs:// (resolved above) nor
   // data: (inlined below) — a relative or http(s) URI would otherwise be

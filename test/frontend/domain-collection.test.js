@@ -16,6 +16,7 @@ import {
   assetStore,
   _resetForTesting,
 } from "../../frontend/src/js/asset-core/domain/asset-store.js";
+import { initRuntime } from "../../frontend/src/js/asset-core/runtime.ts";
 
 beforeEach(() => {
   _resetForTesting();
@@ -32,6 +33,17 @@ beforeEach(() => {
       }),
     },
   };
+  // asset-core runtime seam: deriveDefaultCollectionId now hashes through the
+  // injected HashPort instead of the window.Web3 CDN global. The port
+  // delegates to the fake above so derived ids stay byte-identical.
+  initRuntime({
+    ipfsRead: { getJSON: async () => null },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: {
+      soliditySha3: (...args) => window.Web3.utils.soliditySha3(...args),
+      keccak256: () => "0x",
+    },
+  });
 });
 
 test("adoptOpenedCollection sets active token and optionally clears selection", () => {

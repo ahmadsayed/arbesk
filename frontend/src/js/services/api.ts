@@ -13,7 +13,7 @@ import {
 } from "../blockchain/network-config.ts";
 import { log, warn, error } from "../utils/log.ts";
 import { base64ToBytes } from "../asset-core/utils/encoding.ts";
-import { identityMatrix } from "../utils/collections.ts";
+import { identityMatrix } from "../asset-core/utils/collections.ts";
 
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";

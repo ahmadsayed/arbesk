@@ -16,6 +16,21 @@ export const DB_VERSION = 1;
 export const MAX_CACHE_BYTES = 500 * 1024 * 1024; // 500 MB
 export const BIG_CONTENT_THRESHOLD_BYTES = 64 * 1024; // 64 KB
 
+// IndexedDB types/globals are referenced structurally (not via the DOM lib)
+// because this module is typechecked by BOTH the frontend (DOM lib) and the
+// backend (ES2022 lib only) programs — the backend pulls it in transitively
+// through the compose pipeline. Runtime use is guarded: the DB promise
+// resolves null wherever `indexedDB` is absent, so the IDB code paths never
+// execute outside a browser.
+type IdbDatabase = any;
+type IdbObjectStore = any;
+type IdbTransactionMode = "readonly" | "readwrite";
+
+function getIndexedDB(): { open(name: string, version: number): any } | null {
+  const idb = (globalThis as any).indexedDB;
+  return typeof idb !== "undefined" ? idb : null;
+}
+
 /**
  * Payload record shape stored in memory and IndexedDB:
  * { hash, cid, compressed, bytes, bytesCount, storedAt }
@@ -32,18 +47,14 @@ export interface CachedPayloadRecord {
 interface ContentCacheOptions {
   memory?: Map<string, any>;
   maxBytes?: number;
-  db?: IDBDatabase | null;
-}
-
-function getIndexedDB(): IDBFactory | null {
-  return typeof indexedDB !== "undefined" ? indexedDB : null;
+  db?: IdbDatabase | null;
 }
 
 export class ContentCache {
   private _memory: Map<string, any>;
   private _maxBytes: number;
   private _currentBytes: number;
-  private _dbPromise: Promise<IDBDatabase | null> | null;
+  private _dbPromise: Promise<IdbDatabase | null> | null;
 
   constructor(options: ContentCacheOptions = {}) {
     this._memory = options.memory || new Map();
@@ -52,7 +63,7 @@ export class ContentCache {
     this._dbPromise = options.db === null ? null : (options.db ? Promise.resolve(options.db) : this._openDb());
   }
 
-  private async _openDb(): Promise<IDBDatabase | null> {
+  private async _openDb(): Promise<IdbDatabase | null> {
     const idb = getIndexedDB();
     if (!idb) return null;
     try {
@@ -60,8 +71,8 @@ export class ContentCache {
         const request = idb.open(DB_NAME, DB_VERSION);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
-        request.onupgradeneeded = (event) => {
-          const db = (event.target as IDBOpenDBRequest).result;
+        request.onupgradeneeded = (event: any) => {
+          const db = event.target.result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
             db.createObjectStore(STORE_NAME, { keyPath: "hash" });
           }
@@ -74,14 +85,17 @@ export class ContentCache {
     }
   }
 
-  private async _withStore(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => any): Promise<any> {
+  private async _withStore(mode: IdbTransactionMode, fn: (store: IdbObjectStore) => any): Promise<any> {
     const db = await this._dbPromise;
     if (!db) return null;
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, mode);
       const store = tx.objectStore(STORE_NAME);
       const result = fn(store);
-      if (result instanceof IDBRequest) {
+      // The IDBRequest constructor is read lazily (per call) — tests swap
+      // globalThis.IDBRequest after module load.
+      const IdbRequest = (globalThis as any).IDBRequest;
+      if (IdbRequest && result instanceof IdbRequest) {
         result.onsuccess = () => resolve(result.result);
         result.onerror = () => reject(result.error);
       } else {

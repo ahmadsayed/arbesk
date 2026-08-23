@@ -201,6 +201,103 @@ export async function getEditorSetVersion(tag: string): Promise<number> {
   }
 }
 
+// ─── Add/remove commands ────────────────────────────────────────────────────
+
+/** Role assigned by addEditorCommand (matches CollaboratorRole.Editor in services/team.ts). */
+export const EDITOR_ROLE_EDITOR = 2;
+
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * Result of an editor-list mutation. `root`/`version` are what an on-chain
+ * updateEditors transaction would submit — the command itself only persists
+ * the list (IPFS write + local cache); the ChainPort has no write op yet, so
+ * submitting the transaction stays the caller's job.
+ */
+export interface EditorListUpdate {
+  cid: string;
+  root: string;
+  version: number;
+  list: EditorEntry[];
+}
+
+/**
+ * Rebuild the Merkle root for `list` at the next set version and persist the
+ * list to IPFS + the local cache.
+ */
+async function _persistEditorList(
+  tag: string,
+  list: EditorEntry[]
+): Promise<EditorListUpdate> {
+  const version = (await getEditorSetVersion(tag)) + 1;
+  const root = computeRoot(list, tag, version);
+  const cid = await getRuntime().ipfsWrite.writeJSON(list, null, {
+    compress: true,
+    type: "editors",
+    assetId: `token_${tag}_v${version}`,
+  });
+  saveEditorList(tag, list, cid);
+  return { cid, root, version, list };
+}
+
+/**
+ * Add an editor to a token's editor list and persist the updated list.
+ * Mirrors services/team.ts addTeamMember minus the on-chain updateEditors
+ * transaction (see EditorListUpdate).
+ */
+export async function addEditorCommand(
+  tag: string,
+  address: string,
+  options: { role?: number; email?: string } = {}
+): Promise<EditorListUpdate> {
+  const { role = EDITOR_ROLE_EDITOR, email } = options;
+  if (!ADDRESS_RE.test(address || "")) throw new Error("Invalid Ethereum address");
+  const normalized = address.toLowerCase();
+  const list = await loadEditorList(tag);
+  if (list.some((e) => e.address.toLowerCase() === normalized)) {
+    throw new Error("Address is already an editor");
+  }
+  if (list.length >= MAX_EDITORS_PER_TOKEN) {
+    throw new Error(
+      `Editor limit reached (maximum ${MAX_EDITORS_PER_TOKEN} members)`
+    );
+  }
+  const next = [
+    ...list,
+    { address: normalized, role, ...(email ? { email } : {}) },
+  ];
+  return _persistEditorList(tag, next);
+}
+
+/**
+ * Remove an editor from a token's editor list and persist the updated list.
+ * Mirrors services/team.ts removeTeamMember minus the on-chain updateEditors
+ * transaction (see EditorListUpdate).
+ */
+export async function removeEditorCommand(
+  tag: string,
+  address: string
+): Promise<EditorListUpdate> {
+  if (!ADDRESS_RE.test(address || "")) throw new Error("Invalid Ethereum address");
+  const normalized = address.toLowerCase();
+  const list = await loadEditorList(tag);
+  const next = list.filter((e) => e.address.toLowerCase() !== normalized);
+  if (next.length === list.length) {
+    throw new Error("Address is not an editor");
+  }
+  if (next.length === 0) {
+    throw new Error("Cannot remove the last editor");
+  }
+  return _persistEditorList(tag, next);
+}
+
+/**
+ * List the current editors of a token (IPFS list with local cache fallback).
+ */
+export async function listEditorsCommand(tag: string): Promise<EditorEntry[]> {
+  return loadEditorList(tag);
+}
+
 // ─── Proof command ─────────────────────────────────────────────────────────
 
 export async function buildEditorProof(

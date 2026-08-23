@@ -6,6 +6,22 @@
  * duplicated derivations that previously drifted across modules.
  */
 
+import { getRuntime } from "../runtime.ts";
+import type { HashPort } from "../types.ts";
+
+/**
+ * The injected HashPort, or null when the runtime is uninitialized / has no
+ * hash port (mirrors the historical `window.Web3` guard: callers treat null
+ * as "cannot derive right now").
+ */
+function _hashPort(): HashPort | null {
+  try {
+    return getRuntime().hash;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Derive a deterministic default collection token ID from a wallet address.
  * Uses keccak256(soliditySha3(address)) so the contract can recompute and
@@ -14,8 +30,9 @@
  * @returns hex token id, or null if inputs are missing
  */
 export function deriveDefaultCollectionId(walletAddr: string): string | null {
-  if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
-  return window.Web3.utils.soliditySha3({
+  const hash = _hashPort();
+  if (!walletAddr || !hash) return null;
+  return hash.soliditySha3({
     type: "address",
     value: walletAddr,
   });
@@ -27,8 +44,9 @@ export function deriveDefaultCollectionId(walletAddr: string): string | null {
  * @returns hex token id, or null if inputs are missing
  */
 export function deriveNamedCollectionId(walletAddr: string, name: string): string | null {
-  if (!walletAddr || !window.Web3?.utils?.soliditySha3) return null;
-  return window.Web3.utils.soliditySha3(
+  const hash = _hashPort();
+  if (!walletAddr || !hash) return null;
+  return hash.soliditySha3(
     { type: "address", value: walletAddr },
     { type: "string", value: name }
   );

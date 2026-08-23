@@ -43,7 +43,7 @@ import {
   updatePendingGeneration,
 } from "../../state/pending-generations.ts";
 import { log, warn } from "../../utils/log.ts";
-import { identityMatrix } from "../../utils/collections.ts";
+import { identityMatrix } from "../../asset-core/utils/collections.ts";
 
 /** @param {any} err */
 function isRateLimitError(err: any) {

@@ -13,9 +13,31 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
-import { composeGlTFToBlobAsync } from "../asset-core/gltf/async-gltf.ts";
+import { createArbeskCore } from "../asset-core/facade.ts";
+import type { ArbeskCore } from "../asset-core/facade.ts";
+import { createBrowserIpfsPorts } from "../ipfs/asset-core-adapter.ts";
+import { createWorkerExecutor } from "../workers/worker-executor.ts";
 import { getAssetState } from "../asset-core/domain/asset.ts";
 import { announceStatus } from "./api.ts";
+
+/**
+ * Task-9 facade proof site: a locally-constructed core, built once on first
+ * use. This duplicates what Task 10's composition root (asset-core-init.ts)
+ * will own app-wide (with the full port set: hash/storage/chain/credentials)
+ * — when that lands, this getter should be replaced by the shared instance.
+ */
+let _core: ArbeskCore | null = null;
+function getCore(): ArbeskCore {
+  if (!_core) {
+    const { read, write } = createBrowserIpfsPorts();
+    _core = createArbeskCore({
+      ipfsRead: read,
+      ipfsWrite: write,
+      executor: createWorkerExecutor(),
+    });
+  }
+  return _core;
+}
 
 /**
  * @returns filesystem-safe base name
@@ -77,7 +99,7 @@ export async function downloadAssetByManifestCid(
     // Composite glTFs reference ipfs:// buffers — inline them as data URIs
     // so the download is self-contained.
     const composite = await getFromRemoteIPFS(source.cid);
-    blob = await composeGlTFToBlobAsync(composite);
+    blob = await getCore().compose(composite);
   } else {
     blob = await getBlobFromRemoteIPFS(source.cid);
   }

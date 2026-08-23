@@ -16,7 +16,7 @@ import type {
 } from "../state/library-state.ts";
 import { getActiveContract } from "../blockchain/wallet.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { deriveDefaultCollectionId } from "../utils/collections.ts";
+import { deriveDefaultCollectionId } from "../asset-core/utils/collections.ts";
 import { extractThumbnailCid } from "../utils/thumbnail.ts";
 import { fetchAssetLibrary, expandTokenToAssets } from "./asset-library.ts";
 
