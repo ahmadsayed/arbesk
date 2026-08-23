@@ -15,7 +15,7 @@ import { getPendingChildRefs } from "../../engine/scene-graph.ts";
 import { waitForPendingLinkedDrops } from "../../engine/scene-graph.ts";
 import { waitForPendingFileDrops } from "../asset-file-drop.ts";
 import { resolveFormatHandler } from "../../formats/index.ts";
-import { buildDedupMap } from "../../gltf/dedup.ts";
+import { buildDedupMap } from "../../asset-core/gltf/dedup.ts";
 import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,

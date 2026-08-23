@@ -16,7 +16,7 @@ import {
   parseGLB,
   serializeGLB,
   decomposeGLB,
-} from "../../frontend/src/js/gltf/glb-parser.js";
+} from "../../frontend/src/js/asset-core/gltf/glb-parser.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "../..");

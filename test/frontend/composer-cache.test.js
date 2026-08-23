@@ -40,33 +40,42 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
     clearCache: jest.fn(),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
-    __esModule: true,
-    gatewayBase: jest.fn(async () => "http://127.0.0.1:8080/ipfs/"),
-    getFromRemoteIPFS: jest.fn(async () => ({})),
-    getBase64FromRemoteIPFS: jest.fn(async () => ""),
-    getBlobFromRemoteIPFS: jest.fn(async () => new Blob([])),
-    getArrayBufferFromRemoteIPFS: jest.fn(async (cid) => {
-      if (fetchedRaw.has(cid)) {
-        const bytes = fetchedRaw.get(cid);
-        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      }
-      throw new Error(`unexpected decompressed fetch for ${cid}`);
-    }),
-    getRawArrayBufferFromRemoteIPFS: jest.fn(async (cid) => {
-      if (fetchedRaw.has(cid)) {
-        const bytes = fetchedRaw.get(cid);
-        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      }
-      throw new Error(`unexpected raw fetch for ${cid}`);
-    }),
-    getManifestChain: jest.fn(async () => []),
-    isIpfsCidReachable: jest.fn(async () => true),
-  }));
+  // composer.js now reads via getRuntime().ipfsRead; wire the old remote-ipfs
+  // fakes into the read port instead of mocking remote-ipfs.js.
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.js"
+  );
+  initRuntime({
+    ipfsRead: {
+      getJSON: jest.fn(async () => ({})),
+      getBytes: jest.fn(async (cid) => {
+        if (fetchedRaw.has(cid)) {
+          const bytes = fetchedRaw.get(cid);
+          return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        }
+        throw new Error(`unexpected decompressed fetch for ${cid}`);
+      }),
+      getRawBytes: jest.fn(async (cid) => {
+        if (fetchedRaw.has(cid)) {
+          const bytes = fetchedRaw.get(cid);
+          return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        }
+        throw new Error(`unexpected raw fetch for ${cid}`);
+      }),
+    },
+    ipfsWrite: { write: jest.fn(), writeJSON: jest.fn() },
+  });
 
-  const mod = await import("../../frontend/src/js/gltf/composer.js");
+  const mod = await import("../../frontend/src/js/asset-core/gltf/composer.js");
   return { composeGlTF: mod.composeGlTF, cacheGet, cachePut };
 }
+
+afterEach(async () => {
+  const { _resetRuntimeForTesting } = await import(
+    "../../frontend/src/js/asset-core/runtime.js"
+  );
+  _resetRuntimeForTesting();
+});
 
 function dataUriPayload(uri) {
   const prefix = "data:application/octet-stream;base64,";

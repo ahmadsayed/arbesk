@@ -9,7 +9,7 @@
  */
 
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { uploadWithDedup } from "../gltf/dedup.ts";
+import { uploadWithDedup } from "../asset-core/gltf/dedup.ts";
 import { sanitizeFileName } from "../asset-core/utils/uri.ts";
 import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 import { unzipBytes, strFromU8 } from "./zip.ts";
@@ -78,7 +78,7 @@ export async function decompose3mf(
     const { cid, meta } = await uploadWithDedup(
       entryBytes,
       `${sanitizeFileName(assetName || assetId || "3mf")}_${filename}`,
-      // uploadWithDedup (gltf/dedup.js) declares object|undefined and defaults
+      // uploadWithDedup (asset-core/gltf/dedup.js) declares object|undefined and defaults
       // both parameters to null internally, so ?? undefined is equivalent.
       credential ?? undefined,
       { compress: false },

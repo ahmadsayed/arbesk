@@ -1,8 +1,8 @@
 /**
  * Arbesk glTF deduplication helpers - unit tests.
  *
- * Tests the pure hash→CID logic in frontend/src/js/gltf/dedup.js with a
- * mocked writeToIPFS so no network/IPFS node is required.
+ * Tests the pure hash→CID logic in frontend/src/js/asset-core/gltf/dedup.js
+ * with a fake ipfsWrite port so no network/IPFS node is required.
  */
 
 import { jest } from "@jest/globals";
@@ -14,15 +14,22 @@ globalThis.crypto = {
   },
 };
 
-// Mock the IPFS writer before importing dedup.js.
-jest.unstable_mockModule("../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
-  writeToIPFS: jest.fn(),
-}));
+// dedup.js writes via getRuntime().ipfsWrite.write — install the runtime with
+// a fake write port before importing it.
+const { initRuntime, _resetRuntimeForTesting } = await import(
+  "../frontend/src/js/asset-core/runtime.js"
+);
+const writeToIPFS = jest.fn();
+initRuntime({
+  ipfsRead: {
+    getJSON: jest.fn(),
+    getBytes: jest.fn(),
+    getRawBytes: jest.fn(),
+  },
+  ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
+});
 
 const { hashBytes } = await import("../frontend/src/js/asset-core/utils/hash.js");
-const { writeToIPFS } = await import(
-  "../frontend/src/js/ipfs/write-to-ipfs.js"
-);
 const {
   buildDedupMap,
   uploadWithDedup,
@@ -30,7 +37,9 @@ const {
   stripDedupMeta,
   cidFromIpfsUri,
   ipfsUriFromCid,
-} = await import("../frontend/src/js/gltf/dedup.js");
+} = await import("../frontend/src/js/asset-core/gltf/dedup.js");
+
+afterAll(() => _resetRuntimeForTesting());
 
 describe("dedup helpers", () => {
   beforeEach(() => {

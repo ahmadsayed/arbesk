@@ -33,9 +33,9 @@ Arbesk stores 3D content on a **private Kubo IPFS node** and renders it in the b
 
 | File | Role | When to touch |
 |------|------|---------------|
-| `frontend/src/js/gltf/composer.ts` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
-| `frontend/src/js/gltf/decomposer.ts` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
-| `frontend/src/js/gltf/material-editor.ts` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
+| `frontend/src/js/asset-core/gltf/composer.ts` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
+| `frontend/src/js/asset-core/gltf/decomposer.ts` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
+| `frontend/src/js/asset-core/gltf/material-editor.ts` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
 | `frontend/src/js/engine/transforms.ts` | `extractCid()`, `detectAssetFormat()`, `applyDefaultMaterial()` | Add new format detection, change default material |
 | `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatches GLB vs glTF; `loadNode()` applies `post_processor` | Fix loading, add OBJ/FBX support |
 | `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` — runtime color/scale overlays | Fix color application, add new post-processor effects |

@@ -17,14 +17,14 @@ import {
   gatewayBase,
 } from "../ipfs/remote-ipfs.ts";
 import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
-import { composeGlTF } from "./composer.ts";
+import { composeGlTF } from "../asset-core/gltf/composer.ts";
 import {
   decomposeGlTF as decomposeGlTFMain,
   decomposeAndStore as decomposeAndStoreMain,
   isComposite,
-} from "./decomposer.ts";
-import { decomposeGLB as decomposeGLBMain, isGLB } from "./glb-parser.ts";
-import { editSourceColors as editSourceColorsMain } from "./source-color-editor.ts";
+} from "../asset-core/gltf/decomposer.ts";
+import { decomposeGLB as decomposeGLBMain, isGLB } from "../asset-core/gltf/glb-parser.ts";
+import { editSourceColors as editSourceColorsMain } from "../asset-core/gltf/source-color-editor.ts";
 
 /** Upload credential as handled by this module (backend-minted, plus gateway/reusable). */
 type PooledUploadCredential = UploadCredential;

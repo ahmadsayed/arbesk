@@ -170,40 +170,6 @@ async function getRawArrayBufferFromRemoteIPFS(
   );
 }
 
-interface ManifestChainEntry {
-  cid: string;
-  version: any;
-  name: string | null;
-  nodeCount: number;
-}
-
-/**
- * Walk a manifest chain backward via prev_asset_manifest_cid links.
- * Returns an array of { cid, version, name } summaries.
- */
-async function getManifestChain(
-  cid: string,
-  maxDepth: number = 50
-): Promise<ManifestChainEntry[]> {
-  const chain: ManifestChainEntry[] = [];
-  let current: string | null = cid;
-  while (current && chain.length < maxDepth) {
-    try {
-      const manifest = await getFromRemoteIPFS(current);
-      chain.push({
-        cid: current,
-        version: manifest.version || 1,
-        name: manifest.name || null,
-        nodeCount: (manifest.scene?.nodes || []).length,
-      });
-      current = manifest.prev_asset_manifest_cid || null;
-    } catch {
-      break;
-    }
-  }
-  return chain;
-}
-
 /**
  * Lightweight reachability probe for a CID on the configured gateway.
  * Returns true only if the gateway responds with a 2xx status.
@@ -223,6 +189,11 @@ async function isIpfsCidReachable(
   }
 }
 
+// getManifestChain moved into asset-core (it consumes the IpfsReadPort);
+// re-exported here so existing consumers of this module keep working.
+export { getManifestChain } from "../asset-core/manifest/chain.ts";
+export type { ManifestChainEntry } from "../asset-core/manifest/chain.ts";
+
 export {
   gatewayBase,
   getFromRemoteIPFS,
@@ -230,6 +201,5 @@ export {
   getBlobFromRemoteIPFS,
   getArrayBufferFromRemoteIPFS,
   getRawArrayBufferFromRemoteIPFS,
-  getManifestChain,
   isIpfsCidReachable,
 };

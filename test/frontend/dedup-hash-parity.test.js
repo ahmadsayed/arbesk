@@ -11,15 +11,31 @@ import { jest } from "@jest/globals";
 describe("uploadWithDedup - raw-content hash parity (Finding A)", () => {
   async function loadModule() {
     jest.resetModules();
+    // dedup.js writes via getRuntime().ipfsWrite.write; the fake keeps the old
+    // writeToIPFS name so the assertions below read unchanged.
     const writeToIPFS = jest.fn().mockResolvedValue("bafyCid");
-    jest.unstable_mockModule(
-      "../../frontend/src/js/ipfs/write-to-ipfs.js",
-      () => ({ __esModule: true, writeToIPFS })
+    const { initRuntime } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
     );
-    const mod = await import("../../frontend/src/js/gltf/dedup.js");
+    initRuntime({
+      ipfsRead: {
+        getJSON: jest.fn(),
+        getBytes: jest.fn(),
+        getRawBytes: jest.fn(),
+      },
+      ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
+    });
+    const mod = await import("../../frontend/src/js/asset-core/gltf/dedup.js");
     const hashMod = await import("../../frontend/src/js/asset-core/utils/hash.js");
     return { mod, hashMod, writeToIPFS };
   }
+
+  afterEach(async () => {
+    const { _resetRuntimeForTesting } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
+    );
+    _resetRuntimeForTesting();
+  });
 
   it("hashes over RAW bytes regardless of compression (matches the worker hash basis)", async () => {
     const { mod, hashMod } = await loadModule();

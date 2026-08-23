@@ -2,21 +2,10 @@ import { jest } from "@jest/globals";
 
 async function load() {
   jest.resetModules();
-  jest.unstable_mockModule(
-    "../../frontend/src/js/ipfs/remote-ipfs.js",
-    () => ({
-      getFromRemoteIPFS: jest.fn(),
-      getArrayBufferFromRemoteIPFS: jest.fn(),
-    }),
-  );
-  jest.unstable_mockModule(
-    "../../frontend/src/js/ipfs/write-to-ipfs.js",
-    () => ({
-      writeJSONToIPFS: jest.fn(),
-    }),
-  );
-
-  const mod = await import("../../frontend/src/js/gltf/material-editor.js");
+  // The editor now consumes the IPFS ports via getRuntime(); the pure
+  // applyMeshOverrideColors paths under test never touch the runtime, so no
+  // port fakes are needed here.
+  const mod = await import("../../frontend/src/js/asset-core/gltf/material-editor.js");
   return { mod };
 }
 

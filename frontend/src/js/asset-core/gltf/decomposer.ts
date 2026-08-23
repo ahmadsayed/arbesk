@@ -15,7 +15,8 @@
  * buffers and images stay at their original CIDs (IPFS deduplication).
  */
 
-import { sanitizeFileName } from "../asset-core/utils/uri.ts";
+import { sanitizeFileName } from "../utils/uri.ts";
+import { getRuntime } from "../runtime.ts";
 import { uploadWithDedup } from "./dedup.ts";
 import {
   IPFS_URI_PREFIX,
@@ -23,8 +24,8 @@ import {
   ipfsUriFromCid,
   attachDedupMeta,
   decomposeGltfJson,
-} from "../asset-core/gltf/gltf-core.ts";
-import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+} from "./gltf-core.ts";
+import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
 
 export { isComposite };
 
@@ -146,9 +147,8 @@ export async function decomposeAndStore(
     assetId,
     dedupMap,
   });
-  const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.ts");
   const baseName = sanitizeFileName((assetName || assetId) as string);
-  const compositeCid = await writeJSONToIPFS(composite, credential, {
+  const compositeCid = await getRuntime().ipfsWrite.writeJSON(composite, credential, {
     compress,
     assetId,
     filename: `${baseName}_composite.gltf`,

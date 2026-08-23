@@ -27,7 +27,7 @@ async function load() {
     isComposite: jest.fn(),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/gltf/decomposer.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     decomposeGlTF: jest.fn(),
     decomposeAndStore: jest.fn(),
@@ -41,7 +41,7 @@ async function load() {
   );
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
   const asyncGltf = await import("../../frontend/src/js/gltf/async-gltf.js");
-  const decomposer = await import("../../frontend/src/js/gltf/decomposer.js");
+  const decomposer = await import("../../frontend/src/js/asset-core/gltf/decomposer.js");
   return {
     gltfHandler: gltf.gltfHandler,
     glbHandler: glb.glbHandler,

@@ -606,7 +606,7 @@ async function uploadExtractedItems(
 
     // Hash over the RAW bytes so the dedup/content-cache key matches the
     // main-thread path regardless of which compressor produced the stored
-    // bytes (see frontend/src/js/gltf/dedup.js).
+    // bytes (see frontend/src/js/asset-core/gltf/dedup.js).
     const meta = {
       hash: hashBytes(item.bytes),
       hashAlgo: HASH_ALGORITHM,

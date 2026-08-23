@@ -48,6 +48,50 @@ jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
   }),
 }));
 
+// 3mf/decomposer.js pulls uploadWithDedup from asset-core, which writes via
+// getRuntime().ipfsWrite — back the runtime ports with the same in-memory
+// store the module mocks above use.
+const { initRuntime, _resetRuntimeForTesting } = await import(
+  "../../frontend/src/js/asset-core/runtime.js"
+);
+initRuntime({
+  ipfsRead: {
+    getJSON: jest.fn(async (cid) => {
+      const bytes = store.get(cid);
+      if (!bytes) throw new Error(`fake IPFS miss: ${cid}`);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }),
+    getBytes: jest.fn(async (cid) => {
+      const bytes = store.get(cid);
+      if (!bytes) throw new Error(`fake IPFS miss: ${cid}`);
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }),
+    getRawBytes: jest.fn(async (cid) => {
+      const bytes = store.get(cid);
+      if (!bytes) throw new Error(`fake IPFS miss: ${cid}`);
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }),
+  },
+  ipfsWrite: {
+    write: jest.fn(async (data) => {
+      const bytes =
+        data instanceof Uint8Array
+          ? data
+          : new TextEncoder().encode(String(data));
+      const cid = `bafyFake${String(seq++).padStart(4, "0")}`;
+      store.set(cid, bytes);
+      return cid;
+    }),
+    writeJSON: jest.fn(async (json) => {
+      const cid = `bafyFake${String(seq++).padStart(4, "0")}`;
+      store.set(cid, new TextEncoder().encode(JSON.stringify(json)));
+      return cid;
+    }),
+  },
+});
+
+afterAll(() => _resetRuntimeForTesting());
+
 const { decompose3mf, isComposite3mf } = await import(
   "../../frontend/src/js/3mf/decomposer.js"
 );

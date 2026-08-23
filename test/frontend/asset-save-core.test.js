@@ -68,12 +68,12 @@ async function load() {
     })
   );
   jest.unstable_mockModule(
-    "../../frontend/src/js/gltf/material-editor.js",
+    "../../frontend/src/js/asset-core/gltf/material-editor.js",
     () => ({
       editCompositeColors: jest.fn(),
     })
   );
-  jest.unstable_mockModule("../../frontend/src/js/gltf/decomposer.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
   }));
   jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
