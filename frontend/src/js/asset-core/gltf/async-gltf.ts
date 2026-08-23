@@ -15,7 +15,7 @@ import {
   decomposeAndStore as decomposeAndStoreMain,
   isComposite,
 } from "./decomposer.ts";
-import { decomposeGLB as decomposeGLBMain, isGLB } from "./glb-parser.ts";
+import { decomposeGLB as decomposeGLBMain } from "./glb-parser.ts";
 import { editSourceColors as editSourceColorsMain } from "./source-color-editor.ts";
 
 /** Upload credential as handled by this module (backend-minted, plus gateway/reusable). */
@@ -422,7 +422,7 @@ export async function editSourceColorsAsync(
 
   try {
     const buffer = await getRuntime().ipfsRead.getBytes(sourceCid);
-    if (isGLB(buffer)) {
+    if (getRuntime().kernels.glb.isGLB(buffer)) {
       const { composite } = await decomposeGLBAsync(buffer, false, {
         dedupMap,
       });

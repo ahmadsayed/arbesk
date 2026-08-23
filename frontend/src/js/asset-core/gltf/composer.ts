@@ -16,11 +16,12 @@ import { composeGltfJson } from "./gltf-core.ts";
 
 async function fetchCIDAsBase64(cid: string, arbeskMeta: any): Promise<string> {
   console.log(`[COMPOSE] fetching ipfs://${cid}`);
-  const { ipfsRead } = getRuntime();
+  const { ipfsRead, kernels } = getRuntime();
   return fetchCIDAsBase64Cached(cid, arbeskMeta, {
     fetchRaw: (c) => ipfsRead.getRawBytes(c),
     fetchDecompressed: (c) => ipfsRead.getBytes(c),
     decompress,
+    base64Encode: (bytes) => kernels.base64.encode(bytes),
   });
 }
 

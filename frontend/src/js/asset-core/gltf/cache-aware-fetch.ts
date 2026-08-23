@@ -28,6 +28,8 @@ interface CidFetchers {
   fetchDecompressed: (cid: string) => Promise<ArrayBuffer>;
   /** decompresses gzipped bytes */
   decompress: (bytes: Uint8Array) => Uint8Array | Promise<Uint8Array>;
+  /** base64 encoder (defaults to the pure util; main thread injects the kernel) */
+  base64Encode?: (bytes: Uint8Array | ArrayBuffer) => string;
 }
 
 function bytesFromBuffer(buffer: ArrayBufferLike): Uint8Array {
@@ -46,7 +48,7 @@ function bytesFromBuffer(buffer: ArrayBufferLike): Uint8Array {
 export async function fetchCIDAsBase64(
   cid: string,
   arbeskMeta: any,
-  { fetchRaw, fetchDecompressed, decompress }: CidFetchers
+  { fetchRaw, fetchDecompressed, decompress, base64Encode = arrayBufferToBase64 }: CidFetchers
 ): Promise<string> {
   const useCache =
     arbeskMeta &&
@@ -59,7 +61,7 @@ export async function fetchCIDAsBase64(
       const bytes = cached.compressed
         ? await decompress(cached.bytes)
         : cached.bytes;
-      return arrayBufferToBase64(bytes.buffer as ArrayBuffer);
+      return base64Encode(bytes.buffer as ArrayBuffer);
     }
 
     const rawBuffer = await fetchRaw(cid);
@@ -68,9 +70,9 @@ export async function fetchCIDAsBase64(
       (err) => console.warn(`[CACHE-FETCH] cache write failed: ${err.message}`)
     );
     const bytes = arbeskMeta.compressed ? await decompress(rawBytes) : rawBytes;
-    return arrayBufferToBase64(bytes.buffer as ArrayBuffer);
+    return base64Encode(bytes.buffer as ArrayBuffer);
   }
 
   const buffer = await fetchDecompressed(cid);
-  return arrayBufferToBase64(buffer);
+  return base64Encode(buffer);
 }

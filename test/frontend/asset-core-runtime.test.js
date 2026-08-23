@@ -29,3 +29,20 @@ test("memoryStorage round-trips and removes", () => {
   s.removeItem("k");
   expect(s.getItem("k")).toBeNull();
 });
+
+test("default kernels: base64 round-trips", () => {
+  const rt = initRuntime({ ipfsRead: fakeRead, ipfsWrite: fakeWrite });
+  const bytes = new Uint8Array([104, 101, 108, 108, 111]);
+  expect(
+    Array.from(rt.kernels.base64.decode(rt.kernels.base64.encode(bytes)))
+  ).toEqual(Array.from(bytes));
+});
+
+test("default kernels: murmur3 matches utils/hash", async () => {
+  const { murmur3_128 } = await import(
+    "../../frontend/src/js/asset-core/utils/hash.ts"
+  );
+  const rt = initRuntime({ ipfsRead: fakeRead, ipfsWrite: fakeWrite });
+  const bytes = new Uint8Array([1, 2, 3]);
+  expect(rt.kernels.hash.murmur3_128(bytes)).toBe(murmur3_128(bytes));
+});

@@ -40,7 +40,29 @@ beforeAll(async () => {
     announceStatus: jest.fn(),
     // Referenced (never called) by ipfs/write-to-ipfs.ts via the adapter.
     getUploadCredential: jest.fn(),
+    // Referenced by asset-core-init.ts (frontend composition root).
+    getUploadCredentials: jest.fn(),
   }));
+  jest.unstable_mockModule(
+    "../../frontend/src/js/blockchain/asset-core-adapter.js",
+    () => ({
+      // asset-core-init.ts imports this adapter for the browser platform
+      // ports; mocking it here keeps the wallet barrel out of this unit test.
+      createBrowserPlatformPorts: jest.fn(() => ({
+        hash: { soliditySha3: jest.fn(), keccak256: jest.fn() },
+        storage: {
+          getItem: jest.fn(),
+          setItem: jest.fn(),
+          removeItem: jest.fn(),
+        },
+        chain: {
+          getEditorListURI: jest.fn(),
+          getEditorListVersion: jest.fn(),
+          resolveEmail: jest.fn(),
+        },
+      })),
+    })
+  );
   global.URL.createObjectURL = jest.fn(() => "blob:mock");
   global.URL.revokeObjectURL = jest.fn();
   ({ downloadAssetByManifestCid, downloadActiveAsset } = await import(

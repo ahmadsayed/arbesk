@@ -13,30 +13,16 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
-import { createArbeskCore } from "../asset-core/facade.ts";
+import { initAssetCoreBrowser } from "../asset-core-init.ts";
 import type { ArbeskCore } from "../asset-core/facade.ts";
-import { createBrowserIpfsPorts } from "../ipfs/asset-core-adapter.ts";
-import { createWorkerExecutor } from "../workers/worker-executor.ts";
 import { getAssetState } from "../asset-core/domain/asset.ts";
 import { announceStatus } from "./api.ts";
 
 /**
- * Task-9 facade proof site: a locally-constructed core, built once on first
- * use. This duplicates what Task 10's composition root (asset-core-init.ts)
- * will own app-wide (with the full port set: hash/storage/chain/credentials)
- * — when that lands, this getter should be replaced by the shared instance.
+ * The shared frontend asset-core (composition root installed at Studio boot).
  */
-let _core: ArbeskCore | null = null;
 function getCore(): ArbeskCore {
-  if (!_core) {
-    const { read, write } = createBrowserIpfsPorts();
-    _core = createArbeskCore({
-      ipfsRead: read,
-      ipfsWrite: write,
-      executor: createWorkerExecutor(),
-    });
-  }
-  return _core;
+  return initAssetCoreBrowser();
 }
 
 /**

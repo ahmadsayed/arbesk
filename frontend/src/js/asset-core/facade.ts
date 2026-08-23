@@ -14,7 +14,7 @@
 import type { ArbeskCoreConfig } from "./types.ts";
 import type { UploadCredential } from "./ipfs/upload-with-credential.ts";
 import { initRuntime, getRuntime } from "./runtime.ts";
-import { isGLB, decomposeGLB } from "./gltf/glb-parser.ts";
+import { decomposeGLB } from "./gltf/glb-parser.ts";
 import { decomposeAndStore } from "./gltf/decomposer.ts";
 import { composeGlTFToBlobAsync } from "./gltf/async-gltf.ts";
 import { getManifestChain } from "./manifest/chain.ts";
@@ -181,7 +181,7 @@ export function createArbeskCore(config: ArbeskCoreConfig): ArbeskCore {
     opts: UploadOptions = {}
   ): Promise<UploadResult> {
     const bytes = await toBytes(source);
-    if (isGLB(bytes)) return uploadGLB(bytes, opts);
+    if (getRuntime().kernels.glb.isGLB(bytes)) return uploadGLB(bytes, opts);
     const json =
       typeof source === "string"
         ? JSON.parse(source)

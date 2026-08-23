@@ -9,6 +9,7 @@
  */
 
 import { on, EVENTS } from "./asset-core/events/bus.ts";
+import { initAssetCoreBrowser } from "./asset-core-init.ts";
 import {
   initWallet,
   connectWallet,
@@ -57,6 +58,10 @@ import {
 
 // ── Router ──
 import { initRouter } from "./app/router.ts";
+
+// ─── Asset-core composition root ───
+// Install the process-wide runtime before any domain/gltf module is used.
+initAssetCoreBrowser();
 
 // ─── Studio panel init ───
 // Kick off the CDP SDK load + initialize immediately when a previous CDP
