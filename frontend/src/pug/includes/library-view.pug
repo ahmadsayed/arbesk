@@ -41,7 +41,43 @@
         #libraryDetailsBody.library-details-body
           #libraryDetailsTitle.library-details-title
           span#libraryDetailsBadge.library-details-badge
+          .library-details-actions
+            button#libraryDetailsOpenBtn.btn.btn-primary.btn-sm(type="button")
+              svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                use(href="/icons.svg#arrow-right")
+              span Open
           .library-details-rows
+            .library-details-row
+              span.k Version
+              span.v
+                span#libraryDetailsVersion.library-details-pill —
+            .library-details-row
+              span.k Current
+              span.v
+                span#libraryDetailsCid.library-details-mono …
+                button#libraryDetailsCopyCid.library-details-copy(type="button" title="Copy CID" aria-label="Copy manifest CID" hidden)
+                  svg(width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                    use(href="/icons.svg#copy")
+            .library-details-row
+              span.k Editors
+              span#libraryDetailsEditors.v —
+            .library-details-row
+              span.k Modified
+              span#libraryDetailsModified.v —
+          button#libraryDetailsMoreBtn.library-details-disclose(type="button" aria-expanded="false")
+            svg(width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              use(href="/icons.svg#chevron-right")
+            span More details
+          #libraryDetailsExtra.library-details-rows(hidden)
+            #libraryDetailsChildrenRow.library-details-row
+              span#libraryDetailsChildrenLabel.k Children
+              span#libraryDetailsChildren.v —
+            #libraryDetailsFormatRow.library-details-row
+              span.k Format
+              span#libraryDetailsFormat.v —
+            .library-details-row
+              span.k Anchor
+              span#libraryDetailsAnchor.v —
             .library-details-row
               span.k Owner
               span.v
@@ -50,15 +86,20 @@
                   svg(width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
                     use(href="/icons.svg#copy")
             .library-details-row
-              span.k Modified
-              span#libraryDetailsModified.v —
-            #libraryDetailsChildrenRow.library-details-row
-              span.k Children
-              span#libraryDetailsChildren.v —
-            .library-details-row
               span.k Role
               span#libraryDetailsRole.v —
-        #libraryDetailsEmpty.library-details-empty Select an item to see details
+        #libraryDetailsEmpty.library-details-empty
+          #libraryDetailsEmptyTitle.library-details-title Home
+          span#libraryDetailsEmptyBadge.library-details-badge Overview
+          .library-details-rows
+            .library-details-row
+              span#libraryDetailsEmptyLabel.k Collections
+              span#libraryDetailsEmptyCount.v 0
+          p.library-details-hint
+            svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+              use(href="/icons.svg#upload")
+            span#libraryDetailsEmptyHint Drop .glb, .gltf or .3mf files anywhere to upload
+          p#libraryDetailsEmptyPrompt.library-details-prompt Select an item to see details
 
       #libraryContent.library-content
         #libraryItems.library-grid(role="listbox" aria-multiselectable="true")

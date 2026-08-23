@@ -24,11 +24,14 @@ import type { LibraryItem } from "../state/library-state.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { loadThumbnailInto } from "../utils/thumbnail.ts";
+import { loadThumbnailInto, extractThumbnailCid } from "../utils/thumbnail.ts";
+import { loadEditorList } from "../domain/editors.ts";
 import { getActiveContract } from "../blockchain/wallet.ts";
 import { ensureBabylon } from "../engine/babylon-loader.ts";
 import { createChatPreview } from "../services/chat-preview.ts";
 import type { PreviewHandle } from "../services/chat-preview.ts";
+import { openItem } from "./library-grid.ts";
+import { CHAIN_IDS } from "../../../../constants/chains.js";
 
 /** Preview id used with the chat-preview registry (one live preview max). */
 const PREVIEW_ID = "library-details";
@@ -45,6 +48,10 @@ let _previewHandle: PreviewHandle | null = null;
 let _orbitHintEl: HTMLElement | null = null;
 /** Last resolved full owner address, for the copy button. */
 let _ownerAddress: string | null = null;
+/** Item currently shown in the pane — target of the Open button. */
+let _currentItemId: string | number | null = null;
+/** Full manifest CID of the current item, for the copy button. */
+let _currentCid: string | null = null;
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -121,13 +128,68 @@ function findItem(id: string | number): LibraryItem | null {
   );
 }
 
-function showMessage(state: "empty" | "multi", text: string): void {
+/**
+ * Empty / multi-select state, styled like the item details view (title,
+ * badge, k/v rows). The overview row shows the location's item count from
+ * libraryState — no fetches — followed by a context-aware upload hint and
+ * the prompt line.
+ */
+function renderEmptyState(selectedCount = 0): void {
   _requestSeq++;
   disposePreview();
+  _currentItemId = null;
+  _currentCid = null;
+  const multi = selectedCount > 1;
   const pane = el("libraryDetails");
-  if (pane) pane.dataset.state = state;
-  const emptyEl = el("libraryDetailsEmpty");
-  if (emptyEl) emptyEl.textContent = text;
+  if (pane) pane.dataset.state = multi ? "multi" : "empty";
+
+  const { collections, assets, currentCollectionTokenId } = libraryState.get();
+  const atHome =
+    currentCollectionTokenId === null ||
+    currentCollectionTokenId === undefined ||
+    currentCollectionTokenId === "";
+  const openCollection = atHome
+    ? null
+    : collections.find(
+        (c) => String(c.tokenId) === String(currentCollectionTokenId)
+      );
+
+  const titleEl = el("libraryDetailsEmptyTitle");
+  if (titleEl) {
+    titleEl.textContent = multi
+      ? "Selection"
+      : atHome
+        ? "Home"
+        : openCollection?.name || "Collection";
+  }
+  const badgeEl = el("libraryDetailsEmptyBadge");
+  if (badgeEl) badgeEl.textContent = multi ? "Items" : "Overview";
+
+  const labelEl = el("libraryDetailsEmptyLabel");
+  const countEl = el("libraryDetailsEmptyCount");
+  if (multi) {
+    if (labelEl) labelEl.textContent = "Selected";
+    if (countEl) countEl.textContent = String(selectedCount);
+  } else {
+    if (labelEl) labelEl.textContent = atHome ? "Collections" : "Assets";
+    if (countEl) {
+      countEl.textContent = String(atHome ? collections.length : assets.length);
+    }
+  }
+  // Mirrors the drop-overlay label in ui/library-toolbar.ts — at Home there
+  // is no target collection, so dropping files is rejected.
+  const hintEl = el("libraryDetailsEmptyHint");
+  if (hintEl) {
+    hintEl.textContent = atHome
+      ? "Open a collection to upload .glb, .gltf or .3mf files"
+      : "Drop .glb, .gltf or .3mf files anywhere to upload";
+  }
+  const promptEl = el("libraryDetailsEmptyPrompt");
+  if (promptEl) {
+    promptEl.textContent = multi
+      ? "Select a single item to see details"
+      : "Select an item to see details";
+  }
 }
 
 /** Static thumbnail in the preview area; hides the area when there is none. */
@@ -207,10 +269,120 @@ async function startAssetPreview(
   }
 }
 
+/** Mid-truncate a CID for the "Current" row: 10 head + 8 tail chars. */
+function midTruncate(text: string, head = 10, tail = 8): string {
+  return text.length <= head + tail + 1
+    ? text
+    : `${text.slice(0, head)}…${text.slice(-tail)}`;
+}
+
+/** Chain display name for the Anchor row. */
+function chainName(): string {
+  const id = Number(walletState.get().chainId);
+  return id === CHAIN_IDS.BASE_TESTNET ? "Base Sepolia" : "Hardhat local";
+}
+
+/** Cap for the prev_manifest_cid walk that counts versions. */
+const VERSION_WALK_CAP = 30;
+
+/**
+ * Version count = manifest-chain length. Walks prev_manifest_cid links,
+ * capped so long histories don't stall the pane; `more` flags a capped walk.
+ */
+async function countVersions(
+  manifest: any
+): Promise<{ count: number; more: boolean }> {
+  let count = 1;
+  let prev = manifest?.prev_manifest_cid;
+  while (prev && count < VERSION_WALK_CAP) {
+    let m: any = null;
+    try {
+      m = await getFromRemoteIPFS(prev);
+    } catch {
+      break;
+    }
+    if (!m) break;
+    count++;
+    prev = m.prev_manifest_cid;
+  }
+  return { count, more: count === VERSION_WALK_CAP && !!prev };
+}
+
+/**
+ * Collection preview: a mosaic of its first assets' thumbnails with a "+N"
+ * overflow tile. Falls back to the collection's own static thumbnail when no
+ * asset thumbnails resolve; an empty collection gets an upload hint.
+ */
+async function startCollectionMosaic(
+  item: LibraryItem,
+  manifest: any,
+  req: number
+): Promise<void> {
+  const previewEl = el("libraryDetailsPreview");
+  if (!previewEl) return;
+  if (_orbitHintEl) _orbitHintEl.hidden = true;
+
+  const assetCids = Object.values(manifest?.assets || {}).filter(
+    (c): c is string => typeof c === "string" && !!c
+  );
+  if (assetCids.length === 0) {
+    previewEl.textContent = "";
+    const hint = document.createElement("div");
+    hint.className = "library-details-mosaic-empty";
+    const line1 = document.createElement("span");
+    line1.textContent = "Empty collection";
+    const line2 = document.createElement("strong");
+    line2.textContent = "Upload .glb, .gltf or .3mf";
+    hint.append(line1, line2);
+    previewEl.appendChild(hint);
+    previewEl.hidden = false;
+    return;
+  }
+
+  const picks = assetCids.slice(0, 4);
+  const thumbs = await Promise.all(
+    picks.map(async (cid) => {
+      try {
+        return extractThumbnailCid((await getFromRemoteIPFS(cid))?.thumbnail);
+      } catch {
+        return null;
+      }
+    })
+  );
+  if (req !== _requestSeq) return;
+  if (!thumbs.some(Boolean)) {
+    showStaticThumbnail(item);
+    return;
+  }
+
+  previewEl.textContent = "";
+  const mosaic = document.createElement("div");
+  mosaic.className = "library-details-mosaic";
+  picks.forEach((_, i) => {
+    const tile = document.createElement("div");
+    mosaic.appendChild(tile);
+    const thumbCid = thumbs[i];
+    if (thumbCid) {
+      void loadThumbnailInto(tile, thumbCid, item.name || "Collection");
+    }
+  });
+  const extra = assetCids.length - picks.length;
+  if (extra > 0) {
+    const more = document.createElement("div");
+    more.className = "library-details-mosaic-more";
+    more.textContent = `+${extra}`;
+    mosaic.appendChild(more);
+  }
+  previewEl.appendChild(mosaic);
+  previewEl.hidden = false;
+}
+
 function renderItem(item: LibraryItem): void {
   const req = ++_requestSeq;
   disposePreview();
   _ownerAddress = null;
+  _currentItemId = item.id;
+  _currentCid = item.manifestCid || null;
 
   const pane = el("libraryDetails");
   if (pane) pane.dataset.state = item.type === "collection" ? "collection" : "asset";
@@ -223,6 +395,40 @@ function renderItem(item: LibraryItem): void {
   }
   const roleEl = el("libraryDetailsRole");
   if (roleEl) roleEl.textContent = capitalize(item.role || "");
+
+  // Each newly selected item starts with the disclosure collapsed.
+  const extraEl = el("libraryDetailsExtra");
+  if (extraEl) extraEl.hidden = true;
+  const moreBtn = el("libraryDetailsMoreBtn");
+  if (moreBtn) moreBtn.setAttribute("aria-expanded", "false");
+
+  // Current manifest CID — mid-truncated, full value on hover + copy.
+  const cidEl = el("libraryDetailsCid");
+  const copyCidBtn = el<HTMLButtonElement>("libraryDetailsCopyCid");
+  if (cidEl) {
+    cidEl.textContent = _currentCid ? midTruncate(_currentCid) : "—";
+    if (_currentCid) cidEl.title = _currentCid;
+    else cidEl.removeAttribute("title");
+  }
+  if (copyCidBtn) copyCidBtn.hidden = !_currentCid;
+
+  const anchorEl = el("libraryDetailsAnchor");
+  if (anchorEl) anchorEl.textContent = `#${item.tokenId} · ${chainName()}`;
+
+  // Editors — token-scoped Merkle list (chain read + IPFS, cached).
+  const editorsEl = el("libraryDetailsEditors");
+  if (editorsEl) editorsEl.textContent = "…";
+  void loadEditorList(String(item.tokenId)).then((list) => {
+    if (req !== _requestSeq) return;
+    if (editorsEl) {
+      editorsEl.textContent =
+        list.length === 0
+          ? "just you"
+          : list.length === 1
+            ? "1 editor"
+            : `${list.length} editors`;
+    }
+  });
 
   // Owner — cached chain read; CDP users see their own email when the
   // owner is the connected smart account, otherwise a truncated address.
@@ -244,9 +450,11 @@ function renderItem(item: LibraryItem): void {
     if (copyBtn) copyBtn.hidden = !address;
   });
 
-  // Manifest — Modified + Children rows, then the preview.
+  // Manifest — Modified/Assets/Format rows + version walk, then the preview.
   const modifiedEl = el("libraryDetailsModified");
   if (modifiedEl) modifiedEl.textContent = "…";
+  const versionEl = el("libraryDetailsVersion");
+  if (versionEl) versionEl.textContent = "…";
   void (async () => {
     let manifest: any = null;
     try {
@@ -258,20 +466,38 @@ function renderItem(item: LibraryItem): void {
 
     if (modifiedEl) modifiedEl.textContent = formatModified(manifest?.timestamp);
 
-    const childrenRow = el("libraryDetailsChildrenRow");
+    if (versionEl && !manifest) versionEl.textContent = "—";
+    if (manifest) {
+      const { count, more } = await countVersions(manifest);
+      if (req !== _requestSeq) return;
+      if (versionEl) versionEl.textContent = more ? `v${count}+` : `v${count}`;
+    }
+
+    const childrenLabel = el("libraryDetailsChildrenLabel");
+    const childrenEl = el("libraryDetailsChildren");
+    const formatRow = el("libraryDetailsFormatRow");
     if (item.type === "collection") {
-      // Collections have no scene nodes — omit the row.
-      if (childrenRow) childrenRow.hidden = true;
-      showStaticThumbnail(item);
+      // Collections have no scene nodes — show the asset count instead.
+      if (childrenLabel) childrenLabel.textContent = "Assets";
+      const assetCount = manifest?.assets ? Object.keys(manifest.assets).length : 0;
+      if (childrenEl) {
+        childrenEl.textContent =
+          assetCount === 1 ? "1 asset" : `${assetCount} assets`;
+      }
+      if (formatRow) formatRow.hidden = true;
+      void startCollectionMosaic(item, manifest, req);
       return;
     }
 
-    if (childrenRow) childrenRow.hidden = false;
-    const childrenEl = el("libraryDetailsChildren");
+    if (childrenLabel) childrenLabel.textContent = "Children";
     const nodes = manifest?.scene?.nodes;
     if (childrenEl) {
       childrenEl.textContent = Array.isArray(nodes) ? `${nodes.length} nodes` : "—";
     }
+    if (formatRow) formatRow.hidden = false;
+    const formatEl = el("libraryDetailsFormat");
+    const format = manifest?.scene?.nodes?.[0]?.source?.format;
+    if (formatEl) formatEl.textContent = format ? String(format).toUpperCase() : "—";
     void startAssetPreview(item, manifest, req);
   })();
 }
@@ -288,16 +514,16 @@ function render(): void {
 
   const { selectedIds } = libraryState.get();
   if (selectedIds.length === 0) {
-    showMessage("empty", "Select an item to see details");
+    renderEmptyState();
     return;
   }
   if (selectedIds.length > 1) {
-    showMessage("multi", `${selectedIds.length} items selected`);
+    renderEmptyState(selectedIds.length);
     return;
   }
   const item = findItem(selectedIds[0]);
   if (!item) {
-    showMessage("empty", "Select an item to see details");
+    renderEmptyState();
     return;
   }
   renderItem(item);
@@ -347,6 +573,30 @@ export function initLibraryDetails(): void {
     } catch (err) {
       console.warn("[LIBRARY-DETAILS] clipboard copy failed:", err);
     }
+  });
+
+  el("libraryDetailsCopyCid")?.addEventListener("click", () => {
+    if (!_currentCid) return;
+    try {
+      void navigator.clipboard?.writeText(_currentCid);
+    } catch (err) {
+      console.warn("[LIBRARY-DETAILS] clipboard copy failed:", err);
+    }
+  });
+
+  // Open behaves exactly like double-clicking the card: collections enter,
+  // assets open in the Studio.
+  el("libraryDetailsOpenBtn")?.addEventListener("click", () => {
+    if (_currentItemId !== null) openItem(_currentItemId);
+  });
+
+  el("libraryDetailsMoreBtn")?.addEventListener("click", () => {
+    const extra = el("libraryDetailsExtra");
+    const btn = el("libraryDetailsMoreBtn");
+    if (!extra || !btn) return;
+    const show = extra.hidden;
+    extra.hidden = !show;
+    btn.setAttribute("aria-expanded", String(show));
   });
 
   initViewLeaveGuard();

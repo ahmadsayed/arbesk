@@ -56,19 +56,50 @@ function buildDom() {
       <div id="libraryDetailsBody">
         <div id="libraryDetailsTitle"></div>
         <span id="libraryDetailsBadge"></span>
+        <div class="library-details-actions">
+          <button id="libraryDetailsOpenBtn"></button>
+        </div>
         <div class="library-details-rows">
+          <div class="library-details-row"><span class="k">Version</span>
+            <span class="v"><span id="libraryDetailsVersion">—</span></span></div>
+          <div class="library-details-row"><span class="k">Current</span>
+            <span class="v"><span id="libraryDetailsCid">…</span>
+              <button id="libraryDetailsCopyCid" hidden></button></span></div>
+          <div class="library-details-row"><span class="k">Editors</span>
+            <span id="libraryDetailsEditors" class="v">—</span></div>
+          <div class="library-details-row"><span class="k">Modified</span>
+            <span id="libraryDetailsModified" class="v">—</span></div>
+        </div>
+        <button id="libraryDetailsMoreBtn" aria-expanded="false"></button>
+        <div id="libraryDetailsExtra" class="library-details-rows" hidden>
+          <div id="libraryDetailsChildrenRow" class="library-details-row">
+            <span id="libraryDetailsChildrenLabel" class="k">Children</span>
+            <span id="libraryDetailsChildren" class="v">—</span></div>
+          <div id="libraryDetailsFormatRow" class="library-details-row"><span class="k">Format</span>
+            <span id="libraryDetailsFormat" class="v">—</span></div>
+          <div class="library-details-row"><span class="k">Anchor</span>
+            <span id="libraryDetailsAnchor" class="v">—</span></div>
           <div class="library-details-row"><span class="k">Owner</span>
             <span class="v"><span id="libraryDetailsOwner">…</span>
               <button id="libraryDetailsCopyOwner" hidden></button></span></div>
-          <div class="library-details-row"><span class="k">Modified</span>
-            <span id="libraryDetailsModified" class="v">—</span></div>
-          <div id="libraryDetailsChildrenRow" class="library-details-row"><span class="k">Children</span>
-            <span id="libraryDetailsChildren" class="v">—</span></div>
           <div class="library-details-row"><span class="k">Role</span>
             <span id="libraryDetailsRole" class="v">—</span></div>
         </div>
       </div>
-      <div id="libraryDetailsEmpty">Select an item to see details</div>
+      <div id="libraryDetailsEmpty">
+        <div id="libraryDetailsEmptyTitle"></div>
+        <span id="libraryDetailsEmptyBadge"></span>
+        <div class="library-details-rows">
+          <div class="library-details-row">
+            <span id="libraryDetailsEmptyLabel" class="k"></span>
+            <span id="libraryDetailsEmptyCount" class="v"></span>
+          </div>
+        </div>
+        <p class="library-details-hint">
+          <span id="libraryDetailsEmptyHint"></span>
+        </p>
+        <p id="libraryDetailsEmptyPrompt"></p>
+      </div>
     </aside>
   `;
 }
@@ -85,13 +116,17 @@ async function flush(rounds = 8) {
  */
 async function load({
   manifest = MANIFEST,
+  manifests = null,
   owner = OWNER,
   babylonFails = false,
   previewHandles = [],
+  editors = [],
 } = {}) {
   jest.resetModules();
 
-  const getFromRemoteIPFS = jest.fn(async () => manifest);
+  const getFromRemoteIPFS = jest.fn(async (cid) =>
+    manifests && manifests[cid] ? manifests[cid] : manifest
+  );
   const ownerOfCall = jest.fn(async () => owner);
   const getActiveContract = jest.fn(() => ({
     methods: { ownerOf: () => ({ call: ownerOfCall }) },
@@ -109,6 +144,13 @@ async function load({
     containerEl.appendChild(img);
     return img;
   });
+  const extractThumbnailCid = (thumbnail) => {
+    if (!thumbnail) return null;
+    if (typeof thumbnail === "string") return thumbnail;
+    return thumbnail.cid || thumbnail.source?.cid || null;
+  };
+  const loadEditorList = jest.fn(async () => editors);
+  const openItem = jest.fn();
 
   jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     __esModule: true,
@@ -129,6 +171,15 @@ async function load({
   jest.unstable_mockModule("../../frontend/src/js/utils/thumbnail.js", () => ({
     __esModule: true,
     loadThumbnailInto,
+    extractThumbnailCid,
+  }));
+  jest.unstable_mockModule("../../frontend/src/js/domain/editors.js", () => ({
+    __esModule: true,
+    loadEditorList,
+  }));
+  jest.unstable_mockModule("../../frontend/src/js/ui/library-grid.js", () => ({
+    __esModule: true,
+    openItem,
   }));
 
   const { libraryState } = await import(
@@ -143,6 +194,8 @@ async function load({
     ensureBabylon,
     createChatPreview,
     loadThumbnailInto,
+    loadEditorList,
+    openItem,
   };
 }
 
@@ -163,8 +216,59 @@ describe("library-details pane", () => {
 
     const pane = document.getElementById("libraryDetails");
     expect(pane.dataset.state).toBe("empty");
-    expect(document.getElementById("libraryDetailsEmpty").textContent).toBe(
-      "Select an item to see details"
+    expect(
+      document.getElementById("libraryDetailsEmptyPrompt").textContent
+    ).toBe("Select an item to see details");
+  });
+
+  test("empty state at Home shows the collection count and upload hint", async () => {
+    const { libraryState, initLibraryDetails } = await load();
+    initLibraryDetails();
+    libraryState.set({
+      collections: [COLLECTION, { ...COLLECTION, id: "collection-10" }],
+      selectedIds: [],
+    });
+    await flush();
+
+    expect(
+      document.getElementById("libraryDetailsEmptyTitle").textContent
+    ).toBe("Home");
+    expect(
+      document.getElementById("libraryDetailsEmptyBadge").textContent
+    ).toBe("Overview");
+    expect(document.getElementById("libraryDetailsEmptyLabel").textContent).toBe(
+      "Collections"
+    );
+    expect(document.getElementById("libraryDetailsEmptyCount").textContent).toBe(
+      "2"
+    );
+    expect(document.getElementById("libraryDetailsEmptyHint").textContent).toBe(
+      "Open a collection to upload .glb, .gltf or .3mf files"
+    );
+  });
+
+  test("empty state inside a collection shows its name, asset count, drop hint", async () => {
+    const { libraryState, initLibraryDetails } = await load();
+    initLibraryDetails();
+    libraryState.set({
+      collections: [{ ...COLLECTION, tokenId: "7", name: "Props Pack" }],
+      assets: [ASSET],
+      currentCollectionTokenId: "7",
+      selectedIds: [],
+    });
+    await flush();
+
+    expect(
+      document.getElementById("libraryDetailsEmptyTitle").textContent
+    ).toBe("Props Pack");
+    expect(document.getElementById("libraryDetailsEmptyLabel").textContent).toBe(
+      "Assets"
+    );
+    expect(document.getElementById("libraryDetailsEmptyCount").textContent).toBe(
+      "1"
+    );
+    expect(document.getElementById("libraryDetailsEmptyHint").textContent).toBe(
+      "Drop .glb, .gltf or .3mf files anywhere to upload"
     );
   });
 
@@ -180,9 +284,18 @@ describe("library-details pane", () => {
 
     const pane = document.getElementById("libraryDetails");
     expect(pane.dataset.state).toBe("multi");
-    expect(document.getElementById("libraryDetailsEmpty").textContent).toBe(
-      "2 items selected"
+    expect(
+      document.getElementById("libraryDetailsEmptyTitle").textContent
+    ).toBe("Selection");
+    expect(document.getElementById("libraryDetailsEmptyLabel").textContent).toBe(
+      "Selected"
     );
+    expect(document.getElementById("libraryDetailsEmptyCount").textContent).toBe(
+      "2"
+    );
+    expect(
+      document.getElementById("libraryDetailsEmptyPrompt").textContent
+    ).toBe("Select a single item to see details");
   });
 
   test("renders the metadata rows for a selected asset", async () => {
@@ -341,7 +454,7 @@ describe("library-details pane", () => {
     expect(preview.querySelector("img")).not.toBeNull();
   });
 
-  test("collection selection shows a thumbnail, no children row, no 3D", async () => {
+  test("collection selection shows the mosaic hint, asset count, no 3D", async () => {
     const { libraryState, initLibraryDetails, createChatPreview, loadThumbnailInto } =
       await load();
     initLibraryDetails();
@@ -356,14 +469,168 @@ describe("library-details pane", () => {
     expect(document.getElementById("libraryDetailsBadge").textContent).toBe(
       "Collection"
     );
-    expect(document.getElementById("libraryDetailsChildrenRow").hidden).toBe(true);
+    expect(
+      document.getElementById("libraryDetailsChildrenLabel").textContent
+    ).toBe("Assets");
+    expect(document.getElementById("libraryDetailsChildren").textContent).toBe(
+      "0 assets"
+    );
+    expect(document.getElementById("libraryDetailsFormatRow").hidden).toBe(true);
     expect(document.getElementById("libraryDetailsRole").textContent).toBe("Editor");
     expect(createChatPreview).not.toHaveBeenCalled();
+    // No assets in the manifest → upload hint instead of thumbnails.
+    expect(loadThumbnailInto).not.toHaveBeenCalled();
+    const preview = document.getElementById("libraryDetailsPreview");
+    expect(preview.hidden).toBe(false);
+    expect(
+      preview.querySelector(".library-details-mosaic-empty").textContent
+    ).toContain("Empty collection");
+  });
+
+  test("collection with assets shows a thumbnail mosaic with overflow tile", async () => {
+    const collectionManifest = {
+      timestamp: MODIFIED,
+      assets: { a1: "bafyA1", a2: "bafyA2", a3: "bafyA3", a4: "bafyA4", a5: "bafyA5" },
+    };
+    const manifests = {
+      bafyCollection: collectionManifest,
+      bafyA1: { thumbnail: "bafyT1" },
+      bafyA2: { thumbnail: { cid: "bafyT2" } },
+      bafyA3: { thumbnail: "bafyT3" },
+      bafyA4: { thumbnail: "bafyT4" },
+    };
+    const { libraryState, initLibraryDetails, loadThumbnailInto } = await load({
+      manifests,
+    });
+    initLibraryDetails();
+    libraryState.set({
+      collections: [COLLECTION],
+      selectedIds: [COLLECTION.id],
+    });
+    await flush();
+
+    expect(document.getElementById("libraryDetailsChildren").textContent).toBe(
+      "5 assets"
+    );
+    const mosaic = document
+      .getElementById("libraryDetailsPreview")
+      .querySelector(".library-details-mosaic");
+    expect(mosaic).not.toBeNull();
+    // 4 thumbnail tiles + 1 "+1" overflow tile.
+    expect(loadThumbnailInto).toHaveBeenCalledTimes(4);
+    expect(mosaic.querySelectorAll("img").length).toBe(4);
+    expect(
+      mosaic.querySelector(".library-details-mosaic-more").textContent
+    ).toBe("+1");
+  });
+
+  test("collection falls back to its static thumbnail when assets have none", async () => {
+    const manifests = {
+      bafyCollection: { timestamp: MODIFIED, assets: { a1: "bafyA1" } },
+      bafyA1: { name: "no thumb here" },
+    };
+    const { libraryState, initLibraryDetails, loadThumbnailInto } = await load({
+      manifests,
+    });
+    initLibraryDetails();
+    libraryState.set({
+      collections: [COLLECTION],
+      selectedIds: [COLLECTION.id],
+    });
+    await flush();
+
+    expect(loadThumbnailInto).toHaveBeenCalledTimes(1);
     expect(loadThumbnailInto).toHaveBeenCalledWith(
       document.getElementById("libraryDetailsPreview"),
       "bafyCollThumb",
       "Props Pack"
     );
+  });
+
+  test("fills version, CID, editors, and anchor rows", async () => {
+    const { libraryState, initLibraryDetails } = await load({
+      editors: [{ address: "0x1" }, { address: "0x2" }, { address: "0x3" }],
+    });
+    const { walletState } = await import(
+      "../../frontend/src/js/state/wallet-state.js"
+    );
+    walletState.set({ chainId: 84532 });
+    initLibraryDetails();
+    libraryState.set({ assets: [ASSET], selectedIds: [ASSET.id] });
+    await flush();
+
+    // MANIFEST has no prev_manifest_cid → v1.
+    expect(document.getElementById("libraryDetailsVersion").textContent).toBe("v1");
+    // Short CIDs stay untruncated; full value on hover + copy.
+    expect(document.getElementById("libraryDetailsCid").textContent).toBe(
+      "bafyManifest"
+    );
+    expect(document.getElementById("libraryDetailsCid").title).toBe("bafyManifest");
+    expect(document.getElementById("libraryDetailsCopyCid").hidden).toBe(false);
+    expect(document.getElementById("libraryDetailsEditors").textContent).toBe(
+      "3 editors"
+    );
+    expect(document.getElementById("libraryDetailsAnchor").textContent).toBe(
+      "#7 · Base Sepolia"
+    );
+    expect(document.getElementById("libraryDetailsFormat").textContent).toBe("GLB");
+  });
+
+  test("version walk follows prev_manifest_cid links", async () => {
+    const manifests = {
+      bafyManifest: { ...MANIFEST, prev_manifest_cid: "bafyPrev1" },
+      bafyPrev1: { timestamp: MODIFIED - 1000, prev_manifest_cid: "bafyPrev2" },
+      bafyPrev2: { timestamp: MODIFIED - 2000 },
+    };
+    const { libraryState, initLibraryDetails } = await load({ manifests });
+    initLibraryDetails();
+    libraryState.set({ assets: [ASSET], selectedIds: [ASSET.id] });
+    await flush();
+
+    expect(document.getElementById("libraryDetailsVersion").textContent).toBe("v3");
+  });
+
+  test("editors row reads 'just you' for an empty editor list", async () => {
+    const { libraryState, initLibraryDetails } = await load();
+    initLibraryDetails();
+    libraryState.set({ assets: [ASSET], selectedIds: [ASSET.id] });
+    await flush();
+
+    expect(document.getElementById("libraryDetailsEditors").textContent).toBe(
+      "just you"
+    );
+  });
+
+  test("More details disclosure toggles the extra rows", async () => {
+    const handle = makeHandle();
+    const { libraryState, initLibraryDetails } = await load({
+      previewHandles: [handle],
+    });
+    initLibraryDetails();
+    libraryState.set({ assets: [ASSET], selectedIds: [ASSET.id] });
+    await flush();
+
+    const extra = document.getElementById("libraryDetailsExtra");
+    const btn = document.getElementById("libraryDetailsMoreBtn");
+    expect(extra.hidden).toBe(true);
+    btn.click();
+    expect(extra.hidden).toBe(false);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    btn.click();
+    expect(extra.hidden).toBe(true);
+  });
+
+  test("Open button delegates to openItem with the current item", async () => {
+    const { libraryState, initLibraryDetails, openItem } = await load();
+    initLibraryDetails();
+    libraryState.set({
+      collections: [COLLECTION],
+      selectedIds: [COLLECTION.id],
+    });
+    await flush();
+
+    document.getElementById("libraryDetailsOpenBtn").click();
+    expect(openItem).toHaveBeenCalledWith(COLLECTION.id);
   });
 
   test("toggle button hides the pane and persists the choice", async () => {
