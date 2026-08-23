@@ -17,7 +17,7 @@ describe("uploadWithDedup - raw-content hash parity (Finding A)", () => {
       () => ({ __esModule: true, writeToIPFS })
     );
     const mod = await import("../../frontend/src/js/gltf/dedup.js");
-    const hashMod = await import("../../frontend/src/js/utils/hash.js");
+    const hashMod = await import("../../frontend/src/js/asset-core/utils/hash.js");
     return { mod, hashMod, writeToIPFS };
   }
 

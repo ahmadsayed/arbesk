@@ -8,13 +8,13 @@
  * browser's HTTP cache (Kubo serves /ipfs/ responses with immutable
  * cache headers) plus inflight request coalescing already cover repeat
  * reads. The glTF composition pipeline has its own memory + IndexedDB
- * cache (utils/content-cache.js) for heavyweight buffers/images.
+ * cache (asset-core/utils/content-cache.js) for heavyweight buffers/images.
  */
 
 import { getConfig } from "../services/api.ts";
-import { isGzipped, decompress } from "../utils/compression.ts";
-import { arrayBufferToBase64 } from "../utils/encoding.ts";
-import { createConcurrencyLimiter } from "../utils/concurrency.ts";
+import { isGzipped, decompress } from "../asset-core/utils/compression.ts";
+import { arrayBufferToBase64 } from "../asset-core/utils/encoding.ts";
+import { createConcurrencyLimiter } from "../asset-core/utils/concurrency.ts";
 
 // Cap concurrent gateway reads to avoid head-of-line blocking when a composite
 // has many buffers/images or when many library thumbnails load at once.

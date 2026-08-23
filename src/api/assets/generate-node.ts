@@ -8,7 +8,7 @@ import {
 import {
   isGzipped,
   decompress,
-} from "../../../frontend/src/js/utils/compression.ts";
+} from "../../../frontend/src/js/asset-core/utils/compression.ts";
 import {
   createTask,
   createImageTask,

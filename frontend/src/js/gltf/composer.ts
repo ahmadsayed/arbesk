@@ -13,7 +13,7 @@ import {
   getArrayBufferFromRemoteIPFS,
   getRawArrayBufferFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
-import { decompress } from "../utils/compression.ts";
+import { decompress } from "../asset-core/utils/compression.ts";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "./cache-aware-fetch.ts";
 import { composeGltfJson } from "./gltf-core.ts";
 

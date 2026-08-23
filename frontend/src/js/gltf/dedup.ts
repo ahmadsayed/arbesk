@@ -11,8 +11,8 @@ import {
   hashBytes,
   DEFAULT_HASH_ALGORITHM,
   SUPPORTED_HASH_ALGORITHMS,
-} from "../utils/hash.ts";
-import { compress } from "../utils/compression.ts";
+} from "../asset-core/utils/hash.ts";
+import { compress } from "../asset-core/utils/compression.ts";
 import { writeToIPFS } from "../ipfs/write-to-ipfs.ts";
 import {
   IPFS_URI_PREFIX,

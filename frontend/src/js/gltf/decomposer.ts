@@ -15,7 +15,7 @@
  * buffers and images stay at their original CIDs (IPFS deduplication).
  */
 
-import { sanitizeFileName } from "../utils/uri.ts";
+import { sanitizeFileName } from "../asset-core/utils/uri.ts";
 import { uploadWithDedup } from "./dedup.ts";
 import {
   IPFS_URI_PREFIX,

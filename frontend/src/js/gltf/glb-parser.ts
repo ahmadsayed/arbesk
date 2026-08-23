@@ -10,7 +10,7 @@
 
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { sanitizeFileName, extractDataURI } from "../utils/uri.ts";
+import { sanitizeFileName, extractDataURI } from "../asset-core/utils/uri.ts";
 import {
   uploadWithDedup,
   attachDedupMeta,

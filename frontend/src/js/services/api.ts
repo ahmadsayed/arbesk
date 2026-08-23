@@ -12,7 +12,7 @@ import {
   getContractAddress as getNetworkContractAddress,
 } from "../blockchain/network-config.ts";
 import { log, warn, error } from "../utils/log.ts";
-import { base64ToBytes } from "../utils/encoding.ts";
+import { base64ToBytes } from "../asset-core/utils/encoding.ts";
 import { identityMatrix } from "../utils/collections.ts";
 
 /** Base URL for all API calls */

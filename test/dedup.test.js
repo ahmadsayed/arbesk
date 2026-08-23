@@ -19,7 +19,7 @@ jest.unstable_mockModule("../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
   writeToIPFS: jest.fn(),
 }));
 
-const { hashBytes } = await import("../frontend/src/js/utils/hash.js");
+const { hashBytes } = await import("../frontend/src/js/asset-core/utils/hash.js");
 const { writeToIPFS } = await import(
   "../frontend/src/js/ipfs/write-to-ipfs.js"
 );
