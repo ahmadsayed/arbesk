@@ -13,7 +13,7 @@ import {
   SUPPORTED_HASH_ALGORITHMS,
 } from "../utils/hash.ts";
 import { compress } from "../utils/compression.ts";
-import { writeToIPFS } from "../ipfs/write-to-ipfs.ts";
+import { getRuntime } from "../runtime.ts";
 import {
   IPFS_URI_PREFIX,
   cidFromIpfsUri,
@@ -43,8 +43,8 @@ export interface DedupUploadResult {
 }
 
 // Coalesce concurrent uploads of identical payloads so two parallel callers
-// that hash to the same value share one in-flight writeToIPFS promise instead
-// of uploading the same bytes twice.
+// that hash to the same value share one in-flight ipfsWrite.write promise
+// instead of uploading the same bytes twice.
 const _inflightUploads = new Map<string, Promise<DedupUploadResult>>();
 
 /**
@@ -132,7 +132,7 @@ export async function uploadWithDedup(
 
   const uploadPromise = (async () => {
     try {
-      const cid = await writeToIPFS(payload, finalFilename, credential, {
+      const cid = await getRuntime().ipfsWrite.write(payload, finalFilename, credential, {
         compress: false,
       });
       return { cid, meta, skipped: false };

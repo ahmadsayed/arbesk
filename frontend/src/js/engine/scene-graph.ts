@@ -6,7 +6,7 @@
  * for backward compatibility.
  */
 
-import { emit, on, EVENTS } from "../events/bus.ts";
+import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { state } from "./state.ts";
 import { getCssVar, hexToColor4 } from "./theme.ts";
@@ -16,8 +16,8 @@ import {
   renameAsset,
   adoptOpenedAsset,
   getActiveAssetManifestCid,
-} from "../domain/asset.ts";
-import { adoptOpenedCollection } from "../domain/collection.ts";
+} from "../asset-core/domain/asset.ts";
+import { adoptOpenedCollection } from "../asset-core/domain/collection.ts";
 
 import {
   selectNode,

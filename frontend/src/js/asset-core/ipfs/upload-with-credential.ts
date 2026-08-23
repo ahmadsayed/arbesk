@@ -40,7 +40,9 @@ function ts(): string {
 function toBlob(data: Uint8Array | ArrayBuffer | Blob | string): Blob {
   if (data instanceof Blob) return data;
   if (data instanceof ArrayBuffer || data instanceof Uint8Array)
-    return new Blob([data as BlobPart]);
+    // `as any`: the BlobPart union name differs between the DOM lib and
+    // @types/node; both accept Uint8Array/ArrayBuffer at runtime.
+    return new Blob([data as any]);
   if (typeof data === "string")
     return new Blob([data], { type: "application/octet-stream" });
   throw new Error("uploadWithCredential: unsupported data type");
@@ -88,7 +90,7 @@ async function uploadToPinata(
       const text = await res.text().catch(() => "");
       throw new Error(`Pinata upload failed: ${res.status} - ${text}`);
     }
-    const json = await res.json();
+    const json = (await res.json()) as any;
     const cid = json?.data?.cid || json?.cid;
     if (!cid) throw new Error("Pinata upload returned no CID");
     console.log(
@@ -129,7 +131,7 @@ async function uploadToKubo(
     const text = await res.text().catch(() => "");
     throw new Error(`IPFS add failed: ${res.status} - ${text}`);
   }
-  const result = await res.json();
+  const result = (await res.json()) as any;
   const cidStr = result.Hash;
   console.log(`[${ts()}] [UPLOAD] kubo stored → ${cidStr} (${result.Size} bytes)`);
   try {

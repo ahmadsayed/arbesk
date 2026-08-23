@@ -9,7 +9,7 @@
  * animationStartMode NONE (babylon-loader.js) so nothing auto-plays.
  */
 
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { state } from "./state.ts";
 
 const animationsSection = document.getElementById("animationsSection");

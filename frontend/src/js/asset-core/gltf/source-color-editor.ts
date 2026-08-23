@@ -5,8 +5,7 @@
  * No post-processor overrides - the color is baked into the source CID.
  */
 
-import { getFromRemoteIPFS, getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
+import { getRuntime } from "../runtime.ts";
 import { isGLB, decomposeGLB } from "./glb-parser.ts";
 
 /**
@@ -174,7 +173,8 @@ export async function editSourceColors(
   let decomposedFromGlb = false;
 
   try {
-    const buffer = await getArrayBufferFromRemoteIPFS(sourceCid);
+    const { ipfsRead } = getRuntime();
+    const buffer = await ipfsRead.getBytes(sourceCid);
     if (isGLB(buffer)) {
       // Decompose GLB into composite glTF before editing. Colors live in JSON,
       // so we never need to re-serialize back to GLB for storage. Skip storing
@@ -186,7 +186,7 @@ export async function editSourceColors(
       gltf = composite;
       decomposedFromGlb = true;
     } else {
-      gltf = await getFromRemoteIPFS(sourceCid);
+      gltf = await ipfsRead.getJSON(sourceCid);
     }
   } catch (err) {
     console.warn(`[SRC-COLOR] failed to fetch ${sourceCid}: ${(err as Error).message}`);
@@ -195,7 +195,7 @@ export async function editSourceColors(
 
   const stats = applyNodeColors(gltf, nodeColors);
 
-  const newCid = await writeJSONToIPFS(gltf, null, {
+  const newCid = await getRuntime().ipfsWrite.writeJSON(gltf, null, {
     compress: true,
     assetId,
     filename: assetName || assetId ? `${assetName || assetId}_colored.gltf` : undefined,

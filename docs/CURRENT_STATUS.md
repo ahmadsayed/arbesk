@@ -1,6 +1,6 @@
 # Arbesk — Current Implementation Status
 
-> **Generated:** 2026-08-03
+> **Generated:** 2026-08-23
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
 > **Frontend build:** Custom Node.js scripts (no bundler).
@@ -19,7 +19,7 @@
 | Phase 4.1: Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.ts`, browser-side thumbnail upload to IPFS, unpin lifecycle |
 | Phase 5.1: Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.ts`, depth/cycle protection in `scene-graph.ts` |
 | Phase 5.2: Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
-| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/gltf/merkle-editors.ts`, `frontend/src/js/services/team.ts` |
+| Phase 5.3: Merkle Editor Proofs | ✅ Complete | `editorRoot`/`editorSetVersion` in `ArbeskAssetBase.sol`, `frontend/src/js/asset-core/gltf/merkle-editors.ts`, `frontend/src/js/services/team.ts` |
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.ts`, collection expansion in `asset-library.ts`, collection loading in `scene-graph.ts` |
 | Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.ts`, `ui/comments-panel.ts`, `src/api/chat-proxy.ts`, `src/api/comments-archive.ts`, E2E specs 14 + 15 |
 | Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.ts`, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, `services/library-ops.ts`, E2E specs 09–12 |
@@ -29,6 +29,7 @@
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.ts`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
 | Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.ts`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
 | Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.ts` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
+| Asset-Core Externalization (SDK facade + ports) | ✅ Complete | `frontend/src/js/asset-core/` (facade, runtime ports, manifest schema, domain, gltf pipeline, kernels, bench), browser adapters in `ipfs/`/`blockchain/`/`workers/`, backend `src/api/asset-core-adapters.ts` |
 
 ---
 
@@ -60,6 +61,7 @@ src/
     ├── errors.ts               # Standardized error response helper
     ├── ipfs-utils.ts           # catManifest() with timeout/abort
     ├── manifest-utils.ts       # getSceneNodes, bumpManifestVersion
+    ├── asset-core-adapters.ts  # Backend IpfsReadPort/IpfsWritePort over storage adapter + createBackendCore()
     ├── nostr-relay.ts          # Shared relay primitives (used by chat-proxy + comments-archive)
     ├── rate-limiter.ts         # In-memory per-wallet rate limiter
     ├── token-indexer.ts        # Chunked eth_getLogs backfill for owned + editor-shared token discovery
@@ -111,7 +113,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 
 - ✅ Mock generation with session auth + rate limiting (returns raw bytes, browser handles IPFS)
 - ✅ Tripo3D BYOK generation (task-based, v3 API, default model `v3.1-20260211`) with `POST /generations` + `GET /generations/:taskId` polling; `auto_size` is passed so models arrive at estimated real-world meter scale; panel-level "Texture quality" selector (Tripo3D only, persisted in localStorage) sends `texture_quality: detailed`
-- ✅ Version-card action row: every Tripo3D generation bubble carries a compact action row — `Retexture` (texture-prompt dialog) · `Retopo` (polygon-budget dialog) · `Auto-rig` (no dialog) · `Animate…` (preset dialog) — via `domain/generation-actions.ts`; actions run against the bubble's own GLB, so they never expire. Animated results are terminal (no actions); rig-only results keep only `Animate…`; mock provider gets none
+- ✅ Version-card action row: every Tripo3D generation bubble carries a compact action row — `Retexture` (texture-prompt dialog) · `Retopo` (polygon-budget dialog) · `Auto-rig` (no dialog) · `Animate…` (preset dialog) — via `asset-core/domain/generation-actions.ts`; actions run against the bubble's own GLB, so they never expire. Animated results are terminal (no actions); rig-only results keep only `Animate…`; mock provider gets none
 - ✅ Tripo3D `sourceAssetCid` GLB follow-ups: the backend fetches the bubble's GLB from IPFS and uploads it to Tripo (`POST /files` → `file_token`) as the source for retexture (`models/texture`, flat `text_prompt`), retopo (`mesh/decimate`), and rig/animate. glTF JSON sources (composite `ipfs://` refs or embedded data URIs — gzipped storage is decompressed first, components honor `_arbesk.compressed`) are composed to GLB before upload via the shared gltf-core pipeline (`composeGltfJson` + `serializeGLB`); other formats (3MF, …) or glTF with unresolvable external refs → 400 `SOURCE_ASSET_UNSUPPORTED_FORMAT` (rig-check accepts GLB only — upstream code 1004). Unreadable or empty GLB → 400 `SOURCE_ASSET_UNAVAILABLE`; GLB over Tripo's 150 MB file limit → 400 `SOURCE_ASSET_TOO_LARGE`
 - ✅ Typed-prompt retexture targets the "active version": a visible `Refining: <name> ×` indicator above the input, set on generation result, Show in Studio, and bubble/history restore; cleared by detach, Clear Chat, asset switch, or restoring a chat-less (e.g. parametric-edit) version
 - ✅ Show in Studio auto-saves a draft (existing asset-save flow) and annotates the bubble "Saved" — publish stays a separate manual action. The button is the only way a bubble's model enters the Studio (the preview is orbit-only) and stays live after sending — re-clicking it restores that version; the manifest-chain tip is preserved across the restore so the auto-save chains linearly onto the prior tip (no fork)
@@ -119,7 +121,7 @@ Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL.
 - ✅ Tripo3D multiview-to-3D: attach up to 4 views of the same object (the attach input is multi-select; each chip gets a swappable Front/Left/Back/Right badge, auto-assigned in attach order with swap-on-conflict and front promotion on remove — pure logic in `ui/attach-views.ts`) → request field `images: [{imageData, imageMime, view}]` (2–4, unique views, exactly one front, mutually exclusive with `imageData`) → backend uploads each view → `generation/multiview-to-model` (`createMultiviewTask` in the adapter, view-key `inputs` in canonical front/left/back/right order). Chat shows a 2-column thumbnail grid bubble (`addImageMessage` `options.images`); the manifest node records `reference_images: [{cid, mime, name, view}]` plus `reference_image` = the front view for back-compat. One attached image keeps the single-image path byte-for-byte
 - ✅ Tripo3D credit balance display: `POST /generations/balance` (BYOK key, session-gated) powers the "Tripo 3D credits" caption under the provider select + in the BYOK key dialog; refreshes on key change, wallet connect, and after each generation
 - ✅ Model download: header download button in Studio (active asset) + per-card Download action in the Library; GLB downloads raw from IPFS, composite glTF is inlined (data URIs) first so the file is self-contained — no wallet/session needed (read-only)
-- ✅ Tripo3D rig & animate: `Auto-rig` action chains rig-check → rig and stops (rigged GLB, Tripo-native skeleton — retarget rejects `spec: "mixamo"` rigs with code 1004, no baked animation); `Animate…` opens the preset dialog (max 5) then chains rig-check → rig → retarget (`animate` + `animations`/`rigOnly` on `POST /generations`). The picker is a curated, categorized set — Basics/Combat/Reactions/Emotes/Daily Life: the 11 generic v2.5 presets (short form) plus 16 from the v1.0 biped library (`preset:biped:*`, pass-through in the adapter; a known generic-rig task rejects them with a clear 400). Animating an already-rigged bubble takes the retarget-only path, skipping rig-check/rig, driven by the backend registry task id (`sourceTaskId`). Poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Rig endpoint uses its own model version (`TRIPO_3D_RIG_MODEL`, default `v2.5-20260210`). Tripo rig/retarget re-normalize model size (~×0.5 per stage), so follow-up manifests bake a compensating uniform `post_processor.scale` from source/result mesh bounds (`gltf/bounds.ts` + `followupScaleCompensation` in `services/api.ts`) — versions keep visual size through the chain
+- ✅ Tripo3D rig & animate: `Auto-rig` action chains rig-check → rig and stops (rigged GLB, Tripo-native skeleton — retarget rejects `spec: "mixamo"` rigs with code 1004, no baked animation); `Animate…` opens the preset dialog (max 5) then chains rig-check → rig → retarget (`animate` + `animations`/`rigOnly` on `POST /generations`). The picker is a curated, categorized set — Basics/Combat/Reactions/Emotes/Daily Life: the 11 generic v2.5 presets (short form) plus 16 from the v1.0 biped library (`preset:biped:*`, pass-through in the adapter; a known generic-rig task rejects them with a clear 400). Animating an already-rigged bubble takes the retarget-only path, skipping rig-check/rig, driven by the backend registry task id (`sourceTaskId`). Poll responses carry a `stage` label; `MODEL_NOT_RIGGABLE` when Tripo rejects the mesh. Rig endpoint uses its own model version (`TRIPO_3D_RIG_MODEL`, default `v2.5-20260210`). Tripo rig/retarget re-normalize model size (~×0.5 per stage), so follow-up manifests bake a compensating uniform `post_processor.scale` from source/result mesh bounds (`asset-core/gltf/bounds.ts` + `followupScaleCompensation` in `services/api.ts`) — versions keep visual size through the chain
 - ✅ Tripo3D smart retopology: `Retopo` action with polygon-budget dialog (500–20,000 triangles, default 20,000, blank = adaptive) → `POST /mesh/decimate` (model v2.0, clean triangulated topology + baked textures, GLB output, optional `faceLimit`); `quad` stays `false` on purpose — quad output forces FBX, which the frontend cannot load. The retopo result can itself enter the rig chain
 - ✅ Generation task progress: GNOME infobar-style banner on the viewport top (`ui/task-progress.ts`) for Save/Besk and generation tasks, with stage hints, success fade, and error state
 - ✅ Generation results land as chat bubbles with a live 3D preview; the Studio scene loads only on explicit "Show in Studio" (`chat-preview.ts`, `pending-generations.ts`); chat session resets on asset switch (keyed on manifest `asset_id`) while history bubbles still render per asset
@@ -204,25 +206,46 @@ frontend/src/js/
 │   └── explorer.ts             # Block explorer links
 ├── ipfs/
 │   ├── remote-ipfs.ts          # Gateway reads (cache currently disabled)
-│   └── write-to-ipfs.ts        # Direct Kubo/Pinata writes + pin
-├── gltf/
-│   ├── decomposer.ts           # Break buffers/images into separate IPFS CIDs (web-worker backed)
-│   ├── async-gltf.ts           # Async decompose helpers
-│   ├── composer.ts             # Resolve ipfs:// URIs back to base64 for Babylon
-│   ├── material-editor.ts      # PBR material color edits, multi-primitive aware, bake to composite
-│   ├── merkle-editors.ts       # Merkle tree/proof library for editor authorization
-│   ├── source-color-editor.ts  # Per-mesh color editor integration
-│   └── glb-parser.ts           # Binary glTF container parsing
-├── domain/
-│   ├── asset-store.ts          # Shared asset store (domain-only import); emits ASSET_STATE_CHANGED with full-state payload
-│   ├── asset.ts                # Asset facade — single writer of asset identity/name/CID fields; getters + save/publish commands
-│   ├── collection.ts           # Collection state commands (single writer of active/selected collection) + publishCollection seam
-│   ├── editors.ts              # Merkle editor helpers, editor-list cache, proof commands
-│   ├── version-history-store.ts # Headless manifest-chain store (entries, active/published CIDs) feeding the scene/model clocks
-│   └── generation-actions.ts   # Pure follow-up-action policy for generation bubbles (retexture/retopo/auto-rig/animate)
+│   ├── write-to-ipfs.ts        # Direct Kubo/Pinata writes + pin
+│   └── asset-core-adapter.ts   # Browser IpfsReadPort/IpfsWritePort over remote-ipfs + write-to-ipfs
+├── asset-core/                 # Environment-agnostic core package (in-tree, no build step)
+│   ├── facade.ts               # createArbeskCore() — upload/download/compose/decompose/manifests/editors
+│   ├── runtime.ts / types.ts   # Process-wide runtime + port types (IpfsRead/Write, Credential, Chain, Hash, Storage, Executor, Kernels)
+│   ├── index.ts                # Sanctioned import surface
+│   ├── kernels/                # base64 / murmur3 / sha256 / GLB magic defaults
+│   ├── executor/inline.ts      # Main-thread op table (backend default / browser fallback)
+│   ├── manifest/               # schema.ts (zod), chain.ts (prev_manifest_cid walk), utils.ts
+│   ├── domain/                 # asset-store/asset/collection/editors/version-history-store/generation-actions (single-writer discipline)
+│   ├── gltf/                   # composer/decomposer/glb-parser/async-gltf/merkle-editors/source-color-editor/material-editor/cache-aware-fetch/gltf-core/bounds/dedup
+│   ├── events/                 # vendored mitt bus
+│   ├── ipfs/                   # worker-safe upload-with-credential
+│   ├── utils/ + state/ + storage/ + testing/ + bench/
+│   └── package.json / README.md
+├── asset-core-init.ts          # Browser composition root — initAssetCoreBrowser() once at boot
+├── blockchain/
+│   ├── wallet.ts               # Backward-compat barrel; re-exports the split wallet modules
+│   ├── wallet-core.ts          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA/WalletConnect), account state; 250ms polling
+│   ├── wallet-network.ts       # Network switching
+│   ├── wallet-payments.ts      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
+│   ├── wallet-publishing.ts    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
+│   ├── wallet-guard.ts         # Guards / helpers for publishing auth
+│   ├── wallet-cdp.ts           # CDP email OTP → embedded EOA → ERC-4337 smart account; EIP-1193 shim
+│   ├── smart-wallet-support.ts # SMART_WALLET_SUPPORTED_CHAIN_IDS (Base Sepolia only)
+│   ├── token-resolver.ts       # Resolve child_ref tokens to manifest CIDs
+│   ├── uri-utils.ts            # Normalize tokenURIs to plain CIDs
+│   ├── siwe.ts                 # EIP-4361 message builder
+│   ├── wallet-discovery.ts     # EIP-6963 multi-wallet
+│   ├── wallet-connect.ts       # WalletConnect v2
+│   ├── network-config.ts       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
+│   ├── error-decoder.ts        # Revert reason decoding
+│   ├── explorer.ts             # Block explorer links
+│   └── asset-core-adapter.ts   # Browser HashPort/StoragePort/ChainPort
+├── workers/
+│   ├── gltf-worker.ts          # Web Worker: compose/decompose/bake ops + batched multi-part IPFS uploads
+│   ├── gltf-worker-pool.ts     # workerpool wrapper (max 4 workers, module workers, fallback detection)
+│   └── worker-executor.ts      # Browser ExecutorPort over the worker pool
 ├── state/
 │   ├── wallet-state.ts / ui-state.ts / library-state.ts
-│   └── create-store.ts         # Generic createStore factory
 └── services/
     ├── api.ts                  # API client: sessions (SIWE), generate, comments archive, unpin, upload-url, paymaster
     ├── asset-save/             # manifest-builder.ts, collection-publish.ts, editor-publish.ts
@@ -321,8 +344,10 @@ frontend/src/js/
 
 | Suite | Count | Status |
 |-------|-------|--------|
-| Jest unit (all) | 1468 across 110 suites | ✅ All passing (verified 2026-08-03) |
-| E2E Playwright specs | 22 specs / 68 tests | ✅ Chromium (manual run against local stack) |
+| Jest frontend (`test:frontend`) | 102 suites / 1109 tests | ✅ All passing (verified 2026-08-23, worktree) |
+| Jest API (`test:api`) | 104 tests | ✅ All passing (verified 2026-08-23, worktree) |
+| Hardhat contracts (`test:contracts`) | 49 tests | ✅ All passing (verified 2026-08-23, worktree) |
+| E2E Playwright (chromium) | 44 tests | ✅ Passing (verified 2026-08-23, worktree local stack) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**
@@ -380,7 +405,7 @@ frontend/src/js/
 
 ### Verdict
 
-**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. 1468 unit tests green, 19 E2E specs cover the critical path.
+**Ready for closed beta on the collaboration and publishing workflow.** The full round-trip (connect → generate mock → parametric edit → publish NFT → collaborate → comment → library management) works on both EOA and CDP email-login wallets, with gas sponsorship for CDP smart-account users. Full gate green on the asset-core externalization branch (102 frontend suites / 1109 tests, 104 API tests, 49 contract tests); chromium E2E passed 44/44 against the worktree local stack.
 
 **Ready for open beta** for the collaboration, publishing, and Tripo3D BYOK generation workflows (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — all live-verified against the v3 API). Everything else is beta-quality.
 

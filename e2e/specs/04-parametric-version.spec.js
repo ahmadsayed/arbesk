@@ -62,7 +62,7 @@ test.describe("parametric versioning + time-travel", () => {
     // Subscribing to the in-memory bus singleton from page context works
     // because the dynamic import resolves to the already-loaded module.
     await page.evaluate(async () => {
-      const { on, EVENTS } = await import("/js/events/bus.js");
+      const { on, EVENTS } = await import("/js/asset-core/events/bus.js");
       window.__sceneReadyCids = [];
       on(EVENTS.SCENE_READY, ({ manifestCid }) =>
         window.__sceneReadyCids.push(manifestCid),

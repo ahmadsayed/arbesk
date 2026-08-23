@@ -4,8 +4,8 @@
 import {
   assetStore,
   _resetForTesting,
-} from "../../frontend/src/js/domain/asset-store.js";
-import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
+} from "../../frontend/src/js/asset-core/domain/asset-store.js";
+import { on, off, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 

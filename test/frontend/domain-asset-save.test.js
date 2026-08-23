@@ -5,9 +5,9 @@
  * emission. IO deps injected; real assetStore + real event bus.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
-import { saveDraftAsset } from "../../frontend/src/js/domain/asset.js";
-import { assetStore, _resetForTesting } from "../../frontend/src/js/domain/asset-store.js";
-import { on, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { saveDraftAsset } from "../../frontend/src/js/asset-core/domain/asset.js";
+import { assetStore, _resetForTesting } from "../../frontend/src/js/asset-core/domain/asset-store.js";
+import { on, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 
 function makeDeps(over = {}) {
   return {

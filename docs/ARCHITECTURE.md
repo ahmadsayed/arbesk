@@ -157,9 +157,9 @@ The system currently combines:
 | Engine | `engine/parametric-preview.ts` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.ts` | Gateway reads with memory + IndexedDB cache |
 | IPFS | `ipfs/write-to-ipfs.ts` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
-| glTF | `gltf/decomposer.ts` / `async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
-| glTF | `gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
-| glTF | `gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
+| glTF | `asset-core/gltf/decomposer.ts` / `gltf/async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
+| glTF | `asset-core/gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
+| glTF | `asset-core/gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
 | glTF | `gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
 | Blockchain | `blockchain/wallet.ts` | Backward-compat barrel re-exporting `wallet-core.ts`, `wallet-connect.ts`, `wallet-network.ts`, `wallet-payments.ts`, `wallet-publishing.ts`, `wallet-guard.ts` |
 | Blockchain | `blockchain/wallet-core.ts` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |

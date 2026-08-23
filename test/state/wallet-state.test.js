@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { walletState, _resetForTesting } from "../../frontend/src/js/state/wallet-state.js";
-import { on, off, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { on, off, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 

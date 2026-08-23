@@ -16,6 +16,7 @@
  */
 
 import { sanitizeFileName } from "../utils/uri.ts";
+import { getRuntime } from "../runtime.ts";
 import { uploadWithDedup } from "./dedup.ts";
 import {
   IPFS_URI_PREFIX,
@@ -146,9 +147,8 @@ export async function decomposeAndStore(
     assetId,
     dedupMap,
   });
-  const { writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.ts");
   const baseName = sanitizeFileName((assetName || assetId) as string);
-  const compositeCid = await writeJSONToIPFS(composite, credential, {
+  const compositeCid = await getRuntime().ipfsWrite.writeJSON(composite, credential, {
     compress,
     assetId,
     filename: `${baseName}_composite.gltf`,

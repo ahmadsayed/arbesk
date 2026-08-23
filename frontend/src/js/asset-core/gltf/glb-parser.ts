@@ -9,7 +9,7 @@
  */
 
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
-import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
+import { getRuntime } from "../runtime.ts";
 import { sanitizeFileName, extractDataURI } from "../utils/uri.ts";
 import {
   uploadWithDedup,
@@ -481,7 +481,7 @@ export async function decomposeGLB(
       );
       compositeCid = result.cid;
     } else {
-      compositeCid = await writeJSONToIPFS(composite, credential, {
+      compositeCid = await getRuntime().ipfsWrite.writeJSON(composite, credential, {
         compress,
         assetId,
         filename: `${baseName}_composite.gltf`,

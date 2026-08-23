@@ -15,8 +15,7 @@
  *   - doubleSided (boolean)
  */
 
-import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
+import { getRuntime } from "../runtime.ts";
 
 /**
  * Fetch a composite glTF JSON from IPFS by CID.
@@ -27,7 +26,7 @@ import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
 export async function fetchComposite(compositeCid: string): Promise<any> {
   if (!compositeCid) throw new Error("fetchComposite: compositeCid is required");
   console.log(`[MAT-EDIT] fetching composite | cid=${compositeCid}`);
-  const gltf = await getFromRemoteIPFS(compositeCid);
+  const gltf = await getRuntime().ipfsRead.getJSON(compositeCid);
 
   // Validate it looks like a glTF
   if (!gltf.asset || !gltf.asset.version) {
@@ -237,7 +236,7 @@ export async function commitCompositeChanges(
   options: { assetName?: string; assetId?: string } = {}
 ): Promise<string> {
   const { assetName, assetId } = options;
-  const newCid = await writeJSONToIPFS(composite, null, {
+  const newCid = await getRuntime().ipfsWrite.writeJSON(composite, null, {
     compress: true,
     assetId,
     filename: assetName || assetId ? `${assetName || assetId}_materials.gltf` : undefined,

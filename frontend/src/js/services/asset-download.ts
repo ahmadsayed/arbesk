@@ -13,9 +13,17 @@ import {
   getFromRemoteIPFS,
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
-import { composeGlTFToBlobAsync } from "../gltf/async-gltf.ts";
-import { getAssetState } from "../domain/asset.ts";
+import { initAssetCoreBrowser } from "../asset-core-init.ts";
+import type { ArbeskCore } from "../asset-core/facade.ts";
+import { getAssetState } from "../asset-core/domain/asset.ts";
 import { announceStatus } from "./api.ts";
+
+/**
+ * The shared frontend asset-core (composition root installed at Studio boot).
+ */
+function getCore(): ArbeskCore {
+  return initAssetCoreBrowser();
+}
 
 /**
  * @returns filesystem-safe base name
@@ -77,7 +85,7 @@ export async function downloadAssetByManifestCid(
     // Composite glTFs reference ipfs:// buffers — inline them as data URIs
     // so the download is self-contained.
     const composite = await getFromRemoteIPFS(source.cid);
-    blob = await composeGlTFToBlobAsync(composite);
+    blob = await getCore().compose(composite);
   } else {
     blob = await getBlobFromRemoteIPFS(source.cid);
   }

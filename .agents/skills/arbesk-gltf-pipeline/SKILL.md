@@ -31,10 +31,10 @@ All row details: `references/deep-dive.md`.
 
 | File | Role |
 |------|------|
-| `frontend/src/js/gltf/gltf-core.ts` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
-| `frontend/src/js/gltf/composer.ts` | Main-thread compose wrapper (IPFS fetch + cache injection) |
-| `frontend/src/js/gltf/decomposer.ts` | Main-thread decompose wrapper (IPFS upload + dedup injection) |
-| `frontend/src/js/gltf/material-editor.ts` | PBR prop edits, commits new CID |
+| `frontend/src/js/asset-core/gltf/gltf-core.ts` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
+| `frontend/src/js/asset-core/gltf/composer.ts` | Main-thread compose wrapper (IPFS read port + cache injection) |
+| `frontend/src/js/asset-core/gltf/decomposer.ts` | Main-thread decompose wrapper (IPFS write port + dedup injection) |
+| `frontend/src/js/asset-core/gltf/material-editor.ts` | PBR prop edits, commits new CID |
 | `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatcher, `loadNode()` orchestration |
 | `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` runtime overlays |
 | `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: color/scale/mesh overrides |

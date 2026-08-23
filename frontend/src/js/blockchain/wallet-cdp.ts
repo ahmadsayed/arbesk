@@ -10,7 +10,7 @@
 
 import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut } from "@coinbase/cdp-core";
 import { log, error, warn } from "../utils/log.ts";
-import { emit, EVENTS } from "../events/bus.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import {
   isSmartWalletSupported,

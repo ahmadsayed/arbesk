@@ -7,10 +7,10 @@
  */
 
 import { getUploadCredential } from "../services/api.ts";
-import { compress } from "../utils/compression.ts";
-import { sanitizeFileName } from "../utils/uri.ts";
-import { uploadToIPFSWithCredential } from "./upload-with-credential.ts";
-import type { UploadCredential } from "./upload-with-credential.ts";
+import { compress } from "../asset-core/utils/compression.ts";
+import { sanitizeFileName } from "../asset-core/utils/uri.ts";
+import { uploadToIPFSWithCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
 
 async function bytesFromData(
   data: Uint8Array | ArrayBuffer | Blob | string

@@ -7,8 +7,8 @@
  */
 
 import { initCollaboratorPanel } from "./collaborators-panel.ts";
-import { on, EVENTS } from "../events/bus.ts";
-import { getActiveAssetTokenId } from "../domain/asset.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { getActiveAssetTokenId } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 
 let teamPanel: HTMLElement | null = null;

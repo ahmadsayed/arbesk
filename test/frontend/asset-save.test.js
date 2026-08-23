@@ -51,7 +51,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/domain/asset-store.js",
+    "../../frontend/src/js/asset-core/domain/asset-store.js",
     () => ({
       assetStore: {
         get: jest.fn(() => ({
@@ -137,10 +137,10 @@ describe("adoptManifestName", () => {
   test("adopts a real manifest name into session state", async () => {
     await loadModule(); // registers the asset-state mock
     const { adoptManifestName } = await import(
-      "../../frontend/src/js/domain/asset.js"
+      "../../frontend/src/js/asset-core/domain/asset.js"
     );
     const { assetStore } = await import(
-      "../../frontend/src/js/domain/asset-store.js"
+      "../../frontend/src/js/asset-core/domain/asset-store.js"
     );
     adoptManifestName({ name: "refaat" });
     expect(assetStore.set).toHaveBeenCalledWith({ activeAssetName: "refaat" });
@@ -149,10 +149,10 @@ describe("adoptManifestName", () => {
   test("does not clobber state with a default or absent name", async () => {
     await loadModule(); // registers the asset-state mock
     const { adoptManifestName } = await import(
-      "../../frontend/src/js/domain/asset.js"
+      "../../frontend/src/js/asset-core/domain/asset.js"
     );
     const { assetStore } = await import(
-      "../../frontend/src/js/domain/asset-store.js"
+      "../../frontend/src/js/asset-core/domain/asset-store.js"
     );
     adoptManifestName({ name: "Untitled Asset" });
     adoptManifestName({ name: "  " });

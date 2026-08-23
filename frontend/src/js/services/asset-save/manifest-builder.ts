@@ -15,7 +15,7 @@ import { getPendingChildRefs } from "../../engine/scene-graph.ts";
 import { waitForPendingLinkedDrops } from "../../engine/scene-graph.ts";
 import { waitForPendingFileDrops } from "../asset-file-drop.ts";
 import { resolveFormatHandler } from "../../formats/index.ts";
-import { buildDedupMap } from "../../gltf/dedup.ts";
+import { buildDedupMap } from "../../asset-core/gltf/dedup.ts";
 import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,
@@ -37,13 +37,13 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
   getCurrentManifest,
-} from "../../domain/asset.ts";
+} from "../../asset-core/domain/asset.ts";
 import {
   listPendingGenerations,
   updatePendingGeneration,
 } from "../../state/pending-generations.ts";
 import { log, warn } from "../../utils/log.ts";
-import { identityMatrix } from "../../utils/collections.ts";
+import { identityMatrix } from "../../asset-core/utils/collections.ts";
 
 /** @param {any} err */
 function isRateLimitError(err: any) {

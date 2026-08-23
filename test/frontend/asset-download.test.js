@@ -24,16 +24,45 @@ beforeAll(async () => {
   jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     getFromRemoteIPFS,
     getBlobFromRemoteIPFS,
+    // Extra names referenced (but never called here) by the facade proof-site
+    // wiring: ipfs/asset-core-adapter.ts and workers/worker-executor.ts.
+    getArrayBufferFromRemoteIPFS: jest.fn(),
+    getRawArrayBufferFromRemoteIPFS: jest.fn(),
+    gatewayBase: jest.fn(),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFToBlobAsync,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/domain/asset.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/domain/asset.js", () => ({
     getAssetState: jest.fn(() => _assetState),
   }));
   jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
     announceStatus: jest.fn(),
+    // Referenced (never called) by ipfs/write-to-ipfs.ts via the adapter.
+    getUploadCredential: jest.fn(),
+    // Referenced by asset-core-init.ts (frontend composition root).
+    getUploadCredentials: jest.fn(),
   }));
+  jest.unstable_mockModule(
+    "../../frontend/src/js/blockchain/asset-core-adapter.js",
+    () => ({
+      // asset-core-init.ts imports this adapter for the browser platform
+      // ports; mocking it here keeps the wallet barrel out of this unit test.
+      createBrowserPlatformPorts: jest.fn(() => ({
+        hash: { soliditySha3: jest.fn(), keccak256: jest.fn() },
+        storage: {
+          getItem: jest.fn(),
+          setItem: jest.fn(),
+          removeItem: jest.fn(),
+        },
+        chain: {
+          getEditorListURI: jest.fn(),
+          getEditorListVersion: jest.fn(),
+          resolveEmail: jest.fn(),
+        },
+      })),
+    })
+  );
   global.URL.createObjectURL = jest.fn(() => "blob:mock");
   global.URL.revokeObjectURL = jest.fn();
   ({ downloadAssetByManifestCid, downloadActiveAsset } = await import(

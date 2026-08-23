@@ -22,10 +22,10 @@
 import { libraryState } from "../state/library-state.ts";
 import type { LibraryItem } from "../state/library-state.ts";
 import { walletState } from "../state/wallet-state.ts";
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { loadThumbnailInto, extractThumbnailCid } from "../utils/thumbnail.ts";
-import { loadEditorList } from "../domain/editors.ts";
+import { loadEditorList } from "../asset-core/domain/editors.ts";
 import { getActiveContract } from "../blockchain/wallet.ts";
 import { ensureBabylon } from "../engine/babylon-loader.ts";
 import { createChatPreview } from "../services/chat-preview.ts";

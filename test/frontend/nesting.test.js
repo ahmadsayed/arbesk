@@ -5,11 +5,11 @@
  * facade (renameAsset), and CID/tokenId identity through adoptOpenedAsset.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
-import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { emit, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 import {
   assetStore,
   _resetForTesting as resetAssetState,
-} from "../../frontend/src/js/domain/asset-store.js";
+} from "../../frontend/src/js/asset-core/domain/asset-store.js";
 
 const renameAssetSpy = jest.fn((name) =>
   assetStore.set({ activeAssetName: name })
@@ -35,7 +35,7 @@ let _mod = null;
 
 async function loadModule() {
   await jest.unstable_mockModule(
-    "../../frontend/src/js/domain/asset.js",
+    "../../frontend/src/js/asset-core/domain/asset.js",
     () => ({
       renameAsset: renameAssetSpy,
       adoptOpenedAsset: adoptOpenedAssetSpy,

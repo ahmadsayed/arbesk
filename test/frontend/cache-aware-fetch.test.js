@@ -10,7 +10,7 @@ async function load({ cacheHits = new Map() } = {}) {
   const cacheGet = jest.fn(async (hash) => cacheHits.get(hash) || null);
   const cachePut = jest.fn(async () => true);
 
-  jest.unstable_mockModule("../../frontend/src/js/utils/content-cache.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/asset-core/utils/content-cache.js", () => ({
     __esModule: true,
     ContentCache: class {},
     BIG_CONTENT_THRESHOLD_BYTES: 64 * 1024,
@@ -19,7 +19,7 @@ async function load({ cacheHits = new Map() } = {}) {
     clearCache: jest.fn(),
   }));
 
-  const mod = await import("../../frontend/src/js/gltf/cache-aware-fetch.js");
+  const mod = await import("../../frontend/src/js/asset-core/gltf/cache-aware-fetch.js");
   return { fetchCIDAsBase64: mod.fetchCIDAsBase64, cacheGet, cachePut };
 }
 

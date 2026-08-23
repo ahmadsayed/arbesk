@@ -8,7 +8,7 @@
  */
 import { expect, test, describe, beforeEach, afterEach } from "@jest/globals";
 import { state } from "../../frontend/src/js/engine/state.js";
-import { emit, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { emit, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
 
 // ── Minimal, exact matrix mock ──────────────────────────────────────────────

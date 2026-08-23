@@ -8,7 +8,8 @@
  * from the URL. Top-level script → no CSP 'unsafe-inline' needed.
  */
 
-import { on, EVENTS } from "./events/bus.ts";
+import { on, EVENTS } from "./asset-core/events/bus.ts";
+import { initAssetCoreBrowser } from "./asset-core-init.ts";
 import {
   initWallet,
   connectWallet,
@@ -19,6 +20,9 @@ import { libraryState } from "./state/library-state.ts";
 import { initTheme, toggleTheme } from "./engine/theme.ts";
 import { initWalletPopover } from "./ui/wallet-popover.ts";
 import { hideWalletModal } from "./ui/wallet-modal.ts";
+// Installs the engine/wallet-backed deps of the asset-core version-history
+// store (side effect) before any scene/history events can fire.
+import "./engine/version-history-deps.ts";
 import {
   updateHeaderWalletButton,
   updateHeaderWalletButtonFromState,
@@ -54,6 +58,10 @@ import {
 
 // ── Router ──
 import { initRouter } from "./app/router.ts";
+
+// ─── Asset-core composition root ───
+// Install the process-wide runtime before any domain/gltf module is used.
+initAssetCoreBrowser();
 
 // ─── Studio panel init ───
 // Kick off the CDP SDK load + initialize immediately when a previous CDP

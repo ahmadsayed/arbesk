@@ -13,8 +13,8 @@ import {
   resolveCollectionChildRef,
   clearResolutionCache,
 } from "../blockchain/token-resolver.ts";
-import { emit, EVENTS } from "../events/bus.ts";
-import { activateAssetManifest, getCurrentManifest } from "../domain/asset.ts";
+import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { activateAssetManifest, getCurrentManifest } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { state, MAX_CHILD_ASSET_DEPTH } from "./state.ts";
 import type { CollectionRef } from "./state.ts";
@@ -29,7 +29,7 @@ import { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
 import { applyColor, applyScale } from "./time-travel.ts";
 import { clearScene, disposeNodeContent } from "./cleanup.ts";
 import { createAnchorNode } from "./scene-graph.ts";
-import { identityMatrix } from "../utils/collections.ts";
+import { identityMatrix } from "../asset-core/utils/collections.ts";
 
 /**
  * @param src - source string or `{cid, path?, format?}` reference

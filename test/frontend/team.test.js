@@ -37,7 +37,7 @@ jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
   writeJSONToIPFS: writeJSONToIPFSMock,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/gltf/merkle-editors.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/merkle-editors.js", () => ({
   computeRoot: computeRootMock,
   getProof: getProofMock,
   MAX_EDITORS_PER_TOKEN: 5000,
@@ -53,15 +53,38 @@ jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
 
 const team = await import("../../frontend/src/js/services/team.js");
 
+// asset-core runtime seam: editor ops in domain/editors.ts read their
+// Hash/Storage/Chain/IPFS ports from here (previously window.Web3 +
+// localStorage + the mocked wallet/remote-ipfs modules). The browser adapter
+// wraps the mocked wallet module, so assertions on contractMock still hold.
+async function wireAssetCoreRuntime() {
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.ts"
+  );
+  const {
+    createBrowserHashPort,
+    createBrowserStoragePort,
+    createBrowserChainPort,
+  } = await import("../../frontend/src/js/blockchain/asset-core-adapter.ts");
+  initRuntime({
+    ipfsRead: { getJSON: (cid) => getFromRemoteIPFSMock(cid) },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: createBrowserHashPort(),
+    storage: createBrowserStoragePort(),
+    chain: createBrowserChainPort(),
+  });
+}
+
 describe("team service", () => {
   const editorList = [
     { address: "0xOwnerAddress", role: 2 },
     { address: "0xEditorAddress", role: 2 },
   ];
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     localStorage.clear();
+    await wireAssetCoreRuntime();
     contractMock.methods.editorListURI.mockReturnValue({
       call: jest.fn().mockResolvedValue("bafyEditors"),
     });
@@ -143,6 +166,7 @@ describe("team service", () => {
       getFromRemoteIPFSMock.mockResolvedValue(editorList);
 
       jest.resetModules();
+      await wireAssetCoreRuntime();
       const fresh = await import("../../frontend/src/js/services/team.js");
       const result = await fresh.fetchEditors("42");
       expect(result).toEqual(editorList);

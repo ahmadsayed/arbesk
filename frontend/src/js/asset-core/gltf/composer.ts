@@ -9,20 +9,19 @@
  * `_arbesk.hash` so subsequent loads can skip the IPFS gateway.
  */
 
-import {
-  getArrayBufferFromRemoteIPFS,
-  getRawArrayBufferFromRemoteIPFS,
-} from "../ipfs/remote-ipfs.ts";
+import { getRuntime } from "../runtime.ts";
 import { decompress } from "../utils/compression.ts";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "./cache-aware-fetch.ts";
 import { composeGltfJson } from "./gltf-core.ts";
 
 async function fetchCIDAsBase64(cid: string, arbeskMeta: any): Promise<string> {
   console.log(`[COMPOSE] fetching ipfs://${cid}`);
+  const { ipfsRead, kernels } = getRuntime();
   return fetchCIDAsBase64Cached(cid, arbeskMeta, {
-    fetchRaw: getRawArrayBufferFromRemoteIPFS,
-    fetchDecompressed: getArrayBufferFromRemoteIPFS,
+    fetchRaw: (c) => ipfsRead.getRawBytes(c),
+    fetchDecompressed: (c) => ipfsRead.getBytes(c),
     decompress,
+    base64Encode: (bytes) => kernels.base64.encode(bytes),
   });
 }
 

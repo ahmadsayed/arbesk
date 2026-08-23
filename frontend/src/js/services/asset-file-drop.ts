@@ -13,12 +13,12 @@
  * flow uses, so the save pipeline sees an already-stored source.
  */
 
-import { on, emit, EVENTS } from "../events/bus.ts";
+import { on, emit, EVENTS } from "../asset-core/events/bus.ts";
 import {
   getCurrentManifest,
   resetForNewAsset,
   renameAsset,
-} from "../domain/asset.ts";
+} from "../asset-core/domain/asset.ts";
 import {
   stagePendingSourceOverride,
   clearPendingPostProcessorEdit,

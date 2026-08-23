@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { jest } from "@jest/globals";
 import { TextEncoder, TextDecoder } from "util";
-import { compress } from "../../frontend/src/js/utils/compression.js";
+import { compress } from "../../frontend/src/js/asset-core/utils/compression.js";
 
 if (!global.TextEncoder) global.TextEncoder = TextEncoder;
 if (!global.TextDecoder) global.TextDecoder = TextDecoder;
@@ -22,6 +22,13 @@ async function load(gateway) {
   const mod = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
   return { mod, fetchMock };
 }
+
+afterEach(async () => {
+  const { _resetRuntimeForTesting } = await import(
+    "../../frontend/src/js/asset-core/runtime.js"
+  );
+  _resetRuntimeForTesting();
+});
 
 function makeGzippedResponse(gateway, text) {
   const raw = compress(text);
@@ -169,14 +176,26 @@ describe("gateway error paths", () => {
   });
 
   it("getManifestChain walks prev_asset_manifest_cid links", async () => {
-    const responses = [
-      jsonResponse({ version: 3, name: "v3", prev_asset_manifest_cid: "bafy2" }),
-      jsonResponse({ version: 2, name: "v2", prev_asset_manifest_cid: "bafy1" }),
-      jsonResponse({ version: 1, name: "v1" }),
+    // getManifestChain now lives in asset-core/manifest/chain.js and reads via
+    // getRuntime().ipfsRead.getJSON; remote-ipfs.js only re-exports it.
+    const manifests = [
+      { version: 3, name: "v3", prev_asset_manifest_cid: "bafy2" },
+      { version: 2, name: "v2", prev_asset_manifest_cid: "bafy1" },
+      { version: 1, name: "v1" },
     ];
     let index = 0;
-    const fetchMock = jest.fn(async () => responses[index++]);
-    const mod = await loadWithFetch(fetchMock);
+    const mod = await loadWithFetch(jest.fn(async () => jsonResponse({ version: 1 })));
+    const { initRuntime } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
+    );
+    initRuntime({
+      ipfsRead: {
+        getJSON: jest.fn(async () => manifests[index++]),
+        getBytes: jest.fn(),
+        getRawBytes: jest.fn(),
+      },
+      ipfsWrite: { write: jest.fn(), writeJSON: jest.fn() },
+    });
 
     const chain = await mod.getManifestChain("bafy3");
     expect(chain).toHaveLength(3);
@@ -186,23 +205,43 @@ describe("gateway error paths", () => {
   });
 
   it("getManifestChain stops when a manifest cannot be fetched", async () => {
-    const fetchMock = jest.fn(async () => errorResponse(500));
-    const mod = await loadWithFetch(fetchMock);
+    const mod = await loadWithFetch(jest.fn(async () => errorResponse(500)));
+    const { initRuntime } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
+    );
+    initRuntime({
+      ipfsRead: {
+        getJSON: jest.fn(async () => {
+          throw new Error("IPFS gateway returned 500");
+        }),
+        getBytes: jest.fn(),
+        getRawBytes: jest.fn(),
+      },
+      ipfsWrite: { write: jest.fn(), writeJSON: jest.fn() },
+    });
 
     const chain = await mod.getManifestChain("bafyBroken");
     expect(chain).toEqual([]);
   });
 
   it("getManifestChain respects the maxDepth limit", async () => {
-    const responses = Array.from({ length: 5 }, (_, i) =>
-      jsonResponse({
-        version: i + 1,
-        prev_asset_manifest_cid: i < 4 ? `bafy${i}` : undefined,
-      }),
-    );
+    const manifests = Array.from({ length: 5 }, (_, i) => ({
+      version: i + 1,
+      prev_asset_manifest_cid: i < 4 ? `bafy${i}` : undefined,
+    }));
     let index = 0;
-    const fetchMock = jest.fn(async () => responses[index++]);
-    const mod = await loadWithFetch(fetchMock);
+    const mod = await loadWithFetch(jest.fn(async () => jsonResponse({ version: 1 })));
+    const { initRuntime } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
+    );
+    initRuntime({
+      ipfsRead: {
+        getJSON: jest.fn(async () => manifests[index++]),
+        getBytes: jest.fn(),
+        getRawBytes: jest.fn(),
+      },
+      ipfsWrite: { write: jest.fn(), writeJSON: jest.fn() },
+    });
 
     const chain = await mod.getManifestChain("bafyStart", 3);
     expect(chain).toHaveLength(3);

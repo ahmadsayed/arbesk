@@ -12,7 +12,7 @@
  */
 
 import { expect, test, beforeEach } from "@jest/globals";
-import { on, off, emit, EVENTS } from "../../frontend/src/js/events/bus.js";
+import { on, off, emit, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 // mitt is a module-level singleton, so listeners registered in one test

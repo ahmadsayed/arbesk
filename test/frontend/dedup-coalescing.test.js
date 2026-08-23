@@ -4,17 +4,30 @@ import { jest } from "@jest/globals";
 describe("uploadWithDedup - concurrent coalescing", () => {
   async function loadModule() {
     jest.resetModules();
+    // dedup.js now writes via getRuntime().ipfsWrite.write — the fake keeps the
+    // old writeToIPFS name so the assertions below read unchanged.
     const writeToIPFS = jest.fn();
-    jest.unstable_mockModule(
-      "../../frontend/src/js/ipfs/write-to-ipfs.js",
-      () => ({
-        __esModule: true,
-        writeToIPFS,
-      })
+    const { initRuntime } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
     );
-    const mod = await import("../../frontend/src/js/gltf/dedup.js");
+    initRuntime({
+      ipfsRead: {
+        getJSON: jest.fn(),
+        getBytes: jest.fn(),
+        getRawBytes: jest.fn(),
+      },
+      ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
+    });
+    const mod = await import("../../frontend/src/js/asset-core/gltf/dedup.js");
     return { mod, writeToIPFS };
   }
+
+  afterEach(async () => {
+    const { _resetRuntimeForTesting } = await import(
+      "../../frontend/src/js/asset-core/runtime.js"
+    );
+    _resetRuntimeForTesting();
+  });
 
   it("coalesces two concurrent identical payloads into one writeToIPFS call", async () => {
     let inFlight = 0;

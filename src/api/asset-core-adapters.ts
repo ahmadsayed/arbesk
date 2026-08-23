@@ -1,0 +1,102 @@
+/**
+ * Backend asset-core adapters — map the asset-core IpfsReadPort/IpfsWritePort
+ * onto the existing storage adapter (src/api/storage/, kubo or pinata via
+ * IPFS_BACKEND) and expose a ready-to-use ArbeskCore for backend modules.
+ *
+ * The storage adapter is resolved lazily inside each method (getStorage()
+ * caches the process-wide adapter, selected by env at first use).
+ */
+import {
+  createArbeskCore,
+} from "../../frontend/src/js/asset-core/facade.ts";
+import type { ArbeskCore } from "../../frontend/src/js/asset-core/facade.ts";
+import type {
+  IpfsReadPort,
+  IpfsWritePort,
+} from "../../frontend/src/js/asset-core/types.ts";
+import type { UploadCredential } from "../../frontend/src/js/asset-core/ipfs/upload-with-credential.ts";
+import {
+  compress,
+  decompress,
+  isGzipped,
+} from "../../frontend/src/js/asset-core/utils/compression.ts";
+import { getStorage } from "./storage/index.ts";
+
+/** Buffer/Uint8Array → standalone ArrayBuffer (no shared-pool aliasing). */
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
+}
+
+/**
+ * IpfsReadPort over the backend storage adapter. Mirrors the port contract:
+ * getJSON/getBytes auto-gunzip (decomposed components are stored gzipped),
+ * getRawBytes returns the exact stored bytes.
+ */
+export function createBackendIpfsReadPort(): IpfsReadPort {
+  return {
+    async getJSON(cid) {
+      const raw = await getStorage().catBytes(cid);
+      const bytes = isGzipped(raw) ? decompress(raw) : raw;
+      return JSON.parse(new TextDecoder().decode(bytes));
+    },
+    async getBytes(cid) {
+      const raw = await getStorage().catBytes(cid);
+      const bytes = isGzipped(raw) ? decompress(raw) : raw;
+      return toArrayBuffer(bytes);
+    },
+    async getRawBytes(cid) {
+      return toArrayBuffer(await getStorage().catBytes(cid));
+    },
+  };
+}
+
+/**
+ * IpfsWritePort over the backend storage adapter. Kubo uploads need no
+ * credential; the credential argument is accepted for port compatibility and
+ * ignored (the backend writes through its own storage adapter, not the
+ * browser's signed-URL flow).
+ */
+export function createBackendIpfsWritePort(): IpfsWritePort {
+  const write: IpfsWritePort["write"] = async (
+    data,
+    filename,
+    _credential: UploadCredential | null = null,
+    options = {}
+  ) => {
+    let bytes =
+      data instanceof Uint8Array
+        ? data
+        : data instanceof ArrayBuffer
+          ? new Uint8Array(data)
+          : typeof data === "string"
+            ? new TextEncoder().encode(data)
+            : new Uint8Array(await (data as Blob).arrayBuffer());
+    if (options.compress) bytes = compress(bytes);
+    return getStorage().add(bytes, filename);
+  };
+  return {
+    write,
+    writeJSON: (json, credential = null, options = {}) =>
+      write(
+        JSON.stringify(json),
+        options.filename ?? "manifest.json",
+        credential,
+        options
+      ),
+  };
+}
+
+/**
+ * Backend ArbeskCore — IPFS through the storage adapter, inline executor
+ * (default), no credentials/chain/hash ports (generation follow-ups only
+ * compose; they never upload or touch editor lists).
+ */
+export function createBackendCore(): ArbeskCore {
+  return createArbeskCore({
+    ipfsRead: createBackendIpfsReadPort(),
+    ipfsWrite: createBackendIpfsWritePort(),
+  });
+}

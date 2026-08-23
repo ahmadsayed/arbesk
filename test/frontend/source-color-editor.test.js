@@ -2,30 +2,47 @@ import { jest } from "@jest/globals";
 
 async function load() {
   jest.resetModules();
+  // The editor now consumes IPFS through the asset-core runtime ports; the
+  // remote/write fakes are wired into the ports instead of mocking
+  // remote-ipfs.js / write-to-ipfs.js.
+  const remote = {
+    getFromRemoteIPFS: jest.fn(),
+    getArrayBufferFromRemoteIPFS: jest.fn(),
+  };
+  const write = { writeJSONToIPFS: jest.fn() };
   jest.unstable_mockModule(
-    "../../frontend/src/js/ipfs/remote-ipfs.js",
+    "../../frontend/src/js/asset-core/gltf/glb-parser.js",
     () => ({
-      getFromRemoteIPFS: jest.fn(),
-      getArrayBufferFromRemoteIPFS: jest.fn(),
-    }),
+      isGLB: jest.fn(),
+      decomposeGLB: jest.fn(),
+    })
   );
-  jest.unstable_mockModule(
-    "../../frontend/src/js/ipfs/write-to-ipfs.js",
-    () => ({
-      writeJSONToIPFS: jest.fn(),
-    }),
+  const { initRuntime } = await import(
+    "../../frontend/src/js/asset-core/runtime.js"
   );
-  jest.unstable_mockModule("../../frontend/src/js/gltf/glb-parser.js", () => ({
-    isGLB: jest.fn(),
-    decomposeGLB: jest.fn(),
-  }));
+  initRuntime({
+    ipfsRead: {
+      getJSON: remote.getFromRemoteIPFS,
+      getBytes: remote.getArrayBufferFromRemoteIPFS,
+      getRawBytes: jest.fn(),
+    },
+    ipfsWrite: {
+      write: jest.fn(),
+      writeJSON: write.writeJSONToIPFS,
+    },
+  });
 
-  const mod = await import("../../frontend/src/js/gltf/source-color-editor.js");
-  const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
-  const write = await import("../../frontend/src/js/ipfs/write-to-ipfs.js");
-  const glb = await import("../../frontend/src/js/gltf/glb-parser.js");
+  const mod = await import("../../frontend/src/js/asset-core/gltf/source-color-editor.js");
+  const glb = await import("../../frontend/src/js/asset-core/gltf/glb-parser.js");
   return { mod, remote, write, glb };
 }
+
+afterEach(async () => {
+  const { _resetRuntimeForTesting } = await import(
+    "../../frontend/src/js/asset-core/runtime.js"
+  );
+  _resetRuntimeForTesting();
+});
 
 function makeGltf({ sharedMaterial = false } = {}) {
   if (sharedMaterial) {

@@ -39,7 +39,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/gltf/async-gltf.js",
+    "../../frontend/src/js/asset-core/gltf/async-gltf.js",
     () => ({
       composeGlTFAsync: jest.fn(),
       composeGlTFToBlobAsync: jest
@@ -62,14 +62,14 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule("../../frontend/src/js/events/bus.js", () => ({
+  await jest.unstable_mockModule("../../frontend/src/js/asset-core/events/bus.js", () => ({
     emit: jest.fn(),
     on: jest.fn(),
     EVENTS: new Proxy({}, { get: (_t, key) => String(key) }),
   }));
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/domain/asset-store.js",
+    "../../frontend/src/js/asset-core/domain/asset-store.js",
     () => ({
       assetStore: {
         get: jest.fn(() => ({})),

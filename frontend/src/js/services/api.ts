@@ -5,15 +5,15 @@
  * parametric version saving, and standardized error handling.
  */
 
-import { on, EVENTS } from "../events/bus.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
 import * as wallet from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
   getContractAddress as getNetworkContractAddress,
 } from "../blockchain/network-config.ts";
 import { log, warn, error } from "../utils/log.ts";
-import { base64ToBytes } from "../utils/encoding.ts";
-import { identityMatrix } from "../utils/collections.ts";
+import { base64ToBytes } from "../asset-core/utils/encoding.ts";
+import { identityMatrix } from "../asset-core/utils/collections.ts";
 
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
@@ -526,7 +526,7 @@ async function followupScaleCompensation(sourceCid: string, resultBytes: Uint8Ar
       "../ipfs/remote-ipfs.ts"
     );
     const { boundsFromGlbBytes, computeGltfBounds, compensationScale } =
-      await import("../gltf/bounds.ts");
+      await import("../asset-core/gltf/bounds.ts");
     const toBounds = (bytes: Uint8Array) =>
       boundsFromGlbBytes(bytes) ??
       computeGltfBounds(JSON.parse(new TextDecoder().decode(bytes)));

@@ -15,8 +15,8 @@
  */
 
 import { truncateAddress, truncateCid } from "../utils/format.ts";
-import { on, EVENTS } from "../events/bus.ts";
-import { getActiveAssetManifestCid } from "../domain/asset.ts";
+import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { getActiveAssetManifestCid } from "../asset-core/domain/asset.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { walkManifestChain } from "../engine/time-travel.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
