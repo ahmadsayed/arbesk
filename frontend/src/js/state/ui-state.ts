@@ -1,5 +1,5 @@
-import { createStore } from "../asset-core/state/create-store.ts";
-import { EVENTS } from "../asset-core/events/bus.ts";
+import { createStore } from "@arbesk/asset-core/state/create-store.js";
+import { EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 export interface UiState {
   selectedNodeId: string | null;

@@ -12,18 +12,18 @@
  */
 
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   publishAsset,
   CollaboratorRole,
 } from "../blockchain/wallet.ts";
-import { computeRoot, saveEditorList } from "../asset-core/domain/editors.ts";
+import { computeRoot, saveEditorList } from "@arbesk/asset-core/domain/editors.js";
 import { updateCollectionManifest } from "./asset-delete.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
   deriveNamedCollectionId,
   identityMatrix,
-} from "../asset-core/utils/collections.ts";
+} from "@arbesk/asset-core/utils/collections.js";
 import { log, warn } from "../utils/log.ts";
 
 function ts(): string {

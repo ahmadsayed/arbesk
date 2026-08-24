@@ -157,10 +157,10 @@ The system currently combines:
 | Engine | `engine/parametric-preview.ts` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.ts` | Gateway reads with memory + IndexedDB cache |
 | IPFS | `ipfs/write-to-ipfs.ts` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
-| glTF | `asset-core/gltf/decomposer.ts` / `asset-core/gltf/async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
-| glTF | `asset-core/gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
-| glTF | `asset-core/gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for Babylon (gateway reads) |
-| glTF | `asset-core/gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
+| glTF | `packages/asset-core/src/gltf/decomposer.ts` / `packages/asset-core/src/gltf/async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
+| glTF | `packages/asset-core/src/gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
+| glTF | `packages/asset-core/src/gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for the renderer (gateway reads) |
+| glTF | `packages/asset-core/src/gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
 | Blockchain | `blockchain/wallet.ts` | Backward-compat barrel re-exporting `wallet-core.ts`, `wallet-connect.ts`, `wallet-network.ts`, `wallet-payments.ts`, `wallet-publishing.ts`, `wallet-guard.ts` |
 | Blockchain | `blockchain/wallet-core.ts` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |
 | Blockchain | `blockchain/wallet-connect.ts` | WalletConnect v2 integration |
@@ -176,7 +176,7 @@ The system currently combines:
 | UI | `ui/create-panel.ts` | Prompt flow, asset definition controls, generation trigger |
 | UI | `ui/asset-save.ts` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.ts` | Token gallery, collection expansion, thumbnail rendering |
-| Domain / UI | `asset-core/domain/version-history-store.ts`, `ui/version-clock.ts`, `ui/scene-clock.ts`, `ui/model-clock-gizmo.ts` | Version history store + scene/model clock UIs |
+| Domain / UI | `packages/asset-core/src/domain/version-history-store.ts`, `ui/version-clock.ts`, `ui/scene-clock.ts`, `ui/model-clock-gizmo.ts` | Version history store + scene/model clock UIs |
 | UI | `ui/collaborators-panel.ts` | Editor list / add/remove UI |
 | UI | `ui/comments-panel.ts` | Asset-level comment thread UI |
 | UI | `ui/ledger-panel.ts` | Activity feed — walks manifest chain client-side, fetches full manifests |
@@ -196,7 +196,7 @@ The system currently combines:
 
 ### 3.2.1 Asset-Core SDK
 
-The manifest, glTF compose/decompose, asset domain state, and Merkle editor logic live in a single environment-agnostic package under `frontend/src/js/asset-core/`. The rest of the frontend (and the backend) consumes it through `createArbeskCore()` in `asset-core/facade.ts`, injecting environment-specific **ports** rather than importing browser- or Node-only modules:
+The manifest, glTF compose/decompose, asset domain state, and Merkle editor logic live in a single environment-agnostic package under `packages/asset-core/src/`. The rest of the frontend (and the backend) consumes it through `createArbeskCore()` in `packages/asset-core/src/facade.ts`, injecting environment-specific **ports** rather than importing browser- or Node-only modules:
 
 | Port | Live implementation | Responsibility |
 |---|---|---|
@@ -206,9 +206,9 @@ The manifest, glTF compose/decompose, asset domain state, and Merkle editor logi
 | `ChainPort` | `frontend/src/js/blockchain/asset-core-adapter.ts` | On-chain editor list URI/version + email→wallet resolution |
 | `HashPort` | `frontend/src/js/blockchain/asset-core-adapter.ts` | Merkle leaf hashing (`soliditySha3`) |
 | `StoragePort` | `frontend/src/js/blockchain/asset-core-adapter.ts` | Editor-list cache |
-| `ExecutorPort` | `frontend/src/js/workers/worker-executor.ts` (browser), `asset-core/executor/inline.ts` (default) | Off-main-thread compose/decompose in the browser |
+| `ExecutorPort` | `frontend/src/js/workers/worker-executor.ts` (browser), `packages/asset-core/src/executor/inline.ts` (default) | Off-main-thread compose/decompose in the browser |
 
-`asset-core/` has no imports from `engine/`, `ui/`, `services/`, `ipfs/`, `blockchain/`, or `workers/`; that boundary is what makes the same code runnable in Node, the browser, and tests. See `docs/ASSET_CORE_SDK.md` for the full consumer guide and port signatures.
+`packages/asset-core/src/` has no imports from `engine/`, `ui/`, `services/`, `ipfs/`, `blockchain/`, or `workers/`; that boundary is what makes the same code runnable in Node, the browser, and tests. See `docs/ASSET_CORE_SDK.md` for the full consumer guide and port signatures.
 
 ### 3.3 Smart Contracts (`blockchain/contracts/`)
 

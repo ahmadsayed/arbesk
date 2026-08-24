@@ -81,7 +81,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/gltf/merkle-editors.js",
+    "@arbesk/asset-core/gltf/merkle-editors.js",
     () => ({
       MAX_EDITORS_PER_TOKEN: 5000,
       computeRoot: jest.fn((list, _tokenId, _version) => {
@@ -116,7 +116,7 @@ async function loadModule() {
   // asset-core runtime seam for the real domain/editors.ts (ports replace
   // window.Web3 + localStorage + direct wallet/remote-ipfs imports).
   const { initRuntime } = await import(
-    "../../frontend/src/js/asset-core/runtime.ts"
+    "@arbesk/asset-core/runtime.js"
   );
   const {
     createBrowserHashPort,

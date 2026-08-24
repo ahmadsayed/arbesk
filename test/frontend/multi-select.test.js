@@ -6,7 +6,7 @@
  */
 import { jest, expect, test, describe, beforeEach, afterEach } from "@jest/globals";
 import { state } from "../../frontend/src/js/engine/state.js";
-import { on, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   selectNode,
   toggleNodeSelection,

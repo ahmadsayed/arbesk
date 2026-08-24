@@ -4,7 +4,7 @@ import {
   murmur3_128,
   DEFAULT_HASH_ALGORITHM,
   SUPPORTED_HASH_ALGORITHMS,
-} from "../../frontend/src/js/asset-core/utils/hash.js";
+} from "@arbesk/asset-core/utils/hash.js";
 
 /**
  * murmur3-128 is the wider, still non-cryptographic content-hash used as the

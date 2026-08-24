@@ -139,11 +139,11 @@ describe("Frontend Build", () => {
     });
 
     test("approve fallback gas is set", () => {
-      expect(wallet).toMatch(/approveGas = await resolveGas\([\s\S]*?100000\s*\)/);
+      expect(wallet).toMatch(/sendContractMethod\(usdcAddr, approveTx, \{\s*fallbackGas:\s*100000/);
     });
 
     test("pay fallback gas is set", () => {
-      expect(wallet).toMatch(/payGas = await resolveGas\([\s\S]*?300000\s*\)/);
+      expect(wallet).toMatch(/sendContractMethod\(contractAddress, payTx, \{\s*fallbackGas:\s*300000/);
     });
   });
 

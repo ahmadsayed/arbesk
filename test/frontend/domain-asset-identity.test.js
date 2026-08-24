@@ -15,8 +15,8 @@ import {
   cacheCurrentManifest,
   recordSavedVersion,
   adoptPublishedIdentity,
-} from "../../frontend/src/js/asset-core/domain/asset.js";
-import { assetStore, _resetForTesting } from "../../frontend/src/js/asset-core/domain/asset-store.js";
+} from "@arbesk/asset-core/domain/asset.js";
+import { assetStore, _resetForTesting } from "@arbesk/asset-core/domain/asset-store.js";
 
 beforeEach(() => _resetForTesting());
 

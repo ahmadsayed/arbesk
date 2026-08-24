@@ -99,7 +99,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/domain/asset.js",
+    "@arbesk/asset-core/domain/asset.js",
     () => ({
       getActiveAssetTokenId: jest.fn(() => _activeAssetTokenId),
       getActiveAssetId: jest.fn(() => _activeAssetId),
@@ -128,7 +128,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/gltf/merkle-editors.js",
+    "@arbesk/asset-core/gltf/merkle-editors.js",
     () => ({
       getProof: jest.fn((_list, _address, _tokenId, _version) => _getProof()),
     })
@@ -183,7 +183,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/events/bus.js",
+    "@arbesk/asset-core/events/bus.js",
     () => ({
       emit: jest.fn(),
       on: jest.fn(),
@@ -200,7 +200,7 @@ async function loadModule() {
   // asset-core runtime seam for the real domain/editors.ts (ports replace
   // window.Web3 + localStorage + direct wallet/remote-ipfs imports).
   const { initRuntime } = await import(
-    "../../frontend/src/js/asset-core/runtime.ts"
+    "@arbesk/asset-core/runtime.js"
   );
   const { getFromRemoteIPFS } = await import(
     "../../frontend/src/js/ipfs/remote-ipfs.js"
@@ -247,7 +247,7 @@ describe("deleteAssetFromCollection", () => {
     const { unpinAssetCids } = await import(
       "../../frontend/src/js/services/api.js"
     );
-    const { emit, EVENTS } = await import("../../frontend/src/js/asset-core/events/bus.js");
+    const { emit, EVENTS } = await import("@arbesk/asset-core/events/bus.js");
 
     const result = await deleteAssetFromCollection({
       tokenId: TOKEN_ID,

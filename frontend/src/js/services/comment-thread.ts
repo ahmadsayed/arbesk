@@ -6,16 +6,16 @@
  * subscribe without touching WebSocket or IPFS details.
  */
 
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import {
   getActiveAssetId,
   getActiveAssetManifestCid,
   getCurrentManifest,
-} from "../asset-core/domain/asset.ts";
+} from "@arbesk/asset-core/domain/asset.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { clearSession, createSession, getCachedSession } from "./api.ts";
-import { buildEditorProof } from "../asset-core/domain/editors.ts";
+import { buildEditorProof } from "@arbesk/asset-core/domain/editors.js";
 
 const RELAY_PATH = "/api/v1/chat/ws";
 const RECONNECT_DELAY_MS = 3000;

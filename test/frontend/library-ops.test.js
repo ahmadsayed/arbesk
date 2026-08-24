@@ -112,7 +112,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/gltf/merkle-editors.js",
+    "@arbesk/asset-core/gltf/merkle-editors.js",
     () => ({
       computeRoot: jest.fn((...args) => _computeRoot(...args)),
       getProof: jest.fn((...args) => _getProof(...args)),
@@ -148,7 +148,7 @@ async function loadModule() {
   // port delegates to the fake window.Web3 set in beforeEach so root values
   // stay byte-identical with the pre-port behavior.
   const { initRuntime } = await import(
-    "../../frontend/src/js/asset-core/runtime.ts"
+    "@arbesk/asset-core/runtime.js"
   );
   const {
     createBrowserStoragePort,

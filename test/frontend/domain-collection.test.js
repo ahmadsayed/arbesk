@@ -11,12 +11,12 @@ import {
   getActiveCollectionTokenId,
   getSelectedCollectionId,
   publishCollection,
-} from "../../frontend/src/js/asset-core/domain/collection.js";
+} from "@arbesk/asset-core/domain/collection.js";
 import {
   assetStore,
   _resetForTesting,
-} from "../../frontend/src/js/asset-core/domain/asset-store.js";
-import { initRuntime } from "../../frontend/src/js/asset-core/runtime.ts";
+} from "@arbesk/asset-core/domain/asset-store.js";
+import { initRuntime } from "@arbesk/asset-core/runtime.js";
 
 beforeEach(() => {
   _resetForTesting();

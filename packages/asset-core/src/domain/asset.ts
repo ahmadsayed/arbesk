@@ -6,9 +6,8 @@
  */
 import { on, emit, EVENTS } from "../events/bus.ts";
 import { assetStore, tagManifestCid } from "./asset-store.ts";
-import { getStateForNewAsset } from "../../utils/new-asset.ts";
 import { deriveDefaultAssetId } from "../utils/collections.ts";
-import { log } from "../../utils/log.ts";
+import { log } from "../utils/log.ts";
 
 export interface AssetSnapshot {
   name: string | null;
@@ -144,11 +143,19 @@ export function adoptManifestName(manifest: any): void {
 
 /**
  * Clear the active asset for a fresh draft: name, CIDs, token identity go;
- * the open collection context survives (getStateForNewAsset semantics).
+ * the open collection context survives (activeCollectionTokenId /
+ * selectedCollectionId are preserved so a new asset publishes into the
+ * collection the user is currently working in).
  */
 export function resetForNewAsset(): void {
+  const current = assetStore.get();
   assetStore.set({
-    ...getStateForNewAsset(assetStore.get()),
+    activeAssetManifestCid: null,
+    latestAssetManifestCid: null,
+    activeAssetTokenId: null,
+    activeAssetId: null,
+    activeCollectionTokenId: current?.activeCollectionTokenId ?? null,
+    selectedCollectionId: current?.selectedCollectionId ?? null,
     activeAssetName: null,
   });
 }

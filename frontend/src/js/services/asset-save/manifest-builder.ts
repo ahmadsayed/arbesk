@@ -15,7 +15,7 @@ import { getPendingChildRefs } from "../../engine/scene-graph.ts";
 import { waitForPendingLinkedDrops } from "../../engine/scene-graph.ts";
 import { waitForPendingFileDrops } from "../asset-file-drop.ts";
 import { resolveFormatHandler } from "../../formats/index.ts";
-import { buildDedupMap } from "../../asset-core/gltf/dedup.ts";
+import { buildDedupMap } from "@arbesk/asset-core/gltf/dedup.js";
 import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,
@@ -37,13 +37,13 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
   getCurrentManifest,
-} from "../../asset-core/domain/asset.ts";
+} from "@arbesk/asset-core/domain/asset.js";
 import {
   listPendingGenerations,
   updatePendingGeneration,
 } from "../../state/pending-generations.ts";
 import { log, warn } from "../../utils/log.ts";
-import { identityMatrix } from "../../asset-core/utils/collections.ts";
+import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
 /** @param {any} err */
 function isRateLimitError(err: any) {

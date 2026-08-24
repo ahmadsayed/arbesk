@@ -8,9 +8,9 @@
  */
 import { readFileSync } from "node:fs";
 import { encodePacked, keccak256 } from "viem/utils";
-import { createArbeskCore } from "../../frontend/src/js/asset-core/facade.ts";
-import { createMemoryIpfs } from "../../frontend/src/js/asset-core/testing/memory-ipfs.ts";
-import { _resetRuntimeForTesting } from "../../frontend/src/js/asset-core/runtime.ts";
+import { createArbeskCore } from "@arbesk/asset-core/facade.js";
+import { createMemoryIpfs } from "@arbesk/asset-core/testing/memory-ipfs.js";
+import { _resetRuntimeForTesting } from "@arbesk/asset-core/runtime.js";
 
 /** Minimal viem-backed HashPort (same semantics as createBrowserHashPort). */
 const makeHashPort = () => ({

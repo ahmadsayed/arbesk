@@ -152,7 +152,7 @@ export function attachDedupMeta(item: any, meta: object): any {
  * Returns a deep clone; the input is not mutated.
  *
  * @param composite - Composite glTF JSON (dynamic schema)
- * @returns Clean glTF JSON suitable for Babylon.js or serialization
+ * @returns Clean glTF JSON suitable for any glTF loader or serialization
  */
 export function stripDedupMeta(composite: any): any {
   const cleaned = JSON.parse(JSON.stringify(composite));

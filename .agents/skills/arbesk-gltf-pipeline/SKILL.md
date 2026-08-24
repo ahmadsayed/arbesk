@@ -31,15 +31,15 @@ All row details: `references/deep-dive.md`.
 
 | File | Role |
 |------|------|
-| `frontend/src/js/asset-core/gltf/gltf-core.ts` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
-| `frontend/src/js/asset-core/gltf/composer.ts` | Main-thread compose wrapper (IPFS read port + cache injection) |
-| `frontend/src/js/asset-core/gltf/decomposer.ts` | Main-thread decompose wrapper (IPFS write port + dedup injection) |
-| `frontend/src/js/asset-core/gltf/material-editor.ts` | PBR prop edits, commits new CID |
+| `packages/asset-core/src/gltf/gltf-core.ts` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
+| `packages/asset-core/src/gltf/composer.ts` | Main-thread compose wrapper (IPFS read port + cache injection) |
+| `packages/asset-core/src/gltf/decomposer.ts` | Main-thread decompose wrapper (IPFS write port + dedup injection) |
+| `packages/asset-core/src/gltf/material-editor.ts` | PBR prop edits, commits new CID |
 | `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatcher, `loadNode()` orchestration |
 | `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` runtime overlays |
 | `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: color/scale/mesh overrides |
 | `frontend/src/js/services/asset-save/manifest-builder.ts` | `prepareManifestForWrite()` — save/publish |
-| `frontend/src/js/asset-core/gltf/async-gltf.ts` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
+| `packages/asset-core/src/gltf/async-gltf.ts` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
 | `frontend/src/js/workers/gltf-worker-pool.ts` | `workerpool` of `gltf-worker.js` for off-main-thread glTF work |
 | `frontend/src/js/workers/gltf-worker.ts` | Worker entry: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` |
 | `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser IPFS write |
@@ -49,4 +49,4 @@ All row details: `references/deep-dive.md`.
 
 - Read `references/deep-dive.md` when working on architecture, URI formats, compose/decompose, scene graph, post-processor, materials, or the save flow.
 - Read `references/troubleshooting.md` when debugging loading/colors, adding properties or formats, or forcing re-decomposition.
-- For embedding the glTF pipeline in another host (backend/script/desktop), see `docs/ASSET_CORE_SDK.md`; the pipeline is part of the `frontend/src/js/asset-core/` SDK and is consumed through `createArbeskCore()` ports.
+- For embedding the glTF pipeline in another host (backend/script/desktop), see `docs/ASSET_CORE_SDK.md`; the pipeline is part of the `packages/asset-core/src/` SDK and is consumed through `createArbeskCore()` ports.

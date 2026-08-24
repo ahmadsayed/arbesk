@@ -4,7 +4,7 @@
  * Leaf encoding and proof verification compatible with
  * ArbeskAssetBase._requireEditor, using OpenZeppelin's reference Merkle-tree
  * implementation. Root/proof construction happens client-side
- * (frontend/src/js/asset-core/gltf/merkle-editors.js); the backend only verifies.
+ * (packages/asset-core/src/gltf/merkle-editors.ts); the backend only verifies.
  */
 
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";

@@ -6,9 +6,9 @@
  * progress/status hook sequencing. IO deps injected; real assetStore + bus.
  */
 import { jest, expect, test, beforeEach } from "@jest/globals";
-import { publishAsset } from "../../frontend/src/js/asset-core/domain/asset.js";
-import { assetStore, _resetForTesting } from "../../frontend/src/js/asset-core/domain/asset-store.js";
-import { on, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { publishAsset } from "@arbesk/asset-core/domain/asset.js";
+import { assetStore, _resetForTesting } from "@arbesk/asset-core/domain/asset-store.js";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 const WALLET = { address: "0xOwner", chainId: 31337, contractAddress: "0xC" };
 

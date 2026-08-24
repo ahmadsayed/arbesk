@@ -7,8 +7,8 @@
  */
 
 import { initCollaboratorPanel } from "./collaborators-panel.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
-import { getActiveAssetTokenId } from "../asset-core/domain/asset.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { getActiveAssetTokenId } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
 
 let teamPanel: HTMLElement | null = null;

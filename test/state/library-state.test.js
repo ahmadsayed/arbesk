@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { libraryState, _resetForTesting } from "../../frontend/src/js/state/library-state.js";
-import { on, off, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { on, off, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 beforeEach(() => _resetForTesting());
 

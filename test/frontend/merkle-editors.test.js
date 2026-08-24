@@ -54,9 +54,9 @@ let _resetRuntimeForTesting;
 describe("merkle-editors", () => {
   beforeAll(async () => {
     ({ initRuntime, _resetRuntimeForTesting } = await import(
-      "../../frontend/src/js/asset-core/runtime.ts"
+      "@arbesk/asset-core/runtime.js"
     ));
-    merkleEditors = await import("../../frontend/src/js/asset-core/gltf/merkle-editors.js");
+    merkleEditors = await import("@arbesk/asset-core/gltf/merkle-editors.js");
   });
 
   beforeEach(() => {

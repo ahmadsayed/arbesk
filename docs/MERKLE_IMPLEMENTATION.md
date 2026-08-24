@@ -200,15 +200,15 @@ function _requireEditor(
 | `src/api/rate-limiter.ts` | Rate limits unchanged |
 | `frontend/src/js/engine/*` | Scene graph, 3D engine unchanged |
 | `frontend/src/js/ipfs/*` | IPFS client unchanged |
-| `frontend/src/js/asset-core/gltf/composer.ts` | Unchanged |
-| `frontend/src/js/asset-core/gltf/decomposer.ts` | Unchanged |
+| `packages/asset-core/src/gltf/composer.ts` | Unchanged |
+| `packages/asset-core/src/gltf/decomposer.ts` | Unchanged |
 | `frontend/src/js/services/api.ts` | Unchanged |
 
 ---
 
 ## 4. Merkle Leaf & Proof Format
 
-The JS library in `frontend/src/js/asset-core/gltf/merkle-editors.ts` matches the Solidity leaf:
+The JS library in `packages/asset-core/src/gltf/merkle-editors.ts` matches the Solidity leaf:
 
 ```javascript
 makeLeaf(address, role, tokenId, setVersion)
@@ -239,7 +239,7 @@ blockchain/contracts/
   ArbeskAssetFree.sol          ← updated with Merkle-compatible ABI
   mock/MockUSDC.sol            ← unchanged
 
-frontend/src/js/asset-core/gltf/
+packages/asset-core/src/gltf/
   merkle-editors.ts            ← Merkle tree JS library
 
 frontend/src/js/services/

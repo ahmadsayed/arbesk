@@ -173,7 +173,7 @@ async function load({
     loadThumbnailInto,
     extractThumbnailCid,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/domain/editors.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/domain/editors.js", () => ({
     __esModule: true,
     loadEditorList,
   }));

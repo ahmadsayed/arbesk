@@ -7,9 +7,9 @@ import {
   composeGlTFToBlobAsync,
   decomposeAndStoreAsync,
   editSourceColorsAsync,
-} from "../../asset-core/gltf/async-gltf.ts";
-import { isComposite } from "../../asset-core/gltf/decomposer.ts";
-import { editCompositeColors } from "../../asset-core/gltf/material-editor.ts";
+} from "@arbesk/asset-core/gltf/async-gltf.js";
+import { isComposite } from "@arbesk/asset-core/gltf/decomposer.js";
+import { editCompositeColors } from "@arbesk/asset-core/gltf/material-editor.js";
 import type {
   FormatHandler,
   FormatLoadContext,

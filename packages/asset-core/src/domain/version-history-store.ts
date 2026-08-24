@@ -8,7 +8,7 @@
  *
  * Heavy dependencies (engine, wallet) are injected through the `_deps` seam
  * (`configureVersionHistoryDeps`) so the package stays environment-agnostic
- * and unit tests can stub them without loading BABYLON. The browser wiring
+ * and unit tests can stub them without loading the 3D engine. The browser wiring
  * lives in `frontend/src/js/engine/version-history-deps.ts`.
  */
 

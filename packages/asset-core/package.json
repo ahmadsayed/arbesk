@@ -1,0 +1,29 @@
+{
+  "name": "@arbesk/asset-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Environment-agnostic Arbesk asset engine: manifests, glTF compose/decompose, domain state, Merkle editors. One TypeScript codebase consumed by the browser, the Node backend, and tests.",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.1.2",
+    "@openzeppelin/merkle-tree": "^1.0.8",
+    "fflate": "^0.8.2",
+    "zod": "^3.25.76"
+  },
+  "license": "ISC"
+}

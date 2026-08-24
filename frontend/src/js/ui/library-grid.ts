@@ -1,6 +1,6 @@
 import { libraryState } from "../state/library-state.ts";
 import type { LibraryItem } from "../state/library-state.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { escapeHtml } from "../utils/html.ts";
 import { loadThumbnailInto } from "../utils/thumbnail.ts";
 import {

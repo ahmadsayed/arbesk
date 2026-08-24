@@ -68,19 +68,19 @@ async function load() {
     })
   );
   jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/gltf/material-editor.js",
+    "@arbesk/asset-core/gltf/material-editor.js",
     () => ({
       editCompositeColors: jest.fn(),
     })
   );
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/decomposer.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     // Imported (unused) by asset-core/executor/inline.ts — the mock must
     // satisfy the full link-time surface of the decomposer module.
     decomposeGlTF: jest.fn(),
     decomposeAndStore: jest.fn(),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFAsync: jest.fn(),
     composeGlTFToBlobAsync: jest.fn(),
     decomposeGlTFAsync: jest.fn(),
@@ -98,7 +98,7 @@ async function load() {
   const mod = await import(
     "../../frontend/src/js/services/asset-save/manifest-builder.js"
   );
-  const stateMod = await import("../../frontend/src/js/asset-core/domain/asset-store.js");
+  const stateMod = await import("@arbesk/asset-core/domain/asset-store.js");
   stateMod._resetForTesting();
   return { mod, mocks, assetStore: stateMod.assetStore };
 }

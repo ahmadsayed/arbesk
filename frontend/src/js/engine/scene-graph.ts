@@ -6,7 +6,7 @@
  * for backward compatibility.
  */
 
-import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { state } from "./state.ts";
 import { getCssVar, hexToColor4 } from "./theme.ts";
@@ -16,8 +16,8 @@ import {
   renameAsset,
   adoptOpenedAsset,
   getActiveAssetManifestCid,
-} from "../asset-core/domain/asset.ts";
-import { adoptOpenedCollection } from "../asset-core/domain/collection.ts";
+} from "@arbesk/asset-core/domain/asset.js";
+import { adoptOpenedCollection } from "@arbesk/asset-core/domain/collection.js";
 
 import {
   selectNode,

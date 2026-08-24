@@ -271,9 +271,9 @@ export const gcSchema = z.object({
 // ─── Manifest Shape Schemas ─────────────────────────────────────────────────
 
 // The canonical manifest schema + runtime validator live in asset-core
-// (`frontend/src/js/asset-core/manifest/`); re-exported here so existing
+// (`packages/asset-core/src/manifest/`); re-exported here so existing
 // backend import sites stay stable. Wire format unchanged.
 export {
   manifestSchema,
   validateManifest,
-} from "../../frontend/src/js/asset-core/manifest/utils.ts";
+} from "@arbesk/asset-core/manifest/utils.js";

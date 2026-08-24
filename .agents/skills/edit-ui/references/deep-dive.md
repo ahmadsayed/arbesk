@@ -38,7 +38,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/js/ui/asset-drop-zone.ts` | Drop target for dragged gallery cards |
 | `frontend/src/js/ui/chat-messages.ts` | Chat / studio editor surfaces |
 | `frontend/src/js/ui/chat-history.ts` | Chat provenance / history rendering |
-| `frontend/src/js/asset-core/domain/version-history-store.ts` | Version history state store (feeds scene/model clocks) |
+| `packages/asset-core/src/domain/version-history-store.ts` | Version history state store (feeds scene/model clocks) |
 | `frontend/src/js/ui/version-clock.ts` | Shared SVG clock face component |
 | `frontend/src/js/ui/scene-clock.ts` | Scene-level version clock |
 | `frontend/src/js/ui/model-clock-gizmo.ts` | Per-model version clock gizmo |
@@ -53,7 +53,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/js/services/api.ts` | Backend API client (generation, save, publish) |
 | `frontend/src/js/services/url-utils.ts` | Query string helpers |
 | `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side IPFS reads via backend |
-| `frontend/src/js/asset-core/gltf/gltf-core.ts` | GLTF buffer URI ↔ CID translation and manifest compose helpers |
+| `packages/asset-core/src/gltf/gltf-core.ts` | GLTF buffer URI ↔ CID translation and manifest compose helpers |
 
 ### Build & Verify Workflow
 

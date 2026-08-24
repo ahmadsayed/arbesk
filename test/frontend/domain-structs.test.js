@@ -10,11 +10,11 @@ import {
   assetRefKey,
   assetRefsEqual,
   resolveAssetRef,
-} from "../../frontend/src/js/asset-core/domain/asset-ref.js";
+} from "@arbesk/asset-core/domain/asset-ref.js";
 import {
   manifestNodeToNode,
   manifestNodes,
-} from "../../frontend/src/js/asset-core/domain/node.js";
+} from "@arbesk/asset-core/domain/node.js";
 
 describe("normalizeAssetRef", () => {
   test("normalizes the current collection shape", () => {

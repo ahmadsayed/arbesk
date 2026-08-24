@@ -12,9 +12,9 @@
  */
 
 import { getConfig } from "../services/api.ts";
-import { isGzipped, decompress } from "../asset-core/utils/compression.ts";
-import { arrayBufferToBase64 } from "../asset-core/utils/encoding.ts";
-import { createConcurrencyLimiter } from "../asset-core/utils/concurrency.ts";
+import { isGzipped, decompress } from "@arbesk/asset-core/utils/compression.js";
+import { arrayBufferToBase64 } from "@arbesk/asset-core/utils/encoding.js";
+import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";
 
 // Cap concurrent gateway reads to avoid head-of-line blocking when a composite
 // has many buffers/images or when many library thumbnails load at once.
@@ -191,8 +191,8 @@ async function isIpfsCidReachable(
 
 // getManifestChain moved into asset-core (it consumes the IpfsReadPort);
 // re-exported here so existing consumers of this module keep working.
-export { getManifestChain } from "../asset-core/manifest/chain.ts";
-export type { ManifestChainEntry } from "../asset-core/manifest/chain.ts";
+export { getManifestChain } from "@arbesk/asset-core/manifest/chain.js";
+export type { ManifestChainEntry } from "@arbesk/asset-core/manifest/chain.js";
 
 export {
   gatewayBase,

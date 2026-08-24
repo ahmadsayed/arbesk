@@ -25,20 +25,20 @@ import { showToast } from "./toasts.ts";
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.ts";
 import { switchView, getActiveView } from "./sidebar.ts";
 import { CHAIN_IDS, DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../../../constants/chains.js";
-import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import {
   adoptOpenedAsset,
   closeAsset,
   getCurrentManifest,
   getAssetState,
-} from "../asset-core/domain/asset.ts";
+} from "@arbesk/asset-core/domain/asset.js";
 import {
   adoptOpenedCollection,
   clearSelectedCollection,
   clearActiveCollection,
   getActiveCollectionTokenId,
-} from "../asset-core/domain/collection.ts";
+} from "@arbesk/asset-core/domain/collection.js";
 import { getOwnedTokens, getSharedTokens } from "../services/api.ts";
 import {
   startTaskProgress,

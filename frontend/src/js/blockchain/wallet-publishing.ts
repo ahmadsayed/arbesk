@@ -7,7 +7,7 @@
  * Extracted from wallet.js to isolate publish-side functions.
  */
 
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { getContractArtifact } from "../services/api.ts";
 import { showToast } from "../ui/toasts.ts";

@@ -30,10 +30,10 @@ beforeAll(async () => {
     getRawArrayBufferFromRemoteIPFS: jest.fn(),
     gatewayBase: jest.fn(),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFToBlobAsync,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/domain/asset.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
     getAssetState: jest.fn(() => _assetState),
   }));
   jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({

@@ -4,7 +4,15 @@
   "version": "0.1.0",
   "description": "Arbesk — 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
   "main": "src/index.ts",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
+    "build:packages": "npm run build --workspace @arbesk/asset-core",
+    "prestart": "npm run build:packages",
+    "pretypecheck": "npm run build:packages",
+    "pretypecheck:frontend": "npm run build:packages",
+    "prebuild:frontend": "npm run build:packages",
     "test": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
     "test:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat test",
     "build:frontend": "cd frontend && npm run build",
@@ -14,7 +22,7 @@
     "dev:testnet": "./scripts/start-dev.sh --testnet",
     "test:api": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
     "test:frontend": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/frontend",
-    "bench:asset-core": "node frontend/src/js/asset-core/bench/run.ts",
+    "bench:asset-core": "node packages/asset-core/src/bench/run.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:all": "npm run lint && npm run typecheck && npm run typecheck:frontend && npm run test:frontend && npm run test:api && npm run test:contracts",

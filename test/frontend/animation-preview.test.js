@@ -28,7 +28,7 @@ beforeAll(async () => {
         <option value="">None</option>
       </select>
     </section>`;
-  ({ emit, EVENTS } = await import("../../frontend/src/js/asset-core/events/bus.js"));
+  ({ emit, EVENTS } = await import("@arbesk/asset-core/events/bus.js"));
   ({ state } = await import("../../frontend/src/js/engine/state.js"));
   await import("../../frontend/src/js/engine/animation-preview.js");
 });

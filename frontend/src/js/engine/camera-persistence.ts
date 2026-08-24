@@ -24,7 +24,7 @@ import {
   getActiveAssetManifestCid,
   getActiveAssetTokenId,
   getActiveAssetId,
-} from "../asset-core/domain/asset.ts";
+} from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
 
 const STORAGE_PREFIX = "arbesk:cameraPose:";

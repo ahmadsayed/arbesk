@@ -1,12 +1,12 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { mockGenerate } from "../adapters/mock-adapter.ts";
-import { serializeGLB } from "../../../frontend/src/js/asset-core/gltf/gltf-core.ts";
+import { serializeGLB } from "@arbesk/asset-core/gltf/gltf-core.js";
 import {
   isGzipped,
   decompress,
-} from "../../../frontend/src/js/asset-core/utils/compression.ts";
-import type { ArbeskCore } from "../../../frontend/src/js/asset-core/facade.ts";
+} from "@arbesk/asset-core/utils/compression.js";
+import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import {
   createTask,
   createImageTask,

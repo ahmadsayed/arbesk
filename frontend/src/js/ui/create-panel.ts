@@ -16,8 +16,8 @@ import { showToast } from "./toasts.ts";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.ts";
 import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage } from "./chat-messages.ts";
 import type { AssetMessageHandle, WorkingMessageHandle } from "./chat-messages.ts";
-import { followupActionsFor } from "../asset-core/domain/generation-actions.ts";
-import type { FollowupAction } from "../asset-core/domain/generation-actions.ts";
+import { followupActionsFor } from "@arbesk/asset-core/domain/generation-actions.js";
+import type { FollowupAction } from "@arbesk/asset-core/domain/generation-actions.js";
 import {
   VIEW_LABELS,
   MAX_ATTACH_IMAGES,
@@ -39,7 +39,7 @@ import {
   disposeChatPreview,
   disposeAllChatPreviews,
 } from "../services/chat-preview.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import {
   addPendingGeneration,
@@ -47,7 +47,7 @@ import {
   updatePendingGeneration,
   _resetPendingGenerations,
 } from "../state/pending-generations.ts";
-import { deriveDefaultCollectionId, identityMatrix } from "../asset-core/utils/collections.ts";
+import { deriveDefaultCollectionId, identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 import { onSaveAssetDraft } from "./asset-save.ts";
 import {
   adoptManifestName,
@@ -58,8 +58,8 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
   getActiveAssetName,
-} from "../asset-core/domain/asset.ts";
-import { selectCollection } from "../asset-core/domain/collection.ts";
+} from "@arbesk/asset-core/domain/asset.js";
+import { selectCollection } from "@arbesk/asset-core/domain/collection.js";
 
 // ─── DOM References ───
 // The SPA shell (app.pug) always renders these elements, so non-null casts.

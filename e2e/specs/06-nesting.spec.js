@@ -90,7 +90,7 @@ test.describe("nesting / linked child assets", () => {
     // Subscribe to the mitt nesting bus so we can assert the
     // depth-change events.
     await page.evaluate(async () => {
-      const { on, EVENTS } = await import("/js/asset-core/events/bus.js");
+      const { on, EVENTS } = await import("/js/vendor/asset-core/events/bus.js");
       window.__nesting = [];
       on(EVENTS.NESTING_DID_DIVE, ({ depth }) =>
         window.__nesting.push(["dive", depth]),

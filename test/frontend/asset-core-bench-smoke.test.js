@@ -1,4 +1,4 @@
-import { runBench } from "../../frontend/src/js/asset-core/bench/run.ts";
+import { runBench } from "@arbesk/asset-core/bench/run.js";
 
 test("bench returns timing rows for the smallest fixture", async () => {
   const rows = await runBench({

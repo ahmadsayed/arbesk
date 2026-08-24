@@ -13,7 +13,7 @@ import {
   stripDedupMeta,
   composeGltfJson,
   decomposeGltfJson,
-} from "../../frontend/src/js/asset-core/gltf/gltf-core.js";
+} from "@arbesk/asset-core/gltf/gltf-core.js";
 
 const DATA_BIN = "data:application/octet-stream;base64,SGVsbG8="; // "Hello"
 const DATA_PNG = "data:image/png;base64,iVBORw0KGgo=";

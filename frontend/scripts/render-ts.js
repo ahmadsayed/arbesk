@@ -37,10 +37,19 @@ module.exports = async function renderTs() {
         // Emitted files load in the browser: relative .ts specifiers must
         // point at the emitted .js files instead. Covers static `from`
         // imports, dynamic import(), and bare side-effect imports.
-        const code = result.code.replace(
+        let code = result.code.replace(
             /(from\s+['"]|import\s*\(\s*['"]|import\s+['"])(\.{1,2}\/[^'"]+)\.ts(['"])/g,
             '$1$2.js$3'
         );
+        // Module workers do not inherit the page import map, so the glTF
+        // worker's bare @arbesk/asset-core specifiers must resolve to the
+        // vendored copy by relative path (mirrors ../vendor/gltf-transform-core).
+        if (rel === 'workers/gltf-worker.ts') {
+            code = code.replace(
+                /(from\s+['"]|import\s*\(\s*['"])@arbesk\/asset-core\/([^'"]+)(['"])/g,
+                '$1../vendor/asset-core/$2$3'
+            );
+        }
         sh.mkdir('-p', upath.dirname(outFile));
         fs.writeFileSync(outFile, code);
     }

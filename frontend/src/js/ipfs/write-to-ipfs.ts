@@ -7,10 +7,10 @@
  */
 
 import { getUploadCredential } from "../services/api.ts";
-import { compress } from "../asset-core/utils/compression.ts";
-import { sanitizeFileName } from "../asset-core/utils/uri.ts";
-import { uploadToIPFSWithCredential } from "../asset-core/ipfs/upload-with-credential.ts";
-import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+import { compress } from "@arbesk/asset-core/utils/compression.js";
+import { sanitizeFileName } from "@arbesk/asset-core/utils/uri.js";
+import { uploadToIPFSWithCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
 
 async function bytesFromData(
   data: Uint8Array | ArrayBuffer | Blob | string

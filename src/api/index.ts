@@ -14,7 +14,7 @@ const {
 
 import generateAssetNode from "./assets/generate-node.ts";
 import type { StorageAdapter } from "./storage/index.ts";
-import type { ArbeskCore } from "../../frontend/src/js/asset-core/facade.ts";
+import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import sessionRouter from "./sessions.ts";
 import commentsRoutes from "./routes/comments.ts";
 import ipfsRoutes from "./routes/ipfs.ts";

@@ -20,7 +20,7 @@ import {
 import { truncateAddress } from "../utils/format.ts";
 import { disconnectWallet } from "../blockchain/wallet.ts";
 import { getCachedSession } from "../services/api.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { Alpine, registerAlpineComponent } from "./alpine.ts";
 

@@ -19,7 +19,7 @@ const {
   getPayload,
   putPayload,
   clearCache,
-} = await import("../../frontend/src/js/asset-core/utils/content-cache.js");
+} = await import("@arbesk/asset-core/utils/content-cache.js");
 
 function bytes(text) {
   return new TextEncoder().encode(text);
@@ -326,7 +326,7 @@ describe("ContentCache._openDb", () => {
   it("returns null when indexedDB is not available", async () => {
     jest.resetModules();
     globalThis.indexedDB = undefined;
-    const mod = await import("../../frontend/src/js/asset-core/utils/content-cache.js");
+    const mod = await import("@arbesk/asset-core/utils/content-cache.js");
     const cache = new mod.ContentCache({ memory: new Map() });
     expect(await cache._dbPromise).toBeNull();
   });
@@ -350,7 +350,7 @@ describe("ContentCache._openDb", () => {
     };
 
     jest.resetModules();
-    const mod = await import("../../frontend/src/js/asset-core/utils/content-cache.js");
+    const mod = await import("@arbesk/asset-core/utils/content-cache.js");
     const cache = new mod.ContentCache({ memory: new Map() });
 
     // Defer firing so _openDb can attach handlers.
@@ -379,7 +379,7 @@ describe("ContentCache._openDb", () => {
     };
 
     jest.resetModules();
-    const mod = await import("../../frontend/src/js/asset-core/utils/content-cache.js");
+    const mod = await import("@arbesk/asset-core/utils/content-cache.js");
     const cache = new mod.ContentCache({ memory: new Map() });
 
     Promise.resolve().then(() => {

@@ -19,7 +19,7 @@ import workerpool from "../vendor/workerpool-10.0.2.mjs";
 // @ts-ignore TS1470 - NodeNext treats frontend .ts as CommonJS output
 // (frontend/package.json has no "type":"module"), but this is browser-native
 // ESM where import.meta is valid.
-const WORKER_SCRIPT = new URL("./gltf-worker.js?v=6", import.meta.url).href;
+const WORKER_SCRIPT = new URL("./gltf-worker.js?v=7", import.meta.url).href;
 const MAX_WORKERS = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
 
 let pool: any = null;

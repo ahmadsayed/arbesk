@@ -1,4 +1,4 @@
-import { followupActionsFor } from "../../frontend/src/js/asset-core/domain/generation-actions.js";
+import { followupActionsFor } from "@arbesk/asset-core/domain/generation-actions.js";
 
 describe("followupActionsFor", () => {
   it("returns all four actions for a plain tripo3d generation", () => {

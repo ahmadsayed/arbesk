@@ -7,13 +7,13 @@
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { uiState } from "../state/ui-state.ts";
 import {
   adoptOpenedAsset,
   renameAsset,
   getAssetState,
-} from "../asset-core/domain/asset.ts";
+} from "@arbesk/asset-core/domain/asset.js";
 
 const MAX_DEPTH = 5;
 

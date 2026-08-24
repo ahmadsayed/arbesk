@@ -37,7 +37,7 @@ jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
   writeJSONToIPFS: writeJSONToIPFSMock,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/merkle-editors.js", () => ({
+jest.unstable_mockModule("@arbesk/asset-core/gltf/merkle-editors.js", () => ({
   computeRoot: computeRootMock,
   getProof: getProofMock,
   MAX_EDITORS_PER_TOKEN: 5000,
@@ -59,7 +59,7 @@ const team = await import("../../frontend/src/js/services/team.js");
 // wraps the mocked wallet module, so assertions on contractMock still hold.
 async function wireAssetCoreRuntime() {
   const { initRuntime } = await import(
-    "../../frontend/src/js/asset-core/runtime.ts"
+    "@arbesk/asset-core/runtime.js"
   );
   const {
     createBrowserHashPort,

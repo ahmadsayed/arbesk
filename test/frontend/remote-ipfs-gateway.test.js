@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { jest } from "@jest/globals";
 import { TextEncoder, TextDecoder } from "util";
-import { compress } from "../../frontend/src/js/asset-core/utils/compression.js";
+import { compress } from "@arbesk/asset-core/utils/compression.js";
 
 if (!global.TextEncoder) global.TextEncoder = TextEncoder;
 if (!global.TextDecoder) global.TextDecoder = TextDecoder;
@@ -25,7 +25,7 @@ async function load(gateway) {
 
 afterEach(async () => {
   const { _resetRuntimeForTesting } = await import(
-    "../../frontend/src/js/asset-core/runtime.js"
+    "@arbesk/asset-core/runtime.js"
   );
   _resetRuntimeForTesting();
 });
@@ -186,7 +186,7 @@ describe("gateway error paths", () => {
     let index = 0;
     const mod = await loadWithFetch(jest.fn(async () => jsonResponse({ version: 1 })));
     const { initRuntime } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     initRuntime({
       ipfsRead: {
@@ -207,7 +207,7 @@ describe("gateway error paths", () => {
   it("getManifestChain stops when a manifest cannot be fetched", async () => {
     const mod = await loadWithFetch(jest.fn(async () => errorResponse(500)));
     const { initRuntime } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     initRuntime({
       ipfsRead: {
@@ -232,7 +232,7 @@ describe("gateway error paths", () => {
     let index = 0;
     const mod = await loadWithFetch(jest.fn(async () => jsonResponse({ version: 1 })));
     const { initRuntime } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     initRuntime({
       ipfsRead: {

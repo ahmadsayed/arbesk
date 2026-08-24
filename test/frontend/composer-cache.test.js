@@ -31,7 +31,7 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
   const cacheGet = jest.fn(async (hash) => cacheHits.get(hash) || null);
   const cachePut = jest.fn(async () => true);
 
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/utils/content-cache.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/utils/content-cache.js", () => ({
     __esModule: true,
     ContentCache: class {},
     BIG_CONTENT_THRESHOLD_BYTES: 64 * 1024,
@@ -43,7 +43,7 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
   // composer.js now reads via getRuntime().ipfsRead; wire the old remote-ipfs
   // fakes into the read port instead of mocking remote-ipfs.js.
   const { initRuntime } = await import(
-    "../../frontend/src/js/asset-core/runtime.js"
+    "@arbesk/asset-core/runtime.js"
   );
   initRuntime({
     ipfsRead: {
@@ -66,13 +66,13 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
     ipfsWrite: { write: jest.fn(), writeJSON: jest.fn() },
   });
 
-  const mod = await import("../../frontend/src/js/asset-core/gltf/composer.js");
+  const mod = await import("@arbesk/asset-core/gltf/composer.js");
   return { composeGlTF: mod.composeGlTF, cacheGet, cachePut };
 }
 
 afterEach(async () => {
   const { _resetRuntimeForTesting } = await import(
-    "../../frontend/src/js/asset-core/runtime.js"
+    "@arbesk/asset-core/runtime.js"
   );
   _resetRuntimeForTesting();
 });

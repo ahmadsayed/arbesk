@@ -11,7 +11,7 @@
  * @module wallet-payments
  */
 
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { showToast } from "../ui/toasts.ts";
 import { getUsdcToken as getNetworkUsdcToken } from "./network-config.ts";

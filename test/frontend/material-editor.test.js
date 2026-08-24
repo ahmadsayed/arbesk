@@ -5,7 +5,7 @@ async function load() {
   // The editor now consumes the IPFS ports via getRuntime(); the pure
   // applyMeshOverrideColors paths under test never touch the runtime, so no
   // port fakes are needed here.
-  const mod = await import("../../frontend/src/js/asset-core/gltf/material-editor.js");
+  const mod = await import("@arbesk/asset-core/gltf/material-editor.js");
   return { mod };
 }
 

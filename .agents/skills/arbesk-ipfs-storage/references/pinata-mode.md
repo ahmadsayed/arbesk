@@ -71,7 +71,7 @@ parallelized server-side, then hand one URL to each file.
   `{ count }` (1–200, `uploadUrlsSchema` in `src/api/schemas.ts`) →
   `{ credentials: [...] }`. Session-gated, rate-limited like `/upload-url`.
 - **Frontend**: `getUploadCredentials(count)` in `services/api.ts` hits the
-  batch route. `frontend/src/js/asset-core/gltf/async-gltf.ts` wraps it in
+  batch route. `packages/asset-core/src/gltf/async-gltf.ts` wraps it in
   `getPooledUploadCredential(count)`, which for single-use strategies reshapes
   the array into a single pool-credential object: `{ strategy: 'presigned-put',
   urls: [...], gateway, reusable: true }` (kubo-api passes through unchanged —
@@ -79,7 +79,7 @@ parallelized server-side, then hand one URL to each file.
   (`buffers.length + images.length + 1`, clamped to 200) via
   `estimateUploadCount`/`estimateGlbUploadCount` — over-minting is harmless
   (unused signed URLs just expire), under-minting would starve mid-upload.
-- **Consumption**: `frontend/src/js/asset-core/ipfs/upload-with-credential.ts`'s
+- **Consumption**: `packages/asset-core/src/ipfs/upload-with-credential.ts`'s
   `uploadToPresignedPut()` calls `nextPresignedUrl(credential)`, which does
   `credential.urls.shift()` for a pool credential (or returns the plain
   `credential.url` for a legacy single-shot credential). Safe without a lock

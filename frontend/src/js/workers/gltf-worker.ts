@@ -16,15 +16,15 @@
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
-import { extractDataURI } from "../asset-core/utils/uri.ts";
-import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "../asset-core/gltf/cache-aware-fetch.ts";
-import { createConcurrencyLimiter } from "../asset-core/utils/concurrency.ts";
-import { hashBytes, DEFAULT_HASH_ALGORITHM } from "../asset-core/utils/hash.ts";
+import { extractDataURI } from "@arbesk/asset-core/utils/uri.js";
+import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "@arbesk/asset-core/gltf/cache-aware-fetch.js";
+import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";
+import { hashBytes, DEFAULT_HASH_ALGORITHM } from "@arbesk/asset-core/utils/hash.js";
 import {
   uploadBatchToIPFSWithCredential,
   uploadToIPFSWithCredential,
-} from "../asset-core/ipfs/upload-with-credential.ts";
-import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+} from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
 import {
   IPFS_URI_PREFIX,
   isComposite,
@@ -32,7 +32,7 @@ import {
   attachDedupMeta,
   composeGltfJson,
   decomposeGltfJson,
-} from "../asset-core/gltf/gltf-core.ts";
+} from "@arbesk/asset-core/gltf/gltf-core.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
 
@@ -606,7 +606,7 @@ async function uploadExtractedItems(
 
     // Hash over the RAW bytes so the dedup/content-cache key matches the
     // main-thread path regardless of which compressor produced the stored
-    // bytes (see frontend/src/js/asset-core/gltf/dedup.js).
+    // bytes (see packages/asset-core/src/gltf/dedup.ts).
     const meta = {
       hash: hashBytes(item.bytes),
       hashAlgo: HASH_ALGORITHM,

@@ -7,7 +7,7 @@
  * next Save Draft / Publish.
  */
 
-import { on, emit, EVENTS } from "../asset-core/events/bus.ts";
+import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { state } from "../engine/state.ts";
 import type { TransformMode } from "../engine/state.ts";
 import {

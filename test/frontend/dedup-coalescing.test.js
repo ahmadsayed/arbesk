@@ -8,7 +8,7 @@ describe("uploadWithDedup - concurrent coalescing", () => {
     // old writeToIPFS name so the assertions below read unchanged.
     const writeToIPFS = jest.fn();
     const { initRuntime } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     initRuntime({
       ipfsRead: {
@@ -18,13 +18,13 @@ describe("uploadWithDedup - concurrent coalescing", () => {
       },
       ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
     });
-    const mod = await import("../../frontend/src/js/asset-core/gltf/dedup.js");
+    const mod = await import("@arbesk/asset-core/gltf/dedup.js");
     return { mod, writeToIPFS };
   }
 
   afterEach(async () => {
     const { _resetRuntimeForTesting } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     _resetRuntimeForTesting();
   });

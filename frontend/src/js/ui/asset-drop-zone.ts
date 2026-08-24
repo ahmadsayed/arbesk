@@ -5,7 +5,7 @@
  * UX event surface.
  */
 
-import { emit, on, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 const MIME = "application/x-arbesk-linked-asset";
 const viewport = document.getElementById("viewport");

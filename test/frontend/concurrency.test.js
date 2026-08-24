@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { createConcurrencyLimiter } from "../../frontend/src/js/asset-core/utils/concurrency.js";
+import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";
 
 describe("createConcurrencyLimiter", () => {
   it("runs tasks sequentially when limit is 1", async () => {

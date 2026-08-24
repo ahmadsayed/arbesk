@@ -47,9 +47,9 @@ const ipfsGetJSON = jest.fn(async () => ({}));
 
 beforeAll(async () => {
   ({ initRuntime, _resetRuntimeForTesting } = await import(
-    "../../frontend/src/js/asset-core/runtime.ts"
+    "@arbesk/asset-core/runtime.js"
   ));
-  editors = await import("../../frontend/src/js/asset-core/domain/editors.js");
+  editors = await import("@arbesk/asset-core/domain/editors.js");
 });
 
 beforeEach(() => {

@@ -18,10 +18,10 @@ async function load({ executorAvailable, execImpl } = {}) {
   jest.resetModules();
 
   const { initRuntime } = await import(
-    "../../frontend/src/js/asset-core/runtime.ts"
+    "@arbesk/asset-core/runtime.js"
   );
   const { createMemoryIpfs } = await import(
-    "../../frontend/src/js/asset-core/testing/memory-ipfs.ts"
+    "@arbesk/asset-core/testing/memory-ipfs.js"
   );
 
   const exec = jest.fn(
@@ -35,7 +35,7 @@ async function load({ executorAvailable, execImpl } = {}) {
   });
 
   const mod = await import(
-    "../../frontend/src/js/asset-core/gltf/async-gltf.js"
+    "@arbesk/asset-core/gltf/async-gltf.js"
   );
   return { mod, exec };
 }

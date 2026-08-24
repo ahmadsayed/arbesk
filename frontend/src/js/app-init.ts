@@ -8,7 +8,7 @@
  * from the URL. Top-level script → no CSP 'unsafe-inline' needed.
  */
 
-import { on, EVENTS } from "./asset-core/events/bus.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { initAssetCoreBrowser } from "./asset-core-init.ts";
 import {
   initWallet,

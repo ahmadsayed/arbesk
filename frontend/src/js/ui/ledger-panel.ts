@@ -15,8 +15,8 @@
  */
 
 import { truncateAddress, truncateCid } from "../utils/format.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
-import { getActiveAssetManifestCid } from "../asset-core/domain/asset.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { getActiveAssetManifestCid } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
 import { walkManifestChain } from "../engine/time-travel.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";

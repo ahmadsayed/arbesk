@@ -12,9 +12,9 @@ import { readFileSync } from "node:fs";
 import {
   initRuntime,
   _resetRuntimeForTesting,
-} from "../../frontend/src/js/asset-core/runtime.ts";
-import { inlineExecutor } from "../../frontend/src/js/asset-core/executor/inline.ts";
-import { createMemoryIpfs } from "../../frontend/src/js/asset-core/testing/memory-ipfs.ts";
+} from "@arbesk/asset-core/runtime.js";
+import { inlineExecutor } from "@arbesk/asset-core/executor/inline.js";
+import { createMemoryIpfs } from "@arbesk/asset-core/testing/memory-ipfs.js";
 
 afterEach(() => _resetRuntimeForTesting());
 

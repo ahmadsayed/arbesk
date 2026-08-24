@@ -1,9 +1,9 @@
 /**
  * Thin orchestrator around domain/collection.js publishCollection.
  */
-import { publishCollection } from "../../asset-core/domain/collection.ts";
-import type { PublishCollectionResult } from "../../asset-core/domain/collection.ts";
-import { adoptPublishedIdentity } from "../../asset-core/domain/asset.ts";
+import { publishCollection } from "@arbesk/asset-core/domain/collection.js";
+import type { PublishCollectionResult } from "@arbesk/asset-core/domain/collection.js";
+import { adoptPublishedIdentity } from "@arbesk/asset-core/domain/asset.js";
 import { getOwnerOf, getTokenURI, getCollectionManifest } from "../token.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 import {

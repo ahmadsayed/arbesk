@@ -45,7 +45,7 @@ description: Use for any IPFS read/write/pin/unpin issue, backend or frontend â€
 | `src/api/storage/index.ts` | Kubo/Pinata selection; pool env vars |
 | `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser-side writer |
 | `frontend/src/js/ipfs/upload-with-credential.ts` | Worker-safe upload; pool consumption |
-| `frontend/src/js/asset-core/gltf/async-gltf.ts` | Pool sizing/reservation for worker-offloaded decompose |
+| `packages/asset-core/src/gltf/async-gltf.ts` | Pool sizing/reservation for worker-offloaded decompose |
 | `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side reader + cache |
 | `docker/Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` | Kubo image, init/isolation config, orchestration |
 

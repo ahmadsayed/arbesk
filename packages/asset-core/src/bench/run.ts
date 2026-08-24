@@ -18,7 +18,8 @@ import { createMemoryIpfs } from "../testing/memory-ipfs.ts";
 import { getRuntime } from "../runtime.ts";
 
 const benchDir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(benchDir, "..", "..", "..", "..", "..");
+// packages/asset-core/{src,dist}/bench -> repo root
+const repoRoot = join(benchDir, "..", "..", "..", "..");
 
 export interface BenchRow {
   fixture: string;

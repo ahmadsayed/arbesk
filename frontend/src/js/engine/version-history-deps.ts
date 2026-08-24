@@ -6,7 +6,7 @@
  * used to be dynamic imports inside the store. Imported for its side effect
  * from app-init.ts before any scene/history events can fire.
  */
-import { configureVersionHistoryDeps } from "../asset-core/domain/version-history-store.ts";
+import { configureVersionHistoryDeps } from "@arbesk/asset-core/domain/version-history-store.js";
 import { walkManifestChain } from "./time-travel.ts";
 import { clearScene, loadAssetManifest } from "./scene-graph.ts";
 import { getActiveContract } from "../blockchain/wallet.ts";

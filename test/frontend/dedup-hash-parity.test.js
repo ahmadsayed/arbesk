@@ -15,7 +15,7 @@ describe("uploadWithDedup - raw-content hash parity (Finding A)", () => {
     // writeToIPFS name so the assertions below read unchanged.
     const writeToIPFS = jest.fn().mockResolvedValue("bafyCid");
     const { initRuntime } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     initRuntime({
       ipfsRead: {
@@ -25,14 +25,14 @@ describe("uploadWithDedup - raw-content hash parity (Finding A)", () => {
       },
       ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
     });
-    const mod = await import("../../frontend/src/js/asset-core/gltf/dedup.js");
-    const hashMod = await import("../../frontend/src/js/asset-core/utils/hash.js");
+    const mod = await import("@arbesk/asset-core/gltf/dedup.js");
+    const hashMod = await import("@arbesk/asset-core/utils/hash.js");
     return { mod, hashMod, writeToIPFS };
   }
 
   afterEach(async () => {
     const { _resetRuntimeForTesting } = await import(
-      "../../frontend/src/js/asset-core/runtime.js"
+      "@arbesk/asset-core/runtime.js"
     );
     _resetRuntimeForTesting();
   });

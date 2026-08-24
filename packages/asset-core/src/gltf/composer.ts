@@ -3,7 +3,7 @@
  *
  * Thin main-thread wrapper around the shared compose logic in gltf-core.js:
  * resolves `ipfs://<CID>` buffer/image references to base64 data URIs so the
- * result is a self-contained glTF ready for Babylon.js SceneLoader.
+ * result is a self-contained glTF any standard loader can consume.
  *
  * Large buffers and images are cached locally by the content hash stored in
  * `_arbesk.hash` so subsequent loads can skip the IPFS gateway.
@@ -29,7 +29,7 @@ async function fetchCIDAsBase64(cid: string, arbeskMeta: any): Promise<string> {
  * Compose a full standard glTF JSON from a composite or standard glTF.
  *
  * Resolves all buffer and image URIs to base64 data URIs so that
- * Babylon.js can load the result as a self-contained glTF.
+ * any standard loader can consume the result as a self-contained glTF.
  *
  * @param gltfJson - The glTF JSON (composite ipfs:// refs or standard data URIs; dynamic schema)
  * @returns Standard glTF JSON with data URI buffers/images

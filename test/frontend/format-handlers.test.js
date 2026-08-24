@@ -17,7 +17,7 @@ async function load() {
     isIpfsCidReachable: jest.fn(),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/gltf/async-gltf.js", () => ({
     composeGlTFAsync: jest.fn(),
     composeGlTFToBlobAsync: jest.fn(),
     decomposeGlTFAsync: jest.fn(),
@@ -27,7 +27,7 @@ async function load() {
     isComposite: jest.fn(),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/decomposer.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     decomposeGlTF: jest.fn(),
     decomposeAndStore: jest.fn(),
@@ -40,8 +40,8 @@ async function load() {
     "../../frontend/src/js/formats/handlers/glb-handler.js"
   );
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
-  const asyncGltf = await import("../../frontend/src/js/asset-core/gltf/async-gltf.js");
-  const decomposer = await import("../../frontend/src/js/asset-core/gltf/decomposer.js");
+  const asyncGltf = await import("@arbesk/asset-core/gltf/async-gltf.js");
+  const decomposer = await import("@arbesk/asset-core/gltf/decomposer.js");
   return {
     gltfHandler: gltf.gltfHandler,
     glbHandler: glb.glbHandler,

@@ -88,24 +88,38 @@ export default [
 
   {
     name: "arbesk/asset-core",
-    files: ["frontend/src/js/asset-core/**/*.ts"],
+    files: ["packages/asset-core/src/**/*.ts"],
     rules: {
       "no-restricted-imports": ["error", {
-        patterns: [{
-          group: [
-            "**/ipfs/remote-ipfs*",
-            "**/ipfs/write-to-ipfs*",
-            "**/ipfs/asset-core-adapter*",
-            "**/services/*",
-            "**/blockchain/*",
-            "**/workers/*",
-            "**/engine/*",
-            "**/ui/*",
-            "**/formats/*",
-            "**/3mf/*",
-          ],
-          message: "asset-core must stay environment-agnostic — consume these via injected ports (see docs/superpowers/specs/2026-08-23-asset-core-externalization-design.md §3).",
-        }],
+        patterns: [
+          {
+            group: [
+              "**/frontend/**",
+              "**/src/api/**",
+              "**/constants/**",
+            ],
+            message: "asset-core must stay environment-agnostic — consume host capabilities via injected ports, never by reaching into the frontend/backend trees.",
+          },
+          {
+            group: [
+              "**/ipfs/remote-ipfs*",
+              "**/ipfs/write-to-ipfs*",
+              "**/ipfs/asset-core-adapter*",
+              "**/services/*",
+              "**/blockchain/*",
+              "**/workers/*",
+              "**/engine/*",
+              "**/ui/*",
+              "**/formats/*",
+              "**/3mf/*",
+            ],
+            message: "asset-core must stay environment-agnostic — consume these via injected ports (see docs/ASSET_CORE_SDK.md §7).",
+          },
+          {
+            group: ["@babylonjs/*", "babylonjs", "babylon.js"],
+            message: "asset-core must not depend on Babylon.js — it is a pure glTF/manifest engine.",
+          },
+        ],
       }],
       "no-restricted-globals": ["error",
         { name: "window", message: "asset-core is environment-agnostic; inject via ports." },

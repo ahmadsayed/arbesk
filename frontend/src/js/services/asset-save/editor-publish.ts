@@ -5,14 +5,14 @@
  * and persistence of the initial editor list for a new token.
  */
 
-import { computeRoot, getProof, makeLeaf } from "../../asset-core/gltf/merkle-editors.ts";
+import { computeRoot, getProof, makeLeaf } from "@arbesk/asset-core/gltf/merkle-editors.js";
 import * as wallet from "../../blockchain/wallet.ts";
 import { CollaboratorRole } from "../../blockchain/wallet.ts";
 import {
   loadEditorList,
   saveEditorList,
   getEditorSetVersion,
-} from "../../asset-core/domain/editors.ts";
+} from "@arbesk/asset-core/domain/editors.js";
 import { isOwner } from "../team.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 

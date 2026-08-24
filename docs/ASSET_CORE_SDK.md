@@ -1,6 +1,6 @@
 # Arbesk Asset Core — SDK Consumer Guide
 
-`@arbesk/asset-core` (`frontend/src/js/asset-core/`) is Arbesk's
+`@arbesk/asset-core` (`packages/asset-core/`) is Arbesk's
 environment-agnostic asset engine: manifest handling, glTF compose/decompose,
 asset domain state, and Merkle editor lists — one TypeScript codebase that
 runs unchanged in the browser, in the Node backend, and in tests.
@@ -13,29 +13,38 @@ Express API or reimplementing the manifest/glTF formats.
 If you only need to call Arbesk over HTTP, you want `docs/API_SPEC.md`
 instead. This guide is for embedding the engine itself.
 
-## 1. How consumption works (no build step, no npm package)
+## 1. How consumption works (npm workspace package)
 
-The package is consumed **as TypeScript source** by relative import — there is
-no published artifact today:
+`@arbesk/asset-core` lives at `packages/asset-core/` as an npm **workspace**
+package (root `"workspaces": ["packages/*"]`) and is compiled by `tsc` to
+`dist/` (ESM + `.d.ts`). Consumers import it by bare specifier, with
+`.js`-suffixed subpaths for advanced callers:
 
-- **Node (backend, scripts, tests)** — direct import, executed via Node's
-  type-stripping (Node ≥ 22.18, no build):
-  ```ts
-  import { createArbeskCore } from "../frontend/src/js/asset-core/facade.ts";
-  ```
-- **Browser (this repo's frontend)** — files under `frontend/src/js/` are
-  transpiled per-file by swc (`npm run build:frontend`); imports keep their
-  on-disk `.ts`-relative shape and just work. Frontend code should not build
-  its own core — call the existing composition root:
+```ts
+import { createArbeskCore } from "@arbesk/asset-core";
+import { composeGltfJson } from "@arbesk/asset-core/gltf/gltf-core.js";
+```
+
+- **Build** — `npm run build:packages` (also wired as `prestart`/`pretypecheck`/
+  `prebuild:frontend`, so it runs automatically where needed).
+- **Node (backend, scripts)** — resolves `@arbesk/asset-core` through the
+  workspace symlink to `dist/`.
+- **Browser (this repo's frontend)** — the frontend build vendors `dist/` into
+  `dist/js/vendor/asset-core/` and an import map entry (`head.pug`) resolves
+  the bare specifier. The glTF Web Worker, which has no import map, imports the
+  vendored copy by relative path. Frontend code should not build its own core —
+  call the existing composition root:
   ```ts
   import { initAssetCoreBrowser } from "./asset-core-init.ts";
   const core = initAssetCoreBrowser(); // singleton, already wired at boot
   ```
-- **External project** — vendor the `asset-core/` directory into your tree (it
-  is self-contained except for `zod`, `fflate`, `viem`,
-  `@gltf-transform/core`, `@openzeppelin/merkle-tree` from npm) and import it
-  the same way. A published npm package is a documented promotion path, not
-  yet done.
+- **Tests** — jest maps `@arbesk/asset-core/*.js` to the package's `.ts` source
+  (`jest.config.js` moduleNameMapper), so tests exercise source with no build
+  step.
+
+The package's only runtime npm dependencies are `zod`, `fflate`,
+`@gltf-transform/core`, and `@openzeppelin/merkle-tree` (no Babylon.js, no DOM,
+no chain code).
 
 One runtime rule that matters: `createArbeskCore(config)` installs a
 **process-wide runtime** — call it once per environment, keep the returned
@@ -49,10 +58,10 @@ this with `_resetRuntimeForTesting()`).
 The smallest useful core needs just the two IPFS ports. This repo ships a
 ready-made backend wiring (`src/api/asset-core-adapters.ts#createBackendCore`)
 and an in-memory double for tests
-(`asset-core/testing/memory-ipfs.ts#createMemoryIpfs`).
+(`packages/asset-core/src/testing/memory-ipfs.ts#createMemoryIpfs`).
 
 ```ts
-import { createArbeskCore } from "../frontend/src/js/asset-core/facade.ts";
+import { createArbeskCore } from "@arbesk/asset-core";
 import { createBackendCore } from "../src/api/asset-core-adapters.ts"; // in-repo backend
 import { createStorageAdapter } from "../src/api/storage/index.ts";
 
@@ -73,9 +82,9 @@ const check = core.validateManifest(manifest);         // { valid, data | errors
 ### 2.2 Tests (no IPFS, no chain, no browser)
 
 ```ts
-import { createArbeskCore } from "../../frontend/src/js/asset-core/facade.ts";
-import { createMemoryIpfs } from "../../frontend/src/js/asset-core/testing/memory-ipfs.ts";
-import { _resetRuntimeForTesting } from "../../frontend/src/js/asset-core/runtime.ts";
+import { createArbeskCore } from "@arbesk/asset-core";
+import { createMemoryIpfs } from "@arbesk/asset-core/testing/memory-ipfs.js";
+import { _resetRuntimeForTesting } from "@arbesk/asset-core/runtime.js";
 
 afterEach(() => _resetRuntimeForTesting());
 
@@ -90,7 +99,7 @@ test("round-trip", async () => {
 ### 2.3 A new environment (the real extension point)
 
 You implement **ports** — plain objects matching the interfaces in
-`asset-core/types.ts` — and pass them to `createArbeskCore`. Nothing inside
+`packages/asset-core/src/types.ts` — and pass them to `createArbeskCore`. Nothing inside
 the package touches network, DOM, chain, or storage directly; it only calls
 your ports.
 
@@ -120,14 +129,14 @@ const core = createArbeskCore({
 | `executor` | no | inline (same thread) | `download`/`compose` and async decompose ops | fine for scripts/backend; browsers should inject the worker executor to keep the UI responsive |
 | `kernels` | no | pure-TS implementations | base64, hashing, GLB sniffing on hot paths | nothing — swap only with benchmark evidence (`npm run bench:asset-core`) |
 
-Interface signatures are the source of truth: `frontend/src/js/asset-core/types.ts`.
+Interface signatures are the source of truth: `packages/asset-core/src/types.ts`.
 Reference implementations to copy from:
 
 - **Browser**: `frontend/src/js/ipfs/asset-core-adapter.ts` (IPFS),
   `frontend/src/js/blockchain/asset-core-adapter.ts` (hash/storage/chain),
   `frontend/src/js/workers/worker-executor.ts` (executor)
 - **Backend**: `src/api/asset-core-adapters.ts` (IPFS over kubo/pinata)
-- **Test/in-memory**: `frontend/src/js/asset-core/testing/memory-ipfs.ts`
+- **Test/in-memory**: `packages/asset-core/src/testing/memory-ipfs.ts`
 
 ### 3.1 Upload credentials are strategy tokens
 
@@ -189,7 +198,7 @@ duplicate guard, last-editor guard, 5000-editor cap). They do **not** submit
 the on-chain `updateEditors` transaction — contract writes stay with the
 caller (in this repo: `services/team.ts`, which owns wallet UX). If you need
 the root/version for a transaction, use the domain commands directly
-(`asset-core/domain/editors.ts` — `addEditorCommand` returns
+(`packages/asset-core/src/domain/editors.ts` — `addEditorCommand` returns
 `{ cid, root, version }`).
 
 ### Error behavior to expect
@@ -250,7 +259,7 @@ How the production browser wiring works (copy this pattern):
    `decomposeAndUploadGltf`, `decomposeAndUploadGlb`, `bakeSourceColors`
    (`ExecutorOp` in `types.ts`). `async-gltf.ts` dispatches these op names
    with a single payload object per call — an ExecutorPort is either this
-   pass-through or the inline op table (`asset-core/executor/inline.ts`)
+   pass-through or the inline op table (`packages/asset-core/src/executor/inline.ts`)
    mapping the same names to the same functions on the calling thread.
 4. **Availability probe + automatic fallback**: `available()` execs the
    built-in `methods` op and checks the required methods registered (this
@@ -281,13 +290,15 @@ package cannot tell the difference.
 
 ## 7. Rules for contributors (the boundary that keeps this portable)
 
-`asset-core/` must stay environment-agnostic:
+`packages/asset-core/` must stay environment-agnostic:
 
-- No imports from `ipfs/`, `services/`, `blockchain/`, `workers/`, `engine/`,
-  `ui/`, `formats/`, `3mf/` — eslint enforces this
+- No imports from the frontend/backend trees (`frontend/`, `src/api/`,
+  `constants/`) or from `ipfs/`, `services/`, `blockchain/`, `workers/`,
+  `engine/`, `ui/`, `formats/`, `3mf/` — eslint enforces this
   (`no-restricted-imports`, name-anchored patterns).
-- No `window`/`document`/`BABYLON`/`Web3`/`navigator`/`localStorage`
-  references — eslint `no-restricted-globals`. `indexedDB` is allowed **only**
+- No `window`/`document`/`Web3`/`navigator`/`localStorage` references and no
+  `@babylonjs/*` imports — eslint `no-restricted-globals` +
+  `no-restricted-imports`. `indexedDB` is allowed **only**
   behind the existing runtime guard in `utils/content-cache.ts`
   (`globalThis` lookup with in-memory fallback).
 - Erasable TypeScript only (Node type-stripping): no enums/namespaces,
@@ -328,7 +339,7 @@ whatever your host offers (Web Workers, threads, actors).
 
 ## See also
 
-- `frontend/src/js/asset-core/README.md` — package overview
+- `packages/asset-core/README.md` — package overview
 - `docs/superpowers/specs/2026-08-23-asset-core-externalization-design.md` — design decisions (why TS, why ports, why no WASM yet)
 - `docs/ARCHITECTURE.md §4` — manifest/collection data model
 - `docs/API_SPEC.md` — the HTTP API, if you don't need to embed the engine

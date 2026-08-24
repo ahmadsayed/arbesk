@@ -52,7 +52,7 @@ jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
 // getRuntime().ipfsWrite — back the runtime ports with the same in-memory
 // store the module mocks above use.
 const { initRuntime, _resetRuntimeForTesting } = await import(
-  "../../frontend/src/js/asset-core/runtime.js"
+  "@arbesk/asset-core/runtime.js"
 );
 initRuntime({
   ipfsRead: {

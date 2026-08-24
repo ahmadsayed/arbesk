@@ -13,12 +13,12 @@
  * flow uses, so the save pipeline sees an already-stored source.
  */
 
-import { on, emit, EVENTS } from "../asset-core/events/bus.ts";
+import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   getCurrentManifest,
   resetForNewAsset,
   renameAsset,
-} from "../asset-core/domain/asset.ts";
+} from "@arbesk/asset-core/domain/asset.js";
 import {
   stagePendingSourceOverride,
   clearPendingPostProcessorEdit,

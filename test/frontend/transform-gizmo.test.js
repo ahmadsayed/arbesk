@@ -3,7 +3,7 @@
  */
 import { expect, test, describe, beforeEach, afterEach } from "@jest/globals";
 import { state } from "../../frontend/src/js/engine/state.js";
-import { emit, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
 
 describe("transform-gizmo toolbar", () => {
@@ -98,7 +98,7 @@ describe("transform-gizmo toolbar", () => {
   });
 
   test("time mode button exists, disables all gizmos, and emits mode event", async () => {
-    const { on, EVENTS } = await import("../../frontend/src/js/asset-core/events/bus.js");
+    const { on, EVENTS } = await import("@arbesk/asset-core/events/bus.js");
     const modes = [];
     const off = on(EVENTS.TRANSFORM_MODE_CHANGED, (e) => modes.push(e.mode));
 

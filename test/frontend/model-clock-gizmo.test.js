@@ -9,7 +9,7 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
-import { emit, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { state } from "../../frontend/src/js/engine/state.js";
 
 const ENTRIES = [
@@ -35,7 +35,7 @@ const storeMock = {
 };
 
 jest.unstable_mockModule(
-  "../../frontend/src/js/asset-core/domain/version-history-store.js",
+  "@arbesk/asset-core/domain/version-history-store.js",
   () => storeMock
 );
 

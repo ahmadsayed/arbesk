@@ -3,8 +3,8 @@
  * Model Clock Gizmo — 3D Babylon ring for scrubbing a node's version history.
  */
 
-import * as store from "../asset-core/domain/version-history-store.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
+import * as store from "@arbesk/asset-core/domain/version-history-store.js";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { state } from "../engine/state.ts";
 
 // Local ring radius the clock geometry is authored at. The root is scaled

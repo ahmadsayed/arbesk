@@ -14,7 +14,7 @@
 
 export type EventHandler = (payload?: any) => void;
 
-import mitt from "./mitt.mjs";
+import mitt from "./mitt.ts";
 
 // ─── Event Name Constants ─────────────────────────────────────────────────────
 

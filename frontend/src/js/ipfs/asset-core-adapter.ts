@@ -3,7 +3,7 @@
  * gateway/session modules. Lives outside asset-core by design: this file
  * IS the environment-specific implementation.
  */
-import type { IpfsReadPort, IpfsWritePort } from "../asset-core/types.ts";
+import type { IpfsReadPort, IpfsWritePort } from "@arbesk/asset-core/types.js";
 import {
   getFromRemoteIPFS,
   getArrayBufferFromRemoteIPFS,

@@ -1,7 +1,7 @@
 /**
  * Arbesk glTF deduplication helpers - unit tests.
  *
- * Tests the pure hash→CID logic in frontend/src/js/asset-core/gltf/dedup.js
+ * Tests the pure hash→CID logic in packages/asset-core/src/gltf/dedup.ts
  * with a fake ipfsWrite port so no network/IPFS node is required.
  */
 
@@ -17,7 +17,7 @@ globalThis.crypto = {
 // dedup.js writes via getRuntime().ipfsWrite.write — install the runtime with
 // a fake write port before importing it.
 const { initRuntime, _resetRuntimeForTesting } = await import(
-  "../frontend/src/js/asset-core/runtime.js"
+  "@arbesk/asset-core/runtime.js"
 );
 const writeToIPFS = jest.fn();
 initRuntime({
@@ -29,7 +29,7 @@ initRuntime({
   ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
 });
 
-const { hashBytes } = await import("../frontend/src/js/asset-core/utils/hash.js");
+const { hashBytes } = await import("@arbesk/asset-core/utils/hash.js");
 const {
   buildDedupMap,
   uploadWithDedup,
@@ -37,7 +37,7 @@ const {
   stripDedupMeta,
   cidFromIpfsUri,
   ipfsUriFromCid,
-} = await import("../frontend/src/js/asset-core/gltf/dedup.js");
+} = await import("@arbesk/asset-core/gltf/dedup.js");
 
 afterAll(() => _resetRuntimeForTesting());
 

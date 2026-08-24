@@ -2,18 +2,18 @@
  * @jest-environment jsdom
  */
 import { jest, expect, test, describe, beforeEach, beforeAll } from "@jest/globals";
-import { emit, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   assetStore,
   _resetForTesting,
-} from "../../frontend/src/js/asset-core/domain/asset-store.js";
+} from "@arbesk/asset-core/domain/asset-store.js";
 
 let _resetSubscribers;
 
 let store;
 beforeAll(async () => {
   store = await import(
-    "../../frontend/src/js/asset-core/domain/version-history-store.js"
+    "@arbesk/asset-core/domain/version-history-store.js"
   );
   _resetSubscribers = store._resetSubscribers;
 });

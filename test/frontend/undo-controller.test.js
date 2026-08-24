@@ -3,7 +3,7 @@
  */
 import { describe, test, expect, beforeEach, afterEach } from "@jest/globals";
 import { state } from "../../frontend/src/js/engine/state.js";
-import { emit, on, EVENTS } from "../../frontend/src/js/asset-core/events/bus.js";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   pushUndoEntry,
   clearUndoStacks,

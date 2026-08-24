@@ -9,9 +9,9 @@
  */
 
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { uploadWithDedup } from "../asset-core/gltf/dedup.ts";
-import { sanitizeFileName } from "../asset-core/utils/uri.ts";
-import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+import { uploadWithDedup } from "@arbesk/asset-core/gltf/dedup.js";
+import { sanitizeFileName } from "@arbesk/asset-core/utils/uri.js";
+import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
 import { unzipBytes, strFromU8 } from "./zip.ts";
 
 export const COMPOSITE_3MF_FORMAT = "composite-3mf";

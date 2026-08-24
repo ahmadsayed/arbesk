@@ -3,7 +3,7 @@ import {
   validateManifest,
   getSceneNodes,
   bumpManifestVersion,
-} from "../../frontend/src/js/asset-core/manifest/utils.ts";
+} from "@arbesk/asset-core/manifest/utils.js";
 
 describe("asset-core manifest module", () => {
   test("exposes the zod manifestSchema", () => {

@@ -9,18 +9,18 @@
  */
 import {
   createArbeskCore,
-} from "../../frontend/src/js/asset-core/facade.ts";
-import type { ArbeskCore } from "../../frontend/src/js/asset-core/facade.ts";
+} from "@arbesk/asset-core/facade.js";
+import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import type {
   IpfsReadPort,
   IpfsWritePort,
-} from "../../frontend/src/js/asset-core/types.ts";
-import type { UploadCredential } from "../../frontend/src/js/asset-core/ipfs/upload-with-credential.ts";
+} from "@arbesk/asset-core/types.js";
+import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
 import {
   compress,
   decompress,
   isGzipped,
-} from "../../frontend/src/js/asset-core/utils/compression.ts";
+} from "@arbesk/asset-core/utils/compression.js";
 import type { StorageAdapter } from "./storage/index.ts";
 
 /** Buffer/Uint8Array → standalone ArrayBuffer (no shared-pool aliasing). */

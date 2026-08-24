@@ -14,8 +14,8 @@ import {
   getBlobFromRemoteIPFS,
 } from "../ipfs/remote-ipfs.ts";
 import { initAssetCoreBrowser } from "../asset-core-init.ts";
-import type { ArbeskCore } from "../asset-core/facade.ts";
-import { getAssetState } from "../asset-core/domain/asset.ts";
+import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
+import { getAssetState } from "@arbesk/asset-core/domain/asset.js";
 import { announceStatus } from "./api.ts";
 
 /**

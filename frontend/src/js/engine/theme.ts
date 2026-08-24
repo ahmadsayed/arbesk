@@ -6,7 +6,7 @@
  * colors so a single token change themes the entire studio.
  */
 
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 /**
  * Read a CSS custom property from :root, trimmed of whitespace.

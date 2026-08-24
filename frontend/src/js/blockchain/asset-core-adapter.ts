@@ -4,7 +4,7 @@
  * resolution). Lives outside asset-core by design: this file IS the
  * environment-specific implementation.
  */
-import type { ChainPort, HashPort, StoragePort } from "../asset-core/types.ts";
+import type { ChainPort, HashPort, StoragePort } from "@arbesk/asset-core/types.js";
 import { encodePacked, keccak256 } from "viem/utils";
 import { getActiveContract } from "./wallet.ts";
 import { resolveUserEmail } from "../services/api.ts";

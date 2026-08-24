@@ -31,7 +31,7 @@ async function loadModule() {
 
   const emit = jest.fn();
   await jest.unstable_mockModule(
-    "../../frontend/src/js/asset-core/events/bus.js",
+    "@arbesk/asset-core/events/bus.js",
     () => ({
       emit,
       EVENTS: { ASSET_PUBLISH_PENDING: "assetPublishPending" },

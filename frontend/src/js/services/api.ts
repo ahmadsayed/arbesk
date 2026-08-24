@@ -5,15 +5,15 @@
  * parametric version saving, and standardized error handling.
  */
 
-import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import * as wallet from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
   getContractAddress as getNetworkContractAddress,
 } from "../blockchain/network-config.ts";
 import { log, warn, error } from "../utils/log.ts";
-import { base64ToBytes } from "../asset-core/utils/encoding.ts";
-import { identityMatrix } from "../asset-core/utils/collections.ts";
+import { base64ToBytes } from "@arbesk/asset-core/utils/encoding.js";
+import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
 /** Base URL for all API calls */
 const API_BASE = "/api/v1";
@@ -521,7 +521,7 @@ async function followupScaleCompensation(sourceCid: string, resultBytes: Uint8Ar
       "../ipfs/remote-ipfs.ts"
     );
     const { boundsFromGlbBytes, computeGltfBounds, compensationScale } =
-      await import("../asset-core/gltf/bounds.ts");
+      await import("@arbesk/asset-core/gltf/bounds.js");
     const toBounds = (bytes: Uint8Array) =>
       boundsFromGlbBytes(bytes) ??
       computeGltfBounds(JSON.parse(new TextDecoder().decode(bytes)));
@@ -912,7 +912,7 @@ export async function resolveUserEmail(email: string): Promise<{ exists: boolean
 
 // ─── IPFS Upload Credential ───────────────────────────────────────────────────
 
-import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
 export type { UploadCredential };
 
 /**

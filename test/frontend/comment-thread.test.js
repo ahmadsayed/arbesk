@@ -10,7 +10,7 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     COMMENT_THREAD_STATUS: "commentThread:status",
   };
 
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/events/bus.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
     __esModule: true,
     emit: emitMock,
     EVENTS: EVENTS_MOCK,
@@ -21,7 +21,7 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     walletState: { get: () => wallet },
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/domain/asset.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
     __esModule: true,
     getActiveAssetId: () => asset.activeAssetId,
     getActiveAssetManifestCid: () => asset.activeAssetManifestCid,
@@ -53,7 +53,7 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     getEditorSetVersion: jest.fn().mockResolvedValue(1),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/asset-core/gltf/merkle-editors.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/gltf/merkle-editors.js", () => ({
     __esModule: true,
     getProof: jest.fn(() => null),
   }));

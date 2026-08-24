@@ -7,7 +7,7 @@
  * own core so custom kernels/ports stay consistent app-wide.
  */
 
-import { createArbeskCore, type ArbeskCore } from "./asset-core/facade.ts";
+import { createArbeskCore, type ArbeskCore } from "@arbesk/asset-core/facade.js";
 import { createBrowserIpfsPorts } from "./ipfs/asset-core-adapter.ts";
 import { createBrowserPlatformPorts } from "./blockchain/asset-core-adapter.ts";
 import { createWorkerExecutor } from "./workers/worker-executor.ts";

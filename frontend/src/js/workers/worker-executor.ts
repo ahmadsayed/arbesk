@@ -7,7 +7,7 @@
  * refs over HTTP itself), which asset-core deliberately does not know about,
  * so it is injected here at the environment boundary.
  */
-import type { ExecutorPort, ExecutorOp } from "../asset-core/types.ts";
+import type { ExecutorPort, ExecutorOp } from "@arbesk/asset-core/types.js";
 import { getGlTFWorkerPool, isWorkerPoolAvailable } from "./gltf-worker-pool.ts";
 import { gatewayBase } from "../ipfs/remote-ipfs.ts";
 

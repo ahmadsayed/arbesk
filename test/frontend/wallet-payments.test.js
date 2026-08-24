@@ -64,7 +64,7 @@ async function loadModule() {
       },
     })
   );
-  await jest.unstable_mockModule("../../frontend/src/js/asset-core/events/bus.js", () => ({
+  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
     emit: jest.fn(),
     EVENTS: { WALLET_GENERATION_PAID: "walletGenerationPaid" },
   }));

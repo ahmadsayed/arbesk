@@ -8,7 +8,7 @@
  * UserOperation). This is what makes contract *writes* independent of wallet
  * kind — the prerequisite for deleting the CDP EIP-1193 shim.
  */
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getSigner } from "./wallet-core.ts";
 import { resolveGas } from "./wallet-gas.ts";
 import type { MinedReceipt } from "./wallet-ports.ts";

@@ -9,7 +9,7 @@
  * from a manifest and invalidates every in-memory snapshot.
  */
 
-import { on, emit, EVENTS } from "../asset-core/events/bus.ts";
+import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { MOD } from "../utils/platform.ts";
 import { state } from "./state.ts";
 import { applyTransformMatrix, stageNodeTransform } from "./transforms.ts";

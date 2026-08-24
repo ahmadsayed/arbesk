@@ -15,6 +15,19 @@ module.exports = function renderScripts() {
 
     sh.cp('-R', sourcePath, destPath);
 
+    // Vendor the built @arbesk/asset-core workspace package so the browser
+    // import map (head.pug) can resolve the bare specifier. The package is
+    // compiled by the root `prebuild:frontend` hook; skip quietly when absent.
+    const assetCoreDist = upath.resolve(upath.dirname(__filename), '../../packages/asset-core/dist');
+    const assetCoreDest = upath.resolve(destPath, 'js/vendor/asset-core');
+    if (sh.test('-e', assetCoreDist)) {
+        sh.mkdir('-p', assetCoreDest);
+        sh.cp('-R', `${assetCoreDist}/*`, assetCoreDest);
+        console.log('### INFO: Vendored @arbesk/asset-core into dist/js/vendor/asset-core');
+    } else {
+        console.log('### WARN: packages/asset-core/dist missing — run `npm run build:packages` first');
+    }
+
     // Copy shared root-level constants so browser imports like
     // `../../../../constants/chains.js` resolve at runtime.
     const sourcePathConstants = upath.resolve(upath.dirname(__filename), '../../constants');

@@ -12,17 +12,17 @@ import {
   burn,
 } from "../blockchain/wallet.ts";
 import { requireWallet } from "../blockchain/wallet-guard.ts";
-import { loadEditorList, getEditorSetVersion } from "../asset-core/domain/editors.ts";
-import { getProof } from "../asset-core/gltf/merkle-editors.ts";
+import { loadEditorList, getEditorSetVersion } from "@arbesk/asset-core/domain/editors.js";
+import { getProof } from "@arbesk/asset-core/gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
 import { unpinAssetCids } from "./api.ts";
 import { showConfirmDialog } from "../ui/dialog.ts";
 import { showToast } from "../ui/toasts.ts";
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
-import { getActiveAssetTokenId, getActiveAssetId } from "../asset-core/domain/asset.ts";
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { getActiveAssetTokenId, getActiveAssetId } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
-import { identityMatrix } from "../asset-core/utils/collections.ts";
+import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
 /**
  * Remove an asset from its parent collection.

@@ -6,7 +6,7 @@ import {
 
 // Root/proof construction is a client-side concern (the backend only verifies),
 // so the test builds trees directly with @openzeppelin/merkle-tree — the same
-// library the frontend uses (frontend/src/js/asset-core/gltf/merkle-editors.js) — keeping
+// library the frontend uses (packages/asset-core/src/gltf/merkle-editors.js) — keeping
 // leaf/tree encoding byte-compatible with MerkleProof.sol by construction.
 
 const ZERO_ROOT =

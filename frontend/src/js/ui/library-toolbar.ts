@@ -1,6 +1,6 @@
 import { libraryState } from "../state/library-state.ts";
 import type { LibraryCollectionItem } from "../state/library-state.ts";
-import { on, EVENTS } from "../asset-core/events/bus.ts";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { escapeHtml } from "../utils/html.ts";
 import { showToast } from "./toasts.ts";
 import { uploadFileToCollection } from "../services/library-ops.ts";

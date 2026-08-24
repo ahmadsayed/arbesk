@@ -2,8 +2,8 @@ import {
   initRuntime,
   getRuntime,
   _resetRuntimeForTesting,
-} from "../../frontend/src/js/asset-core/runtime.ts";
-import { memoryStorage } from "../../frontend/src/js/asset-core/storage/memory.ts";
+} from "@arbesk/asset-core/runtime.js";
+import { memoryStorage } from "@arbesk/asset-core/storage/memory.js";
 
 const fakeRead = { getJSON: async () => ({}), getBytes: async () => new ArrayBuffer(0), getRawBytes: async () => new ArrayBuffer(0) };
 const fakeWrite = { write: async () => "bafyfake", writeJSON: async () => "bafyfake" };
@@ -40,7 +40,7 @@ test("default kernels: base64 round-trips", () => {
 
 test("default kernels: murmur3 matches utils/hash", async () => {
   const { murmur3_128 } = await import(
-    "../../frontend/src/js/asset-core/utils/hash.ts"
+    "@arbesk/asset-core/utils/hash.js"
   );
   const rt = initRuntime({ ipfsRead: fakeRead, ipfsWrite: fakeWrite });
   const bytes = new Uint8Array([1, 2, 3]);

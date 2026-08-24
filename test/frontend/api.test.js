@@ -36,7 +36,7 @@ async function loadApi(options = {}) {
   const fetchMock = options.fetchMock || jest.fn();
   global.fetch = fetchMock;
 
-  await jest.unstable_mockModule("../../frontend/src/js/asset-core/events/bus.js", () => ({
+  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
     on: jest.fn(),
     EVENTS: { WALLET_DISCONNECTED: "wallet:disconnected" },
   }));
