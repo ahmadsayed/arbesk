@@ -12,15 +12,11 @@ import { walletState } from "../state/wallet-state.ts";
 import { getContractArtifact } from "../services/api.ts";
 import { showToast } from "../ui/toasts.ts";
 import { isIpfsCidReachable } from "../ipfs/remote-ipfs.ts";
-import { web3, getActiveConnectionSource, getActiveContract } from "./wallet-core.ts";
+import { getActiveConnectionSource, getActiveContract } from "./wallet-core.ts";
 import { isSmartWalletSupported } from "./smart-wallet-support.ts";
-import { resolveGas } from "./wallet-gas.ts";
+import { sendContractMethod } from "./wallet-send.ts";
 
 // ── Helpers ──
-
-function _getWeb3() {
-  return web3 || window.web3 || null;
-}
 
 function _canPublishWithCurrentWallet() {
   const source = getActiveConnectionSource();
@@ -41,27 +37,6 @@ function _canPublishWithCurrentWallet() {
 // ── Asset Publishing ──
 
 /**
- * Send a contract transaction optimistically: emit ASSET_PUBLISH_PENDING as
- * soon as the wallet broadcasts a transaction hash (EOA PromiEvent), then
- * still await the mined receipt for the authoritative result. Callers keep
- * their receipt-based flow unchanged.
- * @param {*} promiEvent - web3 tx.send() PromiEvent
- * @param {object} payload - pending-event payload (tokenId, …)
- * @returns {Promise<*>} the mined receipt
- */
-function _awaitReceiptWithPendingEvent(
-  promiEvent: any,
-  payload: Record<string, unknown>
-) {
-  if (typeof promiEvent.once === "function") {
-    promiEvent.once("transactionHash", (hash: string) => {
-      emit(EVENTS.ASSET_PUBLISH_PENDING, { ...payload, txHash: hash });
-    });
-  }
-  return promiEvent;
-}
-
-/**
  * @param {string} tokenURI
  * @param {number|string} tokenId
  * @param {string} editorRoot
@@ -75,8 +50,7 @@ async function publishAsset(
   editorListUri: string
 ) {
   const c = getActiveContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
+  if (!walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -89,13 +63,10 @@ async function publishAsset(
       editorRoot,
       editorListUri
     );
-    const gas = await resolveGas(tx, walletState.get().walletAddress);
-    const receipt = await _awaitReceiptWithPendingEvent(
-      tx.send({
-        from: walletState.get().walletAddress,
-        gas,
-      }),
-      { tokenId, tokenURI }
+    const receipt = await sendContractMethod(
+      walletState.get().contractAddress,
+      tx,
+      { pendingPayload: { tokenId, tokenURI } }
     );
 
     emit(EVENTS.ASSET_PUBLISHED, {
@@ -132,8 +103,7 @@ async function updateAssetURI(
   proof: string[]
 ) {
   const c = getActiveContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
+  if (!walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -145,13 +115,10 @@ async function updateAssetURI(
       newTokenURI,
       proof
     );
-    const gas = await resolveGas(tx, walletState.get().walletAddress);
-    const receipt = await _awaitReceiptWithPendingEvent(
-      tx.send({
-        from: walletState.get().walletAddress,
-        gas,
-      }),
-      { tokenId, tokenURI: newTokenURI }
+    const receipt = await sendContractMethod(
+      walletState.get().contractAddress,
+      tx,
+      { pendingPayload: { tokenId, tokenURI: newTokenURI } }
     );
     return receipt.transactionHash;
   } catch (error) {
@@ -203,8 +170,7 @@ async function updateEditors(
   callerProof: string[]
 ) {
   const c = getActiveContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
+  if (!walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -214,11 +180,10 @@ async function updateEditors(
     const tx = c.methods[
       "updateEditors(uint256,bytes32,string,uint8,bytes32[])"
     ](tokenId, newRoot, newListUri, callerRole, callerProof);
-    const gas = await resolveGas(tx, walletState.get().walletAddress);
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas,
-    });
+    const receipt = await sendContractMethod(
+      walletState.get().contractAddress,
+      tx
+    );
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateEditors failed:", error);
@@ -235,8 +200,7 @@ async function updateEditors(
  */
 async function burn(tokenId: number | string, proof: string[]) {
   const c = getActiveContract();
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress || !c) {
+  if (!walletState.get().walletAddress || !c) {
     console.error("Wallet or contract not ready");
     return null;
   }
@@ -293,11 +257,10 @@ async function burn(tokenId: number | string, proof: string[]) {
 
   try {
     const tx = c.methods["burn(uint256,bytes32[])"](tokenId, proof);
-    const gas = await resolveGas(tx, walletState.get().walletAddress);
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas,
-    });
+    const receipt = await sendContractMethod(
+      walletState.get().contractAddress,
+      tx
+    );
 
     emit(EVENTS.ASSET_BURNED, {
       tokenId,

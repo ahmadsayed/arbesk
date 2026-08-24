@@ -35,6 +35,9 @@ import {
   CHAIN_IDS,
   SUPPORTED_CHAIN_IDS,
 } from "../../../../constants/chains.js";
+import type { Signer } from "./wallet-ports.ts";
+import { createEoaSigner } from "./wallet-eoa.ts";
+import { buildUserIdentity } from "./auth-mechanism.ts";
 
 // ─── Network definitions (shared with wallet-network.ts) ───
 
@@ -68,6 +71,9 @@ let web3: any = null;
 let contract: any = null;
 let contractAddress: string | null = null;
 let lowBalanceToastId: any = null;
+
+/** Injected on-chain Signer for the active connection (see wallet-ports.ts). */
+let signer: Signer | null = null;
 
 // ─── Constants ───
 
@@ -241,7 +247,7 @@ async function autoConnectWallet() {
       try {
         const _t0 = performance.now();
         const _mark = (label: string) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
-        const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.ts");
+        const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail, createCdpReadWeb3 } = await import("./wallet-cdp.ts");
         _mark("sdkModuleImport");
         // warmupCdpClient was kicked off at page load (app-init.js) — this
         // awaits the shared in-flight promise, so the config fetch + SDK
@@ -252,8 +258,9 @@ async function autoConnectWallet() {
           const cdpResult = await autoConnectCdpWallet();
           _mark("autoConnectCdpWallet");
           if (cdpResult) {
-            web3Provider = cdpResult.provider;
-            web3 = newWeb3(cdpResult.provider);
+            // CDP: read-only Web3 (public RPC) for contract reads; writes go
+            // through the injected CdpSigner. No EIP-1193 provider.
+            web3 = createCdpReadWeb3();
             window.web3 = web3;
             activeConnectionSource = "cdp";
             const email = getCdpEmail() || cdpResult.email || null;
@@ -347,7 +354,21 @@ async function _finishWalletSetup(
     eoaAddress: eoaAddress || address,
     walletSource: activeConnectionSource,
     email,
+    identity: buildUserIdentity({
+      address,
+      email: email || null,
+      source: activeConnectionSource,
+    }),
   });
+
+  // Build the injected Signer for this connection source. CDP uses the native
+  // signer built during the OTP flow; EOA/WalletConnect wrap the active web3.
+  if (activeConnectionSource === "cdp") {
+    const { getCdpSigner } = await import("./wallet-cdp.ts");
+    signer = getCdpSigner();
+  } else {
+    signer = createEoaSigner(web3, address);
+  }
 
   let chainId = Number(await web3.eth.getChainId());
   walletState.set({ chainId });
@@ -521,15 +542,14 @@ async function connectWallet() {
     const { provider, source, walletName, walletRdns, walletAddress: cdpWalletAddress, eoaAddress: cdpEoaAddress } = result;
 
     if (source === "cdp") {
-      // CDP smart account — provider, addresses are already resolved by the modal
-      web3Provider = provider;
-      web3 = newWeb3(provider);
+      // CDP smart account — read-only Web3 + native signer; no EIP-1193 provider.
+      const { createCdpReadWeb3, setCdpEmail } = await import("./wallet-cdp.ts");
+      web3 = createCdpReadWeb3();
       window.web3 = web3;
       activeConnectionSource = "cdp";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "cdp");
       if (result.email) {
-        const { setCdpEmail } = await import("./wallet-cdp.ts");
         setCdpEmail(result.email);
       }
       await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress, result.email || null);
@@ -591,6 +611,14 @@ function getActiveConnectionSource() {
 }
 
 /**
+ * The injected on-chain Signer for the active connection, or null when
+ * disconnected. Prefer this over `web3` for signing/sending.
+ */
+function getSigner(): Signer | null {
+  return signer;
+}
+
+/**
  * Sign out and disconnect wallet.
  */
 async function disconnectWallet() {
@@ -620,6 +648,7 @@ async function disconnectWallet() {
   _activeWalletRdns = null;
   web3Provider = null;
   web3 = null;
+  signer = null;
   contract = null;
   contractAddress = null;
   walletState.reset();
@@ -655,6 +684,7 @@ export {
   authenticateUser,
   getActiveConnectionSource,
   getActiveContract,
+  getSigner,
 };
 
 export { web3 as walletWeb3 };

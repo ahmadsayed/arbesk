@@ -24,7 +24,7 @@ describe("uploadToIPFSWithCredential", () => {
     const cid = await uploadToIPFSWithCredential(
       new Uint8Array([1, 2, 3]),
       "one.bin",
-      { backend: "kubo", apiUrl: "http://127.0.0.1:5001" }
+      { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001" }
     );
 
     expect(cid).toBe("bafyOne");
@@ -44,7 +44,7 @@ describe("uploadToIPFSWithCredential", () => {
     const cid = await uploadToIPFSWithCredential(
       "hello",
       "pin.txt",
-      { backend: "pinata", url: "https://uploads.pinata.cloud/signed" }
+      { strategy: "presigned-put", url: "https://uploads.pinata.cloud/signed" }
     );
 
     expect(cid).toBe("bafyPinata");
@@ -63,7 +63,7 @@ describe("uploadBatchToIPFSWithCredential", () => {
   it("returns an empty map for an empty file list", async () => {
     const result = await uploadBatchToIPFSWithCredential(
       [],
-      { backend: "kubo", apiUrl: "http://127.0.0.1:5001" }
+      { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001" }
     );
     expect(result).toBeInstanceOf(Map);
     expect(result.size).toBe(0);
@@ -85,7 +85,7 @@ describe("uploadBatchToIPFSWithCredential", () => {
         { name: "a.bin", data: new Uint8Array([1, 2, 3]) },
         { name: "b.bin", data: new Uint8Array([4, 5, 6]) },
       ],
-      { backend: "kubo", apiUrl: "http://127.0.0.1:5001" }
+      { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001" }
     );
 
     expect(result.get("a.bin")).toBe("bafyA");
@@ -115,7 +115,7 @@ describe("uploadBatchToIPFSWithCredential", () => {
         { name: "x.bin", data: new Uint8Array([1]) },
         { name: "y.bin", data: new Uint8Array([2]) },
       ],
-      { backend: "pinata", url: "https://uploads.pinata.cloud/signed" }
+      { strategy: "presigned-put", url: "https://uploads.pinata.cloud/signed" }
     );
 
     expect(result.get("x.bin")).toBe("bafyP1");
@@ -129,7 +129,7 @@ describe("uploadBatchToIPFSWithCredential", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ cid: "bafyP2" }) });
 
     const credential = {
-      backend: "pinata",
+      strategy: "presigned-put",
       urls: [
         "https://uploads.pinata.cloud/signed-a",
         "https://uploads.pinata.cloud/signed-b",
@@ -158,7 +158,7 @@ describe("uploadBatchToIPFSWithCredential", () => {
   });
 
   it("throws a clear error when a Pinata credential pool is exhausted", async () => {
-    const credential = { backend: "pinata", urls: [] };
+    const credential = { strategy: "presigned-put", urls: [] };
 
     await expect(
       uploadBatchToIPFSWithCredential(
@@ -184,7 +184,7 @@ describe("uploadToIPFSWithCredential Pinata retry", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ cid: "bafyRetried" }) });
 
     const credential = {
-      backend: "pinata",
+      strategy: "presigned-put",
       urls: ["https://uploads.pinata.cloud/signed-1", "https://uploads.pinata.cloud/signed-2"],
     };
 
@@ -209,7 +209,7 @@ describe("uploadToIPFSWithCredential Pinata retry", () => {
     const cid = await uploadToIPFSWithCredential(
       new Uint8Array([1]),
       "retry.bin",
-      { backend: "pinata", url: "https://uploads.pinata.cloud/signed" }
+      { strategy: "presigned-put", url: "https://uploads.pinata.cloud/signed" }
     );
 
     expect(cid).toBe("bafyRetried");

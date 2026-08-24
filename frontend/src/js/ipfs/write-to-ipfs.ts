@@ -73,7 +73,7 @@ export async function writeToIPFS(
       : rawPayload?.byteLength ?? rawPayload?.length ?? 0;
 
   console.log(
-    `[${ts()}] ${TAG} uploading ${byteLength} bytes via ${cred.backend} as ${finalFilename}`
+    `[${ts()}] ${TAG} uploading ${byteLength} bytes via ${cred.strategy} as ${finalFilename}`
   );
 
   const cid = await uploadToIPFSWithCredential(
@@ -82,7 +82,7 @@ export async function writeToIPFS(
     cred
   );
 
-  console.log(`[${ts()}] ${TAG} ${cred.backend} stored → ${cid}`);
+  console.log(`[${ts()}] ${TAG} ${cred.strategy} stored → ${cid}`);
   return cid;
 }
 

@@ -13,11 +13,12 @@ const TX_HASH = "0xTxHash";
 
 let _connectionSource = "injected";
 let _recordTx;
+let _signerSend;
 
 function _mockContract() {
   _recordTx = {
     estimateGas: jest.fn().mockResolvedValue(100000n),
-    send: jest.fn().mockResolvedValue({ transactionHash: TX_HASH }),
+    encodeABI: jest.fn().mockReturnValue("0xDATA"),
   };
   return {
     methods: {
@@ -28,6 +29,16 @@ function _mockContract() {
 
 async function loadModule() {
   const contract = _mockContract();
+  _signerSend = jest.fn().mockResolvedValue({
+    hash: "0xUserOp",
+    wait: jest.fn().mockResolvedValue({ transactionHash: TX_HASH, status: true }),
+  });
+  const signer = {
+    getAddress: () => WALLET,
+    getSignerAddress: () => WALLET,
+    sendTransaction: _signerSend,
+  };
+
   await jest.unstable_mockModule(
     "../../frontend/src/js/blockchain/wallet-core.js",
     () => ({
@@ -39,6 +50,7 @@ async function loadModule() {
       },
       getActiveContract: () => contract,
       getActiveConnectionSource: () => _connectionSource,
+      getSigner: () => signer,
     })
   );
   await jest.unstable_mockModule(
@@ -77,10 +89,12 @@ describe("recordGeneration gas handling", () => {
 
     expect(txHash).toBe(TX_HASH);
     expect(_recordTx.estimateGas).not.toHaveBeenCalled();
-    expect(_recordTx.send).toHaveBeenCalledWith({
-      from: WALLET,
-      gas: 2_000_000,
-    });
+    expect(_signerSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: CONTRACT_ADDRESS,
+        gas: 2_000_000,
+      })
+    );
   });
 
   test("EOA wallet: estimates gas and pads by 20%", async () => {
@@ -90,10 +104,9 @@ describe("recordGeneration gas handling", () => {
 
     expect(txHash).toBe(TX_HASH);
     expect(_recordTx.estimateGas).toHaveBeenCalledWith({ from: WALLET });
-    expect(_recordTx.send).toHaveBeenCalledWith({
-      from: WALLET,
-      gas: 120000,
-    });
+    expect(_signerSend).toHaveBeenCalledWith(
+      expect.objectContaining({ gas: 120000 })
+    );
   });
 
   test("EOA wallet: falls back to the padded default when estimation fails", async () => {
@@ -103,9 +116,8 @@ describe("recordGeneration gas handling", () => {
     const txHash = await recordGeneration("node-1", "a prompt");
 
     expect(txHash).toBe(TX_HASH);
-    expect(_recordTx.send).toHaveBeenCalledWith({
-      from: WALLET,
-      gas: Math.floor(120000 * 1.2),
-    });
+    expect(_signerSend).toHaveBeenCalledWith(
+      expect.objectContaining({ gas: Math.floor(120000 * 1.2) })
+    );
   });
 });

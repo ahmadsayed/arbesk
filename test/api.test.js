@@ -17,7 +17,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let mockWeb3Receipt;
   let logSpy;
   let createSession;
-  let _resetStorage;
 
   beforeAll(async () => {
     // Suppress noisy production logs/warnings during API tests.
@@ -268,17 +267,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     const { app: importedApp } = await import("../src/index.ts");
     app = importedApp;
-
-    // Import after mocking ipfs-http-client so the storage adapter factory
-    // resolves the mock instead of the real ESM-only client under Jest.
-    const storageMod = await import("../src/api/storage/index.ts");
-    _resetStorage = storageMod._resetStorage;
   });
 
   beforeEach(() => {
-    // Storage adapter is a singleton selected by IPFS_BACKEND; reset it
-    // between tests so Pinata/Kubo backend changes take effect cleanly.
-    _resetStorage();
     _resetRateLimiters();
     _resetRegistry();
     ipfsStorage.clear();
@@ -1933,9 +1924,9 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         .set("Authorization", await makeSessionHeader())
         .send({});
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("backend");
+      expect(res.body).toHaveProperty("strategy");
       // Kubo mode in tests (no IPFS_BACKEND set):
-      expect(res.body.backend).toBe("kubo");
+      expect(res.body.strategy).toBe("kubo-api");
       expect(res.body).toHaveProperty("apiUrl");
       // master secret must never appear
       expect(JSON.stringify(res.body)).not.toMatch(/PINATA_JWT|Bearer/i);
@@ -1975,7 +1966,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       expect(res.status).toBe(200);
       expect(res.body.credentials).toHaveLength(3);
       for (const cred of res.body.credentials) {
-        expect(cred.backend).toBe("kubo");
+        expect(cred.strategy).toBe("kubo-api");
         expect(cred).toHaveProperty("apiUrl");
       }
       expect(JSON.stringify(res.body)).not.toMatch(/PINATA_JWT|Bearer/i);

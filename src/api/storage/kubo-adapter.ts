@@ -91,7 +91,7 @@ export function createKuboAdapter(
     },
 
     async mintUploadCredential() {
-      return { backend: "kubo", apiUrl, gateway: gatewayBase, reusable: true };
+      return { strategy: "kubo-api", apiUrl, gateway: gatewayBase, reusable: true };
     },
 
     /**
@@ -99,7 +99,7 @@ export function createKuboAdapter(
      * batch mint just returns `count` copies of the same credential.
      */
     async mintUploadCredentials(count) {
-      const credential = { backend: "kubo", apiUrl, gateway: gatewayBase, reusable: true };
+      const credential = { strategy: "kubo-api", apiUrl, gateway: gatewayBase, reusable: true };
       return Array.from({ length: count }, () => credential);
     },
 

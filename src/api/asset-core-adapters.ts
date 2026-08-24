@@ -3,8 +3,9 @@
  * onto the existing storage adapter (src/api/storage/, kubo or pinata via
  * IPFS_BACKEND) and expose a ready-to-use ArbeskCore for backend modules.
  *
- * The storage adapter is resolved lazily inside each method (getStorage()
- * caches the process-wide adapter, selected by env at first use).
+ * The storage adapter is injected as a parameter — the composition root
+ * builds it once (createStorageAdapter) and passes it in, so these ports stay
+ * environment-agnostic like everything else in asset-core.
  */
 import {
   createArbeskCore,
@@ -20,7 +21,7 @@ import {
   decompress,
   isGzipped,
 } from "../../frontend/src/js/asset-core/utils/compression.ts";
-import { getStorage } from "./storage/index.ts";
+import type { StorageAdapter } from "./storage/index.ts";
 
 /** Buffer/Uint8Array → standalone ArrayBuffer (no shared-pool aliasing). */
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -35,20 +36,20 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * getJSON/getBytes auto-gunzip (decomposed components are stored gzipped),
  * getRawBytes returns the exact stored bytes.
  */
-export function createBackendIpfsReadPort(): IpfsReadPort {
+export function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort {
   return {
     async getJSON(cid) {
-      const raw = await getStorage().catBytes(cid);
+      const raw = await storage.catBytes(cid);
       const bytes = isGzipped(raw) ? decompress(raw) : raw;
       return JSON.parse(new TextDecoder().decode(bytes));
     },
     async getBytes(cid) {
-      const raw = await getStorage().catBytes(cid);
+      const raw = await storage.catBytes(cid);
       const bytes = isGzipped(raw) ? decompress(raw) : raw;
       return toArrayBuffer(bytes);
     },
     async getRawBytes(cid) {
-      return toArrayBuffer(await getStorage().catBytes(cid));
+      return toArrayBuffer(await storage.catBytes(cid));
     },
   };
 }
@@ -59,7 +60,7 @@ export function createBackendIpfsReadPort(): IpfsReadPort {
  * ignored (the backend writes through its own storage adapter, not the
  * browser's signed-URL flow).
  */
-export function createBackendIpfsWritePort(): IpfsWritePort {
+export function createBackendIpfsWritePort(storage: StorageAdapter): IpfsWritePort {
   const write: IpfsWritePort["write"] = async (
     data,
     filename,
@@ -75,7 +76,7 @@ export function createBackendIpfsWritePort(): IpfsWritePort {
             ? new TextEncoder().encode(data)
             : new Uint8Array(await (data as Blob).arrayBuffer());
     if (options.compress) bytes = compress(bytes);
-    return getStorage().add(bytes, filename);
+    return storage.add(bytes, filename);
   };
   return {
     write,
@@ -94,9 +95,9 @@ export function createBackendIpfsWritePort(): IpfsWritePort {
  * (default), no credentials/chain/hash ports (generation follow-ups only
  * compose; they never upload or touch editor lists).
  */
-export function createBackendCore(): ArbeskCore {
+export function createBackendCore(storage: StorageAdapter): ArbeskCore {
   return createArbeskCore({
-    ipfsRead: createBackendIpfsReadPort(),
-    ipfsWrite: createBackendIpfsWritePort(),
+    ipfsRead: createBackendIpfsReadPort(storage),
+    ipfsWrite: createBackendIpfsWritePort(storage),
   });
 }

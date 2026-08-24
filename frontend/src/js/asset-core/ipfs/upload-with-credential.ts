@@ -19,17 +19,21 @@ const uploadLimiter = createConcurrencyLimiter(UPLOAD_CONCURRENCY);
  * `getUploadCredentials()` in services/api.js).
  */
 export interface UploadCredential {
-  /** "pinata" or "kubo" */
-  backend: string;
-  /** Pinata presigned URL (single-use) */
+  /** Upload topology the client should use — presigned URL or a Kubo RPC.
+   *  (extensible to "server-proxy" and "helia" without touching the SDK). */
+  strategy: "presigned-put" | "kubo-api";
+  /** Presigned URL (single-use). Pinata today; Storj later. */
   url?: string;
-  /** Pooled Pinata URLs, one per file */
+  /** Pooled presigned URLs, one per file (single-use backends). */
   urls?: string[];
-  /** Kubo API base URL */
+  /** Object key (= CID) carried for presigned backends whose response does
+   *  not echo a CID (Storj). Unused by Pinata, whose response returns the CID. */
+  key?: string;
+  /** Kubo API base URL (kubo-api strategy). */
   apiUrl?: string;
-  /** Gateway base URL returned alongside the credential */
+  /** Gateway base URL returned alongside the credential. */
   gateway?: string;
-  /** Whether one credential can be reused for a whole batch (Kubo) */
+  /** Whether one credential can be reused for a whole batch (kubo-api). */
   reusable?: boolean;
 }
 
@@ -56,18 +60,18 @@ function toBlob(data: Uint8Array | ArrayBuffer | Blob | string): Blob {
  * in place, which is safe here because JS is single-threaded and each pop
  * happens synchronously before the upload's first `await`.
  */
-function nextPinataUrl(credential: UploadCredential): string {
+function nextPresignedUrl(credential: UploadCredential): string {
   if (credential.urls) {
     const url = credential.urls.shift();
     if (!url) {
-      throw new Error("uploadToPinata: credential pool exhausted");
+      throw new Error("uploadToPresignedPut: credential pool exhausted");
     }
     return url;
   }
   return credential.url as string;
 }
 
-async function uploadToPinata(
+async function uploadToPresignedPut(
   blob: Blob,
   filename: string,
   credential: UploadCredential,
@@ -77,7 +81,7 @@ async function uploadToPinata(
   form.append("file", blob, filename);
   form.append("network", "public");
   const start = performance.now();
-  const url = nextPinataUrl(credential);
+  const url = nextPresignedUrl(credential);
 
   try {
     const res = await fetch(url, {
@@ -88,13 +92,13 @@ async function uploadToPinata(
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`Pinata upload failed: ${res.status} - ${text}`);
+      throw new Error(`Presigned upload failed: ${res.status} - ${text}`);
     }
     const json = (await res.json()) as any;
-    const cid = json?.data?.cid || json?.cid;
-    if (!cid) throw new Error("Pinata upload returned no CID");
+    const cid = json?.data?.cid || json?.cid || credential.key;
+    if (!cid) throw new Error("Presigned upload returned no CID");
     console.log(
-      `[${ts()}] [UPLOAD] pinata stored → ${cid} ` +
+      `[${ts()}] [UPLOAD] presigned stored → ${cid} ` +
         `(${Math.round(performance.now() - start)}ms)`
     );
     return cid;
@@ -106,16 +110,16 @@ async function uploadToPinata(
     // credential has no replacement, so it retries the same url as before.
     if (attempt === 1 && /HTTP2|fetch|network|aborted/i.test(error.message)) {
       console.warn(
-        `[${ts()}] [UPLOAD] Pinata upload error after ` +
+        `[${ts()}] [UPLOAD] presigned upload error after ` +
           `${Math.round(performance.now() - start)}ms, retrying once: ${error.message}`
       );
-      return uploadToPinata(blob, filename, credential, attempt + 1);
+      return uploadToPresignedPut(blob, filename, credential, attempt + 1);
     }
     throw error;
   }
 }
 
-async function uploadToKubo(
+async function uploadToKuboApi(
   blob: Blob,
   filename: string,
   credential: UploadCredential
@@ -153,7 +157,8 @@ async function uploadToKubo(
  * pre-compressed bytes). Keeping compression out of this module lets it run
  * safely inside a Web Worker without pulling in the fflate dependency.
  *
- * @param credential - Upload credential (Pinata presigned URL or Kubo API URL).
+ * @param credential - Upload credential (a self-describing strategy token:
+ *   `presigned-put` presigned URL or `kubo-api` API URL).
  * @returns CID
  */
 export async function uploadToIPFSWithCredential(
@@ -165,20 +170,20 @@ export async function uploadToIPFSWithCredential(
 
   return uploadLimiter.run(async () => {
     const cid =
-      credential.backend === "pinata"
-        ? await uploadToPinata(blob, filename, credential)
-        : await uploadToKubo(blob, filename, credential);
+      credential.strategy === "presigned-put"
+        ? await uploadToPresignedPut(blob, filename, credential)
+        : await uploadToKuboApi(blob, filename, credential);
     return cid;
   });
 }
 
 /**
- * Upload multiple files in one batch when the backend supports it.
+ * Upload multiple files in one batch when the strategy supports it.
  *
- * Kubo supports true multi-file `add` via multipart. Pinata signed URLs are
- * strictly single-use, so this instead uploads concurrently with one pooled
- * url per file (`credential.urls`, minted via `getUploadCredentials()`) -
- * bounded by the per-credential limiter. Callers must pre-compress data and
+ * `kubo-api` supports true multi-file `add` via multipart. `presigned-put`
+ * URLs are strictly single-use, so this instead uploads concurrently with one
+ * pooled url per file (`credential.urls`, minted via `getUploadCredentials()`)
+ * - bounded by the per-credential limiter. Callers must pre-compress data and
  * use `.gz` filenames if they want compression. Returns a map of
  * filename -> CID.
  *
@@ -192,8 +197,8 @@ export async function uploadBatchToIPFSWithCredential(
     return new Map();
   }
 
-  if (credential.backend === "kubo") {
-    return uploadBatchToKubo(files, credential);
+  if (credential.strategy === "kubo-api") {
+    return uploadBatchToKuboApi(files, credential);
   }
 
   const results = new Map<string, string>();
@@ -212,7 +217,7 @@ export async function uploadBatchToIPFSWithCredential(
  * Sends all files in one multipart POST and parses the newline-delimited JSON
  * responses. Each response line contains { Name, Hash, Size } for one file.
  */
-async function uploadBatchToKubo(
+async function uploadBatchToKuboApi(
   files: Array<{ name: string; data: Uint8Array | string }>,
   credential: UploadCredential
 ): Promise<Map<string, string>> {

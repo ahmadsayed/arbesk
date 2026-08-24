@@ -69,7 +69,7 @@ describe("estimateGlbUploadCount", () => {
 describe("reserveFollowUpCredential", () => {
   it("carves one URL off a Pinata pool without mutating the original", () => {
     const credential = {
-      backend: "pinata",
+      strategy: "presigned-put",
       gateway: "https://gw/ipfs/",
       urls: ["url-1", "url-2", "url-3"],
       reusable: true,
@@ -79,7 +79,7 @@ describe("reserveFollowUpCredential", () => {
       reserveFollowUpCredential(credential);
 
     expect(followUpCredential).toEqual({
-      backend: "pinata",
+      strategy: "presigned-put",
       url: "url-3",
       gateway: "https://gw/ipfs/",
       reusable: false,
@@ -92,7 +92,7 @@ describe("reserveFollowUpCredential", () => {
 
   it("does not reserve when the pool has only one URL (nothing for the worker to spend)", () => {
     const credential = {
-      backend: "pinata",
+      strategy: "presigned-put",
       gateway: "https://gw/ipfs/",
       urls: ["url-1"],
       reusable: true,
@@ -107,7 +107,7 @@ describe("reserveFollowUpCredential", () => {
 
   it("passes kubo credentials through unchanged", () => {
     const credential = {
-      backend: "kubo",
+      strategy: "kubo-api",
       apiUrl: "http://127.0.0.1:5001",
       gateway: "http://127.0.0.1:8080/ipfs/",
       reusable: true,

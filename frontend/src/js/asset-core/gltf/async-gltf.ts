@@ -109,11 +109,11 @@ const MAX_POOLED_CREDENTIALS = 200;
 
 /**
  * Mint an upload credential sized for a batch of `count` files in one round
- * trip. Kubo credentials are already reusable across unlimited uploads, so
- * `count` only matters for Pinata: its signed URLs are strictly single-use
- * (verified: a second upload against the same URL gets HTTP 409 "duplicate
- * file id"), so uploading N files previously meant N sequential
- * backend + Pinata mint round trips. This mints all N up front instead.
+ * trip. Reusable strategies (kubo-api) cover unlimited uploads with one
+ * credential, so `count` only matters for single-use strategies
+ * (`presigned-put`): each signed URL accepts exactly one upload, so uploading
+ * N files previously meant N sequential backend + sign round trips. This mints
+ * all N up front instead and pools them into one credential.
  *
  * @param {number} count
  * @returns {Promise<PooledUploadCredential>}
@@ -125,9 +125,9 @@ async function getPooledUploadCredential(count: number): Promise<PooledUploadCre
   if (!first) {
     throw new Error("getPooledUploadCredential: no credentials returned");
   }
-  if (first.backend !== "pinata") return first;
+  if (first.reusable) return first;
   return {
-    backend: "pinata",
+    strategy: "presigned-put",
     gateway: first.gateway,
     urls: credentials.map((c) => (c.url as string)),
     reusable: true,
@@ -135,7 +135,7 @@ async function getPooledUploadCredential(count: number): Promise<PooledUploadCre
 }
 
 /**
- * Carve one URL off a pooled Pinata credential for a follow-up upload that
+ * Carve one URL off a pooled presigned credential for a follow-up upload that
  * happens on the main thread AFTER an executor call that also draws from the
  * pool.
  *
@@ -144,26 +144,29 @@ async function getPooledUploadCredential(count: number): Promise<PooledUploadCre
  * `credential.urls` as it uploads and the main thread's copy is never touched.
  * Without this, a post-executor upload (e.g. the composite JSON) would pop
  * url[0] from the still-full main-thread copy - a URL the worker already spent
- * inside its clone - and get HTTP 409 "duplicate file id" from Pinata.
+ * inside its clone - and get HTTP 409 "duplicate file id".
  *
  * Reserving one URL up front sidesteps the clone desync entirely: the worker
  * gets a pool one shorter, the main thread gets a single dedicated URL, and
  * neither can collide with the other.
  *
- * No-op for kubo (or an already single-shot credential) since there's no
- * clone-desync risk to guard against.
+ * No-op for reusable strategies (or an already single-shot credential) since
+ * there's no clone-desync risk to guard against.
  *
  * @param {PooledUploadCredential} credential
  * @returns {{workerCredential: PooledUploadCredential, followUpCredential: PooledUploadCredential}}
  */
-function reserveFollowUpCredential(credential: PooledUploadCredential) {
-  if (credential?.backend === "pinata" && credential.urls && credential.urls.length > 1) {
+function reserveFollowUpCredential(credential: PooledUploadCredential): {
+  workerCredential: PooledUploadCredential;
+  followUpCredential: PooledUploadCredential;
+} {
+  if (credential?.urls && credential.urls.length > 1) {
     const urls = credential.urls.slice();
     const reservedUrl = urls.pop();
     return {
       workerCredential: { ...credential, urls },
       followUpCredential: {
-        backend: "pinata",
+        strategy: "presigned-put",
         url: reservedUrl,
         gateway: credential.gateway,
         reusable: false,

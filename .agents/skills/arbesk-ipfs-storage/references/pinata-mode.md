@@ -72,15 +72,15 @@ parallelized server-side, then hand one URL to each file.
   `{ credentials: [...] }`. Session-gated, rate-limited like `/upload-url`.
 - **Frontend**: `getUploadCredentials(count)` in `services/api.ts` hits the
   batch route. `frontend/src/js/asset-core/gltf/async-gltf.ts` wraps it in
-  `getPooledUploadCredential(count)`, which for Pinata reshapes the array
-  into a single pool-credential object: `{ backend: 'pinata', urls: [...],
-  gateway, reusable: true }` (kubo passes through unchanged — already
-  reusable). `count` is estimated as an **upper bound**
+  `getPooledUploadCredential(count)`, which for single-use strategies reshapes
+  the array into a single pool-credential object: `{ strategy: 'presigned-put',
+  urls: [...], gateway, reusable: true }` (kubo-api passes through unchanged —
+  already reusable). `count` is estimated as an **upper bound**
   (`buffers.length + images.length + 1`, clamped to 200) via
   `estimateUploadCount`/`estimateGlbUploadCount` — over-minting is harmless
   (unused signed URLs just expire), under-minting would starve mid-upload.
-- **Consumption**: `frontend/src/js/ipfs/upload-with-credential.ts`'s
-  `uploadToPinata()` calls `nextPinataUrl(credential)`, which does
+- **Consumption**: `frontend/src/js/asset-core/ipfs/upload-with-credential.ts`'s
+  `uploadToPresignedPut()` calls `nextPresignedUrl(credential)`, which does
   `credential.urls.shift()` for a pool credential (or returns the plain
   `credential.url` for a legacy single-shot credential). Safe without a lock
   because JS is single-threaded and the shift happens synchronously before
@@ -88,10 +88,10 @@ parallelized server-side, then hand one URL to each file.
   `uploadBatchToIPFSWithCredential`/the concurrency limiter in
   `upload-with-credential.js` can't interleave mid-shift.
 - **Retry fix (bundled with the pool)**: the old retry-once-on-network-error
-  logic in `uploadToPinata` retried against the *same* URL. If that URL had
+  logic in `uploadToPresignedPut` retried against the *same* URL. If that URL had
   actually reached Pinata before the client saw a network error, retrying
   guaranteed a false 409. With a pool, retry now draws a *fresh* URL via the
-  same `nextPinataUrl` call — the bug only remains for legacy single-shot
+  same `nextPresignedUrl` call — the bug only remains for legacy single-shot
   credentials, which have no replacement URL to draw from.
 
 ### The clone-boundary gotcha

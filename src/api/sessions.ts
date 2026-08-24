@@ -13,7 +13,7 @@
 
 import express from "express";
 import crypto from "crypto";
-import { verifySiwe } from "./siwe-verify.ts";
+import { verifyProof } from "./proof-verify.ts";
 import { validateBody } from "./validation.ts";
 import { createSessionSchema } from "./schemas.ts";
 import type { Request, Response } from "express";
@@ -101,9 +101,11 @@ export default function sessionRouter() {
 
   /**
    * POST /api/v1/sessions
-   * Create a session by proving wallet ownership via SIWE (EIP-4361).
+   * Create a session by proving identity. Wallet logins prove ownership via
+   * SIWE (EIP-4361); future OAuth/OIDC logins prove identity via an ID token.
    *
-   * Body: { message: string, signature: string, eoaAddress?: string }
+   * Body: { proof: { kind: "siwe", message, signature, eoaAddress? }
+   *              | { kind: "oidc", provider, idToken, nonce? } }
    * Returns: { token: string, expiresAt: number }
    */
   router.post(
@@ -111,25 +113,23 @@ export default function sessionRouter() {
     validateBody(createSessionSchema),
     async (req: Request, res: Response) => {
     try {
-      const { message, signature, eoaAddress } = req.body;
+      const { proof } = req.body;
 
-      // Verify SIWE message
-      const result = await verifySiwe(message, signature, {
+      const result = await verifyProof(proof, {
         expectedDomain: req.headers.host,
-        eoaAddress,
       });
 
       if (!result.valid) {
-        console.log(`[SESSION] rejected SIWE - ${result.error}`);
+        console.log(`[SESSION] rejected proof - ${result.error}`);
         return res.status(400).json({
           error: {
-            code: "INVALID_SIWE",
+            code: "INVALID_PROOF",
             message: result.error,
           },
         });
       }
 
-      console.log(`[SESSION] verified SIWE - address=${result.address}`);
+      console.log(`[SESSION] verified proof - address=${result.address}`);
 
       if (!result.address) {
         throw new Error("Authentication verification returned no address");

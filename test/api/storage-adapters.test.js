@@ -93,7 +93,7 @@ describe("kubo adapter", () => {
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
     expect(await a.mintUploadCredential()).toEqual({
-      backend: "kubo",
+      strategy: "kubo-api",
       apiUrl: "http://127.0.0.1:5001",
       gateway: "http://127.0.0.1:8080/ipfs/",
       reusable: true,
@@ -109,7 +109,7 @@ describe("kubo adapter", () => {
     expect(creds).toHaveLength(3);
     for (const cred of creds) {
       expect(cred).toEqual({
-        backend: "kubo",
+        strategy: "kubo-api",
         apiUrl: "http://127.0.0.1:5001",
         gateway: "http://127.0.0.1:8080/ipfs/",
         reusable: true,
@@ -191,7 +191,7 @@ describe("pinata adapter", () => {
     });
     const cred = await a.mintUploadCredential();
     expect(cred).toEqual({
-      backend: "pinata",
+      strategy: "presigned-put",
       url: "https://uploads.pinata.cloud/signed-1",
       gateway: "https://gw.mypinata.cloud/ipfs/",
       reusable: false,
@@ -215,7 +215,7 @@ describe("pinata adapter", () => {
     expect(new Set(urls).size).toBe(3);
     for (const cred of creds) {
       expect(cred).toEqual({
-        backend: "pinata",
+        strategy: "presigned-put",
         url: expect.stringContaining("https://uploads.pinata.cloud/signed-"),
         gateway: "https://gw.mypinata.cloud/ipfs/",
         reusable: false,
@@ -573,7 +573,7 @@ describe("pinata adapter", () => {
 
       const cred = await a.mintUploadCredential();
       expect(cred).toEqual({
-        backend: "pinata",
+        strategy: "presigned-put",
         url: expect.stringContaining("https://uploads.pinata.cloud/signed-"),
         gateway: "https://gw.mypinata.cloud/ipfs/",
         reusable: false,

@@ -39,10 +39,6 @@ async function loadModule() {
     NETWORK_CONFIGS: {},
   }));
 
-  await jest.unstable_mockModule("../src/api/storage/index.ts", () => ({
-    getStorage: jest.fn(() => ({ cat: _cat })),
-  }));
-
   return import("../src/api/token-indexer.ts");
 }
 
@@ -52,7 +48,7 @@ beforeEach(() => {
 
 test("indexes editor-shared tokens from EditorSetChanged events", async () => {
   const { getIndexer } = await loadModule();
-  const indexer = getIndexer(TEST_CHAIN);
+  const indexer = getIndexer(TEST_CHAIN, { cat: _cat });
   indexer._saveState = () => {};
 
   const owner = "0x0000000000000000000000000000000000000AAA".toLowerCase();
@@ -90,7 +86,7 @@ test("indexes editor-shared tokens from EditorSetChanged events", async () => {
 
 test("removes shared token when it is burned (transferred to zero)", async () => {
   const { getIndexer } = await loadModule();
-  const indexer = getIndexer(TEST_CHAIN);
+  const indexer = getIndexer(TEST_CHAIN, { cat: _cat });
   indexer._saveState = () => {};
 
   const editor = "0x0000000000000000000000000000000000000BBB".toLowerCase();

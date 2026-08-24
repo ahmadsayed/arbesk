@@ -10,12 +10,12 @@
 
 import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut } from "@coinbase/cdp-core";
 import { log, error, warn } from "../utils/log.ts";
-import { emit, EVENTS } from "../asset-core/events/bus.ts";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import {
   isSmartWalletSupported,
   SMART_WALLET_SUPPORTED_CHAIN_IDS,
 } from "./smart-wallet-support.ts";
+import type { Signer } from "./wallet-ports.ts";
 
 export { isSmartWalletSupported, SMART_WALLET_SUPPORTED_CHAIN_IDS };
 
@@ -29,12 +29,10 @@ let _currentEoaAccount: any = null;
 /** Smart account address (user.evmSmartAccountObjects?.[0]?.address) */
 let _smartAccountAddress: string | null = null;
 
-let _provider: any = null;
+/** Native Signer built from the current session (the de-shim target). */
+let _signer: Signer | null = null;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-/** Base Sepolia chain ID in hex */
-const BASE_SEPOLIA_CHAIN_ID_HEX = "0x" + CHAIN_IDS.BASE_TESTNET.toString(16); // "0x14a34"
 
 /** CDP network name for Base Sepolia */
 const CDP_NETWORK_BASE_SEPOLIA = "base-sepolia";
@@ -153,11 +151,15 @@ export async function resetCdpStorage(): Promise<void> {
 function _applyCdpSession(
   eoaAccount: any,
   smartAccountAddress: string | null
-): any {
+): void {
   _currentEoaAccount = eoaAccount;
   _smartAccountAddress = smartAccountAddress;
-  _provider = eoaAccount ? buildCdpEip1193Provider(eoaAccount, smartAccountAddress) : null;
-  return _provider;
+  _signer = eoaAccount ? createCdpSigner(eoaAccount, smartAccountAddress) : null;
+}
+
+/** The native CDP Signer for the current session, or null when signed out. */
+export function getCdpSigner(): Signer | null {
+  return _signer;
 }
 
 // ─── Authentication ──────────────────────────────────────────────────────────
@@ -182,7 +184,7 @@ export async function requestEmailOtp(email: string): Promise<{ flowId: string }
 
 /**
  * Complete the email OTP flow with the user-provided code.
- * Populates module-level state (_currentEoaAccount, _smartAccountAddress, _provider).
+ * Populates module-level state (_currentEoaAccount, _smartAccountAddress, _signer).
  * @param flowId - from requestEmailOtp
  * @param otp - the code the user entered
  */
@@ -253,7 +255,6 @@ export async function verifyEmailOtp(
 export async function autoConnectCdpWallet(): Promise<{
   eoaAddress: string;
   smartAccountAddress: string;
-  provider: any;
   email: string | null;
 } | null> {
   if (!_cdpInitialized) {
@@ -282,7 +283,6 @@ export async function autoConnectCdpWallet(): Promise<{
     return {
       eoaAddress: eoaAccount.address,
       smartAccountAddress: smartAccountAddress ?? eoaAccount.address,
-      provider: _provider,
       email: (user as any).email || null,
     };
   } catch (err) {
@@ -359,173 +359,81 @@ async function _waitForUserOperationTransaction(
   throw new Error(`Timed out waiting for UserOperation ${userOpHash}`);
 }
 
-// ─── EIP-1193 Provider Shim ──────────────────────────────────────────────────
+// ─── Native Signer (the de-shim target) ─────────────────────────────────────
 
 /**
- * Decode a hex-encoded UTF-8 string (e.g. "0x68656c6c6f") to its plain-text
- * form. If the string is not 0x-prefixed, return it as-is.
- * Web3.js encodes the SIWE message as a hex string before calling personal_sign.
+ * Build a native `Signer` over the CDP SDK — no EIP-1193 shim. The on-chain
+ * owner is the smart account (or the EOA when none); the signer is the
+ * embedded EOA. `sendTransaction` resolves on broadcast (UserOperation hash)
+ * and `wait()` blocks until the op is mined, returning the real tx hash.
  */
-function hexToUtf8OrKeepHex(hexOrPlain: any): string {
-  if (typeof hexOrPlain !== "string" || !hexOrPlain.startsWith("0x")) {
-    return hexOrPlain;
-  }
-  try {
-    return Web3.utils.hexToUtf8(hexOrPlain);
-  } catch {
-    // If decoding fails, return the original hex (e.g. for raw binary data)
-    return hexOrPlain;
-  }
-}
-
-/**
- * Build an EIP-1193 provider object that wraps the CDP SDK.
- * Existing Web3.js contract code (contract.methods.X().send(), etc.) uses
- * this provider transparently — no changes needed in callers.
- *
- * Routing:
- *  - eth_accounts / eth_requestAccounts → [smartAccountAddress]
- *  - eth_chainId                        → "0x14a34" (Base Sepolia, 84532)
- *  - personal_sign(message, account)    → signEvmMessage(eoaAccount.address, message)
- *  - eth_sign(account, message)         → signEvmMessage(eoaAccount.address, message)
- *  - eth_sendTransaction({ to, value, data }) → sendUserOperation → userOpHash
- *  - all other methods                  → forwarded to Base Sepolia public RPC
- *
- * @param eoaAccount - user.evmAccountObjects[0] from CDP
- * @param smartAccountAddress - user.evmSmartAccountObjects[0].address from CDP
- */
-export function buildCdpEip1193Provider(
+export function createCdpSigner(
   eoaAccount: any,
-  smartAccountAddress: any
-): any {
-  // The on-chain token owner is the smart account; fall back to EOA if absent
+  smartAccountAddress: string | null
+): Signer {
   const effectiveAddress = smartAccountAddress ?? eoaAccount.address;
 
-  let _rpcCallId = 1;
-
-  /**
-   * Forward a JSON-RPC call to the Base Sepolia public RPC endpoint.
-   */
-  async function forwardToRpc(
-    method: string,
-    params: unknown[]
-  ): Promise<unknown> {
-    const id = _rpcCallId++;
-    const body = JSON.stringify({ jsonrpc: "2.0", method, params: params ?? [], id });
-    const res = await fetch(BASE_SEPOLIA_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
-    if (!res.ok) {
-      throw new Error(`RPC HTTP error ${res.status} for method ${method}`);
-    }
-    const json = await res.json();
-    if (json.error) {
-      const msg = json.error.message || JSON.stringify(json.error);
-      throw new Error(`RPC error for ${method}: ${msg}`);
-    }
-    return json.result;
-  }
-
   return {
-    /**
-     * EIP-1193 request method.
-     */
-    async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
-      log("CDP:EIP1193", method, params);
-
-      switch (method) {
-        // ── Account / network identity ─────────────────────────────
-        case "eth_accounts":
-        case "eth_requestAccounts":
-          return [effectiveAddress];
-
-        case "eth_chainId":
-          return BASE_SEPOLIA_CHAIN_ID_HEX;
-
-        case "net_version":
-          return String(CHAIN_IDS.BASE_TESTNET);
-
-        // ── Signing ───────────────────────────────────────────────
-        case "personal_sign": {
-          // Web3.js passes (hexEncodedMessage, address)
-          const [rawMessage] = params ?? [];
-          const message = hexToUtf8OrKeepHex(rawMessage);
-          log("CDP:EIP1193", "personal_sign message (decoded):", message.slice(0, 80));
-          const personalSignResult = await signEvmMessage({ evmAccount: eoaAccount.address, message });
-          return personalSignResult.signature;
-        }
-
-        case "eth_sign": {
-          // Legacy eth_sign passes (address, message) — note reversed order
-          const [, rawMessage] = params ?? [];
-          const message = hexToUtf8OrKeepHex(rawMessage);
-          const ethSignResult = await signEvmMessage({ evmAccount: eoaAccount.address, message });
-          return ethSignResult.signature;
-        }
-
-        // ── Transactions ──────────────────────────────────────────
-        case "eth_sendTransaction": {
-          const txParams = (params?.[0] ?? {}) as any;
-          const { to, value, data } = txParams;
-
-          if (!to) {
-            throw new Error("eth_sendTransaction: missing 'to' field");
-          }
-
-          let valueBigInt: bigint;
-          try {
-            valueBigInt = BigInt(value ?? "0x0");
-          } catch {
-            valueBigInt = 0n;
-          }
-
-          log("CDP:EIP1193", "eth_sendTransaction → sendUserOperation", { to, valueBigInt, data });
-
-          const result = await sendUserOperation({
-            evmSmartAccount: smartAccountAddress,
-            network: CDP_NETWORK_BASE_SEPOLIA,
-            calls: [
-              {
-                to,
-                value: valueBigInt,
-                data: data ?? "0x",
-              },
-            ],
-            // Use CDP's project-scoped paymaster. For production deployments that
-            // need to hide a custom paymaster API key, switch to paymasterUrl
-            // pointing at a public HTTPS backend proxy.
-            useCdpPaymaster: true,
-          });
-
-          const userOpHash = result.userOperationHash;
-          log("CDP:EIP1193", "UserOperation submitted, hash:", userOpHash);
-
-          // Optimistic UI: the UserOperation is accepted by the bundler, so
-          // listeners (library card, save flow) can update immediately instead
-          // of waiting for block inclusion. The authoritative confirmation
-          // still comes from the mined tx below + ASSET_PUBLISHED.
-          emit(EVENTS.ASSET_PUBLISH_PENDING, { txHash: userOpHash });
-
-          // CDP returns a UserOperation hash, but Web3.js expects an EVM transaction
-          // hash so it can poll eth_getTransactionReceipt. Poll CDP until the
-          // UserOperation is mined and we have the on-chain txHash, then return it.
-          const txHash = await _waitForUserOperationTransaction(userOpHash, smartAccountAddress);
-          log("CDP:EIP1193", "UserOperation mined, txHash:", txHash);
-          return txHash;
-        }
-
-        // ── Everything else → public RPC passthrough ──────────────
-        default:
-          return forwardToRpc(method, params ?? []);
-      }
+    source: "cdp",
+    getAddress: () => effectiveAddress,
+    getSignerAddress: () => eoaAccount.address,
+    getChainId: async () => CHAIN_IDS.BASE_TESTNET,
+    signMessage: async (message: string) => {
+      const result = await signEvmMessage({
+        evmAccount: eoaAccount.address,
+        message,
+      });
+      return result.signature;
     },
+    sendTransaction: async (tx) => {
+      let valueBigInt: bigint;
+      try {
+        valueBigInt = BigInt(tx.value ?? 0n);
+      } catch {
+        valueBigInt = 0n;
+      }
 
-    // EIP-1193 event emitter shims. CDP smart accounts are fixed to Base Sepolia
-    // and a single address, so there are no account/chain changes to broadcast.
-    // Wallet-core attaches these listeners unconditionally for EIP-1193 providers.
-    on() {},
-    removeListener() {},
+      const result = await sendUserOperation({
+        evmSmartAccount: smartAccountAddress as any,
+        network: CDP_NETWORK_BASE_SEPOLIA,
+        calls: [
+          {
+            to: tx.to as any,
+            value: valueBigInt,
+            data: (tx.data ?? "0x") as any,
+          },
+        ],
+        // Use CDP's project-scoped paymaster. For production deployments that
+        // need to hide a custom paymaster API key, switch to paymasterUrl
+        // pointing at a public HTTPS backend proxy.
+        useCdpPaymaster: true,
+      });
+
+      const userOpHash = result.userOperationHash;
+      log("CDP", "UserOperation submitted, hash:", userOpHash);
+
+      return {
+        hash: userOpHash,
+        wait: async () => {
+          const transactionHash = await _waitForUserOperationTransaction(
+            userOpHash,
+            smartAccountAddress
+          );
+          return { transactionHash, status: true };
+        },
+      };
+    },
   };
+}
+
+// ─── Read-only Web3 for CDP (no shim) ────────────────────────────────────────
+
+/**
+ * Build a read-only Web3 instance pointed at the Base Sepolia public RPC.
+ * CDP contract *reads* (`.call()`, `estimateGas`, `getChainId`, `getBalance`)
+ * go through this; *writes* go through `createCdpSigner` (sponsored
+ * UserOperations), never through this provider.
+ */
+export function createCdpReadWeb3(): any {
+  return new Web3(new Web3.providers.HttpProvider(BASE_SEPOLIA_RPC_URL));
 }

@@ -24,6 +24,7 @@ export {
   walletWeb3,
   getActiveConnectionSource,
   getActiveContract,
+  getSigner,
   NETWORKS,
 } from "./wallet-core.ts";
 

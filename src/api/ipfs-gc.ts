@@ -15,7 +15,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { web3, getWeb3, getContractAddress } from "../config.ts";
-import { getStorage } from "./storage/index.ts";
+import type { StorageAdapter } from "./storage/index.ts";
 import { walkManifestChain } from "./manifest-chain-walker.ts";
 import type { Contract } from "web3";
 import type { EventLog } from "web3-eth-contract";
@@ -111,6 +111,7 @@ interface GCContractEntry {
 async function buildReachableSet(
   tokenIds: string[],
   contracts: GCContractEntry[],
+  storage: StorageAdapter,
 ): Promise<{ reachable: Set<string>; errors: string[]; tokensProcessed: number }> {
   const reachable = new Set<string>();
   const errors: string[] = [];
@@ -138,6 +139,7 @@ async function buildReachableSet(
             recurseIntoSources: true,
             recurseIntoCollectionAssets: true,
           },
+          storage,
         );
         for (const cid of allReachable) reachable.add(cid);
         if (walkErrors?.length) errors.push(...walkErrors);
@@ -195,7 +197,7 @@ export interface IpfsGCResult {
 /**
  * Run the IPFS reachability garbage collector.
  */
-export async function runIpfsGC(options: IpfsGCOptions = {}): Promise<IpfsGCResult> {
+export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAdapter): Promise<IpfsGCResult> {
   const dryRun = options.dryRun !== false;
   const maxUnpin =
     options.maxUnpin === undefined ? Infinity : Number(options.maxUnpin);
@@ -272,6 +274,7 @@ export async function runIpfsGC(options: IpfsGCOptions = {}): Promise<IpfsGCResu
   const { reachable, errors: walkErrors, tokensProcessed } = await buildReachableSet(
     Array.from(allLiveTokenIds),
     contracts,
+    storage,
   );
   if (walkErrors?.length) errors.push(...walkErrors);
 
@@ -282,7 +285,7 @@ export async function runIpfsGC(options: IpfsGCOptions = {}): Promise<IpfsGCResu
   // 3. List currently pinned CIDs.
   let pinned: string[] = [];
   try {
-    pinned = await getStorage().listPinned();
+    pinned = await storage.listPinned();
     console.log(`[GC] pinned CIDs listed | count=${pinned.length}`);
   } catch (e) {
     const msg = `list pinned: ${(e as Error).message}`;
@@ -309,7 +312,7 @@ export async function runIpfsGC(options: IpfsGCOptions = {}): Promise<IpfsGCResu
     const toUnpin = orphans.slice(0, maxUnpin);
     for (const cid of toUnpin) {
       try {
-        await getStorage().unpin(cid);
+        await storage.unpin(cid);
         unpinned++;
         console.log(`[GC] unpinned orphan → ${cid}`);
       } catch (e) {

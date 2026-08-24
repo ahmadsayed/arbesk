@@ -307,7 +307,7 @@ export function createPinataAdapter(
       pruneExpired();
       const [entry] = pool.length ? pool.splice(0, 1) : await mintFreshEntries(1);
       scheduleRefill();
-      return { backend: "pinata", url: entry.url, gateway: gatewayBase, reusable: false };
+      return { strategy: "presigned-put", url: entry.url, gateway: gatewayBase, reusable: false };
     },
 
     /**
@@ -326,7 +326,7 @@ export function createPinataAdapter(
       const fresh = shortfall > 0 ? await mintFreshEntries(shortfall) : [];
       scheduleRefill();
       return [...fromPool, ...fresh].map((entry) => ({
-        backend: "pinata",
+        strategy: "presigned-put",
         url: entry.url,
         gateway: gatewayBase,
         reusable: false,

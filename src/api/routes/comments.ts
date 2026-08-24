@@ -2,7 +2,7 @@ import express from "express";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
 import { archiveCommentsForAsset } from "../comments-archive.ts";
-import { getStorage } from "../storage/index.ts";
+import type { StorageAdapter } from "../storage/index.ts";
 import { validateBody } from "../validation.ts";
 import { snapshotCommentsSchema } from "../schemas.ts";
 import { buildAssetTag } from "../asset-tag.ts";
@@ -25,8 +25,10 @@ const Router = express.Router;
  */
 export default function commentsRoutes({
   getContractAddress,
+  storage,
 }: {
   getContractAddress: (chainId: number | null) => string | null;
+  storage: StorageAdapter;
 }) {
   const router = Router();
 
@@ -59,7 +61,7 @@ export default function commentsRoutes({
         console.log(`[ARCHIVE] snapshotting comments for ${assetTag}`);
         const { cid: archiveCid, eventCount } = await archiveCommentsForAsset(
           assetTag,
-          getStorage(),
+          storage,
         );
         console.log(
           `[ARCHIVE] snapshot complete - ${eventCount} events → ${archiveCid}`,

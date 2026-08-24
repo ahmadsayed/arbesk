@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
 import { getWeb3, getContractAddress, NETWORK_CONFIGS } from "../config.ts";
-import { getStorage } from "./storage/index.ts";
+import type { StorageAdapter } from "./storage/index.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, "../../.data");
@@ -80,14 +80,16 @@ class TokenIndexer {
   initialized: boolean;
   lastCatchUpAt: number;
   _catchUpPromise: Promise<void> | null;
+  storage: StorageAdapter;
 
-  constructor(chainId: number) {
+  constructor(chainId: number, storage: StorageAdapter) {
     this.chainId = chainId;
     this.contractAddress = getContractAddress(chainId);
     this.web3 = getWeb3(chainId);
     this.contract = new this.web3.eth.Contract(INDEXER_ABI, this.contractAddress);
     this.deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
     this.stateFile = path.join(DATA_DIR, `token-indexer-${chainId}.json`);
+    this.storage = storage;
 
     this.ownership = new Map();
     this.tokenEditors = new Map();
@@ -207,7 +209,7 @@ class TokenIndexer {
         this._removeTokenEditors(tokenId);
         return;
       }
-      const raw = await getStorage().cat(cid);
+      const raw = await this.storage.cat(cid);
       const list = JSON.parse(raw);
       if (!Array.isArray(list)) {
         this._removeTokenEditors(tokenId);
@@ -413,10 +415,10 @@ const indexers = new Map<number, TokenIndexer>();
 /**
  * Get or create a TokenIndexer for a chain.
  */
-export function getIndexer(chainId: number): TokenIndexer {
+export function getIndexer(chainId: number, storage: StorageAdapter): TokenIndexer {
   const id = Number(chainId);
   if (!indexers.has(id)) {
-    indexers.set(id, new TokenIndexer(id));
+    indexers.set(id, new TokenIndexer(id, storage));
   }
   return indexers.get(id) as TokenIndexer;
 }
@@ -424,7 +426,7 @@ export function getIndexer(chainId: number): TokenIndexer {
 /**
  * Initialize indexers for all configured networks.
  */
-export async function initIndexers(): Promise<void> {
+export async function initIndexers(storage: StorageAdapter): Promise<void> {
   const chainIds = Object.keys(NETWORK_CONFIGS).map(Number);
   await Promise.all(
     chainIds.map(async (chainId) => {
@@ -436,7 +438,7 @@ export async function initIndexers(): Promise<void> {
         return;
       }
       try {
-        await getIndexer(chainId).init();
+        await getIndexer(chainId, storage).init();
       } catch (err) {
         console.warn(
           `[${ts()}] [INDEXER] initial catch-up failed for chain ${chainId} ` +

@@ -19,6 +19,14 @@ dotenv.config({ path: path.resolve(__dirnameRoot, "../blockchain/.env") });
 const { default: api } = await import("./api/index.ts");
 const { createChatProxy } = await import("./api/chat-proxy.ts");
 const { initIndexers } = await import("./api/token-indexer.ts");
+const { createStorageAdapter } = await import("./api/storage/index.ts");
+const { createBackendCore } = await import("./api/asset-core-adapters.ts");
+
+// Composition root: build the storage adapter and the asset-core facade once,
+// then inject them into the API — no module reaches into a global to obtain
+// its storage.
+const storage = createStorageAdapter();
+const core = createBackendCore(storage);
 
 export const app = express();
 const port = process.env.PORT || 9090;
@@ -141,7 +149,7 @@ app.use(
 );
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use("/api", api());
+app.use("/api", api({ storage, core }));
 
 // ─── SPA fallback ───
 // Studio and Library are served from a single document (app.html) with a
@@ -157,7 +165,7 @@ createChatProxy(server);
 
 if (process.env.NODE_ENV !== "test") {
   server.listen(port);
-  initIndexers().catch((err: unknown) => {
+  initIndexers(storage).catch((err: unknown) => {
     console.error("[API] failed to initialize token indexers:", err);
   });
   console.log("[BOOT] Server started at http://localhost:" + port);

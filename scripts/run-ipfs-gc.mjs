@@ -17,6 +17,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runIpfsGC } from "../src/api/ipfs-gc.ts";
+import { createStorageAdapter } from "../src/api/storage/index.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -54,11 +55,13 @@ async function main() {
     `[GC-CLI] starting | dryRun=${dryRun} maxUnpin=${opts.maxUnpin} chainId=${opts.chainId}`,
   );
 
+  const storage = createStorageAdapter();
+
   const result = await runIpfsGC({
     dryRun,
     maxUnpin: opts.maxUnpin,
     chainId: opts.chainId,
-  });
+  }, storage);
 
   console.log("\n[GC-CLI] result:");
   console.log(JSON.stringify(result, null, 2));

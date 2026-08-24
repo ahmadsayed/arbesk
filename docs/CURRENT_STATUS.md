@@ -61,7 +61,7 @@ src/
     ├── errors.ts               # Standardized error response helper
     ├── ipfs-utils.ts           # catManifest() with timeout/abort
     ├── manifest-utils.ts       # getSceneNodes, bumpManifestVersion
-    ├── asset-core-adapters.ts  # Backend IpfsReadPort/IpfsWritePort over storage adapter + createBackendCore()
+    ├── asset-core-adapters.ts  # Backend IpfsReadPort/IpfsWritePort over injected storage adapter + createBackendCore(storage)
     ├── nostr-relay.ts          # Shared relay primitives (used by chat-proxy + comments-archive)
     ├── rate-limiter.ts         # In-memory per-wallet rate limiter
     ├── token-indexer.ts        # Chunked eth_getLogs backfill for owned + editor-shared token discovery
@@ -91,7 +91,7 @@ src/
 | GET | `/generations/:taskId` | Session | Polls an async generation task (running / success / failed) |
 | POST | `/generations/balance` | Session | Returns the Tripo3D credit balance for a BYOK key (transient use, no rate limit) |
 | POST | `/assets/snapshot-comments` | Session | Snapshots asset-level Nostr comment thread to IPFS archive; requires `assetId`; returns empty archive if the relay is unreachable |
-| POST | `/ipfs/upload-url` | Session | Mints a short-lived presigned upload credential (Pinata/Kubo) |
+| POST | `/ipfs/upload-url` | Session | Mints a short-lived upload credential as a strategy token (`strategy: presigned-put | kubo-api`) |
 | POST | `/ipfs/unpin` | Session | Walks up to 100 manifests, collects all CIDs, unpins them |
 | GET | `/contracts/:name/abi` | None | Serves compiled ABI JSON from `blockchain/artifacts/` |
 | GET | `/indexer/owned` | None | Returns owned token IDs for an address+chainId via chunked eth_getLogs backfill; supports `force=true` to bypass cache |

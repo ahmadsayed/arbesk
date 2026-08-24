@@ -1,5 +1,6 @@
 import express from "express";
 import { getIndexer } from "../token-indexer.ts";
+import type { StorageAdapter } from "../storage/index.ts";
 import { validateQuery } from "../validation.ts";
 import { ownedQuerySchema, sharedQuerySchema } from "../schemas.ts";
 import { sendError } from "../errors.ts";
@@ -22,8 +23,9 @@ function ts(): string {
 async function withFreshIndexer(
   chainId: number,
   force: boolean,
+  storage: StorageAdapter,
 ): Promise<ReturnType<typeof getIndexer>> {
-  const indexer = getIndexer(chainId);
+  const indexer = getIndexer(chainId, storage);
   const catchUpStart = Date.now();
   const msSinceCatchUp = Date.now() - indexer.lastCatchUpAt;
   if (force || msSinceCatchUp > 30000) {
@@ -59,7 +61,7 @@ async function withFreshIndexer(
  * GET /api/v1/indexer/shared?address=0x...&chainId=10143
  * Returns token IDs where the address is an editor but not the current owner.
  */
-export default function indexerRoutes() {
+export default function indexerRoutes(storage: StorageAdapter) {
   const router = Router();
 
   router.get("/owned", validateQuery(ownedQuerySchema), async (req, res) => {
@@ -70,7 +72,7 @@ export default function indexerRoutes() {
     };
 
     try {
-      const indexer = await withFreshIndexer(chainId, force);
+      const indexer = await withFreshIndexer(chainId, force, storage);
       res.json({
         chainId,
         address: address.toLowerCase(),
@@ -91,7 +93,7 @@ export default function indexerRoutes() {
     };
 
     try {
-      const indexer = await withFreshIndexer(chainId, force);
+      const indexer = await withFreshIndexer(chainId, force, storage);
       res.json({
         chainId,
         address: address.toLowerCase(),

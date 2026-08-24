@@ -128,7 +128,7 @@ The system currently combines:
 | `src/api/index.ts` | Route registry — mounts all `/api/v1` routes |
 | `src/api/routes/` | Per-domain route modules (`comments.ts`, `ipfs.ts`, `contracts.ts`, `indexer.ts`, `paymaster.ts`, `openapi.ts`, `test-utils.ts`) |
 | `src/api/assets/generate-node.ts` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |
-| `src/api/storage/index.ts` | Storage backend abstraction (`kubo` or `pinata`) |
+| `src/api/storage/index.ts` | `StorageAdapter` interface + `createStorageAdapter()` factory (`kubo`/`pinata`), built once at the composition root (`src/index.ts`) and injected into routes — no global lookup |
 | `src/api/storage/pinata-adapter.ts` | Pinata v3 SDK uploads + presigned upload URLs |
 | `src/api/storage/kubo-adapter.ts` | Local Kubo `add`/`cat`/`pin.rm`/`addDirectory` |
 | `src/api/authorization.ts` | On-chain asset access checks for chat proxy (owner or Merkle editor proof) |
@@ -787,12 +787,20 @@ Storage failures (private mode, quota) are silently ignored; persistence is best
 
 ### Storage Backends
 
-The backend selects the storage implementation via `IPFS_BACKEND`:
+The backend builds its storage adapter **once at the composition root**
+(`src/index.ts`) via `createStorageAdapter()`, selected by `IPFS_BACKEND`, and
+injects it into the API routes (dependency injection — no module reaches into
+a global to obtain storage):
 
 | Backend | Use case | Upload model |
 |---|---|---|
 | `kubo` | Local dev / E2E | Direct Kubo `add` |
 | `pinata` | Public testnet / production | Pinata v3 SDK; browser uses presigned URLs via `POST /api/v1/ipfs/upload-url` |
+
+Browser uploads are driven by a **strategy token**: the credential minted by
+`/ipfs/upload-url(s)` carries `strategy: "presigned-put"` (Pinata signed URL)
+or `strategy: "kubo-api"` (direct Kubo RPC), and the client dispatches on that
+topology rather than on the provider name. See `docs/ASSET_CORE_SDK.md §3.1`.
 
 ### Browser Cache
 

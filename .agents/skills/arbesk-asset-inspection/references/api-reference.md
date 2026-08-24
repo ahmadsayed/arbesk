@@ -41,12 +41,14 @@ docker compose exec ipfs ipfs cat <CID>
 
 ## Backend helper (tests only)
 
-In a Node.js test context, fetch content through the storage adapter directly:
+In a Node.js test context, build the storage adapter directly (it's a factory,
+no global singleton) and fetch content through it:
 
 ```js
-import { getStorage } from "../src/api/storage/index.ts";
+import { createStorageAdapter } from "../src/api/storage/index.ts";
 import { maybeDecompress } from "../src/api/ipfs-utils.ts";
 
-const raw = await maybeDecompress(await getStorage().catBytes(cid));
+const storage = createStorageAdapter();
+const raw = await maybeDecompress(await storage.catBytes(cid));
 const manifest = JSON.parse(raw);
 ```

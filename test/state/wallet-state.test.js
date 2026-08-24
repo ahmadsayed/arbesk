@@ -16,6 +16,7 @@ describe("walletState.get()", () => {
       contractAddress: null,
       walletSource: null,
       email: null,
+      identity: null,
     });
   });
 
@@ -58,6 +59,7 @@ describe("walletState.reset()", () => {
       contractAddress: null,
       walletSource: null,
       email: null,
+      identity: null,
     });
   });
 });

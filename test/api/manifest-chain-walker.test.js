@@ -5,9 +5,9 @@ jest.setTimeout(30000);
 
 describe("walkManifestChain", () => {
   let walkManifestChain;
+  let storage;
   let ipfsStorage;
   let mockIPFS;
-  let _resetStorage;
 
   beforeAll(async () => {
     // Suppress production logs during focused unit tests.
@@ -46,13 +46,11 @@ describe("walkManifestChain", () => {
       create: jest.fn(() => mockIPFS),
     }));
 
-    process.env.IPFS_BACKEND = "kubo";
-
     const walkerMod = await import("../../src/api/manifest-chain-walker.ts");
     walkManifestChain = walkerMod.walkManifestChain;
 
-    const storageMod = await import("../../src/api/storage/index.ts");
-    _resetStorage = storageMod._resetStorage;
+    const { createStorageAdapter } = await import("../../src/api/storage/index.ts");
+    storage = createStorageAdapter();
 
     return () => {
       console.log = originalLog;
@@ -61,10 +59,14 @@ describe("walkManifestChain", () => {
   });
 
   beforeEach(() => {
-    _resetStorage();
     ipfsStorage.clear();
     jest.clearAllMocks();
   });
+
+  /** walkManifestChain with the injected Kubo adapter (test storage). */
+  function walk(cid, opts) {
+    return walkManifestChain(cid, opts, storage);
+  }
 
   let _seq = 0;
   function putManifest(manifest, { compress = false } = {}) {
@@ -86,7 +88,7 @@ describe("walkManifestChain", () => {
     });
 
     const { visited, assetUnique, shared, allReachable, errors } =
-      await walkManifestChain(cid);
+      await walk(cid);
 
     expect(errors).toHaveLength(0);
     expect(Array.from(visited)).toEqual([cid]);
@@ -100,7 +102,7 @@ describe("walkManifestChain", () => {
     const v2 = putManifest({ version: 2, prev_asset_manifest_cid: v1, scene: {} });
     const v3 = putManifest({ version: 3, prev_asset_manifest_cid: v2, scene: {} });
 
-    const { visited, assetUnique } = await walkManifestChain(v3);
+    const { visited, assetUnique } = await walk(v3);
 
     expect(Array.from(visited)).toEqual([v3, v2, v1]);
     expect(Array.from(assetUnique)).toEqual([v3, v2, v1]);
@@ -119,7 +121,7 @@ describe("walkManifestChain", () => {
       },
     });
 
-    const { assetUnique, shared, allReachable } = await walkManifestChain(cid);
+    const { assetUnique, shared, allReachable } = await walk(cid);
 
     expect(Array.from(assetUnique)).toEqual([cid]);
     expect(Array.from(shared).sort()).toEqual(["bafyBundle", "bafySource"]);
@@ -134,7 +136,7 @@ describe("walkManifestChain", () => {
       scene: { nodes: [] },
     });
 
-    const { assetUnique, shared } = await walkManifestChain(cid);
+    const { assetUnique, shared } = await walk(cid);
 
     expect(Array.from(assetUnique).sort()).toEqual(
       [cid, "bafyComments", "bafyThumb"].sort(),
@@ -150,7 +152,7 @@ describe("walkManifestChain", () => {
       assets: { a1: assetCid },
     });
 
-    const { assetUnique, shared, visited } = await walkManifestChain(collectionCid);
+    const { assetUnique, shared, visited } = await walk(collectionCid);
 
     expect(Array.from(visited)).toEqual([collectionCid]);
     expect(Array.from(assetUnique)).toEqual([collectionCid]);
@@ -169,7 +171,7 @@ describe("walkManifestChain", () => {
       assets: { a1: assetCid },
     });
 
-    const { visited, assetUnique, shared } = await walkManifestChain(
+    const { visited, assetUnique, shared } = await walk(
       collectionCid,
       { recurseIntoCollectionAssets: true },
     );
@@ -194,7 +196,7 @@ describe("walkManifestChain", () => {
       },
     });
 
-    const { shared, allReachable } = await walkManifestChain(cid, {
+    const { shared, allReachable } = await walk(cid, {
       recurseIntoSources: true,
     });
 
@@ -215,7 +217,7 @@ describe("walkManifestChain", () => {
       scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
     });
 
-    const { shared, allReachable } = await walkManifestChain(cid);
+    const { shared, allReachable } = await walk(cid);
 
     expect(Array.from(shared)).toEqual(["bafySource"]);
     expect(allReachable.has("bafyBuffer")).toBe(false);
@@ -231,7 +233,7 @@ describe("walkManifestChain", () => {
       { compress: true },
     );
 
-    const { visited, assetUnique } = await walkManifestChain(cid);
+    const { visited, assetUnique } = await walk(cid);
 
     expect(Array.from(visited)).toEqual([cid, prevCid]);
     expect(Array.from(assetUnique)).toEqual([cid, prevCid]);
@@ -243,7 +245,7 @@ describe("walkManifestChain", () => {
     // Create a cycle: a now points back to b.
     ipfsStorage.set(a, JSON.stringify({ version: 1, prev_asset_manifest_cid: b, scene: {} }));
 
-    const { visited } = await walkManifestChain(b);
+    const { visited } = await walk(b);
 
     // Should terminate without infinite loop.
     expect(visited.size).toBe(2);
@@ -260,7 +262,7 @@ describe("walkManifestChain", () => {
       prev = cid;
     }
 
-    const { visited } = await walkManifestChain(cids[cids.length - 1], {
+    const { visited } = await walk(cids[cids.length - 1], {
       maxDepth: 3,
     });
 
@@ -268,7 +270,7 @@ describe("walkManifestChain", () => {
   });
 
   it("records an error and stops when the start CID is missing", async () => {
-    const { visited, assetUnique, errors } = await walkManifestChain("bafyMissing");
+    const { visited, assetUnique, errors } = await walk("bafyMissing");
 
     // The start CID is added to visited before the read is attempted.
     expect(Array.from(visited)).toEqual(["bafyMissing"]);
@@ -284,7 +286,7 @@ describe("walkManifestChain", () => {
       scene: {},
     });
 
-    const { visited, errors } = await walkManifestChain(cid);
+    const { visited, errors } = await walk(cid);
 
     // Both the current and the missing prev CID appear in visited.
     expect(Array.from(visited)).toEqual([cid, "bafyMissingPrev"]);
@@ -301,7 +303,7 @@ describe("walkManifestChain", () => {
       scene: {},
     });
 
-    const { visited, errors } = await walkManifestChain(cid);
+    const { visited, errors } = await walk(cid);
 
     // The unreadable prev CID is still recorded as visited.
     expect(Array.from(visited)).toEqual([cid, badCid]);
@@ -319,7 +321,7 @@ describe("walkManifestChain", () => {
       },
     });
 
-    const { assetUnique, shared, allReachable } = await walkManifestChain(cid);
+    const { assetUnique, shared, allReachable } = await walk(cid);
 
     expect(Array.from(assetUnique)).toEqual([cid]);
     expect(Array.from(shared)).toEqual(["bafySource"]);
@@ -339,7 +341,7 @@ describe("walkManifestChain", () => {
       },
     });
 
-    const { shared } = await walkManifestChain(cid);
+    const { shared } = await walk(cid);
 
     expect(Array.from(shared)).toHaveLength(0);
   });

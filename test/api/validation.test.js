@@ -54,18 +54,30 @@ describe("API schemas", () => {
   });
 
   describe("createSessionSchema", () => {
-    it("accepts a SIWE payload", () => {
+    it("accepts a SIWE proof", () => {
       expect(
         createSessionSchema.safeParse({
-          message: "siwe message",
-          signature: "0xabc",
+          proof: { kind: "siwe", message: "siwe message", signature: "0xabc" },
         }).success,
       ).toBe(true);
     });
 
-    it("rejects a payload with neither SIWE fields nor auth token", () => {
-      const result = createSessionSchema.safeParse({ message: "x" });
-      expect(result.success).toBe(false);
+    it("accepts an OIDC proof (design seam)", () => {
+      expect(
+        createSessionSchema.safeParse({
+          proof: { kind: "oidc", provider: "google", idToken: "jwt" },
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects a payload without a proof", () => {
+      expect(createSessionSchema.safeParse({ message: "x" }).success).toBe(false);
+    });
+
+    it("rejects an unknown proof kind", () => {
+      expect(
+        createSessionSchema.safeParse({ proof: { kind: "other" } }).success,
+      ).toBe(false);
     });
   });
 

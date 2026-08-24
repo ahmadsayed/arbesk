@@ -20,7 +20,7 @@ async function buildApp() {
   const { default: indexerRoutes } = await import("../../src/api/routes/indexer.ts");
 
   const app = express();
-  app.use("/indexer", indexerRoutes());
+  app.use("/indexer", indexerRoutes({}));
   return { app, mockIndexer };
 }
 

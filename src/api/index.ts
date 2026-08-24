@@ -13,7 +13,8 @@ const {
 } = await import("../config.ts");
 
 import generateAssetNode from "./assets/generate-node.ts";
-import { getStorage } from "./storage/index.ts";
+import type { StorageAdapter } from "./storage/index.ts";
+import type { ArbeskCore } from "../../frontend/src/js/asset-core/facade.ts";
 import sessionRouter from "./sessions.ts";
 import commentsRoutes from "./routes/comments.ts";
 import ipfsRoutes from "./routes/ipfs.ts";
@@ -25,7 +26,13 @@ import paymasterRoutes from "./routes/paymaster.ts";
 import usersRoutes from "./routes/users.ts";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
-export default () => {
+export interface ApiDeps {
+  storage: StorageAdapter;
+  core: ArbeskCore;
+}
+
+export default (deps: ApiDeps) => {
+  const { storage, core } = deps;
   const v1 = Router();
 
   // JSON body parsing is handled by the express.json() middleware applied in
@@ -34,7 +41,6 @@ export default () => {
   // ─── Config ───────────────────────────────────────────────────────────────
 
   v1.get("/config", (req: Request, res: Response) => {
-    const storage = getStorage();
     res.json({
       contractAddress: CONTRACT_ADDRESS,
       networkConfigs: NETWORK_CONFIGS,
@@ -53,15 +59,15 @@ export default () => {
 
   // ─── Generations ──────────────────────────────────────────────────────────
 
-  v1.use("/generations", generateAssetNode());
+  v1.use("/generations", generateAssetNode(core, storage));
 
   // ─── Comments Archive ─────────────────────────────────────────────────────
 
-  v1.use("/assets", commentsRoutes({ getContractAddress }));
+  v1.use("/assets", commentsRoutes({ getContractAddress, storage }));
 
   // ─── IPFS Upload Credential / Unpin ────────────────────────────────────────
 
-  v1.use("/ipfs", ipfsRoutes());
+  v1.use("/ipfs", ipfsRoutes(storage));
 
   // ─── Contracts ────────────────────────────────────────────────────────────
 
@@ -69,7 +75,7 @@ export default () => {
 
   // ─── Token Ownership Indexer ───────────────────────────────────────────────
 
-  v1.use("/indexer", indexerRoutes());
+  v1.use("/indexer", indexerRoutes(storage));
 
   // ─── CDP Paymaster Proxy ───────────────────────────────────────────────────
 

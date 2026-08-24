@@ -394,7 +394,7 @@ async function selectEmailWallet(): Promise<void> {
 
         if (!resolvePromise) return;
         resolvePromise({
-          provider: cdpResult.provider,
+          provider: null, // CDP has no EIP-1193 provider — wallet-core builds a read-only Web3
           source: "cdp",
           walletAddress: cdpResult.smartAccountAddress,
           eoaAddress: cdpResult.eoaAddress,

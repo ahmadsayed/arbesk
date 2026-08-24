@@ -16,7 +16,7 @@ import { walletState } from "../state/wallet-state.ts";
 import { showToast } from "../ui/toasts.ts";
 import { getUsdcToken as getNetworkUsdcToken } from "./network-config.ts";
 import { web3, getActiveContract } from "./wallet-core.ts";
-import { resolveGas } from "./wallet-gas.ts";
+import { sendContractMethod } from "./wallet-send.ts";
 
 // ─── Tier constants ──────────────────────────────────────────────────────────
 
@@ -120,10 +120,8 @@ async function recordGeneration(nodeId: string, prompt: string) {
     const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
     const tx = c.methods.recordGeneration(nodeIdBytes32, prompt);
 
-    const gas = await resolveGas(tx, walletState.get().walletAddress, 120000);
-    const receipt = await tx.send({
-      from: walletState.get().walletAddress,
-      gas,
+    const receipt = await sendContractMethod(contractAddress, tx, {
+      fallbackGas: 120000,
     });
     console.log("[FREE-GEN] recorded! txHash =", receipt.transactionHash);
 
@@ -291,15 +289,7 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
         "USDC → 0"
       );
       const resetTx = usdcContract.methods.approve(contractAddress, "0");
-      const resetGas = await resolveGas(
-        resetTx,
-        walletState.get().walletAddress,
-        80000
-      );
-      await resetTx.send({
-        from: walletState.get().walletAddress,
-        gas: resetGas,
-      });
+      await sendContractMethod(usdcAddr, resetTx, { fallbackGas: 80000 });
       console.log("[USDC] allowance reset to 0");
     }
 
@@ -308,16 +298,7 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
       tierCostWei
     );
 
-    const approveGas = await resolveGas(
-      approveTx,
-      walletState.get().walletAddress,
-      100000
-    );
-
-    await approveTx.send({
-      from: walletState.get().walletAddress,
-      gas: approveGas,
-    });
+    await sendContractMethod(usdcAddr, approveTx, { fallbackGas: 100000 });
     console.log("[USDC] approval confirmed");
 
     // Verify the allowance was actually set (critical for OP Stack L2s where
@@ -354,16 +335,9 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
     );
 
     // estimateGas may fail when the approval tx hasn't been indexed by the
-    // RPC's simulation state; resolveGas falls back to a generous default.
-    const payGas = await resolveGas(
-      payTx,
-      walletState.get().walletAddress,
-      300000
-    );
-
-    const receipt = await payTx.send({
-      from: walletState.get().walletAddress,
-      gas: payGas,
+    // RPC's simulation state; sendContractMethod falls back to a generous default.
+    const receipt = await sendContractMethod(contractAddress, payTx, {
+      fallbackGas: 300000,
     });
     console.log("[USDC] payment confirmed! txHash =", receipt.transactionHash);
 

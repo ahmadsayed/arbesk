@@ -17,7 +17,7 @@ async function loadModule(credential, uploadResponse) {
 describe("writeToIPFS - pinata mode", () => {
   it("POSTs the file to the presigned URL and returns the CIDv1", async () => {
     const { mod, fetchMock } = await loadModule(
-      { backend: "pinata", url: "https://uploads.pinata.cloud/signed", gateway: "https://gw/ipfs/" },
+      { strategy: "presigned-put", url: "https://uploads.pinata.cloud/signed", gateway: "https://gw/ipfs/" },
       { ok: true, json: async () => ({ data: { cid: "bafyNew", id: "id-1" } }) },
     );
     const cid = await mod.writeToIPFS("hello", "asset.bin");
@@ -29,9 +29,9 @@ describe("writeToIPFS - pinata mode", () => {
   });
 
   it("reuses an explicitly provided credential and skips getUploadCredential", async () => {
-    const explicit = { backend: "pinata", url: "https://uploads.pinata.cloud/explicit", gateway: "https://gw/ipfs/" };
+    const explicit = { strategy: "presigned-put", url: "https://uploads.pinata.cloud/explicit", gateway: "https://gw/ipfs/" };
     const { mod, fetchMock, getUploadCredential } = await loadModule(
-      { backend: "pinata", url: "https://uploads.pinata.cloud/signed", gateway: "https://gw/ipfs/" },
+      { strategy: "presigned-put", url: "https://uploads.pinata.cloud/signed", gateway: "https://gw/ipfs/" },
       { ok: true, json: async () => ({ data: { cid: "bafyExplicit", id: "id-2" } }) },
     );
     const cid = await mod.writeToIPFS("hello", "asset.bin", explicit);
@@ -44,7 +44,7 @@ describe("writeToIPFS - pinata mode", () => {
 describe("writeToIPFS - kubo mode", () => {
   it("POSTs multipart to the kubo /api/v0/add endpoint and returns the hash", async () => {
     const { mod, fetchMock } = await loadModule(
-      { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
+      { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001" },
       { ok: true, json: async () => ({ Hash: "bafyKubo", Size: "5" }) },
     );
     // second fetch (pin) also resolves ok
@@ -55,9 +55,9 @@ describe("writeToIPFS - kubo mode", () => {
   });
 
   it("reuses an explicitly provided kubo credential and skips getUploadCredential", async () => {
-    const explicit = { backend: "kubo", apiUrl: "http://127.0.0.1:5001", reusable: true };
+    const explicit = { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001", reusable: true };
     const { mod, fetchMock, getUploadCredential } = await loadModule(
-      { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
+      { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001" },
       { ok: true, json: async () => ({ Hash: "bafyReuse", Size: "5" }) },
     );
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "bafyReuse", Size: "5" }) });
@@ -70,9 +70,9 @@ describe("writeToIPFS - kubo mode", () => {
 
 describe("writeJSONToIPFS", () => {
   it("passes an optional credential through to writeToIPFS", async () => {
-    const explicit = { backend: "kubo", apiUrl: "http://127.0.0.1:5001", reusable: true };
+    const explicit = { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001", reusable: true };
     const { mod, fetchMock, getUploadCredential } = await loadModule(
-      { backend: "kubo", apiUrl: "http://127.0.0.1:5001" },
+      { strategy: "kubo-api", apiUrl: "http://127.0.0.1:5001" },
       { ok: true, json: async () => ({ Hash: "bafyJson", Size: "10" }) },
     );
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ Hash: "bafyJson", Size: "10" }) });

@@ -18,12 +18,12 @@ per file).
 ```json
 {
   "credentials": [
-    { "backend": "pinata", "url": "https://uploads.pinata.cloud/...", "gateway": "https://.../ipfs/", "reusable": false },
-    { "backend": "pinata", "url": "https://uploads.pinata.cloud/...", "gateway": "https://.../ipfs/", "reusable": false }
+    { "strategy": "presigned-put", "url": "https://uploads.pinata.cloud/...", "gateway": "https://.../ipfs/", "reusable": false },
+    { "strategy": "presigned-put", "url": "https://uploads.pinata.cloud/...", "gateway": "https://.../ipfs/", "reusable": false }
   ]
 }
 ```
-Kubo mode returns `count` copies of the same `{ backend: "kubo", apiUrl, gateway, reusable: true }` credential (no-op — Kubo credentials are already reusable).
+Kubo mode returns `count` copies of the same `{ strategy: "kubo-api", apiUrl, gateway, reusable: true }` credential (no-op — Kubo credentials are already reusable).
 
 ### Errors
 | HTTP | Meaning |

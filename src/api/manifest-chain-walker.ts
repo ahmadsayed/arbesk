@@ -18,7 +18,7 @@
  * decide what is still alive.
  */
 
-import { getStorage } from "./storage/index.ts";
+import type { StorageAdapter } from "./storage/index.ts";
 import { maybeDecompress, extractIpfsCids } from "./ipfs-utils.ts";
 import { getSceneNodes, validateManifest } from "./manifest-utils.ts";
 
@@ -26,10 +26,11 @@ async function collectEmbeddedIpfsCids(
   cid: string,
   cids: Set<string>,
   errors: string[],
+  storage: StorageAdapter,
 ): Promise<void> {
   if (!cid || cids.has(`__json_failed_${cid}`)) return;
   try {
-    const raw = await getStorage().catBytes(cid);
+    const raw = await storage.catBytes(cid);
     const decompressed = await maybeDecompress(raw);
     const json = JSON.parse(decompressed);
     extractIpfsCids(json, cids);
@@ -64,6 +65,7 @@ export interface WalkResult {
 export async function walkManifestChain(
   startCid: string,
   options: WalkOptions = {},
+  storage: StorageAdapter,
 ): Promise<WalkResult> {
   const {
     recurseIntoSources = false,
@@ -86,7 +88,7 @@ export async function walkManifestChain(
     shared,
     allReachable,
     errors,
-  });
+  }, storage);
 
   return { visited, assetUnique, shared, allReachable, errors };
 }
@@ -105,6 +107,7 @@ export interface WalkContext {
 async function walkSingleChain(
   startCid: string,
   ctx: WalkContext,
+  storage: StorageAdapter,
 ): Promise<void> {
   let currentCid: string | null = startCid;
 
@@ -116,7 +119,7 @@ async function walkSingleChain(
 
     let manifest: any;
     try {
-      const raw = await getStorage().catBytes(currentCid);
+      const raw = await storage.catBytes(currentCid);
       const decompressed = await maybeDecompress(raw);
       manifest = JSON.parse(decompressed);
     } catch (e) {
@@ -148,7 +151,7 @@ async function walkSingleChain(
           await walkSingleChain(assetCid, {
             ...ctx,
             recurseIntoCollectionAssets: false,
-          });
+          }, storage);
         } else {
           ctx.shared.add(assetCid);
           ctx.allReachable.add(assetCid);
@@ -179,6 +182,7 @@ async function walkSingleChain(
               node.source.cid,
               ctx.allReachable,
               ctx.errors,
+              storage,
             );
           }
         }

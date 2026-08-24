@@ -1,5 +1,6 @@
 import { createStore } from "../asset-core/state/create-store.ts";
 import { EVENTS } from "../asset-core/events/bus.ts";
+import type { UserIdentity } from "../blockchain/wallet-ports.ts";
 
 export interface WalletState {
   walletAddress: string | null;
@@ -11,6 +12,8 @@ export interface WalletState {
   walletSource: "cdp" | "walletconnect" | "injected" | null;
   /** CDP email login address (displayed in header) */
   email: string | null;
+  /** First-class identity (the "who"), split from the on-chain signer state. */
+  identity: UserIdentity | null;
 }
 
 const _defaults: WalletState = {
@@ -21,6 +24,7 @@ const _defaults: WalletState = {
   contractAddress: null,
   walletSource: null, // 'cdp' | 'walletconnect' | 'injected' | null
   email: null, // CDP email login address (displayed in header)
+  identity: null,
 };
 
 const { store: walletState, _resetForTesting } = createStore(_defaults, EVENTS.WALLET_STATE_CHANGED);

@@ -140,36 +140,35 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
  * smart account address.
  */
 export async function createSession(): Promise<{ token: string; expiresAt: number }> {
-  const { walletAddress, eoaAddress, chainId: walletChainId } = walletState.get();
-  if (!wallet.web3 || !walletAddress) {
+  const { walletAddress, chainId: walletChainId } = walletState.get();
+  const signer = wallet.getSigner();
+  if (!signer || !walletAddress) {
     throw new ApiError("Not signed in", 401, "WALLET_NOT_CONNECTED");
   }
 
-  // Build SIWE (EIP-4361) message
-  const { buildSiweMessage, generateNonce } = await import(
-    "../blockchain/siwe.ts"
-  );
-  const nonce = generateNonce();
   const chainId = Number(walletChainId || 1);
-
   const domain = window.location.origin;
-  const message = buildSiweMessage(domain, walletAddress, nonce, chainId);
 
-  // CDP smart accounts (ERC-4337) may restrict isValidSignature to approved
-  // targets. Sign the SIWE message with the owner EOA instead; the backend
-  // verifies the EOA signature and keeps the smart account as the session address.
-  const signerAddress = eoaAddress || walletAddress;
-  let signature: string;
+  // Build + sign a SIWE proof via the injected signer (the wallet
+  // AuthMechanism's authenticate step). The backend verifies the signature and
+  // keeps the smart account as the session address via the eoaAddress fallback.
+  const { buildSiweAuthProof } = await import("../blockchain/auth-mechanism.ts");
+  let proof;
   const _tSign = performance.now();
   try {
-    signature = await wallet.web3.eth.personal.sign(message, signerAddress, "");
+    proof = await buildSiweAuthProof({
+      signer,
+      address: walletAddress,
+      chainId,
+      domain,
+    });
     console.log(`[LOGIN-TIMING] siweSign: ${Math.round(performance.now() - _tSign)}ms`);
   } catch (err) {
     const cause = err as any;
     // Log the reason inline: wallets bury it in nested objects that render
     // as a collapsed "Object" in the console and never reach bug reports.
     error(
-      `Session sign failed (signer=${signerAddress}, code=${cause?.code ?? "?"}):`,
+      `Session sign failed (signer=${signer.getSignerAddress()}, code=${cause?.code ?? "?"}):`,
       cause?.message || cause?.error?.message || String(cause)
     );
     throw new ApiError(
@@ -179,11 +178,7 @@ export async function createSession(): Promise<{ token: string; expiresAt: numbe
     );
   }
 
-  const body = {
-    message,
-    signature,
-    eoaAddress: eoaAddress || undefined,
-  };
+  const body = { proof };
 
   const response = await fetch(`${API_BASE}/sessions`, {
     method: "POST",
@@ -917,12 +912,8 @@ export async function resolveUserEmail(email: string): Promise<{ exists: boolean
 
 // ─── IPFS Upload Credential ───────────────────────────────────────────────────
 
-export interface UploadCredential {
-  backend: string;
-  url?: string;
-  gateway?: string;
-  apiUrl?: string;
-}
+import type { UploadCredential } from "../asset-core/ipfs/upload-with-credential.ts";
+export type { UploadCredential };
 
 /**
  * POST /api/v1/ipfs/upload-url

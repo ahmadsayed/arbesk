@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Library folder icon — current vs proposed</title>
+<!--
+  Mockup for the collection-card icon fixes proposed after assessing the
+  Library grid (2026-08-23). Self-contained: colors are the light-theme
+  values of the SCSS tokens named alongside each rule.
+-->
+<style>
+  :root {
+    --window-bg: #faf6f2;        /* --choco-1  / --window-bg-light        */
+    --thumb-bg:  #f1ece5;        /* --surface-overlay-hover over window-bg */
+    --accent:    #8c673c;        /* --gold-6   / --accent-bg-light        */
+    --dim-fg:    #8c6a4a;        /* --choco-7  / --dim-fg-light           */
+    --view-fg:   #2a1a0e;        /* --choco-12 / --view-fg-light          */
+    --border:    #e0d0bc;        /* --choco-3  / --border-color           */
+  }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--window-bg);
+    color: var(--view-fg);
+    font: 14px/1.4 system-ui, sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.note { color: var(--dim-fg); margin: 0 0 24px; max-width: 70ch; }
+  .row { display: flex; gap: 40px; align-items: flex-start; margin-bottom: 32px; }
+  .variant { display: flex; flex-direction: column; gap: 8px; }
+  .variant h2 { font-size: 13px; margin: 0 0 4px; color: var(--dim-fg); font-weight: 600; }
+  .cards { display: flex; gap: 16px; }
+
+  /* Same card geometry as .library-item / .library-item-thumbnail */
+  .card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; width: 140px; }
+  .thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--thumb-bg);
+  }
+  .name { font-size: 12px; }
+
+  /* 4) item names: weight 600 like other card titles in the app */
+  .proposed .name,
+  .bare .name { font-weight: 600; }
+
+  .icon { width: 60%; height: 60%; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Current ─────────────────────────────────────────────── */
+  .current .icon { stroke: var(--accent); stroke-width: 1.5; opacity: 0.9; }
+  .badge {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+  .badge svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Proposed ────────────────────────────────────────────── */
+  /* 1) icon: stroke-width 2, full opacity, dimmer tone          */
+  .proposed .icon { stroke: var(--dim-fg); stroke-width: 2; opacity: 1; }
+  /* 2) badge: 2px ring in the thumbnail bg so it detaches from
+        the glyph, nudged 2px further into the corner            */
+  .proposed .badge {
+    bottom: 4px;
+    right: 4px;
+    box-shadow: 0 0 0 2px var(--thumb-bg), 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+
+  /* ── Proposed, no tile behind the fallback glyph ─────────── */
+  /* The tile background only remains when a real thumbnail
+     image is shown; the bare glyph sits on the page like a
+     Nautilus icon. The badge anchors to the icon box and rings
+     against the page bg instead.                               */
+  .bare .thumb { background: transparent; }
+  .bare .icon { stroke: var(--dim-fg); stroke-width: 2; opacity: 1; width: 72%; height: 72%; }
+  .bare .badge {
+    bottom: 8%;
+    right: 8%;
+    box-shadow: 0 0 0 2px var(--window-bg), 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+
+  code { background: var(--thumb-bg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  ul { margin: 4px 0 0; padding-left: 18px; color: var(--dim-fg); max-width: 34ch; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Collection card icon — current vs proposed</h1>
+<p class="note">
+  Fixes 1–2 from the icon assessment. Fix 3 (use <code>icons.svg#folder</code>
+  via <code>&lt;use&gt;</code> instead of the inline SVG in
+  <code>library-grid.ts</code>) is a code change with no visual difference.
+</p>
+
+<div class="row">
+  <div class="variant current">
+    <h2>Current</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="thumb">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="badge"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </div>
+        <span class="name">dragosan</span>
+      </div>
+    </div>
+    <ul>
+      <li>1.5px tan stroke at 90% opacity washes out on the cream card</li>
+      <li>badge fill touches the folder outline — the two shapes merge</li>
+    </ul>
+  </div>
+
+  <div class="variant proposed">
+    <h2>Proposed</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="thumb">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="badge"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </div>
+        <span class="name">dragosan</span>
+      </div>
+      <div class="card">
+        <div class="thumb">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="badge" style="background: color-mix(in srgb, var(--dim-fg) 35%, #fff); color: var(--view-fg);"><svg viewBox="0 0 24 24" style="stroke-width:2"><path d="M4 21V4M4 4h14l-2.5 4L18 12H4"/></svg></span>
+        </div>
+        <span class="name">scaling (wip)</span>
+      </div>
+    </div>
+    <ul>
+      <li>2px stroke, full opacity, <code>--dim-fg</code> — icon holds up</li>
+      <li>2px card-colored ring detaches the badge from the glyph</li>
+      <li>badge nudged to the corner (4px) so it clears the outline</li>
+      <li>name at weight 600, matching the app's card-title style</li>
+    </ul>
+  </div>
+
+  <div class="variant bare">
+    <h2>Proposed, no tile</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="thumb">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="badge"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </div>
+        <span class="name">dragosan</span>
+      </div>
+    </div>
+    <ul>
+      <li>no placeholder tile behind the fallback glyph — Nautilus-style bare icon</li>
+      <li>glyph slightly larger (72%) to fill the space the tile vacated</li>
+      <li>badge anchors to the icon box, ringed against the page bg</li>
+      <li>tile background stays when a real thumbnail image exists</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

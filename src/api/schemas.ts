@@ -26,10 +26,25 @@ export const chainIdSchema = z
 
 // ─── Route Body Schemas ─────────────────────────────────────────────────────
 
-export const createSessionSchema = z.object({
+export const siweProofSchema = z.object({
+  kind: z.literal("siwe"),
   message: z.string().min(1, "message is required"),
   signature: z.string().min(1, "signature is required"),
   eoaAddress: ethereumAddressSchema.optional(),
+});
+
+// Design seam for future OAuth/OIDC sign-in — accepted by the schema so the
+// client can target the proof envelope, but not yet verified (see
+// proof-verify.ts#verifyOidc).
+export const oidcProofSchema = z.object({
+  kind: z.literal("oidc"),
+  provider: z.string().min(1, "provider is required"),
+  idToken: z.string().min(1, "idToken is required"),
+  nonce: z.string().optional(),
+});
+
+export const createSessionSchema = z.object({
+  proof: z.discriminatedUnion("kind", [siweProofSchema, oidcProofSchema]),
 });
 
 // ~10 MB raw image → ~14 MB base64. Keeps generation requests well under the

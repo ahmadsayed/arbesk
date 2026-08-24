@@ -20,7 +20,6 @@ describe("Manifest comments archive integration", () => {
   let ipfsStorage;
   let relayMessages;
   let actualSubId;
-  let _resetStorage;
 
   beforeAll(async () => {
     ipfsStorage = new Map();
@@ -139,11 +138,13 @@ describe("Manifest comments archive integration", () => {
     }));
 
     const { default: createApi } = await import("../src/api/index.ts");
-    const storageMod = await import("../src/api/storage/index.ts");
-    _resetStorage = storageMod._resetStorage;
+    const { createStorageAdapter } = await import("../src/api/storage/index.ts");
+    const { createBackendCore } = await import("../src/api/asset-core-adapters.ts");
+    const storage = createStorageAdapter();
+    const core = createBackendCore(storage);
     app = express();
     app.use(express.json({ limit: "50mb" }));
-    app.use("/api", createApi());
+    app.use("/api", createApi({ storage, core }));
   });
 
   beforeEach(() => {
@@ -151,8 +152,6 @@ describe("Manifest comments archive integration", () => {
     relayMessages = [];
     actualSubId = null;
     jest.clearAllMocks();
-    // Reset storage cache so the mock is fresh for each test.
-    _resetStorage();
   });
 
   test("archives comments and returns CID when relay has events", async () => {

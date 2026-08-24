@@ -54,8 +54,9 @@ and an in-memory double for tests
 ```ts
 import { createArbeskCore } from "../frontend/src/js/asset-core/facade.ts";
 import { createBackendCore } from "../src/api/asset-core-adapters.ts"; // in-repo backend
+import { createStorageAdapter } from "../src/api/storage/index.ts";
 
-const core = createBackendCore(); // IPFS via the repo's kubo/pinata storage layer
+const core = createBackendCore(createStorageAdapter()); // IPFS via kubo/pinata, selected by IPFS_BACKEND
 
 // Store a model (GLB bytes or glTF JSON — format is sniffed automatically):
 const { rootCid } = await core.upload(glbBytes, { assetName: "chair" });
@@ -127,6 +128,36 @@ Reference implementations to copy from:
   `frontend/src/js/workers/worker-executor.ts` (executor)
 - **Backend**: `src/api/asset-core-adapters.ts` (IPFS over kubo/pinata)
 - **Test/in-memory**: `frontend/src/js/asset-core/testing/memory-ipfs.ts`
+
+### 3.1 Upload credentials are strategy tokens
+
+When the async pipeline uploads (decompose-and-upload), the `credentials`
+port returns `UploadCredential[]`, where each credential is a
+**self-describing strategy token** — it tells the writer *how* to upload (a
+topology), not *who* the provider is:
+
+```ts
+interface UploadCredential {
+  strategy: "presigned-put" | "kubo-api"; // extensible: "server-proxy" | "helia"
+  url?: string;      // presigned-put: single-use URL
+  urls?: string[];   // presigned-put: pooled URLs (one per file)
+  key?: string;      // presigned-put: object key = CID for backends that don't echo it (Storj)
+  apiUrl?: string;   // kubo-api: Kubo RPC base
+  gateway?: string;  // gateway base returned alongside
+  reusable?: boolean;// kubo-api: true (one token per batch); presigned-put: false (single-use)
+}
+```
+
+- The SDK dispatches on `strategy` (topology), **never on a provider name** —
+  `upload-with-credential.ts` maps `presigned-put` → a presigned-URL upload and
+  `kubo-api` → Kubo's `/api/v0/add`.
+- `reusable` drives pooling in `async-gltf.ts`: reusable tokens cover a whole
+  batch with one credential; single-use tokens are pooled (one URL per file)
+  and reserved before the worker call (§6).
+- Backend adapters mint these (`kubo-adapter.ts` → `kubo-api`,
+  `pinata-adapter.ts` → `presigned-put`). Adding a topology (a desktop app
+  writing to its own local node, or an in-browser Helia node) is a new
+  `strategy` value + an `IpfsWritePort` implementation — zero SDK-core changes.
 
 ## 4. Facade API
 
@@ -233,8 +264,8 @@ Rules of the road for worker integration:
 - **Payloads must be structured-cloneable** — one plain object per op, no
   functions, no class instances.
 - **Single-use upload credentials**: the workerpool structured-clones the
-  credential into the worker, so a pooled Pinata URL would be double-spent
-  (HTTP 409). The credential-pooling logic in `async-gltf.ts`
+  credential into the worker, so a pooled `presigned-put` URL would be
+  double-spent (HTTP 409). The credential-pooling logic in `async-gltf.ts`
   (`estimateUploadCount`, `reserveFollowUpCredential`,
   `MAX_POOLED_CREDENTIALS = 200`) exists for exactly this — if you build your
   own executor, preserve that behavior for upload-bearing ops.

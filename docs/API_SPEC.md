@@ -497,7 +497,7 @@ Minimal shape: `{ "exists": false }` for unknown emails; `{ "exists": true, "add
 
 ### `POST /api/v1/ipfs/upload-url`
 
-Mints a short-lived client upload credential. Session-gated and rate-limited per wallet. In Pinata mode it returns a presigned URL; in Kubo mode it returns the local API URL. The master Pinata JWT never reaches the browser.
+Mints a short-lived client upload credential. Session-gated and rate-limited per wallet. The credential is a **strategy token**: it carries a `strategy` field (`presigned-put` for Pinata's signed URL, `kubo-api` for the local Kubo RPC) that tells the browser which upload topology to use. The master Pinata JWT never reaches the browser.
 
 **Request Body**
 
@@ -505,20 +505,20 @@ Empty (`{}`).
 
 **Response `200`**
 
-Pinata:
+Pinata (presigned upload):
 ```json
 {
-  "backend": "pinata",
+  "strategy": "presigned-put",
   "url": "https://uploads.pinata.cloud/v3/files?signed=...",
   "gateway": "https://gateway.pinata.cloud/ipfs/",
   "reusable": false
 }
 ```
 
-Kubo:
+Kubo (direct API):
 ```json
 {
-  "backend": "kubo",
+  "strategy": "kubo-api",
   "apiUrl": "http://127.0.0.1:5001",
   "gateway": "http://127.0.0.1:8080/ipfs/",
   "reusable": true
@@ -537,7 +537,7 @@ Kubo:
 
 ### `POST /api/v1/ipfs/upload-urls`
 
-Batch version of `/ipfs/upload-url`. Session-gated and rate-limited per wallet (same budget). Request body `{ "count": 10 }` (1–200, default 1). Returns an array of credentials, one per requested file. Pinata signed URLs are single-use, so a client uploading N files must request N credentials up front; this endpoint lets it do that in one round trip instead of N sequential calls.
+Batch version of `/ipfs/upload-url`. Session-gated and rate-limited per wallet (same budget). Request body `{ "count": 10 }` (1–200, default 1). Returns an array of strategy-token credentials, one per requested file. `presigned-put` URLs are single-use, so a client uploading N files must request N credentials up front; this endpoint lets it do that in one round trip instead of N sequential calls. `kubo-api` credentials are reusable, so the endpoint returns `count` copies of the same credential.
 
 ---
 

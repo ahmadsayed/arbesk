@@ -7,7 +7,7 @@ import {
   unpinRateLimit,
   gcRateLimit,
 } from "../rate-limiter.ts";
-import { getStorage } from "../storage/index.ts";
+import type { StorageAdapter } from "../storage/index.ts";
 import { walkManifestChain } from "../manifest-chain-walker.ts";
 import { runIpfsGC } from "../ipfs-gc.ts";
 import { validateBody } from "../validation.ts";
@@ -37,6 +37,7 @@ const MAX_COLLECTION_HISTORY_STEPS = 5;
 async function cidBelongsToToken(
   cid: string,
   tokenUriCid: string,
+  storage: StorageAdapter,
 ): Promise<boolean> {
   if (!tokenUriCid) return false;
   if (cid === tokenUriCid) return true;
@@ -49,7 +50,7 @@ async function cidBelongsToToken(
   ) {
     let manifest;
     try {
-      const raw = await getStorage().catBytes(currentCid);
+      const raw = await storage.catBytes(currentCid);
       const decompressed = await maybeDecompress(raw);
       manifest = JSON.parse(decompressed);
     } catch (e) {
@@ -79,7 +80,7 @@ function requireAdminToken(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-export default function ipfsRoutes() {
+export default function ipfsRoutes(storage: StorageAdapter) {
   const router = Router();
 
   /**
@@ -94,9 +95,9 @@ export default function ipfsRoutes() {
     uploadUrlRateLimit,
     async (req, res) => {
       try {
-        const credential = await getStorage().mintUploadCredential();
+        const credential = await storage.mintUploadCredential();
         console.log(
-          `[IPFS] minted upload credential - backend=${credential.backend} wallet=${res.locals.userAddress}`,
+          `[IPFS] minted upload credential - strategy=${credential.strategy} wallet=${res.locals.userAddress}`,
         );
         res.json(credential);
       } catch (error) {
@@ -126,9 +127,9 @@ export default function ipfsRoutes() {
     async (req, res) => {
       try {
         const { count } = req.body;
-        const credentials = await getStorage().mintUploadCredentials(count);
+        const credentials = await storage.mintUploadCredentials(count);
         console.log(
-          `[IPFS] minted ${credentials.length} upload credential(s) - backend=${credentials[0]?.backend} wallet=${res.locals.userAddress}`,
+          `[IPFS] minted ${credentials.length} upload credential(s) - strategy=${credentials[0]?.strategy} wallet=${res.locals.userAddress}`,
         );
         res.json({ credentials });
       } catch (error) {
@@ -254,7 +255,7 @@ export default function ipfsRoutes() {
             contractAddress: candidate,
           });
           const tokenUriCid = tokenUri.replace(/^ipfs:\/\//, "");
-          belongs = await cidBelongsToToken(startCid, tokenUriCid);
+          belongs = await cidBelongsToToken(startCid, tokenUriCid, storage);
         } catch (e) {
           // Fail closed: an unreadable collection manifest must not silently
           // allow the unpin.
@@ -307,6 +308,7 @@ export default function ipfsRoutes() {
           recurseIntoSources: false,
           recurseIntoCollectionAssets: false,
         },
+        storage,
       );
 
       console.log(
@@ -318,7 +320,7 @@ export default function ipfsRoutes() {
       for (const cid of assetUnique) {
         try {
           // The adapter treats "already unpinned" as success.
-          await getStorage().unpin(cid);
+          await storage.unpin(cid);
           unpinned.push(cid);
           console.log(`[UNPIN] unpinned → ${cid}`);
         } catch (e) {
@@ -374,7 +376,7 @@ export default function ipfsRoutes() {
           dryRun,
           maxUnpin,
           chainId,
-        });
+        }, storage);
         res.json(result);
       } catch (error) {
         console.error("[GC] route error:", (error as Error).message);

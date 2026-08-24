@@ -41,13 +41,6 @@ async function loadModule() {
     NETWORK_CONFIGS: {},
   }));
 
-  // These tests never touch IPFS; mocking the storage module keeps the real
-  // ESM-only ipfs-http-client (incompatible with Jest's module loader) out of
-  // the import graph. Mirrors token-indexer-shared.test.js.
-  await jest.unstable_mockModule("../src/api/storage/index.ts", () => ({
-    getStorage: jest.fn(),
-  }));
-
   return import("../src/api/token-indexer.ts");
 }
 
@@ -67,7 +60,7 @@ test("boot-time catchUp failure still schedules the background poll (self-heals)
     .mockRejectedValueOnce(new Error("request to https://sepolia.base.org/ failed"))
     .mockResolvedValue(0);
 
-  const indexer = getIndexer(TEST_CHAIN_FAIL);
+  const indexer = getIndexer(TEST_CHAIN_FAIL, { cat: jest.fn() });
   await expect(indexer.init()).rejects.toThrow("sepolia.base.org");
 
   try {
@@ -95,7 +88,7 @@ test("Base Sepolia backfill chunks never exceed the RPC's 2000-block getLogs ran
     return Promise.resolve([]);
   });
 
-  const indexer = getIndexer(BASE_SEPOLIA);
+  const indexer = getIndexer(BASE_SEPOLIA, { cat: jest.fn() });
   indexer._saveState = () => {}; // keep the test off the real .data directory
   indexer.lastScannedBlock = 43587050;
   _getBlockNumber.mockResolvedValue(43591300); // ~4250 blocks behind tip
@@ -107,7 +100,7 @@ test("Base Sepolia backfill chunks never exceed the RPC's 2000-block getLogs ran
 test("successful init schedules the background poll", async () => {
   const { getIndexer } = await loadModule();
 
-  const indexer = getIndexer(TEST_CHAIN_OK);
+  const indexer = getIndexer(TEST_CHAIN_OK, { cat: jest.fn() });
   await indexer.init();
 
   try {

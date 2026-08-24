@@ -41,13 +41,21 @@ async function loadApi(options = {}) {
     EVENTS: { WALLET_DISCONNECTED: "wallet:disconnected" },
   }));
 
+  // Shared jest.fn so both the legacy web3.eth.personal.sign path and the new
+  // Signer.signMessage path honor mockResolvedValue/mockRejectedValueOnce.
+  const personalSign = jest.fn().mockResolvedValue(_signResult);
+
   await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
     web3: {
       eth: {
         getChainId: jest.fn().mockResolvedValue(_chainIdResult),
-        personal: { sign: jest.fn().mockResolvedValue(_signResult) },
+        personal: { sign: personalSign },
       },
     },
+    getSigner: jest.fn(() => ({
+      signMessage: personalSign,
+      getSignerAddress: jest.fn(() => options.eoaAddress || _walletAddress),
+    })),
     getActiveConnectionSource: jest.fn(() => options.connectionSource || "injected"),
   }));
 
@@ -168,8 +176,9 @@ describe("createSession", () => {
     expect(url).toMatch(/\/sessions$/);
     expect(opts.method).toBe("POST");
     const body = JSON.parse(opts.body);
-    expect(body.message).toContain(TEST_ADDRESS);
-    expect(body.signature).toBe("0xsignature");
+    expect(body.proof.kind).toBe("siwe");
+    expect(body.proof.message).toContain(TEST_ADDRESS);
+    expect(body.proof.signature).toBe("0xsignature");
 
     const cached = JSON.parse(localStorage.getItem("arbesk_session"));
     expect(cached.token).toBe(freshToken);
@@ -234,9 +243,10 @@ describe("createSession", () => {
     expect(opts.method).toBe("POST");
     const body = JSON.parse(opts.body);
     // CDP path still uses SIWE (message + signature), not a JWT
-    expect(body.message).toBeDefined();
-    expect(body.signature).toBeDefined();
-    expect(body.eoaAddress).toBe(eoaAddress);
+    expect(body.proof.kind).toBe("siwe");
+    expect(body.proof.message).toBeDefined();
+    expect(body.proof.signature).toBeDefined();
+    expect(body.proof.eoaAddress).toBe(eoaAddress);
 
     const cached = JSON.parse(localStorage.getItem("arbesk_session"));
     expect(cached.token).toBe(freshToken);
@@ -432,7 +442,7 @@ describe("snapshotCommentsArchive", () => {
 
 describe("getUploadCredential", () => {
   test("sends the correct headers and body", async () => {
-    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { backend: "kubo" } }));
+    const fetchMock = jest.fn().mockResolvedValue(buildResponse({ body: { strategy: "kubo-api" } }));
     const { getUploadCredential } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
@@ -440,7 +450,7 @@ describe("getUploadCredential", () => {
     );
 
     const cred = await getUploadCredential();
-    expect(cred).toEqual({ backend: "kubo" });
+    expect(cred).toEqual({ strategy: "kubo-api" });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/ipfs\/upload-url$/);
     expect(opts.method).toBe("POST");
@@ -458,7 +468,7 @@ describe("getUploadCredential", () => {
         })
       )
       .mockResolvedValueOnce(buildResponse({ body: { token: "fresh-token", expiresAt: Date.now() + 3_600_000 } }))
-      .mockResolvedValueOnce(buildResponse({ body: { backend: "pinata" } }));
+      .mockResolvedValueOnce(buildResponse({ body: { strategy: "presigned-put" } }));
     const { getUploadCredential } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",
@@ -466,7 +476,7 @@ describe("getUploadCredential", () => {
     );
 
     const cred = await getUploadCredential();
-    expect(cred.backend).toBe("pinata");
+    expect(cred.strategy).toBe("presigned-put");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -488,8 +498,8 @@ describe("getUploadCredentials", () => {
       buildResponse({
         body: {
           credentials: [
-            { backend: "pinata", url: "https://signed-1" },
-            { backend: "pinata", url: "https://signed-2" },
+            { strategy: "presigned-put", url: "https://signed-1" },
+            { strategy: "presigned-put", url: "https://signed-2" },
           ],
         },
       })
@@ -520,7 +530,7 @@ describe("getUploadCredentials", () => {
         })
       )
       .mockResolvedValueOnce(buildResponse({ body: { token: "fresh-token", expiresAt: Date.now() + 3_600_000 } }))
-      .mockResolvedValueOnce(buildResponse({ body: { credentials: [{ backend: "pinata", url: "https://signed" }] } }));
+      .mockResolvedValueOnce(buildResponse({ body: { credentials: [{ strategy: "presigned-put", url: "https://signed" }] } }));
     const { getUploadCredentials } = await loadApi({ fetchMock });
     localStorage.setItem(
       "arbesk_session",

@@ -22,7 +22,7 @@ describe("getUploadCredential", () => {
 
     const fetchMock = jest.fn(async () => ({
       ok: true,
-      json: async () => ({ backend: "pinata", url: "https://signed", gateway: "https://gw/ipfs/" }),
+      json: async () => ({ strategy: "presigned-put", url: "https://signed", gateway: "https://gw/ipfs/" }),
     }));
     global.fetch = fetchMock;
 
@@ -34,7 +34,7 @@ describe("getUploadCredential", () => {
     const { getUploadCredential } = await import("../../frontend/src/js/services/api.js");
     const cred = await getUploadCredential();
 
-    expect(cred.backend).toBe("pinata");
+    expect(cred.strategy).toBe("presigned-put");
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/ipfs\/upload-url$/);
     expect(opts.method).toBe("POST");

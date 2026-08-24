@@ -95,7 +95,7 @@ describe("session routes", () => {
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")
-      .send({ message: "valid", signature: "0xabc" });
+      .send({ proof: { kind: "siwe", message: "valid", signature: "0xabc" } });
 
     expect(res.status).toBe(201);
     expect(res.body.token).toBeDefined();
@@ -112,10 +112,10 @@ describe("session routes", () => {
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")
-      .send({ message: "valid", signature: "0xabc" });
+      .send({ proof: { kind: "siwe", message: "valid", signature: "0xabc" } });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_SIWE");
+    expect(res.body.error.code).toBe("INVALID_PROOF");
     expect(res.body.error.message).toBe("bad signature");
   });
 
@@ -133,7 +133,7 @@ describe("session routes", () => {
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")
-      .send({ message: "valid", signature: "0xabc" });
+      .send({ proof: { kind: "siwe", message: "valid", signature: "0xabc" } });
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe("SESSION_CREATION_FAILED");
@@ -156,7 +156,14 @@ describe("session routes", () => {
     const app = createApp(mod.default);
     const res = await request(app)
       .post("/sessions")
-      .send({ message: "smart-acct-siwe", signature: "0xeoa", eoaAddress: EOA_ADDRESS });
+      .send({
+        proof: {
+          kind: "siwe",
+          message: "smart-acct-siwe",
+          signature: "0xeoa",
+          eoaAddress: EOA_ADDRESS,
+        },
+      });
 
     expect(res.status).toBe(201);
     expect(res.body.token).toBeDefined();

@@ -6,7 +6,7 @@ import {
   isGzipped,
   decompress,
 } from "../../../frontend/src/js/asset-core/utils/compression.ts";
-import { createBackendCore } from "../asset-core-adapters.ts";
+import type { ArbeskCore } from "../../../frontend/src/js/asset-core/facade.ts";
 import {
   createTask,
   createImageTask,
@@ -33,7 +33,7 @@ import {
   updateTaskEntry,
   evictTask,
 } from "../generation-tasks.ts";
-import { getStorage } from "../storage/index.ts";
+import type { StorageAdapter } from "../storage/index.ts";
 import authenticate from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
 import { validateBody } from "../validation.ts";
@@ -73,12 +73,6 @@ function looksLikeGltfJson(buf: Buffer): boolean {
 }
 
 /**
- * Backend asset-core facade (module singleton): compose/decompose pipeline
- * reading IPFS through the storage adapter via the injected ports.
- */
-const arbeskCore = createBackendCore();
-
-/**
  * Resolve a glTF JSON document into a self-contained GLB binary buffer
  * suitable for Tripo upload, via the asset-core compose pipeline (facade):
  * `compose` inlines `ipfs://<CID>` refs as base64 data URIs and strips dedup
@@ -94,7 +88,10 @@ const arbeskCore = createBackendCore();
  * @param compositeBuf - raw bytes of the glTF JSON
  * @returns self-contained GLB binary
  */
-async function resolveCompositeToGlb(compositeBuf: Buffer): Promise<Buffer> {
+async function resolveCompositeToGlb(
+  compositeBuf: Buffer,
+  core: ArbeskCore,
+): Promise<Buffer> {
   let gltf: any;
   try {
     gltf = JSON.parse(compositeBuf.toString("utf-8"));
@@ -106,7 +103,7 @@ async function resolveCompositeToGlb(compositeBuf: Buffer): Promise<Buffer> {
   // The facade compose returns a Blob of the composed glTF JSON (application/
   // json); parse it back for the GLB packing step below.
   const composed = JSON.parse(
-    await (await arbeskCore.compose(gltf)).text()
+    await (await core.compose(gltf)).text()
   ) as any;
 
   // Fail fast on references that are neither ipfs:// (resolved above) nor
@@ -188,10 +185,15 @@ function providerErrorCode(status: number): string {
  * when the GLB exceeds Tripo's 150 MB file limit.
  * @returns file_token
  */
-async function uploadSourceGlb(cid: string, apiKey: string): Promise<string> {
+async function uploadSourceGlb(
+  cid: string,
+  apiKey: string,
+  core: ArbeskCore,
+  storage: StorageAdapter,
+): Promise<string> {
   let glb: Buffer;
   try {
-    glb = await getStorage().catBytes(cid);
+    glb = await storage.catBytes(cid);
   } catch (e) {
     const err = e as Error;
     console.log(`[GEN] source GLB fetch failed cid=${cid}: ${err.message}`);
@@ -223,7 +225,7 @@ async function uploadSourceGlb(cid: string, apiKey: string): Promise<string> {
       throw new TripoApiError(MSG_SOURCE_UNSUPPORTED, 0, 400);
     }
     console.log(`[GEN] source asset is glTF JSON — composing to GLB cid=${cid}`);
-    glb = await resolveCompositeToGlb(glb);
+    glb = await resolveCompositeToGlb(glb, core);
   }
   if (glb.length > TRIPO_SOURCE_GLB_LIMIT_BYTES) {
     console.log(`[GEN] source GLB too large cid=${cid} bytes=${glb.length}`);
@@ -233,10 +235,14 @@ async function uploadSourceGlb(cid: string, apiKey: string): Promise<string> {
 }
 
 /**
- * Generation route factory. No dependencies — the storage adapter is not
- * needed here because the browser performs all IPFS writes itself.
+ * Generation route factory. Receives the asset-core facade (for composing
+ * glTF JSON sources to GLB) and the storage adapter (for reading source GLBs)
+ * from the composition root — no on-demand lookups.
  */
-export default function generateAssetNode() {
+export default function generateAssetNode(
+  core: ArbeskCore,
+  storage: StorageAdapter,
+) {
   const router = Router();
 
   /**
@@ -359,7 +365,7 @@ export default function generateAssetNode() {
               }
             }
 
-            const fileToken = await uploadSourceGlb(sourceAssetCid, key);
+            const fileToken = await uploadSourceGlb(sourceAssetCid, key, core, storage);
 
             if (animate) {
               console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)} inPlace=${Boolean(animateInPlace)}`);
