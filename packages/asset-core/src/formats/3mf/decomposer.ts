@@ -8,10 +8,10 @@
  * it is never converted to glTF for storage.
  */
 
-import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { uploadWithDedup } from "@arbesk/asset-core/gltf/dedup.js";
-import { sanitizeFileName } from "@arbesk/asset-core/utils/uri.js";
-import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+import { getRuntime } from "../../runtime.ts";
+import { uploadWithDedup } from "../../formats/gltf/dedup.ts";
+import { sanitizeFileName } from "../../utils/uri.ts";
+import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 import { unzipBytes, strFromU8 } from "./zip.ts";
 
 export const COMPOSITE_3MF_FORMAT = "composite-3mf";
@@ -78,7 +78,7 @@ export async function decompose3mf(
     const { cid, meta } = await uploadWithDedup(
       entryBytes,
       `${sanitizeFileName(assetName || assetId || "3mf")}_${filename}`,
-      // uploadWithDedup (asset-core/gltf/dedup.js) declares object|undefined and defaults
+      // uploadWithDedup (formats/gltf/dedup.ts) declares object|undefined and defaults
       // both parameters to null internally, so ?? undefined is equivalent.
       credential ?? undefined,
       { compress: false },
@@ -100,7 +100,8 @@ export async function decompose3mf(
     parts,
   };
 
-  const compositeCid = await writeJSONToIPFS(composite, credential, {
+  const { ipfsWrite } = getRuntime();
+  const compositeCid = await ipfsWrite.writeJSON(composite, credential, {
     assetId,
     filename: `${sanitizeFileName(
       assetName || assetId || "composite"

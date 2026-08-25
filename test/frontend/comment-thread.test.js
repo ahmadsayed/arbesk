@@ -53,7 +53,7 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     getEditorSetVersion: jest.fn().mockResolvedValue(1),
   }));
 
-  jest.unstable_mockModule("@arbesk/asset-core/gltf/merkle-editors.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/merkle-editors.js", () => ({
     __esModule: true,
     getProof: jest.fn(() => null),
   }));

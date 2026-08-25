@@ -81,7 +81,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "@arbesk/asset-core/gltf/merkle-editors.js",
+    "@arbesk/asset-core/formats/gltf/merkle-editors.js",
     () => ({
       MAX_EDITORS_PER_TOKEN: 5000,
       computeRoot: jest.fn((list, _tokenId, _version) => {

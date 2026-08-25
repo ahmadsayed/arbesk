@@ -3,7 +3,7 @@ import { jest } from "@jest/globals";
 import {
   uploadToIPFSWithCredential,
   uploadBatchToIPFSWithCredential,
-} from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+} from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 
 describe("uploadToIPFSWithCredential", () => {
   let fetchMock;

@@ -6,7 +6,7 @@ import {
   computeGltfBounds,
   boundsFromGlbBytes,
   compensationScale,
-} from "@arbesk/asset-core/gltf/bounds.js";
+} from "@arbesk/asset-core/formats/gltf/bounds.js";
 
 function makeGltf(meshes, accessors) {
   return { asset: { version: "2.0" }, meshes, accessors };

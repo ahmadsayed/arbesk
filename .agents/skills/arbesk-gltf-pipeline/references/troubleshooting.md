@@ -15,7 +15,7 @@ Common operations, debugging guides, and force re-decomposition.
 
 1. Add format detection logic to `detectAssetFormat()` in `transforms.js`
 2. Add a loading branch in `loadAsset()` in `scene-graph.js`
-3. If the format needs preprocessing (like glTF composition), create a new module in `packages/asset-core/src/gltf/` or a new directory
+3. If the format needs preprocessing (like glTF composition), create a new module in `packages/asset-core/src/formats/gltf/` or a new directory
 4. Decide whether the format should be decomposed or treated monolithically
 5. Update `decomposeManifestNodes()` in `services/asset-save/manifest-builder.ts` to skip the new format if it shouldn't be decomposed
 6. Update the manifest schema documentation in `AGENTS.md` section 7

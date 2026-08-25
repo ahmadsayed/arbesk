@@ -22,7 +22,7 @@ package (root `"workspaces": ["packages/*"]`) and is compiled by `tsc` to
 
 ```ts
 import { createArbeskCore } from "@arbesk/asset-core";
-import { composeGltfJson } from "@arbesk/asset-core/gltf/gltf-core.js";
+import { composeGltfJson } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 ```
 
 - **Build** — `npm run build:packages` (also wired as `prestart`/`pretypecheck`/
@@ -58,7 +58,7 @@ this with `_resetRuntimeForTesting()`).
 The smallest useful core needs just the two IPFS ports. This repo ships a
 ready-made backend wiring (`src/api/asset-core-adapters.ts#createBackendCore`)
 and an in-memory double for tests
-(`packages/asset-core/src/testing/memory-ipfs.ts#createMemoryIpfs`).
+(`packages/asset-core/src/storage/memory-ipfs.ts#createMemoryIpfs`).
 
 ```ts
 import { createArbeskCore } from "@arbesk/asset-core";
@@ -83,7 +83,7 @@ const check = core.validateManifest(manifest);         // { valid, data | errors
 
 ```ts
 import { createArbeskCore } from "@arbesk/asset-core";
-import { createMemoryIpfs } from "@arbesk/asset-core/testing/memory-ipfs.js";
+import { createMemoryIpfs } from "@arbesk/asset-core/storage/memory-ipfs.js";
 import { _resetRuntimeForTesting } from "@arbesk/asset-core/runtime.js";
 
 afterEach(() => _resetRuntimeForTesting());
@@ -136,7 +136,7 @@ Reference implementations to copy from:
   `frontend/src/js/blockchain/asset-core-adapter.ts` (hash/storage/chain),
   `frontend/src/js/workers/worker-executor.ts` (executor)
 - **Backend**: `src/api/asset-core-adapters.ts` (IPFS over kubo/pinata)
-- **Test/in-memory**: `packages/asset-core/src/testing/memory-ipfs.ts`
+- **Test/in-memory**: `packages/asset-core/src/storage/memory-ipfs.ts`
 
 ### 3.1 Upload credentials are strategy tokens
 

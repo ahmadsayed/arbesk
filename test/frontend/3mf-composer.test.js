@@ -9,48 +9,9 @@ const BOX_PATH = path.resolve(process.cwd(), "mock-gltf-assets/box.3mf");
 const store = new Map();
 let seq = 0;
 
-jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
-  writeToIPFS: jest.fn(async (data) => {
-    const bytes =
-      data instanceof Uint8Array
-        ? data
-        : new TextEncoder().encode(String(data));
-    const cid = `bafyFake${String(seq++).padStart(4, "0")}`;
-    store.set(cid, bytes);
-    return cid;
-  }),
-  writeJSONToIPFS: jest.fn(async (json) => {
-    const cid = `bafyFake${String(seq++).padStart(4, "0")}`;
-    store.set(cid, new TextEncoder().encode(JSON.stringify(json)));
-    return cid;
-  }),
-}));
-
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
-  getRawArrayBufferFromRemoteIPFS: jest.fn(async (cid) => {
-    const bytes = store.get(cid);
-    if (!bytes) throw new Error(`fake IPFS miss: ${cid}`);
-    return bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength
-    );
-  }),
-  getArrayBufferFromRemoteIPFS: jest.fn(async (cid) => {
-    let bytes = store.get(cid);
-    if (!bytes) throw new Error(`fake IPFS miss: ${cid}`);
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-      bytes = new Uint8Array(zlib.gunzipSync(Buffer.from(bytes)));
-    }
-    return bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength
-    );
-  }),
-}));
-
 // 3mf/decomposer.js pulls uploadWithDedup from asset-core, which writes via
-// getRuntime().ipfsWrite — back the runtime ports with the same in-memory
-// store the module mocks above use.
+// getRuntime().ipfsWrite, and 3mf/composer.js reads via getRuntime().ipfsRead
+// — back the runtime ports with the in-memory store.
 const { initRuntime, _resetRuntimeForTesting } = await import(
   "@arbesk/asset-core/runtime.js"
 );
@@ -62,8 +23,13 @@ initRuntime({
       return JSON.parse(new TextDecoder().decode(bytes));
     }),
     getBytes: jest.fn(async (cid) => {
-      const bytes = store.get(cid);
+      let bytes = store.get(cid);
       if (!bytes) throw new Error(`fake IPFS miss: ${cid}`);
+      // Port contract: getBytes auto-gunzips (the frontend adapter maps it to
+      // getArrayBufferFromRemoteIPFS, which decompresses gzipped payloads).
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        bytes = new Uint8Array(zlib.gunzipSync(Buffer.from(bytes)));
+      }
       return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     }),
     getRawBytes: jest.fn(async (cid) => {
@@ -93,11 +59,11 @@ initRuntime({
 afterAll(() => _resetRuntimeForTesting());
 
 const { decompose3mf, isComposite3mf } = await import(
-  "../../frontend/src/js/3mf/decomposer.js"
+  "@arbesk/asset-core/formats/3mf/decomposer.js"
 );
-const { compose3mf } = await import("../../frontend/src/js/3mf/composer.js");
+const { compose3mf } = await import("@arbesk/asset-core/formats/3mf/composer.js");
 const { unzipBytes, zipBytes, strFromU8, strToU8 } = await import(
-  "../../frontend/src/js/3mf/zip.js"
+  "@arbesk/asset-core/formats/3mf/zip.js"
 );
 
 describe("3mf decompose/compose round-trip", () => {

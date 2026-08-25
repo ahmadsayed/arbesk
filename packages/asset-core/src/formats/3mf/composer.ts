@@ -7,7 +7,7 @@
  * .rels parts stay valid — round-tripping preserves content exactly.
  */
 
-import { getArrayBufferFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
+import { getRuntime } from "../../runtime.ts";
 import { zipBytes, strToU8 } from "./zip.ts";
 import { isComposite3mf, relsPathFor } from "./decomposer.ts";
 
@@ -51,11 +51,12 @@ export async function compose3mf(composite: Composite3mf): Promise<Uint8Array> {
   if (composite.modelRels) {
     files[relsPathFor(modelPath)] = strToU8(composite.modelRels);
   }
+  const { ipfsRead } = getRuntime();
   for (const [entryPath, ref] of Object.entries(composite.parts || {})) {
-    // Use the gzip-sniffing reader: a CID shared via the cross-format dedup
-    // map may hold a gzipped payload (the glTF pipeline uploads components
-    // compressed). Plain bytes pass through unchanged.
-    const buffer = await getArrayBufferFromRemoteIPFS(ref.cid);
+    // Auto-gunzip read (ipfsRead.getBytes): a CID shared via the cross-format
+    // dedup map may hold a gzipped payload (the glTF pipeline uploads
+    // components compressed). Plain bytes pass through unchanged.
+    const buffer = await ipfsRead.getBytes(ref.cid);
     files[entryPath] = new Uint8Array(buffer);
     console.log(`[3MF-COMPOSE] part ${entryPath} ← ipfs://${ref.cid}`);
   }

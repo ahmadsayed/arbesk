@@ -15,8 +15,8 @@
  * buffers and images stay at their original CIDs (IPFS deduplication).
  */
 
-import { sanitizeFileName } from "../utils/uri.ts";
-import { getRuntime } from "../runtime.ts";
+import { sanitizeFileName } from "../../utils/uri.ts";
+import { getRuntime } from "../../runtime.ts";
 import { uploadWithDedup } from "./dedup.ts";
 import {
   IPFS_URI_PREFIX,
@@ -25,7 +25,7 @@ import {
   attachDedupMeta,
   decomposeGltfJson,
 } from "./gltf-core.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 
 export { isComposite };
 

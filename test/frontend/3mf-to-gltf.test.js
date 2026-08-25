@@ -5,13 +5,13 @@ const BOX_PATH = path.resolve(process.cwd(), "mock-gltf-assets/box.3mf");
 
 async function loadBoxGltf() {
   const { unzipBytes, strFromU8 } = await import(
-    "../../frontend/src/js/3mf/zip.js"
+    "@arbesk/asset-core/formats/3mf/zip.js"
   );
   const { parse3mfModel } = await import(
-    "../../frontend/src/js/3mf/parser.js"
+    "@arbesk/asset-core/formats/3mf/parser.js"
   );
   const { parsed3mfToGltf } = await import(
-    "../../frontend/src/js/3mf/to-gltf.js"
+    "@arbesk/asset-core/formats/3mf/to-gltf.js"
   );
   const entries = unzipBytes(new Uint8Array(fs.readFileSync(BOX_PATH)));
   return parsed3mfToGltf(parse3mfModel(strFromU8(entries["3D/3dmodel.model"])));
@@ -65,7 +65,7 @@ describe("parsed3mfToGltf", () => {
 
   it("maps basematerials to glTF PBR materials and converts item transforms", async () => {
     const { parsed3mfToGltf } = await import(
-      "../../frontend/src/js/3mf/to-gltf.js"
+      "@arbesk/asset-core/formats/3mf/to-gltf.js"
     );
     const parsed = {
       unit: "millimeter",
@@ -108,7 +108,7 @@ describe("parsed3mfToGltf", () => {
 
   it("maps rotated build-item transforms without transposing", async () => {
     const { parsed3mfToGltf } = await import(
-      "../../frontend/src/js/3mf/to-gltf.js"
+      "@arbesk/asset-core/formats/3mf/to-gltf.js"
     );
     const parsed = {
       unit: "millimeter",

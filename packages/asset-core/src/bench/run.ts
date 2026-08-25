@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 import { createArbeskCore } from "../facade.ts";
-import { createMemoryIpfs } from "../testing/memory-ipfs.ts";
+import { createMemoryIpfs } from "../storage/memory-ipfs.ts";
 import { getRuntime } from "../runtime.ts";
 
 const benchDir = dirname(fileURLToPath(import.meta.url));

@@ -26,14 +26,14 @@ async function load() {
       writeJSONToIPFS: jest.fn(),
     })
   );
-  jest.unstable_mockModule("@arbesk/asset-core/gltf/decomposer.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     // Imported (unused) by asset-core/executor/inline.ts — the mock must
     // satisfy the full link-time surface of the decomposer module.
     decomposeGlTF: jest.fn(),
     decomposeAndStore: jest.fn(),
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/gltf/async-gltf.js", () => ({
+  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
     composeGlTFAsync: jest.fn(),
     composeGlTFToBlobAsync: jest.fn(),
     decomposeGlTFAsync: jest.fn(),
@@ -82,8 +82,8 @@ async function load() {
     "../../frontend/src/js/services/asset-save/manifest-builder.js"
   );
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
-  const asyncGltf = await import("@arbesk/asset-core/gltf/async-gltf.js");
-  const decomposer = await import("@arbesk/asset-core/gltf/decomposer.js");
+  const asyncGltf = await import("@arbesk/asset-core/formats/gltf/async-gltf.js");
+  const decomposer = await import("@arbesk/asset-core/formats/gltf/decomposer.js");
   const { gltfHandler } = await import(
     "../../frontend/src/js/formats/handlers/gltf-handler.js"
   );

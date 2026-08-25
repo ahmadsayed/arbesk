@@ -12,11 +12,11 @@
  */
 
 import type { ArbeskCoreConfig } from "./types.ts";
-import type { UploadCredential } from "./ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "./storage/ipfs/upload-with-credential.ts";
 import { initRuntime, getRuntime } from "./runtime.ts";
-import { decomposeGLB } from "./gltf/glb-parser.ts";
-import { decomposeAndStore } from "./gltf/decomposer.ts";
-import { composeGlTFToBlobAsync } from "./gltf/async-gltf.ts";
+import { decomposeGLB } from "./formats/gltf/glb-parser.ts";
+import { decomposeAndStore } from "./formats/gltf/decomposer.ts";
+import { composeGlTFToBlobAsync } from "./formats/gltf/async-gltf.ts";
 import { getManifestChain } from "./manifest/chain.ts";
 import type { ManifestChainEntry } from "./manifest/chain.ts";
 import { validateManifest } from "./manifest/utils.ts";

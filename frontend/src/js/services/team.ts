@@ -9,7 +9,7 @@
 import * as wallet from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "@arbesk/asset-core/gltf/merkle-editors.js";
+import { computeRoot, getProof, MAX_EDITORS_PER_TOKEN } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
 import {
   loadEditorList,
   saveEditorList,

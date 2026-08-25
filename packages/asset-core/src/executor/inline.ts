@@ -1,8 +1,8 @@
 import type { ExecutorPort, ExecutorOp } from "../types.ts";
-import { composeGlTF } from "../gltf/composer.ts";
-import { decomposeGlTF } from "../gltf/decomposer.ts";
-import { decomposeGLB } from "../gltf/glb-parser.ts";
-import { applyNodeColors } from "../gltf/source-color-editor.ts";
+import { composeGlTF } from "../formats/gltf/composer.ts";
+import { decomposeGlTF } from "../formats/gltf/decomposer.ts";
+import { decomposeGLB } from "../formats/gltf/glb-parser.ts";
+import { applyNodeColors } from "../formats/gltf/source-color-editor.ts";
 
 /**
  * Inline (calling-thread) op table. Each op takes the SAME single-payload

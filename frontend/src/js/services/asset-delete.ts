@@ -13,7 +13,7 @@ import {
 } from "../blockchain/wallet.ts";
 import { requireWallet } from "../blockchain/wallet-guard.ts";
 import { loadEditorList, getEditorSetVersion } from "@arbesk/asset-core/domain/editors.js";
-import { getProof } from "@arbesk/asset-core/gltf/merkle-editors.js";
+import { getProof } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
 import { unpinAssetCids } from "./api.ts";

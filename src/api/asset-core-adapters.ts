@@ -15,7 +15,7 @@ import type {
   IpfsReadPort,
   IpfsWritePort,
 } from "@arbesk/asset-core/types.js";
-import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import {
   compress,
   decompress,

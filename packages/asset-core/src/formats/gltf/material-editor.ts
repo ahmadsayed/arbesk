@@ -15,7 +15,7 @@
  *   - doubleSided (boolean)
  */
 
-import { getRuntime } from "../runtime.ts";
+import { getRuntime } from "../../runtime.ts";
 
 /**
  * Fetch a composite glTF JSON from IPFS by CID.

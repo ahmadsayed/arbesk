@@ -37,7 +37,7 @@ jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
   writeJSONToIPFS: writeJSONToIPFSMock,
 }));
 
-jest.unstable_mockModule("@arbesk/asset-core/gltf/merkle-editors.js", () => ({
+jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/merkle-editors.js", () => ({
   computeRoot: computeRootMock,
   getProof: getProofMock,
   MAX_EDITORS_PER_TOKEN: 5000,

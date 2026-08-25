@@ -8,9 +8,9 @@
  */
 
 import { getArrayBufferFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
-import { unzipBytes, isZipBytes, strFromU8 } from "../../3mf/zip.ts";
-import { parse3mfModel } from "../../3mf/parser.ts";
-import { parsed3mfToGltf } from "../../3mf/to-gltf.ts";
+import { unzipBytes, isZipBytes, strFromU8 } from "@arbesk/asset-core/formats/3mf/zip.js";
+import { parse3mfModel } from "@arbesk/asset-core/formats/3mf/parser.js";
+import { parsed3mfToGltf } from "@arbesk/asset-core/formats/3mf/to-gltf.js";
 import type {
   FormatHandler,
   FormatLoadContext,
@@ -18,10 +18,10 @@ import type {
 } from "../registry.ts";
 
 // Canonical composite-3MF markers. Mirror COMPOSITE_3MF_FORMAT and
-// COMPOSITE_3MF_PATH from ../../3mf/decomposer.ts, which is imported lazily
-// (and only where a real decomposition uploads parts) so that read-side paths
-// — load, and the already-composite normalize below — never pull the IPFS
-// write chain into the module graph.
+// COMPOSITE_3MF_PATH from @arbesk/asset-core/formats/3mf/decomposer.js, which is
+// imported lazily (and only where a real decomposition uploads parts) so that
+// read-side paths — load, and the already-composite normalize below — never
+// pull the IPFS write chain into the module graph.
 const COMPOSITE_3MF_FORMAT = "composite-3mf";
 const COMPOSITE_3MF_PATH = "composite.3mf.json";
 
@@ -52,7 +52,7 @@ export const threeMfHandler: FormatHandler = {
     let packageBytes = raw;
     if (!isZipBytes(raw)) {
       const composite = JSON.parse(strFromU8(raw));
-      const { compose3mf } = await import("../../3mf/composer.ts");
+      const { compose3mf } = await import("@arbesk/asset-core/formats/3mf/composer.js");
       packageBytes = await compose3mf(composite);
     }
 
@@ -93,7 +93,7 @@ export const threeMfHandler: FormatHandler = {
       }
       throw new Error(`[FORMATS-3mf] unrecognized 3MF source | cid=${cid}`);
     }
-    const { decompose3mf } = await import("../../3mf/decomposer.ts");
+    const { decompose3mf } = await import("@arbesk/asset-core/formats/3mf/decomposer.js");
     const { compositeCid } = await decompose3mf(raw, {
       assetName: ctx.assetName,
       assetId: ctx.assetId,

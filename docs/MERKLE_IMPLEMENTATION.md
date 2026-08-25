@@ -172,7 +172,7 @@ function _requireEditor(
 | `services/asset-save/editor-publish.ts` | **NEW** | Build Merkle proofs for republish; prepare initial editor list |
 | `ui/collaborators-panel.ts` | **HIGH** | Reusable Merkle editor list UI (add/remove/role, owner-aware) |
 | `services/team.ts` | **NEW** | Merkle-based editor add/remove with IPFS persistence |
-| `asset-core/gltf/merkle-editors.ts` | **NEW** | Merkle tree JS library (`computeRoot`, `getProof`, `makeLeaf`) |
+| `asset-core/formats/gltf/merkle-editors.ts` | **NEW** | Merkle tree JS library (`computeRoot`, `getProof`, `makeLeaf`) |
 | `services/asset-delete.ts` | **NEW** | Remove asset from collection manifest |
 | `blockchain/network-config.ts` | **LOW** | Point to new contract addresses |
 | `blockchain/token-resolver.ts` | **NONE** | Reads `tokenURI` — still in contract |
@@ -200,15 +200,15 @@ function _requireEditor(
 | `src/api/rate-limiter.ts` | Rate limits unchanged |
 | `frontend/src/js/engine/*` | Scene graph, 3D engine unchanged |
 | `frontend/src/js/ipfs/*` | IPFS client unchanged |
-| `packages/asset-core/src/gltf/composer.ts` | Unchanged |
-| `packages/asset-core/src/gltf/decomposer.ts` | Unchanged |
+| `packages/asset-core/src/formats/gltf/composer.ts` | Unchanged |
+| `packages/asset-core/src/formats/gltf/decomposer.ts` | Unchanged |
 | `frontend/src/js/services/api.ts` | Unchanged |
 
 ---
 
 ## 4. Merkle Leaf & Proof Format
 
-The JS library in `packages/asset-core/src/gltf/merkle-editors.ts` matches the Solidity leaf:
+The JS library in `packages/asset-core/src/formats/gltf/merkle-editors.ts` matches the Solidity leaf:
 
 ```javascript
 makeLeaf(address, role, tokenId, setVersion)
@@ -239,7 +239,7 @@ blockchain/contracts/
   ArbeskAssetFree.sol          ← updated with Merkle-compatible ABI
   mock/MockUSDC.sol            ← unchanged
 
-packages/asset-core/src/gltf/
+packages/asset-core/src/formats/gltf/
   merkle-editors.ts            ← Merkle tree JS library
 
 frontend/src/js/services/

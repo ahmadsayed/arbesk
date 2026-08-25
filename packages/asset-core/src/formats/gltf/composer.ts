@@ -9,8 +9,8 @@
  * `_arbesk.hash` so subsequent loads can skip the IPFS gateway.
  */
 
-import { getRuntime } from "../runtime.ts";
-import { decompress } from "../utils/compression.ts";
+import { getRuntime } from "../../runtime.ts";
+import { decompress } from "../../utils/compression.ts";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "./cache-aware-fetch.ts";
 import { composeGltfJson } from "./gltf-core.ts";
 

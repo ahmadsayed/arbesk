@@ -11,9 +11,9 @@ import {
   hashBytes,
   DEFAULT_HASH_ALGORITHM,
   SUPPORTED_HASH_ALGORITHMS,
-} from "../utils/hash.ts";
-import { compress } from "../utils/compression.ts";
-import { getRuntime } from "../runtime.ts";
+} from "../../utils/hash.ts";
+import { compress } from "../../utils/compression.ts";
+import { getRuntime } from "../../runtime.ts";
 import {
   IPFS_URI_PREFIX,
   cidFromIpfsUri,
@@ -21,7 +21,7 @@ import {
   attachDedupMeta,
   stripDedupMeta,
 } from "./gltf-core.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 
 // The pure helpers live in gltf-core.js (shared with the glTF worker);
 // re-exported here so existing import sites keep working.

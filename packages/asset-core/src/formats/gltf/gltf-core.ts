@@ -13,7 +13,7 @@
  *            in the worker).
  */
 
-import { extractDataURI } from "../utils/uri.ts";
+import { extractDataURI } from "../../utils/uri.ts";
 
 export const IPFS_URI_PREFIX = "ipfs://";
 

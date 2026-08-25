@@ -35,15 +35,15 @@ Arbesk stores 3D content on a **private Kubo IPFS node** and renders it in the b
 
 | File | Role | When to touch |
 |------|------|---------------|
-| `packages/asset-core/src/gltf/composer.ts` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
-| `packages/asset-core/src/gltf/decomposer.ts` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
-| `packages/asset-core/src/gltf/material-editor.ts` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
+| `packages/asset-core/src/formats/gltf/composer.ts` | Resolves `ipfs://<CID>` URIs → base64 data URIs for Babylon.js | Fix loading failures, add new URI formats |
+| `packages/asset-core/src/formats/gltf/decomposer.ts` | Extracts buffer/image data URIs → stores on IPFS, replaces with `ipfs://<CID>` | Add new glTF component types to decompose |
+| `packages/asset-core/src/formats/gltf/material-editor.ts` | Fetches composite glTF, modifies material PBR props, commits new CID | Add material property editors, fix color baking |
 | `frontend/src/js/engine/transforms.ts` | `extractCid()`, `detectAssetFormat()`, `applyDefaultMaterial()` | Add new format detection, change default material |
 | `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatches GLB vs glTF; `loadNode()` applies `post_processor` | Fix loading, add OBJ/FBX support |
 | `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` — runtime color/scale overlays | Fix color application, add new post-processor effects |
 | `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: node color, per-component mesh overrides, scale | Add inspector controls |
 | `frontend/src/js/services/asset-save/manifest-builder.ts` | `prepareManifestForWrite()` — bakes colors into composite glTF or stores as post_processor | Fix save flow, change edit persistence |
-| `packages/asset-core/src/gltf/async-gltf.ts` | Worker-pool wrappers: `composeGlTFAsync`, `composeGlTFToBlobAsync`, `decomposeGlTFAsync`, `decomposeAndStoreAsync`, `decomposeGLBAsync`, `editSourceColorsAsync` | Add new offloaded operations, change fallback behavior |
+| `packages/asset-core/src/formats/gltf/async-gltf.ts` | Worker-pool wrappers: `composeGlTFAsync`, `composeGlTFToBlobAsync`, `decomposeGlTFAsync`, `decomposeAndStoreAsync`, `decomposeGLBAsync`, `editSourceColorsAsync` | Add new offloaded operations, change fallback behavior |
 | `frontend/src/js/workers/gltf-worker-pool.ts` | `workerpool` manager for `gltf-worker.js`; checks availability and dispatches calls | Tune worker count, debug pool failures |
 | `frontend/src/js/workers/gltf-worker.ts` | Web Worker entry point: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` | Add new worker operations |
 | `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser-side IPFS write via `POST /api/v0/add` | Debug upload failures |
@@ -155,7 +155,7 @@ Standard glTF with data URIs → Babylon.js ImportMeshAsync(".gltf")
 
 ### 4.4 Web Worker Offload (`async-gltf.js` + `workers/gltf-worker-*`)
 
-Heavy glTF operations can run off the main thread via `frontend/src/js/workers/gltf-worker-pool.ts` (backed by `workerpool` and `frontend/src/js/workers/gltf-worker.ts`). `packages/asset-core/src/gltf/async-gltf.ts` exposes async wrappers that prefer the worker and fall back to the main-thread implementation if the pool is unavailable or the worker throws:
+Heavy glTF operations can run off the main thread via `frontend/src/js/workers/gltf-worker-pool.ts` (backed by `workerpool` and `frontend/src/js/workers/gltf-worker.ts`). `packages/asset-core/src/formats/gltf/async-gltf.ts` exposes async wrappers that prefer the worker and fall back to the main-thread implementation if the pool is unavailable or the worker throws:
 
 - `composeGlTFAsync(compositeJson)` → worker `compose` → composed glTF JSON
 - `composeGlTFToBlobAsync(compositeJson)` → worker `composeToBytes` → `Blob` of glTF JSON bytes (zero-copy transfer)

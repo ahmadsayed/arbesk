@@ -37,7 +37,7 @@ const {
   stripDedupMeta,
   cidFromIpfsUri,
   ipfsUriFromCid,
-} = await import("@arbesk/asset-core/gltf/dedup.js");
+} = await import("@arbesk/asset-core/formats/gltf/dedup.js");
 
 afterAll(() => _resetRuntimeForTesting());
 

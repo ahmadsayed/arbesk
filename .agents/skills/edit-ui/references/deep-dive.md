@@ -53,7 +53,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/js/services/api.ts` | Backend API client (generation, save, publish) |
 | `frontend/src/js/services/url-utils.ts` | Query string helpers |
 | `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side IPFS reads via backend |
-| `packages/asset-core/src/gltf/gltf-core.ts` | GLTF buffer URI ↔ CID translation and manifest compose helpers |
+| `packages/asset-core/src/formats/gltf/gltf-core.ts` | GLTF buffer URI ↔ CID translation and manifest compose helpers |
 
 ### Build & Verify Workflow
 

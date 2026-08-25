@@ -5,7 +5,7 @@
  * jsdom docblock): jsdom's realm-mismatched Uint8Array breaks the
  * `instanceof` checks in asset-core/utils/compression.ts.
  */
-import { createMemoryIpfs } from "@arbesk/asset-core/testing/memory-ipfs.js";
+import { createMemoryIpfs } from "@arbesk/asset-core/storage/memory-ipfs.js";
 import { isGzipped } from "@arbesk/asset-core/utils/compression.js";
 
 /** Contract shared by every IpfsReadPort/IpfsWritePort pair. */

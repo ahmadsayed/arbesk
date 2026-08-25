@@ -1,7 +1,7 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { mockGenerate } from "../adapters/mock-adapter.ts";
-import { serializeGLB } from "@arbesk/asset-core/gltf/gltf-core.js";
+import { serializeGLB } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import {
   isGzipped,
   decompress,

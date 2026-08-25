@@ -1,5 +1,5 @@
 /** Port + config types for asset-core. No runtime code here. */
-import type { UploadCredential } from "./ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "./storage/ipfs/upload-with-credential.ts";
 
 export interface IpfsReadPort {
   /** JSON fetch with auto-gunzip. */

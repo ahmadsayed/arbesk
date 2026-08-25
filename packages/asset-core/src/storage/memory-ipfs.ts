@@ -1,5 +1,5 @@
 import type { IpfsReadPort, IpfsWritePort, WriteJsonOptions } from "../types.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "./ipfs/upload-with-credential.ts";
 import { compress, decompress, isGzipped } from "../utils/compression.ts";
 
 let counter = 0;

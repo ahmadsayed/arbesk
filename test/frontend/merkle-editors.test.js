@@ -56,7 +56,7 @@ describe("merkle-editors", () => {
     ({ initRuntime, _resetRuntimeForTesting } = await import(
       "@arbesk/asset-core/runtime.js"
     ));
-    merkleEditors = await import("@arbesk/asset-core/gltf/merkle-editors.js");
+    merkleEditors = await import("@arbesk/asset-core/formats/gltf/merkle-editors.js");
   });
 
   beforeEach(() => {

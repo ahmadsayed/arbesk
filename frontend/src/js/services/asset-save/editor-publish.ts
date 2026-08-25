@@ -5,7 +5,7 @@
  * and persistence of the initial editor list for a new token.
  */
 
-import { computeRoot, getProof, makeLeaf } from "@arbesk/asset-core/gltf/merkle-editors.js";
+import { computeRoot, getProof, makeLeaf } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
 import * as wallet from "../../blockchain/wallet.ts";
 import { CollaboratorRole } from "../../blockchain/wallet.ts";
 import {

@@ -10,10 +10,6 @@
 declare const Web3: any;
 declare const IpfsHttpClient: any;
 
-// Node/Jest-only global sniffed via `typeof Buffer !== "undefined"` in
-// 3mf/to-gltf.ts (base64 fast path outside the browser).
-declare const Buffer: any;
-
 declare namespace BABYLON {
   type Engine = any;
   type Scene = any;

@@ -7,8 +7,8 @@
  * executor is unavailable or fails.
  */
 
-import { getRuntime } from "../runtime.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import { getRuntime } from "../../runtime.ts";
+import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 import { composeGlTF } from "./composer.ts";
 import {
   decomposeGlTF as decomposeGlTFMain,

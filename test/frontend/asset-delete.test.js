@@ -128,7 +128,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "@arbesk/asset-core/gltf/merkle-editors.js",
+    "@arbesk/asset-core/formats/gltf/merkle-editors.js",
     () => ({
       getProof: jest.fn((_list, _address, _tokenId, _version) => _getProof()),
     })

@@ -521,7 +521,7 @@ async function followupScaleCompensation(sourceCid: string, resultBytes: Uint8Ar
       "../ipfs/remote-ipfs.ts"
     );
     const { boundsFromGlbBytes, computeGltfBounds, compensationScale } =
-      await import("@arbesk/asset-core/gltf/bounds.js");
+      await import("@arbesk/asset-core/formats/gltf/bounds.js");
     const toBounds = (bytes: Uint8Array) =>
       boundsFromGlbBytes(bytes) ??
       computeGltfBounds(JSON.parse(new TextDecoder().decode(bytes)));
@@ -912,7 +912,7 @@ export async function resolveUserEmail(email: string): Promise<{ exists: boolean
 
 // ─── IPFS Upload Credential ───────────────────────────────────────────────────
 
-import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 export type { UploadCredential };
 
 /**

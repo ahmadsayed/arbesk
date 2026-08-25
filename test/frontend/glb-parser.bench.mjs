@@ -16,7 +16,7 @@ import {
   parseGLB,
   serializeGLB,
   decomposeGLB,
-} from "@arbesk/asset-core/gltf/glb-parser.js";
+} from "@arbesk/asset-core/formats/gltf/glb-parser.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "../..");

@@ -18,7 +18,7 @@ describe("uploadWithDedup - concurrent coalescing", () => {
       },
       ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
     });
-    const mod = await import("@arbesk/asset-core/gltf/dedup.js");
+    const mod = await import("@arbesk/asset-core/formats/gltf/dedup.js");
     return { mod, writeToIPFS };
   }
 

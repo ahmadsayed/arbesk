@@ -5,7 +5,7 @@
  * No post-processor overrides - the color is baked into the source CID.
  */
 
-import { getRuntime } from "../runtime.ts";
+import { getRuntime } from "../../runtime.ts";
 import { isGLB, decomposeGLB } from "./glb-parser.ts";
 
 /**

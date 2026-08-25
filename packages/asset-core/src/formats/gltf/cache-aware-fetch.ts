@@ -13,13 +13,13 @@
  * are fetched raw and stored for the next load.
  */
 
-import { arrayBufferToBase64 } from "../utils/encoding.ts";
-import { SUPPORTED_HASH_ALGORITHMS } from "../utils/hash.ts";
+import { arrayBufferToBase64 } from "../../utils/encoding.ts";
+import { SUPPORTED_HASH_ALGORITHMS } from "../../utils/hash.ts";
 import {
   getPayload,
   putPayload,
   BIG_CONTENT_THRESHOLD_BYTES,
-} from "../utils/content-cache.ts";
+} from "../../utils/content-cache.ts";
 
 interface CidFetchers {
   /** returns stored bytes (may be gzipped) */

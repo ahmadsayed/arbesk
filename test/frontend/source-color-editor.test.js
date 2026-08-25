@@ -11,7 +11,7 @@ async function load() {
   };
   const write = { writeJSONToIPFS: jest.fn() };
   jest.unstable_mockModule(
-    "@arbesk/asset-core/gltf/glb-parser.js",
+    "@arbesk/asset-core/formats/gltf/glb-parser.js",
     () => ({
       isGLB: jest.fn(),
       decomposeGLB: jest.fn(),
@@ -32,8 +32,8 @@ async function load() {
     },
   });
 
-  const mod = await import("@arbesk/asset-core/gltf/source-color-editor.js");
-  const glb = await import("@arbesk/asset-core/gltf/glb-parser.js");
+  const mod = await import("@arbesk/asset-core/formats/gltf/source-color-editor.js");
+  const glb = await import("@arbesk/asset-core/formats/gltf/glb-parser.js");
   return { mod, remote, write, glb };
 }
 

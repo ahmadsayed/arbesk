@@ -6,7 +6,7 @@ const BOX_PATH = path.resolve(process.cwd(), "mock-gltf-assets/box.3mf");
 describe("3mf zip helpers", () => {
   it("detects ZIP magic", async () => {
     const { isZipBytes, strToU8 } = await import(
-      "../../frontend/src/js/3mf/zip.js"
+      "@arbesk/asset-core/formats/3mf/zip.js"
     );
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));
     expect(isZipBytes(box)).toBe(true);
@@ -15,7 +15,7 @@ describe("3mf zip helpers", () => {
   });
 
   it("unzips the box sample into its three OPC entries", async () => {
-    const { unzipBytes } = await import("../../frontend/src/js/3mf/zip.js");
+    const { unzipBytes } = await import("@arbesk/asset-core/formats/3mf/zip.js");
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));
     const entries = unzipBytes(box);
     expect(Object.keys(entries).sort()).toEqual([
@@ -31,7 +31,7 @@ describe("3mf zip helpers", () => {
 
   it("round-trips entries through zipBytes", async () => {
     const { unzipBytes, zipBytes, strFromU8, strToU8, isZipBytes } =
-      await import("../../frontend/src/js/3mf/zip.js");
+      await import("@arbesk/asset-core/formats/3mf/zip.js");
     const zipped = zipBytes({ "a/b.txt": strToU8("hello 3mf") });
     expect(isZipBytes(zipped)).toBe(true);
     expect(strFromU8(unzipBytes(zipped)["a/b.txt"])).toBe("hello 3mf");

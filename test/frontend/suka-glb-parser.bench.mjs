@@ -58,7 +58,7 @@ writeFileSync(BEFORE_PATH, beforeSource);
 const { isGLB: isGLBBefore, parseGLB: parseGLBBefore, serializeGLB: serializeGLBBefore } =
   await import("../../frontend/src/js/gltf/glb-parser.before.js");
 const { isGLB: isGLBAfter, parseGLB: parseGLBAfter, serializeGLB: serializeGLBAfter } =
-  await import("@arbesk/asset-core/gltf/glb-parser.js");
+  await import("@arbesk/asset-core/formats/gltf/glb-parser.js");
 
 const buffer = readArrayBuffer(SUKA_PATH);
 console.log(`Asset: ${SUKA_PATH}`);

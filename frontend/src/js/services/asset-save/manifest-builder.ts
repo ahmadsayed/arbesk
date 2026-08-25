@@ -15,7 +15,7 @@ import { getPendingChildRefs } from "../../engine/scene-graph.ts";
 import { waitForPendingLinkedDrops } from "../../engine/scene-graph.ts";
 import { waitForPendingFileDrops } from "../asset-file-drop.ts";
 import { resolveFormatHandler } from "../../formats/index.ts";
-import { buildDedupMap } from "@arbesk/asset-core/gltf/dedup.js";
+import { buildDedupMap } from "@arbesk/asset-core/formats/gltf/dedup.js";
 import {
   getPendingSourceColorEdits,
   clearPendingSourceColorEdits,

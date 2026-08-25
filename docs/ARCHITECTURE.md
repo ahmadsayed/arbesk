@@ -157,10 +157,10 @@ The system currently combines:
 | Engine | `engine/parametric-preview.ts` | Live color/scale inspector preview and save |
 | IPFS | `ipfs/remote-ipfs.ts` | Gateway reads with memory + IndexedDB cache |
 | IPFS | `ipfs/write-to-ipfs.ts` | Direct browser→IPFS writes (Kubo `:5001` or Pinata presigned URLs) |
-| glTF | `packages/asset-core/src/gltf/decomposer.ts` / `packages/asset-core/src/gltf/async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
-| glTF | `packages/asset-core/src/gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
-| glTF | `packages/asset-core/src/gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for the renderer (gateway reads) |
-| glTF | `packages/asset-core/src/gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
+| glTF | `packages/asset-core/src/formats/gltf/decomposer.ts` / `packages/asset-core/src/formats/gltf/async-gltf.ts` | Breaks monolithic glTF/GLB into composite IPFS CIDs, uploads parts directly |
+| glTF | `packages/asset-core/src/formats/gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
+| glTF | `packages/asset-core/src/formats/gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for the renderer (gateway reads) |
+| glTF | `packages/asset-core/src/formats/gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
 | Blockchain | `blockchain/wallet.ts` | Backward-compat barrel re-exporting `wallet-core.ts`, `wallet-connect.ts`, `wallet-network.ts`, `wallet-payments.ts`, `wallet-publishing.ts`, `wallet-guard.ts` |
 | Blockchain | `blockchain/wallet-core.ts` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |
 | Blockchain | `blockchain/wallet-connect.ts` | WalletConnect v2 integration |

@@ -17,14 +17,14 @@
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
 import workerpool, { Transfer } from "../vendor/workerpool-10.0.2.mjs";
 import { extractDataURI } from "@arbesk/asset-core/utils/uri.js";
-import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "@arbesk/asset-core/gltf/cache-aware-fetch.js";
+import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "@arbesk/asset-core/formats/gltf/cache-aware-fetch.js";
 import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";
 import { hashBytes, DEFAULT_HASH_ALGORITHM } from "@arbesk/asset-core/utils/hash.js";
 import {
   uploadBatchToIPFSWithCredential,
   uploadToIPFSWithCredential,
-} from "@arbesk/asset-core/ipfs/upload-with-credential.js";
-import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+} from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import {
   IPFS_URI_PREFIX,
   isComposite,
@@ -32,7 +32,7 @@ import {
   attachDedupMeta,
   composeGltfJson,
   decomposeGltfJson,
-} from "@arbesk/asset-core/gltf/gltf-core.js";
+} from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
 

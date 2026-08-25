@@ -39,7 +39,7 @@ async function loadModule() {
   );
 
   await jest.unstable_mockModule(
-    "@arbesk/asset-core/gltf/async-gltf.js",
+    "@arbesk/asset-core/formats/gltf/async-gltf.js",
     () => ({
       composeGlTFAsync: jest.fn(),
       composeGlTFToBlobAsync: jest

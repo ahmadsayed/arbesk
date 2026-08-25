@@ -7,4 +7,4 @@ export {
   computeRoot,
   getProof,
   verifyProof,
-} from "../domain/editors.ts";
+} from "../../domain/editors.ts";

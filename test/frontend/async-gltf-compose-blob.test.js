@@ -21,7 +21,7 @@ async function load({ executorAvailable, execImpl } = {}) {
     "@arbesk/asset-core/runtime.js"
   );
   const { createMemoryIpfs } = await import(
-    "@arbesk/asset-core/testing/memory-ipfs.js"
+    "@arbesk/asset-core/storage/memory-ipfs.js"
   );
 
   const exec = jest.fn(
@@ -35,7 +35,7 @@ async function load({ executorAvailable, execImpl } = {}) {
   });
 
   const mod = await import(
-    "@arbesk/asset-core/gltf/async-gltf.js"
+    "@arbesk/asset-core/formats/gltf/async-gltf.js"
   );
   return { mod, exec };
 }

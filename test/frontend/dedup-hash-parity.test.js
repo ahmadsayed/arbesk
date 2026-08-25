@@ -25,7 +25,7 @@ describe("uploadWithDedup - raw-content hash parity (Finding A)", () => {
       },
       ipfsWrite: { write: writeToIPFS, writeJSON: jest.fn() },
     });
-    const mod = await import("@arbesk/asset-core/gltf/dedup.js");
+    const mod = await import("@arbesk/asset-core/formats/gltf/dedup.js");
     const hashMod = await import("@arbesk/asset-core/utils/hash.js");
     return { mod, hashMod, writeToIPFS };
   }

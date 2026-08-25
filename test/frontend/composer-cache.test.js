@@ -66,7 +66,7 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
     ipfsWrite: { write: jest.fn(), writeJSON: jest.fn() },
   });
 
-  const mod = await import("@arbesk/asset-core/gltf/composer.js");
+  const mod = await import("@arbesk/asset-core/formats/gltf/composer.js");
   return { composeGlTF: mod.composeGlTF, cacheGet, cachePut };
 }
 

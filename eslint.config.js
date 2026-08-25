@@ -110,8 +110,6 @@ export default [
               "**/workers/*",
               "**/engine/*",
               "**/ui/*",
-              "**/formats/*",
-              "**/3mf/*",
             ],
             message: "asset-core must stay environment-agnostic — consume these via injected ports (see docs/ASSET_CORE_SDK.md §7).",
           },

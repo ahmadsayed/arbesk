@@ -9,7 +9,7 @@ import {
 import {
   decomposeGLBAsync,
   editSourceColorsAsync,
-} from "@arbesk/asset-core/gltf/async-gltf.js";
+} from "@arbesk/asset-core/formats/gltf/async-gltf.js";
 import type {
   FormatHandler,
   FormatLoadContext,

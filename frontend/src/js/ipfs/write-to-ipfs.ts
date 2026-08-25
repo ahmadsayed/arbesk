@@ -9,8 +9,8 @@
 import { getUploadCredential } from "../services/api.ts";
 import { compress } from "@arbesk/asset-core/utils/compression.js";
 import { sanitizeFileName } from "@arbesk/asset-core/utils/uri.js";
-import { uploadToIPFSWithCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
-import type { UploadCredential } from "@arbesk/asset-core/ipfs/upload-with-credential.js";
+import { uploadToIPFSWithCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 
 async function bytesFromData(
   data: Uint8Array | ArrayBuffer | Blob | string

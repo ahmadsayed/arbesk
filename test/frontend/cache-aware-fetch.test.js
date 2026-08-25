@@ -19,7 +19,7 @@ async function load({ cacheHits = new Map() } = {}) {
     clearCache: jest.fn(),
   }));
 
-  const mod = await import("@arbesk/asset-core/gltf/cache-aware-fetch.js");
+  const mod = await import("@arbesk/asset-core/formats/gltf/cache-aware-fetch.js");
   return { fetchCIDAsBase64: mod.fetchCIDAsBase64, cacheGet, cachePut };
 }
 

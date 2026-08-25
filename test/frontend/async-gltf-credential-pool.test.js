@@ -3,7 +3,7 @@ import {
   estimateUploadCount,
   estimateGlbUploadCount,
   reserveFollowUpCredential,
-} from "@arbesk/asset-core/gltf/async-gltf.js";
+} from "@arbesk/asset-core/formats/gltf/async-gltf.js";
 
 function buildGlb(json) {
   const jsonBytes = new TextEncoder().encode(JSON.stringify(json));

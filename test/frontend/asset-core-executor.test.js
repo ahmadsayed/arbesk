@@ -14,7 +14,7 @@ import {
   _resetRuntimeForTesting,
 } from "@arbesk/asset-core/runtime.js";
 import { inlineExecutor } from "@arbesk/asset-core/executor/inline.js";
-import { createMemoryIpfs } from "@arbesk/asset-core/testing/memory-ipfs.js";
+import { createMemoryIpfs } from "@arbesk/asset-core/storage/memory-ipfs.js";
 
 afterEach(() => _resetRuntimeForTesting());
 

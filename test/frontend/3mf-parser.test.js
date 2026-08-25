@@ -5,10 +5,10 @@ const BOX_PATH = path.resolve(process.cwd(), "mock-gltf-assets/box.3mf");
 
 async function loadBoxParsed() {
   const { unzipBytes, strFromU8 } = await import(
-    "../../frontend/src/js/3mf/zip.js"
+    "@arbesk/asset-core/formats/3mf/zip.js"
   );
   const { parse3mfModel } = await import(
-    "../../frontend/src/js/3mf/parser.js"
+    "@arbesk/asset-core/formats/3mf/parser.js"
   );
   const entries = unzipBytes(new Uint8Array(fs.readFileSync(BOX_PATH)));
   return parse3mfModel(strFromU8(entries["3D/3dmodel.model"]));
@@ -32,7 +32,7 @@ describe("parse3mfModel", () => {
 
   it("parses basematerials, pid/pindex, and item transforms", async () => {
     const { parse3mfModel } = await import(
-      "../../frontend/src/js/3mf/parser.js"
+      "@arbesk/asset-core/formats/3mf/parser.js"
     );
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
@@ -72,7 +72,7 @@ describe("parse3mfModel", () => {
 
   it("throws on <components> objects", async () => {
     const { parse3mfModel } = await import(
-      "../../frontend/src/js/3mf/parser.js"
+      "@arbesk/asset-core/formats/3mf/parser.js"
     );
     const xml = `<?xml version="1.0"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
@@ -88,7 +88,7 @@ describe("parse3mfModel", () => {
 
   it("normalizes multiple objects/items and applies the pindex default", async () => {
     const { parse3mfModel } = await import(
-      "../../frontend/src/js/3mf/parser.js"
+      "@arbesk/asset-core/formats/3mf/parser.js"
     );
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">

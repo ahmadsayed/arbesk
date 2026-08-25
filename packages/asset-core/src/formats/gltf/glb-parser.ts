@@ -9,15 +9,15 @@
  */
 
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
-import { getRuntime } from "../runtime.ts";
-import { sanitizeFileName, extractDataURI } from "../utils/uri.ts";
+import { getRuntime } from "../../runtime.ts";
+import { sanitizeFileName, extractDataURI } from "../../utils/uri.ts";
 import {
   uploadWithDedup,
   attachDedupMeta,
   ipfsUriFromCid,
 } from "./dedup.ts";
 import type { DedupMeta } from "./dedup.ts";
-import type { UploadCredential } from "../ipfs/upload-with-credential.ts";
+import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 
 // serializeGLB lives in gltf-core.js (shared with the backend, which packs
 // composed composites to GLB for Tripo uploads) — re-exported here so
