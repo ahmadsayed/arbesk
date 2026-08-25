@@ -1,6 +1,6 @@
 # Arbesk Format Handlers
 
-Arbesk's 3D asset pipeline is format-agnostic at the dispatch layer. Adding support for a new format means writing one handler module and registering it.
+Arbesk's 3D asset pipeline is format-agnostic at the dispatch layer. Adding support for a new format means writing a pure engine module in `packages/asset-core/src/formats/<fmt>/` (parser, glTF converter, composer/decomposer over the injected IPFS ports), plus one thin browser handler, and registering the handler.
 
 ## Built-in handlers
 
@@ -72,20 +72,28 @@ The built-in `3mf` handler keeps the native form: `decomposeForSave`
 extracts the OPC package into a composite 3MF JSON — XML parts verbatim, binary
 parts referenced by CID — and returns `{ format: "3mf", path: "composite.3mf.json" }`.
 Loading parses the package and converts it to glTF in memory for Babylon.js; the
-glTF is never persisted. The composer/decomposer/parser live in `frontend/src/js/3mf/`.
+glTF is never persisted. The composer/decomposer/parser live in
+`packages/asset-core/src/formats/3mf/` and read/write IPFS through the injected
+`ipfsRead`/`ipfsWrite` runtime ports.
 
-## Adding a format in four steps
+## Adding a format
 
-1. Copy `test/frontend/fixtures/example-format.js` to a new file under `frontend/src/js/formats/handlers/`.
-2. Implement `load`, `decomposeForSave`, and `isStoredForm` for your format.
-3. Import and register it somewhere in your application bootstrap:
-   ```js
-   import { registerFormatHandler } from "./formats/registry.ts";
-   import { myFormatHandler } from "./formats/handlers/my-format-handler.js";
-   registerFormatHandler(myFormatHandler);
-   ```
-   Registration must happen **before** the first asset is loaded or saved.
-4. Add a test that registers the handler and runs `decomposeManifestNodes` on a node with `format: "myformat"`.
+1. Copy the reference engine `packages/asset-core/src/formats/example/` to
+   `packages/asset-core/src/formats/<fmt>/` — `format.ts` (constants/types/
+   predicates), `parser.ts` (pure parse), `to-gltf.ts` (render conversion), and
+   `composer.ts`/`decomposer.ts` (IPFS read/write via the runtime ports). Any
+   pure-half dependency goes in `packages/asset-core/package.json`.
+2. Copy `test/frontend/fixtures/example-format.js` to a thin handler under
+   `frontend/src/js/formats/handlers/<fmt>-handler.ts` and implement `load`,
+   `decomposeForSave`, and `isStoredForm`, delegating heavy work to the engine
+   via lazy `@arbesk/asset-core/formats/<fmt>/*.js` imports (the 3MF handler is
+   the reference).
+3. Register the handler in `frontend/src/js/formats/index.ts` and add the
+   extension to `ALLOWED_EXTENSIONS` in `services/library-ops.ts`.
+4. Registration happens at bootstrap via `formats/index.ts` — before the first
+   asset is loaded or saved.
+5. Add tests: an engine round-trip (see `test/frontend/example-format-engine.test.js`)
+   and a handler test (see `test/frontend/3mf-handler.test.js`).
 
 ## Testing recipe
 

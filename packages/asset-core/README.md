@@ -2,8 +2,9 @@
 
 **Consumer guide: `docs/ASSET_CORE_SDK.md`** — quickstarts per environment, port reference, facade API, boundary rules.
 
-Environment-agnostic Arbesk asset engine: manifests, glTF compose/decompose,
-asset domain state, and Merkle editor helpers. A real npm workspace package
+Environment-agnostic Arbesk asset engine: manifests, glTF/3MF compose/decompose
+(under `src/formats/`), storage backends (under `src/storage/`), asset domain
+state, and Merkle editor helpers. A real npm workspace package
 (`packages/asset-core/`) consumed by the browser, the Node backend, and tests —
 compiled to `dist/` (ESM + `.d.ts`) with no runtime dependency on Babylon.js
 or any 3D engine.
@@ -32,7 +33,7 @@ await core.addEditor({ tokenId }, "0x…");
 ```
 
 Subpath imports (advanced callers) use `.js`-suffixed specifiers, e.g.
-`import { composeGltfJson } from "@arbesk/asset-core/gltf/gltf-core.js"`.
+`import { composeGltfJson } from "@arbesk/asset-core/formats/gltf/gltf-core.js"`.
 
 Frontend apps call `initAssetCoreBrowser()` once at boot
 (`frontend/src/js/asset-core-init.ts`) instead of constructing a core by hand.

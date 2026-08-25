@@ -293,9 +293,10 @@ package cannot tell the difference.
 `packages/asset-core/` must stay environment-agnostic:
 
 - No imports from the frontend/backend trees (`frontend/`, `src/api/`,
-  `constants/`) or from `ipfs/`, `services/`, `blockchain/`, `workers/`,
-  `engine/`, `ui/`, `formats/`, `3mf/` — eslint enforces this
-  (`no-restricted-imports`, name-anchored patterns).
+  `constants/`) or from the browser/backend capability modules
+  (`ipfs/remote-ipfs*`, `ipfs/write-to-ipfs*`, `ipfs/asset-core-adapter*`,
+  `services/`, `blockchain/`, `workers/`, `engine/`, `ui/`) — eslint enforces
+  this (`no-restricted-imports`, name-anchored patterns).
 - No `window`/`document`/`Web3`/`navigator`/`localStorage` references and no
   `@babylonjs/*` imports — eslint `no-restricted-globals` +
   `no-restricted-imports`. `indexedDB` is allowed **only**

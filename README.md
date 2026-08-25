@@ -41,30 +41,37 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 
 ```text
 arbesk/
-├── src/                          # Express backend
-│   ├── index.js                  # Server entry point
-│   ├── config.js                 # Multi-network Web3 config
+├── src/                          # Express backend (TypeScript, Node type-stripping)
+│   ├── index.ts                  # Server entry point
+│   ├── config.ts                 # Multi-network Web3 config
 │   └── api/
-│       ├── index.js              # Main router — all v1 routes
-│       ├── assets/generate-node.js# PayGo-validated generation route (mock + Tripo3D task chains)
+│       ├── index.ts              # Main router — all v1 routes
+│       ├── assets/generate-node.ts  # PayGo-validated generation route (mock + Tripo3D task chains)
 │       ├── storage/              # kubo/pinata storage backends
-│       ├── authentication.js     # Session token auth
-│       ├── sessions.js           # 24h session store (SIWE)
-│       ├── siwe-verify.js        # EIP-4361 verification (incl. CDP smart-account fallback)
-│       ├── chat-proxy.js         # WebSocket bridge: browser ↔ Nostr relay
-│       ├── comments-archive.js   # Nostr comment thread → IPFS archive
-│       ├── token-indexer.js      # Chunked eth_getLogs ownership/editor backfill
+│       ├── authentication.ts     # Session token auth
+│       ├── sessions.ts           # 24h session store (SIWE)
+│       ├── siwe-verify.ts        # EIP-4361 verification (incl. CDP smart-account fallback)
+│       ├── chat-proxy.ts         # WebSocket bridge: browser ↔ Nostr relay
+│       ├── comments-archive.ts   # Nostr comment thread → IPFS archive
+│       ├── token-indexer.ts      # Chunked eth_getLogs ownership/editor backfill
 │       ├── routes/               # Per-domain route modules (ipfs, contracts, indexer, paymaster, …)
-│       ├── rate-limiter.js       # In-memory rate limits
+│       ├── rate-limiter.ts       # In-memory rate limits
 │       └── adapters/             # Mock/cloud generation adapters
+├── packages/asset-core/          # @arbesk/asset-core npm workspace (env-agnostic asset engine)
+│   └── src/
+│       ├── formats/              # gltf/, 3mf/, example/ — compose/decompose + pure parsers
+│       ├── storage/              # memory, in-memory IPFS, IPFS upload-with-credential
+│       ├── domain/  events/  executor/  kernels/  manifest/  state/  utils/
+│       ├── runtime.ts  types.ts  facade.ts  index.ts
+│       └── bench/
 ├── frontend/                     # Pug + custom SCSS design system + Babylon.js frontend
 │   ├── src/pug/                  # Unified SPA templates (app.pug → Studio + Library)
 │   ├── src/scss/                 # Custom SCSS design system (29 partials, no Bootstrap)
 │   ├── src/js/engine/            # Scene graph, time travel, parametric preview
 │   ├── src/js/blockchain/        # Web3.js wallet (EOA + CDP smart accounts), token resolver, SIWE
-│   ├── src/js/ipfs/              # Remote IPFS reader + browser cache + writes
-│   ├── src/js/gltf/              # glTF decompose/composer, material editor, CID URIs, merkle-editors
-│   ├── src/js/3mf/               # 3MF parser, glTF converter, composer/decomposer
+│   ├── src/js/ipfs/              # Remote IPFS reader + browser cache + writes (frontend adapters)
+│   ├── src/js/formats/           # Format-handler registry (gltf/glb/3mf → asset-core engines)
+│   ├── src/js/workers/           # glTF worker pool + worker executor
 │   ├── src/js/services/          # API/team/asset-save/library/asset-delete services
 │   └── src/js/ui/                # Chat, gallery, library grid, comments, collaborators,
 │                                 # history clocks, save/publish, outliner, ledger panel
@@ -173,7 +180,7 @@ docker compose run --rm hardhat npx hardhat test
 npm run test:e2e -- --project=chromium
 ```
 
-See `e2e/README.md` for the full E2E contract (17 specs, worktree isolation, selector map).
+See `e2e/README.md` for the full E2E contract (22 specs, worktree isolation, selector map).
 
 ---
 

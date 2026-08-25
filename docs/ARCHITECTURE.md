@@ -57,12 +57,12 @@ The system currently combines:
 │  ├─ token-resolver.ts: on-chain child_ref resolution (no server)     │
 │  ├─ time-travel.ts: manifest chain walking (no server)              │
 │  ├─ team.ts: Merkle editor list add/remove                           │
-│  ├─ merkle-editors.ts: computeRoot / getProof / makeLeaf             │
+│  ├─ merkle-editors.ts → @arbesk/asset-core (Merkle proof helpers)             │
 │  ├─ comment-thread.ts: per-asset Nostr thread state                  │
 │  ├─ comments-panel.ts: asset comment UI                              │
 │  ├─ library-controller.ts + library-grid.ts / library-toolbar.ts     │
 │  │  / library-context-menu.ts: Library view inside unified SPA       │
-│  └─ library-ops.ts: create collection, upload glTF/GLB file          │
+│  └─ library-ops.ts: create collection, upload glTF/GLB/3MF file          │
 │                                                                      │
 │  IPFS writes happen directly from the browser:                       │
 │  ├─ Thumbnails: captureAssetThumbnail() → writeToIPFS()              │
