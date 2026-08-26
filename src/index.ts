@@ -88,6 +88,10 @@ if (pinataGateway) {
 
 app.use(
   helmet({
+    // Allow the DeepSeek Harness side-viewer to embed the Studio in an iframe
+    // on a different origin (localhost:3080). Local dev only — remove this if
+    // you disable the side-viewer or harden a public deployment.
+    frameguard: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],

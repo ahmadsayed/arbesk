@@ -1,5 +1,7 @@
 /**
  * Comments Panel - unit tests for helpers
+ *
+ * @jest-environment jsdom
  */
 
 import {

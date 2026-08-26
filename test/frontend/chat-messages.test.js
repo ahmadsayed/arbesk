@@ -1,246 +1,158 @@
 /**
- * Chat message builder tests (jsdom).
+ * Chat message builder tests (Alpine store-backed).
  *
- * chat-messages.js resolves #chatHistoryList at module load, so the DOM is
- * seeded before the dynamic import in beforeAll.
+ * The reactive source of truth is Alpine.store("chat").messages; the x-for
+ * template renders it. These tests assert the store mutations the imperative
+ * entry points perform (the DOM rendering is covered by E2E + the Pug build).
  *
  * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
+import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
 
-let addChatMessage;
-let addAssetMessage;
-let addAssetActionRow;
-let addWorkingMessage;
-let addChoiceMessage;
-let addImageMessage;
-let clearChatMessages;
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+let chat;
+let Alpine;
 
 beforeAll(async () => {
-  document.body.innerHTML =
-    '<div id="chatHistoryList"><div class="chat-welcome"></div></div>';
+  document.body.innerHTML = '<div id="chatHistoryList"></div>';
   global.URL.createObjectURL = jest.fn(() => "blob:mock-url");
   global.URL.revokeObjectURL = jest.fn();
-  ({ addChatMessage, addAssetMessage, addAssetActionRow, addWorkingMessage, addChoiceMessage, addImageMessage, clearChatMessages } =
-    await import("../../frontend/src/js/ui/chat-messages.js"));
+  chat = await import("../../frontend/src/js/ui/chat-messages.js");
+  ({ Alpine } = await import("../../frontend/src/js/ui/alpine.js"));
+  await flush();
+});
+
+afterEach(() => {
+  Alpine.destroyTree(document.body);
+  Alpine.stopObservingMutations();
 });
 
 beforeEach(() => {
-  const list = document.getElementById("chatHistoryList");
-  list.innerHTML = '<div class="chat-welcome"></div>';
+  chat.clearChatMessages();
 });
 
-test("addChatMessage appends a text bubble and hides the welcome", () => {
-  addChatMessage("user", "make me a chair");
-  const list = document.getElementById("chatHistoryList");
-  const bubble = list.querySelector(".chat-bubble-user");
-  expect(bubble).not.toBeNull();
-  expect(bubble.querySelector(".chat-bubble-content").textContent).toBe(
-    "make me a chair"
-  );
-  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
+const msgs = () => Alpine.store("chat").messages;
+
+test("addChatMessage pushes a reactive text message", () => {
+  chat.addChatMessage("user", "make me a chair");
+  expect(msgs()).toHaveLength(1);
+  expect(msgs()[0].kind).toBe("text");
+  expect(msgs()[0].text).toBe("make me a chair");
+  expect(msgs()[0].role).toBe("user");
 });
 
-test("addAssetMessage builds a bubble with canvas, caption, and send button", () => {
-  const handle = addAssetMessage({ prompt: "a red car", format: "glb" });
-  expect(handle).not.toBeNull();
-  expect(handle.bubble.classList.contains("chat-bubble-asset")).toBe(true);
-  expect(handle.canvas.classList.contains("chat-asset-canvas")).toBe(true);
-  expect(handle.bubble.querySelector(".chat-asset-caption").textContent).toBe(
-    "a red car"
-  );
-  expect(handle.sendButton.textContent).toBe("Show in Studio");
-  expect(handle.sendButton.disabled).toBe(false);
+test("addChatMessage honors timestamp, extraClass, and provenance fields", () => {
+  const when = new Date("2026-08-02T10:20:00Z");
+  chat.addChatMessage("user", "old prompt", {
+    timestamp: when,
+    extraClass: "chat-bubble-history",
+    manifestCid: "cid1",
+    sourceCid: "glb1",
+    generationId: "g1",
+  });
+  const m = msgs()[0];
+  expect(m.extraClass).toBe("chat-bubble-history");
+  expect(m.manifestCid).toBe("cid1");
+  expect(m.sourceCid).toBe("glb1");
+  expect(m.generationId).toBe("g1");
+  expect(m.dateTime).toBe(when.toISOString());
 });
 
-test("markSent swaps the canvas for a snapshot and keeps the button live", () => {
-  const handle = addAssetMessage({ prompt: "p", format: "glb" });
-  handle.markSent(new Blob(["x"], { type: "image/webp" }));
-  expect(handle.bubble.querySelector("img.chat-asset-snapshot")).not.toBeNull();
-  expect(handle.bubble.querySelector("canvas")).toBeNull();
-  // The button stays enabled — re-clicking it is the explicit restore path.
-  expect(handle.sendButton.disabled).toBe(false);
-  expect(handle.sendButton.textContent).toBe("Show in Studio");
-  expect(handle.bubble.classList.contains("chat-bubble-asset-sent")).toBe(true);
-});
+test("addImageMessage single-image and multiview modes", () => {
+  chat.addImageMessage("user", "data:image/png;base64,AAAA", "chair");
+  expect(msgs()[0].kind).toBe("image");
+  expect(msgs()[0].images).toBeNull();
+  expect(msgs()[0].caption).toBe("chair");
 
-test("collapsePreview keeps the send button active", () => {
-  const handle = addAssetMessage({ prompt: "p", format: "glb" });
-  handle.collapsePreview(new Blob(["x"], { type: "image/webp" }));
-  expect(handle.bubble.querySelector("img.chat-asset-snapshot")).not.toBeNull();
-  expect(handle.sendButton.disabled).toBe(false);
-});
-
-test("markFallback replaces the canvas with an uppercase format badge", () => {
-  const handle = addAssetMessage({ prompt: "p", format: "3mf" });
-  handle.markFallback();
-  const badge = handle.bubble.querySelector(".chat-asset-badge");
-  expect(badge).not.toBeNull();
-  expect(badge.textContent).toBe("3MF");
-  expect(handle.sendButton.disabled).toBe(false);
-});
-
-test("addChoiceMessage renders choice buttons; picking disables the row", () => {
-  const picked = [];
-  addChoiceMessage(
-    "Rig & animate this model?",
-    [
-      { label: "Idle + Walk", value: ["preset:idle", "preset:walk"] },
-      { label: "Jump", value: ["preset:jump"] },
-    ],
-    (value) => picked.push(value)
-  );
-  const list = document.getElementById("chatHistoryList");
-  const bubble = list.querySelector(".chat-bubble-choices");
-  expect(bubble).not.toBeNull();
-  expect(bubble.textContent).toContain("Rig & animate this model?");
-  const buttons = bubble.querySelectorAll(".chat-choice-btn");
-  expect(buttons.length).toBe(2);
-
-  buttons[0].click();
-  expect(picked).toEqual([["preset:idle", "preset:walk"]]);
-  expect([...buttons].every((b) => b.disabled)).toBe(true);
-  expect(buttons[0].classList.contains("picked")).toBe(true);
-});
-
-test("addImageMessage renders an image bubble with a caption", () => {
-  addImageMessage("user", "data:image/png;base64,AAAA", "Image: chair.png");
-  const list = document.getElementById("chatHistoryList");
-  const bubble = list.querySelector(".chat-bubble-image");
-  expect(bubble).not.toBeNull();
-  const img = bubble.querySelector("img.chat-image-thumb");
-  expect(img).not.toBeNull();
-  expect(img.src).toContain("data:image/png;base64,AAAA");
-  // Single-image mode never renders the multiview grid.
-  expect(bubble.querySelector(".chat-image-grid")).toBeNull();
-  expect(bubble.querySelector(".chat-bubble-content").textContent).toBe(
-    "Image: chair.png"
-  );
-  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
-});
-
-test("addImageMessage with options.images renders a captioned 2-column grid", () => {
-  addImageMessage("user", "data:image/png;base64,FRONT", "Images: chair.png + 2 views", {
+  chat.clearChatMessages();
+  chat.addImageMessage("user", "data:image/png;base64,FRONT", "views", {
     images: [
       { src: "data:image/png;base64,FRONT", caption: "Front" },
       { src: "data:image/png;base64,LEFT", caption: "Left" },
-      { src: "data:image/png;base64,BACK", caption: "Back" },
     ],
   });
-  const list = document.getElementById("chatHistoryList");
-  const bubble = list.querySelector(".chat-bubble-image");
-  expect(bubble).not.toBeNull();
-  const grid = bubble.querySelector(".chat-image-grid");
-  expect(grid).not.toBeNull();
-  const cells = grid.querySelectorAll(".chat-image-cell");
-  expect(cells.length).toBe(3);
-  const thumbs = grid.querySelectorAll("img.chat-image-thumb");
-  expect(thumbs[0].src).toContain("data:image/png;base64,FRONT");
-  const captions = [...grid.querySelectorAll(".chat-image-view")].map(
-    (el) => el.textContent
-  );
-  expect(captions).toEqual(["Front", "Left", "Back"]);
-  expect(bubble.querySelector(".chat-bubble-content").textContent).toBe(
-    "Images: chair.png + 2 views"
-  );
-  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
+  expect(msgs()[0].images).toHaveLength(2);
 });
 
-test("addWorkingMessage shows a spinner bubble and removes it", () => {
-  const working = addWorkingMessage("Carving your model…");
+test("addChoiceMessage dispatches onPick once via the component", () => {
+  const picked = [];
+  chat.addChoiceMessage("Rig & animate?", [{ label: "Jump", value: ["preset:jump"] }], (v) => picked.push(v));
+  const msg = msgs()[0];
+  expect(msg.kind).toBe("choice");
+  const component = chat.chatFeed();
+  component.pickChoice(msg, { value: ["preset:jump"] });
+  expect(picked).toEqual([["preset:jump"]]);
+  expect(msg.picked).toBe(true);
+  component.pickChoice(msg, { value: ["preset:jump"] }); // second pick ignored
+  expect(picked).toHaveLength(1);
+});
+
+test("addWorkingMessage handle setText/setProgress/remove", () => {
+  const working = chat.addWorkingMessage("Carving…", { onCancel: () => {} });
   expect(working).not.toBeNull();
-  const list = document.getElementById("chatHistoryList");
-  const bubble = list.querySelector(".chat-bubble-working");
-  expect(bubble).not.toBeNull();
-  expect(bubble.querySelector(".chat-working-spinner")).not.toBeNull();
-  expect(bubble.textContent).toContain("Carving your model…");
+  expect(msgs()[0].kind).toBe("working");
+  expect(msgs()[0].cancel).toBe(true);
 
   working.setText("Almost there…");
-  expect(bubble.textContent).toContain("Almost there…");
+  expect(msgs()[0].text).toBe("Almost there…");
+
+  working.setProgress(0.5, "Sculpting");
+  expect(msgs()[0].progress).toBe(0.5);
+  expect(msgs()[0].text).toBe("Sculpting");
 
   working.remove();
-  expect(list.querySelector(".chat-bubble-working")).toBeNull();
+  expect(msgs()).toHaveLength(0);
 });
 
-test("clearChatMessages removes all bubbles and restores the welcome", () => {
-  const list = document.getElementById("chatHistoryList");
-  addChatMessage("user", "make me a chair");
-  addAssetMessage({ prompt: "p", format: "glb" });
-  expect(list.querySelectorAll(".chat-bubble").length).toBeGreaterThan(0);
-  expect(list.querySelector(".chat-welcome").hidden).toBe(true);
+test("addAssetMessage handle markSent/markFallback/markSaved mutate the store", () => {
+  const handle = chat.addAssetMessage({ prompt: "a red car", format: "glb", generationId: "g1" });
+  expect(msgs()[0].kind).toBe("asset");
+  expect(msgs()[0].preview).toBe("live");
 
-  clearChatMessages();
+  handle.markSent(new Blob(["x"], { type: "image/webp" }));
+  expect(msgs()[0].preview).toBe("snapshot");
+  expect(msgs()[0].sent).toBe(true);
+  expect(msgs()[0].snapshotUrl).toBe("blob:mock-url");
 
-  expect(list.querySelectorAll(".chat-bubble").length).toBe(0);
-  expect(list.querySelector(".chat-welcome")).not.toBeNull();
-  expect(list.querySelector(".chat-welcome").hidden).toBe(false);
+  handle.markSaved();
+  expect(msgs()[0].saved).toBe(true);
 });
 
-test("addAssetActionRow renders one button per action with data-action", () => {
-  const handle = addAssetMessage({ prompt: "a knight", format: "glb" });
+test("addAssetMessage markFallback sets the format-badge state", () => {
+  const handle = chat.addAssetMessage({ prompt: "p", format: "3mf", generationId: "g1" });
+  handle.markFallback();
+  expect(msgs()[0].preview).toBe("fallback");
+  expect(msgs()[0].snapshotUrl).toBeNull();
+});
+
+test("addAssetActionRow attaches followups to the message by generationId", () => {
+  chat.addAssetMessage({ prompt: "a knight", format: "glb", generationId: "g1" });
   const picks = [];
-  addAssetActionRow(handle, [
+  chat.addAssetActionRow("g1", [
     { id: "retexture", label: "Retexture", onPick: () => picks.push("retexture") },
-    { id: "animate", label: "Animate…", onPick: () => picks.push("animate") },
   ]);
-  const btns = handle.bubble.querySelectorAll(".chat-asset-followups [data-action]");
-  expect([...btns].map((b) => b.dataset.action)).toEqual(["retexture", "animate"]);
-  btns[0].click();
+  expect(msgs()[0].followups).toEqual([{ id: "retexture", label: "Retexture" }]);
+
+  const component = chat.chatFeed();
+  component.followup(msgs()[0], "retexture");
   expect(picks).toEqual(["retexture"]);
 });
 
-test("markSaved annotates the bubble", () => {
-  const handle = addAssetMessage({ prompt: "a knight", format: "glb" });
-  handle.markSaved();
-  expect(handle.bubble.classList.contains("chat-bubble-asset-saved")).toBe(true);
-  expect(handle.bubble.querySelector(".chat-asset-saved-pill")?.textContent).toBe("Saved");
+test("clearChatMessages empties the store", () => {
+  chat.addChatMessage("user", "a");
+  chat.addAssetMessage({ prompt: "b", format: "glb", generationId: "g" });
+  expect(msgs().length).toBeGreaterThan(0);
+  chat.clearChatMessages();
+  expect(msgs()).toHaveLength(0);
 });
 
-test("addChatMessage honors timestamp and extraClass options", () => {
-  const when = new Date("2026-08-02T10:20:00Z");
-  addChatMessage("user", "old prompt", {
-    timestamp: when,
-    extraClass: "chat-bubble-history",
-  });
-  const bubble = document.querySelector(".chat-bubble-history");
-  expect(bubble).not.toBeNull();
-  expect(bubble.classList.contains("chat-bubble-user")).toBe(true);
-  expect(bubble.querySelector("time").dateTime).toBe(when.toISOString());
+test("registerAssetSendHandler dispatches via showInStudio", () => {
+  chat.addAssetMessage({ prompt: "a knight", format: "glb", generationId: "g1" });
+  const seen = [];
+  chat.registerAssetSendHandler("g1", (id) => seen.push(id));
+  chat.chatFeed().showInStudio(msgs()[0]);
+  expect(seen).toEqual(["g1"]);
 });
 
-test("addWorkingMessage renders a Stop button when onCancel is given", () => {
-  let cancelled = 0;
-  const handle = addWorkingMessage("Carving…", {
-    onCancel: () => {
-      cancelled++;
-    },
-  });
-  const btn = handle.bubble.querySelector(".chat-working-cancel");
-  expect(btn).not.toBeNull();
-  expect(btn.textContent).toBe("Stop");
-  btn.click();
-  expect(cancelled).toBe(1);
-  expect(btn.disabled).toBe(true);
-});
-
-test("addWorkingMessage without onCancel has no Stop button", () => {
-  const handle = addWorkingMessage("Carving…");
-  expect(handle.bubble.querySelector(".chat-working-cancel")).toBeNull();
-});
-
-test("addAssetActionRow creates the actions container on bubbles that lack one", () => {
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble chat-bubble-history chat-bubble-version";
-  const picks = [];
-  addAssetActionRow({ bubble }, [
-    { id: "retopo", label: "Retopo", onPick: () => picks.push("retopo") },
-  ]);
-  const container = bubble.querySelector(".chat-asset-actions");
-  expect(container).not.toBeNull();
-  const btn = /** @type {HTMLButtonElement} */ (
-    container.querySelector('[data-action="retopo"]')
-  );
-  btn.click();
-  expect(picks).toEqual(["retopo"]);
-});

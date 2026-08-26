@@ -14,8 +14,9 @@ import {
 } from "../engine/scene-graph.ts";
 import { showToast } from "./toasts.ts";
 import { showCustomDialog, showCheckboxDialog } from "./dialog.ts";
-import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage } from "./chat-messages.ts";
+import { addChatMessage, addAssetMessage, addWorkingMessage, addImageMessage, clearChatMessages, addAssetActionRow, addChoiceMessage, registerAssetSendHandler } from "./chat-messages.ts";
 import type { AssetMessageHandle, WorkingMessageHandle } from "./chat-messages.ts";
+import { Alpine } from "./alpine.ts";
 import { followupActionsFor } from "@arbesk/asset-core/domain/generation-actions.js";
 import type { FollowupAction } from "@arbesk/asset-core/domain/generation-actions.js";
 import {
@@ -597,9 +598,17 @@ async function attachChatPreview(
     assetMessage.markFallback();
     return;
   }
+  // The asset bubble is rendered by Alpine's x-for on the next tick; wait for
+  // the <canvas> to exist before mounting the Babylon preview onto it.
+  await Alpine.nextTick();
+  const canvas = assetMessage.canvas;
+  if (!canvas) {
+    assetMessage.markFallback();
+    return;
+  }
   const handle = await createChatPreview(
     generationId,
-    assetMessage.canvas,
+    canvas,
     { cid: record.sourceAssetCid, path: record.path, format: record.format },
     {
       onAutoCollapse: (collapsedId: string, snapshot: Blob | null) => {
@@ -627,7 +636,7 @@ async function sendGenerationToStudio(
   if (!record || record.status !== "pending") return;
 
   updatePendingGeneration(generationId, { status: "sent" });
-  assetMessage.sendButton.disabled = true;
+  assetMessage.setSendDisabled(true);
 
   // Capture the chain tip before the state set re-roots it at the record's
   // manifest — restoring an older bubble must not fork the chain.
@@ -705,7 +714,7 @@ async function sendGenerationToStudio(
   } catch (err) {
     console.error("Show in Studio failed:", err);
     updatePendingGeneration(generationId, { status: "pending" });
-    assetMessage.sendButton.disabled = false;
+    assetMessage.setSendDisabled(false);
     addChatMessage(
       "system",
       (err as Error).message || "Failed to load the model in the Studio."
@@ -962,10 +971,10 @@ function animatePresetLabel(preset: string): string {
  * after sending: re-clicking a sent bubble restores that version.
  */
 function wireSendButton(generationId: string, assetMessage: AssetMessageHandle) {
-  assetMessage.sendButton.addEventListener("click", () => {
-    const record = getPendingGeneration(generationId);
-    if (record?.status === "sent") void restoreGeneration(generationId);
-    else void sendGenerationToStudio(generationId, assetMessage);
+  registerAssetSendHandler(generationId, (id) => {
+    const record = getPendingGeneration(id);
+    if (record?.status === "sent") void restoreGeneration(id);
+    else void sendGenerationToStudio(id, assetMessage);
   });
 }
 
@@ -1016,7 +1025,7 @@ function presentGenerationResult(
     });
   }
 
-  const assetMessage = addAssetMessage({ prompt, format: result.format });
+  const assetMessage = addAssetMessage({ prompt, format: result.format, generationId });
   if (assetMessage) {
     assetMessages.set(generationId, assetMessage);
     wireSendButton(generationId, assetMessage);
@@ -1033,11 +1042,9 @@ function presentGenerationResult(
  * comes from followupActionsFor; each action runs against the bubble's own
  * GLB (sourceAssetCid), so any bubble stays actionable indefinitely.
  */
-function addFollowupActions(generationId: string, bubbleEl: HTMLElement | null = null) {
+function addFollowupActions(generationId: string, _bubbleEl: HTMLElement | null = null) {
   const record = getPendingGeneration(generationId);
-  const assetMessage = assetMessages.get(generationId);
-  const bubble = bubbleEl || assetMessage?.bubble || null;
-  if (!record || !bubble) return;
+  if (!record) return;
   const ACTION_DEFS: Record<FollowupAction, { label: string; run: () => void }> = {
     retexture: { label: "Retexture", run: () => void onRetexture(generationId) },
     retopo: { label: "Retopo", run: () => void onRetopo(generationId) },
@@ -1049,7 +1056,7 @@ function addFollowupActions(generationId: string, bubbleEl: HTMLElement | null =
     label: ACTION_DEFS[id].label,
     onPick: ACTION_DEFS[id].run,
   }));
-  addAssetActionRow(assetMessage || { bubble }, actions);
+  addAssetActionRow(generationId, actions);
 }
 
 /**
@@ -1100,15 +1107,15 @@ function presentStagedModel({
     name,
   });
 
-  const assetMessage = addAssetMessage({ prompt, format: source.format });
+  const assetMessage = addAssetMessage({ prompt, format: source.format, generationId });
   if (assetMessage) {
     assetMessages.set(generationId, assetMessage);
     if (assetManifestCid) {
       wireSendButton(generationId, assetMessage);
     } else {
       // Drop path: the model is already in the viewport — nothing to send.
-      assetMessage.sendButton.disabled = true;
-      assetMessage.sendButton.textContent = "In Studio";
+      assetMessage.setSendDisabled(true);
+      assetMessage.setSendLabel("In Studio");
     }
     void attachChatPreview(generationId, assetMessage);
     addFollowupActions(generationId);
@@ -2172,10 +2179,7 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }: { cid: stri
 // action row as a live generation bubble. chat-history registered the
 // pending-generation record and tagged the bubble with data-generation-id.
 on(EVENTS.HISTORY_VERSION_ACTIONABLE, ({ generationId }: { generationId: string }) => {
-  const bubble = document.querySelector(
-    `.chat-bubble-version[data-generation-id="${generationId}"]`,
-  );
-  if (bubble) addFollowupActions(generationId, bubble as HTMLElement);
+  addFollowupActions(generationId);
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {

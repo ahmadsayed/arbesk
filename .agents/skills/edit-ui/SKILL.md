@@ -21,6 +21,7 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 10. **Icons come from the sprite** — never inline SVG paths in Pug. Add a `<symbol>` to `frontend/public/icons.svg` and reference `use(href="/icons.svg#id")`; keep symbol children bare so host `stroke="currentColor"` inherits (no `<img>` — kills theming).
 11. **CSS variables, not raw px** — spacing, colors, radii, durations from tokens.
 12. **E2E is a public contract** — renaming an id/class/label, changing status text, or reordering a flow breaks specs. Update `e2e/helpers/studio-selectors.mjs` + specs and run the suite.
+13. **Stateful panels use Alpine.js** — register via `registerAlpineComponent()` in `ui/alpine.ts`; shared reactive state lives in `Alpine.store(...)` (component factories return getters over the store, `init()` seeds before subscribing). Alpine renders asynchronously — `await Alpine.nextTick()` before imperative post-render DOM work (Babylon canvas mounts), and `Alpine.initTree()`/`Alpine.destroyTree()` for dynamically-injected subtrees. Keep engine DOM (canvases, focus traps) imperative. See `references/alpine.md`.
 
 ## File Map
 
@@ -42,5 +43,6 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 - Read `references/checklists.md` when adding a panel or keyboard shortcut (7-step checklist, keydown guard).
 - Read `references/patterns.md` when you need an empty state, drop zone, or spinner.
 - Read `references/pitfalls.md` when something feels off (ortho frustum, HighlightLayer stencil, mesh disposal, form guards).
+- Read `references/alpine.md` when converting an imperative panel to Alpine.js (store/getter/template pattern, dynamic components, async render timing, jest testing).
 - Read `references/e2e-sync.md` when changing any button/id/label/flow/status text.
 - Read `references/deep-dive.md` for architecture, shell, HIG principles, state, events, Babylon, and SCSS internals.

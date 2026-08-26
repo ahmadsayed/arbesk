@@ -54,11 +54,83 @@
             use(href="/icons.svg#trash")
     .sidebar-view-body
       #chatHistory
-        #chatHistoryList.chat-history-list
-          .chat-welcome
+        #chatHistoryList.chat-history-list(x-data="chatFeed")
+          .chat-welcome(x-show="!hasMessages")
             .welcome-icon ✦
             p.welcome-text Create an asset
             p.welcome-sub Describe the 3D asset you want to generate.
+          template(x-for="msg in messages" :key="msg.id")
+            div(
+              :class="bubbleClass(msg)"
+              :data-msg-id="msg.id"
+              :data-manifest-cid="msg.manifestCid"
+              :data-source-cid="msg.sourceCid"
+              :data-generation-id="msg.generationId"
+              @click="onTextClick(msg)"
+            )
+              template(x-if="msg.kind === 'text'")
+                span.chat-bubble-content(x-text="msg.text")
+              template(x-if="msg.kind === 'text'")
+                time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
+              template(x-if="msg.kind === 'image'")
+                template(x-if="msg.images")
+                  .chat-image-grid
+                    template(x-for="entry in msg.images" :key="entry.src")
+                      figure.chat-image-cell
+                        img.chat-image-thumb(:src="entry.src" :alt="entry.caption || msg.caption || 'Attached image'")
+                        template(x-if="entry.caption")
+                          figcaption.chat-image-view(x-text="entry.caption")
+                template(x-if="!msg.images")
+                  img.chat-image-thumb(:src="msg.src" :alt="msg.caption || 'Attached image'")
+              template(x-if="msg.kind === 'image' && msg.caption")
+                span.chat-bubble-content(x-text="msg.caption")
+              template(x-if="msg.kind === 'image'")
+                time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
+              template(x-if="msg.kind === 'choice'")
+                span.chat-bubble-content(x-text="msg.text")
+              template(x-if="msg.kind === 'choice'")
+                .chat-choices
+                  template(x-for="(choice, idx) in msg.choices" :key="idx")
+                    button.btn.btn-secondary.chat-choice-btn(
+                      type="button"
+                      :disabled="msg.picked"
+                      :class="{ picked: msg.picked && choice.value === msg.pickedValue }"
+                      x-text="choice.label"
+                      @click="pickChoice(msg, choice)"
+                    )
+              template(x-if="msg.kind === 'choice'")
+                time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
+              template(x-if="msg.kind === 'working'")
+                span.chat-working-spinner(aria-hidden="true" :hidden="msg.progress !== null")
+              template(x-if="msg.kind === 'working'")
+                span.chat-working-body
+                  span.chat-bubble-content(x-text="msg.progress === null ? msg.text : msg.text + ' ' + Math.round(msg.progress * 100) + '%'")
+                  span.chat-working-track(:hidden="msg.progress === null" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round((msg.progress || 0) * 100)")
+                    span.chat-working-fill(:style="{ width: Math.round((msg.progress || 0) * 100) + '%' }")
+              template(x-if="msg.kind === 'working' && msg.cancel")
+                button.btn.btn-secondary.chat-working-cancel(type="button" :disabled="msg.cancelDisabled" @click="stopWorking(msg)") Stop
+              template(x-if="msg.kind === 'asset'")
+                .chat-asset-preview
+                  template(x-if="msg.preview === 'live'")
+                    canvas.chat-asset-canvas(:aria-label="'3D preview of ' + msg.prompt")
+                  template(x-if="msg.preview === 'snapshot'")
+                    img.chat-asset-snapshot(:src="msg.snapshotUrl" :alt="'Snapshot of ' + msg.prompt")
+                  template(x-if="msg.preview === 'fallback'")
+                    .chat-asset-badge(x-text="(msg.format || '3D Model').toUpperCase()")
+              template(x-if="msg.kind === 'asset'")
+                span.chat-asset-caption
+                  span(x-text="msg.prompt")
+                  template(x-if="msg.saved")
+                    span.chat-asset-saved-pill Saved
+              template(x-if="msg.kind === 'asset'")
+                .chat-asset-actions
+                  button.btn.btn-primary.chat-asset-send(type="button" :disabled="msg.sendDisabled" x-text="msg.sendLabel" @click="showInStudio(msg)")
+                  template(x-if="msg.followups.length")
+                    .chat-asset-followups
+                      template(x-for="a in msg.followups" :key="a.id")
+                        button.btn.btn-secondary.chat-asset-followup-btn(type="button" :data-action="a.id" x-text="a.label" @click="followup(msg, a.id)")
+              template(x-if="msg.kind === 'asset'")
+                time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
       .chat-composer
         details#composerSettings.composer-settings(open)
           summary.composer-settings-summary Provider &amp; Quality

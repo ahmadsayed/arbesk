@@ -73,22 +73,30 @@ aside#inspector.inspector
               span#selectedComponentName.component-editor-name —
               .component-editor-swatch#selectedComponentSwatch
             input#selectedComponentColor.form-color.component-color-editor(type="color" aria-label="Component color")
-    section#commentsSection.inspector-section.comments-section(hidden)
+    section#commentsSection.inspector-section.comments-section(hidden x-data="commentsPanel" :hidden="!sectionVisible")
       h3#commentsTitle.inspector-section-title Comments ·
-        span#commentsCount 0
+        span#commentsCount(x-text="count") 0
       .comments-scroll
         ul#commentList.comment-list(role="list" aria-label="Comments")
-      #commentsEmpty.comments-empty(hidden)
+          template(x-for="c in comments" :key="c.id")
+            li.comment-item(:class="{ 'comment-mentioned-you': c.mentioned }" :data-event-id="c.id")
+              .comment-avatar(aria-hidden="true" x-text="c.avatar")
+              .comment-body
+                .comment-meta
+                  span.comment-author(:title="c.authorTitle" x-text="c.author")
+                  span.comment-time(x-text="c.time")
+                p.comment-text(x-html="c.html")
+      #commentsEmpty.comments-empty(:hidden="!showEmpty")
         .comments-empty-icon ✦
-        p.comments-empty-title No comments yet
-        p.comments-empty-sub Mention an editor to request a change or review.
+        p.comments-empty-title(x-text="emptyTitle") No comments yet
+        p.comments-empty-sub(x-text="emptySub") Mention an editor to request a change or review.
       .comment-composer
         #commentAutocomplete.autocomplete(hidden role="listbox" aria-label="Mention a wallet")
         label.composer-label(for="commentComposerInput") Add a comment
-        textarea#commentComposerInput.composer-input(rows="3" placeholder="Add a comment… use @ to mention a wallet." aria-label="Add a comment")
+        textarea#commentComposerInput.composer-input(rows="3" placeholder="Add a comment… use @ to mention a wallet." aria-label="Add a comment" x-model="draft" @keydown.ctrl.enter.prevent="post()")
         .composer-actions
           span.composer-hint Ctrl+Enter to send
-          button#postCommentBtn.btn.btn-primary.btn-sm(type="button" aria-label="Post comment" title="Post comment (Ctrl+Enter)") Post
+          button#postCommentBtn.btn.btn-primary.btn-sm(type="button" aria-label="Post comment" title="Post comment (Ctrl+Enter)" :disabled="!canPost" @click="post()") Post
       span#commentsLiveRegion.sr-only(aria-live="polite" aria-atomic="true")
   .inspector-footer
     button#inspectorToggle.panel-toggle(aria-label="Collapse inspector" title="Collapse inspector" aria-expanded="true")

@@ -22,9 +22,13 @@ let _startScheduled = false;
 /**
  * Register an Alpine data component (usable as `x-data="name"`) and schedule
  * the one-time Alpine.start().
- * @param factory - returns the component's reactive data + methods
+ * @param factory - returns the component's reactive data + methods. Accepts
+ *   optional parameters passed from an `x-data="name(...)"` expression.
  */
-export function registerAlpineComponent(name: string, factory: () => object): void {
+export function registerAlpineComponent(
+  name: string,
+  factory: (...args: any[]) => object
+): void {
   Alpine.data(name, factory);
   if (_startScheduled) return;
   _startScheduled = true;

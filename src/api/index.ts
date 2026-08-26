@@ -24,6 +24,7 @@ import openapiRoutes from "./routes/openapi.ts";
 import testUtilsRoutes from "./routes/test-utils.ts";
 import paymasterRoutes from "./routes/paymaster.ts";
 import usersRoutes from "./routes/users.ts";
+import devConsoleRoutes from "./routes/dev-console.ts";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export interface ApiDeps {
@@ -84,6 +85,12 @@ export default (deps: ApiDeps) => {
   // ─── Users (CDP email → smart account resolution) ──────────────────────────
 
   v1.use("/users", usersRoutes());
+
+  // ─── Dev console bridge (browser → stdout, diagnostics sink) ───────────────
+
+  if (process.env.NODE_ENV !== "production") {
+    v1.use("/dev", devConsoleRoutes());
+  }
 
   // ─── OpenAPI Specification ─────────────────────────────────────────────────
 

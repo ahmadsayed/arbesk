@@ -1,80 +1,159 @@
 /**
- * Chat message builders for the AI Generation pane.
+ * Chat message builders for the AI Generation pane — Alpine.js.
  *
- * addChatMessage renders plain text bubbles (user/system). addAssetMessage
- * renders a rich bubble for a generation result: a live 3D preview canvas,
- * the prompt caption, and a "Show in Studio" action. The bubble's lifecycle
- * mirrors the pending-generation record: while pending it can show a live
- * preview (or a static fallback), and once sent it collapses to a snapshot
- * image. The preview is orbit-only — the button is the sole way a model
- * enters the Studio, and it stays live after sending so re-clicking it
- * restores that version.
+ * Every chat bubble is a reactive message object in Alpine.store("chat").messages,
+ * rendered declaratively by the x-for template in studio-sidebar.pug. The
+ * imperative entry points below (addChatMessage, addAssetMessage, …) are thin
+ * wrappers that push/mutate message objects; Alpine re-renders the list.
+ *
+ * The one genuinely imperative path is the live 3D preview: create-panel
+ * awaits Alpine's next tick, then mounts a Babylon engine onto the
+ * canvas.chat-asset-canvas that x-for rendered for the asset message
+ * (AGENTS.md rule #5 — a Babylon canvas must be created/disposed imperatively,
+ * so it stays a post-render mount rather than store-owned DOM).
  */
 
-const chatHistoryList = document.getElementById("chatHistoryList");
+import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { Alpine, registerAlpineComponent } from "./alpine.ts";
 
-function hideWelcome() {
-  const welcome = chatHistoryList?.querySelector<HTMLElement>(".chat-welcome");
-  if (welcome) welcome.hidden = true;
+// ─── Message model ─────────────────────────────────────────────────────────
+
+interface ChatMsgBase {
+  id: string;
+  time: string;
+  dateTime: string;
 }
 
-function appendBubble(bubble: HTMLElement) {
-  if (!chatHistoryList) return;
-  chatHistoryList.appendChild(bubble);
-  chatHistoryList.scrollTop = chatHistoryList.scrollHeight;
+interface TextMsg extends ChatMsgBase {
+  kind: "text";
+  role: "user" | "system";
+  text: string;
+  extraClass: string;
+  manifestCid?: string;
+  sourceCid?: string;
+  generationId?: string;
+  followups?: Array<{ id: string; label: string }>;
 }
 
-function buildTimestamp(date: Date = new Date()): HTMLElement {
-  const time = document.createElement("time");
-  time.className = "chat-bubble-time";
-  time.dateTime = date.toISOString();
-  time.textContent = date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return time;
+interface ImageMsg extends ChatMsgBase {
+  kind: "image";
+  role: "user" | "system";
+  src: string;
+  caption: string;
+  images: Array<{ src: string; caption?: string }> | null;
 }
 
-/**
- * Append a plain text chat message.
- * @param role
- * @param text
- * @param [options]
- * @param [options.timestamp] - defaults to now
- * @param [options.extraClass] - extra CSS class on the bubble
- */
+interface ChoiceMsg extends ChatMsgBase {
+  kind: "choice";
+  text: string;
+  choices: Array<{ label: string; value: any }>;
+  picked: boolean;
+  pickedValue: any;
+}
+
+interface WorkingMsg extends ChatMsgBase {
+  kind: "working";
+  text: string;
+  progress: number | null;
+  cancel: boolean;
+  cancelDisabled: boolean;
+}
+
+interface AssetMsg extends ChatMsgBase {
+  kind: "asset";
+  prompt: string;
+  format: string;
+  generationId: string;
+  preview: "live" | "snapshot" | "fallback";
+  snapshotUrl: string | null;
+  sent: boolean;
+  saved: boolean;
+  sendLabel: string;
+  sendDisabled: boolean;
+  followups: Array<{ id: string; label: string }>;
+}
+
+export type ChatMsg = TextMsg | ImageMsg | ChoiceMsg | WorkingMsg | AssetMsg;
+
+// ─── Reactive store + handler registries ───────────────────────────────────
+
+interface ChatStore {
+  messages: ChatMsg[];
+}
+
+let _store: ChatStore | null = null;
+
+function store(): ChatStore {
+  if (!_store) {
+    if (!Alpine.store("chat")) {
+      Alpine.store("chat", { messages: [] as ChatMsg[] });
+    }
+    _store = Alpine.store("chat") as ChatStore;
+  }
+  return _store;
+}
+
+const assetSendHandlers = new Map<string, (generationId: string) => void>();
+const followupHandlers = new Map<string, (actionId: string) => void>();
+const choiceHandlers = new Map<string, (value: any) => void>();
+const cancelHandlers = new Map<string, () => void>();
+
+let seq = 0;
+function nextId(): string {
+  return "msg-" + ++seq;
+}
+
+function timeFor(timestamp?: Date): { time: string; dateTime: string } {
+  const d = timestamp || new Date();
+  return {
+    time: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    dateTime: d.toISOString(),
+  };
+}
+
+function push(msg: ChatMsg): void {
+  store().messages.push(msg);
+}
+
+function findBy(predicate: (msg: ChatMsg) => boolean): ChatMsg | undefined {
+  return store().messages.find(predicate);
+}
+
+function removeWhere(predicate: (msg: ChatMsg) => boolean): void {
+  const s = store();
+  s.messages = s.messages.filter((m) => !predicate(m));
+}
+
+// ─── Imperative entry points (thin store writers) ──────────────────────────
+
 export function addChatMessage(
   role: "user" | "system",
   text: string,
-  options: { timestamp?: Date; extraClass?: string } = {}
-) {
-  if (!chatHistoryList) return;
-  hideWelcome();
-
-  const bubble = document.createElement("div");
-  bubble.className = `chat-bubble chat-bubble-${role}${options.extraClass ? ` ${options.extraClass}` : ""}`;
-
-  const content = document.createElement("span");
-  content.className = "chat-bubble-content";
-  content.textContent = text;
-  bubble.appendChild(content);
-
-  bubble.appendChild(buildTimestamp(options.timestamp));
-  appendBubble(bubble);
+  options: {
+    timestamp?: Date;
+    extraClass?: string;
+    manifestCid?: string;
+    sourceCid?: string;
+    generationId?: string;
+  } = {}
+): TextMsg {
+  const t = timeFor(options.timestamp);
+  const msg: TextMsg = {
+    id: nextId(),
+    kind: "text",
+    role,
+    text,
+    extraClass: options.extraClass || "",
+    time: t.time,
+    dateTime: t.dateTime,
+    ...(options.manifestCid ? { manifestCid: options.manifestCid } : {}),
+    ...(options.sourceCid ? { sourceCid: options.sourceCid } : {}),
+    ...(options.generationId ? { generationId: options.generationId } : {}),
+  };
+  push(msg);
+  return msg;
 }
 
-/**
- * Append a chat message containing an image (e.g. a reference photo attached
- * for image-to-3D), with an optional caption below it. When `options.images`
- * is given (multiview), the bubble renders a 2-column thumbnail grid with a
- * small view caption under each thumb instead of the single image.
- * @param role
- * @param src - image URL or data URI (single-image mode)
- * @param [caption]
- * @param [options]
- * @param [options.timestamp] - defaults to now
- * @param [options.images] - multiview thumbnails
- */
 export function addImageMessage(
   role: "user" | "system",
   src: string,
@@ -83,343 +162,310 @@ export function addImageMessage(
     timestamp?: Date;
     images?: Array<{ src: string; caption?: string }>;
   } = {}
-) {
-  if (!chatHistoryList) return;
-  hideWelcome();
-
-  const bubble = document.createElement("div");
-  bubble.className = `chat-bubble chat-bubble-${role} chat-bubble-image`;
-
-  if (Array.isArray(options.images) && options.images.length > 0) {
-    const grid = document.createElement("div");
-    grid.className = "chat-image-grid";
-    for (const entry of options.images) {
-      const cell = document.createElement("figure");
-      cell.className = "chat-image-cell";
-      const img = document.createElement("img");
-      img.className = "chat-image-thumb";
-      img.src = entry.src;
-      img.alt = entry.caption || caption || "Attached image";
-      cell.appendChild(img);
-      if (entry.caption) {
-        const viewCaption = document.createElement("figcaption");
-        viewCaption.className = "chat-image-view";
-        viewCaption.textContent = entry.caption;
-        cell.appendChild(viewCaption);
-      }
-      grid.appendChild(cell);
-    }
-    bubble.appendChild(grid);
-  } else {
-    const img = document.createElement("img");
-    img.className = "chat-image-thumb";
-    img.src = src;
-    img.alt = caption || "Attached image";
-    bubble.appendChild(img);
-  }
-
-  if (caption) {
-    const content = document.createElement("span");
-    content.className = "chat-bubble-content";
-    content.textContent = caption;
-    bubble.appendChild(content);
-  }
-
-  bubble.appendChild(buildTimestamp(options.timestamp));
-  appendBubble(bubble);
+): void {
+  const t = timeFor(options.timestamp);
+  push({
+    id: nextId(),
+    kind: "image",
+    role,
+    src,
+    caption: caption || "",
+    images:
+      Array.isArray(options.images) && options.images.length
+        ? options.images
+        : null,
+    time: t.time,
+    dateTime: t.dateTime,
+  });
 }
 
-/**
- * Remove all chat bubbles and restore the welcome placeholder. Used by the
- * Clear Chat action; preview disposal and store resets live in the caller
- * (create-panel) since it owns that state.
- */
-export function clearChatMessages() {
-  if (!chatHistoryList) return;
-  chatHistoryList
-    .querySelectorAll(".chat-bubble")
-    .forEach((el) => el.remove());
-  const welcome = chatHistoryList.querySelector<HTMLElement>(".chat-welcome");
-  if (welcome) welcome.hidden = false;
-}
-
-/**
- * Append a system message with a row of single-use choice buttons. Clicking
- * a choice disables the whole row and invokes onPick with the choice value.
- * Used for in-chat follow-up actions (e.g. rig & animate presets).
- * @param text
- * @param choices
- * @param onPick
- */
 export function addChoiceMessage(
   text: string,
   choices: Array<{ label: string; value: any }>,
   onPick: (value: any) => void
-): { bubble: HTMLElement } | null {
-  if (!chatHistoryList) return null;
-  hideWelcome();
-
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble chat-bubble-system chat-bubble-choices";
-
-  const content = document.createElement("span");
-  content.className = "chat-bubble-content";
-  content.textContent = text;
-  bubble.appendChild(content);
-
-  const row = document.createElement("div");
-  row.className = "chat-choices";
-  for (const choice of choices) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "btn btn-secondary chat-choice-btn";
-    btn.textContent = choice.label;
-    btn.addEventListener("click", () => {
-      row
-        .querySelectorAll("button")
-        .forEach((b) => (b.disabled = true));
-      btn.classList.add("picked");
-      onPick(choice.value);
-    });
-    row.appendChild(btn);
-  }
-  bubble.appendChild(row);
-  bubble.appendChild(buildTimestamp());
-  appendBubble(bubble);
-  return { bubble };
+): void {
+  const id = nextId();
+  const t = timeFor();
+  choiceHandlers.set(id, onPick);
+  push({
+    id,
+    kind: "choice",
+    text,
+    choices,
+    picked: false,
+    pickedValue: null,
+    time: t.time,
+    dateTime: t.dateTime,
+  });
 }
 
 export interface WorkingMessageHandle {
-  bubble: HTMLElement;
+  id: string;
   setText: (text: string) => void;
-  /** show a determinate progress bar at 0..1 (replacing the indeterminate
-   * spinner, GNOME-style) and append the percentage to the status text */
   setProgress: (fraction: number, text?: string) => void;
   remove: () => void;
 }
 
-/**
- * Append a transient work-in-progress indicator (spinner + status text).
- * The caller removes it when the operation settles. When `onCancel` is
- * given, a Stop button rides along; clicking it disables itself and invokes
- * the callback (which owns confirm + teardown).
- * @param text
- * @param [options]
- * @param [options.onCancel]
- */
 export function addWorkingMessage(
   text: string,
   options: { onCancel?: () => void } = {}
 ): WorkingMessageHandle | null {
-  if (!chatHistoryList) return null;
-  hideWelcome();
-
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble chat-bubble-system chat-bubble-working";
-  bubble.setAttribute("role", "status");
-
-  const spinner = document.createElement("span");
-  spinner.className = "chat-working-spinner";
-  spinner.setAttribute("aria-hidden", "true");
-
-  const body = document.createElement("span");
-  body.className = "chat-working-body";
-
-  const content = document.createElement("span");
-  content.className = "chat-bubble-content";
-  content.textContent = text;
-
-  const track = document.createElement("span");
-  track.className = "chat-working-track";
-  track.hidden = true;
-  const fill = document.createElement("span");
-  fill.className = "chat-working-fill";
-  track.appendChild(fill);
-
-  body.appendChild(content);
-  body.appendChild(track);
-
-  bubble.appendChild(spinner);
-  bubble.appendChild(body);
-
-  let baseText = text;
-
-  const onCancel = options.onCancel;
-  if (typeof onCancel === "function") {
-    const stopBtn = document.createElement("button");
-    stopBtn.type = "button";
-    stopBtn.className = "btn btn-secondary chat-working-cancel";
-    stopBtn.textContent = "Stop";
-    stopBtn.addEventListener("click", () => {
-      stopBtn.disabled = true;
-      onCancel();
-    });
-    bubble.appendChild(stopBtn);
+  const id = nextId();
+  const t = timeFor();
+  if (typeof options.onCancel === "function") {
+    cancelHandlers.set(id, options.onCancel);
   }
-
-  appendBubble(bubble);
-
+  push({
+    id,
+    kind: "working",
+    text,
+    progress: null,
+    cancel: typeof options.onCancel === "function",
+    cancelDisabled: false,
+    time: t.time,
+    dateTime: t.dateTime,
+  });
   return {
-    bubble,
+    id,
     setText(next) {
-      baseText = next;
-      content.textContent = next;
+      const msg = findBy((m) => m.id === id) as WorkingMsg | undefined;
+      if (msg) msg.text = next;
     },
     setProgress(fraction, nextText) {
-      const clamped = Math.min(1, Math.max(0, fraction));
-      if (typeof nextText === "string" && nextText) baseText = nextText;
-      // Determinate progress replaces the spinner (one indicator, not two).
-      spinner.hidden = true;
-      track.hidden = false;
-      track.setAttribute("role", "progressbar");
-      track.setAttribute("aria-valuemin", "0");
-      track.setAttribute("aria-valuemax", "100");
-      track.setAttribute("aria-valuenow", String(Math.round(clamped * 100)));
-      fill.style.width = `${Math.round(clamped * 100)}%`;
-      content.textContent = `${baseText} ${Math.round(clamped * 100)}%`;
+      const msg = findBy((m) => m.id === id) as WorkingMsg | undefined;
+      if (!msg) return;
+      msg.progress = Math.min(1, Math.max(0, fraction));
+      if (typeof nextText === "string" && nextText) msg.text = nextText;
     },
     remove() {
-      bubble.remove();
+      removeWhere((m) => m.id === id);
+      cancelHandlers.delete(id);
     },
   };
 }
 
 export interface AssetMessageHandle {
-  bubble: HTMLElement;
-  /** host for the live 3D preview */
-  canvas: HTMLCanvasElement;
-  sendButton: HTMLButtonElement;
-  /** swap the live canvas for a static image, keeping the Show-in-Studio
-   * action active (used when the preview cap evicts this bubble, or on
-   * preview teardown) */
-  collapsePreview: (snapshot: Blob | null) => void;
-  /** collapse the preview to a snapshot and tag the bubble sent; the
-   * Show-in-Studio button stays live so it doubles as the explicit
-   * restore path */
-  markSent: (snapshot: Blob | null) => void;
-  /** replace the canvas with a static format badge when no live preview is
-   * available */
-  markFallback: () => void;
-  /** annotate the bubble with a "Saved" pill once the asset has been saved
-   * to the library */
-  markSaved: () => void;
+  id: string;
+  generationId: string;
+  get bubble(): HTMLElement | null;
+  get canvas(): HTMLCanvasElement | null;
+  get sendButton(): HTMLButtonElement | null;
+  setSendDisabled(disabled: boolean): void;
+  setSendLabel(label: string): void;
+  collapsePreview(snapshot: Blob | null): void;
+  markSent(snapshot: Blob | null): void;
+  markFallback(): void;
+  markSaved(): void;
 }
 
-/**
- * Append a rich asset message for a generation result.
- */
-export function addAssetMessage({
-  prompt,
-  format,
-}: {
+export function addAssetMessage(args: {
   prompt: string;
   format?: string;
+  generationId: string;
 }): AssetMessageHandle | null {
-  if (!chatHistoryList) return null;
-  hideWelcome();
+  const id = nextId();
+  const t = timeFor();
+  push({
+    id,
+    kind: "asset",
+    prompt: args.prompt,
+    format: args.format || "",
+    generationId: args.generationId,
+    preview: "live",
+    snapshotUrl: null,
+    sent: false,
+    saved: false,
+    sendLabel: "Show in Studio",
+    sendDisabled: false,
+    followups: [],
+    time: t.time,
+    dateTime: t.dateTime,
+  });
 
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble chat-bubble-asset";
+  const findMsg = (): AssetMsg | undefined =>
+    findBy((m) => m.id === id) as AssetMsg | undefined;
 
-  const previewWrap = document.createElement("div");
-  previewWrap.className = "chat-asset-preview";
-
-  const canvas = document.createElement("canvas");
-  canvas.className = "chat-asset-canvas";
-  canvas.setAttribute("aria-label", `3D preview of ${prompt}`);
-  previewWrap.appendChild(canvas);
-
-  const caption = document.createElement("span");
-  caption.className = "chat-asset-caption";
-  caption.textContent = prompt;
-
-  const actions = document.createElement("div");
-  actions.className = "chat-asset-actions";
-
-  const sendButton = document.createElement("button");
-  sendButton.type = "button";
-  sendButton.className = "btn btn-primary chat-asset-send";
-  sendButton.textContent = "Show in Studio";
-  actions.appendChild(sendButton);
-
-  bubble.appendChild(previewWrap);
-  bubble.appendChild(caption);
-  bubble.appendChild(actions);
-  bubble.appendChild(buildTimestamp());
-  appendBubble(bubble);
-
-  /**
-   * Replace the live canvas with a static snapshot image (or a format badge
-   * when no snapshot is available).
-   */
-  function swapPreview(snapshot: Blob | null) {
-    previewWrap.innerHTML = "";
+  function setPreview(snapshot: Blob | null): void {
+    const msg = findMsg();
+    if (!msg) return;
     if (snapshot) {
-      const img = document.createElement("img");
-      img.className = "chat-asset-snapshot";
-      img.src = URL.createObjectURL(snapshot);
-      img.alt = `Snapshot of ${prompt}`;
-      previewWrap.appendChild(img);
+      msg.preview = "snapshot";
+      msg.snapshotUrl = URL.createObjectURL(snapshot);
     } else {
-      const badge = document.createElement("div");
-      badge.className = "chat-asset-badge";
-      badge.textContent = (format || "3D Model").toUpperCase();
-      previewWrap.appendChild(badge);
+      msg.preview = "fallback";
+      msg.snapshotUrl = null;
     }
   }
 
-  return {
-    bubble,
-    canvas,
-    sendButton,
+  const handle: AssetMessageHandle = {
+    id,
+    generationId: args.generationId,
+    get bubble() {
+      return document.querySelector(
+        '[data-msg-id="' + id + '"]'
+      ) as HTMLElement | null;
+    },
+    get canvas() {
+      return (this.bubble?.querySelector(".chat-asset-canvas") ||
+        null) as HTMLCanvasElement | null;
+    },
+    get sendButton() {
+      return (this.bubble?.querySelector(".chat-asset-send") ||
+        null) as HTMLButtonElement | null;
+    },
+    setSendDisabled(disabled) {
+      const msg = findMsg();
+      if (msg) msg.sendDisabled = disabled;
+    },
+    setSendLabel(label) {
+      const msg = findMsg();
+      if (msg) msg.sendLabel = label;
+    },
     collapsePreview(snapshot) {
-      swapPreview(snapshot);
+      setPreview(snapshot);
     },
     markSent(snapshot) {
-      swapPreview(snapshot);
-      sendButton.disabled = false;
-      bubble.classList.add("chat-bubble-asset-sent");
+      setPreview(snapshot);
+      const msg = findMsg();
+      if (msg) {
+        msg.sent = true;
+        msg.sendDisabled = false;
+      }
     },
     markFallback() {
-      swapPreview(null);
+      setPreview(null);
     },
     markSaved() {
-      if (bubble.classList.contains("chat-bubble-asset-saved")) return;
-      bubble.classList.add("chat-bubble-asset-saved");
-      const pill = document.createElement("span");
-      pill.className = "chat-asset-saved-pill";
-      pill.textContent = "Saved";
-      caption.appendChild(pill);
+      const msg = findMsg();
+      if (msg && !msg.saved) msg.saved = true;
+    },
+  };
+  return handle;
+}
+
+export function addAssetActionRow(
+  generationId: string,
+  actions: Array<{ id: string; label: string; onPick: () => void }>
+): void {
+  if (actions.length === 0) return;
+  const msg = findBy(
+    (m) =>
+      (m.kind === "asset" || m.kind === "text") &&
+      (m as any).generationId === generationId
+  ) as (AssetMsg | TextMsg) | undefined;
+  if (msg) {
+    (msg as any).followups = actions.map((a) => ({ id: a.id, label: a.label }));
+  }
+  followupHandlers.set(generationId, (actionId) => {
+    actions.find((a) => a.id === actionId)?.onPick();
+  });
+}
+
+export function registerAssetSendHandler(
+  generationId: string,
+  handler: (generationId: string) => void
+): void {
+  assetSendHandlers.set(generationId, handler);
+}
+
+/** Move already-added messages to the front (history renders above live). */
+export function prependChatMessages(messages: ChatMsg[]): void {
+  const s = store();
+  const ids = new Set(messages.map((m) => m.id));
+  s.messages = messages.concat(s.messages.filter((m) => !ids.has(m.id)));
+}
+
+export function clearChatMessages(): void {
+  store().messages = [];
+  choiceHandlers.clear();
+  cancelHandlers.clear();
+  followupHandlers.clear();
+  assetSendHandlers.clear();
+}
+
+export function clearHistoryMessages(): void {
+  removeWhere(
+    (m) => m.kind === "text" && m.extraClass.includes("chat-bubble-history")
+  );
+}
+
+// ─── Component factory (template-facing) ───────────────────────────────────
+
+interface ChatFeedComponent {
+  readonly messages: ChatMsg[];
+  readonly hasMessages: boolean;
+  bubbleClass(msg: ChatMsg): string;
+  showInStudio(msg: AssetMsg): void;
+  followup(msg: AssetMsg, actionId: string): void;
+  onTextClick(msg: any): void;
+  pickChoice(msg: ChoiceMsg, choice: { value: any }): void;
+  stopWorking(msg: WorkingMsg): void;
+}
+
+export function chatFeed(): ChatFeedComponent {
+  return {
+    get messages() {
+      return store().messages;
+    },
+    get hasMessages() {
+      return store().messages.length > 0;
+    },
+
+    bubbleClass(msg: ChatMsg) {
+      switch (msg.kind) {
+        case "text":
+          return (
+            "chat-bubble chat-bubble-" +
+            msg.role +
+            (msg.extraClass ? " " + msg.extraClass : "")
+          );
+        case "image":
+          return "chat-bubble chat-bubble-" + msg.role + " chat-bubble-image";
+        case "choice":
+          return "chat-bubble chat-bubble-system chat-bubble-choices";
+        case "working":
+          return "chat-bubble chat-bubble-system chat-bubble-working";
+        case "asset":
+          return (
+            "chat-bubble chat-bubble-asset" +
+            (msg.sent ? " chat-bubble-asset-sent" : "") +
+            (msg.saved ? " chat-bubble-asset-saved" : "")
+          );
+      }
+    },
+
+    showInStudio(msg: AssetMsg) {
+      assetSendHandlers.get(msg.generationId)?.(msg.generationId);
+    },
+
+    followup(msg: AssetMsg, actionId: string) {
+      followupHandlers.get(msg.generationId)?.(actionId);
+    },
+
+    onTextClick(msg: any) {
+      if (msg && msg.kind === "text" && msg.manifestCid) {
+        emit(EVENTS.HISTORY_VERSION_SELECTED, {
+          cid: msg.manifestCid,
+          sourceCid: msg.sourceCid,
+          name: msg.text,
+        });
+      }
+    },
+
+    pickChoice(msg: ChoiceMsg, choice: { value: any }) {
+      if (msg.picked) return;
+      msg.picked = true;
+      msg.pickedValue = choice.value;
+      choiceHandlers.get(msg.id)?.(choice.value);
+    },
+
+    stopWorking(msg: WorkingMsg) {
+      if (msg.cancelDisabled) return;
+      msg.cancelDisabled = true;
+      cancelHandlers.get(msg.id)?.();
     },
   };
 }
 
-/**
- * Append a compact follow-up action row (Retexture · Retopo · Auto-rig ·
- * Animate…) to an asset bubble's action area. History bubbles have no
- * actions container — one is created so the same row works there.
- */
-export function addAssetActionRow(
-  handle: AssetMessageHandle | { bubble: HTMLElement },
-  actions: Array<{ id: string; label: string; onPick: () => void }>
-) {
-  if (actions.length === 0) return;
-  let actionsEl = handle.bubble.querySelector(".chat-asset-actions");
-  if (!actionsEl) {
-    actionsEl = document.createElement("div");
-    actionsEl.className = "chat-asset-actions";
-    handle.bubble.appendChild(actionsEl);
-  }
-  const row = document.createElement("div");
-  row.className = "chat-asset-followups";
-  for (const action of actions) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "btn btn-secondary chat-asset-followup-btn";
-    btn.dataset.action = action.id;
-    btn.textContent = action.label;
-    btn.addEventListener("click", action.onPick);
-    row.appendChild(btn);
-  }
-  actionsEl.appendChild(row);
-}
+registerAlpineComponent("chatFeed", chatFeed);
+

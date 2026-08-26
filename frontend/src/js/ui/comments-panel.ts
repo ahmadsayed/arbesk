@@ -1,9 +1,11 @@
 /**
- * Arbesk Comments Panel
+ * Arbesk Comments Panel — Alpine.js component.
  *
- * Thin view layer for the right-inspector Comments section. All transport,
- * deduplication, and ordering live in {@link CommentThread};
- * this module only renders what the thread emits.
+ * Thin view layer for the right-inspector Comments section. Transport,
+ * deduplication, and ordering live in CommentThread; this module maps the
+ * thread's events/status into a reactive Alpine store that the x-for template
+ * in studio-main.pug renders. initCommentsPanel() subscribes to the bus and
+ * syncs the store; the DOM is fully declarative.
  */
 
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -13,64 +15,148 @@ import { CommentThread } from "../services/comment-thread.ts";
 import { truncateAddress } from "../utils/format.ts";
 import { escapeHtml } from "../utils/html.ts";
 import { getCachedSession } from "../services/api.ts";
+import { Alpine, registerAlpineComponent } from "./alpine.ts";
 
-export interface CommentPanelElements {
-  section?: HTMLElement | null;
-  title?: HTMLElement | null;
-  list?: HTMLElement | null;
-  empty?: HTMLElement | null;
-  input?: HTMLInputElement | null;
-  postBtn?: HTMLButtonElement | null;
-  count?: HTMLElement | null;
-  live?: HTMLElement | null;
-}
-
-const elements: CommentPanelElements = {};
 const thread = new CommentThread();
 
-// ─── Init ───────────────────────────────────────────────────────────────────
-
-export function initCommentsPanel(): void {
-  cacheElements();
-  bindEvents();
-  bindDomEvents();
-  bindThreadEvents();
-  updateUI();
+interface CommentVm {
+  id: string;
+  avatar: string;
+  author: string;
+  authorTitle: string;
+  time: string;
+  mentioned: boolean;
+  html: string;
 }
 
-function cacheElements(): void {
-  elements.section = document.getElementById("commentsSection");
-  elements.title = document.getElementById("commentsTitle");
-  elements.list = document.getElementById("commentList");
-  elements.empty = document.getElementById("commentsEmpty");
-  elements.input = document.getElementById("commentComposerInput") as HTMLInputElement | null;
-  elements.postBtn = document.getElementById("postCommentBtn") as HTMLButtonElement | null;
-  elements.count = document.getElementById("commentsCount");
-  elements.live = document.getElementById("commentsLiveRegion");
+interface CommentsStore {
+  events: CommentVm[];
+  sectionVisible: boolean;
+  canPost: boolean;
+  showEmpty: boolean;
+  emptyTitle: string;
+  emptySub: string;
+  draft: string;
 }
 
-function bindEvents(): void {
-  on(EVENTS.SCENE_READY, onAssetContextChanged);
-  on(EVENTS.ASSET_PUBLISHED, onAssetContextChanged);
-  on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, onAssetContextChanged);
-  on(EVENTS.ASSET_DRAFT_SAVED, onAssetContextChanged);
-  on(EVENTS.ASSET_CLEARED, onAssetContextChanged);
-  on(EVENTS.WALLET_CONNECTED, onAuthChanged);
-  on(EVENTS.USER_AUTHENTICATED, onAuthChanged);
-  on(EVENTS.WALLET_DISCONNECTED, onAuthChanged);
+let _store: CommentsStore | null = null;
+function store(): CommentsStore {
+  if (!_store) {
+    if (!Alpine.store("comments")) {
+      Alpine.store("comments", {
+        events: [],
+        sectionVisible: false,
+        canPost: false,
+        showEmpty: true,
+        emptyTitle: "No comments yet",
+        emptySub: "Mention an editor to request a change or review.",
+        draft: "",
+      });
+    }
+    _store = Alpine.store("comments") as CommentsStore;
+  }
+  return _store;
 }
 
-function bindDomEvents(): void {
-  elements.postBtn?.addEventListener("click", onPostComment);
-  elements.input?.addEventListener("keydown", onComposerKeydown);
+function toVm(event: any): CommentVm {
+  const tags = (event.tags || []) as any[];
+  const senderTag = tags.find(
+    (t) => Array.isArray(t) && t[0] === "sender"
+  );
+  const sender = (senderTag && senderTag[1]) || "unknown";
+  const currentAddress = walletState.get().walletAddress;
+  const isMe =
+    currentAddress && sender.toLowerCase() === currentAddress.toLowerCase();
+  const contentText = event.content || "";
+  const mentioned = isMentioned(contentText, currentAddress);
+  const time = event.created_at
+    ? formatRelativeTime(new Date(event.created_at * 1000).toISOString())
+    : "";
+  return {
+    id: event.id,
+    avatar: getInitials(isMe ? "You" : truncateAddress(sender)),
+    author: isMe ? "You" : truncateAddress(sender),
+    authorTitle: sender,
+    time,
+    mentioned: mentioned || !!isMe,
+    html: renderMentions(escapeHtml(event.content)),
+  };
 }
 
-function bindThreadEvents(): void {
-  on(EVENTS.COMMENT_THREAD_CHANGE, onThreadChange);
-  on(EVENTS.COMMENT_THREAD_STATUS, onThreadStatus);
+function renderMentions(html: string): string {
+  return html.replace(
+    /(@0x[a-fA-F0-9]{1,40})/g,
+    '<span class="comment-mention" role="button" tabindex="0">$1</span>'
+  );
 }
 
-// ─── State Changes ──────────────────────────────────────────────────────────
+function syncEvents(): void {
+  store().events = thread.events.map(toVm);
+  syncUI();
+  scrollToBottomSoon();
+}
+
+function syncUI(): void {
+  const s = store();
+  const status = thread.status;
+  const hasToken = !!status.tokenId;
+  const isConnected = !!walletState.get().walletAddress;
+  const hasSession = !!getCachedSession();
+  const wsOpen = status.connected;
+
+  s.sectionVisible = hasToken;
+  s.canPost = hasToken && isConnected && hasSession && wsOpen;
+
+  if (!isConnected) {
+    s.emptyTitle = "Sign in";
+    s.emptySub = "Sign in to view comments.";
+    s.showEmpty = true;
+  } else if (!hasSession) {
+    s.emptyTitle = "Sign in";
+    s.emptySub = "Sign in with your wallet to view comments.";
+    s.showEmpty = true;
+  } else if (s.events.length === 0) {
+    s.emptyTitle = "No comments yet";
+    s.emptySub = "Mention an editor to request a change or review.";
+    s.showEmpty = true;
+  } else {
+    s.showEmpty = false;
+  }
+}
+
+function postComment(): void {
+  const s = store();
+  const text = s.draft.trim();
+  if (!text) return;
+  if (thread.post(text)) {
+    s.draft = "";
+    document.getElementById("commentComposerInput")?.focus();
+  }
+}
+
+function scrollToBottomSoon(): void {
+  if (typeof requestAnimationFrame !== "function") return;
+  requestAnimationFrame(() => {
+    const scroller = document.querySelector(".comments-scroll");
+    scroller?.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+  });
+}
+
+function announce(text: string): void {
+  const live = document.getElementById("commentsLiveRegion");
+  if (!live) return;
+  live.textContent = "";
+  requestAnimationFrame(() => {
+    live.textContent = text;
+  });
+}
+
+function showError(message: string): void {
+  console.warn("[COMMENTS] server error:", message);
+  const s = store();
+  s.emptySub = message;
+  s.showEmpty = true;
+}
 
 async function onAssetContextChanged(e: any): Promise<void> {
   const tokenId = getActiveAssetTokenId();
@@ -80,194 +166,64 @@ async function onAssetContextChanged(e: any): Promise<void> {
 }
 
 function onAuthChanged(): void {
-  updateUI();
+  syncUI();
   thread.connect();
 }
 
 function onThreadChange({ source }: { source?: string }): void {
-  renderAll();
-  updateUI();
-  if (source === "live") {
-    announce("New comment posted");
-  }
+  syncEvents();
+  if (source === "live") announce("New comment posted");
 }
 
 function onThreadStatus({ error }: { error?: string } = {}): void {
-  updateUI();
+  syncUI();
   if (error) showError(error);
 }
 
-// ─── Composer ───────────────────────────────────────────────────────────────
-
-function onPostComment(): void {
-  const text = elements.input?.value?.trim();
-  if (!text) return;
-  if (thread.post(text)) {
-    (elements.input as HTMLInputElement).value = "";
-    (elements.input as HTMLInputElement).focus();
-  }
+interface CommentsPanelComponent {
+  readonly comments: CommentVm[];
+  readonly count: number;
+  readonly sectionVisible: boolean;
+  readonly canPost: boolean;
+  readonly showEmpty: boolean;
+  readonly emptyTitle: string;
+  readonly emptySub: string;
+  draft: string;
+  post(): void;
 }
 
-function onComposerKeydown(e: KeyboardEvent): void {
-  if (e.ctrlKey && e.key === "Enter") {
-    e.preventDefault();
-    onPostComment();
-  }
+export function commentsPanel(): CommentsPanelComponent {
+  return {
+    get comments() { return store().events; },
+    get count() { return store().events.length; },
+    get sectionVisible() { return store().sectionVisible; },
+    get canPost() { return store().canPost; },
+    get showEmpty() { return store().showEmpty; },
+    get emptyTitle() { return store().emptyTitle; },
+    get emptySub() { return store().emptySub; },
+    get draft() { return store().draft; },
+    set draft(value: string) { store().draft = value; },
+    post() { postComment(); },
+  };
 }
 
-// ─── Rendering ──────────────────────────────────────────────────────────────
+registerAlpineComponent("commentsPanel", commentsPanel);
 
-function renderAll(): void {
-  if (!elements.list) return;
-  elements.list.innerHTML = "";
-  for (const event of thread.events) {
-    elements.list.appendChild(renderEvent(event));
-  }
-  updateCount();
-  scrollToBottom();
+export function initCommentsPanel(): void {
+  on(EVENTS.SCENE_READY, onAssetContextChanged);
+  on(EVENTS.ASSET_PUBLISHED, onAssetContextChanged);
+  on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, onAssetContextChanged);
+  on(EVENTS.ASSET_DRAFT_SAVED, onAssetContextChanged);
+  on(EVENTS.ASSET_CLEARED, onAssetContextChanged);
+  on(EVENTS.WALLET_CONNECTED, onAuthChanged);
+  on(EVENTS.USER_AUTHENTICATED, onAuthChanged);
+  on(EVENTS.WALLET_DISCONNECTED, onAuthChanged);
+  on(EVENTS.COMMENT_THREAD_CHANGE, onThreadChange);
+  on(EVENTS.COMMENT_THREAD_STATUS, onThreadStatus);
+
+  syncEvents();
 }
 
-function renderEvent(event: any): HTMLLIElement {
-  const tags = (event.tags || []) as any[];
-  const senderTag = tags.find(
-    (t) => Array.isArray(t) && t[0] === "sender"
-  );
-  const sender = senderTag?.[1] || "unknown";
-  const currentAddress = walletState.get().walletAddress;
-  const isMe =
-    currentAddress && sender.toLowerCase() === currentAddress.toLowerCase();
-  const contentText = event.content || "";
-  const mentioned = isMentioned(contentText, currentAddress);
-  const time = event.created_at
-    ? formatRelativeTime(new Date(event.created_at * 1000).toISOString())
-    : "";
-
-  const li = document.createElement("li");
-  li.className = `comment-item ${
-    mentioned || isMe ? "comment-mentioned-you" : ""
-  }`;
-  li.setAttribute("data-event-id", event.id);
-
-  const avatar = document.createElement("div");
-  avatar.className = "comment-avatar";
-  avatar.textContent = getInitials(isMe ? "You" : truncateAddress(sender));
-  avatar.setAttribute("aria-hidden", "true");
-
-  const body = document.createElement("div");
-  body.className = "comment-body";
-
-  const meta = document.createElement("div");
-  meta.className = "comment-meta";
-
-  const author = document.createElement("span");
-  author.className = "comment-author";
-  author.textContent = isMe ? "You" : truncateAddress(sender);
-  author.title = sender;
-
-  const timeSpan = document.createElement("span");
-  timeSpan.className = "comment-time";
-  timeSpan.textContent = time;
-
-  meta.appendChild(author);
-  meta.appendChild(timeSpan);
-
-  const textEl = document.createElement("p");
-  textEl.className = "comment-text";
-  textEl.innerHTML = renderMentions(escapeHtml(event.content));
-
-  body.appendChild(meta);
-  body.appendChild(textEl);
-
-  li.appendChild(avatar);
-  li.appendChild(body);
-
-  return li;
-}
-
-function renderMentions(html: string): string {
-  // Highlight @0x... mentions without linking anywhere for v1.
-  return html.replace(
-    /(@0x[a-fA-F0-9]{1,40})/g,
-    '<span class="comment-mention" role="button" tabindex="0">$1</span>'
-  );
-}
-
-function updateCount(): void {
-  if (elements.count) elements.count.textContent = String(thread.events.length);
-}
-
-function scrollToBottom(): void {
-  elements.list?.scrollTo({
-    top: elements.list.scrollHeight,
-    behavior: "smooth",
-  });
-}
-
-function updateUI(): void {
-  const hasToken = !!thread.status.tokenId;
-  const isConnected = !!walletState.get().walletAddress;
-  const hasSession = !!getCachedSession();
-  const wsOpen = thread.status.connected;
-
-  // Show section only when an asset is open
-  if (elements.section) elements.section.hidden = !hasToken;
-
-  // Composer enabled only when wallet connected, session valid, and socket open
-  const canPost = hasToken && isConnected && hasSession && wsOpen;
-  if (elements.input) elements.input.disabled = !canPost;
-  if (elements.postBtn) elements.postBtn.disabled = !canPost;
-
-  // Empty / status state
-  if (!isConnected) {
-    setEmptyState("Sign in", "Sign in to view comments.");
-  } else if (!hasSession) {
-    setEmptyState("Sign in", "Sign in with your wallet to view comments.");
-  } else if (thread.events.length === 0) {
-    setEmptyState(
-      "No comments yet",
-      "Mention an editor to request a change or review."
-    );
-  } else if (elements.empty) {
-    elements.empty.hidden = true;
-  }
-}
-
-/**
- * Show the empty-state block with the given title/subtitle.
- */
-function setEmptyState(title: string, sub: string): void {
-  if (!elements.empty) return;
-  const emptyTitle = elements.empty.querySelector(".comments-empty-title");
-  const emptySub = elements.empty.querySelector(".comments-empty-sub");
-  if (emptyTitle) emptyTitle.textContent = title;
-  if (emptySub) emptySub.textContent = sub;
-  elements.empty.hidden = false;
-}
-
-function announce(text: string): void {
-  if (elements.live) {
-    elements.live.textContent = "";
-    requestAnimationFrame(() => {
-      (elements.live as HTMLElement).textContent = text;
-    });
-  }
-}
-
-function showError(message: string): void {
-  console.warn("[COMMENTS] server error:", message);
-  // Surface short errors via the empty-state subtitle for v1.
-  if (elements.empty) {
-    const emptySub = elements.empty.querySelector(".comments-empty-sub");
-    if (emptySub) emptySub.textContent = message;
-    elements.empty.hidden = false;
-  }
-}
-
-// ─── Helpers (also exported for unit tests) ─────────────────────────────────
-
-/**
- * Format an ISO timestamp as a short relative string.
- */
 export function formatRelativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   const now = Date.now();
@@ -275,32 +231,25 @@ export function formatRelativeTime(iso: string): string {
 
   if (diffSeconds < 60) return "just now";
   const minutes = Math.floor(diffSeconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return minutes + "m ago";
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return hours + "h ago";
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return days + "d ago";
 }
 
-/**
- * Return uppercase initials from an address or display name.
- */
 export function getInitials(value: string): string {
   if (!value) return "?";
   const cleaned = value.toString().replace(/^0x/, "").trim();
   return cleaned.slice(0, 2).toUpperCase();
 }
 
-/**
- * Detect whether the given wallet address is mentioned in the text.
- * Matches both full and truncated 0x… mention forms.
- */
 export function isMentioned(text: string, walletAddress: string | null): boolean {
   if (!text || !walletAddress) return false;
   const address = walletAddress.toLowerCase();
   const truncated = truncateAddress(address);
   const lowerText = text.toLowerCase();
   return (
-    lowerText.includes(`@${address}`) || lowerText.includes(`@${truncated}`)
+    lowerText.includes("@" + address) || lowerText.includes("@" + truncated)
   );
 }
