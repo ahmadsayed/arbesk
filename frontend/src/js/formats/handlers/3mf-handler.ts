@@ -52,8 +52,8 @@ export const threeMfHandler: FormatHandler = {
     let packageBytes = raw;
     if (!isZipBytes(raw)) {
       const composite = JSON.parse(strFromU8(raw));
-      const { compose3mf } = await import("@arbesk/asset-core/formats/3mf/composer.js");
-      packageBytes = await compose3mf(composite);
+      const { compose } = await import("@arbesk/asset-core/formats/3mf/composer.js");
+      packageBytes = await compose(composite);
     }
 
     const entries = unzipBytes(packageBytes);
@@ -93,8 +93,8 @@ export const threeMfHandler: FormatHandler = {
       }
       throw new Error(`[FORMATS-3mf] unrecognized 3MF source | cid=${cid}`);
     }
-    const { decompose3mf } = await import("@arbesk/asset-core/formats/3mf/decomposer.js");
-    const { compositeCid } = await decompose3mf(raw, {
+    const { decompose } = await import("@arbesk/asset-core/formats/3mf/decomposer.js");
+    const { compositeCid } = await decompose(raw, {
       assetName: ctx.assetName,
       assetId: ctx.assetId,
       dedupMap: ctx.dedupMap,

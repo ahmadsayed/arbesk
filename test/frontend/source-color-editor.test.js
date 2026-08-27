@@ -14,7 +14,7 @@ async function load() {
     "@arbesk/asset-core/formats/gltf/glb-parser.js",
     () => ({
       isGLB: jest.fn(),
-      decomposeGLB: jest.fn(),
+      decompose: jest.fn(),
     })
   );
   const { initRuntime } = await import(
@@ -276,12 +276,12 @@ describe("editSourceColors", () => {
 
   it("decomposes a GLB source and reports the composite path", async () => {
     ctx.glb.isGLB.mockReturnValue(true);
-    ctx.glb.decomposeGLB.mockResolvedValue({ composite: makeGltf() });
+    ctx.glb.decompose.mockResolvedValue({ composite: makeGltf() });
 
     const result = await ctx.mod.editSourceColors("bafyGlb", { Body: "#ff0000" });
 
     expect(ctx.remote.getArrayBufferFromRemoteIPFS).toHaveBeenCalledWith("bafyGlb");
-    expect(ctx.glb.decomposeGLB).toHaveBeenCalledWith(
+    expect(ctx.glb.decompose).toHaveBeenCalledWith(
       expect.any(ArrayBuffer),
       undefined,
       expect.objectContaining({ storeComposite: false }),

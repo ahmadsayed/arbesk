@@ -177,8 +177,7 @@ All methods are on the object returned by `createArbeskCore`.
 | `upload` | `(source: Blob \| ArrayBuffer \| Uint8Array \| string, opts?) → Promise<{ rootCid, compositeCid? }>` | GLB bytes or glTF JSON (object string); format sniffed by GLB magic. Decomposes into content-addressed components and stores the composite. |
 | `download` | `(ref: string \| manifest, opts?) → Promise<Blob>` | CID or an already-fetched manifest → composed GLB `Blob`. Uses the executor (worker pool in the browser). |
 | `compose` | `(manifest, opts?) → Promise<Blob>` | Explicit compose of a manifest you already hold. |
-| `decompose` | `(gltfJson, opts?) → Promise<UploadResult>` | Explicit decompose of glTF JSON. |
-| `decomposeGLB` | `(bytes, opts?) → Promise<UploadResult>` | Explicit decompose of GLB bytes. |
+| `decompose` | `(input, opts?) → Promise<{ composite, compositeCid? }>` | Explicit decompose of glTF JSON, GLB, 3MF, or example bytes — format detected by the dispatcher. |
 | `getManifest` | `(cid) → Promise<manifest>` | Auto-gunzip JSON read via `ipfsRead`. |
 | `getVersionHistory` | `(cid, maxDepth = 50) → Promise<ManifestChainEntry[]>` | Walks the `prev_manifest_cid` chain: `{ cid, version, name, nodeCount }[]`. |
 | `validateManifest` | `(manifest) → { valid: true, data } \| { valid: false, errors }` | zod-backed; the same schema the backend routes enforce. Unknown keys are stripped in `data`. |
@@ -255,7 +254,7 @@ How the production browser wiring works (copy this pattern):
    take fetchers/credentials as arguments, so they are worker-safe by
    construction.
 3. **The op set** is fixed by the worker's registered methods:
-   `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`,
+   `compose`, `decomposeGltf`, `decomposeGlb`,
    `decomposeAndUploadGltf`, `decomposeAndUploadGlb`, `bakeSourceColors`
    (`ExecutorOp` in `types.ts`). `async-gltf.ts` dispatches these op names
    with a single payload object per call — an ExecutorPort is either this

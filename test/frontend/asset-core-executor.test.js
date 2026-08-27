@@ -40,9 +40,10 @@ test("inline executor decomposeGlb + compose round-trips triangle.glb", async ()
   // Compose from the stored CID (what a loader does) rather than the
   // in-memory composite, so the memory-IPFS read path is exercised too.
   const compositeJson = await read.getJSON(result.compositeCid);
-  const { composedJson } = await inlineExecutor.exec("compose", [
+  const { composedBytes } = await inlineExecutor.exec("compose", [
     { compositeJson },
   ]);
+  const composedJson = JSON.parse(new TextDecoder().decode(composedBytes));
   expect(composedJson).toBeDefined();
   expect(composedJson.buffers[0].uri).toMatch(/^data:/);
 });

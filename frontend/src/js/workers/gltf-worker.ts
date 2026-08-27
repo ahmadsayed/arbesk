@@ -215,18 +215,9 @@ async function compose(payload: any) {
   const composedJson = await composeGltfJson(compositeJson, (cid, meta) =>
     fetchCIDAsBase64(cid, meta, gatewayBase)
   );
-  return { composedJson };
-}
-
-/**
- * Compose and serialize in one worker call. Stringifying + encoding the
- * composed glTF here lets the result cross the worker boundary as a
- * transferred ArrayBuffer (zero-copy) instead of a structured-cloned JSON
- * object full of giant base64 strings that the main thread would have to
- * re-stringify.
- */
-async function composeToBytes(payload: any) {
-  const { composedJson } = await compose(payload);
+  // Stringify + encode here so the result crosses the worker boundary as a
+  // transferred ArrayBuffer (zero-copy) instead of a giant structured-cloned
+  // JSON object the main thread would re-stringify.
   const composedBytes = new TextEncoder().encode(JSON.stringify(composedJson));
   return new Transfer({ composedBytes }, [composedBytes.buffer]);
 }
@@ -762,9 +753,8 @@ function wrapWithTransfer(handler: (payload: any) => Promise<any> | any) {
 
 try {
   workerpool.worker({
-    compose: wrapWithTransfer(compose),
     // Builds its own Transfer (transfers composedBytes.buffer directly).
-    composeToBytes,
+    compose,
     decomposeGltf: wrapWithTransfer(decomposeGltf),
     decomposeGlb: wrapWithTransfer(decomposeGlb),
     decomposeAndUploadGltf: wrapWithTransfer(decomposeAndUploadGltf),

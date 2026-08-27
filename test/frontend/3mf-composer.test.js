@@ -58,10 +58,10 @@ initRuntime({
 
 afterAll(() => _resetRuntimeForTesting());
 
-const { decompose3mf, isComposite3mf } = await import(
+const { decompose, isComposite3mf } = await import(
   "@arbesk/asset-core/formats/3mf/decomposer.js"
 );
-const { compose3mf } = await import("@arbesk/asset-core/formats/3mf/composer.js");
+const { compose } = await import("@arbesk/asset-core/formats/3mf/composer.js");
 const { unzipBytes, zipBytes, strFromU8, strToU8 } = await import(
   "@arbesk/asset-core/formats/3mf/zip.js"
 );
@@ -69,7 +69,7 @@ const { unzipBytes, zipBytes, strFromU8, strToU8 } = await import(
 describe("3mf decompose/compose round-trip", () => {
   it("round-trips the box sample without content changes", async () => {
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));
-    const { compositeCid, composite } = await decompose3mf(box, {
+    const { compositeCid, composite } = await decompose(box, {
       assetName: "Box",
       assetId: "asset_box",
     });
@@ -78,7 +78,7 @@ describe("3mf decompose/compose round-trip", () => {
     expect(composite.parts).toEqual({});
     expect(composite.model).toContain("<vertices>");
 
-    const rebuilt = await compose3mf(composite);
+    const rebuilt = await compose(composite);
     const entries = unzipBytes(rebuilt);
     expect(Object.keys(entries).sort()).toEqual([
       "3D/3dmodel.model",
@@ -102,14 +102,14 @@ describe("3mf decompose/compose round-trip", () => {
       "3D/Textures/tex.png": texBytes,
     });
 
-    const { composite } = await decompose3mf(original, {
+    const { composite } = await decompose(original, {
       assetId: "asset_tex",
     });
     expect(Object.keys(composite.parts)).toEqual(["3D/Textures/tex.png"]);
     const partCid = composite.parts["3D/Textures/tex.png"].cid;
     expect(store.get(partCid)).toEqual(texBytes);
 
-    const rebuilt = await compose3mf(composite);
+    const rebuilt = await compose(composite);
     const entries = unzipBytes(rebuilt);
     expect(Object.keys(entries).sort()).toEqual([
       "3D/3dmodel.model",
@@ -137,22 +137,22 @@ describe("3mf decompose/compose round-trip", () => {
       parts: { "3D/Textures/tex.png": { cid: partCid } },
     };
 
-    const rebuilt = await compose3mf(composite);
+    const rebuilt = await compose(composite);
     const entries = unzipBytes(rebuilt);
     expect(Array.from(entries["3D/Textures/tex.png"])).toEqual([9, 8, 7, 6]);
   });
 
-  it("decompose3mf rejects packages without a .model part", async () => {
+  it("decompose rejects packages without a .model part", async () => {
     const noModel = zipBytes({
       "[Content_Types].xml": strToU8("<Types/>"),
       "_rels/.rels": strToU8("<Relationships/>"),
       "3D/Textures/tex.png": new Uint8Array([1]),
     });
-    await expect(decompose3mf(noModel)).rejects.toThrow(/\.model/);
+    await expect(decompose(noModel)).rejects.toThrow(/\.model/);
   });
 
-  it("compose3mf rejects non-composite input", async () => {
-    await expect(compose3mf({ model: "<model/>" })).rejects.toThrow(
+  it("compose rejects non-composite input", async () => {
+    await expect(compose({ model: "<model/>" })).rejects.toThrow(
       /not a composite 3MF/
     );
   });

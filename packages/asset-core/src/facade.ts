@@ -3,20 +3,25 @@
  *
  * One-call composition root for any environment (backend, browser, tests):
  * `createArbeskCore(config)` installs the process-wide runtime (initRuntime)
- * and returns a thin object composing the pipeline (gltf/), manifest chain
- * walk/validation (manifest/), and editor commands (domain/editors.ts).
+ * and returns a thin object composing the format pipeline (formats/ — the
+ * compose/decompose dispatcher), manifest chain walk/validation (manifest/),
+ * and editor commands (domain/editors.ts).
  *
- * The facade contains no logic of its own beyond input format sniffing
- * (GLB magic vs glTF JSON) and editor identity resolution (0x-address
- * passthrough, else ChainPort.resolveEmail).
+ * The facade contains no format logic of its own: `compose`/`decompose`
+ * dispatch to the FormatCodec selected by format (formats/index.ts), and
+ * `upload` sniffs the raw input to choose the right codec.
  */
 
 import type { ArbeskCoreConfig } from "./types.ts";
-import type { UploadCredential } from "./storage/ipfs/upload-with-credential.ts";
 import { initRuntime, getRuntime } from "./runtime.ts";
-import { decomposeGLB } from "./formats/gltf/glb-parser.ts";
-import { decomposeAndStore } from "./formats/gltf/decomposer.ts";
-import { composeGlTFToBlobAsync } from "./formats/gltf/async-gltf.ts";
+import type { UploadCredential } from "./storage/ipfs/upload-with-credential.ts";
+import {
+  detectFormat,
+  compose as composeFormat,
+  decompose as decomposeFormat,
+} from "./formats/index.ts";
+import type { DecomposeResult } from "./formats/codec.ts";
+import { composeAsync } from "./formats/gltf/async-gltf.ts";
 import { getManifestChain } from "./manifest/chain.ts";
 import type { ManifestChainEntry } from "./manifest/chain.ts";
 import { validateManifest } from "./manifest/utils.ts";
@@ -28,7 +33,6 @@ import {
 import type { EditorEntry } from "./domain/editors.ts";
 
 export interface UploadOptions {
-  /** Accepted for interface stability; the decompose pipeline does not report progress yet. */
   onProgress?: (fraction: number) => void;
   credential?: UploadCredential | null;
   compress?: boolean;
@@ -38,14 +42,13 @@ export interface UploadOptions {
 }
 
 export interface UploadResult {
-  /** CID of the stored composite glTF (the content root of the upload). */
   rootCid: string;
   compositeCid?: string;
 }
 
 export interface DownloadOptions {
-  /** Accepted for interface stability; compose fetches do not report progress yet. */
   onProgress?: (fraction: number) => void;
+  format?: string;
 }
 
 export interface AssetRefLike {
@@ -70,13 +73,9 @@ export interface ArbeskCore {
     opts?: DownloadOptions
   ): Promise<Blob>;
   decompose(
-    gltfJson: Record<string, any>,
-    opts?: UploadOptions
-  ): Promise<UploadResult>;
-  decomposeGLB(
-    bytes: Uint8Array | ArrayBuffer,
-    opts?: UploadOptions
-  ): Promise<UploadResult>;
+    input: Record<string, any> | ArrayBuffer | Uint8Array,
+    opts?: UploadOptions & { store?: boolean; format?: string }
+  ): Promise<DecomposeResult>;
   getManifest(cid: string): Promise<Record<string, any>>;
   getVersionHistory(
     cid: string,
@@ -88,9 +87,6 @@ export interface ArbeskCore {
   listEditors(asset: AssetRefLike): Promise<EditorEntry[]>;
 }
 
-/**
- * Normalize an upload source to an ArrayBuffer for format sniffing.
- */
 async function toBytes(
   source: Blob | ArrayBuffer | Uint8Array | string
 ): Promise<ArrayBuffer> {
@@ -112,10 +108,6 @@ async function toBytes(
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
-/**
- * Resolve an editor identity: 0x addresses pass through; anything else is
- * treated as an email and needs a ChainPort with resolveEmail.
- */
 async function resolveIdentity(identity: string): Promise<string> {
   if (ADDRESS_RE.test(identity)) return identity;
   const chain = getRuntime().chain;
@@ -127,11 +119,6 @@ async function resolveIdentity(identity: string): Promise<string> {
   return chain.resolveEmail(identity);
 }
 
-/**
- * Editor lists are keyed per token: the browser ChainPort passes the key
- * straight to the contract's editorListURI/editorSetVersion (tokenId). A full
- * canonical asset tag is accepted for environments keyed that way.
- */
 function editorListKey(asset: AssetRefLike): string {
   const key = asset.tokenId ?? asset.tag;
   if (!key) {
@@ -140,75 +127,62 @@ function editorListKey(asset: AssetRefLike): string {
   return String(key);
 }
 
-/**
- * Install the runtime from `config` and return the SDK facade.
- */
 export function createArbeskCore(config: ArbeskCoreConfig): ArbeskCore {
   initRuntime(config);
 
-  async function uploadGLB(
-    bytes: ArrayBuffer,
-    opts: UploadOptions
-  ): Promise<UploadResult> {
-    const { credential = null, compress = true, onProgress, ...rest } = opts;
-    void onProgress; // see UploadOptions
-    const { compositeCid } = await decomposeGLB(bytes, null, {
-      credential,
-      compress,
-      ...rest,
-    });
-    if (!compositeCid) {
-      throw new Error("asset-core: GLB decompose stored no composite CID");
-    }
-    return { rootCid: compositeCid, compositeCid };
-  }
-
-  async function uploadGltfJson(
-    gltfJson: Record<string, any>,
-    opts: UploadOptions
-  ): Promise<UploadResult> {
-    const { credential = null, compress = true, onProgress, ...rest } = opts;
-    void onProgress; // see UploadOptions
-    const { compositeCid } = await decomposeAndStore(gltfJson, credential, {
-      compress,
-      ...rest,
-    });
-    return { rootCid: compositeCid, compositeCid };
+  async function composeToBlob(
+    manifest: Record<string, any>,
+    opts: DownloadOptions = {}
+  ): Promise<Blob> {
+    const format = detectFormat(manifest, opts.format);
+    // glTF goes through the executor (worker in the browser, inline on the
+    // backend) so large compositions stay off the calling thread; other
+    // formats use the main-thread codec (they have no worker offload).
+    const bytes =
+      format === "gltf"        ? await composeAsync(manifest)        : await composeFormat(manifest, { format });
+    return new Blob([bytes as unknown as BlobPart], { type: "application/json" });
   }
 
   async function upload(
     source: Blob | ArrayBuffer | Uint8Array | string,
     opts: UploadOptions = {}
   ): Promise<UploadResult> {
+    const { credential = null, compress = true, onProgress, ...rest } = opts;
+    void onProgress;
     const bytes = await toBytes(source);
-    if (getRuntime().kernels.glb.isGLB(bytes)) return uploadGLB(bytes, opts);
-    const json =
-      typeof source === "string"
-        ? JSON.parse(source)
-        : JSON.parse(new TextDecoder().decode(bytes));
-    return uploadGltfJson(json, opts);
+    let input: Record<string, any> | ArrayBuffer;
+    if (getRuntime().kernels.glb.isGLB(bytes)) {
+      input = bytes;
+    } else if (typeof source === "string") {
+      input = JSON.parse(source);
+    } else {
+      input = JSON.parse(new TextDecoder().decode(bytes));
+    }
+    const { compositeCid } = await decomposeFormat(input, {
+      credential,
+      compress,
+      ...rest,
+    });
+    if (!compositeCid) {
+      throw new Error("asset-core: decompose stored no composite CID");
+    }
+    return { rootCid: compositeCid, compositeCid };
   }
 
   async function download(
     ref: string | Record<string, any>,
     opts: DownloadOptions = {}
   ): Promise<Blob> {
-    void opts; // see DownloadOptions
     const manifest =
       typeof ref === "string" ? await getRuntime().ipfsRead.getJSON(ref) : ref;
-    return composeGlTFToBlobAsync(manifest);
+    return composeToBlob(manifest, opts);
   }
 
   return {
     upload,
     download,
-    compose: (manifest, opts = {}) => {
-      void opts; // see DownloadOptions
-      return composeGlTFToBlobAsync(manifest);
-    },
-    decompose: (gltfJson, opts = {}) => uploadGltfJson(gltfJson, opts),
-    decomposeGLB: async (bytes, opts = {}) =>
-      uploadGLB(await toBytes(bytes), opts),
+    compose: (manifest, opts = {}) => composeToBlob(manifest, opts),
+    decompose: (input, opts = {}) => decomposeFormat(input, opts),
     getManifest: (cid) => getRuntime().ipfsRead.getJSON(cid),
     getVersionHistory: (cid, maxDepth) => getManifestChain(cid, maxDepth),
     validateManifest,

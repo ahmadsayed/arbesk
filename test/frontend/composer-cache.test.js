@@ -67,7 +67,7 @@ async function loadComposer({ cacheHits = new Map(), fetchedRaw = new Map() } = 
   });
 
   const mod = await import("@arbesk/asset-core/formats/gltf/composer.js");
-  return { composeGlTF: mod.composeGlTF, cacheGet, cachePut };
+  return { compose: mod.compose, cacheGet, cachePut };
 }
 
 afterEach(async () => {
@@ -84,18 +84,18 @@ function dataUriPayload(uri) {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 }
 
-describe("composeGlTF content-cache integration", () => {
+describe("compose content-cache integration", () => {
   it("uses the cache for a large buffer and skips remote fetch", async () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0xab);
     const hash = "aabbccdd";
     const cid = "bafyBigBuffer";
 
-    const { composeGlTF, cacheGet, cachePut } = await loadComposer({
+    const { compose, cacheGet, cachePut } = await loadComposer({
       cacheHits: new Map([[hash, { hash, cid, compressed: false, bytes: raw, bytesCount: raw.length }]]),
     });
 
     const composite = makeComposite([{ cid, byteLength: BIG_BYTES, arbesk: { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES } }], []);
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(cacheGet).toHaveBeenCalledWith(hash);
     expect(cachePut).not.toHaveBeenCalled();
@@ -110,12 +110,12 @@ describe("composeGlTF content-cache integration", () => {
     const hash = "ccddeeff";
     const cid = "bafyMissBuffer";
 
-    const { composeGlTF, cacheGet, cachePut } = await loadComposer({
+    const { compose, cacheGet, cachePut } = await loadComposer({
       fetchedRaw: new Map([[cid, raw]]),
     });
 
     const composite = makeComposite([{ cid, byteLength: BIG_BYTES, arbesk: { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES } }], []);
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(cacheGet).toHaveBeenCalledWith(hash);
     expect(cachePut).toHaveBeenCalledWith(hash, cid, false, expect.any(Uint8Array));
@@ -139,12 +139,12 @@ describe("composeGlTF content-cache integration", () => {
     const hash = "11223344";
     const cid = "bafyCompressed";
 
-    const { composeGlTF, cacheGet, cachePut } = await loadComposer({
+    const { compose, cacheGet, cachePut } = await loadComposer({
       cacheHits: new Map([[hash, { hash, cid, compressed: true, bytes: raw, bytesCount: raw.length }]]),
     });
 
     const composite = makeComposite([{ cid, byteLength: BIG_BYTES, arbesk: { hash, hashAlgo: "murmur3-32", compressed: true, bytes: raw.length } }], []);
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(cacheGet).toHaveBeenCalledWith(hash);
     expect(cachePut).not.toHaveBeenCalled();
@@ -158,12 +158,12 @@ describe("composeGlTF content-cache integration", () => {
     const hash = "eeeeffff";
     const cid = "bafySmallBuffer";
 
-    const { composeGlTF, cacheGet, cachePut } = await loadComposer({
+    const { compose, cacheGet, cachePut } = await loadComposer({
       fetchedRaw: new Map([[cid, raw]]),
     });
 
     const composite = makeComposite([{ cid, byteLength: 1024, arbesk: { hash, hashAlgo: "murmur3-32", compressed: false, bytes: 1024 } }], []);
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(cacheGet).not.toHaveBeenCalled();
     expect(cachePut).not.toHaveBeenCalled();
@@ -176,12 +176,12 @@ describe("composeGlTF content-cache integration", () => {
     const raw = new Uint8Array(BIG_BYTES).fill(0x12);
     const cid = "bafyNoMeta";
 
-    const { composeGlTF, cacheGet, cachePut } = await loadComposer({
+    const { compose, cacheGet, cachePut } = await loadComposer({
       fetchedRaw: new Map([[cid, raw]]),
     });
 
     const composite = makeComposite([{ cid, byteLength: BIG_BYTES, arbesk: null }], []);
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(cacheGet).not.toHaveBeenCalled();
     expect(cachePut).not.toHaveBeenCalled();
@@ -195,12 +195,12 @@ describe("composeGlTF content-cache integration", () => {
     const hash = "44556677";
     const cid = "bafyBigImage";
 
-    const { composeGlTF, cacheGet, cachePut } = await loadComposer({
+    const { compose, cacheGet, cachePut } = await loadComposer({
       cacheHits: new Map([[hash, { hash, cid, compressed: false, bytes: raw, bytesCount: raw.length }]]),
     });
 
     const composite = makeComposite([], [{ cid, mimeType: "image/png", arbesk: { hash, hashAlgo: "murmur3-32", compressed: false, bytes: BIG_BYTES } }]);
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(cacheGet).toHaveBeenCalledWith(hash);
     expect(cachePut).not.toHaveBeenCalled();
@@ -211,7 +211,7 @@ describe("composeGlTF content-cache integration", () => {
     // Storage form carries both bufferView (into the shared buffer) and uri
     // (dedup'd IPFS image); the composed output must keep only the uri or
     // strict importers like Blender reject the file.
-    const { composeGlTF } = await loadComposer();
+    const { compose } = await loadComposer();
 
     const composite = {
       asset: { version: "2.0" },
@@ -222,7 +222,7 @@ describe("composeGlTF content-cache integration", () => {
         { bufferView: 0, mimeType: "image/png" }, // bufferView-only: untouched
       ],
     };
-    const composed = await composeGlTF(composite);
+    const composed = JSON.parse(new TextDecoder().decode(await compose(composite)));
 
     expect(composed.images[0].uri).toBe("data:image/png;base64,iVBORw0KGgo=");
     expect(composed.images[0].bufferView).toBeUndefined();

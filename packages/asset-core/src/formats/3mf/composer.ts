@@ -33,13 +33,13 @@ export interface Composite3mf {
  *
  * @param composite - composite 3MF JSON (arbesk_format: composite-3mf)
  */
-export async function compose3mf(composite: Composite3mf): Promise<Uint8Array> {
+export async function compose(composite: Composite3mf): Promise<Uint8Array> {
   if (!isComposite3mf(composite)) {
-    throw new Error("[3MF] compose3mf: not a composite 3MF document");
+    throw new Error("[3MF] compose: not a composite 3MF document");
   }
   for (const field of ["contentTypes", "rootRels", "model"]) {
     if (typeof (composite as unknown as Record<string, unknown>)[field] !== "string") {
-      throw new Error(`[3MF] compose3mf: composite missing ${field}`);
+      throw new Error(`[3MF] compose: composite missing ${field}`);
     }
   }
   const modelPath = composite.modelPath || "3D/3dmodel.model";

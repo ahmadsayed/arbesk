@@ -46,7 +46,7 @@ export interface Decompose3mfOptions {
  *
  * @param bytes - raw .3mf ZIP bytes
  */
-export async function decompose3mf(
+export async function decompose(
   bytes: Uint8Array,
   options: Decompose3mfOptions = {}
 ): Promise<{ compositeCid: string; composite: object }> {

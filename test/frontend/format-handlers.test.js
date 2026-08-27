@@ -18,19 +18,15 @@ async function load() {
   }));
 
   jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
-    composeGlTFAsync: jest.fn(),
-    composeGlTFToBlobAsync: jest.fn(),
-    decomposeGlTFAsync: jest.fn(),
-    decomposeAndStoreAsync: jest.fn(),
-    decomposeGLBAsync: jest.fn(),
+    composeAsync: jest.fn(),
+    decomposeAsync: jest.fn(),
     editSourceColorsAsync: jest.fn(),
     isComposite: jest.fn(),
   }));
 
   jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
-    decomposeGlTF: jest.fn(),
-    decomposeAndStore: jest.fn(),
+    decompose: jest.fn(),
   }));
 
   const gltf = await import(
@@ -60,9 +56,8 @@ describe("gltf handler", () => {
 
   it("loads via importFromBlob with .gltf extension", async () => {
     const gltfJson = { asset: { version: "2.0" } };
-    const blob = new Blob(["gltf"], { type: "model/gltf+json" });
     ctx.remote.getFromRemoteIPFS.mockResolvedValue(gltfJson);
-    ctx.asyncGltf.composeGlTFToBlobAsync.mockResolvedValue(blob);
+    ctx.asyncGltf.composeAsync.mockResolvedValue(new TextEncoder().encode("gltf"));
     const importFromBlob = jest.fn().mockResolvedValue({ meshes: ["m1"] });
 
     const result = await ctx.gltfHandler.load(
@@ -71,7 +66,7 @@ describe("gltf handler", () => {
     );
 
     expect(result).toEqual({ meshes: ["m1"] });
-    expect(importFromBlob).toHaveBeenCalledWith(blob, ".gltf");
+    expect(importFromBlob).toHaveBeenCalledWith(expect.any(Blob), ".gltf");
   });
 
   it("returns normalizeOnly for already-composite glTF", async () => {
@@ -96,7 +91,7 @@ describe("gltf handler", () => {
     const gltfJson = { asset: { version: "2.0" } };
     ctx.remote.getFromRemoteIPFS.mockResolvedValue(gltfJson);
     ctx.decomposer.isComposite.mockReturnValue(false);
-    ctx.asyncGltf.decomposeAndStoreAsync.mockResolvedValue({
+    ctx.asyncGltf.decomposeAsync.mockResolvedValue({
       compositeCid: "bafyNew",
     });
 
@@ -168,7 +163,7 @@ describe("glb handler", () => {
     ctx.remote.getArrayBufferFromRemoteIPFS.mockResolvedValue(
       new ArrayBuffer(10)
     );
-    ctx.asyncGltf.decomposeGLBAsync.mockResolvedValue({
+    ctx.asyncGltf.decomposeAsync.mockResolvedValue({
       compositeCid: "bafyComposite",
     });
 

@@ -41,13 +41,8 @@ async function loadModule() {
   await jest.unstable_mockModule(
     "@arbesk/asset-core/formats/gltf/async-gltf.js",
     () => ({
-      composeGlTFAsync: jest.fn(),
-      composeGlTFToBlobAsync: jest
-        .fn()
-        .mockResolvedValue(new Blob(["gltf"])),
-      decomposeGlTFAsync: jest.fn(),
-      decomposeAndStoreAsync: jest.fn(),
-      decomposeGLBAsync: jest.fn(),
+      composeAsync: jest.fn().mockResolvedValue(new TextEncoder().encode("gltf")),
+      decomposeAsync: jest.fn(),
       editSourceColorsAsync: jest.fn(),
       isComposite: jest.fn(),
     })

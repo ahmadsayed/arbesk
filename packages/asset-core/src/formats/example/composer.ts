@@ -18,15 +18,15 @@ import { serializeExample } from "./parser.ts";
  *
  * @param composite - composite example JSON (arbesk_format: "composite-example")
  */
-export async function composeExample(
+export async function compose(
   composite: CompositeExample
 ): Promise<Uint8Array> {
   if (!isCompositeExample(composite)) {
-    throw new Error("[EXAMPLE] composeExample: not a composite example document");
+    throw new Error("[EXAMPLE] compose: not a composite example document");
   }
   const payloadCid = composite.payload?.cid;
   if (!payloadCid || typeof composite.name !== "string") {
-    throw new Error("[EXAMPLE] composeExample: composite missing payload.cid or name");
+    throw new Error("[EXAMPLE] compose: composite missing payload.cid or name");
   }
 
   const { ipfsRead } = getRuntime();

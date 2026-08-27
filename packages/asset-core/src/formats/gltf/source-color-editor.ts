@@ -6,7 +6,7 @@
  */
 
 import { getRuntime } from "../../runtime.ts";
-import { isGLB, decomposeGLB } from "./glb-parser.ts";
+import { isGLB, decompose } from "./glb-parser.ts";
 
 /**
  * Convert a hex color string to a glTF baseColorFactor RGBA array.
@@ -179,7 +179,7 @@ export async function editSourceColors(
       // Decompose GLB into composite glTF before editing. Colors live in JSON,
       // so we never need to re-serialize back to GLB for storage. Skip storing
       // the intermediate composite - we write the edited version below.
-      const { composite } = await decomposeGLB(buffer, undefined, {
+      const { composite } = await decompose(buffer, undefined, {
         storeComposite: false,
         dedupMap,
       });

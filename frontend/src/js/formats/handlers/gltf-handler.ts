@@ -4,8 +4,8 @@
 
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
 import {
-  composeGlTFToBlobAsync,
-  decomposeAndStoreAsync,
+  composeAsync,
+  decomposeAsync,
   editSourceColorsAsync,
 } from "@arbesk/asset-core/formats/gltf/async-gltf.js";
 import { isComposite } from "@arbesk/asset-core/formats/gltf/decomposer.js";
@@ -27,7 +27,8 @@ export const gltfHandler: FormatHandler = {
     const cid = ctx.cid || src.cid;
     console.log(`[FORMATS-gltf] fetching glTF JSON | cid=${cid}`);
     const gltfJson = await getFromRemoteIPFS(cid);
-    const gltfBlob = await composeGlTFToBlobAsync(gltfJson);
+    const gltfBytes = await composeAsync(gltfJson);
+    const gltfBlob = new Blob([gltfBytes as unknown as BlobPart], { type: "application/json" });
     console.log(`[FORMATS-gltf] composed | bytes=${gltfBlob.size}`);
     return ctx.importFromBlob(gltfBlob, ".gltf");
   },
@@ -53,11 +54,16 @@ export const gltfHandler: FormatHandler = {
         normalizeOnly: true,
       };
     }
-    const { compositeCid } = await decomposeAndStoreAsync(gltf, {
+    const { compositeCid } = await decomposeAsync(gltf, {
       assetName: ctx.assetName,
       assetId: ctx.assetId,
       dedupMap: ctx.dedupMap,
     });
+    if (!compositeCid) {
+      throw new Error(
+        `[FORMATS-gltf] decomposition produced no CID | cid=${cid}`
+      );
+    }
     return {
       cid: compositeCid,
       path: "composite.gltf",

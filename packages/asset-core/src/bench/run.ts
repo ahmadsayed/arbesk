@@ -2,7 +2,7 @@
  * asset-core benchmark harness.
  *
  * Builds a core over the in-memory IPFS double and times the SDK's heavy
- * operations (decomposeGLB, compose, base64 encode/decode, murmur3_128) on
+ * operations (decompose, compose, base64 encode/decode, murmur3_128) on
  * real GLB fixtures. The CLI entry prints a table and writes a JSON artifact
  * to test-results/asset-core-bench.json.
  *
@@ -92,13 +92,16 @@ export async function runBench(
 
     rows.push({
       fixture,
-      op: "decomposeGLB",
-      ms: await timeAsync(() => core.decomposeGLB(bytes), iterations),
+      op: "decompose",
+      ms: await timeAsync(() => core.decompose(bytes), iterations),
       bytes: bytes.byteLength,
     });
 
-    const { rootCid } = await core.decomposeGLB(bytes);
-    const composite = await core.getManifest(rootCid);
+    const { compositeCid } = await core.decompose(bytes);
+    if (!compositeCid) {
+      throw new Error("bench: GLB decompose stored no composite CID");
+    }
+    const composite = await core.getManifest(compositeCid);
     rows.push({
       fixture,
       op: "compose",

@@ -66,7 +66,6 @@ export interface StoragePort {
  */
 export type ExecutorOp =
   | "compose"
-  | "composeToBytes"
   | "decomposeGltf"
   | "decomposeGlb"
   | "decomposeAndUploadGltf"

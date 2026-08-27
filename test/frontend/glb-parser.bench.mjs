@@ -15,7 +15,7 @@ import {
   isGLB,
   parseGLB,
   serializeGLB,
-  decomposeGLB,
+  decompose,
 } from "@arbesk/asset-core/formats/gltf/glb-parser.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -131,8 +131,8 @@ async function benchAsset(asset) {
 
   results.push(
     await benchAsync(
-      `${asset.name} - decomposeGLB (mock writer)`,
-      () => decomposeGLB(buffer, createMockWriter()),
+      `${asset.name} - decompose (mock writer)`,
+      () => decompose(buffer, createMockWriter()),
       20
     )
   );

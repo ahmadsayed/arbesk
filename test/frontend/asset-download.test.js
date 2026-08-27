@@ -3,7 +3,7 @@ import { jest } from "@jest/globals";
 
 const getFromRemoteIPFS = jest.fn();
 const getBlobFromRemoteIPFS = jest.fn();
-const composeGlTFToBlobAsync = jest.fn();
+const composeAsync = jest.fn();
 let _assetState = { activeAssetManifestCid: null, activeAssetName: null };
 
 let downloadAssetByManifestCid;
@@ -31,7 +31,7 @@ beforeAll(async () => {
     gatewayBase: jest.fn(),
   }));
   jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
-    composeGlTFToBlobAsync,
+    composeAsync,
   }));
   jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
     getAssetState: jest.fn(() => _assetState),
@@ -88,7 +88,7 @@ test("GLB manifests download raw bytes with a sanitized filename", async () => {
 
   expect(filename).toBe("My Knight_.glb");
   expect(getBlobFromRemoteIPFS).toHaveBeenCalledWith("bafyGlb");
-  expect(composeGlTFToBlobAsync).not.toHaveBeenCalled();
+  expect(composeAsync).not.toHaveBeenCalled();
   expect(clickSpy).toHaveBeenCalled();
   clickSpy.mockRestore();
 });
@@ -99,16 +99,14 @@ test("glTF manifests are composed (buffers inlined) before download", async () =
       manifestWithSource({ cid: "bafyComposite", path: "asset.gltf", format: "gltf" })
     )
     .mockResolvedValueOnce({ asset: { version: "2.0" }, buffers: [] });
-  composeGlTFToBlobAsync.mockResolvedValue(
-    new Blob(["{}"], { type: "application/json" })
-  );
+  composeAsync.mockResolvedValue(new TextEncoder().encode("{}"));
   jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
   const filename = await downloadAssetByManifestCid("bafyManifest", "suka");
 
   expect(filename).toBe("suka.gltf");
   expect(getFromRemoteIPFS).toHaveBeenCalledWith("bafyComposite");
-  expect(composeGlTFToBlobAsync).toHaveBeenCalled();
+  expect(composeAsync).toHaveBeenCalled();
   expect(getBlobFromRemoteIPFS).not.toHaveBeenCalled();
 });
 

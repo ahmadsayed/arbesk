@@ -13,7 +13,7 @@ import {
   isGLB,
   parseGLB,
   serializeGLB,
-  decomposeGLB,
+  decompose,
 } from "@arbesk/asset-core/formats/gltf/glb-parser.js";
 
 const HOWDY_PATH = join(process.cwd(), "mock-gltf-assets", "howdy.glb");
@@ -103,7 +103,7 @@ describe("glb-parser", () => {
     expect(diffs).toBe(0);
   });
 
-  test("decomposeGLB uploads buffers and images to mock writer", async () => {
+  test("decompose uploads buffers and images to mock writer", async () => {
     const buffer = readArrayBuffer(HOWDY_PATH);
     let counter = 0;
     const writer = async (_data, _filename) => {
@@ -111,7 +111,7 @@ describe("glb-parser", () => {
       return `bafyMock${counter}`;
     };
 
-    const { composite, compositeCid } = await decomposeGLB(buffer, writer);
+    const { composite, compositeCid } = await decompose(buffer, writer);
 
     expect(composite).toBeDefined();
     expect(composite.buffers).toBeInstanceOf(Array);
@@ -120,7 +120,7 @@ describe("glb-parser", () => {
     expect(compositeCid).toMatch(/^bafyMock/);
   });
 
-  test("decomposeGLB uploads images and buffers in parallel", async () => {
+  test("decompose uploads images and buffers in parallel", async () => {
     const buffer = readArrayBuffer(HOWDY_PATH);
     let active = 0;
     let maxActive = 0;
@@ -135,7 +135,7 @@ describe("glb-parser", () => {
       return `bafyMock${counter}`;
     };
 
-    const { composite } = await decomposeGLB(buffer, writer);
+    const { composite } = await decompose(buffer, writer);
 
     expect(composite.images.length).toBeGreaterThan(0);
     expect(maxActive).toBeGreaterThan(1);

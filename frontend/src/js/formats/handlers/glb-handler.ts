@@ -7,7 +7,7 @@ import {
   getArrayBufferFromRemoteIPFS,
 } from "../../ipfs/remote-ipfs.ts";
 import {
-  decomposeGLBAsync,
+  decomposeAsync,
   editSourceColorsAsync,
 } from "@arbesk/asset-core/formats/gltf/async-gltf.js";
 import type {
@@ -49,7 +49,7 @@ export const glbHandler: FormatHandler = {
   async decomposeForSave(node: any, ctx: FormatSaveContext) {
     const cid = node.source.cid;
     const glbBuffer = await getArrayBufferFromRemoteIPFS(cid);
-    const { compositeCid } = await decomposeGLBAsync(glbBuffer, true, {
+    const { compositeCid } = await decomposeAsync(glbBuffer, {
       assetName: ctx.assetName,
       assetId: ctx.assetId,
       dedupMap: ctx.dedupMap,

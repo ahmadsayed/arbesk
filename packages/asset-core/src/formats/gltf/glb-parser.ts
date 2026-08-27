@@ -248,16 +248,17 @@ interface DecomposeGLBOptions {
 
 /**
  * Decompose a GLB in-memory into a composite glTF JSON with IPFS CID references.
+ * This is the `decompose` half of the GLB FormatCodec (formats/codec.ts).
  *
  * @param arrayBuffer - Raw GLB bytes
  * @param writer - Optional IPFS writer `(bytes, filename) => Promise<cid>`
  */
-export async function decomposeGLB(
+export async function decompose(
   arrayBuffer: ArrayBuffer,
   writer?: GlbWriter | null,
   options: DecomposeGLBOptions = {}
-): Promise<{ composite: any; compositeCid: string | null }> {
-  if (!arrayBuffer) throw new Error("decomposeGLB: arrayBuffer is required");
+): Promise<{ composite: any; compositeCid?: string }> {
+  if (!arrayBuffer) throw new Error("decompose: arrayBuffer is required");
   const {
     storeComposite = true,
     credential = null,
@@ -469,7 +470,7 @@ export async function decomposeGLB(
     `[GLB-DECOMPOSE] done | buffers=${stats.buffers} images=${stats.images} skipped=${stats.skipped} totalBytes=${stats.bytesTotal}`
   );
 
-  let compositeCid: string | null = null;
+  let compositeCid: string | undefined;
   if (storeComposite) {
     if (writer) {
       const result = await writeBytes(

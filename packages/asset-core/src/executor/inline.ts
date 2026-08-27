@@ -1,7 +1,7 @@
 import type { ExecutorPort, ExecutorOp } from "../types.ts";
-import { composeGlTF } from "../formats/gltf/composer.ts";
-import { decomposeGlTF } from "../formats/gltf/decomposer.ts";
-import { decomposeGLB } from "../formats/gltf/glb-parser.ts";
+import { compose } from "../formats/gltf/composer.ts";
+import { decompose } from "../formats/gltf/decomposer.ts";
+import { decompose as decomposeGlb } from "../formats/gltf/glb-parser.ts";
 import { applyNodeColors } from "../formats/gltf/source-color-editor.ts";
 
 /**
@@ -9,42 +9,25 @@ import { applyNodeColors } from "../formats/gltf/source-color-editor.ts";
  * argument the glTF Web Worker method of the same name takes, and returns the
  * same shape, so async-gltf.ts can dispatch through the ExecutorPort without
  * caring which side runs it (see worker-executor.ts for the browser pool).
- *
- * Differences from the worker, by design:
- *  - `compose`/`composeToBytes` ignore `gatewayBase` (reads go through the
- *    injected IpfsReadPort instead of a gateway URL).
- *  - `decomposeGltf`/`decomposeAndUploadGltf` upload extracted components as
- *    they decompose (main-thread decomposer.ts always has), so they return
- *    empty `buffers`/`images` lists like the worker's upload variants do.
- *  - `decomposeGlb` stores via the IpfsWritePort and returns `compositeCid`
- *    (worker `decomposeGlb` is extract-only; async-gltf only ever dispatches
- *    `decomposeAndUploadGlb`, which matches this shape).
  */
 const OPS: Record<ExecutorOp, (payload: any) => Promise<any>> = {
   compose: async (payload) => {
     const { compositeJson } = payload || {};
     if (!compositeJson) throw new Error("compose: gltfJson is null");
-    return { composedJson: await composeGlTF(compositeJson) };
-  },
-
-  composeToBytes: async (payload) => {
-    const { composedJson } = await OPS.compose(payload);
-    return {
-      composedBytes: new TextEncoder().encode(JSON.stringify(composedJson)),
-    };
+    return { composedBytes: await compose(compositeJson) };
   },
 
   decomposeGltf: async (payload) => {
     const { gltfJson, credential = null, options = {} } = payload || {};
     if (!gltfJson) throw new Error("decomposeGltf: gltf is null");
-    const composite = await decomposeGlTF(gltfJson, credential, options);
+    const { composite } = await decompose(gltfJson, { credential, ...options, store: false });
     return { composite, buffers: [], images: [] };
   },
 
   decomposeGlb: async (payload) => {
     const { arrayBuffer, credential = null, options = {} } = payload || {};
     if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
-    return decomposeGLB(arrayBuffer, undefined, { credential, ...options });
+    return decomposeGlb(arrayBuffer, undefined, { credential, ...options });
   },
 
   decomposeAndUploadGltf: async (payload) => {
@@ -52,9 +35,11 @@ const OPS: Record<ExecutorOp, (payload: any) => Promise<any>> = {
     if (!gltfJson) {
       throw new Error("decomposeAndUploadGltf: gltfJson is required");
     }
-    const composite = await decomposeGlTF(gltfJson, credential, {
+    const { composite } = await decompose(gltfJson, {
+      credential,
       compress: true,
       ...options,
+      store: false,
     });
     return { composite, buffers: [], images: [] };
   },
@@ -64,7 +49,7 @@ const OPS: Record<ExecutorOp, (payload: any) => Promise<any>> = {
     if (!arrayBuffer) {
       throw new Error("decomposeAndUploadGlb: arrayBuffer is required");
     }
-    return decomposeGLB(arrayBuffer, undefined, {
+    return decomposeGlb(arrayBuffer, undefined, {
       compress: true,
       credential,
       ...options,
@@ -83,15 +68,11 @@ const OPS: Record<ExecutorOp, (payload: any) => Promise<any>> = {
   },
 };
 
-/**
- * Runs pipeline ops on the calling thread — backend default and browser
- * fallback when module workers are unavailable.
- */
 export const inlineExecutor: ExecutorPort = {
   available: async () => true,
   exec: async (op, args) => {
     const fn = OPS[op];
-    if (!fn) throw new Error(`asset-core: unknown executor op "${op}"`);
+    if (!fn) throw new Error("asset-core: unknown executor op " + JSON.stringify(op));
     return fn(args[0]);
   },
 };

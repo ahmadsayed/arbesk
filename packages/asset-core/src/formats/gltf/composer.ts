@@ -1,9 +1,10 @@
 /**
  * Arbesk glTF Composer (main thread)
  *
- * Thin main-thread wrapper around the shared compose logic in gltf-core.js:
+ * Thin main-thread wrapper around the shared compose logic in gltf-core.ts:
  * resolves `ipfs://<CID>` buffer/image references to base64 data URIs so the
- * result is a self-contained glTF any standard loader can consume.
+ * result is a self-contained glTF, then serializes it to bytes. This is the
+ * `compose` half of the glTF FormatCodec (formats/codec.ts).
  *
  * Large buffers and images are cached locally by the content hash stored in
  * `_arbesk.hash` so subsequent loads can skip the IPFS gateway.
@@ -26,16 +27,15 @@ async function fetchCIDAsBase64(cid: string, arbeskMeta: any): Promise<string> {
 }
 
 /**
- * Compose a full standard glTF JSON from a composite or standard glTF.
- *
- * Resolves all buffer and image URIs to base64 data URIs so that
- * any standard loader can consume the result as a self-contained glTF.
+ * Compose a composite glTF into a self-contained standard glTF, returned as
+ * serialized JSON bytes (Uint8Array). Resolves every buffer/image URI to a
+ * base64 data URI so any standard loader can consume the result.
  *
  * @param gltfJson - The glTF JSON (composite ipfs:// refs or standard data URIs; dynamic schema)
- * @returns Standard glTF JSON with data URI buffers/images
+ * @returns Self-contained glTF JSON serialized to UTF-8 bytes
  */
-export async function composeGlTF(gltfJson: any): Promise<any> {
-  if (!gltfJson) throw new Error("composeGlTF: gltfJson is null");
+export async function compose(gltfJson: any): Promise<Uint8Array> {
+  if (!gltfJson) throw new Error("compose: gltfJson is null");
 
   const composed = await composeGltfJson(gltfJson, fetchCIDAsBase64);
 
@@ -44,5 +44,5 @@ export async function composeGlTF(gltfJson: any): Promise<any> {
       composed.images?.length || 0
     } images`
   );
-  return composed;
+  return new TextEncoder().encode(JSON.stringify(composed));
 }

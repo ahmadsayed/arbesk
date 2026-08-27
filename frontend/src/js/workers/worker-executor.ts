@@ -17,7 +17,7 @@ export function createWorkerExecutor(): ExecutorPort {
     available: () => isWorkerPoolAvailable(),
     exec: async <T>(op: ExecutorOp, args: unknown[]): Promise<T> => {
       let forwarded = args;
-      if (op === "compose" || op === "composeToBytes") {
+      if (op === "compose") {
         const [payload] = args;
         forwarded = [
           { ...(payload as Record<string, unknown>), gatewayBase: await gatewayBase() },

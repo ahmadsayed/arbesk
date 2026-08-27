@@ -77,15 +77,11 @@ async function load() {
     isComposite: jest.fn(),
     // Imported (unused) by asset-core/executor/inline.ts — the mock must
     // satisfy the full link-time surface of the decomposer module.
-    decomposeGlTF: jest.fn(),
-    decomposeAndStore: jest.fn(),
+    decompose: jest.fn(),
   }));
   jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
-    composeGlTFAsync: jest.fn(),
-    composeGlTFToBlobAsync: jest.fn(),
-    decomposeGlTFAsync: jest.fn(),
-    decomposeAndStoreAsync: jest.fn(),
-    decomposeGLBAsync: jest.fn(),
+    composeAsync: jest.fn(),
+    decomposeAsync: jest.fn(),
     editSourceColorsAsync: jest.fn(),
     isComposite: jest.fn(),
   }));

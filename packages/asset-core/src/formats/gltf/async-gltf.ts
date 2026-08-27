@@ -1,31 +1,13 @@
-/**
- * Async glTF Operations with Executor Offload
- *
- * These wrappers try to run heavy glTF work through the injected ExecutorPort
- * (a browser Web Worker pool in the app, the inline calling-thread executor on
- * the backend) and fall back to the main-thread implementations when the
- * executor is unavailable or fails.
- */
-
 import { getRuntime } from "../../runtime.ts";
 import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
-import { composeGlTF } from "./composer.ts";
-import {
-  decomposeGlTF as decomposeGlTFMain,
-  decomposeAndStore as decomposeAndStoreMain,
-  isComposite,
-} from "./decomposer.ts";
-import { decomposeGLB as decomposeGLBMain } from "./glb-parser.ts";
+import { compose } from "./composer.ts";
+import { decompose as decomposeMain, isComposite } from "./decomposer.ts";
+import { decompose as decomposeGlbMain, isGLB } from "./glb-parser.ts";
 import { editSourceColors as editSourceColorsMain } from "./source-color-editor.ts";
+import type { DecomposeResult } from "../codec.ts";
 
-/** Upload credential as handled by this module (backend-minted, plus gateway/reusable). */
 type PooledUploadCredential = UploadCredential;
 
-/**
- * Upload credentials come from the injected CredentialPort (browser: the
- * session-backed /ipfs/upload-urls mint). An absent port means uploads are
- * not configured for this runtime.
- */
 function credentialPort() {
   const c = getRuntime().credentials;
   if (!c) {
@@ -36,17 +18,10 @@ function credentialPort() {
   return c;
 }
 
-/**
- * @returns {Promise<boolean>}
- */
 async function checkExecutorAvailable() {
   return getRuntime().executor.available();
 }
 
-/**
- * @param {any} name
- * @returns {string}
- */
 function sanitizeAsyncName(name: any) {
   return (
     String(name || "asset")
@@ -56,32 +31,14 @@ function sanitizeAsyncName(name: any) {
   );
 }
 
-/**
- * Upper-bound count of IPFS uploads a glTF decompose will need (buffers +
- * images + the composite JSON itself). Deliberately a loose upper bound
- * rather than mirroring decomposeGltf's exact skip logic (already-ipfs://
- * refs, external image URIs) - a few unused pooled credentials just expire
- * unused, while under-counting would starve the pool mid-upload.
- *
- * @param {any} gltfJson
- * @returns {number}
- */
 function estimateUploadCount(gltfJson: any) {
   return (gltfJson?.buffers?.length || 0) + (gltfJson?.images?.length || 0) + 1;
 }
 
-const GLB_MAGIC = 0x46546c67; // 'glTF'
+const GLB_MAGIC = 0x46546c67;
 const GLB_HEADER_LENGTH = 12;
 const GLB_CHUNK_HEADER_LENGTH = 8;
 
-/**
- * Cheaply peek a GLB's embedded JSON chunk to size the credential pool,
- * without pulling in the full gltf-transform parser on the main thread.
- * Falls back to a conservative fixed estimate if the header can't be read.
- *
- * @param {ArrayBuffer} arrayBuffer
- * @returns {number}
- */
 function estimateGlbUploadCount(arrayBuffer: ArrayBuffer) {
   try {
     const view = new DataView(arrayBuffer);
@@ -100,24 +57,8 @@ function estimateGlbUploadCount(arrayBuffer: ArrayBuffer) {
   }
 }
 
-// Matches the backend's uploadUrlsSchema cap (src/api/schemas.js). Clamped
-// client-side so an unusually large decompose (many discrete buffers/images)
-// degrades to a smaller pool - triggering the existing executor-failure ->
-// main-thread fallback path - instead of the mint request itself failing
-// with HTTP 400.
 const MAX_POOLED_CREDENTIALS = 200;
 
-/**
- * Mint an upload credential sized for a batch of `count` files in one round
- * trip. Reusable strategies (kubo-api) cover unlimited uploads with one
- * credential, so `count` only matters for single-use strategies
- * (`presigned-put`): each signed URL accepts exactly one upload, so uploading
- * N files previously meant N sequential backend + sign round trips. This mints
- * all N up front instead and pools them into one credential.
- *
- * @param {number} count
- * @returns {Promise<PooledUploadCredential>}
- */
 async function getPooledUploadCredential(count: number): Promise<PooledUploadCredential> {
   const clamped = Math.min(Math.max(count, 1), MAX_POOLED_CREDENTIALS);
   const credentials = await credentialPort().getUploadCredentials(clamped);
@@ -134,28 +75,6 @@ async function getPooledUploadCredential(count: number): Promise<PooledUploadCre
   };
 }
 
-/**
- * Carve one URL off a pooled presigned credential for a follow-up upload that
- * happens on the main thread AFTER an executor call that also draws from the
- * pool.
- *
- * Necessary when the executor is worker-backed: `workerPool.exec()` passes the
- * credential through structured clone, so the worker mutates its OWN copy of
- * `credential.urls` as it uploads and the main thread's copy is never touched.
- * Without this, a post-executor upload (e.g. the composite JSON) would pop
- * url[0] from the still-full main-thread copy - a URL the worker already spent
- * inside its clone - and get HTTP 409 "duplicate file id".
- *
- * Reserving one URL up front sidesteps the clone desync entirely: the worker
- * gets a pool one shorter, the main thread gets a single dedicated URL, and
- * neither can collide with the other.
- *
- * No-op for reusable strategies (or an already single-shot credential) since
- * there's no clone-desync risk to guard against.
- *
- * @param {PooledUploadCredential} credential
- * @returns {{workerCredential: PooledUploadCredential, followUpCredential: PooledUploadCredential}}
- */
 function reserveFollowUpCredential(credential: PooledUploadCredential): {
   workerCredential: PooledUploadCredential;
   followUpCredential: PooledUploadCredential;
@@ -176,22 +95,15 @@ function reserveFollowUpCredential(credential: PooledUploadCredential): {
   return { workerCredential: credential, followUpCredential: credential };
 }
 
-/**
- * Compose a composite glTF into a renderable glTF with data URIs.
- * Tries the executor first; falls back to the main-thread composer.
- *
- * @param {any} compositeJson
- * @returns {Promise<any>} composed glTF JSON
- */
-export async function composeGlTFAsync(compositeJson: any) {
-  if (!compositeJson) throw new Error("composeGlTFAsync: gltfJson is null");
+export async function composeAsync(compositeJson: any): Promise<Uint8Array> {
+  if (!compositeJson) throw new Error("composeAsync: gltfJson is null");
 
   if (await checkExecutorAvailable()) {
     try {
-      const { composedJson } = await getRuntime().executor.exec("compose", [
+      const { composedBytes } = await getRuntime().executor.exec("compose", [
         { compositeJson },
       ]);
-      return composedJson;
+      return composedBytes as Uint8Array;
     } catch (error) {
       console.warn(
         "[ASYNC-GLTF] compose executor failed, falling back:",
@@ -200,88 +112,41 @@ export async function composeGlTFAsync(compositeJson: any) {
     }
   }
 
-  return composeGlTF(compositeJson);
+  return compose(compositeJson);
 }
 
-/**
- * Compose a composite glTF into a renderable Blob of glTF JSON.
- *
- * Worker-executor path: the worker composes, stringifies, and encodes the
- * glTF, then transfers the bytes zero-copy — the main thread never holds the
- * composed JSON object or pays a giant JSON.stringify. Fallback matches the
- * previous behavior: main-thread composeGlTF() + JSON.stringify wrapped in a
- * Blob.
- *
- * @param {any} compositeJson
- * @returns {Promise<Blob>} application/json Blob ready for a blob URL
- */
-export async function composeGlTFToBlobAsync(compositeJson: any) {
-  if (!compositeJson) {
-    throw new Error("composeGlTFToBlobAsync: gltfJson is null");
+function toArrayBuffer(input: unknown): ArrayBuffer | null {
+  if (input instanceof ArrayBuffer) return input;
+  if (input instanceof Uint8Array) {
+    return input.buffer.slice(
+      input.byteOffset,
+      input.byteOffset + input.byteLength
+    ) as ArrayBuffer;
   }
-
-  if (await checkExecutorAvailable()) {
-    try {
-      const { composedBytes } = await getRuntime().executor.exec(
-        "composeToBytes",
-        [{ compositeJson }]
-      );
-      return new Blob([composedBytes], { type: "application/json" });
-    } catch (error) {
-      console.warn(
-        "[ASYNC-GLTF] composeToBytes executor failed, falling back:",
-        (error as Error).message
-      );
-    }
-  }
-
-  const composed = await composeGlTF(compositeJson);
-  return new Blob([JSON.stringify(composed)], { type: "application/json" });
+  return null;
 }
 
-/**
- * Decompose a standard glTF JSON into a composite + extracted buffers/images.
- * The worker path does NOT upload to IPFS; caller must upload returned bytes
- * and rewrite URIs, or use decomposeAndStoreAsync. (The main-thread fallback
- * decomposer always uploads as it extracts, so it returns empty
- * buffers/images lists.)
- *
- * @param {any} gltfJson
- * @returns {Promise<{composite: any, buffers: any[], images: any[]}>}
- */
-export async function decomposeGlTFAsync(gltfJson: any) {
-  if (!gltfJson) throw new Error("decomposeGlTFAsync: gltf is null");
+export async function decomposeAsync(
+  input: unknown,
+  options: { assetName?: string; assetId?: string; dedupMap?: Map<string, string> | null; store?: boolean } = {}
+): Promise<DecomposeResult> {
+  const { assetName, assetId, dedupMap = null, store = true } = options;
 
-  if (await checkExecutorAvailable()) {
-    try {
-      return await getRuntime().executor.exec("decomposeGltf", [{ gltfJson }]);
-    } catch (error) {
-      console.warn(
-        "[ASYNC-GLTF] decomposeGltf executor failed, falling back:",
-        (error as Error).message
-      );
-    }
+  const bytes = toArrayBuffer(input);
+  if (bytes && isGLB(bytes)) {
+    return decomposeGlb(bytes, store, { assetName, assetId, dedupMap });
   }
 
-  const composite = await decomposeGlTFMain(gltfJson);
-  return { composite, buffers: [], images: [] };
+  const gltf = bytes
+    ? JSON.parse(new TextDecoder().decode(bytes))
+    : (input as Record<string, unknown>);
+  return decomposeGltf(gltf, { assetName, assetId, dedupMap });
 }
 
-/**
- * Decompose a standard glTF JSON and store the composite + components on IPFS.
- * Mirrors the original decomposeAndStore signature.
- *
- * @param {any} gltfJson
- * @param {object} [options]
- * @param {string} [options.assetName]
- * @param {string} [options.assetId]
- * @param {Map<string, string>|null} [options.dedupMap]
- * @returns {Promise<{composite: any, compositeCid: string}>}
- */
-export async function decomposeAndStoreAsync(
+async function decomposeGltf(
   gltfJson: any,
-  options: { assetName?: string; assetId?: string; dedupMap?: Map<string, string> | null } = {}
-) {
+  options: { assetName?: string; assetId?: string; dedupMap?: Map<string, string> | null }
+): Promise<DecomposeResult> {
   const { assetName, assetId, dedupMap = null } = options;
   const credential = await getPooledUploadCredential(
     estimateUploadCount(gltfJson)
@@ -290,13 +155,6 @@ export async function decomposeAndStoreAsync(
 
   if (reusableCredential && (await checkExecutorAvailable())) {
     try {
-      // Executor path: extraction + batched IPFS upload happen off the main
-      // thread when the executor is worker-backed. Workers store components
-      // uncompressed (no fflate in the worker); the inline executor compresses
-      // like the main-thread path. The composite JSON is written back on the
-      // main thread afterward, so its credential is reserved up front (see
-      // reserveFollowUpCredential) rather than shared with the worker's clone
-      // of the pool.
       const { workerCredential, followUpCredential } =
         reserveFollowUpCredential(reusableCredential);
       const { composite } = await getRuntime().executor.exec(
@@ -311,7 +169,7 @@ export async function decomposeAndStoreAsync(
           assetId,
           filename:
             assetName || assetId
-              ? `${sanitizeAsyncName(assetName || assetId)}_composite.gltf`
+              ? sanitizeAsyncName(assetName || assetId) + "_composite.gltf"
               : undefined,
         }
       );
@@ -324,36 +182,22 @@ export async function decomposeAndStoreAsync(
     }
   }
 
-  const result = await decomposeAndStoreMain(gltfJson, reusableCredential, {
+  return decomposeMain(gltfJson, {
     compress: true,
     assetName,
     assetId,
     dedupMap,
+    credential: reusableCredential,
+    store: true,
   });
-  return result;
 }
 
-/**
- * Decompose a GLB ArrayBuffer into a composite + extracted buffers/images.
- * Mirrors the original decomposeGLB signature when storeComposite is true.
- *
- * @param {ArrayBuffer} arrayBuffer
- * @param {boolean} [storeComposite=true]
- * @param {object} [options]
- * @param {string} [options.assetName]
- * @param {string} [options.assetId]
- * @param {Map<string, string>|null} [options.dedupMap]
- * @returns {Promise<{composite: any, compositeCid: string|null}>}
- */
-export async function decomposeGLBAsync(
+async function decomposeGlb(
   arrayBuffer: ArrayBuffer,
-  storeComposite = true,
-  options: { assetName?: string; assetId?: string; dedupMap?: Map<string, string> | null } = {}
-) {
+  storeComposite: boolean,
+  options: { assetName?: string; assetId?: string; dedupMap?: Map<string, string> | null }
+): Promise<DecomposeResult> {
   const { assetName, assetId, dedupMap = null } = options;
-  if (!arrayBuffer)
-    throw new Error("decomposeGLBAsync: arrayBuffer is required");
-
   const credential = await getPooledUploadCredential(
     estimateGlbUploadCount(arrayBuffer)
   );
@@ -361,8 +205,6 @@ export async function decomposeGLBAsync(
 
   if (reusableCredential && (await checkExecutorAvailable())) {
     try {
-      // Executor path: extraction + batched IPFS upload happen off the main
-      // thread when the executor is worker-backed.
       const { composite, compositeCid } = await getRuntime().executor.exec(
         "decomposeAndUploadGlb",
         [{
@@ -385,29 +227,21 @@ export async function decomposeGLBAsync(
     }
   }
 
-  const result = await decomposeGLBMain(arrayBuffer, undefined, {
-    storeComposite,
-    credential: reusableCredential,
-    compress: true,
-    assetName,
-    assetId,
-    dedupMap,
-  });
-  return result;
+  const { composite, compositeCid } = await decomposeGlbMain(
+    arrayBuffer,
+    undefined,
+    {
+      storeComposite,
+      credential: reusableCredential,
+      compress: true,
+      assetName,
+      assetId,
+      dedupMap,
+    }
+  );
+  return { composite, compositeCid };
 }
 
-/**
- * Edit per-node source colors and upload the baked source asset.
- * Mirrors editSourceColors but offloads the color baking to the executor.
- *
- * @param {string} sourceCid
- * @param {Object<string, string>} nodeColors
- * @param {object} [options] - Optional parameters
- * @param {string} [options.assetName] - Asset name for IPFS filename
- * @param {string} [options.assetId] - Asset ID for IPFS filename
- * @param {Map<string, string>|null} [options.dedupMap]
- * @returns {Promise<{sourceCid: string, format?: string, path?: string, modified: number, skipped: number}>}
- */
 export async function editSourceColorsAsync(
   sourceCid: string,
   nodeColors: any,
@@ -426,7 +260,7 @@ export async function editSourceColorsAsync(
   try {
     const buffer = await getRuntime().ipfsRead.getBytes(sourceCid);
     if (getRuntime().kernels.glb.isGLB(buffer)) {
-      const { composite } = await decomposeGLBAsync(buffer, false, {
+      const { composite } = await decomposeGlb(buffer, false, {
         dedupMap,
       });
       gltf = composite;
@@ -436,7 +270,7 @@ export async function editSourceColorsAsync(
     }
   } catch (err) {
     console.warn(
-      `[ASYNC-GLTF] failed to fetch ${sourceCid}: ${(err as Error).message}`
+      "[ASYNC-GLTF] failed to fetch " + sourceCid + ": " + (err as Error).message
     );
     throw err;
   }
@@ -455,7 +289,7 @@ export async function editSourceColorsAsync(
         assetId,
         filename:
           assetName || assetId
-            ? `${assetName || assetId}_colored.gltf`
+            ? (assetName || assetId) + "_colored.gltf"
             : undefined,
       });
       const out: {

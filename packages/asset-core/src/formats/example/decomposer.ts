@@ -33,7 +33,7 @@ export interface DecomposeExampleOptions {
  *
  * @param bytes - raw `.example` bytes
  */
-export async function decomposeExample(
+export async function decompose(
   bytes: Uint8Array,
   options: DecomposeExampleOptions = {}
 ): Promise<{ compositeCid: string; composite: object }> {

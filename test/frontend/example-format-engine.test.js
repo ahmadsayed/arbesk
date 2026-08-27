@@ -66,10 +66,10 @@ const { parseExample, serializeExample } = await import(
 const { parsedExampleToGltf } = await import(
   "@arbesk/asset-core/formats/example/to-gltf.js"
 );
-const { decomposeExample } = await import(
+const { decompose } = await import(
   "@arbesk/asset-core/formats/example/decomposer.js"
 );
-const { composeExample, } = await import(
+const { compose, } = await import(
   "@arbesk/asset-core/formats/example/composer.js"
 );
 const { isCompositeExample } = await import(
@@ -102,7 +102,7 @@ describe("example format (reference engine)", () => {
   });
 
   it("round-trips raw → composite → raw through the ports", async () => {
-    const { compositeCid, composite } = await decomposeExample(RAW, {
+    const { compositeCid, composite } = await decompose(RAW, {
       assetName: "Box",
       assetId: "asset_box",
     });
@@ -111,13 +111,13 @@ describe("example format (reference engine)", () => {
     expect(composite.name).toBe("Box");
     expect(composite.payload.length).toBe("hello payload".length);
 
-    const rebuilt = await composeExample(composite);
+    const rebuilt = await compose(composite);
     expect(rebuilt).toEqual(RAW);
   });
 
-  it("rejects non-composite input in composeExample", async () => {
+  it("rejects non-composite input in compose", async () => {
     await expect(
-      composeExample({ name: "x", payload: { cid: "bafy", length: 0 } })
+      compose({ name: "x", payload: { cid: "bafy", length: 0 } })
     ).rejects.toThrow(/not a composite example/);
   });
 });

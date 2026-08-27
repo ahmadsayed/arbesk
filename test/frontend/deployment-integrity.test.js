@@ -471,9 +471,10 @@ describe("Deployment Pipeline Integrity", () => {
       expect(content).not.toContain('cache: "no-store"');
     });
 
-    test("worker registers the composeToBytes op used by composeGlTFToBlobAsync", () => {
+    test("worker registers the byte-returning compose op (no composeToBytes)", () => {
       const content = readFileSync(WORKER_PATH, "utf-8");
-      expect(content).toContain("composeToBytes");
+      expect(content).toContain("composedBytes");
+      expect(content).not.toContain("composeToBytes");
     });
   });
 
