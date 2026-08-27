@@ -1,6 +1,6 @@
 import { createStore } from "@arbesk/asset-core/state/create-store.js";
 import { EVENTS } from "@arbesk/asset-core/events/bus.js";
-import type { UserIdentity } from "../blockchain/wallet-ports.ts";
+import type { UserIdentity } from "@arbesk/wallet/types.js";
 
 export interface WalletState {
   walletAddress: string | null;

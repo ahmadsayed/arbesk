@@ -22,6 +22,10 @@ export default {
     // and tests source (no build step needed).
     "^@arbesk/asset-core$": "<rootDir>/packages/asset-core/src/index.ts",
     "^@arbesk/asset-core/(.+)\\.js$": "<rootDir>/packages/asset-core/src/$1.ts",
+    "^@arbesk/wallet$": "<rootDir>/packages/wallet/src/index.ts",
+    "^@arbesk/wallet/(.+)\\.js$": "<rootDir>/packages/wallet/src/$1.ts",
+    "^@arbesk/authz$": "<rootDir>/packages/authz/src/index.ts",
+    "^@arbesk/authz/(.+)\\.js$": "<rootDir>/packages/authz/src/$1.ts",
     // Frontend .ts sources import siblings with .js specifiers (emitted-ESM
     // convention); strip the extension so jest resolves the .ts source.
     "^(\\.{1,2}/.*)\\.js$": "$1",

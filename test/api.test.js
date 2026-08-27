@@ -2076,7 +2076,7 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
 
     it("allows an editor with a valid Merkle proof", async () => {
       const { SimpleMerkleTree } = await import("@openzeppelin/merkle-tree");
-      const { makeLeaf } = await import("../src/api/merkle-editors-node.ts");
+      const { makeLeaf } = await import("@arbesk/wallet/merkle.js");
 
       const tokenId = "7";
       const setVersion = "1";

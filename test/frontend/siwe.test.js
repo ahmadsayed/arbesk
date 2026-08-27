@@ -4,7 +4,7 @@ import { SiweMessage } from "siwe";
 import {
   buildSiweMessage,
   generateNonce,
-} from "../../frontend/src/js/blockchain/siwe.ts";
+} from "@arbesk/wallet/siwe.js";
 
 describe("frontend SIWE builder", () => {
   it("emits a message the official siwe parser round-trips, with an EIP-55 address", () => {

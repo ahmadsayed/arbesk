@@ -1,43 +1,14 @@
-import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import {
   makeLeaf,
-  verifyProof,
-} from "../../src/api/merkle-editors-node.ts";
-
-// Root/proof construction is a client-side concern (the backend only verifies),
-// so the test builds trees directly with @openzeppelin/merkle-tree — the same
-// library the frontend uses (packages/asset-core/src/gltf/merkle-editors.js) — keeping
-// leaf/tree encoding byte-compatible with MerkleProof.sol by construction.
+  computeRoot,
+  getProof,
+  verifyEditorProof,
+} from "@arbesk/wallet/merkle.js";
 
 const ZERO_ROOT =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-function computeRoot(editorList, tokenId, setVersion) {
-  if (!editorList || editorList.length === 0) {
-    return ZERO_ROOT;
-  }
-  const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion),
-  );
-  return SimpleMerkleTree.of(leaves).root;
-}
-
-function getProof(editorList, targetAddress, tokenId, setVersion) {
-  if (!editorList || editorList.length === 0) return null;
-  const entry = editorList.find(
-    (e) => e.address.toLowerCase() === targetAddress.toLowerCase(),
-  );
-  if (!entry) return null;
-
-  const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion),
-  );
-  const tree = SimpleMerkleTree.of(leaves);
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
-  return { proof: tree.getProof(leaf), role: entry.role };
-}
-
-describe("merkle-editors-node", () => {
+describe("wallet merkle primitives", () => {
   const tokenId = 42;
   const setVersion = 3;
   const editors = [
@@ -53,9 +24,7 @@ describe("merkle-editors-node", () => {
   });
 
   it("computeRoot returns zero root for empty list", () => {
-    expect(computeRoot([], tokenId, setVersion)).toBe(
-      "0x0000000000000000000000000000000000000000000000000000000000000000",
-    );
+    expect(computeRoot([], tokenId, setVersion)).toBe(ZERO_ROOT);
   });
 
   it("computeRoot returns a stable bytes32 root", () => {
@@ -69,28 +38,20 @@ describe("merkle-editors-node", () => {
     const result = getProof(editors, editors[1].address, tokenId, setVersion);
     expect(result).not.toBeNull();
     expect(result.proof.length).toBeGreaterThan(0);
-
     const leaf = makeLeaf(editors[1].address, editors[1].role, tokenId, setVersion);
-    expect(verifyProof(root, leaf, result.proof)).toBe(true);
+    expect(verifyEditorProof(root, leaf, result.proof)).toBe(true);
   });
 
   it("getProof returns null for a non-editor address", () => {
-    const result = getProof(
-      editors,
-      "0x0000000000000000000000000000000000000000",
-      tokenId,
-      setVersion,
-    );
+    const result = getProof(editors, "0x0000000000000000000000000000000000000000", tokenId, setVersion);
     expect(result).toBeNull();
   });
 
-  it("verifyProof rejects a tampered proof", () => {
+  it("verifyEditorProof rejects a tampered proof", () => {
     const root = computeRoot(editors, tokenId, setVersion);
     const leaf = makeLeaf(editors[0].address, editors[0].role, tokenId, setVersion);
-    const badProof = [
-      "0x0000000000000000000000000000000000000000000000000000000000000001",
-    ];
-    expect(verifyProof(root, leaf, badProof)).toBe(false);
+    const badProof = ["0x0000000000000000000000000000000000000000000000000000000000000001"];
+    expect(verifyEditorProof(root, leaf, badProof)).toBe(false);
   });
 
   it("proofs verify for every editor in the list", () => {
@@ -98,7 +59,7 @@ describe("merkle-editors-node", () => {
     for (const editor of editors) {
       const result = getProof(editors, editor.address, tokenId, setVersion);
       const leaf = makeLeaf(editor.address, editor.role, tokenId, setVersion);
-      expect(verifyProof(root, leaf, result.proof)).toBe(true);
+      expect(verifyEditorProof(root, leaf, result.proof)).toBe(true);
     }
   });
 });

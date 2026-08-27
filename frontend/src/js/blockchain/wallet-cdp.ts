@@ -15,7 +15,7 @@ import {
   isSmartWalletSupported,
   SMART_WALLET_SUPPORTED_CHAIN_IDS,
 } from "./smart-wallet-support.ts";
-import type { Signer } from "./wallet-ports.ts";
+import type { Signer } from "@arbesk/wallet/types.js";
 
 export { isSmartWalletSupported, SMART_WALLET_SUPPORTED_CHAIN_IDS };
 

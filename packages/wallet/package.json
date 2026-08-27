@@ -1,0 +1,26 @@
+{
+  "name": "@arbesk/wallet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Environment-agnostic Arbesk wallet/identity/chain SDK: Signer port, SIWE build/verify, Merkle editor proofs, contract writes, session store. One TypeScript codebase consumed by the browser, the Node backend, and tests.",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@openzeppelin/merkle-tree": "^1.0.8",
+    "siwe": "^3.0.0",
+    "viem": "^2.52.2"
+  },
+  "license": "ISC"
+}
