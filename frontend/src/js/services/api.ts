@@ -152,11 +152,11 @@ export async function createSession(): Promise<{ token: string; expiresAt: numbe
   // Build + sign a SIWE proof via the injected signer (the wallet
   // AuthMechanism's authenticate step). The backend verifies the signature and
   // keeps the smart account as the session address via the eoaAddress fallback.
-  const { buildSiweAuthProof } = await import("../blockchain/auth-mechanism.ts");
+  const { buildSiweProof } = await import("@arbesk/wallet/facade.js");
   let proof;
   const _tSign = performance.now();
   try {
-    proof = await buildSiweAuthProof({
+    proof = await buildSiweProof({
       signer,
       address: walletAddress,
       chainId,

@@ -35,9 +35,9 @@ import {
   CHAIN_IDS,
   SUPPORTED_CHAIN_IDS,
 } from "../../../../constants/chains.js";
-import type { Signer } from "./wallet-ports.ts";
-import { createEoaSigner } from "./wallet-eoa.ts";
-import { buildUserIdentity } from "./auth-mechanism.ts";
+import type { Signer } from "@arbesk/wallet/types.js";
+import { createEoaSigner } from "@arbesk/wallet/adapters/eoa.js";
+import { buildUserIdentity } from "@arbesk/wallet/facade.js";
 
 // ─── Network definitions (shared with wallet-network.ts) ───
 
@@ -72,7 +72,7 @@ let contract: any = null;
 let contractAddress: string | null = null;
 let lowBalanceToastId: any = null;
 
-/** Injected on-chain Signer for the active connection (see wallet-ports.ts). */
+/** Injected on-chain Signer for the active connection (see @arbesk/wallet/types.js). */
 let signer: Signer | null = null;
 
 // ─── Constants ───

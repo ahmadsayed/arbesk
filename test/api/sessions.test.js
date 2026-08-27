@@ -7,8 +7,8 @@ const EOA_ADDRESS = "0xEOA000000000000000000000000000000000000A";
 
 async function loadModule(verifySiweResult) {
   jest.resetModules();
-  jest.unstable_mockModule("../../src/api/siwe-verify.ts", () => ({
-    verifySiwe: jest.fn(async () => verifySiweResult),
+  jest.unstable_mockModule("../../src/api/identity.ts", () => ({
+    verifyProof: jest.fn(async () => verifySiweResult),
   }));
   jest.unstable_mockModule("../../src/api/validation.ts", () => ({
     validateBody: jest.fn(() => (req, res, next) => next()),
@@ -121,8 +121,8 @@ describe("session routes", () => {
 
   it("POST /sessions returns 500 when verification throws", async () => {
     jest.resetModules();
-    jest.unstable_mockModule("../../src/api/siwe-verify.ts", () => ({
-      verifySiwe: jest.fn(async () => {
+    jest.unstable_mockModule("../../src/api/identity.ts", () => ({
+      verifyProof: jest.fn(async () => {
         throw new Error("verify exploded");
       }),
     }));
@@ -142,9 +142,9 @@ describe("session routes", () => {
   it("POST /sessions creates a session for a valid SIWE signature from a smart account", async () => {
     // CDP smart accounts: SIWE message address = smart account, eoaAddress = embedded EOA
     jest.resetModules();
-    jest.unstable_mockModule("../../src/api/siwe-verify.ts", () => ({
-      verifySiwe: jest.fn(async (_msg, _sig, opts) =>
-        opts && opts.eoaAddress
+    jest.unstable_mockModule("../../src/api/identity.ts", () => ({
+      verifyProof: jest.fn(async (proof) =>
+        proof && proof.eoaAddress
           ? { valid: true, address: VALID_ADDRESS }
           : { valid: false, error: "no eoaAddress" },
       ),

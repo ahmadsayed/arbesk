@@ -19,9 +19,9 @@ jest.unstable_mockModule("../../src/config.ts", () => ({
   getWeb3: mockGetWeb3,
 }));
 
-jest.unstable_mockModule("../../src/api/merkle-editors-node.ts", () => ({
+jest.unstable_mockModule("@arbesk/wallet/merkle.js", () => ({
   makeLeaf: mockMakeLeaf,
-  verifyProof: mockVerifyProof,
+  verifyEditorProof: mockVerifyProof,
 }));
 
 const {

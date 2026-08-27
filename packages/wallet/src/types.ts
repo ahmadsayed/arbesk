@@ -1,23 +1,16 @@
 /**
- * Wallet & identity ports.
+ * Port + config types for @arbesk/wallet. No runtime code here.
  *
- * These interfaces are the DI seam for the wallet layer, mirroring the
- * port-and-adapter pattern used everywhere else in asset-core. The concrete
- * wallet code (EOA via injected/WalletConnect, CDP email smart accounts) and
- * future auth mechanisms (OAuth/OIDC) implement these and are injected at the
- * composition root — nothing in the app should branch on wallet *kind*.
- *
- * The key split: **identity/auth** (`AuthMechanism` — "who are you, prove it")
- * is separate from **on-chain signing** (`Signer` — "sign & send on-chain").
- * A login method may provide a Signer (EOA, CDP) or not (pure OAuth), so the
- * Signer is an optional capability, not part of identity.
+ * Signer / MinedReceipt / SendResult / UserIdentity / AuthProof / AuthMechanism
+ * move verbatim from the old frontend/src/js/blockchain/wallet-ports.ts.
+ * SessionStore and SignatureVerifier are the environment seams.
  */
 
 // ─── On-chain signer ────────────────────────────────────────────────────────
 
 export type SignerSource = "eoa" | "cdp";
 
-/** A mined transaction result. `status` is null when unknown/not-yet-known. */
+/** A mined transaction result. status is null when unknown/not-yet-known. */
 export interface MinedReceipt {
   /** On-chain transaction hash (not a UserOperation hash). */
   transactionHash: string;
@@ -28,10 +21,8 @@ export interface MinedReceipt {
 }
 
 /**
- * The result of `Signer.sendTransaction`. Resolves as soon as the transaction
- * is *broadcast* (never blocks on mining), so callers can fire optimistic UI
- * immediately. `wait()` blocks until block inclusion and yields the real
- * on-chain transaction hash + status.
+ * The result of Signer.sendTransaction. Resolves as soon as the transaction
+ * is broadcast (never blocks on mining). wait() blocks until inclusion.
  */
 export interface SendResult {
   /** Hash the wallet broadcast: EVM tx hash (EOA) or UserOperation hash (CDP). */
@@ -41,10 +32,9 @@ export interface SendResult {
 }
 
 /**
- * On-chain signing & sending capability. The on-chain *owner* address
- * (`getAddress`) and the *signer* address (`getSignerAddress`) differ only for
- * CDP smart accounts (owner = smart account, signer = embedded EOA); for an
- * EOA they are the same key.
+ * On-chain signing & sending capability. getAddress and getSignerAddress
+ * differ only for CDP smart accounts (owner = smart account, signer =
+ * embedded EOA); for an EOA they are the same key.
  */
 export interface Signer {
   source: SignerSource;
@@ -68,36 +58,50 @@ export interface Signer {
 // ─── Identity & authentication ──────────────────────────────────────────────
 
 export interface UserIdentity {
-  /** Canonical id: an Ethereum address (wallet) or an OIDC `sub`. */
+  /** Canonical id: an Ethereum address (wallet) or an OIDC sub. */
   id: string;
   kind: "ethereum-address" | "oauth-subject";
-  /** Human-readable label: email, short address, or name. */
   displayName: string;
   email?: string;
 }
 
 /**
  * A proof that authenticates a user, exchanged by the backend for a session.
- * `siwe` (EIP-4361) for wallet mechanisms; `oidc` (an ID token) for
- * OAuth/OIDC mechanisms.
  */
 export type AuthProof =
   | { kind: "siwe"; message: string; signature: string; eoaAddress?: string }
   | { kind: "oidc"; provider: string; idToken: string; nonce?: string };
 
 /**
- * An identity/auth mechanism — how a user logs in and proves who they are.
- * Concrete instances: EOA (SIWE), CDP (email OTP → SIWE via embedded EOA),
- * and OAuth/OIDC (ID token). A mechanism does NOT imply on-chain signing;
- * that capability is the separate `Signer`.
+ * An identity/auth mechanism. Concrete instances: EOA (SIWE), CDP (email OTP
+ * → SIWE via embedded EOA), OAuth/OIDC (ID token). A mechanism does NOT imply
+ * on-chain signing; that capability is the separate Signer.
  */
 export interface AuthMechanism {
-  /** Stable id: "eoa" | "cdp" | "oauth-google" | "oauth-apple" | … */
+  /** Stable id: "eoa" | "cdp" | "oauth-google" | ... */
   id: string;
-  /** Interactive sign-in (popup / OTP / redirect). Resolves an AuthProof. */
   authenticate(): Promise<AuthProof>;
-  /** Silent restore (no popup); resolves null when no live session. */
   restoreSilently(): Promise<AuthProof | null>;
   signOut(): Promise<void>;
   getIdentity(): UserIdentity | null;
+}
+
+// ─── Session store (environment seam) ───────────────────────────────────────
+
+export interface SessionStore {
+  create(address: string): { token: string; expiresAt: number };
+  validate(token: string): string | null;
+  invalidate(token: string): void;
+}
+
+// ─── Signature verification (environment seam) ──────────────────────────────
+
+/**
+ * EIP-191 signature verification + recovery. The backend wires this to viem
+ * verifyMessage + web3 accounts.recover; the frontend leaves it null (it only
+ * builds proofs).
+ */
+export interface SignatureVerifier {
+  verifyMessage(address: string, message: string, signature: string, chainId: number): Promise<boolean>;
+  recoverAddress(message: string, signature: string): Promise<string>;
 }

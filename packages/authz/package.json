@@ -1,0 +1,24 @@
+{
+  "name": "@arbesk/authz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arbesk authorization SDK: asset access policy (ownership + Merkle editor proofs) on top of @arbesk/wallet identity.",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@arbesk/wallet": "*"
+  },
+  "license": "ISC"
+}

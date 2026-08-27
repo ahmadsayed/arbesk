@@ -11,7 +11,7 @@
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getSigner } from "./wallet-core.ts";
 import { resolveGas } from "./wallet-gas.ts";
-import type { MinedReceipt } from "./wallet-ports.ts";
+import type { MinedReceipt } from "@arbesk/wallet/types.js";
 
 export interface SendMethodOptions {
   /** Gas to use when EOA estimation fails (ignored for CDP). */

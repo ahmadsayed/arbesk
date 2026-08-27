@@ -76,7 +76,7 @@ async function loadApi(options = {}) {
     ),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/siwe.js", () => ({
+  await jest.unstable_mockModule("@arbesk/wallet/siwe.js", () => ({
     buildSiweMessage: jest.fn(
       (domain, address, nonce, chainId) =>
         `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to Arbesk Studio\n\nURI: ${window.location.origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: 2024-01-01T00:00:00.000Z`

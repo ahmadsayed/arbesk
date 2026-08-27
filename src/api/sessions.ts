@@ -13,7 +13,7 @@
 
 import express from "express";
 import crypto from "crypto";
-import { verifyProof } from "./proof-verify.ts";
+import { verifyProof } from "./identity.ts";
 import { validateBody } from "./validation.ts";
 import { createSessionSchema } from "./schemas.ts";
 import type { Request, Response } from "express";
