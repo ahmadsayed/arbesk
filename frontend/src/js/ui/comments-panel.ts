@@ -124,11 +124,30 @@ function syncUI(): void {
   }
 }
 
+// Idempotence guard: a double-fired @click (or a click racing the
+// Ctrl+Enter shortcut) can invoke post() twice before the draft clears,
+// sending two identical "chat" frames that the relay then stores as two
+// distinct Nostr events (and the thread counts twice). Suppress an identical
+// re-post within a short window; the draft is still cleared so the composer
+// reads empty after the (single) send.
+let _lastSentText = "";
+let _lastSentAt = 0;
+const DUPLICATE_POST_WINDOW_MS = 1500;
+
 function postComment(): void {
   const s = store();
   const text = s.draft.trim();
   if (!text) return;
+
+  const now = Date.now();
+  if (text === _lastSentText && now - _lastSentAt < DUPLICATE_POST_WINDOW_MS) {
+    s.draft = "";
+    return;
+  }
+
   if (thread.post(text)) {
+    _lastSentText = text;
+    _lastSentAt = now;
     s.draft = "";
     document.getElementById("commentComposerInput")?.focus();
   }

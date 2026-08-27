@@ -1105,6 +1105,24 @@ async function handlePublishUpdate(): Promise<void> {
   highlightActiveAsset();
 }
 
+/**
+ * Refresh the Studio gallery only when its sidebar view is actually visible.
+ *
+ * Background triggers (wallet connect, active-collection change, publish)
+ * call this so a hidden gallery never pays to expand every asset in the
+ * collection. The work is deferred to the SIDEBAR_VIEW_CHANGED handler, which
+ * runs refreshAssetLibrary() when the user actually opens the gallery pane.
+ * This keeps the Studio page-load cost proportional to the wallet's owned
+ * collections rather than the (unbounded) number of assets inside them.
+ */
+function refreshGalleryWhenVisible(): void {
+  if (getActiveView() !== "library") {
+    _libraryDirty = true;
+    return;
+  }
+  void refreshAssetLibrary();
+}
+
 on(EVENTS.ASSET_PUBLISHED, handlePublishUpdate);
 on(EVENTS.ASSET_PUBLISH_PENDING, handlePublishUpdate);
 
@@ -1120,7 +1138,7 @@ on(EVENTS.ASSET_CLEARED, async () => {
   closeAsset();
   emit(EVENTS.SCENE_EMPTY);
   clearUrlAssetParams();
-  await refreshAssetLibrary();
+  refreshGalleryWhenVisible();
 });
 
 on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
@@ -1138,7 +1156,7 @@ on(EVENTS.WALLET_CONNECTED, async () => {
   if (assetLibraryBody) {
     assetLibraryBody.innerHTML = LOADING_GALLERY_HTML;
   }
-  await refreshAssetLibrary();
+  refreshGalleryWhenVisible();
 });
 
 // Wallet may already be connected by the time this module loads (e.g. page
@@ -1157,7 +1175,7 @@ on(EVENTS.ASSET_STATE_CHANGED, (state) => {
   const tokenId = state?.activeCollectionTokenId ?? null;
   if (tokenId !== _lastRenderedCollectionTokenId) {
     _lastRenderedCollectionTokenId = tokenId;
-    refreshAssetLibrary();
+    refreshGalleryWhenVisible();
   }
 });
 
