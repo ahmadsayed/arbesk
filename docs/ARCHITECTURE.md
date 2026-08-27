@@ -135,11 +135,11 @@ The system currently combines:
 | *(client-side only)* | Parametric editing, manifest writes, thumbnail upload, manifest-chain walks, token resolution — all browser-side |
 | `src/api/authentication.ts` | Session token validation, sets `res.locals.userAddress` |
 | `src/api/sessions.ts` | SIWE session create/delete (24h TTL) |
-| `src/api/siwe-verify.ts` | EIP-4361 message verification (supports `eoaAddress` for CDP smart accounts) |
+| `@arbesk/wallet/siwe.js` | EIP-4361 message verification (supports `eoaAddress` for CDP smart accounts) |
 | `src/api/routes/paymaster.ts` | CDP Paymaster JSON-RPC proxy (keeps `CDP_PAYMASTER_URL` server-side) |
 | `src/api/rate-limiter.ts` | In-memory route rate limiter |
 | `src/api/abi-router.ts` | Serves compiled contract artifacts by name |
-| `src/api/adapters/mock-adapter.ts` | Deterministic local asset generation for development/tests |
+| `@arbesk/ai-asset-gen` | 3D-model generation (deterministic mock + Tripo3D v3, BYOK) |
 | `src/api/comments-archive.ts` | Snapshots Nostr comment threads to IPFS on republish |
 | `src/api/chat-proxy.ts` | WebSocket bridge: browser ↔ Nostr relay (session-gated) |
 | `src/api/nostr-relay.ts` | Shared relay primitives (used by chat-proxy + comments-archive) |

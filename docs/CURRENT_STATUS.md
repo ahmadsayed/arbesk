@@ -12,7 +12,7 @@
 
 | Phase | Status | Evidence in Code |
 |-------|--------|------------------|
-| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.ts`, `src/api/adapters/mock-adapter.ts`, `docker-compose.yml`, `src/api/storage/` |
+| Phase 1: Data Bridge, Mock Adapters & Private IPFS | ✅ Complete | `src/api/assets/generate-node.ts`, `@arbesk/ai-asset-gen`, `docker-compose.yml`, `src/api/storage/` |
 | Phase 2: Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.ts`, `frontend/src/js/engine/time-travel.ts` |
 | Phase 3: PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.ts` |
 | Phase 4: UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/app.pug` (unified Studio + Library SPA), 29 SCSS partials, sidebar/outliner/nesting |
@@ -23,12 +23,12 @@
 | Phase 5.4: Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.ts`, collection expansion in `asset-library.ts`, collection loading in `scene-graph.ts` |
 | Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.ts`, `ui/comments-panel.ts`, `src/api/chat-proxy.ts`, `src/api/comments-archive.ts`, E2E specs 14 + 15 |
 | Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.ts`, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, `services/library-ops.ts`, E2E specs 09–12 |
-| CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.ts`, SIWE with `eoaAddress` fallback in `siwe-verify.ts`, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
+| CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.ts`, SIWE with `eoaAddress` fallback in the `@arbesk/wallet` SIWE verifier, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.ts`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.ts`, `src/api/routes/indexer.ts`, per-chain `LOG_CHUNK_SIZES` |
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.ts`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
 | Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.ts`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
-| Tripo3D v3 Generation Integration | ✅ Complete | `src/api/adapters/tripo3d-adapter.ts` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
+| Tripo3D v3 Generation Integration | ✅ Complete | `@arbesk/ai-asset-gen` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
 | Asset-Core Externalization (SDK facade + ports) | ✅ Complete | `packages/asset-core/` npm workspace (`@arbesk/asset-core`: facade, runtime ports, manifest schema, domain, gltf pipeline, kernels, bench), browser adapters in `ipfs/`/`blockchain/`/`workers/`, backend `src/api/asset-core-adapters.ts`; see `docs/ASSET_CORE_SDK.md` |
 
 ---
@@ -46,9 +46,7 @@ src/
     ├── assets/
     │   └── generate-node.ts    # 3D generation entrypoint (mock + Tripo3D task-based; sourceAssetCid retexture/retopo/rig/animate follow-ups)
     ├── generation-tasks.ts     # In-memory wallet-bound generation task registry (TTL, phase tracking)
-    ├── adapters/
-    │   ├── mock-adapter.ts     # Reads local .gltf files
-    │   └── tripo3d-adapter.ts  # Tripo3D v3 REST adapter (BYOK, async task polling)
+    ├── (generation adapters → @arbesk/ai-asset-gen/providers/)
     ├── storage/
     │   ├── index.ts            # Storage backend factory (kubo/pinata)
     │   ├── kubo-adapter.ts     # Local Kubo add/cat/pin/directory/unpin
@@ -74,7 +72,7 @@ src/
     │   ├── paymaster.ts        # POST /paymaster — CDP Paymaster JSON-RPC proxy
     │   └── test-utils.ts       # Test-only reset helpers
     ├── sessions.ts             # SIWE session create/delete (24h TTL)
-    ├── siwe-verify.ts          # EIP-4361 message verification
+    ├── identity.ts             # EIP-4361 verification (wraps @arbesk/wallet)
     └── openapi.json            # Static OpenAPI spec
 ```
 
@@ -105,7 +103,7 @@ src/
 **Single session type — SIWE for all wallet kinds:**
 
 - **EOA wallets** (MetaMask/Rabby/WalletConnect): standard EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
-- **CDP email-login smart accounts**: the embedded EOA signer signs the SIWE message; the SIWE `address` field contains the smart account address; `eoaAddress` in the POST body provides the actual signer for fallback verification in `siwe-verify.ts`.
+- **CDP email-login smart accounts**: the embedded EOA signer signs the SIWE message; the SIWE `address` field contains the smart account address; `eoaAddress` in the POST body provides the actual signer for fallback verification in the `@arbesk/wallet` SIWE verifier.
 
 Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL. `authentication.ts` validates the SIWE-issued token for all request types.
 
@@ -249,7 +247,7 @@ frontend/src/js/
 - Email OTP → CDP Embedded Wallet (`@coinbase/cdp-core`) → ERC-4337 smart account on Base Sepolia.
 - Provider exposed as an EIP-1193 shim (`wallet-cdp.ts`) so all existing Web3.js code is unchanged.
 - Gas is sponsored by the CDP Paymaster (`useCdpPaymaster: true`); low-balance toast is suppressed for smart accounts.
-- Auth: embedded EOA signs the SIWE message; `eoaAddress` in the POST body enables fallback verification in `siwe-verify.ts`. Same SIWE session token format as EOA wallets.
+- Auth: embedded EOA signs the SIWE message; `eoaAddress` in the POST body enables fallback verification in the `@arbesk/wallet` SIWE verifier. Same SIWE session token format as EOA wallets.
 - **Chain constraint:** Smart wallets only work on Base Sepolia (`SMART_WALLET_SUPPORTED_CHAIN_IDS`). EOA wallets (MetaMask/Rabby) work on all supported chains.
 - **Verified end-to-end 2026-07-01:** OTP sign-in → SIWE session → collection mint via sponsored UserOperation on Base Sepolia.
 - **Implementation notes / gotchas fixed:**

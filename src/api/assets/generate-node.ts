@@ -1,6 +1,5 @@
 import express from "express";
 import type { Request, Response } from "express";
-import { mockGenerate } from "../adapters/mock-adapter.ts";
 import { serializeGLB } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import {
   isGzipped,
@@ -8,23 +7,15 @@ import {
 } from "@arbesk/asset-core/utils/compression.js";
 import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import {
-  createTask,
-  createImageTask,
-  createMultiviewTask,
-  createRefineTask,
-  uploadImage,
-  uploadModel,
-  getBalance,
-  decimateTask,
-  rigCheckTask,
-  rigModelTask,
-  retargetTask,
-  pollTask,
-  downloadModel,
-  cancelTask,
+  createGenerationProvider,
   TripoApiError,
-} from "../adapters/tripo3d-adapter.ts";
-import type { MultiviewViewTokens } from "../adapters/tripo3d-adapter.ts";
+} from "@arbesk/ai-asset-gen/index.js";
+import type { GenerationProvider } from "@arbesk/ai-asset-gen/facade.js";
+import type {
+  GenerationCapability,
+  SourceRef,
+  MultiviewImage,
+} from "@arbesk/ai-asset-gen/types.js";
 import {
   registerTask,
   getTask,
@@ -40,6 +31,22 @@ import { validateBody } from "../validation.ts";
 import { generateAssetSchema, providerBalanceSchema } from "../schemas.ts";
 
 const Router = express.Router;
+
+/** Capabilities the mock provider declares (text-only, synchronous samples). */
+const MOCK_CAPABILITIES: GenerationCapability[] = ["text-to-3d"];
+
+/** Capabilities the Tripo3D provider declares (full generation + follow-up pipeline). */
+const TRIPO_CAPABILITIES: GenerationCapability[] = [
+  "text-to-3d",
+  "image-to-3d",
+  "multiview-to-3d",
+  "retexture",
+  "retopo",
+  "rig-check",
+  "rig",
+  "animate",
+  "balance",
+];
 
 /** Tripo's file upload limit for source GLBs (file_token flow). */
 const TRIPO_SOURCE_GLB_LIMIT_BYTES = 150 * 1024 * 1024;
@@ -185,12 +192,11 @@ function providerErrorCode(status: number): string {
  * when the GLB exceeds Tripo's 150 MB file limit.
  * @returns file_token
  */
-async function uploadSourceGlb(
+async function resolveSourceGlb(
   cid: string,
-  apiKey: string,
   core: ArbeskCore,
   storage: StorageAdapter,
-): Promise<string> {
+): Promise<Buffer> {
   let glb: Buffer;
   try {
     glb = await storage.catBytes(cid);
@@ -231,7 +237,7 @@ async function uploadSourceGlb(
     console.log(`[GEN] source GLB too large cid=${cid} bytes=${glb.length}`);
     throw new TripoApiError("Source asset exceeds the 150 MB upload limit", 0, 400);
   }
-  return uploadModel(glb, apiKey);
+  return glb;
 }
 
 /**
@@ -244,6 +250,19 @@ export default function generateAssetNode(
   storage: StorageAdapter,
 ) {
   const router = Router();
+
+  /** CID → self-contained GLB bytes (decompress + compose glTF JSON as needed). */
+  const sourceResolver = (cid: string): Promise<Buffer> =>
+    resolveSourceGlb(cid, core, storage);
+
+  /** Build a per-request Tripo provider (BYOK key is transient per request). */
+  const buildTripoProvider = (apiKey: string): GenerationProvider =>
+    createGenerationProvider({
+      id: "tripo3d",
+      apiKey,
+      sourceResolver,
+      capabilities: TRIPO_CAPABILITIES,
+    });
 
   /**
    * POST /api/v1/generations
@@ -298,53 +317,33 @@ export default function generateAssetNode(
         }
 
         if (useMockAdapter) {
-          // The mock adapter always needs a prompt string; image-only
-          // requests fall back to a placeholder (image input is a
-          // Tripo3D-only feature).
+          // The mock provider only does text-to-3D; image-only requests fall
+          // back to a placeholder prompt (image input is Tripo3D-only).
           const mockPrompt = prompt || "image";
           console.log(`[GEN] using MOCK adapter for "${mockPrompt}"`);
-          const result = await mockGenerate(mockPrompt, {
-            provider: effectiveProvider,
-            providerKey,
+          const mockProvider = createGenerationProvider({
+            id: "mock",
+            capabilities: MOCK_CAPABILITIES,
           });
+          const taskId = await mockProvider.textToModel({ prompt: mockPrompt });
+          const poll = await mockProvider.poll(taskId);
+          const bytes = await mockProvider.download(taskId);
+          const assetFormat = poll.format || "gltf";
+          const assetBase64 = Buffer.from(bytes).toString("base64");
           console.log(
-            `[GEN] mock returned provider=${result.provider || "mock"} size=${result.data?.length || result.buffer?.length || "?"} bytes`,
+            `[GEN] mock returned provider=mock size=${bytes.length} bytes (${assetFormat})`,
           );
-
-          const assetPayload = result.data || result.buffer;
-          const assetFormat = result.format || "gltf";
-          const assetPath =
-            (result as { path?: string }).path ||
-            `asset.${assetFormat}`;
-
-          if (assetPayload === undefined) {
-            throw new Error("Generation adapter returned no payload");
-          }
-
-          // Always base64-encode so the client gets a consistent wire format
-          // regardless of whether the adapter returned a Buffer (.glb) or a
-          // UTF-8 string (.gltf).
-          const assetBase64 = Buffer.isBuffer(assetPayload)
-            ? assetPayload.toString("base64")
-            : Buffer.from(assetPayload, "utf-8").toString("base64");
-
-          console.log(
-            `[GEN] success - returning ${assetPayload.length} bytes of ${assetFormat} (base64: ${assetBase64.length} chars) to browser for client-side IPFS upload`,
-          );
-
-          // Return raw asset bytes to the browser. The browser uploads the
-          // asset to IPFS, constructs the manifest, and writes the manifest
-          // to IPFS directly - no server-side IPFS writes.
           return res.json({
             assetData: assetBase64,
             format: assetFormat,
-            path: assetPath,
-            provider: result.provider || effectiveProvider,
+            path: `asset.${assetFormat}`,
+            provider: "mock",
           });
         }
 
         if (effectiveProvider === "tripo3d") {
           const key = providerKey.trim();
+          const provider = buildTripoProvider(key);
 
           if (sourceAssetCid) {
             // Retarget-only shortcut: the caller references a completed rig-only
@@ -356,7 +355,9 @@ export default function generateAssetNode(
               const rigSource = getCompletedTask(sourceTaskId, res.locals.userAddress);
               if (rigSource && rigSource.kind === "animate" && rigSource.phase === "rig" && !rigOnly) {
                 console.log(`[GEN] retarget-only: source rig=${rigSource.tripoTaskId} animations=${(animations || []).join(",")}`);
-                const retargetId = await retargetTask(rigSource.tripoTaskId, animations, key, {
+                const retargetId = await provider.animate({
+                  rigTaskId: rigSource.tripoTaskId,
+                  animations: animations || [],
                   animateInPlace: Boolean(animateInPlace),
                   rigModel: rigSource.rigModel,
                 });
@@ -365,11 +366,12 @@ export default function generateAssetNode(
               }
             }
 
-            const fileToken = await uploadSourceGlb(sourceAssetCid, key, core, storage);
+            const fileToken = await provider.uploadSource({ kind: "cid", cid: sourceAssetCid });
+            const source: SourceRef = { kind: "fileToken", fileToken };
 
             if (animate) {
               console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)} inPlace=${Boolean(animateInPlace)}`);
-              const rigCheckId = await rigCheckTask(fileToken, key);
+              const rigCheckId = await provider.rigCheck({ source });
               const taskId = registerTask({
                 tripoTaskId: rigCheckId, providerKey: key, userAddress: res.locals.userAddress,
                 kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken, rigModel,
@@ -379,7 +381,7 @@ export default function generateAssetNode(
 
             if (retopo) {
               console.log(`[GEN] starting retopo source=${sourceAssetCid} faceLimit=${faceLimit ?? "adaptive"}`);
-              const decimateId = await decimateTask(fileToken, key, { faceLimit });
+              const decimateId = await provider.retopo({ source, faceLimit });
               const taskId = registerTask({ tripoTaskId: decimateId, providerKey: key, userAddress: res.locals.userAddress });
               return res.status(202).json({ taskId, provider: "tripo3d", status: "running", retopo: true });
             }
@@ -387,7 +389,7 @@ export default function generateAssetNode(
             // retexture (schema guarantees exactly one action flag)
             if (retexture) {
               console.log(`[GEN] starting retexture source=${sourceAssetCid}`);
-              const refineId = await createRefineTask(prompt, fileToken, key, { textureQuality });
+              const refineId = await provider.retexture({ prompt, source, textureQuality });
               const taskId = registerTask({ tripoTaskId: refineId, providerKey: key, userAddress: res.locals.userAddress });
               return res.status(202).json({ taskId, provider: "tripo3d", status: "running", refined: true });
             }
@@ -399,36 +401,21 @@ export default function generateAssetNode(
             `[GEN] using Tripo3D adapter for "${prompt || (images ? "(multiview)" : "(image)")}" image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
           );
           const tripoTaskId = images
-            ? await createMultiviewTask(
-                // Upload every view first (parallel), then key tokens by view.
-                (
-                  Object.fromEntries(
-                    await Promise.all(
-                      images.map(async (img: { imageData: string; imageMime: string; view: string }) => [
-                        img.view,
-                        await uploadImage(
-                          Buffer.from(img.imageData, "base64"),
-                          img.imageMime,
-                          key,
-                        ),
-                      ]),
-                    ),
-                  ) as MultiviewViewTokens
-                ),
-                key,
-                { textureQuality },
-              )
+            ? await provider.multiviewToModel({
+                views: images.map((img: { imageData: string; imageMime: string; view: string }) => ({
+                  view: img.view,
+                  image: Buffer.from(img.imageData, "base64"),
+                  mime: img.imageMime,
+                })) as MultiviewImage[],
+                textureQuality,
+              })
             : imageData
-              ? await createImageTask(
-                  await uploadImage(
-                    Buffer.from(imageData, "base64"),
-                    imageMime,
-                    key,
-                  ),
-                  key,
-                  { textureQuality },
-                )
-              : await createTask(prompt, key, { textureQuality });
+              ? await provider.imageToModel({
+                  image: Buffer.from(imageData, "base64"),
+                  mime: imageMime,
+                  textureQuality,
+                })
+              : await provider.textToModel({ prompt, textureQuality });
           const taskId = registerTask({
             tripoTaskId,
             providerKey: key,
@@ -513,7 +500,8 @@ export default function generateAssetNode(
     async (req: Request, res: Response) => {
       try {
         const key = req.body.providerKey.trim();
-        const result = await getBalance(key);
+        const provider = buildTripoProvider(key);
+        const result = await provider.getBalance();
         console.log("[GEN] balance fetched for BYOK key=***");
         return res.json(result);
       } catch (error) {
@@ -558,7 +546,8 @@ export default function generateAssetNode(
     }
     evictTask(taskId);
     console.log(`[GEN] task cancelled taskId=${taskId} tripo=${entry.tripoTaskId}`);
-    const upstreamCancelled = await cancelTask(entry.tripoTaskId, entry.providerKey);
+    const provider = buildTripoProvider(entry.providerKey);
+    const upstreamCancelled = await provider.cancel(entry.tripoTaskId);
     return res.json({ status: "cancelled", upstreamCancelled });
   });
 
@@ -586,7 +575,8 @@ export default function generateAssetNode(
       }
 
       console.log(`[GEN] polling taskId=${taskId} tripo=${entry.tripoTaskId}`);
-      const poll = await pollTask(entry.tripoTaskId, entry.providerKey);
+      const provider = buildTripoProvider(entry.providerKey);
+      const poll = await provider.poll(entry.tripoTaskId);
 
       if (poll.status === "queued" || poll.status === "running") {
         const stageLabels = {
@@ -629,12 +619,11 @@ export default function generateAssetNode(
               },
             });
           }
-          const rig = await rigModelTask(
-            entry.sourceFileToken || "",
-            rigOutput.rig_type || "biped",
-            entry.providerKey,
-            { model: entry.rigModel },
-          );
+          const rig = await provider.rig({
+            source: { kind: "fileToken", fileToken: entry.sourceFileToken || "" },
+            rigType: rigOutput.rig_type || "biped",
+            model: entry.rigModel,
+          });
           updateTaskEntry(taskId, res.locals.userAddress, {
             tripoTaskId: rig.taskId,
             phase: "rig",
@@ -650,15 +639,12 @@ export default function generateAssetNode(
           });
         }
         // phase === "rig" → start retarget with the requested presets
-        const retargetId = await retargetTask(
-          entry.tripoTaskId,
-          entry.animations || [],
-          entry.providerKey,
-          {
-            animateInPlace: Boolean(entry.animateInPlace),
-            rigModel: entry.rigModel,
-          },
-        );
+        const retargetId = await provider.animate({
+          rigTaskId: entry.tripoTaskId,
+          animations: entry.animations || [],
+          animateInPlace: Boolean(entry.animateInPlace),
+          rigModel: entry.rigModel,
+        });
         updateTaskEntry(taskId, res.locals.userAddress, {
           tripoTaskId: retargetId,
           phase: "retarget",
@@ -677,14 +663,14 @@ export default function generateAssetNode(
         if (!poll.glbUrl) {
           throw new Error("Tripo success response missing model URL");
         }
-        const buffer = await downloadModel(poll.glbUrl);
+        const buffer = await provider.download(poll.glbUrl);
         markTaskComplete(taskId, res.locals.userAddress);
         console.log(
           `[GEN] task complete taskId=${taskId} size=${buffer.length}`,
         );
         return res.json({
           status: "success",
-          assetData: buffer.toString("base64"),
+          assetData: Buffer.from(buffer).toString("base64"),
           format: "glb",
           path: "asset.glb",
           provider: "tripo3d",

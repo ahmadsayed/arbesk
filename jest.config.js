@@ -26,6 +26,8 @@ export default {
     "^@arbesk/wallet/(.+)\\.js$": "<rootDir>/packages/wallet/src/$1.ts",
     "^@arbesk/authz$": "<rootDir>/packages/authz/src/index.ts",
     "^@arbesk/authz/(.+)\\.js$": "<rootDir>/packages/authz/src/$1.ts",
+    "^@arbesk/ai-asset-gen$": "<rootDir>/packages/ai-asset-gen/src/index.ts",
+    "^@arbesk/ai-asset-gen/(.+)\\.js$": "<rootDir>/packages/ai-asset-gen/src/$1.ts",
     // Frontend .ts sources import siblings with .js specifiers (emitted-ESM
     // convention); strip the extension so jest resolves the .ts source.
     "^(\\.{1,2}/.*)\\.js$": "$1",

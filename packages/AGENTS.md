@@ -13,12 +13,14 @@ should follow that package's own guide, not the root one:
 | `@arbesk/wallet` | `packages/wallet/` | Wallet/identity/chain: `Signer` port, SIWE, Merkle proofs, contract writes, session store. **Bottom of the stack.** | `packages/wallet/AGENTS.md` |
 | `@arbesk/authz` | `packages/authz/` | Asset access policy (ownership + Merkle editor proof), on top of `@arbesk/wallet`. | `packages/authz/AGENTS.md` |
 | `@arbesk/asset-core` | `packages/asset-core/` | Asset engine: manifests, glTF/3MF compose/decompose, domain state, editor lists. | `packages/asset-core/AGENTS.md` + `docs/ASSET_CORE_SDK.md` |
+| `@arbesk/ai-asset-gen` | `packages/ai-asset-gen/` | 3D-model generation (mock + Tripo3D), capability-gated facade. Backend-only. | `packages/ai-asset-gen/AGENTS.md` |
 
 ## Dependency order
 
 ```
 @arbesk/wallet  ──(depends on)──▶  @arbesk/authz
 @arbesk/asset-core                 (independent)
+@arbesk/ai-asset-gen               (independent, backend-only)
 ```
 
 Only `@arbesk/authz` depends on another in-repo package (it imports
@@ -43,7 +45,7 @@ independent of each other and of the frontend/backend trees.
 ## Build & test
 
 ```bash
-npm run build:packages   # tsc → dist/ (ESM + .d.ts) for all three, in dependency order
+npm run build:packages   # tsc → dist/ (ESM + .d.ts) for all four, in dependency order
 npm run typecheck        # after build (resolves @arbesk/* via workspace symlinks)
 npm test                 # jest maps @arbesk/*.js → each package's .ts source (no build step)
 ```
