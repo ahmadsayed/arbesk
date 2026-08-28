@@ -7,6 +7,9 @@ export default {
     "/e2e/"
   ],
   coverageDirectory: "coverage/js",
+  // Haste map must not see linked worktrees: their packages/*/package.json
+  // collide with the main checkout's @arbesk/* workspace packages.
+  modulePathIgnorePatterns: ["<rootDir>/.worktrees/"],
   coveragePathIgnorePatterns: [
     "/node_modules/",
     "/frontend/dist/",
