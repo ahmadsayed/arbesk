@@ -22,7 +22,7 @@ import { showToast } from "../ui/toasts.ts";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getActiveAssetTokenId, getActiveAssetId } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
-import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
+import { identityMatrix, applyCollectionMutation } from "@arbesk/asset-core/utils/collections.js";
 
 /**
  * Remove an asset from its parent collection.
@@ -184,9 +184,7 @@ export async function updateCollectionManifest(
   const currentCid = await c.methods.tokenURI(tokenId).call();
   const collection = await getFromRemoteIPFS(currentCid);
 
-  const newCollection = mutate({ ...collection });
-  newCollection.version = (newCollection.version || 0) + 1;
-  newCollection.prev_asset_manifest_cid = currentCid;
+  const newCollection = applyCollectionMutation(collection, currentCid, mutate);
 
   const newCollectionCid = await writeJSONToIPFS(newCollection, null as any, {
     type: "collection",

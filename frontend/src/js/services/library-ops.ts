@@ -22,6 +22,7 @@ import { updateCollectionManifest } from "./asset-delete.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
   deriveNamedCollectionId,
+  buildCollectionManifest,
   identityMatrix,
 } from "@arbesk/asset-core/utils/collections.js";
 import { log, warn } from "../utils/log.ts";
@@ -80,15 +81,7 @@ export async function createNamedCollection(
     // Token does not exist - proceed to mint.
   }
 
-  const collectionManifest = {
-    type: "collection",
-    name: trimmed,
-    asset_id: `collection_${Date.now()}`,
-    version: 1,
-    timestamp: Date.now(),
-    assets: {},
-    prev_asset_manifest_cid: null,
-  };
+  const collectionManifest = buildCollectionManifest(trimmed);
 
   const collectionCid = await writeJSONToIPFS(collectionManifest, null as any, {
     type: "collection",
