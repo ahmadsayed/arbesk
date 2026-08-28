@@ -1,13 +1,17 @@
 /**
  * Environment adapters: the host half of the asset-core ports for the CLI.
  * listTokens → backend indexer; tokenURI → viem readContract; IPFS → gateway
- * (reads, auto-gunzip) and local Kubo /api/v0/add (writes, gzip-compressed).
+ * (reads, auto-gunzip) and backend-minted upload credentials (writes,
+ * gzip-compressed) — kubo-api locally, Pinata presigned-put on testnet.
  */
 import { createPublicClient, http } from "viem";
 import { encodePacked, keccak256 } from "viem/utils";
 import type { PublicClient, Address } from "viem";
 import { gzipSync, gunzipSync } from "zlib";
-import { BACKEND_URL, CHAIN_ID, IPFS_API } from "./config.ts";
+import { uploadToIPFSWithCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
+import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
+import { BACKEND_URL, CHAIN_ID } from "./config.ts";
+import { loadSession } from "./session.ts";
 
 export interface BackendConfig {
   contractAddress: string;
@@ -106,25 +110,41 @@ async function toBytes(data: unknown): Promise<Uint8Array> {
   throw new Error("besk: unsupported write data type");
 }
 
-async function kuboAdd(bytes: Uint8Array): Promise<string> {
-  const form = new FormData();
-  form.append("file", new Blob([bytes as BlobPart], { type: "application/octet-stream" }));
-  const res = await fetch(IPFS_API + "/api/v0/add?pin=true", { method: "POST", body: form });
-  const body = (await res.json()) as { Hash?: string };
-  if (!body?.Hash) throw new Error("Kubo add returned no Hash");
-  return body.Hash;
+/** Mint one upload credential from the backend with the CLI session token. */
+export async function mintUploadCredential(): Promise<UploadCredential> {
+  const s = loadSession();
+  if (!s) throw new Error("Not logged in. Run `besk login <email>`.");
+  const res = await fetch(BACKEND_URL + "/api/v1/ipfs/upload-url", {
+    method: "POST",
+    headers: { Authorization: "Session " + s.token },
+  });
+  if (!res.ok) throw new Error("upload credential mint failed: " + res.status);
+  return (await res.json()) as UploadCredential;
 }
 
+/**
+ * Write port: every upload goes through a backend-minted credential, so the
+ * same code path serves local dev (kubo-api strategy) and testnet (Pinata
+ * presigned-put). Presigned URLs are single-use — only a credential that
+ * declares itself reusable (kubo) is cached.
+ */
 export function createIpfsWritePort() {
+  let reusable: UploadCredential | null = null;
+  const credentialFor = async (): Promise<UploadCredential> => {
+    if (reusable) return reusable;
+    const c = await mintUploadCredential();
+    if (c.strategy === "kubo-api" && c.reusable !== false) reusable = c;
+    return c;
+  };
   return {
-    write: async (data: unknown, _filename?: string, _credential?: unknown, options?: { compress?: boolean }) => {
+    write: async (data: unknown, filename?: string, _credential?: unknown, options?: { compress?: boolean }) => {
       let bytes = await toBytes(data);
       if (options?.compress !== false) bytes = new Uint8Array(gzipSync(bytes));
-      return kuboAdd(bytes);
+      return uploadToIPFSWithCredential(bytes, (filename ?? "blob") + ".gz", await credentialFor());
     },
     writeJSON: async (json: Record<string, unknown>) => {
       const bytes = new Uint8Array(gzipSync(Buffer.from(JSON.stringify(json))));
-      return kuboAdd(bytes);
+      return uploadToIPFSWithCredential(bytes, "manifest.json.gz", await credentialFor());
     },
   };
 }
