@@ -6,6 +6,11 @@
  *   keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion))
  * implemented with viem encodePacked + keccak256 (byte-identical to
  * Web3.utils.soliditySha3 and the asset-core HashPort path).
+ *
+ * CANONICAL: this is the Merkle source of truth. @arbesk/asset-core keeps an
+ * independent copy (domain/editors.ts) because it cannot import this package —
+ * the two MUST stay byte-identical for makeLeaf/computeRoot/getProof/verify.
+ * A change here must be mirrored there; test/merkle-parity.test.js pins parity.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import { encodePacked, keccak256 } from "viem/utils";

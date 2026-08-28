@@ -18,8 +18,12 @@ import {
   getCollectionManifest,
   clearCatalogCache,
   uploadAsset,
+  getVersionHistory,
+  downloadAsset,
+  detectFormat,
 } from "./catalog.ts";
 import { relay } from "./relay.ts";
+import { createCollection } from "./collections.ts";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -43,8 +47,12 @@ function help(): void {
   console.log("  whoami            show the current identity");
   console.log("  logout            sign out");
   console.log("  collections       list your collections");
+  console.log("  create <name>     mint a new collection");
   console.log("  use <name>        switch to a collection");
   console.log("  list              list assets in the current collection");
+  console.log("  info <name>       show an asset's identity card");
+  console.log("  history <name>    show an asset's version chain");
+  console.log("  download <name> [version]  pull a model to a local file");
   console.log("  upload <file>     save a local model to the current collection");
   console.log("  delete <name>     remove from the collection (only confirmation)");
   console.log("  rename <old> <new>  rename an asset");
@@ -206,6 +214,146 @@ async function cmdUpload(file?: string): Promise<void> {
   console.log("Saved as " + name);
 }
 
+function extFor(format: string): string {
+  return { gltf: ".gltf", glb: ".glb", "3mf": ".3mf", example: ".example" }[format] ?? ".gltf";
+}
+
+function sanitizeFileName(name: string): string {
+  const base = String(name).trim().replace(/[^a-zA-Z0-9._-]+/g, "_");
+  return base || "asset";
+}
+
+/**
+ * A collection asset may be stored either as a full asset manifest
+ * (type:"asset" with scene.nodes[0].source.cid → the composite) or, for CLI
+ * uploads, as the composite glTF/3MF JSON directly. Return the composite source
+ * CID when the manifest wraps one, else null (the manifest IS the composite).
+ */
+function composeSourceCid(m: Record<string, any>): string | null {
+  const src = m?.scene?.nodes?.[0]?.source?.cid;
+  if (src && !m.buffers && !m.meshes && !m.arbesk_format) return src;
+  return null;
+}
+
+async function cmdInfo(name?: string): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  if (!name) {
+    console.error("Usage: besk info <name>");
+    process.exitCode = 2;
+    return;
+  }
+  const tokenId = await currentCollectionTokenId(s);
+  const hit = await resolveAssetByName(tokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return;
+  }
+  const m = (await getManifest(hit.cid)) as Record<string, any>;
+  const srcCid = composeSourceCid(m);
+  const source = srcCid ? ((await getManifest(srcCid)) as Record<string, any>) : m;
+  // Asset manifests carry scene.nodes; CLI uploads store the composite glTF
+  // JSON directly, whose nodes sit at the top level.
+  const nodes = m?.scene?.nodes ?? (Array.isArray(m.nodes) ? m.nodes : []);
+  console.log("Name:      " + (m.name ?? "(unnamed)"));
+  console.log("Asset ID:  " + (m.assetID ?? m.asset_id ?? hit.assetID));
+  console.log("Version:   " + (m.version ?? 1));
+  console.log("Format:    " + detectFormat(source));
+  console.log("CID:       " + hit.cid);
+  if (m.timestamp) console.log("Created:   " + new Date(m.timestamp).toISOString());
+  console.log("Nodes:     " + nodes.length);
+  if (m.prev_asset_manifest_cid) console.log("Previous:  " + m.prev_asset_manifest_cid);
+}
+
+async function cmdHistory(name?: string): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  if (!name) {
+    console.error("Usage: besk history <name>");
+    process.exitCode = 2;
+    return;
+  }
+  const tokenId = await currentCollectionTokenId(s);
+  const hit = await resolveAssetByName(tokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return;
+  }
+  const chain = await getVersionHistory(hit.cid);
+  if (chain.length === 0) {
+    console.log("No history.");
+    return;
+  }
+  // getVersionHistory walks newest → oldest; print oldest → newest.
+  const ordered = [...chain].reverse();
+  for (let i = 0; i < ordered.length; i++) {
+    const e = ordered[i];
+    const marker = i === ordered.length - 1 ? " (current)" : "";
+    console.log("v" + e.version + marker);
+    console.log("  " + e.cid);
+    console.log("  " + (e.name ?? "(unnamed)") + " · " + e.nodeCount + " nodes");
+  }
+}
+
+async function cmdDownload(name?: string, version?: string): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  if (!name) {
+    console.error("Usage: besk download <name> [version]");
+    process.exitCode = 2;
+    return;
+  }
+  const tokenId = await currentCollectionTokenId(s);
+  const hit = await resolveAssetByName(tokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return;
+  }
+  let cid = hit.cid;
+  if (version) {
+    const chain = await getVersionHistory(hit.cid);
+    const target = chain.find((e) => String(e.version) === String(version));
+    if (!target) {
+      console.error("Version " + version + " not found for " + name);
+      process.exitCode = 5;
+      return;
+    }
+    cid = target.cid;
+  }
+  const m = (await getManifest(cid)) as Record<string, any>;
+  const srcCid = composeSourceCid(m) ?? cid;
+  const source = srcCid === cid ? m : ((await getManifest(srcCid)) as Record<string, any>);
+  const format = detectFormat(source);
+  console.log("Downloading " + name + " (v" + (m.version ?? 1) + ", " + format + ")…");
+  const bytes = await downloadAsset(srcCid, format);
+  const outName = sanitizeFileName((m.name as string) ?? name) + extFor(format);
+  fs.writeFileSync(outName, bytes);
+  console.log("Saved " + outName + " (" + bytes.length + " bytes)");
+}
+
+async function cmdCreate(name?: string): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  if (!name) {
+    console.error("Usage: besk create <name>");
+    process.exitCode = 2;
+    return;
+  }
+  console.log("Creating collection " + name + "…");
+  const result = await createCollection(s, name);
+  clearCatalogCache();
+  if (!result.isNew) {
+    console.log("Collection already exists: " + name + " (token " + result.tokenId + ")");
+    return;
+  }
+  setActiveCollection(result.tokenId);
+  console.log("Created collection " + name + " (token " + result.tokenId + ")");
+  if (result.transactionHash) console.log("Tx: " + result.transactionHash);
+}
+
 async function main(): Promise<void> {
   if (!command || command === "help" || command === "--help") {
     help();
@@ -215,8 +363,12 @@ async function main(): Promise<void> {
   else if (command === "whoami") whoami();
   else if (command === "logout") logout();
   else if (command === "collections") await cmdCollections();
+  else if (command === "create") await cmdCreate(args[1]);
   else if (command === "use") await cmdUse(args[1]);
   else if (command === "list") await cmdList();
+  else if (command === "info") await cmdInfo(args[1]);
+  else if (command === "history") await cmdHistory(args[1]);
+  else if (command === "download") await cmdDownload(args[1], args[2]);
   else if (command === "upload") await cmdUpload(args[1]);
   else if (command === "delete") await cmdDelete(args[1]);
   else if (command === "rename") await cmdRename(args[1], args[2]);

@@ -67,10 +67,28 @@ export async function getManifest(cid: string) {
   return (await getCore()).getManifest(cid);
 }
 
-export async function writeManifest(manifest: Record<string, unknown>): Promise<string> {
+/** Write an arbitrary JSON value (object or array) to IPFS, gzip-compressed. */
+export async function writeJSON(json: unknown): Promise<string> {
   await getCore();
-  return _ipfsWrite!.writeJSON(manifest);
+  return _ipfsWrite!.writeJSON(json as Record<string, any>);
 }
+
+export async function writeManifest(manifest: Record<string, unknown>): Promise<string> {
+  return writeJSON(manifest);
+}
+
+export async function getVersionHistory(cid: string) {
+  return (await getCore()).getVersionHistory(cid);
+}
+
+/** Compose a stored manifest/source CID into a self-contained renderable artifact. */
+export async function downloadAsset(cid: string, format?: string): Promise<Uint8Array> {
+  const blob = await (await getCore()).download(cid, { format });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+/** Re-export the format detector so commands can name output extensions. */
+export { detectFormat } from "@arbesk/asset-core";
 
 export async function getCollectionManifest(tokenId: string) {
   const port = createCollectionReadPort();

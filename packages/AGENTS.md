@@ -27,6 +27,14 @@ Only `@arbesk/authz` depends on another in-repo package (it imports
 `@arbesk/wallet/merkle.js`); `@arbesk/wallet` and `@arbesk/asset-core` are
 independent of each other and of the frontend/backend trees.
 
+> **Intentional duplication — Merkle primitives.** Because `@arbesk/asset-core`
+> cannot import `@arbesk/wallet` (they are independent), `asset-core` keeps a
+> byte-identical copy of the Merkle leaf/root/proof/verify primitives in
+> `domain/editors.ts` (`wallet/merkle.ts` is canonical and matches the
+> contract). Do NOT deduplicate one side into the other — that breaks the
+> dependency order. Keep them in lockstep; `test/merkle-parity.test.js` pins
+> byte-parity for all four primitives.
+
 ## Shared conventions (all packages)
 
 - **Boundary**: no imports from `frontend/`, `src/api/`, or `constants/`; no

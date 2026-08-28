@@ -71,12 +71,27 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
       const authz = deps.getAuthz
         ? deps.getAuthz()
         : (await import("../authz.ts")).createAuthzInstance();
-      const access = await authz.checkAssetAccess(tokenId, cid, record.address, {
-        proof,
-        requiredRole,
-      });
-      if (!access.allowed) {
-        return sendError(res, 403, "PERMISSION_DENIED", "You do not have write access to this asset");
+
+      if (op === "publish") {
+        // Minting a brand-new token: there is no prior owner to authorize
+        // against. A valid session + delegated wallet (both checked below) is
+        // the gate, and the contract reverts on a TokenAlreadyMinted collision.
+        // ownerOf reverting is the signal the token does not exist yet — the
+        // only case where publish is valid.
+        try {
+          await authz.checkAssetAccess(tokenId, cid, record.address, { proof, requiredRole });
+          return sendError(res, 409, "TOKEN_EXISTS", "Token already minted; publish creates a new token");
+        } catch {
+          // ownerOf reverted → token does not exist → mint allowed.
+        }
+      } else {
+        const access = await authz.checkAssetAccess(tokenId, cid, record.address, {
+          proof,
+          requiredRole,
+        });
+        if (!access.allowed) {
+          return sendError(res, 403, "PERMISSION_DENIED", "You do not have write access to this asset");
+        }
       }
 
       const cdp = await getCdp();

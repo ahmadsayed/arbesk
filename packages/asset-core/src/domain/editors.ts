@@ -4,6 +4,12 @@
  * Centralizes editor list caching (StoragePort), on-chain version lookup
  * (ChainPort), Merkle root computation (HashPort), and proof generation for
  * the publish, team, delete, library, and comment flows.
+ *
+ * MIRROR: the makeLeaf/computeRoot/getProof/verify primitives here are a
+ * byte-identical copy of @arbesk/wallet/merkle.ts (the canonical source of
+ * truth). This package cannot import wallet (they are declared independent),
+ * so the duplication is intentional — keep them in lockstep.
+ * test/merkle-parity.test.js pins parity.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import { getRuntime } from "../runtime.ts";

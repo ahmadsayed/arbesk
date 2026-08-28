@@ -106,4 +106,55 @@ describe("wallet relay", () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("PERMISSION_DENIED");
   });
+
+  test("mints a new token via publish when there is no prior owner", async () => {
+    const cdp = fakeCdp();
+    const authz = {
+      checkAssetAccess: jest.fn(async () => {
+        // ownerOf reverts for a non-existent token.
+        throw new Error("ownerOf reverted: nonexistent token");
+      }),
+    };
+    const app = makeApp(cdp, authz);
+    const token = createSession("0xabc", { userId: "u1", authMethod: "email" });
+    const zeroRoot = "0x" + "0".repeat(64);
+
+    const res = await request(app)
+      .post("/wallet/relay")
+      .set("Authorization", "Session " + token)
+      .send({
+        op: "publish",
+        tokenId: "99",
+        contractAddress: "0xcont",
+        params: { uri: "ipfs://col", editorRoot: zeroRoot, editorListUri: "ipfs://editors" },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.receipt.transactionHash).toBe("0xtx");
+
+    const sent = cdp.endUser.sendUserOperation.mock.calls[0][0];
+    expect(sent.userId).toBe("u1");
+    expect(sent.calls).toHaveLength(1);
+    expect(sent.calls[0].to).toBe("0xcont");
+    expect(sent.calls[0].data).toMatch(/^0x/);
+  });
+
+  test("rejects publish when the token already exists", async () => {
+    const app = makeApp(fakeCdp(), fakeAuthz(true)); // ownerOf resolves → token exists
+    const token = createSession("0xabc", { userId: "u1", authMethod: "email" });
+    const zeroRoot = "0x" + "0".repeat(64);
+
+    const res = await request(app)
+      .post("/wallet/relay")
+      .set("Authorization", "Session " + token)
+      .send({
+        op: "publish",
+        tokenId: "1",
+        contractAddress: "0xcont",
+        params: { uri: "ipfs://col", editorRoot: zeroRoot, editorListUri: "ipfs://editors" },
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("TOKEN_EXISTS");
+  });
 });
