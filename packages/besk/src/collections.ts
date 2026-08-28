@@ -4,7 +4,7 @@
  * it via the backend relay (no key, no browser). Reuses the asset-core write
  * port for the collection manifest + editor list.
  */
-import { deriveNamedCollectionId } from "@arbesk/asset-core/utils/collections.js";
+import { buildCollectionManifest, deriveNamedCollectionId } from "@arbesk/asset-core/utils/collections.js";
 import { computeRoot } from "@arbesk/wallet/merkle.js";
 import { getCore, writeJSON, getCollectionManifest } from "./catalog.ts";
 import { relay } from "./relay.ts";
@@ -46,15 +46,7 @@ export async function createCollection(
     // token does not exist — proceed to mint.
   }
 
-  const collectionManifest = {
-    type: "collection",
-    name: trimmed,
-    asset_id: "collection_" + Date.now(),
-    version: 1,
-    timestamp: Date.now(),
-    assets: {},
-    prev_asset_manifest_cid: null,
-  };
+  const collectionManifest = buildCollectionManifest(trimmed);
   const collectionCid = await writeJSON(collectionManifest);
 
   const editorList = [{ address: session.address, role: EDITOR_ROLE }];
