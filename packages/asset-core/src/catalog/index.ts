@@ -153,3 +153,16 @@ export async function resolveAssetByName(
   );
   return hit ? { assetID: hit.assetID, cid: hit.cid } : null;
 }
+
+/**
+ * A collection asset may be stored either as a full asset manifest
+ * (type:"asset" with scene.nodes[0].source.cid → the composite) or, for CLI
+ * uploads, as the composite glTF/3MF JSON directly. Return the composite
+ * source CID when the manifest wraps one, else null (the manifest IS the
+ * composite).
+ */
+export function resolveCompositeSourceCid(manifest: Record<string, any>): string | null {
+  const src = manifest?.scene?.nodes?.[0]?.source?.cid;
+  if (src && !manifest.buffers && !manifest.meshes && !manifest.arbesk_format) return src;
+  return null;
+}
