@@ -7,8 +7,11 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { createArbeskCore } from "@arbesk/asset-core";
+import { applyCollectionMutation } from "@arbesk/asset-core/utils/collections.js";
 import { CHAIN_ID } from "./config.ts";
 import { createCollectionReadPort, createHashPort, createIpfsReadPort, createIpfsWritePort, getBackendConfig } from "./adapters.ts";
+import { relay } from "./relay.ts";
+import type { Session } from "./session.ts";
 
 let _core: ReturnType<typeof createArbeskCore> | null = null;
 let _ipfsWrite: ReturnType<typeof createIpfsWritePort> | null = null;
@@ -133,4 +136,22 @@ export async function resolveAssetByName(tokenId: string, name: string) {
 export async function uploadAsset(bytes: Uint8Array, assetName: string, assetId: string) {
   const result = await (await getCore()).upload(bytes, { assetName, assetId });
   return { compositeCid: result.compositeCid ?? result.rootCid, assetId };
+}
+
+/**
+ * The one CLI collection-write path: read → mutate (with version bump + prev
+ * link, via the canonical asset-core helper) → write → relay updateUri →
+ * invalidate the catalog cache. Returns the new collection CID.
+ */
+export async function updateCollection(
+  session: Session,
+  tokenId: string,
+  mutate: (draft: Record<string, any>) => void,
+): Promise<string> {
+  const { cid, manifest } = await getCollectionManifest(tokenId);
+  const next = applyCollectionMutation(manifest, cid, mutate);
+  const newCid = await writeManifest(next);
+  await relay(session, "updateUri", tokenId, { newUri: newCid, proof: [] });
+  clearCatalogCache();
+  return newCid;
 }

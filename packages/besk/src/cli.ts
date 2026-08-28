@@ -8,6 +8,7 @@ import path from "path";
 import { login } from "./auth.ts";
 import { whoami, logout, loadSession, setActiveCollection } from "./session.ts";
 import type { Session } from "./session.ts";
+import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
 import {
   listCollections,
   getCollectionAssets,
@@ -15,14 +16,13 @@ import {
   resolveAssetByName,
   getManifest,
   writeManifest,
-  getCollectionManifest,
   clearCatalogCache,
+  updateCollection,
   uploadAsset,
   getVersionHistory,
   downloadAsset,
   detectFormat,
 } from "./catalog.ts";
-import { relay } from "./relay.ts";
 import { createCollection } from "./collections.ts";
 
 const args = process.argv.slice(2);
@@ -147,13 +147,9 @@ async function cmdDelete(name?: string): Promise<void> {
     console.log("Cancelled");
     return;
   }
-  const { manifest } = await getCollectionManifest(tokenId);
-  const assets = { ...(manifest.assets ?? {}) };
-  delete assets[hit.assetID];
-  manifest.assets = assets;
-  const newCid = await writeManifest(manifest);
-  await relay(s, "updateUri", tokenId, { newUri: newCid, proof: [] });
-  clearCatalogCache();
+  await updateCollection(s, tokenId, (draft) => {
+    delete draft.assets[hit.assetID];
+  });
   console.log("Deleted " + name + " (history intact)");
 }
 
@@ -175,12 +171,9 @@ async function cmdRename(oldName?: string, newName?: string): Promise<void> {
   const assetManifest = (await getManifest(hit.cid)) as Record<string, any>;
   assetManifest.name = newName;
   const newAssetCid = await writeManifest(assetManifest);
-  const { manifest } = await getCollectionManifest(tokenId);
-  manifest.assets = { ...(manifest.assets ?? {}) };
-  manifest.assets[hit.assetID] = newAssetCid;
-  const newCid = await writeManifest(manifest);
-  await relay(s, "updateUri", tokenId, { newUri: newCid, proof: [] });
-  clearCatalogCache();
+  await updateCollection(s, tokenId, (draft) => {
+    draft.assets[hit.assetID] = newAssetCid;
+  });
   console.log("Renamed " + oldName + " to " + newName);
 }
 
@@ -205,12 +198,9 @@ async function cmdUpload(file?: string): Promise<void> {
   const bytes = new Uint8Array(fs.readFileSync(file));
   console.log("Uploading " + file + "…");
   const { compositeCid } = await uploadAsset(bytes, name, assetId);
-  const { manifest } = await getCollectionManifest(tokenId);
-  manifest.assets = { ...(manifest.assets ?? {}) };
-  manifest.assets[assetId] = compositeCid;
-  const newCid = await writeManifest(manifest);
-  await relay(s, "updateUri", tokenId, { newUri: newCid, proof: [] });
-  clearCatalogCache();
+  await updateCollection(s, tokenId, (draft) => {
+    draft.assets[assetId] = compositeCid;
+  });
   console.log("Saved as " + name);
 }
 
@@ -221,18 +211,6 @@ function extFor(format: string): string {
 function sanitizeFileName(name: string): string {
   const base = String(name).trim().replace(/[^a-zA-Z0-9._-]+/g, "_");
   return base || "asset";
-}
-
-/**
- * A collection asset may be stored either as a full asset manifest
- * (type:"asset" with scene.nodes[0].source.cid → the composite) or, for CLI
- * uploads, as the composite glTF/3MF JSON directly. Return the composite source
- * CID when the manifest wraps one, else null (the manifest IS the composite).
- */
-function composeSourceCid(m: Record<string, any>): string | null {
-  const src = m?.scene?.nodes?.[0]?.source?.cid;
-  if (src && !m.buffers && !m.meshes && !m.arbesk_format) return src;
-  return null;
 }
 
 async function cmdInfo(name?: string): Promise<void> {
@@ -251,7 +229,7 @@ async function cmdInfo(name?: string): Promise<void> {
     return;
   }
   const m = (await getManifest(hit.cid)) as Record<string, any>;
-  const srcCid = composeSourceCid(m);
+  const srcCid = resolveCompositeSourceCid(m);
   const source = srcCid ? ((await getManifest(srcCid)) as Record<string, any>) : m;
   // Asset manifests carry scene.nodes; CLI uploads store the composite glTF
   // JSON directly, whose nodes sit at the top level.
@@ -324,7 +302,7 @@ async function cmdDownload(name?: string, version?: string): Promise<void> {
     cid = target.cid;
   }
   const m = (await getManifest(cid)) as Record<string, any>;
-  const srcCid = composeSourceCid(m) ?? cid;
+  const srcCid = resolveCompositeSourceCid(m) ?? cid;
   const source = srcCid === cid ? m : ((await getManifest(srcCid)) as Record<string, any>);
   const format = detectFormat(source);
   console.log("Downloading " + name + " (v" + (m.version ?? 1) + ", " + format + ")…");
