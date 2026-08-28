@@ -364,8 +364,11 @@ async function _finishWalletSetup(
   // Build the injected Signer for this connection source. CDP uses the native
   // signer built during the OTP flow; EOA/WalletConnect wrap the active web3.
   if (activeConnectionSource === "cdp") {
-    const { getCdpSigner } = await import("./wallet-cdp.ts");
+    const { getCdpSigner, grantDelegation } = await import("./wallet-cdp.ts");
     signer = getCdpSigner();
+    // One-time delegation grant (fire-and-forget) so backend relay works for
+    // subsequent writes without the browser.
+    void grantDelegation();
   } else {
     signer = createEoaSigner(web3, address);
   }

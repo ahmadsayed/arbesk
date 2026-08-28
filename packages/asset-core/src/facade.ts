@@ -31,6 +31,13 @@ import {
   listEditorsCommand,
 } from "./domain/editors.ts";
 import type { EditorEntry } from "./domain/editors.ts";
+import {
+  listCollections,
+  getCollectionAssets,
+  resolveCollectionByName,
+  resolveAssetByName,
+} from "./catalog/index.ts";
+import type { CollectionSummary, AssetSummary } from "./catalog/index.ts";
 
 export interface UploadOptions {
   onProgress?: (fraction: number) => void;
@@ -81,6 +88,18 @@ export interface ArbeskCore {
     cid: string,
     maxDepth?: number
   ): Promise<ManifestChainEntry[]>;
+  listCollections(address: string, chainId?: number): Promise<CollectionSummary[]>;
+  getCollectionAssets(tokenId: string, chainId?: number): Promise<AssetSummary[]>;
+  resolveCollectionByName(
+    address: string,
+    name: string,
+    chainId?: number
+  ): Promise<CollectionSummary | null>;
+  resolveAssetByName(
+    tokenId: string,
+    name: string,
+    chainId?: number
+  ): Promise<{ assetID: string; cid: string } | null>;
   validateManifest(manifest: unknown): ReturnType<typeof validateManifest>;
   addEditor(asset: AssetRefLike, identity: string): Promise<void>;
   removeEditor(asset: AssetRefLike, identity: string): Promise<void>;
@@ -185,6 +204,12 @@ export function createArbeskCore(config: ArbeskCoreConfig): ArbeskCore {
     decompose: (input, opts = {}) => decomposeFormat(input, opts),
     getManifest: (cid) => getRuntime().ipfsRead.getJSON(cid),
     getVersionHistory: (cid, maxDepth) => getManifestChain(cid, maxDepth),
+    listCollections: (address, chainId) => listCollections(address, chainId),
+    getCollectionAssets: (tokenId, chainId) => getCollectionAssets(tokenId, chainId),
+    resolveCollectionByName: (address, name, chainId) =>
+      resolveCollectionByName(address, name, chainId),
+    resolveAssetByName: (tokenId, name, chainId) =>
+      resolveAssetByName(tokenId, name, chainId),
     validateManifest,
     addEditor: async (asset, identity) => {
       const address = await resolveIdentity(identity);

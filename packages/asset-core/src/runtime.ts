@@ -12,6 +12,7 @@ export function initRuntime(config: ArbeskCoreConfig): ArbeskRuntime {
     ipfsWrite: config.ipfsWrite,
     credentials: config.credentials ?? null,
     chain: config.chain ?? null,
+    collection: config.collection ?? null,
     hash: config.hash ?? null,
     storage: config.storage ?? memoryStorage(),
     executor: config.executor ?? inlineExecutor,

@@ -23,6 +23,7 @@ async function loadModule() {
       sendUserOperation: jest.fn().mockResolvedValue({ userOperationHash: USER_OP_HASH }),
       getUserOperation: jest.fn((...args) => _getUserOperationImpl(...args)),
       signOut: jest.fn(),
+      createDelegation: jest.fn().mockResolvedValue({}),
     }),
     { virtual: true }
   );

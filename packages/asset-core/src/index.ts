@@ -22,3 +22,4 @@ export type {
   DownloadOptions,
   AssetRefLike,
 } from "./facade.ts";
+export type { CollectionSummary, AssetSummary } from "./catalog/index.ts";

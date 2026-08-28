@@ -246,6 +246,28 @@ export async function getOrCreateSession(): Promise<string> {
   return sessionCreationPromise;
 }
 
+/**
+ * Relay an on-chain write through the backend (server-wallet / delegated).
+ * The backend checks access (authz), ABI-encodes, and sends a paymaster-sponsored
+ * UserOperation — no browser transaction, no private key on the client.
+ */
+export async function relayWrite(
+  op: "publish" | "updateUri" | "updateEditors" | "burn",
+  tokenId: string | number,
+  params: Record<string, unknown>,
+): Promise<Record<string, any>> {
+  const response = await fetchWithSession("/wallet/relay", {
+    method: "POST",
+    body: { op, tokenId, params },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(message || "Relay failed", response.status, code);
+  }
+  return data.receipt ?? data;
+}
+
 // ─── Authenticated Fetch ─────────────────────────────────────────────────────
 
 interface FetchWithSessionOptions {

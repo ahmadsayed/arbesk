@@ -24,11 +24,23 @@ const Router = express.Router;
 
 interface SessionRecord {
   address: string;
+  /** CDP end-user id (server-wallet sessions only). */
+  userId?: string | null;
+  /** Login email (email-auth sessions only). */
+  email?: string | null;
+  /** How this session was established. */
+  authMethod?: "email" | "siwe" | null;
   createdAt: number;
   expiresAt: number;
 }
 
-/** Map<token, { address, createdAt, expiresAt }> */
+export interface SessionMeta {
+  userId?: string | null;
+  email?: string | null;
+  authMethod?: "email" | "siwe";
+}
+
+/** Map<token, SessionRecord> */
 const sessions = new Map<string, SessionRecord>();
 
 /** Session lifetime: 24 hours (in milliseconds) */
@@ -52,11 +64,14 @@ setInterval(() => {
  * @param address - 0x-prefixed wallet address
  * @returns opaque session token
  */
-function createSession(address: string): string {
+function createSession(address: string, meta: SessionMeta = {}): string {
   const token = crypto.randomUUID();
   const now = Date.now();
   sessions.set(token, {
     address: address.toLowerCase(),
+    userId: meta.userId ?? null,
+    email: meta.email ?? null,
+    authMethod: meta.authMethod ?? null,
     createdAt: now,
     expiresAt: now + SESSION_TTL,
   });
@@ -64,6 +79,16 @@ function createSession(address: string): string {
     `[SESSION] created - token=${token.slice(0, 8)}... address=${address}`,
   );
   return token;
+}
+
+/** Return the full session record, or null if missing/expired. */
+function getSessionRecord(token: string): SessionRecord | null {
+  const session = sessions.get(token);
+  if (!session || session.expiresAt <= Date.now()) {
+    if (session) sessions.delete(token);
+    return null;
+  }
+  return session;
 }
 
 /**
@@ -178,4 +203,4 @@ export default function sessionRouter() {
 }
 
 // Export helpers for use by authentication middleware and tests
-export { validateSession, invalidateSession, createSession, sessions };
+export { validateSession, invalidateSession, getSessionRecord, createSession, sessions };

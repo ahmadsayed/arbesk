@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arbesk CLI login</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "@arbesk/asset-core": "/js/vendor/asset-core/index.js",
+      "@arbesk/asset-core/": "/js/vendor/asset-core/",
+      "@arbesk/wallet": "/js/vendor/wallet/index.js",
+      "@arbesk/wallet/": "/js/vendor/wallet/",
+      "@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js",
+      "fflate": "https://esm.sh/fflate@0.8.2",
+      "alpinejs": "https://esm.sh/alpinejs@3.16.1",
+      "fast-xml-parser": "https://esm.sh/fast-xml-parser@4.5.3",
+      "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
+      "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113?bundle",
+      "siwe": "https://esm.sh/siwe@3.0.0",
+      "viem/utils": "https://esm.sh/viem@2.52.2/utils",
+      "zod": "https://esm.sh/zod@3.25.76"
+    }
+  }
+  </script>
+</head>
+<body>
+  <h1>Arbesk CLI login</h1>
+  <p id="status">Sending verification code…</p>
+  <div id="step-code" style="display:none">
+    <p>Code sent to <strong id="email"></strong>.</p>
+    <input id="code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric">
+    <button id="verify">Verify</button>
+    <p id="error" style="color:red"></p>
+  </div>
+  <script type="module">
+    var params = new URLSearchParams(window.location.search);
+    var email = params.get("email");
+    var port = params.get("port");
+
+    function fail(e) {
+      var msg = (e && e.message) || String(e);
+      var el = document.getElementById("error");
+      if (el) el.textContent = msg;
+      var st = document.getElementById("status");
+      if (st) { st.style.display = ""; st.textContent = "Login failed: " + msg; }
+    }
+
+    async function main() {
+      var cfg = await (await fetch("/api/v1/config")).json();
+      if (!cfg.cdpProjectId) throw new Error("CDP is not configured on this server.");
+
+      var cdp = await import("@coinbase/cdp-core");
+      await cdp.initialize({ projectId: cfg.cdpProjectId, ethereum: { createOnLogin: "smart" }, disableAnalytics: true });
+
+      // Clear stale CDP browser state (localStorage keys + signOut) so a previous
+      // session does not cause "User is already authenticated" on signInWithEmail.
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          var lk = k.toLowerCase();
+          if (lk.indexOf("cdp") === 0 || lk.indexOf("coinbase") === 0) localStorage.removeItem(k);
+        });
+      } catch (e) {}
+      try { await cdp.signOut(); } catch (e) {}
+
+      var res = await cdp.signInWithEmail({ email: email });
+      document.getElementById("step-code").style.display = "";
+      document.getElementById("status").style.display = "none";
+      document.getElementById("email").textContent = email;
+
+      document.getElementById("verify").onclick = async function () {
+        var code = document.getElementById("code").value.trim();
+        try {
+          var v = await cdp.verifyEmailOTP({ flowId: res.flowId, otp: code });
+          var user = v.user;
+          var smart = (user.evmSmartAccountObjects && user.evmSmartAccountObjects[0] && user.evmSmartAccountObjects[0].address) || (user.evmSmartAccounts && user.evmSmartAccounts[0]);
+          var eoa = (user.evmAccountObjects && user.evmAccountObjects[0] && user.evmAccountObjects[0].address) || (user.evmAccounts && user.evmAccounts[0]);
+          if (!smart || !eoa) throw new Error("CDP did not return the smart account.");
+
+          var wallet = await import("@arbesk/wallet/facade.js");
+          var signer = {
+            source: "cdp",
+            getAddress: function () { return smart; },
+            getSignerAddress: function () { return eoa; },
+            getChainId: async function () { return 84532; },
+            signMessage: async function (message) {
+              var sig = await cdp.signEvmMessage({ evmAccount: eoa, message: message });
+              return sig.signature;
+            },
+            sendTransaction: async function () { throw new Error("not used"); }
+          };
+          var proof = await wallet.buildSiweProof({ signer: signer, address: smart, chainId: 84532, domain: window.location.origin });
+
+          var sres = await fetch("/api/v1/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ proof: proof })
+          });
+          var sbody = await sres.json();
+          if (!sres.ok) throw new Error((sbody && sbody.error && sbody.error.message) || "session failed");
+
+          // One-time delegation grant (the "sign one"): lets the backend relay
+          // writes for this wallet without the browser being present.
+          var expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          try { await cdp.createDelegation({ expiresAt: expiry }); } catch (e) { /* login still succeeds; writes need delegation */ }
+
+          var cb = new URL("http://127.0.0.1:" + port + "/");
+          cb.searchParams.set("token", sbody.token);
+          cb.searchParams.set("expiresAt", String(sbody.expiresAt));
+          cb.searchParams.set("address", smart);
+          cb.searchParams.set("email", email);
+          window.location.href = cb.toString();
+        } catch (e) { fail(e); }
+      };
+    }
+
+    main().catch(fail);
+  </script>
+</body>
+</html>

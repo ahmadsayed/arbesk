@@ -9,7 +9,7 @@
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
-import { getContractArtifact } from "../services/api.ts";
+import { getContractArtifact, relayWrite } from "../services/api.ts";
 import { showToast } from "../ui/toasts.ts";
 import { isIpfsCidReachable } from "../ipfs/remote-ipfs.ts";
 import { getActiveConnectionSource, getActiveContract } from "./wallet-core.ts";
@@ -34,6 +34,27 @@ function _canPublishWithCurrentWallet() {
   return true;
 }
 
+/**
+ * For CDP (email) sessions, write through the backend relay (no browser tx).
+ * Returns { handled, txHash }; when not CDP, handled=false and the caller falls
+ * through to the existing EOA browser-transaction path.
+ */
+async function _relayForCdp(
+  op: "publish" | "updateUri" | "updateEditors" | "burn",
+  tokenId: number | string,
+  params: Record<string, unknown>,
+): Promise<{ handled: boolean; txHash: string | null }> {
+  if (getActiveConnectionSource() !== "cdp") return { handled: false, txHash: null };
+  try {
+    const receipt = await relayWrite(op, tokenId, params);
+    return { handled: true, txHash: (receipt as any)?.transactionHash ?? null };
+  } catch (error) {
+    const msg = (error as any)?.message || "Relay failed";
+    showToast({ type: "error", title: "Write Failed", message: msg });
+    return { handled: true, txHash: null };
+  }
+}
+
 // ── Asset Publishing ──
 
 /**
@@ -55,6 +76,18 @@ async function publishAsset(
     return null;
   }
   if (!_canPublishWithCurrentWallet()) return null;
+
+  const relayed = await _relayForCdp("publish", tokenId, {
+    uri: tokenURI,
+    editorRoot,
+    editorListUri,
+  });
+  if (relayed.handled) {
+    if (relayed.txHash) {
+      emit(EVENTS.ASSET_PUBLISHED, { tokenId, tokenURI, txHash: relayed.txHash });
+    }
+    return relayed.txHash;
+  }
 
   try {
     const tx = c.methods["publishAsset(string,uint256,bytes32,string)"](
@@ -108,6 +141,9 @@ async function updateAssetURI(
     return null;
   }
   if (!_canPublishWithCurrentWallet()) return null;
+
+  const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof });
+  if (relayed.handled) return relayed.txHash;
 
   try {
     const tx = c.methods["updateAssetURI(uint256,string,bytes32[])"](
@@ -175,6 +211,14 @@ async function updateEditors(
     return null;
   }
   if (!_canPublishWithCurrentWallet()) return null;
+
+  const relayed = await _relayForCdp("updateEditors", tokenId, {
+    newRoot,
+    newListUri,
+    callerRole,
+    callerProof,
+  });
+  if (relayed.handled) return relayed.txHash;
 
   try {
     const tx = c.methods[
@@ -253,6 +297,14 @@ async function burn(tokenId: number | string, proof: string[]) {
     } catch (err) {
       console.warn(`[BURN] unpin failed (non-fatal):`, (err as Error).message);
     }
+  }
+
+  const relayedBurn = await _relayForCdp("burn", tokenId, { proof });
+  if (relayedBurn.handled) {
+    if (relayedBurn.txHash) {
+      emit(EVENTS.ASSET_BURNED, { tokenId, txHash: relayedBurn.txHash });
+    }
+    return relayedBurn.txHash;
   }
 
   try {

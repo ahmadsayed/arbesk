@@ -244,6 +244,35 @@ export const resolveEmailSchema = z.object({
     .max(254),
 });
 
+export const emailOtpRequestSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("a valid email is required")
+    .max(254),
+});
+
+export const emailOtpVerifySchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("a valid email is required")
+    .max(254),
+  code: z.string().regex(/^\d{6}$/, "code must be 6 digits"),
+});
+
+export const walletRelaySchema = z.object({
+  op: z.enum(["publish", "updateUri", "updateEditors", "burn"]),
+  tokenId: z.union([z.string().min(1), z.number().int().nonnegative()]),
+  chainId: z.number().int().nonnegative().optional(),
+  contractAddress: z.string().optional(),
+  proof: z.array(z.string()).optional(),
+  requiredRole: z.number().int().min(1).max(2).optional(),
+  params: z.record(z.unknown()).optional(),
+});
+
 export const ownedQuerySchema = z.object({
   address: ethereumAddressSchema,
   chainId: chainIdSchema,

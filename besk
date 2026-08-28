@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# besk — Arbesk CLI wrapper. Usage: ./besk <command> [args]
+set -euo pipefail
+SCRIPT="$(readlink -f "$0")"
+DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+exec node "$DIR/packages/besk/src/cli.ts" "$@"

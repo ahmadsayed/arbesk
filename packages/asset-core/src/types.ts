@@ -45,6 +45,17 @@ export interface ChainPort {
   resolveEmail?(email: string): Promise<string>;
 }
 
+export interface CollectionReadPort {
+  /** On-chain tokenURI for a collection token — returns the collection manifest CID. */
+  tokenURI(tokenId: string, chainId?: number): Promise<string>;
+  /** Token IDs owned/shared by an address (backend indexer). */
+  listTokens(opts: {
+    address: string;
+    chainId?: number;
+    scope: "owned" | "shared";
+  }): Promise<string[]>;
+}
+
 export interface HashPort {
   /** drop-in for Web3.utils.soliditySha3 — implement with viem encodePacked+keccak256. */
   soliditySha3(...args: any[]): string;
@@ -96,6 +107,7 @@ export interface ArbeskCoreConfig {
   ipfsWrite: IpfsWritePort;
   credentials?: CredentialPort;
   chain?: ChainPort;
+  collection?: CollectionReadPort;
   hash?: HashPort;
   storage?: StoragePort;
   executor?: ExecutorPort;
@@ -107,6 +119,7 @@ export interface ArbeskRuntime {
   ipfsWrite: IpfsWritePort;
   credentials: CredentialPort | null;
   chain: ChainPort | null;
+  collection: CollectionReadPort | null;
   hash: HashPort | null;
   storage: StoragePort;
   executor: ExecutorPort;

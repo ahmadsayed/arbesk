@@ -122,11 +122,32 @@ const userResolveLimiter = createLimiter({
   message: "Email resolution rate limit exceeded.",
 });
 
+const emailOtpRequestLimiter = createLimiter({
+  max: () => Number(process.env.EMAIL_OTP_REQUEST_RATE_LIMIT_MAX || 5),
+  windowMs: 15 * 60 * 1000,
+  message: "Too many code requests. Try again later.",
+});
+
+const emailOtpVerifyLimiter = createLimiter({
+  max: () => Number(process.env.EMAIL_OTP_VERIFY_RATE_LIMIT_MAX || 10),
+  windowMs: 15 * 60 * 1000,
+  message: "Too many verification attempts. Request a new code.",
+});
+
+const walletRelayLimiter = createLimiter({
+  max: () => Number(process.env.WALLET_RELAY_RATE_LIMIT_MAX || 30),
+  windowMs: 60 * 1000,
+  message: "Wallet relay rate limit exceeded.",
+});
+
 export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
 export const unpinRateLimit = unpinLimiter.middleware;
 export const gcRateLimit = gcLimiter.middleware;
 export const paymasterRateLimit = paymasterLimiter.middleware;
 export const userResolveRateLimit = userResolveLimiter.middleware;
+export const emailOtpRequestRateLimit = emailOtpRequestLimiter.middleware;
+export const emailOtpVerifyRateLimit = emailOtpVerifyLimiter.middleware;
+export const walletRelayRateLimit = walletRelayLimiter.middleware;
 
 /**
  * Generation rate-limit middleware. BYOK requests skip the server-side limit
@@ -148,4 +169,7 @@ export function _resetRateLimiters(): void {
   gcLimiter.store.resetAll();
   paymasterLimiter.store.resetAll();
   userResolveLimiter.store.resetAll();
+  emailOtpRequestLimiter.store.resetAll();
+  emailOtpVerifyLimiter.store.resetAll();
+  walletRelayLimiter.store.resetAll();
 }

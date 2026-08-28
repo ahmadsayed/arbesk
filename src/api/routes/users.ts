@@ -1,5 +1,6 @@
 import express from "express";
 import type { CdpClient } from "@coinbase/cdp-sdk";
+import { getCdpClient, findEndUserByEmail } from "../cdp.ts";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
 import { validateBody } from "../validation.ts";
@@ -7,30 +8,6 @@ import { resolveEmailSchema } from "../schemas.ts";
 import { userResolveRateLimit } from "../rate-limiter.ts";
 
 const Router = express.Router;
-
-// The CDP server SDK is loaded lazily: it is heavy, pulls a large dependency
-// tree (which breaks Jest's ESM loader when imported statically), and is only
-// needed when the route is actually called. Cached per env credential pair so
-// tests and credential rotation pick up changes.
-let _cdpClient: CdpClient | null = null;
-let _cdpClientKey = "";
-
-/**
- * Returns null when CDP_API_KEY_ID / CDP_API_KEY_SECRET are not configured
- * (feature unavailable, not an error).
- */
-async function getCdpClient(): Promise<CdpClient | null> {
-  const apiKeyId = process.env.CDP_API_KEY_ID;
-  const apiKeySecret = process.env.CDP_API_KEY_SECRET;
-  if (!apiKeyId || !apiKeySecret) return null;
-  const key = `${apiKeyId}:${apiKeySecret}`;
-  if (!_cdpClient || _cdpClientKey !== key) {
-    const { CdpClient } = await import("@coinbase/cdp-sdk");
-    _cdpClient = new CdpClient({ apiKeyId, apiKeySecret });
-    _cdpClientKey = key;
-  }
-  return _cdpClient;
-}
 
 /**
  * Scan the project's CDP end users for an exact full-email match and return
@@ -46,27 +23,9 @@ async function resolveSmartAccountByEmail(
   cdp: CdpClient,
   email: string,
 ): Promise<{ address: string | null } | null> {
-  let pageToken: string | undefined = undefined;
-  do {
-    const page = await cdp.endUser.listEndUsers(
-      pageToken ? { pageSize: 100, pageToken } : { pageSize: 100 },
-    );
-    for (const user of page.endUsers ?? []) {
-      const methods = (user.authenticationMethods ?? []) as {
-        type?: string;
-        email?: string;
-      }[];
-      const hit = methods.some(
-        (m) =>
-          m.type === "email" &&
-          typeof m.email === "string" &&
-          m.email.toLowerCase() === email,
-      );
-      if (hit) return { address: user.evmSmartAccounts?.[0] ?? null };
-    }
-    pageToken = page.nextPageToken || undefined;
-  } while (pageToken);
-  return null;
+  const user = await findEndUserByEmail(cdp, email);
+  if (!user) return null;
+  return { address: user.evmSmartAccounts?.[0] ?? null };
 }
 
 /**

@@ -8,7 +8,7 @@
  * Smart wallets are supported on Base Sepolia only.
  */
 
-import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut } from "@coinbase/cdp-core";
+import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut, createDelegation } from "@coinbase/cdp-core";
 import { log, error, warn } from "../utils/log.ts";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import {
@@ -160,6 +160,26 @@ function _applyCdpSession(
 /** The native CDP Signer for the current session, or null when signed out. */
 export function getCdpSigner(): Signer | null {
   return _signer;
+}
+
+/**
+ * Grant the one-time delegation so the backend can relay writes for this
+ * embedded wallet without the browser being present. Best-effort.
+ */
+export async function grantDelegation(days = 30): Promise<void> {
+  if (!_cdpInitialized) {
+    warn("CDP", "grantDelegation skipped — client not initialized");
+    return;
+  }
+  try {
+    const expiresAt = new Date(
+      Date.now() + days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    await createDelegation({ expiresAt });
+    log("CDP", "delegation granted until", expiresAt);
+  } catch (err) {
+    warn("CDP", "delegation grant failed (non-fatal):", (err as Error).message);
+  }
 }
 
 // ─── Authentication ──────────────────────────────────────────────────────────

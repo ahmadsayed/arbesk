@@ -24,6 +24,9 @@ import openapiRoutes from "./routes/openapi.ts";
 import testUtilsRoutes from "./routes/test-utils.ts";
 import paymasterRoutes from "./routes/paymaster.ts";
 import usersRoutes from "./routes/users.ts";
+import emailAuthRoutes from "./routes/email-auth.ts";
+import walletRelayRoutes from "./routes/wallet-relay.ts";
+import cliAuthRoutes from "./routes/cli-auth.ts";
 import devConsoleRoutes from "./routes/dev-console.ts";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
@@ -85,6 +88,18 @@ export default (deps: ApiDeps) => {
   // ─── Users (CDP email → smart account resolution) ──────────────────────────
 
   v1.use("/users", usersRoutes());
+
+  // ─── Email OTP Auth ────────────────────────────────────────────────────────
+
+  v1.use("/auth/email", emailAuthRoutes());
+
+  // ─── Wallet Relay (server-wallet on-chain writes) ─────────────────────────
+
+  v1.use("/wallet/relay", walletRelayRoutes());
+
+  // ─── CLI browser-assisted login page ──────────────────────────────────────
+
+  v1.use("/cli-auth", cliAuthRoutes());
 
   // ─── Dev console bridge (browser → stdout, diagnostics sink) ───────────────
 
