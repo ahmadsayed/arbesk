@@ -15,6 +15,10 @@ should follow that package's own guide, not the root one:
 | `@arbesk/asset-core` | `packages/asset-core/` | Asset engine: manifests, glTF/3MF compose/decompose, domain state, editor lists. | `packages/asset-core/AGENTS.md` + `docs/ASSET_CORE_SDK.md` |
 | `@arbesk/ai-asset-gen` | `packages/ai-asset-gen/` | 3D-model generation (mock + Tripo3D), capability-gated facade. Backend-only. | `packages/ai-asset-gen/AGENTS.md` |
 
+`@arbesk/besk` (`packages/besk/`) is the CLI **consumer** of these SDKs (not an
+SDK itself): it composes `createArbeskCore` with its own Node adapters and
+routes all on-chain writes through the backend wallet relay.
+
 ## Dependency order
 
 ```

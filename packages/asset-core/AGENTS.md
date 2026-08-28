@@ -44,6 +44,7 @@ src/
   index.ts               public exports
   formats/               compose/decompose pipeline (see below)
   manifest/              chain walk (chain.ts), schema (schema.ts), utils
+  catalog/               collection/asset listing (read) + collection-write helpers
   domain/                shared asset/collection/editor state (single-writer, see below)
   events/bus.ts          singleton mitt bus + EVENTS constants
   state/create-store.ts  generic immutable-ish store helper
@@ -53,6 +54,14 @@ src/
   utils/                 collections, compression, concurrency, cache, encoding, hash, log, uri
   bench/run.ts           pipeline benchmark → test-results/asset-core-bench.json
 ```
+
+**Collection-write helpers.** `catalog/` also carries the canonical
+collection-manifest write path: `buildCollectionManifest` /
+`applyCollectionMutation` live in `utils/collections.ts`, and
+`resolveCompositeSourceCid` in `catalog/index.ts`. **Every collection-manifest
+write — Studio or CLI — must go through `applyCollectionMutation`** so the
+`prev_manifest_cid` version chain stays walkable; never assemble a mutated
+collection manifest by hand.
 
 ## Domain layer — single-writer discipline
 
