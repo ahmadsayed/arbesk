@@ -1,32 +1,17 @@
 /**
  * Collection creation for the CLI: derive the deterministic named-collection
- * token ID (byte-identical to the Studio's deriveNamedCollectionId) and mint it
- * via the backend relay (no key, no browser). Reuses the asset-core write port
- * for the collection manifest + editor list.
+ * token ID through the canonical asset-core helper (HashPort-backed) and mint
+ * it via the backend relay (no key, no browser). Reuses the asset-core write
+ * port for the collection manifest + editor list.
  */
-import { encodePacked, keccak256 } from "viem/utils";
+import { deriveNamedCollectionId } from "@arbesk/asset-core/utils/collections.js";
 import { computeRoot } from "@arbesk/wallet/merkle.js";
-import { writeJSON, getCollectionManifest } from "./catalog.ts";
+import { getCore, writeJSON, getCollectionManifest } from "./catalog.ts";
 import { relay } from "./relay.ts";
 import type { Session } from "./session.ts";
 
 /** CollaboratorRole.Editor — matches the Solidity contract + wallet SDK. */
 const EDITOR_ROLE = 2;
-
-/**
- * Derive the deterministic named-collection token ID from wallet + name.
- * Byte-identical to the Studio: keccak256(abi.encodePacked(address, string))
- * with the address lowercased (checksum-exempt, matching Web3.soliditySha3).
- */
-export function deriveNamedCollectionTokenId(address: string, name: string): string {
-  const hex = keccak256(
-    encodePacked(
-      ["address", "string"] as any,
-      [address.toLowerCase(), name] as any,
-    ),
-  );
-  return BigInt(hex).toString();
-}
 
 export interface CreatedCollection {
   tokenId: string;
@@ -47,7 +32,10 @@ export async function createCollection(
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Collection name is required");
 
-  const tokenId = deriveNamedCollectionTokenId(session.address, trimmed);
+  await getCore(); // installs the runtime (HashPort) the derivation reads
+  const hex = deriveNamedCollectionId(session.address, trimmed);
+  if (!hex) throw new Error("Cannot derive collection token id (no hash port)");
+  const tokenId = BigInt(hex).toString();
 
   // Already minted? tokenURI reverts for a non-existent token, so a successful
   // read means the collection exists (deterministic ID → same wallet+name).

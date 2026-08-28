@@ -4,6 +4,7 @@
  * (reads, auto-gunzip) and local Kubo /api/v0/add (writes, gzip-compressed).
  */
 import { createPublicClient, http } from "viem";
+import { encodePacked, keccak256 } from "viem/utils";
 import type { PublicClient, Address } from "viem";
 import { gzipSync, gunzipSync } from "zlib";
 import { BACKEND_URL, CHAIN_ID, IPFS_API } from "./config.ts";
@@ -125,5 +126,25 @@ export function createIpfsWritePort() {
       const bytes = new Uint8Array(gzipSync(Buffer.from(JSON.stringify(json))));
       return kuboAdd(bytes);
     },
+  };
+}
+
+/**
+ * viem-backed HashPort. Address values are lowercased before packing so the
+ * output is byte-identical to Web3.utils.soliditySha3 (checksum-exempt) and to
+ * packages/wallet/src/merkle.ts — the contract's expectation.
+ */
+export function createHashPort() {
+  return {
+    soliditySha3: (...args: any[]) =>
+      keccak256(
+        encodePacked(
+          args.map((a: any) => a.type) as any,
+          args.map((a: any) =>
+            a.type === "address" ? String(a.value).toLowerCase() : a.value
+          ) as any,
+        ),
+      ),
+    keccak256: (data: any) => keccak256(data),
   };
 }

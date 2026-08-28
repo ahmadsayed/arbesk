@@ -8,7 +8,7 @@ import os from "os";
 import path from "path";
 import { createArbeskCore } from "@arbesk/asset-core";
 import { CHAIN_ID } from "./config.ts";
-import { createCollectionReadPort, createIpfsReadPort, createIpfsWritePort, getBackendConfig } from "./adapters.ts";
+import { createCollectionReadPort, createHashPort, createIpfsReadPort, createIpfsWritePort, getBackendConfig } from "./adapters.ts";
 
 let _core: ReturnType<typeof createArbeskCore> | null = null;
 let _ipfsWrite: ReturnType<typeof createIpfsWritePort> | null = null;
@@ -59,6 +59,7 @@ export async function getCore() {
     ipfsRead: createIpfsReadPort(cfg.ipfsGatewayUrl),
     ipfsWrite: _ipfsWrite,
     collection: createCollectionReadPort(),
+    hash: createHashPort(),
   });
   return _core;
 }
