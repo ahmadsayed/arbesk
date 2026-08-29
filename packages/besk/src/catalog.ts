@@ -9,6 +9,7 @@ import path from "path";
 import { createArbeskCore } from "@arbesk/asset-core";
 import { applyCollectionMutation } from "@arbesk/asset-core/utils/collections.js";
 import { CHAIN_ID } from "./config.ts";
+import { debug, trace } from "./debug.ts";
 import { createCollectionReadPort, createHashPort, createIpfsReadPort, createIpfsWritePort, getBackendConfig } from "./adapters.ts";
 import { relay } from "./relay.ts";
 import type { Session } from "./session.ts";
@@ -57,6 +58,7 @@ export function clearCatalogCache(): void {
 export async function getCore() {
   if (_core) return _core;
   const cfg = await getBackendConfig();
+  debug("asset-core init: gateway " + cfg.ipfsGatewayUrl + ", chain " + CHAIN_ID);
   _ipfsWrite = createIpfsWritePort();
   _core = createArbeskCore({
     ipfsRead: createIpfsReadPort(cfg.ipfsGatewayUrl),
@@ -68,13 +70,17 @@ export async function getCore() {
 }
 
 export async function getManifest(cid: string) {
+  // Reads are logged at the IPFS read port (adapters.ts), which also covers
+  // the SDK's internal fetches (version-chain walk, children, buffers).
   return (await getCore()).getManifest(cid);
 }
 
 /** Write an arbitrary JSON value (object or array) to IPFS, gzip-compressed. */
 export async function writeJSON(json: unknown): Promise<string> {
   await getCore();
-  return _ipfsWrite!.writeJSON(json as Record<string, any>);
+  const cid = await _ipfsWrite!.writeJSON(json as Record<string, any>);
+  debug("ipfs write →", cid);
+  return cid;
 }
 
 export async function writeManifest(manifest: Record<string, unknown>): Promise<string> {
@@ -105,9 +111,14 @@ export async function listCollections(address: string) {
   const cache = loadCache();
   const key = "collections:" + address.toLowerCase();
   const hit = fresh(cache[key]);
-  if (hit) return hit as any[];
+  if (hit) {
+    debug("collections cache hit:", address);
+    return hit as any[];
+  }
 
+  debug("collections fetch:", address);
   const cols = await (await getCore()).listCollections(address, CHAIN_ID);
+  debug("collections:", cols.length, "found");
   cache[key] = { cachedAt: Date.now(), data: cols };
   saveCache(cache);
   return cols;
@@ -117,8 +128,12 @@ export async function getCollectionAssets(tokenId: string) {
   const cache = loadCache();
   const key = "assets:" + tokenId;
   const hit = fresh(cache[key]);
-  if (hit) return hit as any[];
+  if (hit) {
+    debug("assets cache hit: token", tokenId);
+    return hit as any[];
+  }
 
+  debug("assets fetch: token", tokenId);
   const assets = await (await getCore()).getCollectionAssets(tokenId, CHAIN_ID);
   cache[key] = { cachedAt: Date.now(), data: assets };
   saveCache(cache);
@@ -134,7 +149,9 @@ export async function resolveAssetByName(tokenId: string, name: string) {
 }
 
 export async function uploadAsset(bytes: Uint8Array, assetName: string, assetId: string) {
+  debug("upload:", assetName, "(" + bytes.length + " bytes) as", assetId);
   const result = await (await getCore()).upload(bytes, { assetName, assetId });
+  debug("upload composite →", result.compositeCid ?? result.rootCid);
   return { compositeCid: result.compositeCid ?? result.rootCid, assetId };
 }
 
@@ -148,10 +165,13 @@ export async function updateCollection(
   tokenId: string,
   mutate: (draft: Record<string, any>) => void,
 ): Promise<string> {
-  const { cid, manifest } = await getCollectionManifest(tokenId);
-  const next = applyCollectionMutation(manifest, cid, mutate);
-  const newCid = await writeManifest(next);
-  await relay(session, "updateUri", tokenId, { newUri: newCid, proof: [] });
-  clearCatalogCache();
-  return newCid;
+  return trace("updateCollection token=" + tokenId, async () => {
+    const { cid, manifest } = await getCollectionManifest(tokenId);
+    const next = applyCollectionMutation(manifest, cid, mutate);
+    const newCid = await writeManifest(next);
+    debug("collection manifest:", cid, "→", newCid);
+    await relay(session, "updateUri", tokenId, { newUri: newCid, proof: [] });
+    clearCatalogCache();
+    return newCid;
+  });
 }

@@ -4,8 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Arbesk CLI (besk) — designer-friendly command-line client for Arbesk assets.",
-  "bin": { "besk": "./src/cli.ts" },
+  "bin": {
+    "besk": "./src/cli.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
   }
 }

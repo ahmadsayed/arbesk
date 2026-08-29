@@ -17,7 +17,15 @@ should follow that package's own guide, not the root one:
 
 `@arbesk/besk` (`packages/besk/`) is the CLI **consumer** of these SDKs (not an
 SDK itself): it composes `createArbeskCore` with its own Node adapters and
-routes all on-chain writes through the backend wallet relay.
+routes all on-chain writes through the backend wallet relay. `besk mcp`
+(`packages/besk/src/mcp.ts` + `mcp-server.ts`) re-exposes the same modules as
+an MCP stdio server for AI agents — tool handlers belong in `mcp.ts` (thin,
+throwing), transport in `mcp-server.ts`, and stdout stays reserved for
+JSON-RPC. **CLI ↔ MCP parity is mandatory**: every subcommand ships with its
+`mcp.ts` tool in the same change and vice versa (interactive-only `login` is
+the sole exception); feature logic lives in a focused module both sides call.
+Verbose debugging goes through `debug.ts` (`debug`/`trace`, stderr
+only): `--verbose`/`-v` in the CLI, `ARBESK_VERBOSE=1` everywhere.
 
 ## Dependency order
 

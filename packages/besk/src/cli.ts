@@ -27,15 +27,42 @@ import { createCollection } from "./collections.ts";
 import { burnCollection } from "./burn.ts";
 import { linkChildAsset } from "./link.ts";
 import { sendAssetToCollection } from "./send.ts";
+import { showAsset } from "./show.ts";
 import {
   runGeneration,
   cancelGeneration,
   getProviderBalance,
   resolveSourceCid,
 } from "./generate.ts";
-import type { GenerationBody, GeneratedModel } from "./generate.ts";
+import type { GenerationBody } from "./generate.ts";
+import {
+  displayName,
+  currentCollectionTokenId,
+  makeNodeId,
+  sanitizeFileName,
+  extFor,
+  readImageFile,
+  saveGenerated,
+} from "./helpers.ts";
 
-const args = process.argv.slice(2);
+/** cli.ts adapter over helpers.readImageFile: print + exit code instead of throwing. */
+function readImageFileCli(file: string): { imageData: string; imageMime: string } | null {
+  try {
+    return readImageFile(file);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exitCode = (e as { code?: string }).code === "FILE_NOT_FOUND" ? 5 : 2;
+    return null;
+  }
+}
+
+import { debug, setVerbose } from "./debug.ts";
+
+// Global flag: --verbose / -v (env: ARBESK_VERBOSE=1) — timestamped debug log
+// of every backend/IPFS/relay action on stderr. Stripped before dispatch.
+const rawArgs = process.argv.slice(2);
+if (rawArgs.includes("--verbose") || rawArgs.includes("-v")) setVerbose(true);
+const args = rawArgs.filter((a) => a !== "--verbose" && a !== "-v");
 const command = args[0];
 
 async function prompt(question: string): Promise<string> {
@@ -69,6 +96,7 @@ function help(): void {
   console.log("  rename <old> <new>  rename an asset");
   console.log("  send <name> <collection> [fork|live-ref]  link an asset into another collection");
   console.log("  link <child> <parent> [live-ref|fork] [--from <collection>] [--position \"x,y,z\"] [--scale s]  nest an asset inside another asset");
+  console.log("  show <name> [--version N] [--collection c] [--print]  open an asset in the Studio browser UI");
   console.log("  generate <prompt> [--image f | --view <front|left|back|right> f ...] [--provider mock|tripo3d] [--key k] [--quality standard|detailed|extreme] [--name n]  generate a 3D model (asks for provider/key interactively)");
   console.log("  retexture <name> <prompt> [--quality q]  retexture an asset (Tripo3D key required)");
   console.log("  retopo <name> [faceLimit]  smart retopology (500-20000 tris, blank = adaptive)");
@@ -76,6 +104,10 @@ function help(): void {
   console.log("  animate <name> <preset> [preset...] [--no-in-place]  rig + retarget animations");
   console.log("  balance [--key k]     show the Tripo3D credit balance");
   console.log("  cancel <taskId>       stop an in-flight generation task");
+  console.log("  mcp                 start an MCP server (stdio) exposing all besk tools to AI agents");
+  console.log("");
+  console.log("Global flags:");
+  console.log("  --verbose, -v       timestamped debug log of every action on stderr (env: ARBESK_VERBOSE=1)");
 }
 
 function requireSession(): Session | null {
@@ -86,18 +118,6 @@ function requireSession(): Session | null {
     return null;
   }
   return s;
-}
-
-function displayName(name: string | null): string {
-  return name ?? "My Library";
-}
-
-async function currentCollectionTokenId(s: Session): Promise<string> {
-  if (s.activeCollectionTokenId) return s.activeCollectionTokenId;
-  const cols = await listCollections(s.address);
-  const def = cols.find((c) => c.name === null) ?? cols[0];
-  if (!def) throw new Error("No collections found");
-  return def.tokenId;
 }
 
 async function cmdCollections(): Promise<void> {
@@ -222,15 +242,6 @@ async function cmdUpload(file?: string): Promise<void> {
     draft.assets[assetId] = compositeCid;
   });
   console.log("Saved as " + name);
-}
-
-function extFor(format: string): string {
-  return { gltf: ".gltf", glb: ".glb", "3mf": ".3mf", example: ".example" }[format] ?? ".gltf";
-}
-
-function sanitizeFileName(name: string): string {
-  const base = String(name).trim().replace(/[^a-zA-Z0-9._-]+/g, "_");
-  return base || "asset";
 }
 
 async function cmdInfo(name?: string): Promise<void> {
@@ -394,13 +405,6 @@ async function cmdSend(name?: string, collection?: string, mode?: string): Promi
   );
 }
 
-const IMAGE_MIME: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-};
-
 function parseFlags(argv: string[]): { positional: string[]; flags: Record<string, string[]> } {
   const positional: string[] = [];
   const flags: Record<string, string[]> = {};
@@ -411,7 +415,7 @@ function parseFlags(argv: string[]): { positional: string[]; flags: Record<strin
       const file = argv[++i];
       if (!view || !file) throw new Error("Usage: --view <front|left|back|right> <file>");
       (flags["--view"] ??= []).push(view + "=" + file);
-    } else if (a.startsWith("--no-")) {
+    } else if (a === "--print" || a.startsWith("--no-")) {
       flags[a] = ["true"];
     } else if (a.startsWith("--")) {
       const v = argv[++i];
@@ -529,28 +533,6 @@ async function pickCollection(s: Session): Promise<string> {
   return idx < 0 ? fallbackId : cols[idx].tokenId;
 }
 
-function readImageFile(file: string): { imageData: string; imageMime: string } | null {
-  if (!fs.existsSync(file)) {
-    console.error("File not found: " + file);
-    process.exitCode = 5;
-    return null;
-  }
-  const mime = IMAGE_MIME[path.extname(file).toLowerCase()];
-  if (!mime) {
-    console.error("Unsupported image type: " + file + " (JPEG, PNG, or WebP)");
-    process.exitCode = 2;
-    return null;
-  }
-  return { imageData: fs.readFileSync(file).toString("base64"), imageMime: mime };
-}
-
-function makeNodeId(seed: string): string {
-  const slug =
-    seed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) ||
-    "asset";
-  return slug + "_" + Date.now();
-}
-
 const PROGRESS_BAR_WIDTH = 24;
 let progressBarDrawn = false;
 
@@ -579,18 +561,43 @@ function endProgress(): void {
   progressBarDrawn = false;
 }
 
-/** Save a generated model into a collection as a (new version of an) asset. */
-async function saveGenerated(
-  s: Session,
-  tokenId: string,
-  model: GeneratedModel,
-  name: string,
-  assetId: string,
-): Promise<void> {
-  const { compositeCid } = await uploadAsset(model.bytes, name, assetId);
-  await updateCollection(s, tokenId, (draft) => {
-    draft.assets[assetId] = compositeCid;
+async function cmdShow(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const name = positional[0];
+  if (!name) {
+    console.error("Usage: besk show <name> [--version N] [--collection c] [--print]");
+    process.exitCode = 2;
+    return;
+  }
+  let tokenId = await currentCollectionTokenId(s);
+  const colOverride = flagValue(flags, "--collection");
+  if (colOverride) {
+    const c = await resolveCollectionByName(s.address, colOverride);
+    if (!c) {
+      console.error("No collection named " + colOverride + ". Run `besk collections`.");
+      process.exitCode = 5;
+      return;
+    }
+    tokenId = c.tokenId;
+  }
+  const hit = await resolveAssetByName(tokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return;
+  }
+  const open = !flags["--print"];
+  const result = await showAsset({
+    tokenId,
+    assetID: hit.assetID,
+    cid: hit.cid,
+    version: flagValue(flags, "--version"),
+    open,
   });
+  console.log(result.url);
+  if (open) console.log("Opened in your browser");
 }
 
 async function cmdLink(argv: string[]): Promise<void> {
@@ -702,7 +709,7 @@ async function cmdGenerate(argv: string[]): Promise<void> {
   const quality = flagValue(flags, "--quality") ?? process.env.ARBESK_TEXTURE_QUALITY;
   if (quality) body.textureQuality = quality;
   if (imageFile) {
-    const img = readImageFile(imageFile);
+    const img = readImageFileCli(imageFile);
     if (!img) return;
     body.imageData = img.imageData;
     body.imageMime = img.imageMime;
@@ -722,7 +729,7 @@ async function cmdGenerate(argv: string[]): Promise<void> {
     body.images = [];
     for (const v of viewFlags) {
       const [view, file] = v.split("=");
-      const img = readImageFile(file);
+      const img = readImageFileCli(file);
       if (!img) return;
       body.images.push({ ...img, view });
     }
@@ -932,6 +939,8 @@ async function main(): Promise<void> {
     help();
     return;
   }
+  const commandStart = Date.now();
+  debug("command:", command, ...args.slice(1));
   if (command === "login") await login(args[1]);
   else if (command === "whoami") whoami();
   else if (command === "logout") logout();
@@ -948,6 +957,7 @@ async function main(): Promise<void> {
   else if (command === "rename") await cmdRename(args[1], args[2]);
   else if (command === "send") await cmdSend(args[1], args[2], args[3]);
   else if (command === "link") await cmdLink(args.slice(1));
+  else if (command === "show") await cmdShow(args.slice(1));
   else if (command === "generate") await cmdGenerate(args.slice(1));
   else if (command === "retexture") await cmdRetexture(args.slice(1));
   else if (command === "retopo") await cmdRetopo(args.slice(1));
@@ -955,11 +965,16 @@ async function main(): Promise<void> {
   else if (command === "animate") await cmdAnimate(args.slice(1));
   else if (command === "balance") await cmdBalance(args.slice(1));
   else if (command === "cancel") await cmdCancel(args.slice(1));
+  else if (command === "mcp") {
+    const { startMcpServer } = await import("./mcp-server.ts");
+    await startMcpServer();
+  }
   else {
     console.error("Unknown command: " + command);
     help();
     process.exitCode = 2;
   }
+  debug("command done:", command, "(" + (Date.now() - commandStart) + "ms)");
 }
 
 main().catch((e) => {

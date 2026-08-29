@@ -8,6 +8,7 @@
 import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
 import { BACKEND_URL } from "./config.ts";
 import { getManifest } from "./catalog.ts";
+import { debug, trace } from "./debug.ts";
 import type { Session } from "./session.ts";
 
 export interface GeneratedModel {
@@ -81,42 +82,54 @@ export async function runGeneration(
   body: GenerationBody,
   poll: PollOptions = {},
 ): Promise<GeneratedModel> {
-  const res = await fetch(BACKEND_URL + "/api/v1/generations", {
-    method: "POST",
-    headers: {
-      Authorization: "Session " + session.token,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok && res.status !== 202) throw new Error(await errorMessage(res));
-  const payload = (await res.json()) as Record<string, any>;
-  if (!payload.taskId) return decodeResult(payload);
+  const op =
+    body.retexture ? "retexture" :
+    body.retopo ? "retopo" :
+    body.animate ? (body.rigOnly ? "rig" : "animate") :
+    "generate";
+  return trace("generation " + op + " node=" + body.nodeId, async () => {
+    const res = await fetch(BACKEND_URL + "/api/v1/generations", {
+      method: "POST",
+      headers: {
+        Authorization: "Session " + session.token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok && res.status !== 202) throw new Error(await errorMessage(res));
+    const payload = (await res.json()) as Record<string, any>;
+    if (!payload.taskId) {
+      debug("generation completed synchronously");
+      return decodeResult(payload);
+    }
 
-  const taskId = String(payload.taskId);
-  poll.onProgress?.({ status: "running", taskId });
-  const intervalMs = poll.intervalMs ?? DEFAULT_INTERVAL_MS;
-  const deadline = Date.now() + (poll.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  for (;;) {
-    if (Date.now() > deadline) {
-      throw new Error("Generation timed out (task " + taskId + ")");
+    const taskId = String(payload.taskId);
+    debug("generation task:", taskId);
+    poll.onProgress?.({ status: "running", taskId });
+    const intervalMs = poll.intervalMs ?? DEFAULT_INTERVAL_MS;
+    const deadline = Date.now() + (poll.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    for (;;) {
+      if (Date.now() > deadline) {
+        throw new Error("Generation timed out (task " + taskId + ")");
+      }
+      await sleep(intervalMs);
+      const statusRes = await fetch(BACKEND_URL + "/api/v1/generations/" + taskId, {
+        headers: { Authorization: "Session " + session.token },
+      });
+      if (!statusRes.ok) throw new Error(await errorMessage(statusRes));
+      const status = (await statusRes.json()) as Record<string, any>;
+      debug("poll", taskId + ":", status.status, status.progress ?? "", status.stage ?? "");
+      if (status.status === "success") return decodeResult(status);
+      if (status.status === "failed") {
+        throw new Error((status as any).error?.message ?? "Generation failed");
+      }
+      poll.onProgress?.({
+        status: String(status.status),
+        progress: status.progress as number | undefined,
+        stage: status.stage as string | undefined,
+      });
     }
-    await sleep(intervalMs);
-    const statusRes = await fetch(BACKEND_URL + "/api/v1/generations/" + taskId, {
-      headers: { Authorization: "Session " + session.token },
-    });
-    if (!statusRes.ok) throw new Error(await errorMessage(statusRes));
-    const status = (await statusRes.json()) as Record<string, any>;
-    if (status.status === "success") return decodeResult(status);
-    if (status.status === "failed") {
-      throw new Error((status as any).error?.message ?? "Generation failed");
-    }
-    poll.onProgress?.({
-      status: String(status.status),
-      progress: status.progress as number | undefined,
-      stage: status.stage as string | undefined,
-    });
-  }
+  });
 }
 
 /** Best-effort cancel of an in-flight task (credits already consumed are lost). */
@@ -124,6 +137,7 @@ export async function cancelGeneration(
   session: Session,
   taskId: string,
 ): Promise<{ status: string; upstreamCancelled?: boolean }> {
+  debug("cancel generation task:", taskId);
   const res = await fetch(BACKEND_URL + "/api/v1/generations/" + taskId, {
     method: "DELETE",
     headers: { Authorization: "Session " + session.token },

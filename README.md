@@ -42,7 +42,7 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 Arbesk ships two clients on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
-- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, `link`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel`.
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, `link`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel` — and `mcp`, an MCP stdio server exposing the same surface to AI agents. `show <name>` opens an asset's Studio deep link in the browser (`--print` just prints the URL).
 
 Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
 
@@ -107,13 +107,22 @@ Status legend: **✅** supported in the CLI today · **TODO** — feasible in a 
 | | Restore a historical version as current | ✅ | TODO | CLI can download any version but never repoints the tip |
 | **Library UX** | Grid/list toggle, search, sort, multi-select | ✅ | Not doable | GUI browser paradigm |
 | | Live 3D preview in details pane | ✅ | Not doable | Requires 3D viewer |
-| | Deep links (`?asset=`, `?manifest=`) | ✅ | Not doable | Web-only concept |
+| | Deep links (`?asset=`, `?manifest=`) | ✅ | ✅ | `show <name>` builds the link and opens the browser (`--version N` pins a historical manifest, `--print` prints the URL) |
 | **Collaboration** | Manage collaborators (Merkle editor lists) | ✅ | TODO | Relay supports `updateEditors`; no CLI command |
 | | Viewer/Editor roles, email → wallet resolution | ✅ | TODO | |
 | | Asset comments (Nostr threads, @mentions) | ✅ | TODO | |
 | **Activity** | Activity ledger (Generation/Save/Publish/… feed) | ✅ | TODO | Derivable from the manifest chain |
+| **AI agents** | MCP server exposing the client surface to AI agents | — | ✅ | `besk mcp` — stdio MCP server, 23 tools covering the full CLI surface |
 
-CLI-only capabilities (not in Studio): shell scriptability/pipelining, idempotent collection create, and direct version-positional download. Known CLI gaps beyond the table: no machine-readable (JSON) output mode and no global flags.
+CLI-only capabilities (not in Studio): shell scriptability/pipelining, idempotent collection create, direct version-positional download, and MCP tool access for AI agents. Known CLI gaps beyond the table: no machine-readable (JSON) output mode. Global flag: `--verbose`/`-v` (or `ARBESK_VERBOSE=1`) — timestamped debug log of every backend/IPFS/relay action on stderr (the only switch available under `besk mcp`, where stdout is the JSON-RPC channel).
+
+### AI agents: `besk mcp`
+
+`besk mcp` starts an [MCP](https://modelcontextprotocol.io) server on stdio exposing the full CLI surface as 23 tools (`list_collections`, `generate_model`, `link_asset`, `show_asset`, `burn_collection`, …) to any MCP-capable agent (Claude Code, Cursor, Kimi Code, …). It shares the session with the human CLI — run `besk login <email>` first. Non-interactive by design: `generate_model` takes an explicit `provider` (no picker), and `burn_collection` requires `confirm` to exactly equal the collection name. Register it in your agent's MCP config, e.g.:
+
+```json
+{ "mcpServers": { "besk": { "command": "/path/to/repo/besk", "args": ["mcp"] } } }
+```
 
 ---
 

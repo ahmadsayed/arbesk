@@ -6,6 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { SESSION_PATH } from "./config.ts";
+import { debug } from "./debug.ts";
 
 export interface Session {
   token: string;
@@ -20,10 +21,18 @@ export function loadSession(sessionPath: string = SESSION_PATH): Session | null 
   try {
     const raw = fs.readFileSync(sessionPath, "utf8");
     const s = JSON.parse(raw) as Session;
-    if (!s?.token) return null;
-    if (s.expiresAt && s.expiresAt < Date.now()) return null;
+    if (!s?.token) {
+      debug("session load: no token in", sessionPath);
+      return null;
+    }
+    if (s.expiresAt && s.expiresAt < Date.now()) {
+      debug("session load: expired", new Date(s.expiresAt).toISOString());
+      return null;
+    }
+    debug("session load:", s.email, "from", sessionPath);
     return s;
   } catch {
+    debug("session load: no session file at", sessionPath);
     return null;
   }
 }
@@ -31,11 +40,13 @@ export function loadSession(sessionPath: string = SESSION_PATH): Session | null 
 export function saveSession(session: Session, sessionPath: string = SESSION_PATH): void {
   fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
   fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2));
+  debug("session saved:", session.email, "→", sessionPath);
 }
 
 export function clearSession(sessionPath: string = SESSION_PATH): void {
   try {
     fs.unlinkSync(sessionPath);
+    debug("session cleared:", sessionPath);
   } catch {
     /* already gone */
   }
@@ -44,6 +55,7 @@ export function clearSession(sessionPath: string = SESSION_PATH): void {
 export function setActiveCollection(tokenId: string | null): void {
   const s = loadSession();
   if (!s) return;
+  debug("active collection →", tokenId);
   s.activeCollectionTokenId = tokenId;
   saveSession(s);
 }

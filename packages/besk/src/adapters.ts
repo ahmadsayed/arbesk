@@ -11,6 +11,7 @@ import { gzipSync, gunzipSync } from "zlib";
 import { uploadToIPFSWithCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import { BACKEND_URL, CHAIN_ID } from "./config.ts";
+import { debug, trace } from "./debug.ts";
 import { loadSession } from "./session.ts";
 
 export interface BackendConfig {
@@ -22,6 +23,7 @@ export interface BackendConfig {
 let _config: BackendConfig | null = null;
 export async function getBackendConfig(): Promise<BackendConfig> {
   if (_config) return _config;
+  debug("backend config fetch:", BACKEND_URL);
   const res = await fetch(BACKEND_URL + "/api/v1/config");
   _config = (await res.json()) as BackendConfig;
   return _config;
@@ -44,6 +46,7 @@ async function publicClient(): Promise<PublicClient> {
 export function createCollectionReadPort() {
   return {
     tokenURI: async (tokenId: string, chainId?: number) => {
+      debug("tokenURI read: token", tokenId);
       const cfg = await getBackendConfig();
       const client = await publicClient();
       const address =
@@ -64,7 +67,9 @@ export function createCollectionReadPort() {
         (opts.chainId ?? CHAIN_ID);
       const res = await fetch(BACKEND_URL + "/api/v1/indexer/" + opts.scope + "?" + q);
       const body = (await res.json()) as Record<string, unknown>;
-      return (body[opts.scope] ?? []) as string[];
+      const tokens = (body[opts.scope] ?? []) as string[];
+      debug("indexer", opts.scope + ":", tokens.length, "tokens");
+      return tokens;
     },
   };
 }
@@ -80,22 +85,31 @@ export function createIpfsReadPort(gatewayUrl: string) {
     const base = gatewayUrl.replace(/\/+$/, "");
     return base.endsWith("/ipfs") ? base + "/" + cid : base + "/ipfs/" + cid;
   };
-  return {
-    getJSON: async (cid: string) => {
+  // Every asset-core read (tokenURI manifest, version-chain walk, asset
+  // manifests, buffers) funnels through here — one instrumented fetch covers
+  // the whole manifest exploration tree in verbose mode.
+  const fetchRaw = async (cid: string): Promise<Uint8Array> => {
+    return trace("ipfs fetch " + cid, async () => {
       const res = await fetch(urlFor(cid));
       const buf = new Uint8Array(await res.arrayBuffer());
+      debug("ipfs http", res.status, buf.length + " bytes", isGzipped(buf) ? "(gzipped)" : "");
+      return buf;
+    });
+  };
+  return {
+    getJSON: async (cid: string) => {
+      const buf = await fetchRaw(cid);
       const plain = isGzipped(buf) ? new Uint8Array(gunzipSync(buf)) : buf;
       return JSON.parse(new TextDecoder().decode(plain));
     },
     getBytes: async (cid: string) => {
-      const res = await fetch(urlFor(cid));
-      const buf = new Uint8Array(await res.arrayBuffer());
+      const buf = await fetchRaw(cid);
       const plain = isGzipped(buf) ? new Uint8Array(gunzipSync(buf)) : buf;
       return plain.buffer;
     },
     getRawBytes: async (cid: string) => {
-      const res = await fetch(urlFor(cid));
-      return res.arrayBuffer();
+      const buf = await fetchRaw(cid);
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     },
   };
 }
@@ -114,6 +128,7 @@ async function toBytes(data: unknown): Promise<Uint8Array> {
 export async function mintUploadCredential(): Promise<UploadCredential> {
   const s = loadSession();
   if (!s) throw new Error("Not logged in. Run `besk login <email>`.");
+  debug("minting IPFS upload credential");
   const res = await fetch(BACKEND_URL + "/api/v1/ipfs/upload-url", {
     method: "POST",
     headers: { Authorization: "Session " + s.token },
@@ -140,11 +155,13 @@ export function createIpfsWritePort() {
     write: async (data: unknown, filename?: string, _credential?: unknown, options?: { compress?: boolean }) => {
       let bytes = await toBytes(data);
       if (options?.compress !== false) bytes = new Uint8Array(gzipSync(bytes));
-      return uploadToIPFSWithCredential(bytes, (filename ?? "blob") + ".gz", await credentialFor());
+      return trace("ipfs write " + (filename ?? "blob") + " (" + bytes.length + " bytes)", async () =>
+        uploadToIPFSWithCredential(bytes, (filename ?? "blob") + ".gz", await credentialFor()));
     },
     writeJSON: async (json: Record<string, unknown>) => {
       const bytes = new Uint8Array(gzipSync(Buffer.from(JSON.stringify(json))));
-      return uploadToIPFSWithCredential(bytes, "manifest.json.gz", await credentialFor());
+      return trace("ipfs write manifest.json (" + bytes.length + " bytes)", async () =>
+        uploadToIPFSWithCredential(bytes, "manifest.json.gz", await credentialFor()));
     },
   };
 }
@@ -159,23 +176,26 @@ export async function unpinCids(
   cid: string,
   tokenId: string,
 ): Promise<{ count: number; errors?: string[] }> {
-  const cfg = await getBackendConfig();
-  const res = await fetch(BACKEND_URL + "/api/v1/ipfs/unpin", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Session " + session.token,
-    },
-    body: JSON.stringify({
-      cid,
-      tokenId: String(tokenId),
-      chainId: CHAIN_ID,
-      contractAddress: cfg.networkConfigs[CHAIN_ID]?.contractAddress ?? cfg.contractAddress,
-    }),
+  return trace("unpin token=" + tokenId + " cid=" + cid, async () => {
+    const cfg = await getBackendConfig();
+    const res = await fetch(BACKEND_URL + "/api/v1/ipfs/unpin", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Session " + session.token,
+      },
+      body: JSON.stringify({
+        cid,
+        tokenId: String(tokenId),
+        chainId: CHAIN_ID,
+        contractAddress: cfg.networkConfigs[CHAIN_ID]?.contractAddress ?? cfg.contractAddress,
+      }),
+    });
+    const body = (await res.json()) as Record<string, any>;
+    if (!res.ok) throw new Error(body?.error?.message ?? "unpin failed: HTTP " + res.status);
+    debug("unpinned:", body.count, "CIDs");
+    return body as { count: number; errors?: string[] };
   });
-  const body = (await res.json()) as Record<string, any>;
-  if (!res.ok) throw new Error(body?.error?.message ?? "unpin failed: HTTP " + res.status);
-  return body as { count: number; errors?: string[] };
 }
 
 /**

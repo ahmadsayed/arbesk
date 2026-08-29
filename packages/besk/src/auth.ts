@@ -1,8 +1,9 @@
 /** Browser-assisted login: open a browser, CDP emails the code, session comes back. */
 import http from "http";
-import { spawn } from "child_process";
+import { createInterface } from "readline/promises";
 import type { AddressInfo } from "net";
 import { BACKEND_URL } from "./config.ts";
+import { openBrowser } from "./helpers.ts";
 import { saveSession } from "./session.ts";
 
 interface CallbackResult {
@@ -12,15 +13,15 @@ interface CallbackResult {
   email: string;
 }
 
-function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin" ? "open" :
-    process.platform === "win32" ? "start" :
-    "xdg-open";
-  spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
-}
-
 export async function login(email?: string): Promise<void> {
+  if (!email && process.stdin.isTTY) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      email = (await rl.question("Email: ")).trim();
+    } finally {
+      rl.close();
+    }
+  }
   if (!email) {
     console.error("Usage: besk login <email>");
     process.exitCode = 2;
@@ -37,13 +38,17 @@ export async function login(email?: string): Promise<void> {
       const emailParam = u.searchParams.get("email") ?? normalized;
       const expiresAt = Number(u.searchParams.get("expiresAt") ?? 0);
       res.end("Logged in. You can close this window and return to the terminal.");
-      server.close();
       clearTimeout(timeout);
+      // The browser keeps its connection alive (keep-alive); server.close()
+      // alone waits for it and the CLI would hang after a successful login.
+      server.closeAllConnections();
+      server.close();
       if (token) resolve({ token, address, email: emailParam, expiresAt });
       else reject(new Error("No session token received"));
     });
 
     const timeout = setTimeout(() => {
+      server.closeAllConnections();
       server.close();
       reject(new Error("Timed out waiting for login (5 min)"));
     }, 5 * 60 * 1000);
