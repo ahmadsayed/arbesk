@@ -15,7 +15,7 @@ backend/frontend both build on it.
 | `buildSiweProof({ signer, … })` | Standalone SIWE build+sign for callers holding a raw `Signer` (e.g. `services/api.ts`). |
 | `buildUserIdentity({ address, email?, source })` | Build the `UserIdentity` for a connected wallet. |
 | `createAssetContract({ signer, address, abi })` | Typed contract writes — `publish`, `updateUri`, `updateEditors`, `burn`, generic `call`. |
-| `createEoaSigner(web3, address)` | Reference EOA `Signer` adapter (wraps an injected Web3.js/EIP-1193 instance). |
+| `createEoaSigner(provider, address)` | Reference EOA `Signer` adapter (wraps an injected EIP-1193 provider via viem). |
 | `buildSiweMessage` / `generateNonce` / `parseSiweMessage` / `verifySiwe` / `_resetSiweNonceStoreForTesting` | SIWE (EIP-4361) build + verify in one module. |
 | `verifyAuthProof(proof, ctx)` | Proof-verification dispatcher (`siwe` \| `oidc`) — the single session-creation entry point. |
 | `createMemorySessionStore(opts?)` | In-memory `SessionStore` (24h TTL, hourly cleanup). |
@@ -63,13 +63,13 @@ src/
   merkle.ts        editor-tree leaf/root/proof/verify primitives
   session.ts       createMemorySessionStore
   contract.ts      createAssetContract (viem-encoded writes)
-  adapters/eoa.ts  createEoaSigner (wraps injected web3)
+  adapters/eoa.ts  createEoaSigner (wraps an injected EIP-1193 provider)
 ```
 
 ## Boundary rules
 
-- **No browser globals.** `createEoaSigner` receives `web3` by injection;
-  `siwe.ts` reads `window.location.origin` only behind a `typeof window` guard.
+- **No browser globals.** `siwe.ts` reads `window.location.origin` only behind
+  a `typeof window` guard.
 - **CDP signer lives outside the package** — `frontend/src/js/blockchain/wallet-cdp.ts`
   implements the same `Signer` port using `@coinbase/cdp-core`, because it needs
   the CDP SDK and the browser environment.

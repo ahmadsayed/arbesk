@@ -1,59 +1,49 @@
 /**
- * EOA Signer adapter — wraps an injected Web3.js instance (EIP-1193 or
- * WalletConnect) as the wallet Signer port. DI'd (web3 is passed in, no
- * browser globals), so it lives in the package. Gas defaults to
- * estimateGas + 20% pad (matching the old wallet-gas.ts); on estimate failure
- * it omits gas and lets web3 estimate at send time.
+ * Reference EOA Signer adapter: wraps a raw EIP-1193 provider (injected wallet
+ * or WalletConnect) with viem wallet/public clients. personal_sign carries
+ * exactly [message, address] — the web3 empty-password quirk is gone.
  */
-import type { Signer } from "../types.ts";
+import { createPublicClient, createWalletClient, custom } from "viem";
+import type { Signer, SendResult, MinedReceipt } from "../types.ts";
 
-export function createEoaSigner(web3: any, address: string): Signer {
+/** Minimal EIP-1193 shape (the package may not reference window.ethereum types). */
+export interface Eip1193Provider {
+  request(args: { method: string; params?: unknown[] }): Promise<unknown>;
+}
+
+export function createEoaSigner(provider: Eip1193Provider, address: string): Signer {
+  const transport = custom(provider as any);
+  const wallet = createWalletClient({ transport });
+  const reader = createPublicClient({ transport });
+  const account = address as `0x${string}`;
   return {
     source: "eoa",
     getAddress: () => address,
     getSignerAddress: () => address,
-    getChainId: async () => Number(await web3.eth.getChainId()),
-    signMessage: async (message: string) =>
-      web3.eth.personal.sign(message, address, ""),
-    sendTransaction: async (tx) => {
-      let gas = tx.gas;
-      if (gas === undefined) {
-        try {
-          const est = await web3.eth.estimateGas({
-            from: address,
-            to: tx.to,
-            data: tx.data,
-            value: tx.value ?? "0x0",
-          });
-          gas = Math.floor(Number(est) * 1.2);
-        } catch {
-          // Leave gas undefined so web3 estimates at send time.
-          gas = undefined;
-        }
-      }
-      return new Promise((resolve, reject) => {
-        const promiEvent: any = web3.eth.sendTransaction({
-          from: address,
-          to: tx.to,
-          value: tx.value ?? "0x0",
-          data: tx.data ?? "0x",
-          gas,
-        });
-        promiEvent.once("transactionHash", (hash: string) => {
-          resolve({
-            hash,
-            wait: async () => {
-              const receipt = await promiEvent;
-              return {
-                transactionHash: receipt.transactionHash,
-                status: Boolean(receipt.status),
-                blockNumber: receipt.blockNumber ? Number(receipt.blockNumber) : null,
-              };
-            },
-          });
-        });
-        promiEvent.once("error", (err: unknown) => reject(err));
+    getChainId: () => reader.getChainId(),
+    signMessage: (message: string) =>
+      wallet.signMessage({ account, message }) as Promise<string>,
+    async sendTransaction({ to, value, data, gas }): Promise<SendResult> {
+      // chain: null — the signer is chain-agnostic (the provider may switch
+      // chains after construction); this skips viem's chain assertion, like
+      // the old web3 path which never pinned a chain either.
+      const hash = await wallet.sendTransaction({
+        account, chain: null, to: to as `0x${string}`,
+        value: value === undefined ? undefined : BigInt(value),
+        data: data as `0x${string}` | undefined,
+        gas: gas === undefined ? undefined : BigInt(gas),
       });
+      return {
+        hash,
+        wait: async (): Promise<MinedReceipt> => {
+          const r = await reader.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+          return {
+            transactionHash: r.transactionHash,
+            status: r.status === "success" ? true : r.status === "reverted" ? false : null,
+            blockNumber: Number(r.blockNumber),
+          };
+        },
+      };
     },
   };
 }
