@@ -24,6 +24,7 @@ import {
   detectFormat,
 } from "./catalog.ts";
 import { createCollection } from "./collections.ts";
+import { burnCollection } from "./burn.ts";
 import { sendAssetToCollection } from "./send.ts";
 import {
   runGeneration,
@@ -56,6 +57,7 @@ function help(): void {
   console.log("  logout            sign out");
   console.log("  collections       list your collections");
   console.log("  create <name>     mint a new collection");
+  console.log("  burn <name>       burn a collection token + unpin its IPFS content (irreversible, typed confirmation)");
   console.log("  use <name>        switch to a collection");
   console.log("  list              list assets in the current collection");
   console.log("  info <name>       show an asset's identity card");
@@ -816,6 +818,35 @@ async function cmdCancel(argv: string[]): Promise<void> {
   console.log("Cancelled " + taskId + (r.upstreamCancelled ? " (upstream cancelled)" : ""));
 }
 
+async function cmdBurn(name?: string): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  if (!name) {
+    console.error("Usage: besk burn <collection>");
+    process.exitCode = 2;
+    return;
+  }
+  const c = await resolveCollectionByName(s.address, name);
+  if (!c) {
+    console.error("No collection named " + name + ". Run `besk collections`.");
+    process.exitCode = 5;
+    return;
+  }
+  const label = displayName(c.name);
+  const answer = await prompt(
+    "Are you sure you want to delete the collection \"" + label +
+      "\" and all non-referenced assets? This burns the token on-chain and cannot be undone. Type the collection name (" +
+      label + ") to confirm: ",
+  );
+  if (answer.trim() !== label) {
+    console.log("Cancelled");
+    return;
+  }
+  const receipt = await burnCollection(s, c.tokenId);
+  console.log("Burned collection " + label + " (token " + c.tokenId + ")");
+  if (receipt.transactionHash) console.log("Tx: " + receipt.transactionHash);
+}
+
 async function main(): Promise<void> {
   if (!command || command === "help" || command === "--help") {
     help();
@@ -826,6 +857,7 @@ async function main(): Promise<void> {
   else if (command === "logout") logout();
   else if (command === "collections") await cmdCollections();
   else if (command === "create") await cmdCreate(args[1]);
+  else if (command === "burn") await cmdBurn(args[1]);
   else if (command === "use") await cmdUse(args[1]);
   else if (command === "list") await cmdList();
   else if (command === "info") await cmdInfo(args[1]);

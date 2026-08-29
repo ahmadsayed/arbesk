@@ -42,7 +42,7 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 Arbesk ships two clients on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
-- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel`.
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel`.
 
 Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
 
@@ -57,7 +57,7 @@ Status legend: **✅** supported in the CLI today · **TODO** — feasible in a 
 | | Create named collection | ✅ | ✅ | `create <name>` (idempotent — returns existing if already minted) |
 | | Select active collection | ✅ | ✅ | `use <name>` (Studio: per-asset settings picker) |
 | | Shared (editor) collections discovery | ✅ | TODO | CLI reads indexer `owned` scope only |
-| | Burn collection + IPFS unpin | ✅ | TODO | Relay supports `burn`; CLI never calls it |
+| | Burn collection + IPFS unpin | ✅ | ✅ | `burn <collection>` (typed-name confirmation; owner-only — `proof: []`; best-effort unpin before burn) |
 | | Rename collection | ✅ | TODO | CLI `rename` covers assets only |
 | **Assets** | List assets in a collection | ✅ | ✅ | `list` |
 | | Asset details (ID, version, CID, nodes) | ✅ | ✅ | `info` (Studio details pane also has a live 3D preview — Not doable) |

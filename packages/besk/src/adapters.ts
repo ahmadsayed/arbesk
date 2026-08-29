@@ -150,6 +150,35 @@ export function createIpfsWritePort() {
 }
 
 /**
+ * Unpin an IPFS footprint (collection manifest chain, sources, thumbnails) via
+ * the backend. The backend verifies on-chain ownership/editor rights, so this
+ * must run while the token is still live — i.e. before a burn.
+ */
+export async function unpinCids(
+  session: { token: string },
+  cid: string,
+  tokenId: string,
+): Promise<{ count: number; errors?: string[] }> {
+  const cfg = await getBackendConfig();
+  const res = await fetch(BACKEND_URL + "/api/v1/ipfs/unpin", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Session " + session.token,
+    },
+    body: JSON.stringify({
+      cid,
+      tokenId: String(tokenId),
+      chainId: CHAIN_ID,
+      contractAddress: cfg.networkConfigs[CHAIN_ID]?.contractAddress ?? cfg.contractAddress,
+    }),
+  });
+  const body = (await res.json()) as Record<string, any>;
+  if (!res.ok) throw new Error(body?.error?.message ?? "unpin failed: HTTP " + res.status);
+  return body as { count: number; errors?: string[] };
+}
+
+/**
  * viem-backed HashPort. Address values are lowercased before packing so the
  * output is byte-identical to Web3.utils.soliditySha3 (checksum-exempt) and to
  * packages/wallet/src/merkle.ts — the contract's expectation.
