@@ -877,6 +877,82 @@ function addStoppableWorkingMessage(workingText: string): {
 
 // ─── Rig & Animate (Tripo3D) ───
 
+/**
+ * Shared pre-flight for the follow-up actions: wallet connected (else alert)
+ * and session established (else a sign-in toast naming the action).
+ * @returns true when both gates pass
+ */
+async function ensureFollowupGates(action: string): Promise<boolean> {
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return false;
+  }
+  try {
+    await getOrCreateSession();
+  } catch {
+    showToast({
+      type: "warning",
+      title: "Sign In Required",
+      message: `Sign in to ${action} assets.`,
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * nodeId for a follow-up generation: asset-name slug + action suffix + ts.
+ */
+function followupNodeId(suffix: string): string {
+  const assetName = getAssetName();
+  return `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${suffix}_${Date.now()}`;
+}
+
+/**
+ * Error mapping for the follow-up actions. All variants share the same
+ * skeleton; the options pick which canned messages apply:
+ * - notRiggable: message for MODEL_NOT_RIGGABLE (rig/animate paths)
+ * - timeout: message for GENERATION_TIMEOUT (retopo/animate)
+ * - auth: canned 401/402 Tripo3D messages (retopo/rig/animate, not retries)
+ * - passThroughMessage: non-ApiError err.message fallback (retopo/animate)
+ */
+function followupErrorMessage(
+  err: unknown,
+  fallback: string,
+  {
+    notRiggable,
+    timeout,
+    auth = false,
+    passThroughMessage = false,
+  }: {
+    notRiggable?: string;
+    timeout?: string;
+    auth?: boolean;
+    passThroughMessage?: boolean;
+  } = {}
+): string {
+  if (err instanceof ApiError) {
+    if (notRiggable && err.code === "MODEL_NOT_RIGGABLE") return notRiggable;
+    if (auth) {
+      if (err.status === 401) {
+        return "Invalid Tripo3D API key. Check your key in the provider settings.";
+      }
+      if (err.status === 402) {
+        return "Tripo3D account has insufficient credits.";
+      }
+    }
+    if (timeout && err.code === "GENERATION_TIMEOUT") return timeout;
+    if (err.message) return err.message;
+    return fallback;
+  }
+  if (passThroughMessage && (err as any).message) return (err as any).message;
+  return fallback;
+}
+
+/** Guidance shown when Tripo rejects a model as not riggable. */
+const NOT_RIGGABLE_GUIDANCE =
+  "This model isn't riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.";
+
 // Animation presets offered by the Animate follow-up's checkbox picker.
 // Pseudo-option value for the Animate dialog's in-place toggle — filtered
 // out before presets go to the backend, and doesn't count toward Tripo's
@@ -1303,19 +1379,11 @@ function maybeAddRigRetryChips(generationId: string, task: "rig" | "animate") {
 async function retryRig(generationId: string, rigModel: string) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
-  if (!walletState.get().walletAddress) {
-    alert("Please log in or sign up first.");
-    return;
-  }
-  try { await getOrCreateSession(); } catch {
-    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to rig assets." });
-    return;
-  }
+  if (!(await ensureFollowupGates("rig"))) return;
   const prompt = `Auto-rig (${rigModel === "v1.0-20240301" ? "v1.0 Humanoid" : "v2.5 Generic"})`;
   addChatMessage("user", prompt);
   const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
-  const assetName = getAssetName();
-  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
+  const nodeId = followupNodeId("rig");
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
@@ -1341,12 +1409,9 @@ async function retryRig(generationId: string, rigModel: string) {
   } catch (err) {
     if (isGenerationCancelled(err)) { addChatMessage("system", "Auto-rig stopped."); return; }
     console.error("Retry auto-rig failed:", err);
-    let userMsg = "Rigging failed. Please try again.";
-    if (err instanceof ApiError) {
-      if (err.code === "MODEL_NOT_RIGGABLE") userMsg = "This model isn't riggable.";
-      else if (err.message) userMsg = err.message;
-    }
-    addChatMessage("system", userMsg);
+    addChatMessage("system", followupErrorMessage(err, "Rigging failed. Please try again.", {
+      notRiggable: "This model isn't riggable.",
+    }));
   } finally { working?.remove(); }
 }
 
@@ -1360,14 +1425,7 @@ async function retryAnimate(generationId: string, rigModel: string) {
   // Reuse onAnimate with the rig model pre-selected but still let the user
   // pick presets via the dialog — we pass rigModel to force it.
   // For simplicity, re-trigger onAnimate with rigModel forced.
-  if (!walletState.get().walletAddress) {
-    alert("Please log in or sign up first.");
-    return;
-  }
-  try { await getOrCreateSession(); } catch {
-    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to animate assets." });
-    return;
-  }
+  if (!(await ensureFollowupGates("animate"))) return;
   // Show just the preset picker (no rig model selector — we already know it)
   const picked = await showCheckboxDialog(
     "Retry Animate",
@@ -1384,8 +1442,7 @@ async function retryAnimate(generationId: string, rigModel: string) {
   const prompt = `Animate: ${labels} (${rigModel === "v1.0-20240301" ? "v1.0" : "v2.5"})`;
   addChatMessage("user", prompt);
   const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
-  const assetName = getAssetName();
-  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
+  const nodeId = followupNodeId("anim");
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
@@ -1413,12 +1470,9 @@ async function retryAnimate(generationId: string, rigModel: string) {
   } catch (err) {
     if (isGenerationCancelled(err)) { addChatMessage("system", "Animation stopped."); return; }
     console.error("Retry animate failed:", err);
-    let userMsg = "Animation failed. Please try again.";
-    if (err instanceof ApiError) {
-      if (err.code === "MODEL_NOT_RIGGABLE") userMsg = "This model isn't riggable with the chosen skeleton.";
-      else if (err.message) userMsg = err.message;
-    }
-    addChatMessage("system", userMsg);
+    addChatMessage("system", followupErrorMessage(err, "Animation failed. Please try again.", {
+      notRiggable: "This model isn't riggable with the chosen skeleton.",
+    }));
   } finally { working?.remove(); }
 }
 
@@ -1479,15 +1533,10 @@ async function onRetexture(generationId: string) {
   if (!record?.sourceAssetCid) return;
   const texturePrompt = await showTexturePromptDialog();
   if (!texturePrompt) return;
-  if (!walletState.get().walletAddress) { alert("Please log in or sign up first."); return; }
-  try { await getOrCreateSession(); } catch {
-    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to retexture assets." });
-    return;
-  }
+  if (!(await ensureFollowupGates("retexture"))) return;
   addChatMessage("user", `Retexture: ${texturePrompt}`);
   const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Retexturing — this takes a minute or two…");
-  const assetName = getAssetName();
-  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_retex_${Date.now()}`;
+  const nodeId = followupNodeId("retex");
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
@@ -1534,20 +1583,7 @@ async function onRetopo(generationId: string) {
   const faceLimit = await showFaceLimitDialog();
   if (faceLimit === null) return; // cancelled
 
-  if (!walletState.get().walletAddress) {
-    alert("Please log in or sign up first.");
-    return;
-  }
-  try {
-    await getOrCreateSession();
-  } catch {
-    showToast({
-      type: "warning",
-      title: "Sign In Required",
-      message: "Sign in to retopo assets.",
-    });
-    return;
-  }
+  if (!(await ensureFollowupGates("retopo"))) return;
 
   const prompt = "Retopo for animation";
   addChatMessage("user", prompt);
@@ -1555,10 +1591,7 @@ async function onRetopo(generationId: string) {
     "Rebuilding topology — this takes a minute or two…",
   );
 
-  const assetName = getAssetName();
-  const nodeId = `${assetName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "_")}_retopo_${Date.now()}`;
+  const nodeId = followupNodeId("retopo");
   const prevAssetManifestCid =
     getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
@@ -1596,21 +1629,11 @@ async function onRetopo(generationId: string) {
       return;
     }
     console.error("Retopo failed:", err);
-    let userMsg = "Retopo failed. Please try again.";
-    if (err instanceof ApiError) {
-      if (err.status === 401) {
-        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
-      } else if (err.status === 402) {
-        userMsg = "Tripo3D account has insufficient credits.";
-      } else if (err.code === "GENERATION_TIMEOUT") {
-        userMsg = "Retopo timed out. Try again later.";
-      } else if (err.message) {
-        userMsg = err.message;
-      }
-    } else if ((err as any).message) {
-      userMsg = (err as any).message;
-    }
-    addChatMessage("system", userMsg);
+    addChatMessage("system", followupErrorMessage(err, "Retopo failed. Please try again.", {
+      timeout: "Retopo timed out. Try again later.",
+      auth: true,
+      passThroughMessage: true,
+    }));
   } finally {
     working?.remove();
   }
@@ -1624,23 +1647,13 @@ async function onRetopo(generationId: string) {
 async function onAutoRig(generationId: string) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
-  if (!walletState.get().walletAddress) {
-    alert("Please log in or sign up first.");
-    return;
-  }
-  try {
-    await getOrCreateSession();
-  } catch {
-    showToast({ type: "warning", title: "Sign In Required", message: "Sign in to rig assets." });
-    return;
-  }
+  if (!(await ensureFollowupGates("rig"))) return;
   const rigModel = await showRigModelDialog("Auto-rig — rig model");
   if (rigModel === null) return; // cancelled
   const prompt = "Auto-rig";
   addChatMessage("user", prompt);
   const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
-  const assetName = getAssetName();
-  const nodeId = `${assetName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_rig_${Date.now()}`;
+  const nodeId = followupNodeId("rig");
   const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
   try {
@@ -1670,19 +1683,10 @@ async function onAutoRig(generationId: string) {
       return;
     }
     console.error("Auto-rig failed:", err);
-    let userMsg = "Rigging failed. Please try again.";
-    if (err instanceof ApiError) {
-      if (err.code === "MODEL_NOT_RIGGABLE") {
-        userMsg = "This model isn't riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.";
-      } else if (err.status === 401) {
-        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
-      } else if (err.status === 402) {
-        userMsg = "Tripo3D account has insufficient credits.";
-      } else if (err.message) {
-        userMsg = err.message;
-      }
-    }
-    addChatMessage("system", userMsg);
+    addChatMessage("system", followupErrorMessage(err, "Rigging failed. Please try again.", {
+      notRiggable: NOT_RIGGABLE_GUIDANCE,
+      auth: true,
+    }));
   } finally {
     working?.remove();
   }
@@ -1807,20 +1811,7 @@ async function onAnimate(generationId: string) {
   const animations = presets.filter((p) => p !== IN_PLACE_OPTION);
   if (animations.length === 0) return;
 
-  if (!walletState.get().walletAddress) {
-    alert("Please log in or sign up first.");
-    return;
-  }
-  try {
-    await getOrCreateSession();
-  } catch {
-    showToast({
-      type: "warning",
-      title: "Sign In Required",
-      message: "Sign in to animate assets.",
-    });
-    return;
-  }
+  if (!(await ensureFollowupGates("animate"))) return;
 
   const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels}`;
@@ -1829,10 +1820,7 @@ async function onAnimate(generationId: string) {
     "Rigging and animating — this chains three Tripo tasks and takes a few minutes…",
   );
 
-  const assetName = getAssetName();
-  const nodeId = `${assetName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "_")}_anim_${Date.now()}`;
+  const nodeId = followupNodeId("anim");
   const prevAssetManifestCid =
     getActiveAssetManifestCid() || undefined;
   const transformMatrix = buildTransformMatrix();
@@ -1875,39 +1863,82 @@ async function onAnimate(generationId: string) {
       return;
     }
     console.error("Animate failed:", err);
-    let userMsg = "Animation failed. Please try again.";
-    if (err instanceof ApiError) {
-      if (err.code === "MODEL_NOT_RIGGABLE") {
-        userMsg =
-          "This model isn't riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.";
-      } else if (err.status === 401) {
-        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
-      } else if (err.status === 402) {
-        userMsg = "Tripo3D account has insufficient credits.";
-      } else if (err.code === "GENERATION_TIMEOUT") {
-        userMsg = "Animation timed out. Try again later.";
-      } else if (err.message) {
-        userMsg = err.message;
-      }
-    } else if ((err as any).message) {
-      userMsg = (err as any).message;
-    }
-    addChatMessage("system", userMsg);
+    addChatMessage("system", followupErrorMessage(err, "Animation failed. Please try again.", {
+      notRiggable: NOT_RIGGABLE_GUIDANCE,
+      timeout: "Animation timed out. Try again later.",
+      auth: true,
+      passThroughMessage: true,
+    }));
   } finally {
     working?.remove();
   }
 }
 
-async function onGenerate() {
+/**
+ * Map a generation failure to the user-facing chat message. ApiError status
+ * codes get canned copy (400 keeps the server's message), anything else falls
+ * back to err.message, then to a generic line.
+ */
+function generationErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 400) {
+      return err.message || "Missing required generation parameter.";
+    } else if (err.status === 429) {
+      return "Rate limit reached. Please wait before generating again.";
+    } else if (err.status === 401) {
+      return "Invalid Tripo3D API key. Check your key in the provider settings.";
+    } else if (err.status === 402) {
+      return "Tripo3D account has insufficient credits.";
+    } else if (err.status === 504 || err.code === "GENERATION_TIMEOUT") {
+      return "Generation timed out. Try again later.";
+    } else if (err.message) {
+      return err.message;
+    }
+  } else if ((err as any).message) {
+    return (err as any).message;
+  }
+  return "Generation failed. Please try again.";
+}
+
+interface SingleImagePayload {
+  imageData?: string;
+  imageMime?: string;
+  imageName?: string;
+}
+
+interface MultiviewImagePayload {
+  images: Array<{
+    imageData?: string;
+    imageMime?: string;
+    imageName?: string;
+    view: string;
+  }>;
+}
+
+interface PromptAndImagePayload {
+  effectivePrompt: string;
+  imagePayload: SingleImagePayload | MultiviewImagePayload | null;
+  multiview: boolean;
+  frontImage: AttachedImage | null;
+}
+
+/**
+ * Shape the prompt + attached images into the wire payload. Returns null when
+ * there is nothing to generate (empty prompt, no images). Image-only
+ * generations get a synthesized prompt so chat history, manifest provenance,
+ * and display names all carry meaningful text. Wire contract: 1 image →
+ * legacy imageData/imageMime; 2+ → images array of {imageData, imageMime,
+ * view} in canonical view order (imageName rides along for the manifest but
+ * is stripped from the POST body by api.js).
+ */
+function buildPromptAndImagePayload(): PromptAndImagePayload | null {
   const prompt = promptInput.value.trim();
-  if (!prompt && attachedImages.length === 0) return;
+  if (!prompt && attachedImages.length === 0) return null;
 
   // attachedImages is canonical-sorted, so [0] is always the front view.
   const frontImage = attachedImages[0] || null;
   const multiview = attachedImages.length > 1;
 
-  // Image-only generations get a synthesized prompt so chat history,
-  // manifest provenance, and display names all carry meaningful text.
   const effectivePrompt =
     prompt ||
     (multiview
@@ -1915,9 +1946,6 @@ async function onGenerate() {
       : frontImage
         ? `Image: ${frontImage.name}`
         : "");
-  // Wire contract: 1 image → legacy imageData/imageMime; 2+ → images array
-  // of {imageData, imageMime, view} in canonical view order (imageName rides
-  // along for the manifest but is stripped from the POST body by api.js).
   const imagePayload = multiview
     ? {
         // Entries always carry base64/mime/name/dataUrl (set by attachImageFiles).
@@ -1936,6 +1964,96 @@ async function onGenerate() {
         }
       : null;
 
+  return { effectivePrompt, imagePayload, multiview, frontImage };
+}
+
+/**
+ * Echo the submitted prompt into the chat — a reference-image bubble (grid
+ * with per-view captions for multiview) or a plain text bubble — then reset
+ * the composer for the next input.
+ */
+function echoPromptInChat({
+  effectivePrompt,
+  imagePayload,
+  multiview,
+  frontImage,
+}: PromptAndImagePayload) {
+  if (imagePayload) {
+    // Show the reference image(s) in the chat, not just filenames — a grid
+    // bubble with per-view captions for multiview, the single image as today.
+    if (multiview) {
+      addImageMessage("user", frontImage!.dataUrl as string, effectivePrompt, {
+        images: attachedImages.map((img) => ({
+          src: img.dataUrl || "",
+          caption: VIEW_LABELS[img.view] || img.view,
+        })),
+      });
+    } else {
+      const single = imagePayload as SingleImagePayload;
+      addImageMessage(
+        "user",
+        `data:${single.imageMime};base64,${single.imageData}`,
+        effectivePrompt,
+      );
+    }
+  } else {
+    addChatMessage("user", effectivePrompt);
+  }
+  promptInput.value = "";
+  promptInput.style.height = "auto";
+  clearAttachedImage();
+}
+
+/**
+ * Assemble the generateAsset request body. Conditional fields: BYOK key (real
+ * providers only), retexture source (typed follow-ups), image payload,
+ * texture quality (Tripo3D only), and the stoppable-task wiring (real
+ * providers only).
+ */
+function buildGenerateAssetArgs({
+  effectivePrompt,
+  nodeId,
+  prevAssetManifestCid,
+  transformMatrix,
+  tier,
+  provider,
+  providerKey,
+  retextureSource,
+  imagePayload,
+  stoppable,
+}: {
+  effectivePrompt: string;
+  nodeId: string;
+  prevAssetManifestCid: string | undefined;
+  transformMatrix: number[];
+  tier: number;
+  provider: string;
+  providerKey: string;
+  retextureSource: ActiveVersion | null;
+  imagePayload: SingleImagePayload | MultiviewImagePayload | null;
+  stoppable: ReturnType<typeof addStoppableWorkingMessage> | null;
+}) {
+  return {
+    prompt: effectivePrompt,
+    nodeId,
+    txHash: null as any,
+    provider,
+    prevAssetManifestCid,
+    transformMatrix,
+    tier,
+    ...(isRealProvider() && { providerKey }),
+    ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
+    ...(imagePayload && (imagePayload as any)),
+    ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
+    ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId, onProgress: stoppable.onProgress }),
+  };
+}
+
+async function onGenerate() {
+  const payload = buildPromptAndImagePayload();
+  if (!payload) return;
+  const { effectivePrompt, imagePayload } = payload;
+
   if (!walletState.get().walletAddress) {
     alert("Please log in or sign up first.");
     return;
@@ -1953,29 +2071,7 @@ async function onGenerate() {
     return;
   }
 
-  if (imagePayload) {
-    // Show the reference image(s) in the chat, not just filenames — a grid
-    // bubble with per-view captions for multiview, the single image as today.
-    if (multiview) {
-      addImageMessage("user", frontImage.dataUrl as string, effectivePrompt, {
-        images: attachedImages.map((img) => ({
-          src: img.dataUrl || "",
-          caption: VIEW_LABELS[img.view] || img.view,
-        })),
-      });
-    } else {
-      addImageMessage(
-        "user",
-        `data:${imagePayload.imageMime};base64,${imagePayload.imageData}`,
-        effectivePrompt,
-      );
-    }
-  } else {
-    addChatMessage("user", effectivePrompt);
-  }
-  promptInput.value = "";
-  promptInput.style.height = "auto";
-  clearAttachedImage();
+  echoPromptInChat(payload);
 
   setGenerating(true);
   // Stop button only makes sense for async providers — the mock returns
@@ -2016,20 +2112,20 @@ async function onGenerate() {
       addChatMessage("system", `Refining "${retextureSource.name}" (texture/material only — geometry unchanged)…`);
     }
 
-    const result = await generateAsset({
-      prompt: effectivePrompt,
-      nodeId,
-      txHash: null as any,
-      provider,
-      prevAssetManifestCid,
-      transformMatrix,
-      tier,
-      ...(isRealProvider() && { providerKey }),
-      ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
-      ...(imagePayload && (imagePayload as any)),
-      ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
-      ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId, onProgress: stoppable.onProgress }),
-    });
+    const result = await generateAsset(
+      buildGenerateAssetArgs({
+        effectivePrompt,
+        nodeId,
+        prevAssetManifestCid,
+        transformMatrix,
+        tier,
+        provider,
+        providerKey,
+        retextureSource,
+        imagePayload,
+        stoppable,
+      })
+    );
 
     // Defer the Studio viewport load: register the result, show an asset
     // bubble with a live preview, and let the user send it explicitly.
@@ -2049,27 +2145,7 @@ async function onGenerate() {
       return;
     }
     console.error("Generation failed:", err);
-    let userMsg = "Generation failed. Please try again.";
-
-    if (err instanceof ApiError) {
-      if (err.status === 400) {
-        userMsg = err.message || "Missing required generation parameter.";
-      } else if (err.status === 429) {
-        userMsg = "Rate limit reached. Please wait before generating again.";
-      } else if (err.status === 401) {
-        userMsg = "Invalid Tripo3D API key. Check your key in the provider settings.";
-      } else if (err.status === 402) {
-        userMsg = "Tripo3D account has insufficient credits.";
-      } else if (err.status === 504 || err.code === "GENERATION_TIMEOUT") {
-        userMsg = "Generation timed out. Try again later.";
-      } else if (err.message) {
-        userMsg = err.message;
-      }
-    } else if ((err as any).message) {
-      userMsg = (err as any).message;
-    }
-
-    addChatMessage("system", userMsg);
+    addChatMessage("system", generationErrorMessage(err));
   } finally {
     working?.remove();
     setGenerating(false);

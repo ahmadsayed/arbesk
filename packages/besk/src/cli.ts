@@ -600,21 +600,32 @@ async function cmdShow(argv: string[]): Promise<void> {
   if (open) console.log("Opened in your browser");
 }
 
-async function cmdLink(argv: string[]): Promise<void> {
-  const s = requireSession();
-  if (!s) return;
+interface LinkArgs {
+  child: string;
+  parent: string;
+  mode: "live-ref" | "fork";
+  position?: { x: number; y: number; z: number };
+  scale?: number;
+  from?: string;
+}
+
+/**
+ * Parse and validate `besk link` args. Returns null when usage/validation
+ * fails (error printed, exit code set).
+ */
+function parseLinkArgs(argv: string[]): LinkArgs | null {
   const { positional, flags } = parseFlags(argv);
   const [child, parent, modeArg] = positional;
   if (!child || !parent) {
     console.error("Usage: besk link <child> <parent> [live-ref|fork] [--from <collection>] [--position \"x,y,z\"] [--scale s]");
     process.exitCode = 2;
-    return;
+    return null;
   }
   const mode = modeArg ?? "live-ref";
   if (mode !== "live-ref" && mode !== "fork") {
     console.error("Unsupported link mode: " + mode + " (live-ref or fork)");
     process.exitCode = 2;
-    return;
+    return null;
   }
   let position: { x: number; y: number; z: number } | undefined;
   const posRaw = flagValue(flags, "--position");
@@ -623,7 +634,7 @@ async function cmdLink(argv: string[]): Promise<void> {
     if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
       console.error("--position needs three numbers: \"x,y,z\"");
       process.exitCode = 2;
-      return;
+      return null;
     }
     position = { x: parts[0], y: parts[1], z: parts[2] };
   }
@@ -634,24 +645,40 @@ async function cmdLink(argv: string[]): Promise<void> {
     if (!Number.isFinite(scale) || scale <= 0) {
       console.error("--scale must be a positive number.");
       process.exitCode = 2;
-      return;
+      return null;
     }
   }
+  return { child, parent, mode, position, scale, from: flagValue(flags, "--from") };
+}
+
+/**
+ * Resolve both link endpoints: the parent in the active collection, the
+ * child in the active or --from collection. Returns null when any lookup
+ * fails (error printed, exit code set).
+ */
+async function resolveLinkEndpoints(
+  s: Session,
+  { child, parent, from }: LinkArgs,
+): Promise<{
+  parentTokenId: string;
+  parentHit: { assetID: string; cid: string };
+  childTokenId: string;
+  childHit: { assetID: string; cid: string };
+} | null> {
   const parentTokenId = await currentCollectionTokenId(s);
   const parentHit = await resolveAssetByName(parentTokenId, parent);
   if (!parentHit) {
     console.error("No asset named " + parent + " in the active collection");
     process.exitCode = 5;
-    return;
+    return null;
   }
   let childTokenId = parentTokenId;
-  const from = flagValue(flags, "--from");
   if (from) {
     const fromCol = await resolveCollectionByName(s.address, from);
     if (!fromCol) {
       console.error("No collection named " + from + ". Run `besk collections`.");
       process.exitCode = 5;
-      return;
+      return null;
     }
     childTokenId = fromCol.tokenId;
   }
@@ -659,15 +686,26 @@ async function cmdLink(argv: string[]): Promise<void> {
   if (!childHit) {
     console.error("No asset named " + child + (from ? " in " + from : " in the active collection"));
     process.exitCode = 5;
-    return;
+    return null;
   }
+  return { parentTokenId, parentHit, childTokenId, childHit };
+}
+
+async function cmdLink(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const linkArgs = parseLinkArgs(argv);
+  if (!linkArgs) return;
+  const { child, parent, mode, position, scale } = linkArgs;
+  const endpoints = await resolveLinkEndpoints(s, linkArgs);
+  if (!endpoints) return;
   const result = await linkChildAsset(s, {
-    parentTokenId,
-    parentAssetId: parentHit.assetID,
-    parentCid: parentHit.cid,
-    childTokenId,
-    childAssetId: childHit.assetID,
-    childCid: childHit.cid,
+    parentTokenId: endpoints.parentTokenId,
+    parentAssetId: endpoints.parentHit.assetID,
+    parentCid: endpoints.parentHit.cid,
+    childTokenId: endpoints.childTokenId,
+    childAssetId: endpoints.childHit.assetID,
+    childCid: endpoints.childHit.cid,
     mode,
     position,
     scale,
@@ -676,6 +714,67 @@ async function cmdLink(argv: string[]): Promise<void> {
     (mode === "fork" ? "Forked " : "Linked ") + child + " into " + parent +
       " (node " + result.nodeId + ")",
   );
+}
+
+/**
+ * Resolve the generation provider (flag → env → interactive picker) and, for
+ * non-mock providers, the BYOK key. Returns null when the command should stop
+ * (the picker/key helper already set the exit code).
+ */
+async function resolveProviderAndKey(
+  flags: Record<string, string[]>,
+): Promise<{ provider: string; key?: string } | null> {
+  let provider = flagValue(flags, "--provider") ?? process.env.ARBESK_PROVIDER;
+  if (!provider) {
+    provider = (await pickProvider()) ?? undefined;
+    if (!provider) return null;
+  }
+  let key: string | undefined;
+  if (provider !== "mock") {
+    key = (await requireProviderKey(flags)) ?? undefined;
+    if (!key) return null;
+  }
+  return { provider, key };
+}
+
+/**
+ * Apply --image / --view flags to the generation body. Wire contract: a
+ * single image rides as imageData/imageMime; 2-4 views become images[] in
+ * canonical order with exactly one front. Returns false when validation
+ * fails or an image can't be read (exit code already set).
+ */
+function applyImageFlags(
+  body: GenerationBody,
+  imageFile: string | undefined,
+  viewFlags: string[],
+): boolean {
+  if (imageFile) {
+    const img = readImageFileCli(imageFile);
+    if (!img) return false;
+    body.imageData = img.imageData;
+    body.imageMime = img.imageMime;
+  }
+  if (viewFlags.length > 0) {
+    if (viewFlags.length < 2 || viewFlags.length > 4) {
+      console.error("Multiview needs 2-4 views.");
+      process.exitCode = 2;
+      return false;
+    }
+    const views = viewFlags.map((v) => v.split("=")[0]);
+    if (new Set(views).size !== views.length || views.filter((v) => v === "front").length !== 1) {
+      console.error("Views must be unique and include exactly one front view.");
+      process.exitCode = 2;
+      return false;
+    }
+    body.images = [];
+    for (const v of viewFlags) {
+      const [view, file] = v.split("=");
+      const img = readImageFileCli(file);
+      if (!img) return false;
+      body.images.push({ ...img, view });
+    }
+  }
+  return true;
 }
 
 async function cmdGenerate(argv: string[]): Promise<void> {
@@ -690,51 +789,18 @@ async function cmdGenerate(argv: string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  let provider = flagValue(flags, "--provider") ?? process.env.ARBESK_PROVIDER;
-  if (!provider) {
-    provider = (await pickProvider()) ?? undefined;
-    if (!provider) return;
-  }
-  let key: string | undefined;
-  if (provider !== "mock") {
-    key = (await requireProviderKey(flags)) ?? undefined;
-    if (!key) return;
-  }
+  const pk = await resolveProviderAndKey(flags);
+  if (!pk) return;
   const body: GenerationBody = {
     nodeId: makeNodeId(prompt || "image"),
     prompt: prompt || undefined,
-    provider,
+    provider: pk.provider,
   };
-  if (key) body.providerKey = key;
+  if (pk.key) body.providerKey = pk.key;
   const quality = flagValue(flags, "--quality") ?? process.env.ARBESK_TEXTURE_QUALITY;
   if (quality) body.textureQuality = quality;
-  if (imageFile) {
-    const img = readImageFileCli(imageFile);
-    if (!img) return;
-    body.imageData = img.imageData;
-    body.imageMime = img.imageMime;
-  }
-  if (viewFlags.length > 0) {
-    if (viewFlags.length < 2 || viewFlags.length > 4) {
-      console.error("Multiview needs 2-4 views.");
-      process.exitCode = 2;
-      return;
-    }
-    const views = viewFlags.map((v) => v.split("=")[0]);
-    if (new Set(views).size !== views.length || views.filter((v) => v === "front").length !== 1) {
-      console.error("Views must be unique and include exactly one front view.");
-      process.exitCode = 2;
-      return;
-    }
-    body.images = [];
-    for (const v of viewFlags) {
-      const [view, file] = v.split("=");
-      const img = readImageFileCli(file);
-      if (!img) return;
-      body.images.push({ ...img, view });
-    }
-  }
-  console.log("Generating (" + provider + ")…");
+  if (!applyImageFlags(body, imageFile, viewFlags)) return;
+  console.log("Generating (" + pk.provider + ")…");
   const model = await runGeneration(s, body, { onProgress: printProgress });
   endProgress();
   const name = flagValue(flags, "--name") ?? (prompt ? prompt.slice(0, 60) : "image_" + Date.now());
@@ -934,6 +1000,38 @@ async function cmdBurn(name?: string): Promise<void> {
   if (receipt.transactionHash) console.log("Tx: " + receipt.transactionHash);
 }
 
+/** Command dispatch table — each handler receives nothing; args are module state. */
+const COMMANDS: Record<string, () => void | Promise<void>> = {
+  login: () => login(args[1]),
+  whoami: () => whoami(),
+  logout: () => logout(),
+  collections: () => cmdCollections(),
+  create: () => cmdCreate(args[1]),
+  burn: () => cmdBurn(args[1]),
+  use: () => cmdUse(args[1]),
+  list: () => cmdList(),
+  info: () => cmdInfo(args[1]),
+  history: () => cmdHistory(args[1]),
+  download: () => cmdDownload(args[1], args[2]),
+  upload: () => cmdUpload(args[1]),
+  delete: () => cmdDelete(args[1]),
+  rename: () => cmdRename(args[1], args[2]),
+  send: () => cmdSend(args[1], args[2], args[3]),
+  link: () => cmdLink(args.slice(1)),
+  show: () => cmdShow(args.slice(1)),
+  generate: () => cmdGenerate(args.slice(1)),
+  retexture: () => cmdRetexture(args.slice(1)),
+  retopo: () => cmdRetopo(args.slice(1)),
+  rig: () => cmdRig(args.slice(1)),
+  animate: () => cmdAnimate(args.slice(1)),
+  balance: () => cmdBalance(args.slice(1)),
+  cancel: () => cmdCancel(args.slice(1)),
+  mcp: async () => {
+    const { startMcpServer } = await import("./mcp-server.ts");
+    await startMcpServer();
+  },
+};
+
 async function main(): Promise<void> {
   if (!command || command === "help" || command === "--help") {
     help();
@@ -941,35 +1039,10 @@ async function main(): Promise<void> {
   }
   const commandStart = Date.now();
   debug("command:", command, ...args.slice(1));
-  if (command === "login") await login(args[1]);
-  else if (command === "whoami") whoami();
-  else if (command === "logout") logout();
-  else if (command === "collections") await cmdCollections();
-  else if (command === "create") await cmdCreate(args[1]);
-  else if (command === "burn") await cmdBurn(args[1]);
-  else if (command === "use") await cmdUse(args[1]);
-  else if (command === "list") await cmdList();
-  else if (command === "info") await cmdInfo(args[1]);
-  else if (command === "history") await cmdHistory(args[1]);
-  else if (command === "download") await cmdDownload(args[1], args[2]);
-  else if (command === "upload") await cmdUpload(args[1]);
-  else if (command === "delete") await cmdDelete(args[1]);
-  else if (command === "rename") await cmdRename(args[1], args[2]);
-  else if (command === "send") await cmdSend(args[1], args[2], args[3]);
-  else if (command === "link") await cmdLink(args.slice(1));
-  else if (command === "show") await cmdShow(args.slice(1));
-  else if (command === "generate") await cmdGenerate(args.slice(1));
-  else if (command === "retexture") await cmdRetexture(args.slice(1));
-  else if (command === "retopo") await cmdRetopo(args.slice(1));
-  else if (command === "rig") await cmdRig(args.slice(1));
-  else if (command === "animate") await cmdAnimate(args.slice(1));
-  else if (command === "balance") await cmdBalance(args.slice(1));
-  else if (command === "cancel") await cmdCancel(args.slice(1));
-  else if (command === "mcp") {
-    const { startMcpServer } = await import("./mcp-server.ts");
-    await startMcpServer();
-  }
-  else {
+  const handler = COMMANDS[command];
+  if (handler) {
+    await handler();
+  } else {
     console.error("Unknown command: " + command);
     help();
     process.exitCode = 2;
