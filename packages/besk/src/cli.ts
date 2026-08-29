@@ -25,6 +25,13 @@ import {
 } from "./catalog.ts";
 import { createCollection } from "./collections.ts";
 import { sendAssetToCollection } from "./send.ts";
+import {
+  runGeneration,
+  cancelGeneration,
+  getProviderBalance,
+  resolveSourceCid,
+} from "./generate.ts";
+import type { GenerationBody, GeneratedModel } from "./generate.ts";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -58,6 +65,13 @@ function help(): void {
   console.log("  delete <name>     remove from the collection (only confirmation)");
   console.log("  rename <old> <new>  rename an asset");
   console.log("  send <name> <collection> [fork|live-ref]  link an asset into another collection");
+  console.log("  generate <prompt> [--image f | --view <front|left|back|right> f ...] [--provider mock|tripo3d] [--key k] [--quality standard|detailed|extreme] [--name n]  generate a 3D model");
+  console.log("  retexture <name> <prompt> [--quality q]  retexture an asset (Tripo3D key required)");
+  console.log("  retopo <name> [faceLimit]  smart retopology (500-20000 tris, blank = adaptive)");
+  console.log("  rig <name>            auto-rig an asset (Tripo3D key required)");
+  console.log("  animate <name> <preset> [preset...] [--no-in-place]  rig + retarget animations");
+  console.log("  balance [--key k]     show the Tripo3D credit balance");
+  console.log("  cancel <taskId>       stop an in-flight generation task");
 }
 
 function requireSession(): Session | null {
@@ -376,6 +390,320 @@ async function cmdSend(name?: string, collection?: string, mode?: string): Promi
   );
 }
 
+const IMAGE_MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
+
+function parseFlags(argv: string[]): { positional: string[]; flags: Record<string, string[]> } {
+  const positional: string[] = [];
+  const flags: Record<string, string[]> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--view") {
+      const view = argv[++i];
+      const file = argv[++i];
+      if (!view || !file) throw new Error("Usage: --view <front|left|back|right> <file>");
+      (flags["--view"] ??= []).push(view + "=" + file);
+    } else if (a.startsWith("--no-")) {
+      flags[a] = ["true"];
+    } else if (a.startsWith("--")) {
+      const v = argv[++i];
+      if (v === undefined) throw new Error("Flag " + a + " needs a value");
+      (flags[a] ??= []).push(v);
+    } else {
+      positional.push(a);
+    }
+  }
+  return { positional, flags };
+}
+
+function flagValue(flags: Record<string, string[]>, name: string): string | undefined {
+  return flags[name]?.[0];
+}
+
+function providerKey(flags: Record<string, string[]>): string | undefined {
+  return flagValue(flags, "--key") ?? process.env.ARBESK_PROVIDER_KEY ?? process.env.TRIPO_API_KEY;
+}
+
+function requireProviderKey(flags: Record<string, string[]>): string | null {
+  const k = providerKey(flags);
+  if (!k) {
+    console.error("A Tripo3D API key is required (--key, ARBESK_PROVIDER_KEY, or TRIPO_API_KEY).");
+    process.exitCode = 2;
+    return null;
+  }
+  return k;
+}
+
+function readImageFile(file: string): { imageData: string; imageMime: string } | null {
+  if (!fs.existsSync(file)) {
+    console.error("File not found: " + file);
+    process.exitCode = 5;
+    return null;
+  }
+  const mime = IMAGE_MIME[path.extname(file).toLowerCase()];
+  if (!mime) {
+    console.error("Unsupported image type: " + file + " (JPEG, PNG, or WebP)");
+    process.exitCode = 2;
+    return null;
+  }
+  return { imageData: fs.readFileSync(file).toString("base64"), imageMime: mime };
+}
+
+function makeNodeId(seed: string): string {
+  const slug =
+    seed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) ||
+    "asset";
+  return slug + "_" + Date.now();
+}
+
+function printProgress(p: { status: string; progress?: number; stage?: string; taskId?: string }): void {
+  if (p.taskId) {
+    console.log("  task " + p.taskId + " (cancel with: besk cancel " + p.taskId + ")");
+    return;
+  }
+  const parts = [p.status];
+  if (p.stage) parts.push(p.stage);
+  if (p.progress !== undefined) parts.push(p.progress + "%");
+  console.log("  " + parts.join(" · "));
+}
+
+/** Save a generated model into a collection as a (new version of an) asset. */
+async function saveGenerated(
+  s: Session,
+  tokenId: string,
+  model: GeneratedModel,
+  name: string,
+  assetId: string,
+): Promise<void> {
+  const { compositeCid } = await uploadAsset(model.bytes, name, assetId);
+  await updateCollection(s, tokenId, (draft) => {
+    draft.assets[assetId] = compositeCid;
+  });
+}
+
+async function cmdGenerate(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const prompt = positional.join(" ");
+  const imageFile = flagValue(flags, "--image");
+  const viewFlags = flags["--view"] ?? [];
+  if (!prompt && !imageFile && viewFlags.length === 0) {
+    console.error("Usage: besk generate <prompt> [--image f | --view <front|left|back|right> f ...]");
+    process.exitCode = 2;
+    return;
+  }
+  const provider = flagValue(flags, "--provider") ?? process.env.ARBESK_PROVIDER ?? "mock";
+  const key = providerKey(flags);
+  if (provider !== "mock" && !key) {
+    console.error("A Tripo3D API key is required (--key, ARBESK_PROVIDER_KEY, or TRIPO_API_KEY).");
+    process.exitCode = 2;
+    return;
+  }
+  const body: GenerationBody = {
+    nodeId: makeNodeId(prompt || "image"),
+    prompt: prompt || undefined,
+    provider,
+  };
+  if (key) body.providerKey = key;
+  const quality = flagValue(flags, "--quality") ?? process.env.ARBESK_TEXTURE_QUALITY;
+  if (quality) body.textureQuality = quality;
+  if (imageFile) {
+    const img = readImageFile(imageFile);
+    if (!img) return;
+    body.imageData = img.imageData;
+    body.imageMime = img.imageMime;
+  }
+  if (viewFlags.length > 0) {
+    if (viewFlags.length < 2 || viewFlags.length > 4) {
+      console.error("Multiview needs 2-4 views.");
+      process.exitCode = 2;
+      return;
+    }
+    const views = viewFlags.map((v) => v.split("=")[0]);
+    if (new Set(views).size !== views.length || views.filter((v) => v === "front").length !== 1) {
+      console.error("Views must be unique and include exactly one front view.");
+      process.exitCode = 2;
+      return;
+    }
+    body.images = [];
+    for (const v of viewFlags) {
+      const [view, file] = v.split("=");
+      const img = readImageFile(file);
+      if (!img) return;
+      body.images.push({ ...img, view });
+    }
+  }
+  console.log("Generating (" + provider + ")…");
+  const model = await runGeneration(s, body, { onProgress: printProgress });
+  const name = flagValue(flags, "--name") ?? (prompt ? prompt.slice(0, 60) : "image_" + Date.now());
+  const tokenId = await currentCollectionTokenId(s);
+  const existing = await resolveAssetByName(tokenId, name);
+  const assetId = existing?.assetID ?? "asset_" + Date.now();
+  await saveGenerated(s, tokenId, model, name, assetId);
+  console.log("Saved as " + name + " (" + model.format + ")");
+}
+
+/** Shared preamble for follow-up ops: resolve the asset and its source CID. */
+async function resolveSourceAsset(
+  s: Session,
+  name: string | undefined,
+  usage: string,
+): Promise<{ tokenId: string; assetId: string; srcCid: string } | null> {
+  if (!name) {
+    console.error(usage);
+    process.exitCode = 2;
+    return null;
+  }
+  const tokenId = await currentCollectionTokenId(s);
+  const hit = await resolveAssetByName(tokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return null;
+  }
+  const srcCid = await resolveSourceCid(hit.cid);
+  return { tokenId, assetId: hit.assetID, srcCid };
+}
+
+async function cmdRetexture(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const [name, ...promptParts] = positional;
+  const prompt = promptParts.join(" ");
+  const src = await resolveSourceAsset(s, name, "Usage: besk retexture <name> <prompt>");
+  if (!src) return;
+  if (!prompt) {
+    console.error("Usage: besk retexture <name> <prompt>");
+    process.exitCode = 2;
+    return;
+  }
+  const key = requireProviderKey(flags);
+  if (!key) return;
+  const body: GenerationBody = {
+    nodeId: makeNodeId(name),
+    provider: "tripo3d",
+    providerKey: key,
+    sourceAssetCid: src.srcCid,
+    retexture: true,
+    prompt,
+  };
+  const quality = flagValue(flags, "--quality") ?? process.env.ARBESK_TEXTURE_QUALITY;
+  if (quality) body.textureQuality = quality;
+  console.log("Retexturing " + name + "…");
+  const model = await runGeneration(s, body, { onProgress: printProgress });
+  await saveGenerated(s, src.tokenId, model, name, src.assetId);
+  console.log("Retextured " + name);
+}
+
+async function cmdRetopo(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const [name, face] = positional;
+  const src = await resolveSourceAsset(s, name, "Usage: besk retopo <name> [faceLimit]");
+  if (!src) return;
+  let faceLimit: number | undefined;
+  if (face !== undefined) {
+    faceLimit = Number(face);
+    if (!Number.isInteger(faceLimit) || faceLimit < 500 || faceLimit > 20000) {
+      console.error("faceLimit must be an integer between 500 and 20000.");
+      process.exitCode = 2;
+      return;
+    }
+  }
+  const key = requireProviderKey(flags);
+  if (!key) return;
+  console.log("Retopologizing " + name + "…");
+  const model = await runGeneration(s, {
+    nodeId: makeNodeId(name),
+    provider: "tripo3d",
+    providerKey: key,
+    sourceAssetCid: src.srcCid,
+    retopo: true,
+    faceLimit,
+  }, { onProgress: printProgress });
+  await saveGenerated(s, src.tokenId, model, name, src.assetId);
+  console.log("Retopologized " + name);
+}
+
+async function cmdRig(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const src = await resolveSourceAsset(s, positional[0], "Usage: besk rig <name>");
+  if (!src) return;
+  const key = requireProviderKey(flags);
+  if (!key) return;
+  console.log("Rigging " + positional[0] + "…");
+  const model = await runGeneration(s, {
+    nodeId: makeNodeId(positional[0]),
+    provider: "tripo3d",
+    providerKey: key,
+    sourceAssetCid: src.srcCid,
+    animate: true,
+    rigOnly: true,
+  }, { onProgress: printProgress });
+  await saveGenerated(s, src.tokenId, model, positional[0], src.assetId);
+  console.log("Rigged " + positional[0]);
+}
+
+async function cmdAnimate(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const [name, ...presets] = positional;
+  const src = await resolveSourceAsset(s, name, "Usage: besk animate <name> <preset> [preset...] [--no-in-place]");
+  if (!src) return;
+  if (presets.length < 1 || presets.length > 5) {
+    console.error("Pick 1-5 animation presets (e.g. preset:idle preset:biped:dance_01).");
+    process.exitCode = 2;
+    return;
+  }
+  const key = requireProviderKey(flags);
+  if (!key) return;
+  console.log("Animating " + name + "…");
+  const model = await runGeneration(s, {
+    nodeId: makeNodeId(name),
+    provider: "tripo3d",
+    providerKey: key,
+    sourceAssetCid: src.srcCid,
+    animate: true,
+    animations: presets,
+    animateInPlace: !flags["--no-in-place"],
+  }, { onProgress: printProgress });
+  await saveGenerated(s, src.tokenId, model, name, src.assetId);
+  console.log("Animated " + name + " (" + presets.join(", ") + ")");
+}
+
+async function cmdBalance(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { flags } = parseFlags(argv);
+  const key = requireProviderKey(flags);
+  if (!key) return;
+  const { balance, frozen } = await getProviderBalance(s, key);
+  console.log("Tripo3D balance: " + balance + " credits (" + frozen + " frozen)");
+}
+
+async function cmdCancel(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const taskId = argv[0];
+  if (!taskId) {
+    console.error("Usage: besk cancel <taskId>");
+    process.exitCode = 2;
+    return;
+  }
+  const r = await cancelGeneration(s, taskId);
+  console.log("Cancelled " + taskId + (r.upstreamCancelled ? " (upstream cancelled)" : ""));
+}
+
 async function main(): Promise<void> {
   if (!command || command === "help" || command === "--help") {
     help();
@@ -395,6 +723,13 @@ async function main(): Promise<void> {
   else if (command === "delete") await cmdDelete(args[1]);
   else if (command === "rename") await cmdRename(args[1], args[2]);
   else if (command === "send") await cmdSend(args[1], args[2], args[3]);
+  else if (command === "generate") await cmdGenerate(args.slice(1));
+  else if (command === "retexture") await cmdRetexture(args.slice(1));
+  else if (command === "retopo") await cmdRetopo(args.slice(1));
+  else if (command === "rig") await cmdRig(args.slice(1));
+  else if (command === "animate") await cmdAnimate(args.slice(1));
+  else if (command === "balance") await cmdBalance(args.slice(1));
+  else if (command === "cancel") await cmdCancel(args.slice(1));
   else {
     console.error("Unknown command: " + command);
     help();

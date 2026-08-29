@@ -42,7 +42,7 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 Arbesk ships two clients on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
-- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`.
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel`.
 
 Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
 
@@ -75,16 +75,16 @@ Status legend: **✅** supported in the CLI today · **TODO** — feasible in a 
 | | Publish thumbnail capture | ✅ | TODO | Captured by the browser on save/publish |
 | | Comments archive snapshot on republish | ✅ | TODO | |
 | | Editor (non-owner) writes via Merkle proof | ✅ | TODO | CLI hardcodes `proof: []` — owner-only writes |
-| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | TODO | |
-| | Image-to-3D (JPEG/PNG/WebP attach) | ✅ | TODO | |
-| | Multiview-to-3D (up to 4 oriented views) | ✅ | TODO | |
-| | Retexture (texture-only refine) | ✅ | TODO | |
-| | Smart retopology (polygon budget) | ✅ | TODO | |
-| | Auto-rig (biped-first with fallback) | ✅ | TODO | |
-| | Animate (preset picker, in-place toggle) | ✅ | TODO | |
-| | Provider selection, BYOK key, credit balance | ✅ | TODO | |
-| | Texture-quality tiers (standard/detailed/extreme) | ✅ | TODO | |
-| | Generation progress + cancel | ✅ | TODO | |
+| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | ✅ | `generate "<prompt>"` (mock default; `--provider tripo3d` + key) |
+| | Image-to-3D (JPEG/PNG/WebP attach) | ✅ | ✅ | `generate --image <file>` |
+| | Multiview-to-3D (up to 4 oriented views) | ✅ | ✅ | `generate --view front f.png --view left f.png …` |
+| | Retexture (texture-only refine) | ✅ | ✅ | `retexture <asset> "<prompt>"` |
+| | Smart retopology (polygon budget) | ✅ | ✅ | `retopo <asset> [faceLimit]` |
+| | Auto-rig (biped-first with fallback) | ✅ | ✅ | `rig <asset>` (fallback is server-side) |
+| | Animate (preset picker, in-place toggle) | ✅ | ✅ | `animate <asset> <preset>…` (positional presets, `--no-in-place`; no categorized picker) |
+| | Provider selection, BYOK key, credit balance | ✅ | ✅ | `--provider`/`--key` (env: `ARBESK_PROVIDER`, `ARBESK_PROVIDER_KEY`), `balance` |
+| | Texture-quality tiers (standard/detailed/extreme) | ✅ | ✅ | `--quality` (env: `ARBESK_TEXTURE_QUALITY`) |
+| | Generation progress + cancel | ✅ | ✅ | Progress lines while polling; `cancel <taskId>` |
 | | Result bubbles with live orbitable preview | ✅ | Not doable | Requires 3D viewer |
 | | "Show in Studio" + auto-save draft | ✅ | Not doable | Requires 3D viewer |
 | | Chat provenance (`metadata.chat`) restore | ✅ | TODO | CLI has no chat; version restore is the missing part |
