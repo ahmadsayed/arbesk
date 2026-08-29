@@ -4,6 +4,7 @@
  * viem's http transport uses undici fetch, which keeps connections alive by
  * default; the behavior this suite now pins is per-chain caching.)
  */
+import { CHAIN_IDS } from "../constants/chains.js";
 const { getPublicClient } = await import("../src/config.ts");
 
 describe("getPublicClient", () => {
@@ -18,7 +19,7 @@ describe("getPublicClient", () => {
 
   test("omitting chainId uses the default chain", () => {
     expect(getPublicClient()).toBe(
-      getPublicClient(Number(process.env.DEFAULT_CHAIN_ID || 84532)),
+      getPublicClient(Number(process.env.DEFAULT_CHAIN_ID || CHAIN_IDS.HARDHAT_LOCAL)),
     );
   });
 });
