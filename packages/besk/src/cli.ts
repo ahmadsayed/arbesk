@@ -25,6 +25,7 @@ import {
 } from "./catalog.ts";
 import { createCollection } from "./collections.ts";
 import { burnCollection } from "./burn.ts";
+import { linkChildAsset } from "./link.ts";
 import { sendAssetToCollection } from "./send.ts";
 import {
   runGeneration,
@@ -67,6 +68,7 @@ function help(): void {
   console.log("  delete <name>     remove from the collection (only confirmation)");
   console.log("  rename <old> <new>  rename an asset");
   console.log("  send <name> <collection> [fork|live-ref]  link an asset into another collection");
+  console.log("  link <child> <parent> [live-ref|fork] [--from <collection>] [--position \"x,y,z\"] [--scale s]  nest an asset inside another asset");
   console.log("  generate <prompt> [--image f | --view <front|left|back|right> f ...] [--provider mock|tripo3d] [--key k] [--quality standard|detailed|extreme] [--name n]  generate a 3D model (asks for provider/key interactively)");
   console.log("  retexture <name> <prompt> [--quality q]  retexture an asset (Tripo3D key required)");
   console.log("  retopo <name> [faceLimit]  smart retopology (500-20000 tris, blank = adaptive)");
@@ -591,6 +593,84 @@ async function saveGenerated(
   });
 }
 
+async function cmdLink(argv: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { positional, flags } = parseFlags(argv);
+  const [child, parent, modeArg] = positional;
+  if (!child || !parent) {
+    console.error("Usage: besk link <child> <parent> [live-ref|fork] [--from <collection>] [--position \"x,y,z\"] [--scale s]");
+    process.exitCode = 2;
+    return;
+  }
+  const mode = modeArg ?? "live-ref";
+  if (mode !== "live-ref" && mode !== "fork") {
+    console.error("Unsupported link mode: " + mode + " (live-ref or fork)");
+    process.exitCode = 2;
+    return;
+  }
+  let position: { x: number; y: number; z: number } | undefined;
+  const posRaw = flagValue(flags, "--position");
+  if (posRaw !== undefined) {
+    const parts = posRaw.split(",").map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
+      console.error("--position needs three numbers: \"x,y,z\"");
+      process.exitCode = 2;
+      return;
+    }
+    position = { x: parts[0], y: parts[1], z: parts[2] };
+  }
+  let scale: number | undefined;
+  const scaleRaw = flagValue(flags, "--scale");
+  if (scaleRaw !== undefined) {
+    scale = Number(scaleRaw);
+    if (!Number.isFinite(scale) || scale <= 0) {
+      console.error("--scale must be a positive number.");
+      process.exitCode = 2;
+      return;
+    }
+  }
+  const parentTokenId = await currentCollectionTokenId(s);
+  const parentHit = await resolveAssetByName(parentTokenId, parent);
+  if (!parentHit) {
+    console.error("No asset named " + parent + " in the active collection");
+    process.exitCode = 5;
+    return;
+  }
+  let childTokenId = parentTokenId;
+  const from = flagValue(flags, "--from");
+  if (from) {
+    const fromCol = await resolveCollectionByName(s.address, from);
+    if (!fromCol) {
+      console.error("No collection named " + from + ". Run `besk collections`.");
+      process.exitCode = 5;
+      return;
+    }
+    childTokenId = fromCol.tokenId;
+  }
+  const childHit = await resolveAssetByName(childTokenId, child);
+  if (!childHit) {
+    console.error("No asset named " + child + (from ? " in " + from : " in the active collection"));
+    process.exitCode = 5;
+    return;
+  }
+  const result = await linkChildAsset(s, {
+    parentTokenId,
+    parentAssetId: parentHit.assetID,
+    parentCid: parentHit.cid,
+    childTokenId,
+    childAssetId: childHit.assetID,
+    childCid: childHit.cid,
+    mode,
+    position,
+    scale,
+  });
+  console.log(
+    (mode === "fork" ? "Forked " : "Linked ") + child + " into " + parent +
+      " (node " + result.nodeId + ")",
+  );
+}
+
 async function cmdGenerate(argv: string[]): Promise<void> {
   const s = requireSession();
   if (!s) return;
@@ -867,6 +947,7 @@ async function main(): Promise<void> {
   else if (command === "delete") await cmdDelete(args[1]);
   else if (command === "rename") await cmdRename(args[1], args[2]);
   else if (command === "send") await cmdSend(args[1], args[2], args[3]);
+  else if (command === "link") await cmdLink(args.slice(1));
   else if (command === "generate") await cmdGenerate(args.slice(1));
   else if (command === "retexture") await cmdRetexture(args.slice(1));
   else if (command === "retopo") await cmdRetopo(args.slice(1));

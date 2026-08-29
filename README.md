@@ -42,7 +42,7 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 Arbesk ships two clients on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
-- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel`.
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, `link`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel`.
 
 Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
 
@@ -96,8 +96,8 @@ Status legend: **✅** supported in the CLI today · **TODO** — feasible in a 
 | | Parametric color editing (live preview) | ✅ | Not doable | Needs visual feedback |
 | | Uniform scale editing | ✅ | Not doable | Needs visual feedback |
 | | Animation clip preview | ✅ | Not doable | Requires 3D viewer |
-| **Nesting (fractal children)** | Link child assets (drag from gallery, outliner) | ✅ | Not doable | Requires 3D viewer |
-| | Fork vs live-reference on link | ✅ | Not doable | Requires 3D viewer |
+| **Nesting (fractal children)** | Link child assets (drag from gallery, outliner) | ✅ | ✅ | `link <child> <parent> [live-ref\|fork] [--from col] [--position "x,y,z"] [--scale s]` — manifest-level, no viewer needed |
+| | Fork vs live-reference on link | ✅ | ✅ | Positional mode on `link` (default live-ref) |
 | | Dive/ascend navigation + breadcrumbs | ✅ | Not doable | Requires 3D viewer |
 | | Unlink child asset | ✅ | TODO | Manifest edit; selection UX is the open question |
 | | Linked-token inspector | ✅ | Not doable | Requires 3D viewer |
