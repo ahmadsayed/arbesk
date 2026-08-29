@@ -13,9 +13,8 @@
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { normalizeTokenURI } from "./uri-utils.ts";
-import { web3 as walletWeb3 } from "./wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
-import { getRpcUrl } from "./network-config.ts";
+import { getReadClient } from "./viem-clients.ts";
 
 const resolutionCache = new Map<string, { manifestCid: string; timestamp: number }>();
 
@@ -103,50 +102,25 @@ const minERC721ABI = [
     stateMutability: "view",
     type: "function",
   },
-];
+] as const;
 
 /**
- * Create a Web3 contract instance for a token at a given chain and address.
- * Uses the current provider for the connected chain, or creates a new
- * provider if the target chain is different and has a known RPC endpoint.
- *
- * @returns Web3 contract instance or null
+ * Read a token's tokenURI from an ERC-721 contract via a per-chain cached
+ * viem public client. Cross-chain reads resolve the RPC URL from network
+ * config (the old web3 HttpProvider path); same-chain reads use the active
+ * chain's client.
  */
-function getTokenContract(
+async function readTokenURI(
   chainId: number | null,
-  contractAddress: string | null
-): any {
-  const provider = walletWeb3 || window.web3 || null;
-
-  // If the target chain differs from the connected chain, try an external RPC
-  if (provider && chainId) {
-    try {
-      const connectedChainId = walletState.get().chainId;
-      if (connectedChainId && Number(chainId) !== Number(connectedChainId)) {
-        const rpcUrl = getRpcUrl(chainId);
-        if (rpcUrl) {
-          console.log(
-            `[TOKEN] using external RPC for chain ${chainId}: ${rpcUrl}`
-          );
-          const externalWeb3 = new window.Web3(
-            new window.Web3.providers.HttpProvider(rpcUrl)
-          );
-          return new externalWeb3.eth.Contract(minERC721ABI, contractAddress);
-        }
-      }
-    } catch {
-      // Fall through to use connected provider
-    }
-  }
-
-  if (!provider) return null;
-
-  try {
-    return new provider.eth.Contract(minERC721ABI, contractAddress);
-  } catch (err) {
-    console.warn(`[TOKEN] failed to create contract instance:`, err);
-    return null;
-  }
+  contractAddress: string,
+  tokenId: string
+): Promise<string> {
+  return (await getReadClient(chainId ?? undefined).readContract({
+    address: contractAddress as `0x${string}`,
+    abi: minERC721ABI,
+    functionName: "tokenURI",
+    args: [BigInt(tokenId)],
+  })) as string;
 }
 
 // Re-export normalizeTokenURI for backward compatibility - prefer importing
@@ -179,7 +153,6 @@ export async function resolveChildRef(
   }
 
   // Fall back to connected wallet's chain/contract when not provided.
-  // Normalize chainId to Number - getChainId() returns BigInt in Web3 v4.
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
   const chainId = Number(childRef.chainId || walletChainId) || null;
@@ -209,10 +182,8 @@ export async function resolveChildRef(
     `[TOKEN] resolving child_ref token #${childRef.tokenId} at ${contractAddress} chain ${chainId}`
   );
 
-  // Get contract instance
-  const tokenContract = getTokenContract(chainId, contractAddress);
-  if (!tokenContract) {
-    const err = `No Web3 provider available to resolve token #${childRef.tokenId}`;
+  if (!contractAddress) {
+    const err = `No contract address to resolve token #${childRef.tokenId}`;
     console.error(`[TOKEN] ${err}`);
     return _resolveError(err);
   }
@@ -220,7 +191,7 @@ export async function resolveChildRef(
   // Call tokenURI
   let rawURI;
   try {
-    rawURI = await tokenContract.methods.tokenURI(childRef.tokenId).call();
+    rawURI = await readTokenURI(chainId, contractAddress, childRef.tokenId);
   } catch (err) {
     const errMsg = `tokenURI call failed for token #${childRef.tokenId}: ${(err as Error).message}`;
     console.error(`[TOKEN] ${errMsg}`);

@@ -1,8 +1,7 @@
 /**
  * CDP Email-OTP Wallet + Smart Account integration.
  *
- * Provides an EIP-1193 provider shim so the rest of the app can keep using
- * Web3.js unchanged. An email OTP flow creates an embedded EOA (the signer),
+ * An email OTP flow creates an embedded EOA (the signer),
  * which is wrapped in an ERC-4337 smart account (the token owner on-chain).
  * Transactions are sent as sponsored UserOperations via the CDP Paymaster.
  * Smart wallets are supported on Base Sepolia only.
@@ -16,6 +15,8 @@ import {
   SMART_WALLET_SUPPORTED_CHAIN_IDS,
 } from "./smart-wallet-support.ts";
 import type { Signer } from "@arbesk/wallet/types.js";
+import { createPublicClient, http } from "viem";
+import type { PublicClient } from "viem";
 
 export { isSmartWalletSupported, SMART_WALLET_SUPPORTED_CHAIN_IDS };
 
@@ -446,14 +447,13 @@ export function createCdpSigner(
   };
 }
 
-// ─── Read-only Web3 for CDP (no shim) ────────────────────────────────────────
+// ─── Read-only viem client for CDP ────────────────────────────────────────────
 
 /**
- * Build a read-only Web3 instance pointed at the Base Sepolia public RPC.
- * CDP contract *reads* (`.call()`, `estimateGas`, `getChainId`, `getBalance`)
- * go through this; *writes* go through `createCdpSigner` (sponsored
- * UserOperations), never through this provider.
+ * Build a read-only viem PublicClient pointed at the Base Sepolia public RPC.
+ * CDP contract *reads* go through this; *writes* go through `createCdpSigner`
+ * (sponsored UserOperations), never through this client.
  */
-export function createCdpReadWeb3(): any {
-  return new Web3(new Web3.providers.HttpProvider(BASE_SEPOLIA_RPC_URL));
+export function createCdpReadClient(): PublicClient {
+  return createPublicClient({ transport: http(BASE_SEPOLIA_RPC_URL) });
 }
