@@ -6,38 +6,11 @@
  * backward compatibility.
  */
 
-import Web3 from "web3";
-import http_ from "http";
-import https_ from "https";
 import { createPublicClient, http } from "viem";
 import type { PublicClient } from "viem";
 import { CHAIN_IDS } from "../constants/chains.js";
 
-// TypeScript sees the default import as the module namespace under NodeNext,
-// so alias it to any for construction while keeping the runtime default import.
-const Web3Ctor: any = Web3;
-
-// Keep-alive agents shared across all web3 instances. Public RPCs behind
-// Cloudflare (sepolia.base.org) throttle repeated fresh TLS handshakes, which
-// intermittently kills web3's per-request connections with ETIMEDOUT;
-// reusing sockets avoids the handshake churn entirely.
-const httpKeepAliveAgent = new http_.Agent({ keepAlive: true });
-const httpsKeepAliveAgent = new https_.Agent({ keepAlive: true });
-
-function makeWeb3(rpcUrl: string) {
-  const HttpProvider = Web3Ctor.providers?.HttpProvider ?? Web3Ctor.HttpProvider;
-  if (!HttpProvider) {
-    // Test mocks may only expose the default constructor.
-    return new Web3Ctor(rpcUrl);
-  }
-  const agent = rpcUrl.startsWith("https")
-    ? httpsKeepAliveAgent
-    : httpKeepAliveAgent;
-  const provider = new HttpProvider(rpcUrl, {
-    providerOptions: { agent } as any,
-  });
-  return new Web3Ctor(provider);
-}
+const DEFAULT_CHAIN_ID = Number(process.env.DEFAULT_CHAIN_ID || 84532);
 
 // ─── Per-Network Configuration ───────────────────────────────────────────────
 
@@ -130,37 +103,35 @@ export function getRpcUrl(chainId: any): string {
   return envUrl || "http://127.0.0.1:8545";
 }
 
-// ─── Web3 Instances ──────────────────────────────────────────────────────────
+// ─── Chain Clients ───────────────────────────────────────────────────────────
 
-const web3Instances = new Map<number, any>();
-const viemClients = new Map<number, PublicClient>();
+// One cached viem PublicClient per chain id, built on the configured RPC URL.
+// viem's http transport uses undici fetch, which keeps connections alive by
+// default — no explicit keep-alive agent is needed (unlike the old web3
+// providers, which required one to survive Cloudflare TLS-handshake throttling
+// on sepolia.base.org).
+const publicClients = new Map<number, PublicClient>();
 
-export function getWeb3(chainId: any) {
-  const id = chainId ? Number(chainId) : null;
-  if (!id) return web3;
-  if (!web3Instances.has(id)) {
-    web3Instances.set(id, makeWeb3(getRpcUrl(id)));
+export function getPublicClient(chainId?: number): PublicClient {
+  const id = chainId ?? DEFAULT_CHAIN_ID;
+  let c = publicClients.get(id);
+  if (!c) {
+    c = createPublicClient({ transport: http(getRpcUrl(id)) });
+    publicClients.set(id, c);
   }
-  return web3Instances.get(id);
+  return c;
 }
 
 /**
  * Get a viem public client for the given chain.
  * Used for ERC-6492 / EIP-1271 universal signature verification.
+ * Thin wrapper over getPublicClient that returns null (instead of the
+ * default-chain client) when no chain id is given.
  */
 export function getViemPublicClient(chainId: any): PublicClient | null {
   const id = chainId ? Number(chainId) : null;
   if (!id) return null;
-  if (!viemClients.has(id)) {
-    const rpcUrl = getRpcUrl(id);
-    viemClients.set(
-      id,
-      createPublicClient({
-        transport: http(rpcUrl),
-      }),
-    );
-  }
-  return viemClients.get(id) as PublicClient | null;
+  return getPublicClient(id);
 }
 
 // ─── Legacy Exports (backward compatible) ────────────────────────────────────
@@ -172,6 +143,3 @@ export const API_URL = process.env.API_URL || HARDHAT_RPC_URL;
 export const NOSTR_RELAY_URL =
   process.env.NOSTR_RELAY_URL || "ws://127.0.0.1:7777";
 export const NOSTR_SERVICE_PRIVATE_KEY = process.env.NOSTR_SERVICE_PRIVATE_KEY;
-
-// Default shared Web3 instance (Hardhat local or env-configured RPC)
-export const web3 = makeWeb3(API_URL);
