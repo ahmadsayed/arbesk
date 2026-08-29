@@ -37,6 +37,86 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 
 ---
 
+## Studio vs `besk` CLI
+
+Arbesk ships two clients on top of the same backend and SDKs:
+
+- **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`.
+
+Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
+
+| Area | Feature | Studio | `besk` CLI | CLI status / notes |
+|---|---|---|---|---|
+| **Auth & wallets** | CDP email login (OTP → smart account) | ✅ | ✅ | `login <email>` (browser-assisted) |
+| | EOA wallets (MetaMask/Rabby) via SIWE | ✅ | TODO | No EOA/key-file auth path |
+| | WalletConnect v2 | ✅ | TODO | |
+| | Network selection (Hardhat local / Base Sepolia) | ✅ | ✅ | CLI: `ARBESK_CHAIN_ID` env var (no interactive switcher) |
+| | Session persistence | ✅ | ✅ | Studio: in-memory + auto-restore; CLI: plaintext JSON file (OS keychain is TODO) |
+| **Collections** | List collections | ✅ | ✅ | `collections` |
+| | Create named collection | ✅ | ✅ | `create <name>` (idempotent — returns existing if already minted) |
+| | Select active collection | ✅ | ✅ | `use <name>` (Studio: per-asset settings picker) |
+| | Shared (editor) collections discovery | ✅ | TODO | CLI reads indexer `owned` scope only |
+| | Burn collection + IPFS unpin | ✅ | TODO | Relay supports `burn`; CLI never calls it |
+| | Rename collection | ✅ | TODO | CLI `rename` covers assets only |
+| **Assets** | List assets in a collection | ✅ | ✅ | `list` |
+| | Asset details (ID, version, CID, nodes) | ✅ | ✅ | `info` (Studio details pane also has a live 3D preview — Not doable) |
+| | Upload glTF/GLB/3MF | ✅ | ✅ | `upload <file>` |
+| | Download / export (GLB, glTF, 3MF) | ✅ | ✅ | `download <name>` |
+| | Download a specific historical version | ✅ | ✅ | `download <name> <version>` (Studio restores via clocks/chat instead) |
+| | Rename asset | ✅ | ✅ | `rename <old> <new>` |
+| | Delete asset from collection (unpublish) | ✅ | ✅ | `delete` (always prompts; no `--yes` flag — TODO) |
+| | Send asset to another collection | ✅ | TODO | |
+| | New empty asset | ✅ | TODO | |
+| | Burn unreachable/inaccessible tokens | ✅ | TODO | |
+| **Publishing** | Save draft (manifest build + IPFS upload) | ✅ | TODO | CLI writes are always relayed immediately |
+| | Publish / republish (`tokenURI` update) | ✅ | ✅ | Via `create`/`upload`/`delete`/`rename` collection writes |
+| | Free-tier quota / USDC PayGo payment flow | ✅ | TODO | No `wallet-payments` equivalent |
+| | Publish thumbnail capture | ✅ | TODO | Captured by the browser on save/publish |
+| | Comments archive snapshot on republish | ✅ | TODO | |
+| | Editor (non-owner) writes via Merkle proof | ✅ | TODO | CLI hardcodes `proof: []` — owner-only writes |
+| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | TODO | |
+| | Image-to-3D (JPEG/PNG/WebP attach) | ✅ | TODO | |
+| | Multiview-to-3D (up to 4 oriented views) | ✅ | TODO | |
+| | Retexture (texture-only refine) | ✅ | TODO | |
+| | Smart retopology (polygon budget) | ✅ | TODO | |
+| | Auto-rig (biped-first with fallback) | ✅ | TODO | |
+| | Animate (preset picker, in-place toggle) | ✅ | TODO | |
+| | Provider selection, BYOK key, credit balance | ✅ | TODO | |
+| | Texture-quality tiers (standard/detailed/extreme) | ✅ | TODO | |
+| | Generation progress + cancel | ✅ | TODO | |
+| | Result bubbles with live orbitable preview | ✅ | Not doable | Requires 3D viewer |
+| | "Show in Studio" + auto-save draft | ✅ | Not doable | Requires 3D viewer |
+| | Chat provenance (`metadata.chat`) restore | ✅ | TODO | CLI has no chat; version restore is the missing part |
+| **Viewport & 3D editing** | Babylon viewport, selection, frame/reset camera | ✅ | Not doable | Requires 3D viewer |
+| | Transform gizmos (translate/rotate/scale) | ✅ | Not doable | Requires 3D viewer |
+| | Undo / redo | ✅ | Not doable | Interactive session state |
+| | Grid/axes toggle, orientation view-cube | ✅ | Not doable | Requires 3D viewer |
+| | Camera pose persistence per asset | ✅ | Not doable | Requires 3D viewer |
+| | Parametric color editing (live preview) | ✅ | Not doable | Needs visual feedback |
+| | Uniform scale editing | ✅ | Not doable | Needs visual feedback |
+| | Animation clip preview | ✅ | Not doable | Requires 3D viewer |
+| **Nesting (fractal children)** | Link child assets (drag from gallery, outliner) | ✅ | Not doable | Requires 3D viewer |
+| | Fork vs live-reference on link | ✅ | Not doable | Requires 3D viewer |
+| | Dive/ascend navigation + breadcrumbs | ✅ | Not doable | Requires 3D viewer |
+| | Unlink child asset | ✅ | TODO | Manifest edit; selection UX is the open question |
+| | Linked-token inspector | ✅ | Not doable | Requires 3D viewer |
+| **Version history (4D)** | List version chain | ✅ | ✅ | `history` |
+| | Scene clock (whole-asset scrubbing) | ✅ | Not doable | Requires 3D viewer |
+| | Model clock (per-node scrubbing) | ✅ | Not doable | Requires 3D viewer |
+| | Restore a historical version as current | ✅ | TODO | CLI can download any version but never repoints the tip |
+| **Library UX** | Grid/list toggle, search, sort, multi-select | ✅ | Not doable | GUI browser paradigm |
+| | Live 3D preview in details pane | ✅ | Not doable | Requires 3D viewer |
+| | Deep links (`?asset=`, `?manifest=`) | ✅ | Not doable | Web-only concept |
+| **Collaboration** | Manage collaborators (Merkle editor lists) | ✅ | TODO | Relay supports `updateEditors`; no CLI command |
+| | Viewer/Editor roles, email → wallet resolution | ✅ | TODO | |
+| | Asset comments (Nostr threads, @mentions) | ✅ | TODO | |
+| **Activity** | Activity ledger (Generation/Save/Publish/… feed) | ✅ | TODO | Derivable from the manifest chain |
+
+CLI-only capabilities (not in Studio): shell scriptability/pipelining, idempotent collection create, and direct version-positional download. Known CLI gaps beyond the table: no machine-readable (JSON) output mode and no global flags.
+
+---
+
 ## Repository Layout
 
 ```text
