@@ -38,6 +38,8 @@ import {
 import type { Signer } from "@arbesk/wallet/types.js";
 import { createEoaSigner } from "@arbesk/wallet/adapters/eoa.js";
 import { buildUserIdentity } from "@arbesk/wallet/facade.js";
+import { getContract, formatEther } from "viem";
+import { getReadClient } from "./viem-clients.ts";
 
 // ─── Network definitions (shared with wallet-network.ts) ───
 
@@ -67,7 +69,6 @@ let activeConnectionSource: "injected" | "walletconnect" | "cdp" | null = null;
 let _activeWalletRdns: string | null = null;
 
 let web3Provider: any = null;
-let web3: any = null;
 let contract: any = null;
 let contractAddress: string | null = null;
 let lowBalanceToastId: any = null;
@@ -80,25 +81,18 @@ let signer: Signer | null = null;
 const LAST_WALLET_KEY = "arbesk-last-wallet";
 const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
 
-// web3@1.x polls eth_getTransactionReceipt every 1000ms by default, adding up
-// to a second of dead time after a tx (or sponsored UserOperation) is mined.
-// 250ms detects the receipt sooner — most noticeable for ERC-4337 smart
-// accounts, where the bundler returns the hash only after inclusion.
-const TX_POLLING_INTERVAL_MS = 250;
-
 /**
- * Build a Web3 instance with a tightened receipt polling interval.
- * @param provider EIP-1193 provider
- * @returns configured Web3 instance
+ * Resolve the active wallet's chain id without a web3 instance.
+ * CDP smart accounts are pinned to Base Sepolia; EOA/WalletConnect read the
+ * chain from the injected EIP-1193 provider.
  */
-function newWeb3(provider: any): any {
-  const w = new Web3(provider);
-  try {
-    w.eth.transactionPollingInterval = TX_POLLING_INTERVAL_MS;
-  } catch {
-    // Older/newer web3 builds may not expose this setter — safe to ignore.
+async function _getWalletChainId(): Promise<number> {
+  if (activeConnectionSource === "cdp") return CHAIN_IDS.BASE_TESTNET;
+  if (web3Provider?.request) {
+    const hex = await web3Provider.request({ method: "eth_chainId" });
+    return Number(hex);
   }
-  return w;
+  return CHAIN_IDS.HARDHAT_LOCAL;
 }
 
 // ─── Initialization ───
@@ -131,7 +125,7 @@ function initWallet() {
  */
 async function _initContract(knownChainId: number | null = null) {
   try {
-    const chainId = knownChainId ?? Number(await web3.eth.getChainId());
+    const chainId = knownChainId ?? (await _getWalletChainId());
     const network = getNetworkConfig(chainId);
 
     // Kick off the ABI fetch immediately — it is independent of the address
@@ -159,7 +153,9 @@ async function _initContract(knownChainId: number | null = null) {
     // costs a full public-RPC round trip. EOA/WalletConnect users can be on any
     // network, so the wrong-network guard still applies to them.
     const skipCodeCheck = activeConnectionSource === "cdp";
-    const code = skipCodeCheck ? null : await web3.eth.getCode(addr);
+    const code = skipCodeCheck
+      ? null
+      : await getReadClient(chainId).getCode({ address: addr as `0x${string}` });
     if (!skipCodeCheck && (!code || code === "0x" || code === "0x0")) {
       warn(
         `[CONTRACT] No bytecode at ${addr}. ` +
@@ -175,7 +171,11 @@ async function _initContract(knownChainId: number | null = null) {
     if (!abiData?.abi) return;
 
     contractAddress = addr;
-    contract = new web3.eth.Contract(abiData.abi, contractAddress);
+    contract = getContract({
+      address: contractAddress as `0x${string}`,
+      abi: abiData.abi,
+      client: getReadClient(chainId),
+    });
     walletState.set({ contract, contractAddress });
   } catch (e) {
     warn("Contract initialization failed:", (e as Error).message);
@@ -189,10 +189,12 @@ async function _initContract(knownChainId: number | null = null) {
  */
 async function _checkBalance() {
   const { walletAddress } = walletState.get();
-  if (!web3 || !walletAddress) return;
+  if (!walletAddress) return;
   try {
-    const balanceWei = await web3.eth.getBalance(walletAddress);
-    const balanceEth = web3.utils.fromWei(balanceWei, "ether");
+    const balanceWei = await getReadClient().getBalance({
+      address: walletAddress as `0x${string}`,
+    });
+    const balanceEth = formatEther(balanceWei);
     log("Balance:", balanceEth, "ETH");
 
     // Clear any previous low-balance toast before deciding again.
@@ -201,8 +203,7 @@ async function _checkBalance() {
       lowBalanceToastId = null;
     }
 
-    let chainId = await web3.eth.getChainId();
-    chainId = Number(chainId);
+    const chainId = await getReadClient().getChainId();
 
     if (chainId === HARHAT_CHAIN_ID_DEC && parseFloat(balanceEth) < 0.1) {
       warn("Low balance detected on Hardhat");
@@ -247,7 +248,7 @@ async function autoConnectWallet() {
       try {
         const _t0 = performance.now();
         const _mark = (label: string) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
-        const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail, createCdpReadWeb3 } = await import("./wallet-cdp.ts");
+        const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.ts");
         _mark("sdkModuleImport");
         // warmupCdpClient was kicked off at page load (app-init.js) — this
         // awaits the shared in-flight promise, so the config fetch + SDK
@@ -258,10 +259,8 @@ async function autoConnectWallet() {
           const cdpResult = await autoConnectCdpWallet();
           _mark("autoConnectCdpWallet");
           if (cdpResult) {
-            // CDP: read-only Web3 (public RPC) for contract reads; writes go
-            // through the injected CdpSigner. No EIP-1193 provider.
-            web3 = createCdpReadWeb3();
-            window.web3 = web3;
+            // CDP: contract reads go through the viem read client (public RPC);
+            // writes go through the injected CdpSigner. No EIP-1193 provider.
             activeConnectionSource = "cdp";
             const email = getCdpEmail() || cdpResult.email || null;
             await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
@@ -282,8 +281,6 @@ async function autoConnectWallet() {
       const wcProvider = await getWalletConnectProvider();
       if (wcProvider && wcProvider.connected) {
         web3Provider = wcProvider;
-        web3 = newWeb3(wcProvider);
-        window.web3 = web3;
         const accounts = wcProvider.accounts || [];
         if (accounts.length > 0) {
           activeConnectionSource = "walletconnect";
@@ -305,8 +302,6 @@ async function autoConnectWallet() {
           });
           if (accounts && accounts.length > 0) {
             web3Provider = wallet.provider;
-            web3 = newWeb3(wallet.provider);
-            window.web3 = web3;
             activeConnectionSource = "injected";
             _activeWalletRdns = wallet.rdns;
             await _finishWalletSetup(accounts[0]);
@@ -325,7 +320,6 @@ async function autoConnectWallet() {
       });
       if (accounts && accounts.length > 0) {
         web3Provider = window.ethereum;
-        web3 = newWeb3(window.ethereum);
         activeConnectionSource = "injected";
         _activeWalletRdns = null; // unknown which wallet
         await _finishWalletSetup(accounts[0]);
@@ -362,7 +356,7 @@ async function _finishWalletSetup(
   });
 
   // Build the injected Signer for this connection source. CDP uses the native
-  // signer built during the OTP flow; EOA/WalletConnect wrap the active web3.
+  // signer built during the OTP flow; EOA/WalletConnect wrap the injected provider.
   if (activeConnectionSource === "cdp") {
     const { getCdpSigner, grantDelegation } = await import("./wallet-cdp.ts");
     signer = getCdpSigner();
@@ -370,10 +364,10 @@ async function _finishWalletSetup(
     // subsequent writes without the browser.
     void grantDelegation();
   } else {
-    signer = createEoaSigner(web3, address);
+    signer = createEoaSigner(web3Provider, address);
   }
 
-  let chainId = Number(await web3.eth.getChainId());
+  let chainId = await _getWalletChainId();
   walletState.set({ chainId });
   log("Connected wallet:", address, "chainId:", chainId);
   const _tSetup = performance.now();
@@ -402,7 +396,7 @@ async function _finishWalletSetup(
       // that has never seen Base Sepolia gets prompted to add it.
       const { switchNetwork } = await import("./wallet-network.ts");
       await switchNetwork(preferred);
-      chainId = Number(await web3.eth.getChainId());
+      chainId = await _getWalletChainId();
       walletState.set({ chainId });
     } catch {
       warn("User did not switch to a supported network");
@@ -545,10 +539,8 @@ async function connectWallet() {
     const { provider, source, walletName, walletRdns, walletAddress: cdpWalletAddress, eoaAddress: cdpEoaAddress } = result;
 
     if (source === "cdp") {
-      // CDP smart account — read-only Web3 + native signer; no EIP-1193 provider.
-      const { createCdpReadWeb3, setCdpEmail } = await import("./wallet-cdp.ts");
-      web3 = createCdpReadWeb3();
-      window.web3 = web3;
+      // CDP smart account — viem read client + native signer; no EIP-1193 provider.
+      const { setCdpEmail } = await import("./wallet-cdp.ts");
       activeConnectionSource = "cdp";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "cdp");
@@ -559,7 +551,6 @@ async function connectWallet() {
     } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
       web3Provider = provider;
-      web3 = newWeb3(provider);
       activeConnectionSource = "walletconnect";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
@@ -573,11 +564,12 @@ async function connectWallet() {
     } else {
       // Injected wallet - request accounts to trigger popup
       web3Provider = provider;
-      web3 = newWeb3(provider);
       activeConnectionSource = "injected";
       _activeWalletRdns = walletRdns || null;
 
-      const accounts = await web3.eth.requestAccounts();
+      const accounts = await web3Provider.request({
+        method: "eth_requestAccounts",
+      });
       if (!accounts || accounts.length === 0) {
         error("No accounts found");
         return;
@@ -615,7 +607,7 @@ function getActiveConnectionSource() {
 
 /**
  * The injected on-chain Signer for the active connection, or null when
- * disconnected. Prefer this over `web3` for signing/sending.
+ * disconnected. Prefer this over the raw provider for signing/sending.
  */
 function getSigner(): Signer | null {
   return signer;
@@ -650,7 +642,6 @@ async function disconnectWallet() {
   activeConnectionSource = null;
   _activeWalletRdns = null;
   web3Provider = null;
-  web3 = null;
   signer = null;
   contract = null;
   contractAddress = null;
@@ -670,14 +661,13 @@ async function disconnectWallet() {
 /**
  * Get the active contract instance, preferring the module-level binding and
  * falling back to walletState (both are kept in sync by _initContract).
- * @returns web3 Contract instance, or null when not initialized
+ * @returns viem contract instance, or null when not initialized
  */
 function getActiveContract(): any {
   return contract || walletState.get().contract || null;
 }
 
 export {
-  web3,
   web3Provider,
   contract,
   initWallet,
@@ -689,5 +679,3 @@ export {
   getActiveContract,
   getSigner,
 };
-
-export { web3 as walletWeb3 };

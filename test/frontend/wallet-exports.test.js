@@ -97,9 +97,18 @@ describe("wallet.js export block", () => {
     expect(isFunctionDefined(allSources, name)).toBe(true);
   });
 
-  test("web3 is exported", () => {
+  test("web3 is no longer exported", () => {
     const exported = extractExportNames(WALLET);
-    expect(exported).toContain("web3");
+    expect(exported).not.toContain("web3");
+    expect(exported).not.toContain("walletWeb3");
+  });
+
+  test("viem surface is exported", () => {
+    const exported = extractExportNames(WALLET);
+    expect(exported).toContain("getReadClient");
+    expect(exported).toContain("getActiveContract");
+    expect(exported).toContain("getSigner");
+    expect(exported).toContain("web3Provider");
   });
 
   test("contract is exported", () => {

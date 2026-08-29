@@ -41,17 +41,14 @@ async function loadApi(options = {}) {
     EVENTS: { WALLET_DISCONNECTED: "wallet:disconnected" },
   }));
 
-  // Shared jest.fn so both the legacy web3.eth.personal.sign path and the new
-  // Signer.signMessage path honor mockResolvedValue/mockRejectedValueOnce.
+  // Shared jest.fn so the Signer.signMessage path honors
+  // mockResolvedValue/mockRejectedValueOnce.
   const personalSign = jest.fn().mockResolvedValue(_signResult);
 
   await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
-    web3: {
-      eth: {
-        getChainId: jest.fn().mockResolvedValue(_chainIdResult),
-        personal: { sign: personalSign },
-      },
-    },
+    getReadClient: jest.fn(() => ({
+      getChainId: jest.fn().mockResolvedValue(_chainIdResult),
+    })),
     getSigner: jest.fn(() => ({
       signMessage: personalSign,
       getSignerAddress: jest.fn(() => options.eoaAddress || _walletAddress),
@@ -195,8 +192,8 @@ describe("createSession", () => {
 
   test("throws ApiError when sign is rejected", async () => {
     const { createSession, ApiError } = await loadApi();
-    const { web3 } = await import("../../frontend/src/js/blockchain/wallet.js");
-    web3.eth.personal.sign.mockRejectedValueOnce(new Error("User denied"));
+    const { getSigner } = await import("../../frontend/src/js/blockchain/wallet.js");
+    getSigner().signMessage.mockRejectedValueOnce(new Error("User denied"));
 
     const err = await createSession().catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
