@@ -6,7 +6,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 
 ## 1. Identity & Key Constraints
 
-**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, Node type-stripping — no emit step; requires Node ≥ 22.18), JS browser frontend, Solidity, Pug/SCSS. Phases 1–5.4 complete (`docs/CURRENT_STATUS.md`).
+**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, Node type-stripping — no emit step; requires Node ≥ 22.18), JS browser frontend, Solidity, Pug/SCSS. See `docs/CURRENT_STATUS.md` for the definitive status.
 
 - **Chains**: Hardhat local + Base Sepolia. IDs, `DEPLOYMENT_BLOCKS`, `LOG_CHUNK_SIZES` in `constants/chains.js` — no magic numbers.
 - **Wallets**: EOA (MetaMask/Rabby) via SIWE everywhere; CDP email-login smart accounts on **Base Sepolia only** (`smart-wallet-support.ts`).
@@ -117,7 +117,7 @@ Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the asset · fractal nest
 - **Collections**: `tokenURI()` → `type: "collection"` manifest with `assets: { assetID: cid }`. Default token ID from wallet address; named collections from `keccak256(address, name)`. Updates write a new collection manifest + `updateAssetURI()` — no remint.
 - **Thumbnails**: best-effort — all code must tolerate missing thumbnails.
 - **Comments archive** (`comments_archive_cid`): asset-scoped (Nostr tag = asset tag). Republish snapshots via `POST /api/v1/assets/snapshot-comments`; frontend loads archive before live relay events, dedups by `event.id`; archive unpinned on burn.
-- **Chat provenance** (`metadata.chat`): each manifest version records the AI prompts that produced it — `{prompt, provider, task, taskId?, timestamp}`, version-scoped (not cumulative); the chain walk reconstructs the full conversation. Unsaved chat is ephemeral (Nostr-based preservation is a future phase).
+- **Chat provenance** (`metadata.chat`): each manifest version records the AI prompts that produced it — `{prompt, provider, task, taskId?, timestamp}`, version-scoped (not cumulative); the chain walk reconstructs the full conversation. Unsaved chat is ephemeral (Nostr-based preservation is future work).
 - **glTF buffer URIs**: `ipfs://bafy...` in storage ↔ base64 data URI at render. Only the `@arbesk/asset-core` glTF composer/decomposer performs this transform (`packages/asset-core/AGENTS.md`) — don't bypass it.
 
 ## 8. Session Auth

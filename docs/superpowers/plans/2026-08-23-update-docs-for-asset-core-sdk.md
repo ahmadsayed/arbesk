@@ -59,7 +59,7 @@
 - Consumes: Current CURRENT_STATUS.md
 - Produces: Status marking asset-core externalization as complete.
 
-- [ ] **Step 1: Mark asset-core SDK externalization complete in the appropriate phase/section**
+- [ ] **Step 1: Mark asset-core SDK externalization complete in the appropriate section**
 - [ ] **Step 2: Link to `docs/ASSET_CORE_SDK.md`**
 
 ## Task 4: Update `docs/MERKLE_IMPLEMENTATION.md`

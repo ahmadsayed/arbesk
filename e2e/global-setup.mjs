@@ -341,13 +341,13 @@ async function startBackend(i) {
 export default async function globalSetup() {
   log(`Starting infrastructure for ${E2E_WORKERS} E2E worker(s)...`);
 
-  // Phase 1: start all Docker stacks in parallel.
+  // Step 1: start all Docker stacks in parallel.
   await Promise.all(
     Array.from({ length: E2E_WORKERS }, (_, i) => startStack(i)),
   );
   log("All Docker stacks ready");
 
-  // Phase 2: compile once. blockchain/artifacts is host-mounted and shared
+  // Step 2: compile once. blockchain/artifacts is host-mounted and shared
   // across all Hardhat containers.
   const ports0 = portsForWorker(0);
   log("Compiling contracts once (shared artifacts)...");
@@ -361,7 +361,7 @@ export default async function globalSetup() {
   );
   log("Contracts compiled");
 
-  // Phase 3: deploy sequentially per worker. Sequential avoids a race writing
+  // Step 3: deploy sequentially per worker. Sequential avoids a race writing
   // the shared blockchain/.env; deterministic addresses mean order is irrelevant.
   for (let i = 0; i < E2E_WORKERS; i++) {
     const ports = portsForWorker(i);
@@ -371,7 +371,7 @@ export default async function globalSetup() {
     log(`Worker ${i}: contracts deployed`);
   }
 
-  // Phase 4: sync addresses and build frontend once. Contract addresses are
+  // Step 4: sync addresses and build frontend once. Contract addresses are
   // identical across workers, so a single build serves all workers.
   log("Syncing network-config.ts with deployed contract addresses...");
   syncNetworkConfigWithDeployedAddresses(ports0.hardhatRpc);
@@ -383,7 +383,7 @@ export default async function globalSetup() {
   });
   log("Frontend rebuilt");
 
-  // Phase 5: start backends in parallel.
+  // Step 5: start backends in parallel.
   const workers = await Promise.all(
     Array.from({ length: E2E_WORKERS }, (_, i) => startBackend(i)),
   );

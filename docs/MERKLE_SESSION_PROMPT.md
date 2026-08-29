@@ -1,6 +1,6 @@
-Implement Phase 1 of the Merkle editor architecture for Arbesk as specified in docs/MERKLE_IMPLEMENTATION.md.
+Implement the Merkle editor architecture for Arbesk as specified in docs/MERKLE_IMPLEMENTATION.md.
 
-> **Historical note:** This was the original Phase 1 prompt. The final implementation applied these Merkle changes directly to the existing contracts (`ArbeskAssetBase.sol`, `ArbeskAsset.sol`, and `ArbeskAssetFree.sol`) rather than creating separate `*Merkle.sol` copies. `editorListURI[tokenId]` is also stored on-chain, and `publishAsset` / `initEditors` accept an `editorListUri` parameter. The legacy on-chain editor functions listed below were removed from the base contract in place.
+> **Historical note:** This was the original implementation prompt. The final implementation applied these Merkle changes directly to the existing contracts (`ArbeskAssetBase.sol`, `ArbeskAsset.sol`, and `ArbeskAssetFree.sol`) rather than creating separate `*Merkle.sol` copies. `editorListURI[tokenId]` is also stored on-chain, and `publishAsset` / `initEditors` accept an `editorListUri` parameter. The legacy on-chain editor functions listed below were removed from the base contract in place.
 
 ## Context
 
@@ -11,7 +11,7 @@ The current contracts are at:
 - `blockchain/contracts/ArbeskAsset.sol` — paid tier, already has per-user nonce (#2+#3)
 - `blockchain/contracts/ArbeskAssetFree.sol` — free tier with packed quota
 
-## What to Build (Phase 1 ONLY — contracts, no JS, no frontend)
+## What to Build (contracts only — no JS, no frontend)
 
 ### 1. `blockchain/contracts/ArbeskAssetBaseMerkle.sol` (new file)
 
@@ -126,9 +126,9 @@ docker compose run --rm hardhat npx hardhat compile
 - `ArbeskAsset.sol` — keep
 - `ArbeskAssetFree.sol` — keep
 - `hardhat.config.js` — unchanged
-- `deploy.js` — will update in Phase 3
+- `deploy.js` — will update in a follow-up
 - Any frontend files
-- Test files (Phase 3)
+- Test files (follow-up)
 
 > In the final implementation these contract files were updated in place; no separate `*Merkle.sol` files were kept.
 

@@ -6,9 +6,9 @@
 
 ---
 
-## Implementation Phases
+## Implementation Stages
 
-### Phase A: CSS Foundation — 2 days (no dependencies)
+### Stage A: CSS Foundation — 2 days (no dependencies)
 
 Drop Bootstrap. Build token system + 27 component SCSS files.
 
@@ -59,7 +59,7 @@ frontend/src/scss/
 
 ---
 
-### Phase B: Header Bar + Bottom Bar — 1 day (depends on A)
+### Stage B: Header Bar + Bottom Bar — 1 day (depends on A)
 
 **Template (`studio.pug`):**
 - Replace `.arabesque-topbar` with `<header class="headerbar">`
@@ -79,7 +79,7 @@ frontend/src/scss/
 
 ---
 
-### Phase C: Unified Sidebar + 5-View Switcher + Outliner — 2.5 days (depends on A, B)
+### Stage C: Unified Sidebar + 5-View Switcher + Outliner — 2.5 days (depends on A, B)
 
 **Template:**
 - Merge the previous left chat/library panels and bottom ledger into one `<aside class="sidebar">`
@@ -101,7 +101,7 @@ frontend/src/scss/
 
 ---
 
-### Phase D: Inspector + Outliner Integration — 1.5 days (depends on A, C)
+### Stage D: Inspector + Outliner Integration — 1.5 days (depends on A, C)
 
 - Move inspector from floating `position: absolute` to right sidebar column
 - Three inspector modes: parametric color editor, token child world info, asset comments
@@ -112,7 +112,7 @@ frontend/src/scss/
 
 ---
 
-### Phase E: Content Area + Nesting Navigation — 2 days (depends on B, D)
+### Stage E: Content Area + Nesting Navigation — 2 days (depends on B, D)
 
 - Move prompt input to bottom `.message-bar` (later relocated into the AI Generation sidebar view, 2026-07)
 - Add path bar to header for nesting breadcrumbs
@@ -124,7 +124,7 @@ frontend/src/scss/
 
 ---
 
-### Phase F: Responsive Behavior — 1.5 days (depends on C, D)
+### Stage F: Responsive Behavior — 1.5 days (depends on C, D)
 
 Three breakpoints:
 | Breakpoint | Layout |
@@ -135,7 +135,7 @@ Three breakpoints:
 
 ---
 
-### Phase G: Polish & Accessibility — 1.5 days (depends on F)
+### Stage G: Polish & Accessibility — 1.5 days (depends on F)
 
 - Keyboard navigation (tab order)
 - Visible focus rings
@@ -147,7 +147,7 @@ Three breakpoints:
 
 ---
 
-### Phase H: Testing & Validation — 1.5 days (depends on G)
+### Stage H: Testing & Validation — 1.5 days (depends on G)
 
 - Visual regression: all views, inspector open/closed, all breakpoints
 - Keyboard navigation audit
@@ -159,7 +159,7 @@ Three breakpoints:
 
 ## Effort Summary
 
-| Phase | Days | Depends on |
+| Stage | Days | Depends on |
 |---|---|---|
 | A: CSS Foundation | 2 | — |
 | B: Header Bar + Bottom Bar | 1 | A |

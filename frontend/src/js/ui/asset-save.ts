@@ -1,6 +1,6 @@
 /**
  * Arbesk Asset Save/Publish Controller.
- * Phase B: Updated for GNOME headerbar - buttons managed individually, no wrapper div.
+ * Updated for GNOME headerbar - buttons managed individually, no wrapper div.
  *
  * This module is the UI orchestrator. Manifest construction lives in
  * `services/asset-save/manifest-builder.js`; collection and editor publishing

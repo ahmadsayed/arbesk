@@ -259,7 +259,7 @@ export function adoptPublishedIdentity(
   });
 }
 
-// ─── Save/publish commands (Phase 2) ───────────────────────────────
+// ─── Save/publish commands ───────────────────────────────
 // IO stays in injected deps so the domain module never imports
 // services/asset-save/* (which imports this module for the state commands).
 
@@ -309,7 +309,7 @@ export async function saveDraftAsset(deps: {
  * toasts, and button state. Progress/status hooks fire at the exact legacy
  * points. Collection coordination goes through the injected
  * `publishCollection` dep (services/asset-save/collection-publish.js today;
- * the Collection module in Phase 3).
+ * the Collection module).
  * @param assetName - already explicit (UI ran ensureExplicitName)
  */
 export async function publishAsset(

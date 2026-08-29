@@ -1,5 +1,5 @@
 /**
- * Arbesk Scene Graph - Phase 1 Unit Tests
+ * Arbesk Scene Graph - Unit Tests
  *
  * Tests pure logic functions from scene-graph.js.
  * Functions are tested inline (matching token-resolver.test.js pattern)
@@ -517,7 +517,7 @@ describe("DEFAULT_WOOD_COLOR", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Phase 2 - BABYLON-dependent integration tests
+// BABYLON-dependent integration tests
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ─── Shared mock state (simulating scene-graph.js module state) ────────────
@@ -746,7 +746,7 @@ function getNodeChildRef(nodeId) {
   return null;
 }
 
-// ─── Phase 2 Tests ─────────────────────────────────────────────────────────
+// ─── Integration Tests ─────────────────────────────────────────────────────────
 
 describe("createPlaceholder", () => {
   beforeEach(() => resetMockState());

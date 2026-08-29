@@ -1,7 +1,7 @@
 # Tokens, CSS Methodology & Templating
 
 > Part of [GNOME HIG Unification Plan](README.md)  
-> Reference for Phase A implementation
+> Reference for Stage A implementation
 
 ---
 

@@ -1,6 +1,6 @@
 # Arbesk System Architecture
 
-> Status: Current v0.9 — Phases 1–5.4 complete (token child assets, free-tier contract, Merkle editor proofs, collection manifests). CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented.
+> Status: Current v0.9 — token child assets, the free-tier contract, Merkle editor proofs, and collection manifests are complete. CDP email-login smart accounts, unified Studio + Library SPA, asset-level Nostr comments, and token indexer implemented.
 > Scope: Full-stack architecture for private-IPFS 3D generation, fractal manifest versioning, free-tier + EVM PayGo, token child assets, collection manifests, and studio publishing
 
 ---
@@ -843,7 +843,7 @@ No background prefetching or cache warming is performed. (Note: the cache is cur
 
 ---
 
-## 9. Phase 5.1: Token ID-Based Child Assets (Complete)
+## 9. Token ID-Based Child Assets (Complete)
 
 Child assets are referenced by on-chain token IDs. The parent manifest stores a `child_ref` with `{ collection: { chainId, contractAddress, tokenId }, assetID }`; at load time the browser resolves the referenced collection manifest CID via `tokenURI()`, then loads the relevant `assetID` from the collection's `assets` map.
 

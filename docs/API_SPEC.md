@@ -789,9 +789,9 @@ keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion[tokenId]))
 
 ## Planned / Not Yet Implemented API
 
-The following are planned backend routes not currently implemented. Note that Phase 5.1 (Token ID-Based Child Worlds) is complete — the browser resolver is the current path; a backend fallback is optional:
+The following are planned backend routes not currently implemented. Note that token ID-based child worlds are complete — the browser resolver is the current path; a backend fallback is optional:
 
-### Phase 5.1 — Token Child World Resolution
+### Token Child World Resolution
 
 | Endpoint | Purpose | Status |
 |---|---|---|

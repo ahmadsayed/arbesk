@@ -1,6 +1,6 @@
 # Arbesk Studio — GNOME HIG Unification
 
-> **Status**: Implemented — Phase 4 complete
+> **Status**: Implemented
 > **Goal**: Simplify and unify a complex, cluttered 3D studio UI using GNOME Human Interface Guidelines
 
 ---
@@ -23,7 +23,7 @@
 **Toggle buttons reduced**: 3 → 1
 **New nesting UX**: Path bar breadcrumbs, back button, Outline scene tree, depth indicator
 **CSS**: 1 file (2136 lines + Bootstrap) → 29 SCSS partials + semantic tokens + `prefers-color-scheme`
-**Effort**: ~13.5 days across 8 phases
+**Effort**: ~13.5 days across 8 stages
 
 ---
 
@@ -33,9 +33,9 @@
 |---|---|---|
 | [`audit.md`](audit.md) | Current state audit, HIG violations, CSS problems | Understanding what's broken |
 | [`layout.md`](layout.md) | Architecture diagrams, layout zones, adaptive breakpoints | Designing the new layout |
-| [`tokens.md`](tokens.md) | Full color token system, CSS methodology rules, Pug decision | Implementing Phase A (CSS foundation) |
-| [`nesting.md`](nesting.md) | Nesting UX: path bar, back button, outliner, inspector modes, dive/ascend | Implementing Phases C-E (sidebar, inspector, content) |
-| [`implementation.md`](implementation.md) | All 8 phases, migration strategy, before/after comparison, open questions, effort, file map | Planning work and tracking progress |
+| [`tokens.md`](tokens.md) | Full color token system, CSS methodology rules, Pug decision | Implementing Stage A (CSS foundation) |
+| [`nesting.md`](nesting.md) | Nesting UX: path bar, back button, outliner, inspector modes, dive/ascend | Implementing Stages C-E (sidebar, inspector, content) |
+| [`implementation.md`](implementation.md) | All 8 stages, migration strategy, before/after comparison, open questions, effort, file map | Planning work and tracking progress |
 
 ---
 

@@ -6,7 +6,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
-- Current status: Phases 1–5.4 are complete, including Phase 5.1 (token child worlds), Phase 5.2 (free-tier contract), Phase 5.3 (Merkle editor proofs), and Phase 5.4 (collection manifests). CDP email-login smart accounts, standalone library page, asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented.
+- Current status: token child worlds, the free-tier contract, Merkle editor proofs, and collection manifests are all implemented. CDP email-login smart accounts, standalone library page, asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented.
 
 ---
 
@@ -94,7 +94,7 @@ arbesk/
 
 | Document | Purpose |
 |---|---|
-| [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Phase status, validation snapshot, known gaps |
+| [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Implementation status, validation snapshot, known gaps |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture and data flows |
 | [`docs/API_SPEC.md`](docs/API_SPEC.md) | Implemented Express API routes and response shapes |
 | [`docs/MEGAETH_ANALYSIS.md`](docs/MEGAETH_ANALYSIS.md) | MegaETH gas model and cost projections |
@@ -252,25 +252,3 @@ Every published token points to a collection manifest:
 
 The gallery expands collection tokens into one card per `assets` entry.
 
----
-
-## Completed Phases
-
-| Phase | Description |
-|---|---|
-| 1 | Data bridge, mock adapters, private IPFS |
-| 2 | Parametric versions, Babylon.js rendering, time travel |
-| 3 | PayGo smart contract, on-chain integration, tx validation |
-| 4 | Workspace studio, wallet, gallery, minting, team panel |
-| 4.1 | Publishing polish, WebP thumbnails, on-demand IPFS cache |
-| 5.1 | Token ID-based child worlds, drag/drop composition, cross-chain resolution |
-| 5.2 | Free-tier contract with daily generation quota |
-| 5.3 | Merkle editor proofs for authorization |
-| 5.4 | Collection manifests — every token is a collection of assets |
-| 5.4+ | CDP email-login smart accounts (Base Sepolia) |
-| 5.4+ | Standalone library page with optimistic create and token indexer |
-| 5.4+ | Asset-level Nostr comments with IPFS archive snapshot |
-| 5.4+ | Token indexer — chunked `eth_getLogs` ownership backfill |
-| 5.4+ | Tripo3D v3 BYOK generation — text/image-to-3D, HD texture, refine, smart retopology, rig & animate |
-
-See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for deferred items and known gaps.

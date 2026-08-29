@@ -10,7 +10,7 @@ import {
 
 jest.setTimeout(30000);
 
-describe("Arbesk Phase 1 + Phase 3 API", () => {
+describe("Arbesk API", () => {
   let app;
   let ipfsStorage;
   let mockIPFS;
