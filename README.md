@@ -75,16 +75,16 @@ Status legend: **✅** supported in the CLI today · **TODO** — feasible in a 
 | | Publish thumbnail capture | ✅ | TODO | Captured by the browser on save/publish |
 | | Comments archive snapshot on republish | ✅ | TODO | |
 | | Editor (non-owner) writes via Merkle proof | ✅ | TODO | CLI hardcodes `proof: []` — owner-only writes |
-| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | ✅ | `generate "<prompt>"` (mock default; `--provider tripo3d` + key) |
+| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | ✅ | `generate "<prompt>"` (interactive provider + target-collection pickers, active collection pre-selected; `--provider` for scripts) |
 | | Image-to-3D (JPEG/PNG/WebP attach) | ✅ | ✅ | `generate --image <file>` |
 | | Multiview-to-3D (up to 4 oriented views) | ✅ | ✅ | `generate --view front f.png --view left f.png …` |
 | | Retexture (texture-only refine) | ✅ | ✅ | `retexture <asset> "<prompt>"` |
 | | Smart retopology (polygon budget) | ✅ | ✅ | `retopo <asset> [faceLimit]` |
 | | Auto-rig (biped-first with fallback) | ✅ | ✅ | `rig <asset>` (fallback is server-side) |
 | | Animate (preset picker, in-place toggle) | ✅ | ✅ | `animate <asset> <preset>…` (positional presets, `--no-in-place`; no categorized picker) |
-| | Provider selection, BYOK key, credit balance | ✅ | ✅ | `--provider`/`--key` (env: `ARBESK_PROVIDER`, `ARBESK_PROVIDER_KEY`), `balance` |
+| | Provider selection, BYOK key, credit balance | ✅ | ✅ | Interactive provider picker + key prompt; flags/env for scripts (`--provider`, `--key`, `ARBESK_PROVIDER`, `ARBESK_PROVIDER_KEY`); `balance` |
 | | Texture-quality tiers (standard/detailed/extreme) | ✅ | ✅ | `--quality` (env: `ARBESK_TEXTURE_QUALITY`) |
-| | Generation progress + cancel | ✅ | ✅ | Progress lines while polling; `cancel <taskId>` |
+| | Generation progress + cancel | ✅ | ✅ | Progress bar while polling (plain lines when piped); `cancel <taskId>` |
 | | Result bubbles with live orbitable preview | ✅ | Not doable | Requires 3D viewer |
 | | "Show in Studio" + auto-save draft | ✅ | Not doable | Requires 3D viewer |
 | | Chat provenance (`metadata.chat`) restore | ✅ | TODO | CLI has no chat; version restore is the missing part |

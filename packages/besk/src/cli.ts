@@ -65,7 +65,7 @@ function help(): void {
   console.log("  delete <name>     remove from the collection (only confirmation)");
   console.log("  rename <old> <new>  rename an asset");
   console.log("  send <name> <collection> [fork|live-ref]  link an asset into another collection");
-  console.log("  generate <prompt> [--image f | --view <front|left|back|right> f ...] [--provider mock|tripo3d] [--key k] [--quality standard|detailed|extreme] [--name n]  generate a 3D model");
+  console.log("  generate <prompt> [--image f | --view <front|left|back|right> f ...] [--provider mock|tripo3d] [--key k] [--quality standard|detailed|extreme] [--name n]  generate a 3D model (asks for provider/key interactively)");
   console.log("  retexture <name> <prompt> [--quality q]  retexture an asset (Tripo3D key required)");
   console.log("  retopo <name> [faceLimit]  smart retopology (500-20000 tris, blank = adaptive)");
   console.log("  rig <name>            auto-rig an asset (Tripo3D key required)");
@@ -428,14 +428,101 @@ function providerKey(flags: Record<string, string[]>): string | undefined {
   return flagValue(flags, "--key") ?? process.env.ARBESK_PROVIDER_KEY ?? process.env.TRIPO_API_KEY;
 }
 
-function requireProviderKey(flags: Record<string, string[]>): string | null {
-  const k = providerKey(flags);
+async function requireProviderKey(flags: Record<string, string[]>): Promise<string | null> {
+  let k = providerKey(flags);
+  if (!k && process.stdin.isTTY) {
+    k = (await prompt("Tripo3D API key: ")).trim();
+  }
   if (!k) {
     console.error("A Tripo3D API key is required (--key, ARBESK_PROVIDER_KEY, or TRIPO_API_KEY).");
     process.exitCode = 2;
     return null;
   }
   return k;
+}
+
+/**
+ * Arrow-key menu on a TTY (raw-mode keypress loop). Returns the chosen index,
+ * or -1 when stdin is not a TTY so callers can fall back to flags/env.
+ * `initial` pre-selects an entry (e.g. the active collection).
+ */
+async function selectOption(question: string, options: string[], initial = 0): Promise<number> {
+  if (!process.stdin.isTTY) return -1;
+  const { emitKeypressEvents } = await import("readline");
+  emitKeypressEvents(process.stdin);
+  process.stdin.setRawMode(true);
+  let index = Math.min(Math.max(initial, 0), options.length - 1);
+  const lines = options.length + 1;
+  const draw = (first: boolean): void => {
+    if (!first) process.stdout.write("\x1b[" + lines + "A\x1b[0J");
+    let out = question + "\n";
+    for (let i = 0; i < options.length; i++) {
+      out += (i === index ? "❯ " : "  ") + options[i] + "\n";
+    }
+    process.stdout.write(out);
+  };
+  draw(true);
+  return new Promise((resolve) => {
+    const done = (value: number): void => {
+      process.stdin.off("keypress", onKey);
+      process.stdin.setRawMode(false);
+      resolve(value);
+    };
+    const onKey = (_s: string, key: { name?: string; ctrl?: boolean }): void => {
+      if (key.ctrl && key.name === "c") {
+        done(-1);
+        process.stdout.write("\n");
+        process.exit(130);
+      } else if (key.name === "up") {
+        index = (index - 1 + options.length) % options.length;
+        draw(false);
+      } else if (key.name === "down") {
+        index = (index + 1) % options.length;
+        draw(false);
+      } else if (key.name === "return") {
+        done(index);
+      }
+    };
+    process.stdin.on("keypress", onKey);
+  });
+}
+
+/** Interactive provider picker; null when no selection is possible. */
+async function pickProvider(): Promise<string | null> {
+  const idx = await selectOption("Select a generation provider (↑/↓, Enter):", [
+    "Mock (local, free)",
+    "Tripo 3D (BYOK)",
+  ]);
+  if (idx < 0) {
+    console.error("No provider selected. Non-interactive? Pass --provider mock|tripo3d.");
+    process.exitCode = 2;
+    return null;
+  }
+  return idx === 0 ? "mock" : "tripo3d";
+}
+
+/**
+ * Interactive collection picker for generated results — the active collection
+ * is pre-selected. Non-TTY runs fall back to the active/default collection.
+ */
+async function pickCollection(s: Session): Promise<string> {
+  const cols = await listCollections(s.address);
+  if (cols.length === 0) throw new Error("No collections found");
+  const fallbackId =
+    s.activeCollectionTokenId ?? (cols.find((c) => c.name === null) ?? cols[0]).tokenId;
+  if (!process.stdin.isTTY) return fallbackId;
+  const initial = Math.max(0, cols.findIndex((c) => c.tokenId === fallbackId));
+  const idx = await selectOption(
+    "Store in which collection? (↑/↓, Enter):",
+    cols.map(
+      (c) =>
+        displayName(c.name) +
+        " (" + c.assetCount + " assets)" +
+        (c.tokenId === fallbackId ? " — active" : ""),
+    ),
+    initial,
+  );
+  return idx < 0 ? fallbackId : cols[idx].tokenId;
 }
 
 function readImageFile(file: string): { imageData: string; imageMime: string } | null {
@@ -460,15 +547,32 @@ function makeNodeId(seed: string): string {
   return slug + "_" + Date.now();
 }
 
+const PROGRESS_BAR_WIDTH = 24;
+let progressBarDrawn = false;
+
 function printProgress(p: { status: string; progress?: number; stage?: string; taskId?: string }): void {
   if (p.taskId) {
     console.log("  task " + p.taskId + " (cancel with: besk cancel " + p.taskId + ")");
     return;
   }
-  const parts = [p.status];
-  if (p.stage) parts.push(p.stage);
-  if (p.progress !== undefined) parts.push(p.progress + "%");
-  console.log("  " + parts.join(" · "));
+  const pct = p.progress ?? 0;
+  const filled = Math.round((pct / 100) * PROGRESS_BAR_WIDTH);
+  const bar = "█".repeat(filled) + "░".repeat(PROGRESS_BAR_WIDTH - filled);
+  const line =
+    "  [" + bar + "] " + String(pct).padStart(3) + "%" +
+    (p.stage ? " · " + p.stage : p.status ? " · " + p.status : "");
+  if (process.stdout.isTTY) {
+    process.stdout.write("\r" + line.padEnd(72));
+    progressBarDrawn = true;
+  } else {
+    console.log(line);
+  }
+}
+
+/** End the in-place progress bar before printing a final result line. */
+function endProgress(): void {
+  if (progressBarDrawn && process.stdout.isTTY) process.stdout.write("\n");
+  progressBarDrawn = false;
 }
 
 /** Save a generated model into a collection as a (new version of an) asset. */
@@ -497,12 +601,15 @@ async function cmdGenerate(argv: string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const provider = flagValue(flags, "--provider") ?? process.env.ARBESK_PROVIDER ?? "mock";
-  const key = providerKey(flags);
-  if (provider !== "mock" && !key) {
-    console.error("A Tripo3D API key is required (--key, ARBESK_PROVIDER_KEY, or TRIPO_API_KEY).");
-    process.exitCode = 2;
-    return;
+  let provider = flagValue(flags, "--provider") ?? process.env.ARBESK_PROVIDER;
+  if (!provider) {
+    provider = (await pickProvider()) ?? undefined;
+    if (!provider) return;
+  }
+  let key: string | undefined;
+  if (provider !== "mock") {
+    key = (await requireProviderKey(flags)) ?? undefined;
+    if (!key) return;
   }
   const body: GenerationBody = {
     nodeId: makeNodeId(prompt || "image"),
@@ -540,8 +647,9 @@ async function cmdGenerate(argv: string[]): Promise<void> {
   }
   console.log("Generating (" + provider + ")…");
   const model = await runGeneration(s, body, { onProgress: printProgress });
+  endProgress();
   const name = flagValue(flags, "--name") ?? (prompt ? prompt.slice(0, 60) : "image_" + Date.now());
-  const tokenId = await currentCollectionTokenId(s);
+  const tokenId = await pickCollection(s);
   const existing = await resolveAssetByName(tokenId, name);
   const assetId = existing?.assetID ?? "asset_" + Date.now();
   await saveGenerated(s, tokenId, model, name, assetId);
@@ -583,7 +691,7 @@ async function cmdRetexture(argv: string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const key = requireProviderKey(flags);
+  const key = await requireProviderKey(flags);
   if (!key) return;
   const body: GenerationBody = {
     nodeId: makeNodeId(name),
@@ -598,6 +706,7 @@ async function cmdRetexture(argv: string[]): Promise<void> {
   console.log("Retexturing " + name + "…");
   const model = await runGeneration(s, body, { onProgress: printProgress });
   await saveGenerated(s, src.tokenId, model, name, src.assetId);
+  endProgress();
   console.log("Retextured " + name);
 }
 
@@ -617,7 +726,7 @@ async function cmdRetopo(argv: string[]): Promise<void> {
       return;
     }
   }
-  const key = requireProviderKey(flags);
+  const key = await requireProviderKey(flags);
   if (!key) return;
   console.log("Retopologizing " + name + "…");
   const model = await runGeneration(s, {
@@ -629,6 +738,7 @@ async function cmdRetopo(argv: string[]): Promise<void> {
     faceLimit,
   }, { onProgress: printProgress });
   await saveGenerated(s, src.tokenId, model, name, src.assetId);
+  endProgress();
   console.log("Retopologized " + name);
 }
 
@@ -638,7 +748,7 @@ async function cmdRig(argv: string[]): Promise<void> {
   const { positional, flags } = parseFlags(argv);
   const src = await resolveSourceAsset(s, positional[0], "Usage: besk rig <name>");
   if (!src) return;
-  const key = requireProviderKey(flags);
+  const key = await requireProviderKey(flags);
   if (!key) return;
   console.log("Rigging " + positional[0] + "…");
   const model = await runGeneration(s, {
@@ -650,6 +760,7 @@ async function cmdRig(argv: string[]): Promise<void> {
     rigOnly: true,
   }, { onProgress: printProgress });
   await saveGenerated(s, src.tokenId, model, positional[0], src.assetId);
+  endProgress();
   console.log("Rigged " + positional[0]);
 }
 
@@ -665,7 +776,7 @@ async function cmdAnimate(argv: string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const key = requireProviderKey(flags);
+  const key = await requireProviderKey(flags);
   if (!key) return;
   console.log("Animating " + name + "…");
   const model = await runGeneration(s, {
@@ -678,6 +789,7 @@ async function cmdAnimate(argv: string[]): Promise<void> {
     animateInPlace: !flags["--no-in-place"],
   }, { onProgress: printProgress });
   await saveGenerated(s, src.tokenId, model, name, src.assetId);
+  endProgress();
   console.log("Animated " + name + " (" + presets.join(", ") + ")");
 }
 
@@ -685,7 +797,7 @@ async function cmdBalance(argv: string[]): Promise<void> {
   const s = requireSession();
   if (!s) return;
   const { flags } = parseFlags(argv);
-  const key = requireProviderKey(flags);
+  const key = await requireProviderKey(flags);
   if (!key) return;
   const { balance, frozen } = await getProviderBalance(s, key);
   console.log("Tripo3D balance: " + balance + " credits (" + frozen + " frozen)");
