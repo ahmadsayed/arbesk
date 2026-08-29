@@ -25,6 +25,7 @@ const SECTIONS = [
     rows: [
       [`${MOD}+N`, "New asset"],
       [`${MOD}+S`, "Save draft"],
+      ["Delete", "Unlink selected child asset"],
       [`${MOD}+Z`, "Undo edit"],
       [`${MOD}+Shift+Z / ${MOD}+Y`, "Redo edit"],
     ],

@@ -55,6 +55,8 @@ async function load() {
     getPendingTransformEdits: mocks.getPendingTransformEdits,
     clearPendingTransformEdits: jest.fn(),
     clearPendingChildRefs: jest.fn(),
+    getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
+    clearPendingChildRefRemovals: jest.fn(),
     getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
     clearPendingSourceOverrides: jest.fn(),
     captureAssetThumbnail: mocks.captureAssetThumbnail,

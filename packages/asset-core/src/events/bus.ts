@@ -41,6 +41,7 @@ export const EVENTS = {
   NESTING_DIVE_REQUESTED:     "nesting:diveRequested",
   NODE_DESELECTED:            "node:deselected",
   NODE_DOUBLE_CLICKED:        "node:doubleClicked",
+  NODE_LIST_CHANGED:          "node:listChanged",
   NODE_SELECTED:              "node:selected",
   OUTLINER_NODE_SELECTED:     "outliner:nodeSelected",
   OUTLINER_REMOVE_REQUESTED:  "outliner:removeRequested",

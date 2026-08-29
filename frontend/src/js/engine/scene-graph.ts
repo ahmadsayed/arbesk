@@ -66,9 +66,12 @@ export { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
 export {
   disposeNode,
   disposeNodeContent,
+  disposeNodeSubtree,
   clearScene,
   clearPendingChildRefs,
   getPendingChildRefs,
+  getPendingChildRefRemovals,
+  clearPendingChildRefRemovals,
   getPendingPostProcessorEdits,
   clearPendingPostProcessorEdits,
   clearPendingPostProcessorEdit,
@@ -711,14 +714,6 @@ async function captureAssetThumbnail(options: { width?: number; height?: number;
     return null;
   }
 }
-
-on(EVENTS.OUTLINER_REMOVE_REQUESTED, (payload: {nodeId?: string}) => {
-  // TODO(#18): implement node removal from manifest
-  console.warn(
-    "[SCENE] outliner:removeRequested not yet implemented for nodeId:",
-    payload?.nodeId
-  );
-});
 
 // Forward outliner clicks to the scene selection system so that
 // state.highlightedNodeId is updated and the transform gizmo attaches.

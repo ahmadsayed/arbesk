@@ -16,10 +16,11 @@ import {
   getCurrentManifest,
 } from "@arbesk/asset-core/domain/asset.js";
 import { getManifestNodes } from "../engine/transforms.ts";
+import { state } from "../engine/state.ts";
 
 let outlinerTree: Element | null = null;
 let outlinerFooter: Element | null = null;
-let selectedNodeId: string | null = null;
+let removeBtn: HTMLButtonElement | null = null;
 const selectedNodeIds: Set<string> = new Set();
 const collapsedNodeIds: Set<string> = new Set();
 let renderedManifestCid: string | null = null;
@@ -43,7 +44,7 @@ function initOutliner(): void {
   }
 
   // [-] Remove button
-  const removeBtn = document.getElementById("outlinerRemoveBtn");
+  removeBtn = document.getElementById("outlinerRemoveBtn") as HTMLButtonElement | null;
   if (removeBtn) {
     removeBtn.addEventListener("click", onRemoveSelected);
   }
@@ -51,6 +52,10 @@ function initOutliner(): void {
   // Listen for scene updates
   on(EVENTS.SCENE_READY, onSceneReady);
   on(EVENTS.SCENE_EMPTY, onSceneEmpty);
+  // Child-asset unlink changes the node list without a scene reload.
+  on(EVENTS.NODE_LIST_CHANGED, () => {
+    refreshOutliner();
+  });
   on(EVENTS.ASSET_DRAFT_SAVED, () => refreshOutliner());
   on(EVENTS.SCENE_CLEARED, onSceneEmpty);
   on(EVENTS.NODE_DESELECTED, clearSelection);
@@ -86,7 +91,12 @@ async function fetchCurrentManifest(): Promise<any> {
 }
 
 function getNodes(): any[] {
-  return getManifestNodes(getCurrentManifest());
+  const nodes = getManifestNodes(getCurrentManifest());
+  const removals = state.pendingChildRefRemovals;
+  if (removals && removals.size > 0) {
+    return nodes.filter((n) => !removals.has(n?.node_id));
+  }
+  return nodes;
 }
 
 /**
@@ -148,6 +158,7 @@ async function refreshOutliner(): Promise<void> {
     renderedManifestCid = cid;
   }
   renderTree(buildOutlineTree(getNodes()));
+  _syncRemoveButtonState();
 }
 
 function renderEmpty(): void {
@@ -155,6 +166,7 @@ function renderEmpty(): void {
   if (!tree) return;
   tree.innerHTML = "";
   if (outlinerFooter) outlinerFooter.textContent = "No items";
+  _syncRemoveButtonState();
 }
 
 function renderTree(
@@ -335,6 +347,29 @@ function updateFooter(totalNodes: number, childCount: number): void {
   } · ${childCount} child${childCount !== 1 ? "ren" : ""} · Depth ${depth}/5`;
 }
 
+/** True when a node_id is a child asset (saved or pending) — the only
+ * node kind the [-] button can remove. */
+function _isChildAssetNode(nodeId: string): boolean {
+  if (getNodes().some((n) => n?.node_id === nodeId && !!n?.child_ref)) {
+    return true;
+  }
+  return state.pendingChildRefs.some(
+    (n: any) => n?.node_id === nodeId && !!n?.child_ref
+  );
+}
+
+/** Enable [-] only when the current selection contains a child asset. */
+function _syncRemoveButtonState(): void {
+  if (!removeBtn) return;
+  const hasChildSelected = [...selectedNodeIds].some((id) =>
+    _isChildAssetNode(id)
+  );
+  removeBtn.disabled = !hasChildSelected;
+  removeBtn.title = hasChildSelected
+    ? "Remove selected child asset"
+    : "Select a child asset to remove";
+}
+
 // ─── Selection ────────────────────────────────────────────────────────
 
 function _rowFor(nodeId: string): Element | null | undefined {
@@ -361,15 +396,12 @@ function selectNode(nodeId: string, additive = false): void {
     } else {
       selectedNodeIds.add(nodeId);
     }
-    selectedNodeId = selectedNodeIds.has(nodeId)
-      ? nodeId
-      : [...selectedNodeIds].at(-1) || null;
   } else {
     selectedNodeIds.clear();
     selectedNodeIds.add(nodeId);
-    selectedNodeId = nodeId;
   }
   _syncRowSelectionClasses();
+  _syncRemoveButtonState();
 
   // Dispatch for inspector / viewport sync
   emit(EVENTS.OUTLINER_NODE_SELECTED, { nodeId, additive });
@@ -377,8 +409,8 @@ function selectNode(nodeId: string, additive = false): void {
 
 function clearSelection(): void {
   selectedNodeIds.clear();
-  selectedNodeId = null;
   _syncRowSelectionClasses();
+  _syncRemoveButtonState();
 }
 
 /**
@@ -389,8 +421,8 @@ function syncFromEngine(e: any): void {
   const ids = Array.isArray(e?.nodeIds) ? e.nodeIds : [];
   selectedNodeIds.clear();
   for (const id of ids) selectedNodeIds.add(id);
-  selectedNodeId = ids.at(-1) || null;
   _syncRowSelectionClasses();
+  _syncRemoveButtonState();
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────
@@ -409,8 +441,8 @@ function onAddChild(): void {
 }
 
 async function onRemoveSelected(): Promise<void> {
-  if (!selectedNodeId) return;
-  emit(EVENTS.OUTLINER_REMOVE_REQUESTED, { nodeId: selectedNodeId });
+  if (selectedNodeIds.size === 0) return;
+  emit(EVENTS.OUTLINER_REMOVE_REQUESTED, { nodeIds: [...selectedNodeIds] });
 }
 
 // ─── Drag & Drop from Library ────────────────────────────────────────

@@ -412,6 +412,8 @@ describe("prepareManifestForWrite", () => {
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
         clearPendingChildRefs: jest.fn(),
+        getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
+        clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
         clearPendingSourceOverrides: jest.fn(),
         captureAssetThumbnail: jest.fn(),
@@ -482,6 +484,8 @@ describe("prepareManifestForWrite", () => {
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
         clearPendingChildRefs: jest.fn(),
+        getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
+        clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
         clearPendingSourceOverrides: jest.fn(),
         captureAssetThumbnail: jest.fn(),
@@ -545,6 +549,8 @@ describe("prepareManifestForWrite", () => {
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
         clearPendingChildRefs: jest.fn(),
+        getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
+        clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest
           .fn()
           .mockReturnValue(new Map([["n1", override]])),
@@ -612,6 +618,8 @@ describe("prepareManifestForWrite", () => {
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
         clearPendingChildRefs: jest.fn(),
+        getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
+        clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest
           .fn()
           .mockReturnValue(new Map([["node_1", override]])),
@@ -651,5 +659,71 @@ describe("prepareManifestForWrite", () => {
       transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
       post_processor: { color: null, scale: { x: 1, y: 1, z: 1 } },
     });
+  });
+
+  // Child-asset unlink (TODO #18): a saved child_ref marked for removal must
+  // be filtered out of the written manifest, and the removal must be detected
+  // as a change (not a no-op) — the filter runs after the prevManifest snapshot.
+  it("drops a child asset marked for removal and writes the change", async () => {
+    const savedChild = {
+      node_id: "linked_child_1",
+      type: "child_ref",
+      child_ref: {
+        collection: { chainId: 31337, contractAddress: "0xabc", tokenId: "1" },
+        assetID: "asset_child",
+      },
+      transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    };
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/scene-graph.js",
+      () => ({
+        getPendingChildRefs: jest.fn().mockReturnValue([]),
+        waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
+        getPendingPostProcessorEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingPostProcessorEdits: jest.fn(),
+        getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
+        clearPendingTransformEdits: jest.fn(),
+        clearPendingChildRefs: jest.fn(),
+        getPendingChildRefRemovals: jest
+          .fn()
+          .mockReturnValue(new Set(["linked_child_1"])),
+        clearPendingChildRefRemovals: jest.fn(),
+        getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
+        clearPendingSourceOverrides: jest.fn(),
+        captureAssetThumbnail: jest.fn(),
+        getNodeMeshes: jest.fn(),
+        getNodeSubMeshes: jest.fn(),
+        getNodeChildRef: jest.fn(),
+        deselectAll: jest.fn(),
+        selectNodeById: jest.fn(),
+        selectSubMesh: jest.fn(),
+        state: { selectedNodeIds: new Set() },
+      })
+    );
+    const ctx = await load();
+    const stateMod = await import("@arbesk/asset-core/domain/asset-store.js");
+    stateMod._resetForTesting();
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    writeJSONToIPFS.mockResolvedValue("bafyRemovalVersion");
+
+    const manifest = makeManifest([makeNode(), savedChild]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    stateMod.assetStore.set({
+      activeAssetManifestCid: "bafyManifest",
+      latestAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.saveAssetDraftCore("Draft");
+
+    expect(result.ok).toBe(true);
+    expect(result.cid).toBe("bafyRemovalVersion");
+    const written = writeJSONToIPFS.mock.calls[0][0];
+    expect(
+      written.scene.nodes.some((n) => n.node_id === "linked_child_1")
+    ).toBe(false);
+    expect(written.scene.nodes.some((n) => n.node_id === "n1")).toBe(true);
   });
 });

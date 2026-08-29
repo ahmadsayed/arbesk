@@ -44,6 +44,7 @@ import { initCommentsPanel } from "./ui/comments-panel.ts";
 import { rewriteShortcutTitles } from "./utils/platform.ts";
 import "./ui/keyboard-help.ts";
 import "./engine/undo-controller.ts";
+import "./engine/child-remove.ts";
 
 // ── Library ──
 import { initLibraryGrid } from "./ui/library-grid.ts";

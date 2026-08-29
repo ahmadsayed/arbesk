@@ -40,6 +40,13 @@ export interface EngineState {
   rootSceneAnchor: BABYLON.TransformNode | null;
   pendingChildRefs: Array<any>;
   /**
+   * node_ids of saved child_ref nodes the user unlinked this session. Applied
+   * by manifest-builder after the prevManifest snapshot (symmetric to pending
+   * adds) and cleared on save. Unsaved (pending) unlinks splice
+   * pendingChildRefs directly and never touch this set.
+   */
+  pendingChildRefRemovals: Set<string>;
+  /**
    * Post-processor edits (color/scale/meshOverrides) accumulated in the
    * inspector but not yet persisted. Keyed by node_id. Picked up by
    * `asset-save.js → prepareManifestForWrite` and cleared on save.
@@ -113,6 +120,7 @@ export const state: EngineState = {
   nodeAnimationGroups: new Map(),
   rootSceneAnchor: null,
   pendingChildRefs: [],
+  pendingChildRefRemovals: new Set(),
   pendingPostProcessorEdits: new Map(),
   defaultWoodMaterial: null,
   resizeEngineHandler: null,

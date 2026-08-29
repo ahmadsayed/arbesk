@@ -162,6 +162,28 @@ function clearHighlight() {
 }
 
 /**
+ * Remove specific node ids from the selection, promoting a new primary if the
+ * old one was removed. Used when child assets are unlinked and disappear.
+ */
+function deselectNodes(nodeIds: string[]) {
+  const remove = new Set(nodeIds);
+  let changed = false;
+  for (const id of remove) {
+    if (state.selectedNodeIds.delete(id)) changed = true;
+  }
+  if (!changed) return;
+  if (state.highlightedNodeId && remove.has(state.highlightedNodeId)) {
+    const remaining = [...state.selectedNodeIds];
+    state.highlightedNodeId = remaining.length
+      ? remaining[remaining.length - 1]
+      : null;
+    state.highlightedSubMeshName = null;
+    uiState.set({ selectedNodeId: state.highlightedNodeId });
+  }
+  _emitSelectionChanged();
+}
+
+/**
  * Deselect everything: clear highlight, reset state, dispatch events.
  */
 function deselectAll() {
@@ -182,4 +204,5 @@ export {
   selectNodeById,
   clearHighlight,
   deselectAll,
+  deselectNodes,
 };

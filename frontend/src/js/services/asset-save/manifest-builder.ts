@@ -26,6 +26,8 @@ import {
   getPendingTransformEdits,
   clearPendingTransformEdits,
   clearPendingChildRefs,
+  getPendingChildRefRemovals,
+  clearPendingChildRefRemovals,
   getPendingSourceOverrides,
   clearPendingSourceOverrides,
   captureAssetThumbnail,
@@ -445,6 +447,17 @@ export async function prepareManifestForWrite(assetName: string) {
     }
   }
 
+  // Drop child assets the user unlinked this session. Must run AFTER the
+  // prevManifest snapshot above (symmetric to the pending-add bake) so a
+  // "remove child → Save" on an otherwise unchanged draft is detected as a
+  // change and written.
+  const pendingRemovals = getPendingChildRefRemovals();
+  if (pendingRemovals.size > 0) {
+    manifest.scene.nodes = manifest.scene.nodes.filter(
+      (n: any) => !pendingRemovals.has(n.node_id)
+    );
+  }
+
   // Bake pending viewport file-drop source overrides. Same ordering rule as
   // the child refs above: must happen after the prevManifest snapshot so a
   // drop-only save is not reported as "no changes". An override replaces the
@@ -761,6 +774,7 @@ export async function saveAssetDraftCore(
     // it would differ from the previous one). Clear them so the UI doesn't
     // keep trying to re-apply a settled state.
     clearPendingChildRefs();
+    clearPendingChildRefRemovals();
     clearPendingPostProcessorEdits();
     clearPendingTransformEdits();
     clearPendingSourceColorEdits();
@@ -806,6 +820,7 @@ export async function saveAssetDraftCore(
   recordSavedVersion(cid, prepared.manifest);
 
   clearPendingChildRefs();
+  clearPendingChildRefRemovals();
   clearPendingPostProcessorEdits();
   clearPendingTransformEdits();
   clearPendingSourceColorEdits();

@@ -11,6 +11,7 @@ import {
   saveDraft,
   generateSaveAndPublish,
   assetCardLocator,
+  uniqueAssetName,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -121,5 +122,66 @@ test.describe("nesting / linked child assets", () => {
     await expect
       .poll(() => page.evaluate(() => window.__nesting))
       .toContainEqual(["ascend", 0]);
+  });
+
+  test("unlinks a child asset via the outliner remove button and persists the removal", async ({
+    page,
+  }) => {
+    page.on("dialog", (d) => d.accept());
+
+    await connectStudio(page);
+
+    // Unique names: the default collection is shared across the whole run, so
+    // a fixed name would collide with earlier specs' published assets.
+    const childName = uniqueAssetName("Child Asset");
+    const parentName = uniqueAssetName("Parent Asset");
+
+    // ── 1. Generate and publish the child ────────────────────────────
+    const childTokenHex = await generateSaveAndPublish(
+      page,
+      childName,
+      PROMPT,
+    );
+    const childTokenDec = BigInt(childTokenHex).toString();
+
+    // ── 2. Start a fresh parent draft ────────────────────────────────
+    await page.click(SELECTORS.newAssetBtn);
+    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
+    await page.fill(SELECTORS.dialogInput, parentName);
+    await page.click(SELECTORS.dialogConfirmBtn);
+
+    // ── 3. Generate the parent's own content ─────────────────────────
+    const parentGenCid = await generate(page, PROMPT);
+
+    // ── 4. Link the child as a live reference ────────────────────────
+    await page.click(SELECTORS.gallerySwitcherBtn);
+    const childCard = assetCardLocator(page, childTokenDec, childName);
+    await expect(childCard).toHaveCount(1, { timeout: 5000 });
+    await childCard.getByRole("button", { name: "Add to Scene" }).click();
+    await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
+      timeout: 30000,
+    });
+    await page.click(SELECTORS.dialogLiveRefBtn);
+
+    // ── 5. Save the parent draft (bakes the child_ref) ───────────────
+    const parentCid = await saveDraft(page, parentGenCid);
+    const before = await fetchManifest(parentCid);
+    expect(before.scene.nodes.some((n) => n.child_ref)).toBe(true);
+
+    // ── 6. Remove the child via the outliner [-] button ──────────────
+    await page.click(SELECTORS.outlinerSwitcherBtn);
+    const childNode = page
+      .locator(SELECTORS.outlinerNode)
+      .filter({ hasText: childTokenDec });
+    await expect(childNode).toHaveCount(1, { timeout: 30000 });
+    await childNode.click();
+    await expect(page.locator(SELECTORS.outlinerRemoveBtn)).toBeEnabled();
+    await page.click(SELECTORS.outlinerRemoveBtn);
+    await expect(childNode).toHaveCount(0, { timeout: 30000 });
+
+    // ── 7. Save again — the unlink is staged, then persisted ─────────
+    const parentCid2 = await saveDraft(page, parentCid);
+    const after = await fetchManifest(parentCid2);
+    expect(after.scene.nodes.some((n) => n.child_ref)).toBe(false);
   });
 });

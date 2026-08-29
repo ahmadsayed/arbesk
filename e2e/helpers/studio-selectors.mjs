@@ -59,6 +59,7 @@ export const SELECTORS = {
   // Outliner (scene graph tree)
   outlinerSwitcherBtn: '[data-view="outline"]',
   outlinerNode: ".outliner-node",
+  outlinerRemoveBtn: "#outlinerRemoveBtn",
   // Parametric component (color) editor inside the Node Inspector
   componentEditor: "#componentEditor",
   componentColorInput: "#selectedComponentColor",

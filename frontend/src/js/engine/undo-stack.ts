@@ -17,7 +17,7 @@ export interface UndoItem {
 }
 
 export interface UndoEntry {
-  type: "transform" | "color";
+  type: "transform" | "color" | "child_ref";
   /** human label for tooltips/logs ("Move", "Rotate", "Scale", "Color") */
   label: string;
   items: UndoItem[];

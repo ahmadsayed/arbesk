@@ -19,6 +19,14 @@ export function getPendingChildRefs() {
   return state.pendingChildRefs;
 }
 
+export function getPendingChildRefRemovals() {
+  return state.pendingChildRefRemovals;
+}
+
+export function clearPendingChildRefRemovals() {
+  state.pendingChildRefRemovals.clear();
+}
+
 /**
  * Pending post-processor edits (color/scale/meshOverrides) accumulated
  * in the inspector. Mirrors `getPendingChildRefs` / `clearPendingChildRefs`
@@ -95,6 +103,39 @@ export function disposeNodeContent(nodeId: string) {
     }
     state.nodeAnimationGroups.delete(nodeId);
   }
+}
+
+/**
+ * Dispose a node and every descendant node it parents. Used for child-asset
+ * unlink: a child_ref node's Babylon anchor cascades to the child asset's
+ * anchors/meshes, but those descendants are registered under their OWN
+ * node_ids in the state maps, so we collect and drop them too.
+ */
+export function disposeNodeSubtree(nodeId: string) {
+  const top = state.nodeAnchors.get(nodeId);
+  const descendantIds: string[] = [];
+  if (top && typeof top.getChildren === "function") {
+    const stack = [...(top.getChildren() || [])];
+    while (stack.length) {
+      const child = stack.pop();
+      if (!child) continue;
+      const childNodeId = child.metadata?.nodeId;
+      if (childNodeId && childNodeId !== nodeId) {
+        descendantIds.push(childNodeId);
+      }
+      const kids = child.getChildren?.();
+      if (kids?.length) stack.push(...kids);
+    }
+  }
+  // disposeNode disposes the top anchor (Babylon recurses to its children)
+  // and removes the top node's meshes/anchor entries.
+  disposeNode(nodeId);
+  for (const id of descendantIds) {
+    state.nodeMeshes.delete(id);
+    state.nodeAnchors.delete(id);
+    state.nodeAnimationGroups.delete(id);
+  }
+  state._nonChromeMeshCache = null;
 }
 
 /**
@@ -222,6 +263,7 @@ export function clearScene() {
   uiState.set({ selectedNodeId: null });
 
   state.pendingChildRefs.length = 0;
+  state.pendingChildRefRemovals.clear();
   state.pendingPostProcessorEdits.clear();
   state.pendingTransformEdits.clear();
   state.pendingSourceOverrides.clear();
