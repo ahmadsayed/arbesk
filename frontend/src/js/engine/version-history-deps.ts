@@ -20,7 +20,7 @@ configureVersionHistoryDeps({
   fetchPublishedCid: async (tokenId) => {
     const contract = getActiveContract();
     if (!contract) return null;
-    const cid = await contract.methods.tokenURI(tokenId).call();
+    const cid = await contract.read.tokenURI([BigInt(tokenId)]);
     return cid || null;
   },
 });

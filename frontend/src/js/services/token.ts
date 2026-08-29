@@ -16,7 +16,7 @@ export async function getTokenURI(tokenId: string | number): Promise<string | nu
   try {
     const c = getActiveContract();
     if (!c) return null;
-    const cid = await c.methods.tokenURI(String(tokenId)).call();
+    const cid = await c.read.tokenURI([BigInt(String(tokenId))]);
     return cid || null;
   } catch (err) {
     console.warn(`[TOKEN] failed to get tokenURI for ${tokenId}:`, (err as Error).message);
@@ -32,7 +32,7 @@ export async function getOwnerOf(tokenId: string | number): Promise<string | nul
   try {
     const c = getActiveContract();
     if (!c) return null;
-    const owner = await c.methods.ownerOf(String(tokenId)).call();
+    const owner = await c.read.ownerOf([BigInt(String(tokenId))]);
     return owner || null;
   } catch {
     // ERC721NonexistentToken is thrown when token doesn't exist

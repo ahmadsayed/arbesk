@@ -55,7 +55,7 @@ export async function deleteAssetFromCollection({
   );
   if (confirmed !== "delete") return null;
 
-  const collectionCid = await c.methods.tokenURI(tokenId).call();
+  const collectionCid = await c.read.tokenURI([BigInt(tokenId)]);
   const collection = await getFromRemoteIPFS(collectionCid);
 
   if (!collection.assets || !(assetId in collection.assets)) {
@@ -181,7 +181,7 @@ export async function updateCollectionManifest(
 ): Promise<string> {
   const { contract: c } = requireWallet() as any;
 
-  const currentCid = await c.methods.tokenURI(tokenId).call();
+  const currentCid = await c.read.tokenURI([BigInt(tokenId)]);
   const collection = await getFromRemoteIPFS(currentCid);
 
   const newCollection = applyCollectionMutation(collection, currentCid, mutate);
@@ -246,7 +246,7 @@ export async function sendAssetToCollection({
     throw new Error(`Unsupported link mode: ${mode}`);
   }
 
-  const sourceCid = await c.methods.tokenURI(sourceTokenId).call();
+  const sourceCid = await c.read.tokenURI([BigInt(sourceTokenId)]);
   const sourceCollection = await getFromRemoteIPFS(sourceCid);
 
   const assetCid = sourceCollection.assets?.[assetId];

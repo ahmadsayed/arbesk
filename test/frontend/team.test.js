@@ -2,10 +2,10 @@
 import { jest } from "@jest/globals";
 
 const contractMock = {
-  methods: {
-    editorListURI: jest.fn(() => ({ call: jest.fn() })),
-    ownerOf: jest.fn(() => ({ call: jest.fn() })),
-    editorSetVersion: jest.fn(() => ({ call: jest.fn() })),
+  read: {
+    editorListURI: jest.fn(),
+    ownerOf: jest.fn(),
+    editorSetVersion: jest.fn(),
   },
 };
 
@@ -85,15 +85,9 @@ describe("team service", () => {
     jest.clearAllMocks();
     localStorage.clear();
     await wireAssetCoreRuntime();
-    contractMock.methods.editorListURI.mockReturnValue({
-      call: jest.fn().mockResolvedValue("bafyEditors"),
-    });
-    contractMock.methods.ownerOf.mockReturnValue({
-      call: jest.fn().mockResolvedValue("0xOwnerAddress"),
-    });
-    contractMock.methods.editorSetVersion.mockReturnValue({
-      call: jest.fn().mockResolvedValue("5"),
-    });
+    contractMock.read.editorListURI.mockResolvedValue("bafyEditors");
+    contractMock.read.ownerOf.mockResolvedValue("0xOwnerAddress");
+    contractMock.read.editorSetVersion.mockResolvedValue(5n);
     getFromRemoteIPFSMock.mockResolvedValue(editorList);
     writeJSONToIPFSMock.mockResolvedValue("bafyNewEditors");
     updateEditorsMock.mockResolvedValue("0xTxHash");
@@ -106,13 +100,13 @@ describe("team service", () => {
   describe("fetchEditors", () => {
     it("returns an empty array when tokenId is missing", async () => {
       expect(await team.fetchEditors("")).toEqual([]);
-      expect(contractMock.methods.editorListURI).not.toHaveBeenCalled();
+      expect(contractMock.read.editorListURI).not.toHaveBeenCalled();
     });
 
     it("loads the editor list from chain + IPFS and caches it locally", async () => {
       const result = await team.fetchEditors("42");
       expect(result).toEqual(editorList);
-      expect(contractMock.methods.editorListURI).toHaveBeenCalledWith("42");
+      expect(contractMock.read.editorListURI).toHaveBeenCalledWith([42n]);
       expect(getFromRemoteIPFSMock).toHaveBeenCalledWith("bafyEditors");
       const stored = JSON.parse(localStorage.getItem("arbesk_editor_list_42"));
       expect(stored.list).toEqual(editorList);
@@ -120,7 +114,7 @@ describe("team service", () => {
     });
 
     it("falls back to localStorage when chain/IPFS fails", async () => {
-      contractMock.methods.editorListURI.mockImplementation(() => {
+      contractMock.read.editorListURI.mockImplementation(() => {
         throw new Error("chain down");
       });
       getFromRemoteIPFSMock.mockRejectedValue(new Error("ipfs down"));
@@ -145,7 +139,7 @@ describe("team service", () => {
     });
 
     it("returns an empty array when everything fails", async () => {
-      contractMock.methods.editorListURI.mockImplementation(() => {
+      contractMock.read.editorListURI.mockImplementation(() => {
         throw new Error("chain down");
       });
       getFromRemoteIPFSMock.mockRejectedValue(new Error("ipfs down"));
@@ -153,8 +147,8 @@ describe("team service", () => {
     });
 
     it("uses walletState contract when the module-level contract is null", async () => {
-      const methods = {
-        editorListURI: jest.fn(() => ({ call: jest.fn().mockResolvedValue("bafyFromState") })),
+      const read = {
+        editorListURI: jest.fn().mockResolvedValue("bafyFromState"),
       };
       jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
         contract: null,
@@ -162,7 +156,7 @@ describe("team service", () => {
         updateEditors: updateEditorsMock,
         CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
       }));
-      walletStateGetMock.mockReturnValue({ contract: { methods }, walletAddress: "0xOwnerAddress" });
+      walletStateGetMock.mockReturnValue({ contract: { read }, walletAddress: "0xOwnerAddress" });
       getFromRemoteIPFSMock.mockResolvedValue(editorList);
 
       jest.resetModules();
@@ -170,7 +164,7 @@ describe("team service", () => {
       const fresh = await import("../../frontend/src/js/services/team.js");
       const result = await fresh.fetchEditors("42");
       expect(result).toEqual(editorList);
-      expect(methods.editorListURI).toHaveBeenCalledWith("42");
+      expect(read.editorListURI).toHaveBeenCalledWith([42n]);
     });
   });
 
@@ -180,9 +174,7 @@ describe("team service", () => {
     });
 
     it("returns false when the owner address differs", async () => {
-      contractMock.methods.ownerOf.mockReturnValue({
-        call: jest.fn().mockResolvedValue("0xOtherAddress"),
-      });
+      contractMock.read.ownerOf.mockResolvedValue("0xOtherAddress");
       expect(await team.isOwner("42")).toBe(false);
     });
 
@@ -192,7 +184,7 @@ describe("team service", () => {
     });
 
     it("returns false when ownerOf throws", async () => {
-      contractMock.methods.ownerOf.mockImplementation(() => {
+      contractMock.read.ownerOf.mockImplementation(() => {
         throw new Error("revert");
       });
       expect(await team.isOwner("42")).toBe(false);
@@ -412,7 +404,7 @@ describe("team service", () => {
     });
 
     it("falls back to version 1 when the call fails", async () => {
-      contractMock.methods.editorSetVersion.mockImplementation(() => {
+      contractMock.read.editorSetVersion.mockImplementation(() => {
         throw new Error("revert");
       });
       expect(await team.getEditorSetVersion("42")).toBe(1);

@@ -52,18 +52,18 @@ async function loadModule() {
       walletState: {
         get: jest.fn(() => ({
           walletAddress: "0xOwner",
+          chainId: 31415822,
           contract: {
-            getPastEvents: jest.fn().mockResolvedValue([]),
-            methods: {
-              tokenURI: (tokenId) => ({
-                call:
-                  _tokenURIs[tokenId] instanceof Error
-                    ? jest.fn().mockRejectedValue(_tokenURIs[tokenId])
-                    : jest.fn().mockResolvedValue(_tokenURIs[tokenId] || ""),
-              }),
-              listTokens: () => ({
-                call: jest.fn().mockResolvedValue([]),
-              }),
+            address: "0xContract0000000000000000000000000000000001",
+            abi: [],
+            read: {
+              tokenURI: (args) => {
+                const uri = _tokenURIs[String(args[0])];
+                return uri instanceof Error
+                  ? Promise.reject(uri)
+                  : Promise.resolve(uri || "");
+              },
+              listTokens: () => Promise.resolve([]),
             },
           },
         })),

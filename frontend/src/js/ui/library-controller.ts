@@ -67,7 +67,7 @@ async function fetchCollectionMetadata(
   if (!c) return null;
   try {
     const uriStart = performance.now();
-    const cid = await c.methods.tokenURI(tokenId).call();
+    const cid = await c.read.tokenURI([BigInt(tokenId)]);
     console.log(
       `[${ts()}] [LIBRARY] tokenURI ${tokenId} → ${cid ? cid.slice(0, 20) + "…" : null} ` +
         `(${Math.round(performance.now() - uriStart)}ms)`
@@ -105,7 +105,7 @@ async function isTokenOwnedBy(tokenId: string, address: string): Promise<boolean
   const c = getActiveContract();
   if (!c || !address) return false;
   try {
-    const owner = await c.methods.ownerOf(tokenId).call();
+    const owner = await c.read.ownerOf([BigInt(tokenId)]);
     return owner.toLowerCase() === address.toLowerCase();
   } catch {
     return false;

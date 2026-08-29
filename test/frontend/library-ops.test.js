@@ -16,10 +16,10 @@ let _isStoredForm = jest.fn();
 
 let _walletAddress = "0xUser";
 let _contract = {
-  methods: {
-    ownerOf: () => ({ call: jest.fn().mockRejectedValue(new Error("ERC721NonexistentToken")) }),
-    tokenURI: () => ({ call: jest.fn() }),
-    editorSetVersion: () => ({ call: jest.fn().mockResolvedValue("1") }),
+  read: {
+    ownerOf: () => Promise.reject(new Error("ERC721NonexistentToken")),
+    tokenURI: () => Promise.resolve(undefined),
+    editorSetVersion: () => Promise.resolve(1n),
   },
 };
 
@@ -183,9 +183,9 @@ describe("createNamedCollection", () => {
     const ownerOfCall = jest.fn().mockResolvedValue("0xUser");
     const tokenURICall = jest.fn().mockResolvedValue("bafyExisting");
     _contract = {
-      methods: {
-        ownerOf: () => ({ call: ownerOfCall }),
-        tokenURI: () => ({ call: tokenURICall }),
+      read: {
+        ownerOf: () => ownerOfCall(),
+        tokenURI: () => tokenURICall(),
       },
     };
 

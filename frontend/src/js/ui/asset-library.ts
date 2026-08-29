@@ -13,7 +13,7 @@ import {
   initEngine,
 } from "../engine/scene-graph.ts";
 import { ensureBabylon } from "../engine/babylon-loader.ts";
-import { getActiveContract, web3 } from "../blockchain/wallet.ts";
+import { getActiveContract, getReadClient } from "../blockchain/wallet.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { deleteAssetFromCollection } from "../services/asset-delete.ts";
 import { trimTokenId } from "../utils/library-items.ts";
@@ -141,10 +141,21 @@ function _writeOwnedTokensCache(
   }
 }
 
+/** Standard ERC-721 Transfer event ABI item for getLogs. */
+const TRANSFER_EVENT_ABI_ITEM = {
+  type: "event",
+  name: "Transfer",
+  inputs: [
+    { name: "from", type: "address", indexed: true },
+    { name: "to", type: "address", indexed: true },
+    { name: "tokenId", type: "uint256", indexed: true },
+  ],
+} as const;
+
 /**
  * Fetch Transfer events for a specific address in small block chunks.
  * Public RPCs like Base Sepolia reject wide eth_getLogs ranges with 413.
- * @param contract - Web3 contract instance
+ * @param contract - viem contract instance
  * @param latest - pre-fetched current block number
  */
 async function fetchTransferEvents(
@@ -155,8 +166,6 @@ async function fetchTransferEvents(
   latest: number
 ): Promise<any[]> {
   const allEvents: any[] = [];
-  const filter = direction === "to" ? { to: address } : { from: address };
-
   try {
     const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
     const chunkSize = LOG_CHUNK_SIZES[chainId] ?? DEFAULT_EVENT_CHUNK_SIZE;
@@ -172,10 +181,12 @@ async function fetchTransferEvents(
 
     for (let from = fromBlock; from <= latest; from += chunkSize) {
       const to = Math.min(from + chunkSize - 1, latest);
-      const chunk = await contract.getPastEvents("Transfer", {
-        filter,
-        fromBlock: from,
-        toBlock: to,
+      const chunk = await getReadClient(chainId).getLogs({
+        address: contract.address as `0x${string}`,
+        event: TRANSFER_EVENT_ABI_ITEM,
+        args: direction === "to" ? { to: address } : { from: address },
+        fromBlock: BigInt(from),
+        toBlock: BigInt(to),
       });
       allEvents.push(...chunk);
     }
@@ -227,7 +238,7 @@ export async function fetchOwnedTokenIds(
     }
   }
 
-  const latest = Number(await web3.eth.getBlockNumber());
+  const latest = Number(await getReadClient(chainId).getBlockNumber());
   const [transfersTo, transfersFrom] = await Promise.all([
     fetchTransferEvents(contract, address, "to", startBlock, latest),
     fetchTransferEvents(contract, address, "from", startBlock, latest),
@@ -242,8 +253,8 @@ export async function fetchOwnedTokenIds(
 
   let maxBlock = startBlock;
   for (const event of allTransfers) {
-    const tokenId = String(event.returnValues.tokenId);
-    ownership.set(tokenId, event.returnValues.to.toLowerCase());
+    const tokenId = String(event.args.tokenId);
+    ownership.set(tokenId, event.args.to.toLowerCase());
     if (Number(event.blockNumber) > maxBlock) {
       maxBlock = Number(event.blockNumber);
     }
@@ -281,8 +292,16 @@ async function fetchAssetLibrary(
     if (!Array.isArray(shared)) shared = [];
 
     // Fallback for local/dev contracts that expose listTokens(address).
-    if (shared.length === 0 && typeof contract.methods.listTokens === "function") {
-      const memberTokens = await contract.methods.listTokens(address).call();
+    const hasListTokens = Array.isArray(contract.abi)
+      ? contract.abi.some((i: any) => i.type === "function" && i.name === "listTokens")
+      : false;
+    if (shared.length === 0 && hasListTokens) {
+      const memberTokens = await getReadClient().readContract({
+        address: contract.address as `0x${string}`,
+        abi: contract.abi,
+        functionName: "listTokens",
+        args: [address],
+      });
       for (const tokenId of memberTokens) {
         const id = String(tokenId);
         if (!owned.includes(id)) shared.push(id);
@@ -309,7 +328,7 @@ export async function expandTokenToAssets(
   if (!contract) return [];
 
   try {
-    const cid = await contract.methods.tokenURI(tokenId).call();
+    const cid = await contract.read.tokenURI([BigInt(tokenId)]);
     if (!cid) return [];
 
     const manifest = await getFromRemoteIPFS(cid);
@@ -465,7 +484,7 @@ export async function openAssetByTokenId(
 
   let progressStarted = false;
   try {
-    const cid = await contract.methods.tokenURI(tokenId).call();
+    const cid = await contract.read.tokenURI([BigInt(tokenId)]);
     if (!cid) {
       console.warn(`[LIBRARY] No tokenURI for Token ID: ${tokenId}; keeping studio empty`);
       clearScene();

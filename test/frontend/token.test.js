@@ -12,9 +12,9 @@ function makeContract(overrides = {}) {
     ...overrides,
   };
   return {
-    methods: {
-      tokenURI: (id) => ({ call: async () => calls.tokenURI(id) }),
-      ownerOf: (id) => ({ call: async () => calls.ownerOf(id) }),
+    read: {
+      tokenURI: (args) => calls.tokenURI(args[0]),
+      ownerOf: (args) => calls.ownerOf(args[0]),
     },
     _calls: calls,
   };
@@ -60,7 +60,7 @@ describe("token service", () => {
       const { mod } = await loadModule({ contract: c });
       const cid = await mod.getTokenURI(TOKEN_ID);
       expect(cid).toBe(CID);
-      expect(c._calls.tokenURI).toHaveBeenCalledWith(String(TOKEN_ID));
+      expect(c._calls.tokenURI).toHaveBeenCalledWith(BigInt(TOKEN_ID));
     });
 
     it("returns null when no contract is available", async () => {
@@ -76,7 +76,7 @@ describe("token service", () => {
       const { mod } = await loadModule({ contract: c });
       const owner = await mod.getOwnerOf(TOKEN_ID);
       expect(owner).toBe(OWNER);
-      expect(c._calls.ownerOf).toHaveBeenCalledWith(String(TOKEN_ID));
+      expect(c._calls.ownerOf).toHaveBeenCalledWith(BigInt(TOKEN_ID));
     });
 
     it("returns null when the token does not exist (contract throws)", async () => {
