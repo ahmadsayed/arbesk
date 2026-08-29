@@ -91,6 +91,9 @@ fallback `"gltf"`) and dispatches to a `FormatCodec` (`formats/codec.ts`).
 
 - `gltf/` — the primary codec: `composer.ts`/`decomposer.ts` (glTF JSON),
   `glb-codec.ts`/`glb-parser.ts` (binary GLB), `gltf-core.ts` (compose entry),
+  `image-mime.ts` (magic-byte MIME sniff + extension map, shared with the
+  worker), `glb-image-resolve.ts` (image bytes from data-URI/bufferView,
+  shared with the worker),
   `material-editor.ts`/`source-color-editor.ts` (parametric color/scale),
   `merkle-editors.ts`, `dedup.ts`, `bounds.ts`, `cache-aware-fetch.ts`.
 - `async-gltf.ts` — dispatches heavy glTF ops through the `ExecutorPort` (Web

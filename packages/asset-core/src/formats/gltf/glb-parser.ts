@@ -11,6 +11,8 @@
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
 import { getRuntime } from "../../runtime.ts";
 import { sanitizeFileName, extractDataURI } from "../../utils/uri.ts";
+import { extFromMimeType } from "./image-mime.ts";
+import { resolveGlbImageBytes } from "./glb-image-resolve.ts";
 import {
   uploadWithDedup,
   attachDedupMeta,
@@ -84,57 +86,6 @@ export async function parseGLB(
     : null;
 
   return { json, binaryChunk };
-}
-
-/**
- * Image signatures for magic-byte detection: required byte values at absolute
- * offsets, -1 as a wildcard (the WebP RIFF size field). KTX2 is what keeps
- * Basis-compressed glTF textures working — generic sniffers (file-type et
- * al.) don't cover it, which is why this table exists instead of a library.
- */
-const IMAGE_SIGNATURES: Array<{ mime: string; magic: number[] }> = [
-  { mime: "image/png", magic: [0x89, 0x50, 0x4e, 0x47] },
-  { mime: "image/jpeg", magic: [0xff, 0xd8, 0xff] },
-  // WebP: "RIFF" <4-byte size> "WEBP"
-  { mime: "image/webp", magic: [0x52, 0x49, 0x46, 0x46, -1, -1, -1, -1, 0x57, 0x45, 0x42, 0x50] },
-  // KTX2: "\xABKTX 11\xBB\r\n\x1A\n"
-  { mime: "image/ktx2", magic: [0xab, 0x4b, 0x54, 0x58, 0x20, 0x31, 0x31, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a] },
-  { mime: "image/gif", magic: [0x47, 0x49, 0x46] },
-];
-
-/**
- * Detect image MIME type from magic bytes.
- */
-function detectImageMimeType(bytes: Uint8Array): string | null {
-  if (bytes.length < 4) return null;
-  for (const { mime, magic } of IMAGE_SIGNATURES) {
-    if (bytes.length < magic.length) continue;
-    let matches = true;
-    for (let i = 0; i < magic.length; i++) {
-      if (magic[i] >= 0 && bytes[i] !== magic[i]) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) return mime;
-  }
-  return null;
-}
-
-/**
- * Get file extension from a MIME type.
- */
-function extFromMimeType(mimeType: string | null | undefined): string {
-  if (!mimeType) return "bin";
-  const map: Record<string, string> = {
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/webp": "webp",
-    "image/ktx2": "ktx2",
-    "image/gif": "gif",
-    "application/octet-stream": "bin",
-  };
-  return map[mimeType] || mimeType.split("/").pop() || "bin";
 }
 
 type GlbWriter = (bytes: Uint8Array | string, filename: string) => Promise<string>;
@@ -248,60 +199,6 @@ interface UploadContext {
 }
 
 /**
- * Resolve an image entry's bytes + MIME type from a data-URI or a bufferView
- * (magic-byte sniff when the entry carries no mimeType). Returns null after
- * logging when the image can't be resolved or is empty.
- */
-function resolveImageBytes(
-  composite: any,
-  bufferBytesByIndex: Array<Uint8Array | undefined>,
-  img: any,
-  index: number
-): { bytes: Uint8Array; mimeType: string | null } | null {
-  let bytes: Uint8Array | null = null;
-  let mimeType = img.mimeType || null;
-
-  if (img.uri && img.uri.startsWith("data:")) {
-    const extracted = extractDataURI(img.uri);
-    if (extracted) {
-      bytes = extracted.bytes;
-      mimeType = mimeType || extracted.mimeType;
-    }
-  } else if (img.bufferView !== undefined) {
-    const bufferView = composite.bufferViews?.[img.bufferView];
-    if (!bufferView) {
-      console.warn(
-        `[GLB-DECOMPOSE] image[${index}] bufferView ${img.bufferView} not found`
-      );
-      return null;
-    }
-    const srcBytes = bufferBytesByIndex[bufferView.buffer];
-    if (!srcBytes) {
-      console.warn(
-        `[GLB-DECOMPOSE] image[${index}] buffer ${bufferView.buffer} could not be resolved`
-      );
-      return null;
-    }
-    const byteOffset = bufferView.byteOffset || 0;
-    bytes = srcBytes.subarray(byteOffset, byteOffset + bufferView.byteLength);
-    if (!mimeType) {
-      mimeType = detectImageMimeType(bytes);
-    }
-  } else {
-    console.warn(
-      `[GLB-DECOMPOSE] image[${index}] has no uri or bufferView, skipping`
-    );
-    return null;
-  }
-
-  if (!bytes || bytes.length === 0) {
-    console.warn(`[GLB-DECOMPOSE] image[${index}] empty payload, skipping`);
-    return null;
-  }
-  return { bytes, mimeType };
-}
-
-/**
  * Plan image extraction: resolve each image's bytes (data-URI or bufferView)
  * and MIME type, and record the buffer range a bufferView image can later be
  * pruned from. External/already-composite URIs are left as-is.
@@ -327,7 +224,7 @@ function collectImageUploadTasks(
       continue;
     }
 
-    const resolved = resolveImageBytes(composite, bufferBytesByIndex, img, i);
+    const resolved = resolveGlbImageBytes(composite, bufferBytesByIndex, img, i, "[GLB-DECOMPOSE]");
     if (!resolved) continue;
 
     let removal: ImageRemoval | null = null;

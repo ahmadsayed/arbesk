@@ -33,6 +33,8 @@ import {
   composeGltfJson,
   decomposeGltfJson,
 } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
+import { extFromMimeType } from "@arbesk/asset-core/formats/gltf/image-mime.js";
+import { resolveGlbImageBytes } from "@arbesk/asset-core/formats/gltf/glb-image-resolve.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
 
@@ -51,58 +53,6 @@ function getIO(): any {
 }
 
 // ─── Remaining Worker Utilities ─────────────────────────────────────────
-
-function detectImageMimeType(bytes: Uint8Array): string | null {
-  const b = bytes;
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
-    return "image/png";
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
-  if (
-    b.length >= 12 &&
-    b[0] === 0x52 &&
-    b[1] === 0x49 &&
-    b[2] === 0x46 &&
-    b[3] === 0x46 &&
-    b[8] === 0x57 &&
-    b[9] === 0x45 &&
-    b[10] === 0x42 &&
-    b[11] === 0x50
-  ) {
-    return "image/webp";
-  }
-  if (
-    b.length >= 12 &&
-    b[0] === 0xab &&
-    b[1] === 0x4b &&
-    b[2] === 0x54 &&
-    b[3] === 0x58 &&
-    b[4] === 0x20 &&
-    b[5] === 0x31 &&
-    b[6] === 0x31 &&
-    b[7] === 0xbb &&
-    b[8] === 0x0d &&
-    b[9] === 0x0a &&
-    b[10] === 0x1a &&
-    b[11] === 0x0a
-  ) {
-    return "image/ktx2";
-  }
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
-  return null;
-}
-
-function extFromMimeType(mimeType: string | null | undefined): string {
-  if (!mimeType) return "bin";
-  const map: Record<string, string> = {
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/webp": "webp",
-    "image/ktx2": "ktx2",
-    "image/gif": "gif",
-    "application/octet-stream": "bin",
-  };
-  return map[mimeType] || mimeType.split("/").pop() || "bin";
-}
 
 /**
  * Decompress a gzip stream (magic bytes 0x1f 0x8b) using the native
@@ -293,26 +243,17 @@ function resolveBufferBytes(
   return null;
 }
 
-async function decomposeGlb(payload: any) {
-  const { arrayBuffer } = payload || {};
-  if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
-
-  const { json, resources } = await getIO().binaryToJSON(
-    new Uint8Array(arrayBuffer)
-  );
-  const binBytes = resources[GLB_BUFFER];
-  const binaryChunk = binBytes
-    ? binBytes.buffer.slice(
-        binBytes.byteOffset,
-        binBytes.byteOffset + binBytes.byteLength
-      )
-    : null;
-
-  const composite = JSON.parse(JSON.stringify(json));
+/**
+ * Buffer loop of decomposeGlb: resolve each embedded buffer to bytes (skips
+ * ipfs:// refs and external URIs) and rewrite the composite entries to worker
+ * placeholders. Mutates composite.buffers.
+ */
+function extractGlbBuffers(
+  composite: any,
+  binaryChunk: ArrayBuffer | Uint8Array | null
+): { buffers: ExtractedBufferEntry[]; bufferBytesByIndex: Uint8Array[] } {
   const buffers: ExtractedBufferEntry[] = [];
-  const images: ExtractedImageEntry[] = [];
   const bufferBytesByIndex: Uint8Array[] = [];
-
   const gltfBuffers = composite.buffers || [];
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
@@ -350,7 +291,20 @@ async function decomposeGlb(payload: any) {
       uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1),
     };
   }
+  return { buffers, bufferBytesByIndex };
+}
 
+/**
+ * Image loop of decomposeGlb: extract each embedded image (data-URI or
+ * bufferView) and rewrite the composite entries to worker placeholders.
+ * ipfs:// refs become skip entries; external URIs stay as-is. Mutates
+ * composite.images.
+ */
+function extractGlbImages(
+  composite: any,
+  bufferBytesByIndex: Uint8Array[]
+): ExtractedImageEntry[] {
+  const images: ExtractedImageEntry[] = [];
   const gltfImages = composite.images || [];
   for (let i = 0; i < gltfImages.length; i++) {
     const img = gltfImages[i];
@@ -371,49 +325,11 @@ async function decomposeGlb(payload: any) {
       continue;
     }
 
-    let bytes: Uint8Array | null = null;
-    let mimeType: string | null = img.mimeType || null;
-
-    if (img.uri && img.uri.startsWith("data:")) {
-      const extracted = extractDataURI(img.uri);
-      if (extracted) {
-        bytes = extracted.bytes;
-        mimeType = mimeType || extracted.mimeType;
-      }
-    } else if (img.bufferView !== undefined) {
-      const bufferView = composite.bufferViews?.[img.bufferView];
-      if (!bufferView) {
-        console.warn(
-          `[WORKER-DECOMPOSE] GLB image[${i}] bufferView ${img.bufferView} not found`
-        );
-        continue;
-      }
-      const srcBytes = bufferBytesByIndex[bufferView.buffer];
-      if (!srcBytes) {
-        console.warn(
-          `[WORKER-DECOMPOSE] GLB image[${i}] buffer ${bufferView.buffer} could not be resolved`
-        );
-        continue;
-      }
-      const byteOffset = bufferView.byteOffset || 0;
-      const byteLength = bufferView.byteLength;
-      bytes = srcBytes.subarray(byteOffset, byteOffset + byteLength);
-      if (!mimeType) {
-        mimeType = detectImageMimeType(bytes);
-      }
-    } else {
-      console.warn(
-        `[WORKER-DECOMPOSE] GLB image[${i}] has no uri or bufferView, skipping`
-      );
-      continue;
-    }
-
-    if (!bytes || bytes.length === 0) {
-      console.warn(
-        `[WORKER-DECOMPOSE] GLB image[${i}] empty payload, skipping`
-      );
-      continue;
-    }
+    const resolved = resolveGlbImageBytes(
+      composite, bufferBytesByIndex, img, i, "[WORKER-DECOMPOSE] GLB"
+    );
+    if (!resolved) continue;
+    const { bytes, mimeType } = resolved;
 
     const ext = extFromMimeType(mimeType);
     const name = `texture_${i}.${ext}`;
@@ -426,6 +342,27 @@ async function decomposeGlb(payload: any) {
       composite.images[i].mimeType = mimeType;
     }
   }
+  return images;
+}
+
+async function decomposeGlb(payload: any) {
+  const { arrayBuffer } = payload || {};
+  if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
+
+  const { json, resources } = await getIO().binaryToJSON(
+    new Uint8Array(arrayBuffer)
+  );
+  const binBytes = resources[GLB_BUFFER];
+  const binaryChunk = binBytes
+    ? binBytes.buffer.slice(
+        binBytes.byteOffset,
+        binBytes.byteOffset + binBytes.byteLength
+      )
+    : null;
+
+  const composite = JSON.parse(JSON.stringify(json));
+  const { buffers, bufferBytesByIndex } = extractGlbBuffers(composite, binaryChunk);
+  const images = extractGlbImages(composite, bufferBytesByIndex);
 
   return { composite, buffers, images };
 }
