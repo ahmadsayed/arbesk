@@ -184,7 +184,10 @@ async function fetchTransferEvents(
       const chunk = await getReadClient(chainId).getLogs({
         address: contract.address as `0x${string}`,
         event: TRANSFER_EVENT_ABI_ITEM,
-        args: direction === "to" ? { to: address } : { from: address },
+        args:
+          direction === "to"
+            ? { to: address as `0x${string}` }
+            : { from: address as `0x${string}` },
         fromBlock: BigInt(from),
         toBlock: BigInt(to),
       });
@@ -296,12 +299,12 @@ async function fetchAssetLibrary(
       ? contract.abi.some((i: any) => i.type === "function" && i.name === "listTokens")
       : false;
     if (shared.length === 0 && hasListTokens) {
-      const memberTokens = await getReadClient().readContract({
+      const memberTokens = (await getReadClient().readContract({
         address: contract.address as `0x${string}`,
         abi: contract.abi,
         functionName: "listTokens",
         args: [address],
-      });
+      })) as readonly bigint[];
       for (const tokenId of memberTokens) {
         const id = String(tokenId);
         if (!owned.includes(id)) shared.push(id);

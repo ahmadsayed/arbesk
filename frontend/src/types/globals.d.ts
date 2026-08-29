@@ -2,12 +2,11 @@
  * Type declarations for globals loaded via CDN script tags in the Pug templates.
  *
  * These are intentionally loose (`any`) to get the type-checker running quickly
- * without fighting Babylon.js / Web3 / IPFS global shapes. Tighten them later
- * if needed (e.g. install `babylonjs` or `@types/web3`).
+ * without fighting Babylon.js / IPFS global shapes. Tighten them later
+ * if needed (e.g. install `babylonjs`).
  */
 
 declare const BABYLON: any;
-declare const Web3: any;
 declare const IpfsHttpClient: any;
 
 declare namespace BABYLON {

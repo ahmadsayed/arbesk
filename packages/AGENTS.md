@@ -42,7 +42,7 @@ independent of each other and of the frontend/backend trees.
 ## Shared conventions (all packages)
 
 - **Boundary**: no imports from `frontend/`, `src/api/`, or `constants/`; no
-  browser globals (`window`/`document`/`Web3`/`navigator`/`localStorage`); no
+  browser globals (`window`/`document`/`navigator`/`localStorage`); no
   `@babylonjs/*`. eslint enforces this. New capability the package needs from
   the outside → add a port to its `src/types.ts`, never an import.
 - **Erasable TypeScript only** (Node type-stripping): no enums/namespaces,

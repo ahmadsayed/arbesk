@@ -51,7 +51,7 @@ function isFreeTierContract() {
   return (
     !!c &&
     Array.isArray(c.abi) &&
-    c.abi.some((i) => i.type === "function" && i.name === "recordGeneration")
+    c.abi.some((i: any) => i.type === "function" && i.name === "recordGeneration")
   );
 }
 
@@ -252,15 +252,15 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
         inputs: [{ name: "account", type: "address" }],
         outputs: [{ name: "", type: "uint256" }],
       },
-    ];
+    ] as const;
 
     // Check USDC balance before attempting payment
-    const balance = await getReadClient(chainId).readContract({
+    const balance = (await getReadClient(chainId).readContract({
       address: usdcAddr as `0x${string}`,
       abi: usdcAbi,
       functionName: "balanceOf",
-      args: [walletState.get().walletAddress],
-    });
+      args: [walletState.get().walletAddress as `0x${string}`],
+    })) as bigint;
     if (balance < tierCostWei) {
       const balanceUSDC = Number(balance) / 1e6;
       showToast({
@@ -282,12 +282,15 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
     // Reset allowance to 0 first if there's a stale non-zero allowance.
     // Some ERC20 tokens require this to prevent front-running; USDC doesn't
     // but it's a safe practice that costs minimal gas.
-    const currentAllowance = await getReadClient(chainId).readContract({
+    const currentAllowance = (await getReadClient(chainId).readContract({
       address: usdcAddr as `0x${string}`,
       abi: usdcAbi,
       functionName: "allowance",
-      args: [walletState.get().walletAddress, contractAddress],
-    });
+      args: [
+        walletState.get().walletAddress as `0x${string}`,
+        contractAddress as `0x${string}`,
+      ],
+    })) as bigint;
     if (currentAllowance > 0n) {
       console.log(
         "[USDC] resetting existing allowance:",
@@ -316,12 +319,15 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
     // Verify the allowance was actually set (critical for OP Stack L2s where
     // sequencer state may lag behind). Retry up to 5 times with a 500ms delay.
     for (let attempt = 0; attempt < 5; attempt++) {
-      const allowed = await getReadClient(chainId).readContract({
+      const allowed = (await getReadClient(chainId).readContract({
         address: usdcAddr as `0x${string}`,
         abi: usdcAbi,
         functionName: "allowance",
-        args: [walletState.get().walletAddress, contractAddress],
-      });
+        args: [
+          walletState.get().walletAddress as `0x${string}`,
+          contractAddress as `0x${string}`,
+        ],
+      })) as bigint;
       if (allowed >= tierCostWei) {
         console.log("[USDC] allowance verified:", allowed.toString());
         break;

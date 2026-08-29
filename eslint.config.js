@@ -149,10 +149,8 @@ export default [
       globals: {
         ...globals.browser,
         BABYLON: "readonly",
-        Web3: "readonly",
         IpfsHttpClient: "readonly",
         ethereum: "readonly",
-        web3: "readonly",
         WorkerGlobalScope: "readonly",
       },
     },

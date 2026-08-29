@@ -48,7 +48,7 @@ backend/frontend both build on it.
   `Signer`, so it is wallet-kind-independent. `tokenId` is `uint256` on-chain —
   always coerce to `bigint`.
 - **Seams** (host injects, package never imports): `SignatureVerifier` (backend
-  wires `viem`/`web3` recovery) and `SessionStore` (backend in-memory, browser
+  wires `viem` recovery) and `SessionStore` (backend in-memory, browser
   localStorage-backed).
 
 ## Structure
