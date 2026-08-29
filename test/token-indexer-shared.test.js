@@ -6,35 +6,24 @@ import { jest } from "@jest/globals";
 const TEST_CHAIN = 999901;
 
 let _getBlockNumber;
-let _getPastLogs;
+let _getLogs;
 let _editorListURI;
 let _cat;
 
 async function loadModule() {
-  _getBlockNumber = jest.fn().mockResolvedValue(0);
-  _getPastLogs = jest.fn().mockResolvedValue([]);
+  _getBlockNumber = jest.fn().mockResolvedValue(0n);
+  _getLogs = jest.fn().mockResolvedValue([]);
   _editorListURI = jest.fn().mockResolvedValue("");
   _cat = jest.fn().mockResolvedValue("[]");
 
-  const fakeContractMethods = {
-    editorListURI: (tokenId) => ({ call: () => _editorListURI(tokenId) }),
-  };
-
-  const fakeWeb3 = {
-    eth: {
-      getBlockNumber: _getBlockNumber,
-      getPastLogs: _getPastLogs,
-      Contract: class {
-        constructor() {
-          this.methods = fakeContractMethods;
-        }
-      },
-    },
-    utils: { toBigInt: (x) => BigInt(x) },
+  const fakeClient = {
+    getBlockNumber: _getBlockNumber,
+    getLogs: _getLogs,
+    readContract: _editorListURI,
   };
 
   await jest.unstable_mockModule("../src/config.ts", () => ({
-    getWeb3: jest.fn(() => fakeWeb3),
+    getPublicClient: jest.fn(() => fakeClient),
     getContractAddress: jest.fn(() => "0x0000000000000000000000000000000000000001"),
     NETWORK_CONFIGS: {},
   }));
@@ -54,23 +43,26 @@ test("indexes editor-shared tokens from EditorSetChanged events", async () => {
   const owner = "0x0000000000000000000000000000000000000AAA".toLowerCase();
   const editor = "0x0000000000000000000000000000000000000BBB".toLowerCase();
 
-  _getBlockNumber.mockResolvedValue(10);
-  _getPastLogs.mockResolvedValue([
+  _getBlockNumber.mockResolvedValue(10n);
+  _getLogs.mockResolvedValue([
     {
-      blockNumber: 10,
-      topics: [
-        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "0x000000000000000000000000" + owner.slice(2),
-        "0x0000000000000000000000000000000000000000000000000000000000000001",
-      ],
+      eventName: "Transfer",
+      args: {
+        from: "0x0000000000000000000000000000000000000000",
+        to: owner,
+        tokenId: 1n,
+      },
+      blockNumber: 10n,
     },
     {
-      blockNumber: 10,
-      topics: [
-        "0xe04346630a2a402b40ab5f6918205fee5369cca36e2e6c2eebc4188b5f10c8c3",
-        "0x0000000000000000000000000000000000000000000000000000000000000001",
-      ],
+      eventName: "EditorSetChanged",
+      args: {
+        tokenId: 1n,
+        newRoot:
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+        newVersion: 1n,
+      },
+      blockNumber: 10n,
     },
   ]);
 
@@ -96,16 +88,16 @@ test("removes shared token when it is burned (transferred to zero)", async () =>
   indexer.tokenEditors.set("1", [editor]);
   indexer.editorTokens.set(editor, ["1"]);
 
-  _getBlockNumber.mockResolvedValue(20);
-  _getPastLogs.mockResolvedValue([
+  _getBlockNumber.mockResolvedValue(20n);
+  _getLogs.mockResolvedValue([
     {
-      blockNumber: 20,
-      topics: [
-        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-        "0x000000000000000000000000" + editor.slice(2),
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "0x0000000000000000000000000000000000000000000000000000000000000001",
-      ],
+      eventName: "Transfer",
+      args: {
+        from: editor,
+        to: "0x0000000000000000000000000000000000000000",
+        tokenId: 1n,
+      },
+      blockNumber: 20n,
     },
   ]);
 

@@ -6,7 +6,7 @@ export interface WalletState {
   walletAddress: string | null;
   eoaAddress: string | null;
   chainId: number | string | null;
-  /** Web3 contract instance (CDN global, untyped) */
+  /** viem contract instance (untyped) */
   contract: any;
   contractAddress: string | null;
   walletSource: "cdp" | "walletconnect" | "injected" | null;

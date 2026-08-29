@@ -50,7 +50,7 @@ export async function fetchEditors(tokenId: string | number): Promise<EditorEntr
 export async function isOwner(tokenId: string | number): Promise<boolean> {
   if (!wallet.contract || !walletState.get().walletAddress) return false;
   try {
-    const owner = await wallet.contract.methods.ownerOf(tokenId).call();
+    const owner = await wallet.contract.read.ownerOf([BigInt(tokenId)]);
     return (
       owner.toLowerCase() ===
         (walletState.get().walletAddress as string).toLowerCase()

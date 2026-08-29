@@ -11,9 +11,8 @@
  *   wallet-publishing.ts - NFT mint, tokenURI update, editor set, burn
  */
 
-// Core (shared state web3/contract + connection lifecycle)
+// Core (shared state contract + connection lifecycle)
 export {
-  web3,
   web3Provider,
   contract,
   initWallet,
@@ -21,12 +20,14 @@ export {
   disconnectWallet,
   autoConnectWallet,
   authenticateUser,
-  walletWeb3,
   getActiveConnectionSource,
   getActiveContract,
   getSigner,
   NETWORKS,
 } from "./wallet-core.ts";
+
+// viem read client (per-chain cached)
+export { getReadClient } from "./viem-clients.ts";
 
 // Network
 export { switchNetwork } from "./wallet-network.ts";

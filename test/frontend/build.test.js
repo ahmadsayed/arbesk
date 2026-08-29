@@ -10,7 +10,7 @@
  *   - wallet.js sets window.contractAddress after init
  *   - wallet.js mock tx does not self-transfer with data (MetaMask blocks it)
  *   - scene-graph.js calls loadTokenChildNode on asset drop
- *   - studio.html pins web3 to v1.x (not @latest which pulls v4)
+ *   - app.html no longer loads the web3 CDN; importmap pins viem
  */
 
 import fs from "fs";
@@ -139,11 +139,11 @@ describe("Frontend Build", () => {
     });
 
     test("approve fallback gas is set", () => {
-      expect(wallet).toMatch(/sendContractMethod\(usdcAddr, approveTx, \{\s*fallbackGas:\s*100000/);
+      expect(wallet).toMatch(/sendContractCall\(\{[\s\S]*?functionName:\s*"approve"[\s\S]*?fallbackGas:\s*100000/);
     });
 
     test("pay fallback gas is set", () => {
-      expect(wallet).toMatch(/sendContractMethod\(contractAddress, payTx, \{\s*fallbackGas:\s*300000/);
+      expect(wallet).toMatch(/sendContractCall\(\{[\s\S]*?functionName:\s*"payForGenerationWithUSDC"[\s\S]*?fallbackGas:\s*300000/);
     });
   });
 
@@ -168,9 +168,13 @@ describe("Frontend Build", () => {
   describe("studio.html CDN versions", () => {
     const html = readStudioHtml();
 
-    test("web3 is pinned to v1.10.0 (not @latest)", () => {
-      expect(html).toMatch(/web3@1\.10\.0/);
-      expect(html).not.toMatch(/web3@latest/);
+    test("web3 CDN script is removed", () => {
+      expect(html).not.toMatch(/web3@/);
+      expect(html).not.toMatch(/web3\.min\.js/);
+    });
+
+    test("importmap pins viem", () => {
+      expect(html).toMatch(/"viem":\s*"https:\/\/esm\.sh\/viem@2\.52\.2"/);
     });
 
     test("web3modal is removed (not present)", () => {

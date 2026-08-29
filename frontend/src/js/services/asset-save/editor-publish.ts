@@ -20,7 +20,7 @@ import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 async function getEditorRoot(tokenId: string | number) {
   if (!wallet.contract) return null;
   try {
-    return await wallet.contract.methods.editorRoot(tokenId).call();
+    return await wallet.contract.read.editorRoot([BigInt(tokenId)]);
   } catch (err) {
     console.warn("[EDITOR-PUBLISH] failed to read editorRoot:", (err as Error).message);
     return null;

@@ -60,20 +60,15 @@ beforeEach(() => {
 
 function _mockContract() {
   return {
-    methods: {
-      tokenURI: (tokenId) => ({
-        call: jest.fn().mockResolvedValue(
-          String(tokenId) === String(TARGET_TOKEN_ID)
+    read: {
+      tokenURI: (args) =>
+        Promise.resolve(
+          String(args[0]) === String(TARGET_TOKEN_ID)
             ? "bafyTargetCollection"
             : COLLECTION_CID
         ),
-      }),
-      editorSetVersion: (_tokenId) => ({
-        call: jest.fn().mockResolvedValue(String(VERSION)),
-      }),
-      editorListURI: (_tokenId) => ({
-        call: jest.fn().mockResolvedValue(null),
-      }),
+      editorSetVersion: () => Promise.resolve(BigInt(VERSION)),
+      editorListURI: () => Promise.resolve(null),
     },
   };
 }

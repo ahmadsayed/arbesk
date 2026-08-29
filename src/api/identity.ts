@@ -1,17 +1,19 @@
 /**
  * Backend identity composition root — wires @arbesk/wallet's verifyAuthProof to
- * the configured viem PublicClient + web3 recovery, and the SUPPORTED_CHAIN_IDS
- * constant. Replaces the old siwe-verify.ts + proof-verify.ts.
+ * the configured viem PublicClient + viem message recovery, and the
+ * SUPPORTED_CHAIN_IDS constant. Replaces the old siwe-verify.ts +
+ * proof-verify.ts.
  */
 import { verifyAuthProof } from "@arbesk/wallet/verify.js";
 import type { SignatureVerifier, AuthProof } from "@arbesk/wallet/types.js";
 import { verifyMessage } from "viem/actions";
+import { recoverMessageAddress } from "viem";
 import type { Address, Hex } from "viem";
-import { getViemPublicClient, web3 } from "../config.ts";
+import { getViemPublicClient } from "../config.ts";
 import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
 
 /**
- * SignatureVerifier over viem + web3 — the only environment-specific bit the
+ * SignatureVerifier over viem — the only environment-specific bit the
  * shared verifyAuthProof needs.
  */
 const verifier: SignatureVerifier = {
@@ -25,7 +27,7 @@ const verifier: SignatureVerifier = {
     });
   },
   async recoverAddress(message, signature) {
-    return web3.eth.accounts.recover(message, signature);
+    return recoverMessageAddress({ message, signature: signature as Hex });
   },
 };
 

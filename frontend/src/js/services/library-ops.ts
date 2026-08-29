@@ -73,8 +73,8 @@ export async function createNamedCollection(
   // non-existent token, so run them together to save an RPC round trip.
   try {
     const [, existingCid] = await Promise.all([
-      c.methods.ownerOf(tokenId).call(),
-      c.methods.tokenURI(tokenId).call(),
+      c.read.ownerOf([BigInt(tokenId)]),
+      c.read.tokenURI([BigInt(tokenId)]),
     ]);
     return { tokenId, manifestCid: existingCid, isNew: false };
   } catch {

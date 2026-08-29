@@ -80,7 +80,6 @@ script(src="https://cdn.jsdelivr.net/npm/focus-trap@7.6.2/dist/focus-trap.umd.mi
 //- Babylon.js is NOT loaded here — it is fetched lazily on first Studio
 //- entry by js/engine/babylon-loader.js, so the Library view and the
 //- sign-in modal boot without waiting for a 3D engine they never use.
-script(src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" crossorigin="anonymous" defer)
 script(type="importmap").
   {
     "imports": {
@@ -95,6 +94,7 @@ script(type="importmap").
       "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
       "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113?bundle",
       "siwe": "https://esm.sh/siwe@3.0.0",
+      "viem": "https://esm.sh/viem@2.52.2",
       "viem/utils": "https://esm.sh/viem@2.52.2/utils",
       "zod": "https://esm.sh/zod@3.25.76"
     }

@@ -11,6 +11,7 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+const { createPublicClient, http, decodeAbiParameters } = await import("viem");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = resolve(__dirname, "..", "..");
@@ -484,7 +485,7 @@ describe("Deployment Pipeline Integrity", () => {
 
   describe("on-chain contract integrity", () => {
     const HARDHAT_RPC = "http://127.0.0.1:8545";
-    let web3;
+    let client;
     let nodeAvailable = false;
     let freeAddr;
     let paidAddr;
@@ -530,10 +531,8 @@ describe("Deployment Pipeline Integrity", () => {
       usdcAddr = paidArtifact?.usdcToken || blockchainEnv.USDC_TOKEN;
 
       try {
-        const Web3 = (await import("web3")).default;
-        const temp = new Web3(HARDHAT_RPC);
-        await temp.eth.getBlockNumber();
-        web3 = temp;
+        client = createPublicClient({ transport: http(HARDHAT_RPC) });
+        await client.getBlockNumber();
         nodeAvailable = true;
         paidAbiData = loadABI(PAID_ARTIFACT_PATH);
         freeAbiData = loadABI(FREE_ARTIFACT_PATH);
@@ -560,30 +559,30 @@ describe("Deployment Pipeline Integrity", () => {
 
     test("free contract has code on-chain", async () => {
       if (!requireNode()) return;
-      const code = await web3.eth.getCode(freeAddr);
+      const code = await client.getCode({ address: freeAddr });
       expect(code).toBeTruthy();
       expect(code.length).toBeGreaterThan(4);
     });
 
     test("paid contract has code on-chain", async () => {
       if (!requireNode()) return;
-      const code = await web3.eth.getCode(paidAddr);
+      const code = await client.getCode({ address: paidAddr });
       expect(code).toBeTruthy();
       expect(code.length).toBeGreaterThan(4);
     });
 
     test("MockUSDC contract has code on-chain", async () => {
       if (!requireNode()) return;
-      const code = await web3.eth.getCode(usdcAddr);
+      const code = await client.getCode({ address: usdcAddr });
       expect(code).toBeTruthy();
       expect(code.length).toBeGreaterThan(4);
     });
 
     test("free, paid, and USDC have mutually different bytecode", async () => {
       if (!requireNode()) return;
-      const freeCode = await web3.eth.getCode(freeAddr);
-      const paidCode = await web3.eth.getCode(paidAddr);
-      const usdcCode = await web3.eth.getCode(usdcAddr);
+      const freeCode = await client.getCode({ address: freeAddr });
+      const paidCode = await client.getCode({ address: paidAddr });
+      const usdcCode = await client.getCode({ address: usdcAddr });
       expect(freeCode).not.toBe(paidCode);
       expect(freeCode).not.toBe(usdcCode);
       expect(paidCode).not.toBe(usdcCode);
@@ -591,52 +590,65 @@ describe("Deployment Pipeline Integrity", () => {
 
     test("MockUSDC responds to ERC20 decimals() = 6", async () => {
       if (!requireNode()) return;
-      const result = await web3.eth.call({
+      const result = await client.call({
         to: usdcAddr,
         data: "0x313ce567",
       });
-      expect(parseInt(result, 16)).toBe(6);
+      expect(parseInt(result.data, 16)).toBe(6);
     });
 
     test("MockUSDC symbol() returns 'USDC'", async () => {
       if (!requireNode()) return;
-      const result = await web3.eth.call({
+      const result = await client.call({
         to: usdcAddr,
         data: "0x95d89b41",
       });
-      const decoded = web3.eth.abi.decodeParameters(["string"], result);
+      const decoded = decodeAbiParameters([{ type: "string" }], result.data);
       expect(decoded[0]).toBe("USDC");
     });
 
     test("paid contract usdcToken() returns MockUSDC address", async () => {
       if (!requireNode()) return;
       if (!paidAbiData) return;
-      const asset = new web3.eth.Contract(paidAbiData, paidAddr);
-      const usdcFromChain = await asset.methods.usdcToken().call();
+      const usdcFromChain = await client.readContract({
+        address: paidAddr,
+        abi: paidAbiData,
+        functionName: "usdcToken",
+      });
       expect(usdcFromChain.toLowerCase()).toBe(usdcAddr.toLowerCase());
     });
 
     test("paid contract tierCosts(Basic) matches expected 750000", async () => {
       if (!requireNode()) return;
       if (!paidAbiData) return;
-      const asset = new web3.eth.Contract(paidAbiData, paidAddr);
-      const cost = await asset.methods.tierCosts(0).call();
+      const cost = await client.readContract({
+        address: paidAddr,
+        abi: paidAbiData,
+        functionName: "tierCosts",
+        args: [0n],
+      });
       expect(Number(cost)).toBe(750000);
     });
 
     test("free contract MAX_EDITORS_PER_TOKEN() returns 5000", async () => {
       if (!requireNode()) return;
       if (!freeAbiData) return;
-      const asset = new web3.eth.Contract(freeAbiData, freeAddr);
-      const limit = await asset.methods.MAX_EDITORS_PER_TOKEN().call();
+      const limit = await client.readContract({
+        address: freeAddr,
+        abi: freeAbiData,
+        functionName: "MAX_EDITORS_PER_TOKEN",
+      });
       expect(Number(limit)).toBe(5000);
     });
 
     test("free contract DAILY_GENERATION_LIMIT() returns 10", async () => {
       if (!requireNode()) return;
       if (!freeAbiData) return;
-      const asset = new web3.eth.Contract(freeAbiData, freeAddr);
-      const limit = await asset.methods.DAILY_GENERATION_LIMIT().call();
+      const limit = await client.readContract({
+        address: freeAddr,
+        abi: freeAbiData,
+        functionName: "DAILY_GENERATION_LIMIT",
+      });
       expect(Number(limit)).toBe(10);
     });
 
@@ -646,15 +658,15 @@ describe("Deployment Pipeline Integrity", () => {
       const data =
         "0x70a08231" +
         deployer.toLowerCase().replace("0x", "").padStart(64, "0");
-      const result = await web3.eth.call({ to: usdcAddr, data });
-      const balance = BigInt(result);
+      const result = await client.call({ to: usdcAddr, data });
+      const balance = BigInt(result.data);
       expect(balance).toBeGreaterThan(BigInt(0));
     });
 
     test("MockUSDC does NOT respond to ERC721 ownerOf()", async () => {
       if (!requireNode()) return;
       try {
-        await web3.eth.call({
+        await client.call({
           to: usdcAddr,
           data: "0x6352211e0000000000000000000000000000000000000000000000000000000000000001",
         });

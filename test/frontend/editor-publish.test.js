@@ -137,22 +137,14 @@ async function loadModule() {
 
 function _mockContract() {
   return {
-    methods: {
-      ownerOf: (_tokenId) => ({
-        call: jest.fn().mockImplementation(() => {
-          if (_ownerOfResult) return Promise.resolve(_ownerOfResult);
-          return Promise.reject(new Error("ERC721NonexistentToken"));
-        }),
-      }),
-      editorSetVersion: (_tokenId) => ({
-        call: jest.fn().mockResolvedValue(String(VERSION)),
-      }),
-      editorRoot: (_tokenId) => ({
-        call: jest.fn().mockResolvedValue(_editorRootResult),
-      }),
-      editorListURI: (_tokenId) => ({
-        call: jest.fn().mockResolvedValue("bafyEditorList"),
-      }),
+    read: {
+      ownerOf: () => {
+        if (_ownerOfResult) return Promise.resolve(_ownerOfResult);
+        return Promise.reject(new Error("ERC721NonexistentToken"));
+      },
+      editorSetVersion: () => Promise.resolve(BigInt(VERSION)),
+      editorRoot: () => Promise.resolve(_editorRootResult),
+      editorListURI: () => Promise.resolve("bafyEditorList"),
     },
   };
 }

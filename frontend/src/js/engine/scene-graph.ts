@@ -802,9 +802,8 @@ export function loadFromParams() {
 
   const { contract } = walletState.get();
   if (assetTokenId && contract) {
-    contract.methods
-      .tokenURI(assetTokenId)
-      .call()
+    contract.read
+      .tokenURI([BigInt(assetTokenId)])
       .then((cid: string|null) => {
         if (cid) {
           adoptOpenedAsset(cid, { tokenId: String(assetTokenId) });

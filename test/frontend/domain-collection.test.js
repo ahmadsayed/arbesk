@@ -20,9 +20,13 @@ import { initRuntime } from "@arbesk/asset-core/runtime.js";
 
 beforeEach(() => {
   _resetForTesting();
-  window.Web3 = {
-    utils: {
-      soliditySha3: jest.fn((...args) => {
+  // asset-core runtime seam: deriveDefaultCollectionId hashes through the
+  // injected HashPort (the real viem-backed browser hash port).
+  initRuntime({
+    ipfsRead: { getJSON: async () => null },
+    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
+    hash: {
+      soliditySha3: (...args) => {
         const payload = JSON.stringify(args);
         let hash = 0;
         for (let i = 0; i < payload.length; i++) {
@@ -30,17 +34,7 @@ beforeEach(() => {
           hash |= 0;
         }
         return "0x" + Math.abs(hash).toString(16).padStart(64, "0");
-      }),
-    },
-  };
-  // asset-core runtime seam: deriveDefaultCollectionId now hashes through the
-  // injected HashPort instead of the window.Web3 CDN global. The port
-  // delegates to the fake above so derived ids stay byte-identical.
-  initRuntime({
-    ipfsRead: { getJSON: async () => null },
-    ipfsWrite: { write: async () => "", writeJSON: async () => "" },
-    hash: {
-      soliditySha3: (...args) => window.Web3.utils.soliditySha3(...args),
+      },
       keccak256: () => "0x",
     },
   });

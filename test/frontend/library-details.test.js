@@ -129,7 +129,7 @@ async function load({
   );
   const ownerOfCall = jest.fn(async () => owner);
   const getActiveContract = jest.fn(() => ({
-    methods: { ownerOf: () => ({ call: ownerOfCall }) },
+    read: { ownerOf: () => ownerOfCall() },
   }));
   const ensureBabylon = jest.fn(async () => {
     if (babylonFails) throw new Error("no babylon");

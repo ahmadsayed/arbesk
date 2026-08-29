@@ -109,7 +109,7 @@ async function resolveOwner(tokenId: string): Promise<string | null> {
   const c = getActiveContract();
   if (!c) return null;
   try {
-    const owner = await c.methods.ownerOf(key).call();
+    const owner = await c.read.ownerOf([BigInt(key)]);
     const address = typeof owner === "string" ? owner : String(owner);
     _ownerCache.set(key, address);
     return address;

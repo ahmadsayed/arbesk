@@ -50,13 +50,13 @@ export function createBrowserChainPort(): ChainPort {
     getEditorListURI: async (assetTag) => {
       const contract = getActiveContract();
       if (!contract) return null;
-      const cid = await contract.methods.editorListURI(assetTag).call();
+      const cid = await contract.read.editorListURI([BigInt(assetTag)]);
       return cid || null;
     },
     getEditorListVersion: async (assetTag) => {
       const contract = getActiveContract();
       if (!contract) return 1;
-      const version = await contract.methods.editorSetVersion(assetTag).call();
+      const version = await contract.read.editorSetVersion([BigInt(assetTag)]);
       return Number(version);
     },
     resolveEmail: async (email) => {

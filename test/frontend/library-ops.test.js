@@ -16,10 +16,10 @@ let _isStoredForm = jest.fn();
 
 let _walletAddress = "0xUser";
 let _contract = {
-  methods: {
-    ownerOf: () => ({ call: jest.fn().mockRejectedValue(new Error("ERC721NonexistentToken")) }),
-    tokenURI: () => ({ call: jest.fn() }),
-    editorSetVersion: () => ({ call: jest.fn().mockResolvedValue("1") }),
+  read: {
+    ownerOf: () => Promise.reject(new Error("ERC721NonexistentToken")),
+    tokenURI: () => Promise.resolve(undefined),
+    editorSetVersion: () => Promise.resolve(1n),
   },
 };
 
@@ -35,20 +35,6 @@ beforeEach(() => {
       });
     };
   }
-
-  window.Web3 = {
-    utils: {
-      soliditySha3: jest.fn((...args) => {
-        const payload = JSON.stringify(args);
-        let hash = 0;
-        for (let i = 0; i < payload.length; i++) {
-          hash = (hash << 5) - hash + payload.charCodeAt(i);
-          hash |= 0;
-        }
-        return "0x" + Math.abs(hash).toString(16).padStart(64, "0");
-      }),
-    },
-  };
 
   _publishAsset = jest.fn().mockResolvedValue("0xTx");
   _writeToIPFS = jest.fn().mockResolvedValue("bafySource");
@@ -158,7 +144,15 @@ async function loadModule() {
     ipfsRead: { getJSON: (...args) => _getFromRemoteIPFS(...args) },
     ipfsWrite: { write: async () => "", writeJSON: async () => "" },
     hash: {
-      soliditySha3: (...args) => window.Web3.utils.soliditySha3(...args),
+      soliditySha3: (...args) => {
+        const payload = JSON.stringify(args);
+        let hash = 0;
+        for (let i = 0; i < payload.length; i++) {
+          hash = (hash << 5) - hash + payload.charCodeAt(i);
+          hash |= 0;
+        }
+        return "0x" + Math.abs(hash).toString(16).padStart(64, "0");
+      },
       keccak256: () => "0x",
     },
     storage: createBrowserStoragePort(),
@@ -183,9 +177,9 @@ describe("createNamedCollection", () => {
     const ownerOfCall = jest.fn().mockResolvedValue("0xUser");
     const tokenURICall = jest.fn().mockResolvedValue("bafyExisting");
     _contract = {
-      methods: {
-        ownerOf: () => ({ call: ownerOfCall }),
-        tokenURI: () => ({ call: tokenURICall }),
+      read: {
+        ownerOf: () => ownerOfCall(),
+        tokenURI: () => tokenURICall(),
       },
     };
 

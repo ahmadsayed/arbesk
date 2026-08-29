@@ -342,7 +342,7 @@ export async function getConfig(): Promise<any> {
  */
 export async function getContractAddress(): Promise<string | null> {
   try {
-    const chainId = Number(await wallet.web3.eth.getChainId());
+    const chainId = await wallet.getReadClient().getChainId();
     const networkAddr = getNetworkContractAddress(chainId);
     if (networkAddr) return networkAddr;
     const config = await getConfig();
