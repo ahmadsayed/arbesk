@@ -6,7 +6,7 @@ import { jest } from "@jest/globals";
 
 const mockValidateSession = jest.fn();
 const mockGetContractAddress = jest.fn();
-const mockGetWeb3 = jest.fn();
+const mockGetPublicClient = jest.fn();
 const mockMakeLeaf = jest.fn();
 const mockVerifyProof = jest.fn();
 
@@ -16,7 +16,7 @@ jest.unstable_mockModule("../../src/api/sessions.ts", () => ({
 
 jest.unstable_mockModule("../../src/config.ts", () => ({
   getContractAddress: mockGetContractAddress,
-  getWeb3: mockGetWeb3,
+  getPublicClient: mockGetPublicClient,
 }));
 
 jest.unstable_mockModule("@arbesk/wallet/merkle.js", () => ({
@@ -43,22 +43,15 @@ describe("authorization", () => {
 
   let contractCallState;
 
-  function fakeContract() {
-    const makeMethod = (key) => (tokenId) => ({
-      call: async () => {
-        if (!Object.prototype.hasOwnProperty.call(contractCallState, key)) {
-          throw new Error(`Unexpected contract call: ${key}(${tokenId})`);
-        }
-        return contractCallState[key];
-      },
-    });
+  function fakePublicClient() {
     return {
-      methods: {
-        ownerOf: makeMethod("ownerOf"),
-        editorRoot: makeMethod("editorRoot"),
-        editorSetVersion: makeMethod("editorSetVersion"),
-        tokenURI: makeMethod("tokenURI"),
-      },
+      readContract: jest.fn(async ({ functionName, args }) => {
+        const tokenId = args?.[0];
+        if (!Object.prototype.hasOwnProperty.call(contractCallState, functionName)) {
+          throw new Error(`Unexpected contract call: ${functionName}(${tokenId})`);
+        }
+        return contractCallState[functionName];
+      }),
     };
   }
 
@@ -70,9 +63,7 @@ describe("authorization", () => {
       return chainId === CHAIN_ID ? CONTRACT : null;
     });
 
-    mockGetWeb3.mockImplementation(() => ({
-      eth: { Contract: jest.fn(() => fakeContract()) },
-    }));
+    mockGetPublicClient.mockImplementation(() => fakePublicClient());
 
     mockMakeLeaf.mockImplementation(
       (address, role, tokenId) => `leaf:${address}:${role}:${tokenId}`,
@@ -98,7 +89,7 @@ describe("authorization", () => {
     it("allows non-owner with valid Merkle proof", async () => {
       contractCallState.ownerOf = OWNER;
       contractCallState.editorRoot = REAL_ROOT;
-      contractCallState.editorSetVersion = 7;
+      contractCallState.editorSetVersion = 7n;
       mockVerifyProof.mockReturnValue(true);
 
       const result = await checkAssetAccess(42, CHAIN_ID, EDITOR, {
@@ -129,7 +120,7 @@ describe("authorization", () => {
     it("denies non-owner with invalid proof", async () => {
       contractCallState.ownerOf = OWNER;
       contractCallState.editorRoot = REAL_ROOT;
-      contractCallState.editorSetVersion = 1;
+      contractCallState.editorSetVersion = 1n;
       mockVerifyProof.mockReturnValue(false);
 
       const result = await checkAssetAccess(3, CHAIN_ID, STRANGER, {
@@ -149,7 +140,7 @@ describe("authorization", () => {
     it("denies non-owner when editorRoot is zero bytes", async () => {
       contractCallState.ownerOf = OWNER;
       contractCallState.editorRoot = ZERO_ROOT;
-      contractCallState.editorSetVersion = 1;
+      contractCallState.editorSetVersion = 1n;
 
       const result = await checkAssetAccess(5, CHAIN_ID, EDITOR, {
         proof: ["0xabc"],

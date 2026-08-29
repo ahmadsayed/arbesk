@@ -151,7 +151,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
         },
         eth: {
           getBlockNumber: jest.fn(() => Promise.resolve(1000)),
-          accounts: { recover: jest.fn(() => "0xTestAddress") },
           getTransactionReceipt: jest.fn(() =>
             Promise.resolve(mockWeb3Receipt),
           ),
@@ -1892,7 +1891,8 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   describe("Rate Limiting", () => {
     it("returns 429 after exceeding generation rate limit", async () => {
       // The rate limiter uses res.locals.walletAddress set by authenticate.
-      // Our mock auth always recovers to 0xTestAddress, so all requests count against same wallet.
+      // Test sessions are created directly for the same default wallet, so all
+      // requests count against same wallet.
       // We already made several generation requests above. Make enough to hit the 10/hour limit.
       let lastStatus = 200;
       for (let i = 0; i < 15; i++) {
