@@ -59,6 +59,11 @@ npm run test:frontend                  # test/frontend/ + deployment integrity
 npm run test:contracts                 # Hardhat tests in Docker
 npm run bench:asset-core               # asset-core pipeline benchmark → test-results/asset-core-bench.json
 npm run test:e2e -- --project=chromium # Playwright critical path (:ui = visible browser)
+npm run audit                        # fallow quality gate (dead code/complexity/dupes/styling) on the changeset vs HEAD
+
+# Pre-commit gate: .githooks/pre-commit runs `fallow audit --changed-since HEAD`
+# (blocks only findings the changeset introduces — a ratchet, legacy never blocks).
+# Enabled via core.hooksPath set by npm prepare; bypass with --no-verify.
 
 # Contract workflow — MANDATORY after any .sol change
 docker compose run --rm hardhat npx hardhat compile
