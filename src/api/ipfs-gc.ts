@@ -14,15 +14,29 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { web3, getWeb3, getContractAddress } from "../config.ts";
+import { getPublicClient, getContractAddress } from "../config.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 import { walkManifestChain } from "./manifest-chain-walker.ts";
-import type { Contract } from "web3";
-import type { EventLog } from "web3-eth-contract";
+import type { Abi, PublicClient } from "viem";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_ADDRESS: `0x${string}` =
+  "0x0000000000000000000000000000000000000000";
+
+/**
+ * Standard ERC-721 Transfer event ABI item, used for mint (from zero
+ * address) log scans.
+ */
+const TRANSFER_EVENT_ABI_ITEM = {
+  type: "event",
+  name: "Transfer",
+  inputs: [
+    { name: "from", type: "address", indexed: true },
+    { name: "to", type: "address", indexed: true },
+    { name: "tokenId", type: "uint256", indexed: true },
+  ],
+} as const;
 
 function loadAbi(name: string): any[] {
   const abiPath = path.resolve(
@@ -36,54 +50,72 @@ function loadAbi(name: string): any[] {
   return artifact.abi;
 }
 
+/**
+ * Everything the GC needs to read from one contract: its address, its ABI,
+ * and the viem client for the chain it lives on (so block-number reads and
+ * log scans always come from the same chain as the contract).
+ */
+interface ContractRef {
+  address: `0x${string}`;
+  abi: Abi;
+  client: PublicClient;
+}
+
 function getContractInstance(
   name: string,
   address: string,
   chainId?: number | string | null,
-): Contract<any> {
-  const abi = loadAbi(name);
-  const w3 = chainId ? getWeb3(chainId) : web3;
-  return new w3.eth.Contract(abi, address) as Contract<any>;
+): ContractRef {
+  const abi = loadAbi(name) as Abi;
+  const client = getPublicClient(chainId ? Number(chainId) : undefined);
+  return { address: address as `0x${string}`, abi, client };
 }
 
 /**
  * Discover token IDs that have been minted (Transfer from zero address) and
  * are still alive (ownerOf does not revert and is not zero address).
  *
- * @param contract - web3.eth.Contract instance
+ * @param contract - contract ref (address + ABI + viem client for its chain)
  * @param deployBlock - block to start scanning from
  * @param batchSize - RPC log query chunk size
- * @param w3 - web3 instance for the chain the contract lives on;
- *   must match the contract's chain or the block range is nonsense
  * @returns live token IDs as decimal strings
  */
 async function discoverLiveTokenIds(
-  contract: Contract<any>,
+  contract: ContractRef,
   deployBlock: number,
   batchSize = 10000,
-  w3: typeof web3 = web3,
 ): Promise<string[]> {
-  const endBlock = Number(await w3.eth.getBlockNumber());
+  const { client } = contract;
+  const endBlock = Number(await client.getBlockNumber());
 
   const minted = new Set<string>();
 
   for (let fromBlock = deployBlock; fromBlock <= endBlock; fromBlock += batchSize) {
     const toBlock = Math.min(fromBlock + batchSize - 1, endBlock);
-    const events = await contract.getPastEvents("Transfer", {
-      filter: { from: ZERO_ADDRESS },
-      fromBlock,
-      toBlock,
+    const logs = await client.getLogs({
+      address: contract.address,
+      event: TRANSFER_EVENT_ABI_ITEM,
+      args: { from: ZERO_ADDRESS },
+      fromBlock: BigInt(fromBlock),
+      toBlock: BigInt(toBlock),
     });
-    for (const e of events) {
-      const event = e as EventLog;
-      minted.add(String(event.returnValues.tokenId));
+    for (const log of logs) {
+      const tokenId = (log as any).args?.tokenId;
+      if (tokenId !== undefined && tokenId !== null) {
+        minted.add(String(tokenId));
+      }
     }
   }
 
   const live: string[] = [];
   for (const tokenId of minted) {
     try {
-      const owner = (await contract.methods.ownerOf(tokenId).call()) as string;
+      const owner = (await client.readContract({
+        address: contract.address,
+        abi: contract.abi,
+        functionName: "ownerOf",
+        args: [BigInt(tokenId)],
+      })) as string;
       if (owner && owner !== ZERO_ADDRESS) {
         live.push(tokenId);
       }
@@ -96,7 +128,7 @@ async function discoverLiveTokenIds(
 }
 
 interface GCContractEntry {
-  contract: Contract<any>;
+  contract: ContractRef;
   name: string;
   deployBlock: number;
 }
@@ -123,7 +155,12 @@ async function buildReachableSet(
     for (const { contract, name } of contracts) {
       let manifestCid: string;
       try {
-        manifestCid = (await contract.methods.tokenURI(tokenId).call()) as string;
+        manifestCid = (await contract.client.readContract({
+          address: contract.address,
+          abi: contract.abi,
+          functionName: "tokenURI",
+          args: [BigInt(tokenId)],
+        })) as string;
       } catch {
         // Token likely does not exist on this contract.
         continue;
@@ -149,9 +186,12 @@ async function buildReachableSet(
 
       // Editor list URI is stored on-chain and must stay pinned.
       try {
-        const editorListUri = (await contract.methods
-          .editorListURI(tokenId)
-          .call()) as string;
+        const editorListUri = (await contract.client.readContract({
+          address: contract.address,
+          abi: contract.abi,
+          functionName: "editorListURI",
+          args: [BigInt(tokenId)],
+        })) as string;
         if (editorListUri && typeof editorListUri === "string") {
           const cid = editorListUri.replace(/^ipfs:\/\//, "");
           if (cid) reachable.add(cid);
@@ -257,9 +297,6 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
         contract,
         deployBlock,
         eventBatchSize,
-        // The block-number read must come from the same chain as the contract
-        // (getWeb3 falls back to the default instance when chainId is null).
-        getWeb3(chainId),
       );
       for (const id of live) allLiveTokenIds.add(id);
       console.log(`[GC] ${name} live tokens: ${live.length}`);

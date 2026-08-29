@@ -14,7 +14,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
   let app;
   let ipfsStorage;
   let mockIPFS;
-  let mockWeb3Receipt;
   let logSpy;
   let createSession;
 
@@ -86,34 +85,6 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       },
     };
 
-    mockWeb3Receipt = {
-      status: BigInt(1),
-      from: "0xTestAddress",
-      to: "0xArbeskContractAddress",
-      blockNumber: 123,
-      _usdcTier: 2, // default tier for tests; overridden per-test
-      logs: [
-        {
-          address: "0xArbeskContractAddress",
-          topics: [
-            "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-          ],
-        },
-        // USDC payment event (topics[0] matches "USDC" keccak256 mock)
-        {
-          address: "0xArbeskContractAddress",
-          topics: [
-            "0x0000000000000000000000000000000000000000000000000000000000usdc00",
-          ],
-          data:
-            "0x0000000000000000000000000000000000000000000000000000000000000080" +
-            "00000000000000000000000000000000000000000000000000000000001ab3f0" +
-            "000000000000000000000000000000000000000000000000000000006642b400" +
-            "0000000000000000000000000000000000000000000000000000000000000002",
-        },
-      ],
-    };
-
     jest.unstable_mockModule("ipfs-http-client", () => ({
       create: jest.fn(() => mockIPFS),
     }));
@@ -135,97 +106,80 @@ describe("Arbesk Phase 1 + Phase 3 API", () => {
       !address ||
       String(t.contractAddress).toLowerCase() === String(address).toLowerCase();
 
-    jest.unstable_mockModule("web3", () => ({
-      default: jest.fn(() => ({
-        utils: {
-          keccak256: jest.fn((sig) => {
-            // Return different hashes for different event signatures
-            // so we can distinguish native vs USDC events in tests
-            if (sig.includes("USDC")) {
-              return "0x0000000000000000000000000000000000000000000000000000000000usdc00";
+    // viem PublicClient mock: readContract dispatches by functionName and
+    // returns the same fixtures the old web3 Contract mock fed
+    // (methods.X().call maps 1:1 to readContract({ functionName: "X" }));
+    // getLogs returns a decoded mint Transfer log per registered GC token.
+    const mockPublicClient = {
+      getBlockNumber: jest.fn(() => Promise.resolve(1000n)),
+      readContract: jest.fn(({ address, functionName, args }) => {
+        const tokenId = args?.length ? String(args[0]) : undefined;
+        const t = tokenId === undefined ? undefined : gcTokens.get(tokenId);
+        switch (functionName) {
+          case "tokenURI":
+            if (t && visibleOn(t, address)) return Promise.resolve(t.tokenURI);
+            if (t) throw new Error("Token does not exist");
+            return Promise.resolve(_tokenURICid);
+          case "ownerOf":
+            if (!t || !visibleOn(t, address)) {
+              throw new Error("Token does not exist");
             }
-            return "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-          }),
-          padRight: jest.fn((x) => x),
-          utf8ToHex: jest.fn((x) => x),
-        },
-        eth: {
-          getBlockNumber: jest.fn(() => Promise.resolve(1000)),
-          getTransactionReceipt: jest.fn(() =>
-            Promise.resolve(mockWeb3Receipt),
-          ),
-          abi: {
-            decodeParameters: jest.fn((_types, _data) => {
-              // Simulate decoding USDC event data for tier tests
-              // Types: ["string", "uint256", "uint256", "uint8"]
-              // Returns decoded values including the tier from mockWeb3Receipt._usdcTier
-              return {
-                0: "mock prompt",
-                1: "1750000",
-                2: Math.floor(Date.now() / 1000).toString(),
-                3: (mockWeb3Receipt._usdcTier ?? 2).toString(),
-              };
-            }),
+            return Promise.resolve(t.owner);
+          case "editorRoot":
+            if (!visibleOn(t, address)) return Promise.resolve(ZERO_ROOT);
+            return Promise.resolve(t?.editorRoot || ZERO_ROOT);
+          case "editorSetVersion":
+            if (!visibleOn(t, address)) return Promise.resolve("1");
+            return Promise.resolve(t?.editorSetVersion || "1");
+          case "editorListURI":
+            if (!visibleOn(t, address)) return Promise.resolve("");
+            return Promise.resolve(t?.editorListURI || "");
+          default:
+            throw new Error(`Unexpected readContract function: ${functionName}`);
+        }
+      }),
+      getLogs: jest.fn(async () =>
+        Array.from(gcTokens.entries()).map(([tokenId, t]) => ({
+          args: {
+            from: ZERO_ADDRESS,
+            to: t.owner,
+            tokenId: BigInt(tokenId),
           },
-          Contract: jest.fn((_abi, address) => ({
-            getPastEvents: jest.fn(async (event, _opts) => {
-              if (event !== "Transfer") return [];
-              // Return mint events for every registered GC token.
-              return Array.from(gcTokens.entries()).map(
-                ([tokenId, t]) => ({
-                  returnValues: {
-                    from: ZERO_ADDRESS,
-                    to: t.owner,
-                    tokenId,
-                  },
-                }),
-              );
-            }),
-            methods: {
-              tokenURI: jest.fn((tokenId) => ({
-                call: jest.fn(() => {
-                  const t = gcTokens.get(String(tokenId));
-                  if (t && visibleOn(t, address)) {
-                    return Promise.resolve(t.tokenURI);
-                  }
-                  if (t) throw new Error("Token does not exist");
-                  return Promise.resolve(_tokenURICid);
-                }),
-              })),
-              ownerOf: jest.fn((tokenId) => ({
-                call: jest.fn(() => {
-                  const t = gcTokens.get(String(tokenId));
-                  if (!t || !visibleOn(t, address)) {
-                    throw new Error("Token does not exist");
-                  }
-                  return Promise.resolve(t.owner);
-                }),
-              })),
-              editorRoot: jest.fn((tokenId) => ({
-                call: jest.fn(() => {
-                  const t = gcTokens.get(String(tokenId));
-                  if (!visibleOn(t, address)) return Promise.resolve(ZERO_ROOT);
-                  return Promise.resolve(t?.editorRoot || ZERO_ROOT);
-                }),
-              })),
-              editorSetVersion: jest.fn((tokenId) => ({
-                call: jest.fn(() => {
-                  const t = gcTokens.get(String(tokenId));
-                  if (!visibleOn(t, address)) return Promise.resolve("1");
-                  return Promise.resolve(t?.editorSetVersion || "1");
-                }),
-              })),
-              editorListURI: jest.fn((tokenId) => ({
-                call: jest.fn(() => {
-                  const t = gcTokens.get(String(tokenId));
-                  if (!visibleOn(t, address)) return Promise.resolve("");
-                  return Promise.resolve(t?.editorListURI || "");
-                }),
-              })),
-            },
-          })),
-        },
-      })),
+          blockNumber: 1n,
+        })),
+      ),
+    };
+
+    // Valid-format addresses matching the real Hardhat-local defaults — the
+    // unpin schema rejects body contractAddress values that are not valid
+    // Ethereum addresses, and tests read these via NETWORK_CONFIGS.
+    const FREE_CONTRACT = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+    const PAID_CONTRACT = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+    const hardhatNetwork = {
+      name: "Hardhat Local",
+      contractAddress: FREE_CONTRACT,
+      paidContractAddress: PAID_CONTRACT,
+      usdcToken: null,
+      rpcUrl: "http://127.0.0.1:8545",
+    };
+
+    jest.unstable_mockModule("../src/config.ts", () => ({
+      CONTRACT_ADDRESS: FREE_CONTRACT,
+      PAID_CONTRACT_ADDRESS: PAID_CONTRACT,
+      HARDHAT_RPC_URL: "http://127.0.0.1:8545",
+      API_URL: "http://127.0.0.1:8545",
+      NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
+      NOSTR_SERVICE_PRIVATE_KEY: "a".repeat(64),
+      // Keyed by CHAIN_IDS.HARDHAT_LOCAL (31415822).
+      NETWORK_CONFIGS: { 31415822: hardhatNetwork },
+      getNetworkConfig: jest.fn(
+        (id) => ({ 31415822: hardhatNetwork })[Number(id)] || null,
+      ),
+      getContractAddress: jest.fn(() => FREE_CONTRACT),
+      getConfiguredContracts: jest.fn(() => [FREE_CONTRACT, PAID_CONTRACT]),
+      getRpcUrl: jest.fn(() => "http://127.0.0.1:8545"),
+      getPublicClient: jest.fn(() => mockPublicClient),
+      getViemPublicClient: jest.fn(() => mockPublicClient),
     }));
 
     // Expose for test use
