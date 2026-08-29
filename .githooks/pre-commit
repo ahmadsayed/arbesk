@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-commit quality gate: fallow audit scoped to this changeset vs HEAD.
+#
+# Verdict semantics (fallow audit, --gate new-only default): the commit is
+# blocked ONLY by findings introduced by the staged/working changeset —
+# dead code, complexity/CRAP, duplication, styling. Legacy findings already
+# in the codebase are reported with new-vs-inherited attribution but do not
+# block. This makes the gate a ratchet: the repo can only get cleaner.
+#
+# Bypass for emergencies: git commit --no-verify
+# Run manually:           npm run audit
+exec npx -y fallow@3.20.0 audit --changed-since HEAD

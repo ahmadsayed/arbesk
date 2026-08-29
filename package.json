@@ -35,7 +35,9 @@
     "test:coverage:js": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest --coverage --coverageDirectory=coverage/js",
     "test:coverage:all": "npm run test:coverage:js && npm run test:e2e:coverage && node scripts/merge-all-coverage.mjs",
     "test:coverage:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat coverage && docker run --rm -v $(pwd)/blockchain/coverage:/cov alpine sh -c 'chown -R $(stat -c \"%u:%g\" /cov) /cov'",
-    "worktree:create": "./scripts/create-worktree.sh"
+    "worktree:create": "./scripts/create-worktree.sh",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "audit": "npx -y fallow@3.20.0 audit --changed-since HEAD"
   },
   "repository": {
     "type": "git",
