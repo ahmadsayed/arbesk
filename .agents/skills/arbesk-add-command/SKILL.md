@@ -7,7 +7,7 @@ description: Use when implementing a feature marked TODO for the besk CLI in the
 
 ## Overview
 
-The README "Studio vs `besk` CLI" table is the CLI roadmap: every **TODO** row is a candidate feature. This skill is the end-to-end loop for closing one gap: study both clients, gate on duplication cost, let the user decide the dedup target, plan, test, implement, and flip the table row.
+The README "Studio vs `besk` CLI vs MCP" table is the CLI roadmap: every **TODO** row is a candidate feature. This skill is the end-to-end loop for closing one gap: study both clients, gate on duplication cost, let the user decide the dedup target, plan, test, implement, and flip the table row.
 
 **Core principle:** the CLI is a thin consumer of the SDKs. New logic belongs in a shared layer once duplicating it would cost more than ~100 lines — and where that shared layer lives is the *user's* decision, not yours.
 
@@ -17,7 +17,7 @@ The README "Studio vs `besk` CLI" table is the CLI roadmap: every **TODO** row i
 
 Follow the steps in order. Do not skip the decision gate (step 4).
 
-1. **Pick one TODO row** from the README table ("Studio vs `besk` CLI" section). If the user didn't name the feature, ask which one via AskUserQuestion (offer 2–4 concrete TODO rows). Never implement more than one row per run.
+1. **Pick one TODO row** from the README table ("Studio vs `besk` CLI vs MCP" section). If the user didn't name the feature, ask which one via AskUserQuestion (offer 2–4 concrete TODO rows). Never implement more than one row per run.
 2. **Study both sides.** Read the Studio implementation (typically `frontend/src/js/ui/`, `frontend/src/js/services/`, `frontend/src/js/blockchain/`) and the CLI's current state (`packages/besk/src/cli.ts`, `catalog.ts`, `relay.ts`, `adapters.ts`, `mcp.ts`). Check whether the backend relay (`src/api/routes/wallet-relay.ts`) already supports the op — most writes do.
 3. **Assess duplication cost.** Estimate the **net** lines of Studio/frontend logic the CLI would have to copy *after reusing what the SDKs already provide* — if the dedup already happened (e.g. `asset-core/domain/editors.ts` mirrors `team.ts`), the duplicated cost is ~0. State the number in your plan.
 4. **Decision gate:**
@@ -35,7 +35,7 @@ Follow the steps in order. Do not skip the decision gate (step 4).
 7. **Implement.** Keep the CLI module thin; environment-bound pieces (Node fetch, viem reads, session file) go in `adapters.ts`, never domain logic. Then add the matching MCP tool in `mcp.ts` in the same change: snake_case name mirroring the subcommand (`show` → `show_asset`), a JSON-schema `inputSchema`, and a handler that calls the same module and THROWS on error (never prompts, never sets `process.exitCode`). Interactive inputs become explicit args: pickers → required enums, typed confirmations → a `confirm` field, browser opens → an `open` flag defaulting to true. Nothing reachable from `mcp.ts` may print to stdout (stdio is the JSON-RPC channel — log via `debug.ts`, which writes to stderr).
 8. **Run and fix until green:** `npm test`, `npm run typecheck`, `npm run lint` — plus `npm run test:frontend` when step 6 says so. No row is done while anything is red.
 9. **Update the docs, then report:**
-   - Flip the README table row from **TODO** to **✅** with the command name and any caveat (e.g. owner-only, best-effort unpin).
+   - Flip the README table row from **TODO** to **✅** in BOTH the CLI and MCP columns (command name + tool name, plus any caveat like owner-only or best-effort unpin).
    - Add the command to `cli.ts` `help()` and the README intro command list.
    - The MCP tool count appears in the README ("AI agents" row + `besk mcp` section) — bump it when a tool is added or removed.
    - Touch `docs/CURRENT_STATUS.md` only if it documents the affected area.

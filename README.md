@@ -37,82 +37,83 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 
 ---
 
-## Studio vs `besk` CLI
+## Studio vs `besk` CLI vs MCP
 
-Arbesk ships two clients on top of the same backend and SDKs:
+Arbesk ships three client surfaces on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
 - **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, `link`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel` — and `mcp`, an MCP stdio server exposing the same surface to AI agents. `show <name>` opens an asset's Studio deep link in the browser (`--print` just prints the URL).
+- **`besk` MCP** (`besk mcp`) — the same features as MCP tools for AI agents. By the CLI↔MCP parity rule (skill: `arbesk-add-command`) the MCP column mirrors the CLI column: every ✅ ships as both a subcommand and a tool, and every TODO closes in both at once. `login` is the only exempt command (browser/OTP flow).
 
-Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
+Status legend: **✅** supported today (MCP cells name the tool) · **TODO** — feasible headless, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
 
-| Area | Feature | Studio | `besk` CLI | CLI status / notes |
-|---|---|---|---|---|
-| **Auth & wallets** | CDP email login (OTP → smart account) | ✅ | ✅ | `login <email>` (browser-assisted) |
-| | EOA wallets (MetaMask/Rabby) via SIWE | ✅ | TODO | No EOA/key-file auth path |
-| | WalletConnect v2 | ✅ | TODO | |
-| | Network selection (Hardhat local / Base Sepolia) | ✅ | ✅ | CLI: `ARBESK_CHAIN_ID` env var (no interactive switcher) |
-| | Session persistence | ✅ | ✅ | Studio: in-memory + auto-restore; CLI: plaintext JSON file (OS keychain is TODO) |
-| **Collections** | List collections | ✅ | ✅ | `collections` |
-| | Create named collection | ✅ | ✅ | `create <name>` (idempotent — returns existing if already minted) |
-| | Select active collection | ✅ | ✅ | `use <name>` (Studio: per-asset settings picker) |
-| | Shared (editor) collections discovery | ✅ | TODO | CLI reads indexer `owned` scope only |
-| | Burn collection + IPFS unpin | ✅ | ✅ | `burn <collection>` (typed-name confirmation; owner-only — `proof: []`; best-effort unpin before burn) |
-| | Rename collection | ✅ | TODO | CLI `rename` covers assets only |
-| **Assets** | List assets in a collection | ✅ | ✅ | `list` |
-| | Asset details (ID, version, CID, nodes) | ✅ | ✅ | `info` (Studio details pane also has a live 3D preview — Not doable) |
-| | Upload glTF/GLB/3MF | ✅ | ✅ | `upload <file>` |
-| | Download / export (GLB, glTF, 3MF) | ✅ | ✅ | `download <name>` |
-| | Download a specific historical version | ✅ | ✅ | `download <name> <version>` (Studio restores via clocks/chat instead) |
-| | Rename asset | ✅ | ✅ | `rename <old> <new>` |
-| | Delete asset from collection (unpublish) | ✅ | ✅ | `delete` (always prompts; no `--yes` flag — TODO) |
-| | Send asset to another collection | ✅ | ✅ | `send <asset> <collection> [fork\|live-ref]` (default fork; live-ref writes a child_ref wrapper) |
-| | New empty asset | ✅ | TODO | |
-| | Burn unreachable/inaccessible tokens | ✅ | TODO | |
-| **Publishing** | Save draft (manifest build + IPFS upload) | ✅ | TODO | CLI writes are always relayed immediately |
-| | Publish / republish (`tokenURI` update) | ✅ | ✅ | Via `create`/`upload`/`delete`/`rename` collection writes |
-| | Free-tier quota / USDC PayGo payment flow | ✅ | TODO | No `wallet-payments` equivalent |
-| | Publish thumbnail capture | ✅ | TODO | Captured by the browser on save/publish |
-| | Comments archive snapshot on republish | ✅ | TODO | |
-| | Editor (non-owner) writes via Merkle proof | ✅ | TODO | CLI hardcodes `proof: []` — owner-only writes |
-| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | ✅ | `generate "<prompt>"` (interactive provider + target-collection pickers, active collection pre-selected; `--provider` for scripts) |
-| | Image-to-3D (JPEG/PNG/WebP attach) | ✅ | ✅ | `generate --image <file>` |
-| | Multiview-to-3D (up to 4 oriented views) | ✅ | ✅ | `generate --view front f.png --view left f.png …` |
-| | Retexture (texture-only refine) | ✅ | ✅ | `retexture <asset> "<prompt>"` |
-| | Smart retopology (polygon budget) | ✅ | ✅ | `retopo <asset> [faceLimit]` |
-| | Auto-rig (biped-first with fallback) | ✅ | ✅ | `rig <asset>` (fallback is server-side) |
-| | Animate (preset picker, in-place toggle) | ✅ | ✅ | `animate <asset> <preset>…` (positional presets, `--no-in-place`; no categorized picker) |
-| | Provider selection, BYOK key, credit balance | ✅ | ✅ | Interactive provider picker + key prompt; flags/env for scripts (`--provider`, `--key`, `ARBESK_PROVIDER`, `ARBESK_PROVIDER_KEY`); `balance` |
-| | Texture-quality tiers (standard/detailed/extreme) | ✅ | ✅ | `--quality` (env: `ARBESK_TEXTURE_QUALITY`) |
-| | Generation progress + cancel | ✅ | ✅ | Progress bar while polling (plain lines when piped); `cancel <taskId>` |
-| | Result bubbles with live orbitable preview | ✅ | Not doable | Requires 3D viewer |
-| | "Show in Studio" + auto-save draft | ✅ | Not doable | Requires 3D viewer |
-| | Chat provenance (`metadata.chat`) restore | ✅ | TODO | CLI has no chat; version restore is the missing part |
-| **Viewport & 3D editing** | Babylon viewport, selection, frame/reset camera | ✅ | Not doable | Requires 3D viewer |
-| | Transform gizmos (translate/rotate/scale) | ✅ | Not doable | Requires 3D viewer |
-| | Undo / redo | ✅ | Not doable | Interactive session state |
-| | Grid/axes toggle, orientation view-cube | ✅ | Not doable | Requires 3D viewer |
-| | Camera pose persistence per asset | ✅ | Not doable | Requires 3D viewer |
-| | Parametric color editing (live preview) | ✅ | Not doable | Needs visual feedback |
-| | Uniform scale editing | ✅ | Not doable | Needs visual feedback |
-| | Animation clip preview | ✅ | Not doable | Requires 3D viewer |
-| **Nesting (fractal children)** | Link child assets (drag from gallery, outliner) | ✅ | ✅ | `link <child> <parent> [live-ref\|fork] [--from col] [--position "x,y,z"] [--scale s]` — manifest-level, no viewer needed |
-| | Fork vs live-reference on link | ✅ | ✅ | Positional mode on `link` (default live-ref) |
-| | Dive/ascend navigation + breadcrumbs | ✅ | Not doable | Requires 3D viewer |
-| | Unlink child asset | ✅ | TODO | Manifest edit; selection UX is the open question |
-| | Linked-token inspector | ✅ | Not doable | Requires 3D viewer |
-| **Version history (4D)** | List version chain | ✅ | ✅ | `history` |
-| | Scene clock (whole-asset scrubbing) | ✅ | Not doable | Requires 3D viewer |
-| | Model clock (per-node scrubbing) | ✅ | Not doable | Requires 3D viewer |
-| | Restore a historical version as current | ✅ | TODO | CLI can download any version but never repoints the tip |
-| **Library UX** | Grid/list toggle, search, sort, multi-select | ✅ | Not doable | GUI browser paradigm |
-| | Live 3D preview in details pane | ✅ | Not doable | Requires 3D viewer |
-| | Deep links (`?asset=`, `?manifest=`) | ✅ | ✅ | `show <name>` builds the link and opens the browser (`--version N` pins a historical manifest, `--print` prints the URL) |
-| **Collaboration** | Manage collaborators (Merkle editor lists) | ✅ | TODO | Relay supports `updateEditors`; no CLI command |
-| | Viewer/Editor roles, email → wallet resolution | ✅ | TODO | |
-| | Asset comments (Nostr threads, @mentions) | ✅ | TODO | |
-| **Activity** | Activity ledger (Generation/Save/Publish/… feed) | ✅ | TODO | Derivable from the manifest chain |
-| **AI agents** | MCP server exposing the client surface to AI agents | — | ✅ | `besk mcp` — stdio MCP server, 23 tools covering the full CLI surface |
+| Area | Feature | Studio | `besk` CLI | `besk` MCP | CLI status / notes |
+|---|---|---|---|---|---|
+| **Auth & wallets** | CDP email login (OTP → smart account) | ✅ | ✅ | — | `login <email>` (browser-assisted; MCP consumes the saved session) |
+| | EOA wallets (MetaMask/Rabby) via SIWE | ✅ | TODO | TODO | No EOA/key-file auth path |
+| | WalletConnect v2 | ✅ | TODO | TODO | |
+| | Network selection (Hardhat local / Base Sepolia) | ✅ | ✅ | ✅ | `ARBESK_CHAIN_ID` env var (no interactive switcher) |
+| | Session persistence | ✅ | ✅ | ✅ | Studio: in-memory + auto-restore; CLI/MCP: shared plaintext JSON file (OS keychain is TODO) |
+| **Collections** | List collections | ✅ | ✅ | ✅ `list_collections` | `collections` |
+| | Create named collection | ✅ | ✅ | ✅ `create_collection` | `create <name>` (idempotent — returns existing if already minted) |
+| | Select active collection | ✅ | ✅ | ✅ `use_collection` | `use <name>` (Studio: per-asset settings picker) |
+| | Shared (editor) collections discovery | ✅ | TODO | TODO | CLI reads indexer `owned` scope only |
+| | Burn collection + IPFS unpin | ✅ | ✅ | ✅ `burn_collection` | `burn <collection>` (typed-name confirmation; MCP: `confirm` arg; owner-only — `proof: []`; best-effort unpin before burn) |
+| | Rename collection | ✅ | TODO | TODO | CLI `rename` covers assets only |
+| **Assets** | List assets in a collection | ✅ | ✅ | ✅ `list_assets` | `list` |
+| | Asset details (ID, version, CID, nodes) | ✅ | ✅ | ✅ `asset_info` | `info` (Studio details pane also has a live 3D preview — Not doable) |
+| | Upload glTF/GLB/3MF | ✅ | ✅ | ✅ `upload_asset` | `upload <file>` |
+| | Download / export (GLB, glTF, 3MF) | ✅ | ✅ | ✅ `download_asset` | `download <name>` |
+| | Download a specific historical version | ✅ | ✅ | ✅ `download_asset` | `download <name> <version>` (Studio restores via clocks/chat instead) |
+| | Rename asset | ✅ | ✅ | ✅ `rename_asset` | `rename <old> <new>` |
+| | Delete asset from collection (unpublish) | ✅ | ✅ | ✅ `delete_asset` | `delete` (always prompts; no `--yes` flag — TODO) |
+| | Send asset to another collection | ✅ | ✅ | ✅ `send_asset` | `send <asset> <collection> [fork\|live-ref]` (default fork; live-ref writes a child_ref wrapper) |
+| | New empty asset | ✅ | TODO | TODO | |
+| | Burn unreachable/inaccessible tokens | ✅ | TODO | TODO | |
+| **Publishing** | Save draft (manifest build + IPFS upload) | ✅ | TODO | TODO | CLI writes are always relayed immediately |
+| | Publish / republish (`tokenURI` update) | ✅ | ✅ | ✅ | Via `create`/`upload`/`delete`/`rename` collection writes |
+| | Free-tier quota / USDC PayGo payment flow | ✅ | TODO | TODO | No `wallet-payments` equivalent |
+| | Publish thumbnail capture | ✅ | TODO | TODO | Captured by the browser on save/publish |
+| | Comments archive snapshot on republish | ✅ | TODO | TODO | |
+| | Editor (non-owner) writes via Merkle proof | ✅ | TODO | TODO | CLI hardcodes `proof: []` — owner-only writes |
+| **AI generation** | Text-to-3D (Tripo3D v3 / mock) | ✅ | ✅ | ✅ `generate_model` | `generate "<prompt>"` (interactive provider + target-collection pickers, active collection pre-selected; MCP: explicit `provider`/`collection` args) |
+| | Image-to-3D (JPEG/PNG/WebP attach) | ✅ | ✅ | ✅ `generate_model` | `generate --image <file>` (MCP: `imageFile`) |
+| | Multiview-to-3D (up to 4 oriented views) | ✅ | ✅ | ✅ `generate_model` | `generate --view front f.png --view left f.png …` (MCP: `views[]`) |
+| | Retexture (texture-only refine) | ✅ | ✅ | ✅ `retexture_model` | `retexture <asset> "<prompt>"` |
+| | Smart retopology (polygon budget) | ✅ | ✅ | ✅ `retopo_model` | `retopo <asset> [faceLimit]` |
+| | Auto-rig (biped-first with fallback) | ✅ | ✅ | ✅ `rig_model` | `rig <asset>` (fallback is server-side) |
+| | Animate (preset picker, in-place toggle) | ✅ | ✅ | ✅ `animate_model` | `animate <asset> <preset>…` (positional presets, `--no-in-place`; MCP: `presets[]`, `inPlace`; no categorized picker) |
+| | Provider selection, BYOK key, credit balance | ✅ | ✅ | ✅ `provider_balance` | Interactive provider picker + key prompt; flags/env for scripts & MCP (`--provider`, `--key`, `ARBESK_PROVIDER`, `ARBESK_PROVIDER_KEY`); `balance` |
+| | Texture-quality tiers (standard/detailed/extreme) | ✅ | ✅ | ✅ | `--quality` / `quality` arg (env: `ARBESK_TEXTURE_QUALITY`) |
+| | Generation progress + cancel | ✅ | ✅ | ✅ `cancel_generation` | Progress bar while polling (plain lines when piped); MCP: blocking tool call, `cancel_generation` by taskId |
+| | Result bubbles with live orbitable preview | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | "Show in Studio" + auto-save draft | ✅ | Not doable | Not doable | Requires 3D viewer (but see Deep links: `show` / `show_asset`) |
+| | Chat provenance (`metadata.chat`) restore | ✅ | TODO | TODO | CLI has no chat; version restore is the missing part |
+| **Viewport & 3D editing** | Babylon viewport, selection, frame/reset camera | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Transform gizmos (translate/rotate/scale) | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Undo / redo | ✅ | Not doable | Not doable | Interactive session state |
+| | Grid/axes toggle, orientation view-cube | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Camera pose persistence per asset | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Parametric color editing (live preview) | ✅ | Not doable | Not doable | Needs visual feedback |
+| | Uniform scale editing | ✅ | Not doable | Not doable | Needs visual feedback |
+| | Animation clip preview | ✅ | Not doable | Not doable | Requires 3D viewer |
+| **Nesting (fractal children)** | Link child assets (drag from gallery, outliner) | ✅ | ✅ | ✅ `link_asset` | `link <child> <parent> [live-ref\|fork] [--from col] [--position "x,y,z"] [--scale s]` — manifest-level, no viewer needed |
+| | Fork vs live-reference on link | ✅ | ✅ | ✅ `link_asset` | Positional/`mode` arg on `link` (default live-ref) |
+| | Dive/ascend navigation + breadcrumbs | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Unlink child asset | ✅ | TODO | TODO | Manifest edit; selection UX is the open question |
+| | Linked-token inspector | ✅ | Not doable | Not doable | Requires 3D viewer |
+| **Version history (4D)** | List version chain | ✅ | ✅ | ✅ `asset_history` | `history` |
+| | Scene clock (whole-asset scrubbing) | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Model clock (per-node scrubbing) | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Restore a historical version as current | ✅ | TODO | TODO | CLI can download any version but never repoints the tip |
+| **Library UX** | Grid/list toggle, search, sort, multi-select | ✅ | Not doable | Not doable | GUI browser paradigm |
+| | Live 3D preview in details pane | ✅ | Not doable | Not doable | Requires 3D viewer |
+| | Deep links (`?asset=`, `?manifest=`) | ✅ | ✅ | ✅ `show_asset` | `show <name>` builds the link and opens the browser (`--version N` pins a historical manifest, `--print` prints the URL; MCP: `open` arg) |
+| **Collaboration** | Manage collaborators (Merkle editor lists) | ✅ | TODO | TODO | Relay supports `updateEditors`; no CLI command |
+| | Viewer/Editor roles, email → wallet resolution | ✅ | TODO | TODO | |
+| | Asset comments (Nostr threads, @mentions) | ✅ | TODO | TODO | |
+| **Activity** | Activity ledger (Generation/Save/Publish/… feed) | ✅ | TODO | TODO | Derivable from the manifest chain |
+| **AI agents** | MCP server exposing the client surface to AI agents | — | ✅ | ✅ (this column) | `besk mcp` — stdio MCP server, 23 tools covering the full CLI surface |
 
 CLI-only capabilities (not in Studio): shell scriptability/pipelining, idempotent collection create, direct version-positional download, and MCP tool access for AI agents. Known CLI gaps beyond the table: no machine-readable (JSON) output mode. Global flag: `--verbose`/`-v` (or `ARBESK_VERBOSE=1`) — timestamped debug log of every backend/IPFS/relay action on stderr (the only switch available under `besk mcp`, where stdout is the JSON-RPC channel).
 
