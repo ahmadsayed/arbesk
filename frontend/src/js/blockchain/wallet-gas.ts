@@ -2,42 +2,66 @@
  * Arbesk Wallet Gas
  *
  * Shared gas resolution for contract sends. CDP ERC-4337 smart accounts skip
- * estimation entirely (sponsored UserOperations); EOA wallets estimate and
- * pad by 20%.
+ * estimation entirely (sponsored UserOperations); EOA wallets estimate through
+ * the viem read client and pad by 20%.
  *
  * @module wallet-gas
  */
 
 import { getActiveConnectionSource } from "./wallet-core.ts";
+import { getReadClient } from "./viem-clients.ts";
 
 // Generous gas ceiling for sponsored UserOperations. Supplying an explicit gas
-// value lets web3 skip its own eth_estimateGas round trip; the ERC-4337 bundler
-// re-estimates during UserOperation construction and the paymaster sponsors the
-// cost, so an overestimate is free. Removing the redundant estimate trims a full
-// RPC round trip from the social-login publish path.
-const SMART_ACCOUNT_GAS_LIMIT = 2_000_000;
+// value lets the send path skip its own eth_estimateGas round trip; the
+// ERC-4337 bundler re-estimates during UserOperation construction and the
+// paymaster sponsors the cost, so an overestimate is free. Removing the
+// redundant estimate trims a full RPC round trip from the social-login
+// publish path.
+const SMART_ACCOUNT_GAS_LIMIT = 2_000_000n;
+
+export interface ResolveGasOptions {
+  /** Contract address. */
+  to: string;
+  /** 0x-prefixed ABI-encoded calldata. */
+  data: string;
+  /** Native value to send (default 0). */
+  value?: bigint | string;
+  /** Sender address used as the estimation account. */
+  from: string;
+  /** Chain to estimate against (default: the active network). */
+  chainId?: number;
+  /** Gas to use when EOA estimation fails. */
+  fallbackGas?: number;
+}
 
 /**
- * Resolve the gas option for a contract method send.
+ * Resolve the gas option for a contract call send.
  * CDP smart accounts skip estimation entirely; EOA wallets estimate and pad
  * by 20%. For EOA wallets, when estimation fails and `fallbackGas` is given,
  * the padded fallback is used instead of throwing.
- * @param tx web3 contract method
- * @param from sender address
- * @param fallbackGas gas to use when EOA estimation fails
+ * @param opts see ResolveGasOptions
+ * @returns the padded gas limit (bigint), or the smart-account ceiling
  */
-async function resolveGas(
-  tx: any,
-  from: string | null,
-  fallbackGas?: number
-): Promise<number> {
+async function resolveGas({
+  to,
+  data,
+  value,
+  from,
+  chainId,
+  fallbackGas,
+}: ResolveGasOptions): Promise<bigint | undefined> {
   if (getActiveConnectionSource() === "cdp") return SMART_ACCOUNT_GAS_LIMIT;
   try {
-    const gas = await tx.estimateGas({ from });
-    return Math.floor(Number(gas) * 1.2);
+    const estimate = await getReadClient(chainId).estimateGas({
+      account: from as `0x${string}`,
+      to: to as `0x${string}`,
+      data: data as `0x${string}`,
+      value: value !== undefined ? BigInt(value) : undefined,
+    });
+    return (estimate * 120n) / 100n;
   } catch (error) {
     if (fallbackGas === undefined) throw error;
-    return Math.floor(fallbackGas * 1.2);
+    return (BigInt(fallbackGas) * 120n) / 100n;
   }
 }
 
