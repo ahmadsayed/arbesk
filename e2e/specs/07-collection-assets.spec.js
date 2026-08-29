@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures/coverage.mjs";
 import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
+import { encodePacked, keccak256 } from "viem/utils";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   MANIFEST_URL_REGEX,
@@ -315,16 +316,16 @@ test.describe.serial("Collection/asset model", () => {
     await expect(options.first()).toHaveText("Default");
 
     // The single Default option carries the wallet-derived collection id
-    // (soliditySha3 of the connected address), not the empty placeholder value.
+    // (keccak256 of the connected address), not the empty placeholder value.
     const defaultValue = await options.first().getAttribute("value");
     expect(defaultValue).toBeTruthy();
 
-    const expectedId = await page.evaluate(() => {
-      return window.Web3.utils.soliditySha3({
-        type: "address",
-        value: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      });
-    });
+    const expectedId = keccak256(
+      encodePacked(
+        ["address"],
+        ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".toLowerCase()],
+      ),
+    );
     expect(defaultValue).toBe(expectedId);
   });
 });

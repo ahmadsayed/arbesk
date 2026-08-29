@@ -1,6 +1,6 @@
 // @ts-nocheck
+import { createPublicClient, http } from "viem";
 import { BACKEND_URL, HARDHAT_RPC, IPFS_GATEWAY } from "../lib/infra.mjs";
-import Web3 from "web3";
 
 const IPFS_GATEWAY_URL = `${IPFS_GATEWAY}/ipfs`;
 
@@ -22,10 +22,12 @@ const TOKEN_URI_ABI = [
   },
 ];
 
-let contractCache = null;
+const publicClient = createPublicClient({ transport: http(HARDHAT_RPC) });
 
-async function getFreeTierContract() {
-  if (contractCache) return contractCache;
+let contractAddressCache = null;
+
+async function getFreeTierContractAddress() {
+  if (contractAddressCache) return contractAddressCache;
 
   // Fetch the configured free-tier contract address from the backend.
   const configRes = await fetch(`${BACKEND_URL}/api/v1/config`);
@@ -33,14 +35,11 @@ async function getFreeTierContract() {
     throw new Error(`Failed to fetch backend config: ${configRes.status}`);
   }
   const config = await configRes.json();
-  const contractAddress = config.contractAddress;
-  if (!contractAddress) {
+  if (!config.contractAddress) {
     throw new Error("Backend config missing contractAddress");
   }
-
-  const web3 = new Web3(HARDHAT_RPC);
-  contractCache = new web3.eth.Contract(TOKEN_URI_ABI, contractAddress);
-  return contractCache;
+  contractAddressCache = config.contractAddress;
+  return contractAddressCache;
 }
 
 function normalizeTokenURI(uri) {
@@ -75,8 +74,13 @@ export async function fetchManifest(cid) {
  * from the IPFS gateway.
  */
 export async function fetchTokenManifest(tokenIdHex) {
-  const contract = await getFreeTierContract();
-  const uri = await contract.methods.tokenURI(tokenIdHex).call();
+  const contractAddress = await getFreeTierContractAddress();
+  const uri = await publicClient.readContract({
+    address: contractAddress,
+    abi: TOKEN_URI_ABI,
+    functionName: "tokenURI",
+    args: [BigInt(tokenIdHex)],
+  });
   if (!uri) {
     throw new Error(`tokenURI returned empty for token ${tokenIdHex}`);
   }
