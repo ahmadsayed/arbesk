@@ -14,7 +14,7 @@ import { showToast } from "../ui/toasts.ts";
 import { isIpfsCidReachable } from "../ipfs/remote-ipfs.ts";
 import { getActiveConnectionSource, getActiveContract } from "./wallet-core.ts";
 import { isSmartWalletSupported } from "./smart-wallet-support.ts";
-import { sendContractMethod } from "./wallet-send.ts";
+import { sendContractCall } from "./wallet-send.ts";
 
 // ── Helpers ──
 
@@ -90,17 +90,13 @@ async function publishAsset(
   }
 
   try {
-    const tx = c.methods["publishAsset(string,uint256,bytes32,string)"](
-      tokenURI,
-      tokenId,
-      editorRoot,
-      editorListUri
-    );
-    const receipt = await sendContractMethod(
-      walletState.get().contractAddress,
-      tx,
-      { pendingPayload: { tokenId, tokenURI } }
-    );
+    const receipt = await sendContractCall({
+      to: walletState.get().contractAddress,
+      abi: c.abi,
+      functionName: "publishAsset(string,uint256,bytes32,string)",
+      args: [tokenURI, BigInt(tokenId), editorRoot, editorListUri],
+      pendingPayload: { tokenId, tokenURI },
+    });
 
     emit(EVENTS.ASSET_PUBLISHED, {
       tokenId,
@@ -146,16 +142,13 @@ async function updateAssetURI(
   if (relayed.handled) return relayed.txHash;
 
   try {
-    const tx = c.methods["updateAssetURI(uint256,string,bytes32[])"](
-      tokenId,
-      newTokenURI,
-      proof
-    );
-    const receipt = await sendContractMethod(
-      walletState.get().contractAddress,
-      tx,
-      { pendingPayload: { tokenId, tokenURI: newTokenURI } }
-    );
+    const receipt = await sendContractCall({
+      to: walletState.get().contractAddress,
+      abi: c.abi,
+      functionName: "updateAssetURI(uint256,string,bytes32[])",
+      args: [BigInt(tokenId), newTokenURI, proof],
+      pendingPayload: { tokenId, tokenURI: newTokenURI },
+    });
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateAssetURI failed:", error);
@@ -221,13 +214,12 @@ async function updateEditors(
   if (relayed.handled) return relayed.txHash;
 
   try {
-    const tx = c.methods[
-      "updateEditors(uint256,bytes32,string,uint8,bytes32[])"
-    ](tokenId, newRoot, newListUri, callerRole, callerProof);
-    const receipt = await sendContractMethod(
-      walletState.get().contractAddress,
-      tx
-    );
+    const receipt = await sendContractCall({
+      to: walletState.get().contractAddress,
+      abi: c.abi,
+      functionName: "updateEditors(uint256,bytes32,string,uint8,bytes32[])",
+      args: [BigInt(tokenId), newRoot, newListUri, callerRole, callerProof],
+    });
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateEditors failed:", error);
@@ -253,7 +245,7 @@ async function burn(tokenId: number | string, proof: string[]) {
   // Resolve manifest CID before burning (after burn, tokenURI may revert)
   let manifestCid = null;
   try {
-    manifestCid = await c.methods.tokenURI(tokenId).call();
+    manifestCid = await c.read.tokenURI([BigInt(tokenId)]);
     console.log(
       `[BURN] token ${tokenId} manifest CID → ${manifestCid || "none"}`
     );
@@ -308,11 +300,12 @@ async function burn(tokenId: number | string, proof: string[]) {
   }
 
   try {
-    const tx = c.methods["burn(uint256,bytes32[])"](tokenId, proof);
-    const receipt = await sendContractMethod(
-      walletState.get().contractAddress,
-      tx
-    );
+    const receipt = await sendContractCall({
+      to: walletState.get().contractAddress,
+      abi: c.abi,
+      functionName: "burn(uint256,bytes32[])",
+      args: [BigInt(tokenId), proof],
+    });
 
     emit(EVENTS.ASSET_BURNED, {
       tokenId,

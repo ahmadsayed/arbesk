@@ -15,7 +15,7 @@ import { toFunctionSignature } from "viem/utils";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getSigner } from "./wallet-core.ts";
 import { resolveGas } from "./wallet-gas.ts";
-import type { SendResult } from "@arbesk/wallet/types.js";
+import type { MinedReceipt } from "@arbesk/wallet/types.js";
 
 export interface SendCallOptions {
   /** Contract address. */
@@ -68,7 +68,7 @@ function narrowToOverload(
  */
 export async function sendContractCall(
   opts: SendCallOptions
-): Promise<SendResult> {
+): Promise<MinedReceipt> {
   const signer = getSigner();
   if (!signer) throw new Error("sendContractCall: no signer connected");
   if (!opts.to) throw new Error("sendContractCall: no contract address");
@@ -104,5 +104,5 @@ export async function sendContractCall(
     });
   }
 
-  return result;
+  return await result.wait();
 }

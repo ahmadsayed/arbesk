@@ -101,7 +101,7 @@ beforeEach(() => {
 test("encodes calldata with viem and routes the send through the injected signer", async () => {
   const { mod } = await loadModule();
 
-  const result = await mod.sendContractCall({
+  const receipt = await mod.sendContractCall({
     to: CONTRACT,
     abi: BURN_ABI,
     functionName: "burn(uint256,bytes32[])",
@@ -127,9 +127,7 @@ test("encodes calldata with viem and routes the send through the injected signer
     data: expectedData,
   });
 
-  // Broadcast resolves immediately; the mined receipt comes from wait().
-  expect(result.hash).toBe(HASH);
-  const receipt = await result.wait();
+  // Broadcast is awaited through wait(); the mined receipt is returned.
   expect(receipt.transactionHash).toBe("0xTx");
   expect(_wait).toHaveBeenCalled();
 });

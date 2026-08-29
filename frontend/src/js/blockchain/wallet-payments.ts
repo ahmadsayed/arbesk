@@ -4,9 +4,8 @@
  * USDC payment flow, free-tier generation recording, and tier constants.
  * Extracted from wallet.js.
  *
- * Shared module-level state (web3, contract) is imported from ./wallet.js
- * pending migration to ./wallet-core.js.  contractAddress is not exported by
- * wallet.js - it is read from walletState (synced by _initContract).
+ * Shared module-level state is imported from ./wallet-core.ts. The contract
+ * address is read from walletState (synced by _initContract).
  *
  * @module wallet-payments
  */
@@ -15,8 +14,10 @@ import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { showToast } from "../ui/toasts.ts";
 import { getUsdcToken as getNetworkUsdcToken } from "./network-config.ts";
-import { web3, getActiveContract } from "./wallet-core.ts";
-import { sendContractMethod } from "./wallet-send.ts";
+import { getActiveContract } from "./wallet-core.ts";
+import { sendContractCall } from "./wallet-send.ts";
+import { getReadClient } from "./viem-clients.ts";
+import { pad, stringToHex } from "viem";
 
 // ─── Tier constants ──────────────────────────────────────────────────────────
 
@@ -24,10 +25,6 @@ import { sendContractMethod } from "./wallet-send.ts";
 const TIER_NAMES = ["Basic", "Standard", "Premium", "Pro"];
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
-
-function _getWeb3() {
-  return web3 || window.web3 || null;
-}
 
 /**
  * Get the current contract address.
@@ -51,7 +48,11 @@ function _getContractAddress() {
  */
 function isFreeTierContract() {
   const c = getActiveContract();
-  return !!c && typeof c.methods.recordGeneration === "function";
+  return (
+    !!c &&
+    Array.isArray(c.abi) &&
+    c.abi.some((i) => i.type === "function" && i.name === "recordGeneration")
+  );
 }
 
 // ─── Public payment API ──────────────────────────────────────────────────────
@@ -86,8 +87,7 @@ async function payForGenerationWithUSDC(
  * @returns {Promise<string|null>} transaction hash on success, null on failure.
  */
 async function recordGeneration(nodeId: string, prompt: string) {
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress) {
+  if (!walletState.get().walletAddress) {
     showToast({
       type: "error",
       title: "Not Signed In",
@@ -117,10 +117,12 @@ async function recordGeneration(nodeId: string, prompt: string) {
     return null;
   }
   try {
-    const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
-    const tx = c.methods.recordGeneration(nodeIdBytes32, prompt);
-
-    const receipt = await sendContractMethod(contractAddress, tx, {
+    const nodeIdBytes32 = pad(stringToHex(nodeId), { size: 32 });
+    const receipt = await sendContractCall({
+      to: contractAddress,
+      abi: c.abi,
+      functionName: "recordGeneration",
+      args: [nodeIdBytes32, prompt],
       fallbackGas: 120000,
     });
     console.log("[FREE-GEN] recorded! txHash =", receipt.transactionHash);
@@ -169,8 +171,7 @@ async function recordGeneration(nodeId: string, prompt: string) {
  * @returns {Promise<string|null>}
  */
 async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
-  const w3 = _getWeb3();
-  if (!w3 || !walletState.get().walletAddress) {
+  if (!walletState.get().walletAddress) {
     showToast({
       type: "error",
       title: "Not Signed In",
@@ -190,8 +191,8 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
     return null;
   }
   try {
-    const tierCostWei = await c.methods.tierCosts(tier).call();
-    if (tierCostWei === "0" || Number(tierCostWei) === 0) {
+    const tierCostWei = await c.read.tierCosts([BigInt(tier)]);
+    if (tierCostWei === 0n) {
       showToast({
         type: "warning",
         title: "Tier Not Configured",
@@ -205,9 +206,9 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
       "[USDC] tier=" + TIER_NAMES[tier] + " cost=" + tierCostUSDC + " USDC"
     );
 
-    const chainId = Number(await w3.eth.getChainId());
+    const chainId = await getReadClient().getChainId();
     const usdcAddr =
-      getNetworkUsdcToken(chainId) || (await c.methods.usdcToken().call());
+      getNetworkUsdcToken(chainId) || (await c.read.usdcToken());
     if (
       !usdcAddr ||
       usdcAddr === "0x0000000000000000000000000000000000000000"
@@ -225,40 +226,42 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
     console.log("[USDC] requesting approval for", tierCostUSDC, "USDC...");
     const usdcAbi = [
       {
-        constant: false,
+        type: "function",
+        name: "approve",
+        stateMutability: "nonpayable",
         inputs: [
           { name: "spender", type: "address" },
           { name: "value", type: "uint256" },
         ],
-        name: "approve",
         outputs: [{ name: "", type: "bool" }],
-        type: "function",
       },
       {
-        constant: true,
+        type: "function",
+        name: "allowance",
+        stateMutability: "view",
         inputs: [
           { name: "owner", type: "address" },
           { name: "spender", type: "address" },
         ],
-        name: "allowance",
         outputs: [{ name: "", type: "uint256" }],
-        type: "function",
       },
       {
-        constant: true,
-        inputs: [{ name: "account", type: "address" }],
-        name: "balanceOf",
-        outputs: [{ name: "", type: "uint256" }],
         type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "account", type: "address" }],
+        outputs: [{ name: "", type: "uint256" }],
       },
     ];
-    const usdcContract = new w3.eth.Contract(usdcAbi, usdcAddr);
 
     // Check USDC balance before attempting payment
-    const balance = await usdcContract.methods
-      .balanceOf(walletState.get().walletAddress)
-      .call();
-    if (BigInt(balance) < BigInt(tierCostWei)) {
+    const balance = await getReadClient(chainId).readContract({
+      address: usdcAddr as `0x${string}`,
+      abi: usdcAbi,
+      functionName: "balanceOf",
+      args: [walletState.get().walletAddress],
+    });
+    if (balance < tierCostWei) {
       const balanceUSDC = Number(balance) / 1e6;
       showToast({
         type: "warning",
@@ -279,35 +282,47 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
     // Reset allowance to 0 first if there's a stale non-zero allowance.
     // Some ERC20 tokens require this to prevent front-running; USDC doesn't
     // but it's a safe practice that costs minimal gas.
-    const currentAllowance = await usdcContract.methods
-      .allowance(walletState.get().walletAddress, contractAddress)
-      .call();
-    if (BigInt(currentAllowance) > BigInt(0)) {
+    const currentAllowance = await getReadClient(chainId).readContract({
+      address: usdcAddr as `0x${string}`,
+      abi: usdcAbi,
+      functionName: "allowance",
+      args: [walletState.get().walletAddress, contractAddress],
+    });
+    if (currentAllowance > 0n) {
       console.log(
         "[USDC] resetting existing allowance:",
         (Number(currentAllowance) / 1e6).toFixed(6),
         "USDC → 0"
       );
-      const resetTx = usdcContract.methods.approve(contractAddress, "0");
-      await sendContractMethod(usdcAddr, resetTx, { fallbackGas: 80000 });
+      await sendContractCall({
+        to: usdcAddr,
+        abi: usdcAbi,
+        functionName: "approve",
+        args: [contractAddress, 0n],
+        fallbackGas: 80000,
+      });
       console.log("[USDC] allowance reset to 0");
     }
 
-    const approveTx = usdcContract.methods.approve(
-      contractAddress,
-      tierCostWei
-    );
-
-    await sendContractMethod(usdcAddr, approveTx, { fallbackGas: 100000 });
+    await sendContractCall({
+      to: usdcAddr,
+      abi: usdcAbi,
+      functionName: "approve",
+      args: [contractAddress, tierCostWei],
+      fallbackGas: 100000,
+    });
     console.log("[USDC] approval confirmed");
 
     // Verify the allowance was actually set (critical for OP Stack L2s where
     // sequencer state may lag behind). Retry up to 5 times with a 500ms delay.
     for (let attempt = 0; attempt < 5; attempt++) {
-      const allowed = await usdcContract.methods
-        .allowance(walletState.get().walletAddress, contractAddress)
-        .call();
-      if (BigInt(allowed) >= BigInt(tierCostWei)) {
+      const allowed = await getReadClient(chainId).readContract({
+        address: usdcAddr as `0x${string}`,
+        abi: usdcAbi,
+        functionName: "allowance",
+        args: [walletState.get().walletAddress, contractAddress],
+      });
+      if (allowed >= tierCostWei) {
         console.log("[USDC] allowance verified:", allowed.toString());
         break;
       }
@@ -327,16 +342,15 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
 
     // Step 2: Pay for generation
     console.log("[USDC] calling payForGenerationWithUSDC...");
-    const nodeIdBytes32 = w3.utils.padRight(w3.utils.utf8ToHex(nodeId), 64);
-    const payTx = c.methods.payForGenerationWithUSDC(
-      nodeIdBytes32,
-      prompt,
-      tier
-    );
+    const nodeIdBytes32 = pad(stringToHex(nodeId), { size: 32 });
 
     // estimateGas may fail when the approval tx hasn't been indexed by the
-    // RPC's simulation state; sendContractMethod falls back to a generous default.
-    const receipt = await sendContractMethod(contractAddress, payTx, {
+    // RPC's simulation state; sendContractCall falls back to a generous default.
+    const receipt = await sendContractCall({
+      to: contractAddress,
+      abi: c.abi,
+      functionName: "payForGenerationWithUSDC",
+      args: [nodeIdBytes32, prompt, BigInt(tier)],
       fallbackGas: 300000,
     });
     console.log("[USDC] payment confirmed! txHash =", receipt.transactionHash);

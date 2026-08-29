@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  *
- * wallet-payments.js — gas handling per wallet type.
+ * wallet-payments.ts — gas handling per wallet type.
  * CDP smart accounts must skip eth_estimateGas (sponsored UserOperations);
  * EOA wallets estimate and pad.
  */
@@ -12,27 +12,37 @@ const CONTRACT_ADDRESS = "0xContract";
 const TX_HASH = "0xTxHash";
 
 let _connectionSource = "injected";
-let _recordTx;
+let _estimateGas;
 let _signerSend;
 
+const RECORD_ABI = [
+  {
+    type: "function",
+    name: "recordGeneration",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "nodeId", type: "bytes32" },
+      { name: "prompt", type: "string" },
+    ],
+    outputs: [],
+  },
+];
+
 function _mockContract() {
-  _recordTx = {
-    estimateGas: jest.fn().mockResolvedValue(100000n),
-    encodeABI: jest.fn().mockReturnValue("0xDATA"),
-  };
-  return {
-    methods: {
-      recordGeneration: jest.fn(() => _recordTx),
-    },
-  };
+  return { abi: RECORD_ABI };
 }
 
 async function loadModule() {
   const contract = _mockContract();
   _signerSend = jest.fn().mockResolvedValue({
     hash: "0xUserOp",
-    wait: jest.fn().mockResolvedValue({ transactionHash: TX_HASH, status: true }),
+    wait: jest.fn().mockResolvedValue({
+      transactionHash: TX_HASH,
+      status: true,
+      blockNumber: 1,
+    }),
   });
+  _estimateGas = jest.fn().mockResolvedValue(100000n);
   const signer = {
     getAddress: () => WALLET,
     getSignerAddress: () => WALLET,
@@ -42,15 +52,16 @@ async function loadModule() {
   await jest.unstable_mockModule(
     "../../frontend/src/js/blockchain/wallet-core.js",
     () => ({
-      web3: {
-        utils: {
-          utf8ToHex: (s) => "0x" + Buffer.from(s, "utf8").toString("hex"),
-          padRight: (hex, n) => hex.padEnd(n, "0"),
-        },
-      },
       getActiveContract: () => contract,
       getActiveConnectionSource: () => _connectionSource,
       getSigner: () => signer,
+    })
+  );
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/blockchain/viem-clients.js",
+    () => ({
+      getReadClient: jest.fn(() => ({ estimateGas: _estimateGas })),
+      getWalletClient: jest.fn(),
     })
   );
   await jest.unstable_mockModule(
@@ -88,11 +99,11 @@ describe("recordGeneration gas handling", () => {
     const txHash = await recordGeneration("node-1", "a prompt");
 
     expect(txHash).toBe(TX_HASH);
-    expect(_recordTx.estimateGas).not.toHaveBeenCalled();
+    expect(_estimateGas).not.toHaveBeenCalled();
     expect(_signerSend).toHaveBeenCalledWith(
       expect.objectContaining({
         to: CONTRACT_ADDRESS,
-        gas: 2_000_000,
+        gas: 2_000_000n,
       })
     );
   });
@@ -103,21 +114,23 @@ describe("recordGeneration gas handling", () => {
     const txHash = await recordGeneration("node-1", "a prompt");
 
     expect(txHash).toBe(TX_HASH);
-    expect(_recordTx.estimateGas).toHaveBeenCalledWith({ from: WALLET });
+    expect(_estimateGas).toHaveBeenCalledWith(
+      expect.objectContaining({ account: WALLET })
+    );
     expect(_signerSend).toHaveBeenCalledWith(
-      expect.objectContaining({ gas: 120000 })
+      expect.objectContaining({ gas: 120000n })
     );
   });
 
   test("EOA wallet: falls back to the padded default when estimation fails", async () => {
     const { recordGeneration } = await loadModule();
-    _recordTx.estimateGas.mockRejectedValue(new Error("revert"));
+    _estimateGas.mockRejectedValue(new Error("revert"));
 
     const txHash = await recordGeneration("node-1", "a prompt");
 
     expect(txHash).toBe(TX_HASH);
     expect(_signerSend).toHaveBeenCalledWith(
-      expect.objectContaining({ gas: Math.floor(120000 * 1.2) })
+      expect.objectContaining({ gas: 144000n })
     );
   });
 });
