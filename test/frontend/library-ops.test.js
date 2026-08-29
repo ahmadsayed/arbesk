@@ -36,20 +36,6 @@ beforeEach(() => {
     };
   }
 
-  window.Web3 = {
-    utils: {
-      soliditySha3: jest.fn((...args) => {
-        const payload = JSON.stringify(args);
-        let hash = 0;
-        for (let i = 0; i < payload.length; i++) {
-          hash = (hash << 5) - hash + payload.charCodeAt(i);
-          hash |= 0;
-        }
-        return "0x" + Math.abs(hash).toString(16).padStart(64, "0");
-      }),
-    },
-  };
-
   _publishAsset = jest.fn().mockResolvedValue("0xTx");
   _writeToIPFS = jest.fn().mockResolvedValue("bafySource");
   _writeJSONToIPFS = jest.fn().mockResolvedValue("bafyJson");
@@ -158,7 +144,15 @@ async function loadModule() {
     ipfsRead: { getJSON: (...args) => _getFromRemoteIPFS(...args) },
     ipfsWrite: { write: async () => "", writeJSON: async () => "" },
     hash: {
-      soliditySha3: (...args) => window.Web3.utils.soliditySha3(...args),
+      soliditySha3: (...args) => {
+        const payload = JSON.stringify(args);
+        let hash = 0;
+        for (let i = 0; i < payload.length; i++) {
+          hash = (hash << 5) - hash + payload.charCodeAt(i);
+          hash |= 0;
+        }
+        return "0x" + Math.abs(hash).toString(16).padStart(64, "0");
+      },
       keccak256: () => "0x",
     },
     storage: createBrowserStoragePort(),
