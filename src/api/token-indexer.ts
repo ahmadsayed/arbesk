@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import type { PublicClient } from "viem";
 import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
-import { getWeb3, getContractAddress, NETWORK_CONFIGS } from "../config.ts";
+import { getPublicClient, getContractAddress, NETWORK_CONFIGS } from "../config.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -12,17 +13,14 @@ function ts(): string {
   return new Date().toLocaleTimeString();
 }
 
-const TRANSFER_TOPIC0 =
-  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-const EDITOR_SET_CHANGED_TOPIC0 =
-  "0xe04346630a2a402b40ab5f6918205fee5369cca36e2e6c2eebc4188b5f10c8c3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000".toLowerCase();
 
 /**
- * Combined ABI for the indexer: ERC-721 Transfer events, EditorSetChanged
- * events, and the editorListURI view function.
+ * Event ABIs the indexer subscribes to: ERC-721 Transfer mints/burns and
+ * EditorSetChanged. Passed to viem getLogs, which decodes each log's args —
+ * no manual topic slicing.
  */
-const INDEXER_ABI: any = [
+const INDEXER_EVENTS = [
   {
     anonymous: false,
     inputs: [
@@ -43,6 +41,10 @@ const INDEXER_ABI: any = [
     name: "EditorSetChanged",
     type: "event",
   },
+] as const;
+
+/** ABI for the editorListURI view function, read via readContract. */
+const EDITOR_LIST_URI_ABI = [
   {
     inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
     name: "editorListURI",
@@ -50,7 +52,7 @@ const INDEXER_ABI: any = [
     stateMutability: "view",
     type: "function",
   },
-];
+] as const;
 
 export interface IndexerState {
   lastScannedBlock: number;
@@ -65,8 +67,7 @@ export interface IndexerState {
 class TokenIndexer {
   chainId: number;
   contractAddress: string | null;
-  web3: any;
-  contract: any;
+  client: PublicClient;
   deploymentBlock: number;
   stateFile: string;
   ownership: Map<string, string>;
@@ -85,8 +86,7 @@ class TokenIndexer {
   constructor(chainId: number, storage: StorageAdapter) {
     this.chainId = chainId;
     this.contractAddress = getContractAddress(chainId);
-    this.web3 = getWeb3(chainId);
-    this.contract = new this.web3.eth.Contract(INDEXER_ABI, this.contractAddress);
+    this.client = getPublicClient(chainId);
     this.deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
     this.stateFile = path.join(DATA_DIR, `token-indexer-${chainId}.json`);
     this.storage = storage;
@@ -162,17 +162,18 @@ class TokenIndexer {
 
   /**
    * Fetch Transfer and EditorSetChanged logs for a single block range.
+   * Returns viem-decoded logs (eventName + args).
    */
   async _fetchLogs(fromBlock: number, toBlock: number): Promise<any[]> {
     const start = Date.now();
-    const logs = await this.web3.eth.getPastLogs({
-      address: this.contractAddress,
-      topics: [[TRANSFER_TOPIC0, EDITOR_SET_CHANGED_TOPIC0]],
-      fromBlock: fromBlock,
-      toBlock: toBlock,
+    const logs = await this.client.getLogs({
+      address: this.contractAddress as `0x${string}`,
+      events: INDEXER_EVENTS,
+      fromBlock: BigInt(fromBlock),
+      toBlock: BigInt(toBlock),
     });
     console.log(
-      `[${ts()}] [INDEXER] getPastLogs ${fromBlock}..${toBlock} returned ${logs.length} logs ` +
+      `[${ts()}] [INDEXER] getLogs ${fromBlock}..${toBlock} returned ${logs.length} logs ` +
         `in ${Date.now() - start}ms`
     );
     return logs;
@@ -204,7 +205,12 @@ class TokenIndexer {
    */
   async _refreshTokenEditors(tokenId: string): Promise<void> {
     try {
-      const cid = await this.contract.methods.editorListURI(tokenId).call();
+      const cid = await this.client.readContract({
+        address: this.contractAddress as `0x${string}`,
+        abi: EDITOR_LIST_URI_ABI,
+        functionName: "editorListURI",
+        args: [BigInt(tokenId)],
+      });
       if (!cid) {
         this._removeTokenEditors(tokenId);
         return;
@@ -240,25 +246,26 @@ class TokenIndexer {
 
   /**
    * Apply Transfer and EditorSetChanged logs to the index.
+   * Logs are pre-decoded by viem: eventName + args (args.tokenId is bigint,
+   * args.to a checksummed address — lowered to match the legacy topic slice).
    */
   _applyLogs(logs: any[]): { maxBlock: number; editorTokensToRefresh: Set<string> } {
     let maxBlock = this.lastScannedBlock;
     const editorTokensToRefresh = new Set<string>();
 
     for (const log of logs) {
-      const topic0 = log.topics[0];
       const blockNumber = Number(log.blockNumber);
       if (blockNumber > maxBlock) maxBlock = blockNumber;
 
-      if (topic0 === TRANSFER_TOPIC0) {
-        const tokenId = String(this.web3.utils.toBigInt(log.topics[3]));
-        const to = "0x" + log.topics[2].slice(-40).toLowerCase();
+      if (log.eventName === "Transfer") {
+        const tokenId = String(log.args.tokenId);
+        const to = log.args.to.toLowerCase();
         this.ownership.set(tokenId, to);
         if (to === ZERO_ADDRESS) {
           this._removeTokenEditors(tokenId);
         }
-      } else if (topic0 === EDITOR_SET_CHANGED_TOPIC0) {
-        const tokenId = String(this.web3.utils.toBigInt(log.topics[1]));
+      } else if (log.eventName === "EditorSetChanged") {
+        const tokenId = String(log.args.tokenId);
         editorTokensToRefresh.add(tokenId);
       }
     }
@@ -311,7 +318,7 @@ class TokenIndexer {
     const run = async (): Promise<void> => {
       const start = Date.now();
       this.lastCatchUpAt = start;
-      const latest = Number(await this.web3.eth.getBlockNumber());
+      const latest = Number(await this.client.getBlockNumber());
       if (this.lastScannedBlock >= latest) {
         console.log(
           `[${ts()}] [INDEXER] catchUp chain ${this.chainId} already at tip ` +
