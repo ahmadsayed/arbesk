@@ -1678,6 +1678,171 @@ describe("Arbesk API", () => {
         // The BIN chunk must hold the DECOMPRESSED bytes.
         expect(uploaded.includes(binBytes)).toBe(true);
       });
+
+      it("returns 400 SOURCE_ASSET_UNSUPPORTED_FORMAT when '{'-prefixed content is not valid JSON", async () => {
+        ipfsStorage.set("bafyBadJson", Buffer.from("{ this is not json"));
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyBadJson", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_UNSUPPORTED_FORMAT");
+      });
+
+      it("returns 400 SOURCE_ASSET_UNSUPPORTED_FORMAT for glTF with an unresolvable image uri", async () => {
+        ipfsStorage.set(
+          "bafyLooseImg",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{ uri: "data:application/octet-stream;base64,AQIDBA==", byteLength: 4 }],
+            images: [{ uri: "textures/albedo.png" }],
+          })),
+        );
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyLooseImg", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_UNSUPPORTED_FORMAT");
+        expect(res.body.error.message).toContain("textures/albedo.png");
+      });
+
+      it("zero-fills uri-less buffers and adjusts bufferView offsets when packing the GLB", async () => {
+        ipfsStorage.set(
+          "bafyNoUriBuf",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [
+              { uri: "data:application/octet-stream;base64,AQIDBA==", byteLength: 4 },
+              { byteLength: 8 },
+            ],
+            bufferViews: [
+              { buffer: 0, byteOffset: 0, byteLength: 4 },
+              { buffer: 1, byteOffset: 2, byteLength: 4 },
+            ],
+          })),
+        );
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => ({
+          ok: true,
+          json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_nouri" } }),
+        }));
+        fetchSpy.mockClear();
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyNoUriBuf", retexture: true });
+        expect(res.status).toBe(202);
+        const uploaded = Buffer.from(await fetchSpy.mock.calls[0][1].body.get("file").arrayBuffer());
+        expect(uploaded.readUInt32LE(0)).toBe(0x46546c67);
+        // data-URI bytes made it into the BIN chunk, followed by the zero fill.
+        expect(uploaded.includes(Buffer.from([1, 2, 3, 4, 0, 0, 0, 0]))).toBe(true);
+      });
+
+      it("returns 400 SOURCE_ASSET_TOO_LARGE when the composed GLB (not the raw source) exceeds 150 MB", async () => {
+        // A tiny JSON with a huge uri-less buffer: the raw gate passes, the
+        // zero-filled BIN chunk trips the post-compose gate.
+        ipfsStorage.set(
+          "bafyHugeComposed",
+          Buffer.from(JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{ byteLength: 150 * 1024 * 1024 + 1 }],
+          })),
+        );
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyHugeComposed", retexture: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("SOURCE_ASSET_TOO_LARGE");
+      });
+
+      it("returns 202 on multiview POST (one upload per view, then a multiview task)", async () => {
+        const calls = [];
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async (url) => {
+          calls.push(url);
+          return { ok: true, json: async () => ({ code: 0, data: { file_token: "ftok_v", task_id: "task_mv" } }) };
+        });
+        fetchSpy.mockClear();
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_tripo_mv",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+            images: [
+              { imageData: Buffer.from("front-png").toString("base64"), imageMime: "image/png", view: "front" },
+              { imageData: Buffer.from("left-png").toString("base64"), imageMime: "image/png", view: "left" },
+            ],
+          });
+        expect(res.status).toBe(202);
+        expect(res.body).toMatchObject({ taskId: expect.any(String), provider: "tripo3d", status: "running" });
+        expect(calls[0]).toBe("https://openapi.tripo3d.ai/v3/files");
+        expect(calls[calls.length - 1]).toBe("https://openapi.tripo3d.ai/v3/generation/multiview-to-model");
+      });
+
+      it("maps a generic Tripo HTTP failure to 502 PROVIDER_ERROR on POST", async () => {
+        jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: false,
+          status: 500,
+          text: async () => "upstream exploded",
+        });
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "An upstream failure",
+            nodeId: "node_tripo_502",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe("PROVIDER_ERROR");
+      });
+
+      it("returns 500 GENERATION_FAILED when the source is corrupt gzip (unexpected non-Tripo error)", async () => {
+        // Gzip magic (1f 8b) but a corrupt body: decompress() throws a plain
+        // zlib error — not a TripoApiError — exercising the generic catch-all.
+        ipfsStorage.set("bafyCorruptGz", Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff]));
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", sourceAssetCid: "bafyCorruptGz", retexture: true });
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe("GENERATION_FAILED");
+      });
+
+      it("GET returns 500 GENERATION_FAILED when a success response lacks the model URL", async () => {
+        jest
+          .spyOn(global, "fetch")
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_nourl" } }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              code: 0,
+              data: { task_id: "task_nourl", status: "success", output: {} },
+            }),
+          });
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A url-less success",
+            nodeId: "node_tripo_nourl",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+        expect(post.status).toBe(202);
+        const res = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", await makeSessionHeader());
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe("GENERATION_FAILED");
+        expect(res.body.error.message).toContain("missing model URL");
+      });
     });
 
     it("rejects unknown provider with 501", async () => {

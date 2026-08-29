@@ -13,6 +13,7 @@ import {
 import type { GenerationProvider } from "@arbesk/ai-asset-gen/facade.js";
 import type {
   GenerationCapability,
+  GenerationStatus,
   SourceRef,
   MultiviewImage,
 } from "@arbesk/ai-asset-gen/types.js";
@@ -24,6 +25,7 @@ import {
   updateTaskEntry,
   evictTask,
 } from "../generation-tasks.ts";
+import type { TaskEntry } from "../generation-tasks.ts";
 import type { StorageAdapter } from "../storage/index.ts";
 import authenticate from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
@@ -183,6 +185,135 @@ function providerErrorCode(status: number): string {
 }
 
 /**
+ * Shared error-response tail: TripoApiErrors keep their HTTP status with the
+ * documented provider code; anything unexpected is a 500 with `serverCode`.
+ */
+function sendProviderOrServerError(
+  res: Response,
+  err: Error,
+  serverCode: string,
+): Response {
+  if (err instanceof TripoApiError) {
+    return res.status(err.status).json({
+      error: {
+        code: providerErrorCode(err.status),
+        message: err.message,
+      },
+    });
+  }
+  return res.status(500).json({
+    error: {
+      code: serverCode,
+      message: err.message,
+    },
+  });
+}
+
+/** Source-asset 400s: message matcher → documented error code. */
+const SOURCE_ERROR_RULES: { match: (message: string) => boolean; code: string }[] = [
+  {
+    match: (m) => m === "Source asset unavailable in IPFS",
+    code: "SOURCE_ASSET_UNAVAILABLE",
+  },
+  {
+    match: (m) => m === "Source asset exceeds the 150 MB upload limit",
+    code: "SOURCE_ASSET_TOO_LARGE",
+  },
+  {
+    match: (m) => m === MSG_SOURCE_UNSUPPORTED || m.startsWith(MSG_SOURCE_UNRESOLVABLE_PREFIX),
+    code: "SOURCE_ASSET_UNSUPPORTED_FORMAT",
+  },
+];
+
+/**
+ * Send the documented error response for a POST /generations failure:
+ * source-asset 400s keep their dedicated codes, other TripoApiErrors map by
+ * HTTP status, and anything unexpected is a 500 GENERATION_FAILED.
+ */
+function sendGenerationError(res: Response, err: Error): Response {
+  console.error("[GEN] error:", err.message);
+  const rule =
+    err instanceof TripoApiError && err.status === 400
+      ? SOURCE_ERROR_RULES.find((r) => r.match(err.message))
+      : undefined;
+  if (rule) {
+    return res.status(400).json({
+      error: {
+        code: rule.code,
+        message: err.message,
+      },
+    });
+  }
+  return sendProviderOrServerError(res, err, "GENERATION_FAILED");
+}
+
+/**
+ * BYOK (Bring Your Own Key) gate: real providers require a user-supplied API
+ * key. The user pays the provider directly, so the on-chain quota/payment
+ * gate is bypassed entirely. The key is used transiently and is never logged
+ * or persisted. The mock provider needs no key.
+ * @returns true when the request was rejected with 400 MISSING_PROVIDER_KEY
+ */
+function rejectMissingProviderKey(
+  res: Response,
+  effectiveProvider: string,
+  providerKey: unknown,
+): boolean {
+  if (effectiveProvider !== "mock") {
+    if (
+      typeof providerKey !== "string" ||
+      providerKey.trim().length === 0
+    ) {
+      console.log(
+        "[GEN] rejected - providerKey required for real provider",
+      );
+      res.status(400).json({
+        error: {
+          code: "MISSING_PROVIDER_KEY",
+          message: "providerKey is required for the selected provider",
+        },
+      });
+      return true;
+    }
+    console.log(
+      `[GEN] byok provider=${effectiveProvider} key=*** (len=${providerKey.trim().length}) - on-chain gate bypassed`,
+    );
+  }
+  return false;
+}
+
+/**
+ * Run a mock-provider generation and return the sample asset bytes as base64.
+ * The mock provider only does text-to-3D; image-only requests fall back to a
+ * placeholder prompt (image input is Tripo3D-only).
+ */
+async function runMockGeneration(
+  res: Response,
+  prompt: string | undefined,
+): Promise<Response> {
+  const mockPrompt = prompt || "image";
+  console.log(`[GEN] using MOCK adapter for "${mockPrompt}"`);
+  const mockProvider = createGenerationProvider({
+    id: "mock",
+    capabilities: MOCK_CAPABILITIES,
+  });
+  const taskId = await mockProvider.textToModel({ prompt: mockPrompt });
+  const poll = await mockProvider.poll(taskId);
+  const bytes = await mockProvider.download(taskId);
+  const assetFormat = poll.format || "gltf";
+  const assetBase64 = Buffer.from(bytes).toString("base64");
+  console.log(
+    `[GEN] mock returned provider=mock size=${bytes.length} bytes (${assetFormat})`,
+  );
+  return res.json({
+    assetData: assetBase64,
+    format: assetFormat,
+    path: `asset.${assetFormat}`,
+    provider: "mock",
+  });
+}
+
+/**
  * Fetch a source GLB from IPFS and upload it to Tripo, returning the
  * file_token. Throws TripoApiError(400, SOURCE_ASSET_UNAVAILABLE-shaped)
  * when the CID cannot be read or yields an empty buffer,
@@ -240,6 +371,428 @@ async function resolveSourceGlb(
   return glb;
 }
 
+/** Request-body fields the Tripo3D generation flow consumes (Zod-validated). */
+interface TripoGenerationInput {
+  prompt?: string;
+  sourceAssetCid?: string;
+  sourceTaskId?: string;
+  retexture?: boolean;
+  retopo?: boolean;
+  animate?: boolean;
+  rigOnly?: boolean;
+  rigModel?: string;
+  animateInPlace?: boolean;
+  animations?: string[];
+  faceLimit?: number;
+  textureQuality?: string;
+  imageData?: string;
+  imageMime?: string;
+  images?: { imageData: string; imageMime: string; view: string }[];
+}
+
+/**
+ * Registry lookup for the retarget-only shortcut: the caller references a
+ * completed rig-only entry whose skeleton still lives Tripo-side (registry
+ * TTL). Skipped when the caller explicitly picked a different rig model —
+ * the full chain with the user's chosen model is needed then. Everything
+ * else goes through the GLB — the canonical, expiry-free path.
+ */
+function findRigSource(
+  userAddress: string,
+  body: TripoGenerationInput,
+): TaskEntry | undefined {
+  const { animate, sourceTaskId, rigModel, rigOnly } = body;
+  if (!animate || !sourceTaskId || rigModel) return undefined;
+  const rigSource = getCompletedTask(sourceTaskId, userAddress);
+  if (!rigSource || rigSource.kind !== "animate" || rigSource.phase !== "rig" || rigOnly) {
+    return undefined;
+  }
+  return rigSource;
+}
+
+/** Fire the retarget task off a completed rig and register it. */
+async function startRetarget(
+  res: Response,
+  provider: GenerationProvider,
+  key: string,
+  userAddress: string,
+  rigSource: TaskEntry,
+  body: TripoGenerationInput,
+): Promise<Response> {
+  const { animations, animateInPlace } = body;
+  console.log(`[GEN] retarget-only: source rig=${rigSource.tripoTaskId} animations=${(animations || []).join(",")}`);
+  const retargetId = await provider.animate({
+    rigTaskId: rigSource.tripoTaskId,
+    animations: animations || [],
+    animateInPlace: Boolean(animateInPlace),
+    rigModel: rigSource.rigModel,
+  });
+  const taskId = registerTask({ tripoTaskId: retargetId, providerKey: key, userAddress, kind: "animate", phase: "retarget", animations });
+  return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
+}
+
+/**
+ * Retarget-only shortcut.
+ * @returns the 202 response when the shortcut applied, undefined otherwise
+ */
+async function tryRetargetOnly(
+  res: Response,
+  provider: GenerationProvider,
+  key: string,
+  userAddress: string,
+  body: TripoGenerationInput,
+): Promise<Response | undefined> {
+  const rigSource = findRigSource(userAddress, body);
+  if (!rigSource) return undefined;
+  return startRetarget(res, provider, key, userAddress, rigSource, body);
+}
+
+/**
+ * Start a follow-up task (animate chain, retopo, or retexture) on a source
+ * asset: upload the source GLB to Tripo, then dispatch on the action flag.
+ * @returns the 202 response when an action flag matched, undefined otherwise
+ *   (the caller then falls through to fresh generation — unreachable in
+ *   practice: the schema guarantees exactly one action flag)
+ */
+async function startSourceFollowUp(
+  res: Response,
+  provider: GenerationProvider,
+  key: string,
+  userAddress: string,
+  sourceAssetCid: string,
+  body: TripoGenerationInput,
+): Promise<Response | undefined> {
+  const { prompt, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality } = body;
+  const fileToken = await provider.uploadSource({ kind: "cid", cid: sourceAssetCid });
+  const source: SourceRef = { kind: "fileToken", fileToken };
+
+  if (animate) {
+    console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)} inPlace=${Boolean(animateInPlace)}`);
+    const rigCheckId = await provider.rigCheck({ source });
+    const taskId = registerTask({
+      tripoTaskId: rigCheckId, providerKey: key, userAddress,
+      kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken, rigModel,
+    });
+    return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
+  }
+
+  if (retopo) {
+    console.log(`[GEN] starting retopo source=${sourceAssetCid} faceLimit=${faceLimit ?? "adaptive"}`);
+    const decimateId = await provider.retopo({ source, faceLimit });
+    const taskId = registerTask({ tripoTaskId: decimateId, providerKey: key, userAddress });
+    return res.status(202).json({ taskId, provider: "tripo3d", status: "running", retopo: true });
+  }
+
+  // retexture (schema guarantees exactly one action flag)
+  if (retexture) {
+    console.log(`[GEN] starting retexture source=${sourceAssetCid}`);
+    const refineId = await provider.retexture({ prompt: prompt as string, source, textureQuality });
+    const taskId = registerTask({ tripoTaskId: refineId, providerKey: key, userAddress });
+    return res.status(202).json({ taskId, provider: "tripo3d", status: "running", refined: true });
+  }
+  return undefined;
+}
+
+/**
+ * Start a fresh Tripo3D generation (multiview, image, or text) and register
+ * the task. Action flags without sourceAssetCid are ignored here — the
+ * prompt/image starts a new model.
+ */
+async function startFreshGeneration(
+  res: Response,
+  provider: GenerationProvider,
+  key: string,
+  userAddress: string,
+  body: TripoGenerationInput,
+): Promise<Response> {
+  const { prompt, textureQuality, imageData, imageMime, images } = body;
+  console.log(
+    `[GEN] using Tripo3D adapter for "${prompt || (images ? "(multiview)" : "(image)")}" image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
+  );
+  const tripoTaskId = images
+    ? await provider.multiviewToModel({
+        views: images.map((img: { imageData: string; imageMime: string; view: string }) => ({
+          view: img.view,
+          image: Buffer.from(img.imageData, "base64"),
+          mime: img.imageMime,
+        })) as MultiviewImage[],
+        textureQuality,
+      })
+    : imageData
+      ? await provider.imageToModel({
+          image: Buffer.from(imageData, "base64"),
+          mime: imageMime as string,
+          textureQuality,
+        })
+      : await provider.textToModel({ prompt: prompt as string, textureQuality });
+  const taskId = registerTask({
+    tripoTaskId,
+    providerKey: key,
+    userAddress,
+  });
+  console.log(
+    `[GEN] tripo task registered public=${taskId} tripo=${tripoTaskId}`,
+  );
+  return res.status(202).json({
+    taskId,
+    provider: "tripo3d",
+    status: "running",
+  });
+}
+
+/**
+ * Poll body for in-flight tasks, with the chain stage label for animate
+ * tasks so the UI can say which step is running.
+ */
+function buildProgressBody(
+  entry: TaskEntry,
+  poll: GenerationStatus,
+): Record<string, unknown> {
+  const stageLabels = {
+    "rig-check": "Checking rig compatibility",
+    rig: "Rigging skeleton",
+    retarget: "Baking animations",
+  };
+  return {
+    status: poll.status,
+    progress: poll.progress ?? 0,
+    ...(entry.kind === "animate" && {
+      stage: stageLabels[entry.phase || "rig-check"],
+    }),
+  };
+}
+
+/**
+ * Error mapping for GET /generations/:taskId: TripoApiErrors keep their HTTP
+ * status (auth/credit failures are terminal for the task — evict the entry
+ * and its transient BYOK key instead of waiting for the TTL); anything
+ * unexpected is a 500 GENERATION_FAILED.
+ */
+function sendPollError(res: Response, err: Error, taskId: string): Response {
+  console.error("[GEN] get error:", err.message);
+  // Auth/credit failures are terminal for the task: evict the entry
+  // (and its transient BYOK key) instead of waiting for the TTL.
+  if (err instanceof TripoApiError && (err.status === 401 || err.status === 402)) {
+    evictTask(taskId);
+  }
+  return sendProviderOrServerError(res, err, "GENERATION_FAILED");
+}
+
+/**
+ * Terminal failure/cancel: evict the task and report PROVIDER_TASK_FAILED,
+ * including the chain stage so the user knows which step died (the upstream
+ * message alone says "Task failed").
+ */
+function sendTaskFailed(
+  res: Response,
+  entry: TaskEntry,
+  taskId: string,
+  poll: GenerationStatus,
+): Response {
+  evictTask(taskId);
+  const failStage =
+    entry.kind === "animate"
+      ? {
+          "rig-check": "Rig compatibility check",
+          rig: "Rigging",
+          retarget: "Animation bake",
+        }[entry.phase || "rig-check"]
+      : null;
+  const failMessage = poll.error || "Task failed";
+  console.log(
+    `[GEN] task failed taskId=${taskId} stage=${failStage || "generate"} error=${failMessage}`,
+  );
+  return res.json({
+    status: "failed",
+    error: {
+      code: "PROVIDER_TASK_FAILED",
+      message: failStage ? `${failStage} failed — ${failMessage}` : failMessage,
+    },
+  });
+}
+
+/**
+ * Terminal success: download the GLB, mark the task complete (kept in the
+ * registry for the retarget-only shortcut), and return the bytes as base64.
+ */
+async function completeTask(
+  res: Response,
+  provider: GenerationProvider,
+  entry: TaskEntry,
+  taskId: string,
+  userAddress: string,
+  poll: GenerationStatus,
+): Promise<Response> {
+  if (!poll.glbUrl) {
+    throw new Error("Tripo success response missing model URL");
+  }
+  const buffer = await provider.download(poll.glbUrl);
+  markTaskComplete(taskId, userAddress);
+  console.log(
+    `[GEN] task complete taskId=${taskId} size=${buffer.length}`,
+  );
+  return res.json({
+    status: "success",
+    assetData: Buffer.from(buffer).toString("base64"),
+    format: "glb",
+    path: "asset.glb",
+    provider: "tripo3d",
+    providerTaskId: entry.tripoTaskId,
+  });
+}
+
+/**
+ * Animate chain: a succeeded rig-check or rig task starts the next phase
+ * instead of finishing. rig-check → rig (failing fast when Tripo reports the
+ * model is not riggable); rig → retarget with the requested presets.
+ */
+async function advanceAnimateChain(
+  res: Response,
+  provider: GenerationProvider,
+  entry: TaskEntry,
+  taskId: string,
+  userAddress: string,
+  poll: GenerationStatus,
+): Promise<Response> {
+  if (entry.phase === "rig-check") {
+    const rigOutput = (
+      poll.output
+    ) as { riggable?: boolean; rig_type?: string } | undefined;
+    if (!rigOutput?.riggable) {
+      evictTask(taskId);
+      console.log(`[GEN] animate chain: model not riggable taskId=${taskId}`);
+      return res.json({
+        status: "failed",
+        error: {
+          code: "MODEL_NOT_RIGGABLE",
+          message:
+            "Tripo reports this model is not riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.",
+        },
+      });
+    }
+    const rig = await provider.rig({
+      source: { kind: "fileToken", fileToken: entry.sourceFileToken || "" },
+      rigType: rigOutput.rig_type || "biped",
+      model: entry.rigModel,
+    });
+    updateTaskEntry(taskId, userAddress, {
+      tripoTaskId: rig.taskId,
+      phase: "rig",
+      rigModel: rig.model,
+    });
+    console.log(
+      `[GEN] animate chain: rig started taskId=${taskId} tripo=${rig.taskId} rig_type=${rigOutput.rig_type} model=${rig.model}`,
+    );
+    return res.json({
+      status: "running",
+      progress: 40,
+      stage: "Rigging skeleton",
+    });
+  }
+  // phase === "rig" → start retarget with the requested presets
+  const retargetId = await provider.animate({
+    rigTaskId: entry.tripoTaskId,
+    animations: entry.animations || [],
+    animateInPlace: Boolean(entry.animateInPlace),
+    rigModel: entry.rigModel,
+  });
+  updateTaskEntry(taskId, userAddress, {
+    tripoTaskId: retargetId,
+    phase: "retarget",
+  });
+  console.log(
+    `[GEN] animate chain: retarget started taskId=${taskId} tripo=${retargetId}`,
+  );
+  return res.json({
+    status: "running",
+    progress: 75,
+    stage: "Baking animations",
+  });
+}
+
+/**
+ * Resolve the requested provider: defaults to "mock", and the mock adapter
+ * also serves provider-less requests when MOCK_3D_GENERATION=true.
+ */
+function resolveProvider(provider: string | undefined): {
+  effectiveProvider: string;
+  useMockAdapter: boolean;
+} {
+  const effectiveProvider = provider || "mock";
+  const useMockAdapter =
+    effectiveProvider === "mock" ||
+    (!provider && process.env.MOCK_3D_GENERATION === "true");
+  return { effectiveProvider, useMockAdapter };
+}
+
+/**
+ * Tripo3D dispatch: source follow-ups (retarget-only shortcut, then the
+ * animate/retopo/retexture chain) when sourceAssetCid is set, fresh
+ * generation otherwise.
+ */
+async function handleTripoRequest(
+  res: Response,
+  buildTripoProvider: (apiKey: string) => GenerationProvider,
+  providerKey: string,
+  userAddress: string,
+  body: TripoGenerationInput,
+): Promise<Response> {
+  const { sourceAssetCid } = body;
+  const key = providerKey.trim();
+  const provider = buildTripoProvider(key);
+
+  if (sourceAssetCid) {
+    const retargeted = await tryRetargetOnly(res, provider, key, userAddress, body);
+    if (retargeted) return retargeted;
+
+    const followUp = await startSourceFollowUp(
+      res, provider, key, userAddress, sourceAssetCid, body,
+    );
+    if (followUp) return followUp;
+  }
+
+  // await (not bare return) so provider errors land in the route's try/catch.
+  return await startFreshGeneration(res, provider, key, userAddress, body);
+}
+
+/**
+ * Respond to a task poll: progress while in flight, advance the animate
+ * chain on intermediate successes, download the GLB on terminal success,
+ * otherwise report the failure.
+ */
+async function respondToPoll(
+  res: Response,
+  provider: GenerationProvider,
+  entry: TaskEntry,
+  taskId: string,
+  userAddress: string,
+  poll: GenerationStatus,
+): Promise<Response> {
+  if (poll.status === "queued" || poll.status === "running") {
+    return res.json(buildProgressBody(entry, poll));
+  }
+
+  // Animate chain: a succeeded rig-check or rig task starts the next phase
+  // instead of finishing. Terminal phases: retarget (animate), or rig when
+  // rigOnly was requested (rigged model, no animation).
+  const chainTerminal =
+    entry.phase === "retarget" || (entry.rigOnly && entry.phase === "rig");
+  if (
+    entry.kind === "animate" &&
+    poll.status === "success" &&
+    !chainTerminal
+  ) {
+    return await advanceAnimateChain(res, provider, entry, taskId, userAddress, poll);
+  }
+
+  if (poll.status === "success") {
+    return await completeTask(res, provider, entry, taskId, userAddress, poll);
+  }
+
+  // failed or cancelled
+  return sendTaskFailed(res, entry, taskId, poll);
+}
+
 /**
  * Generation route factory. Receives the asset-core facade (for composing
  * glTF JSON sources to GLB) and the storage adapter (for reading source GLBs)
@@ -281,154 +834,28 @@ export default function generateAssetNode(
     validateBody(generateAssetSchema),
     async (req: Request, res: Response) => {
       try {
-        const { prompt, nodeId, provider, providerKey, sourceAssetCid, sourceTaskId, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, imageData, imageMime, images } = req.body;
+        const { prompt, nodeId, provider, providerKey, imageData } = req.body;
 
-        const effectiveProvider = provider || "mock";
-        const useMockAdapter =
-          effectiveProvider === "mock" ||
-          (!provider && process.env.MOCK_3D_GENERATION === "true");
+        const { effectiveProvider, useMockAdapter } = resolveProvider(provider);
 
         console.log(
           `[GEN] prompt="${prompt || (imageData ? "(image)" : "")}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
         );
 
-        // BYOK (Bring Your Own Key): real providers require a user-supplied API
-        // key. The user pays the provider directly, so the on-chain quota/payment
-        // gate is bypassed entirely. The key is used transiently and is never
-        // logged or persisted. The mock provider needs no key.
-        if (effectiveProvider !== "mock") {
-          if (
-            typeof providerKey !== "string" ||
-            providerKey.trim().length === 0
-          ) {
-            console.log(
-              "[GEN] rejected - providerKey required for real provider",
-            );
-            return res.status(400).json({
-              error: {
-                code: "MISSING_PROVIDER_KEY",
-                message: "providerKey is required for the selected provider",
-              },
-            });
-          }
-          console.log(
-            `[GEN] byok provider=${effectiveProvider} key=*** (len=${providerKey.trim().length}) - on-chain gate bypassed`,
-          );
+        if (rejectMissingProviderKey(res, effectiveProvider, providerKey)) {
+          return;
         }
 
         if (useMockAdapter) {
-          // The mock provider only does text-to-3D; image-only requests fall
-          // back to a placeholder prompt (image input is Tripo3D-only).
-          const mockPrompt = prompt || "image";
-          console.log(`[GEN] using MOCK adapter for "${mockPrompt}"`);
-          const mockProvider = createGenerationProvider({
-            id: "mock",
-            capabilities: MOCK_CAPABILITIES,
-          });
-          const taskId = await mockProvider.textToModel({ prompt: mockPrompt });
-          const poll = await mockProvider.poll(taskId);
-          const bytes = await mockProvider.download(taskId);
-          const assetFormat = poll.format || "gltf";
-          const assetBase64 = Buffer.from(bytes).toString("base64");
-          console.log(
-            `[GEN] mock returned provider=mock size=${bytes.length} bytes (${assetFormat})`,
-          );
-          return res.json({
-            assetData: assetBase64,
-            format: assetFormat,
-            path: `asset.${assetFormat}`,
-            provider: "mock",
-          });
+          // await (not bare return) so a throw lands in the try/catch below.
+          return await runMockGeneration(res, prompt);
         }
 
         if (effectiveProvider === "tripo3d") {
-          const key = providerKey.trim();
-          const provider = buildTripoProvider(key);
-
-          if (sourceAssetCid) {
-            // Retarget-only shortcut: the caller references a completed rig-only
-            // registry entry whose skeleton still lives Tripo-side (registry TTL).
-            // Skip this shortcut when the caller explicitly picked a different rig
-            // model — we need the full chain with the user's chosen model.
-            // Everything else goes through the GLB — the canonical, expiry-free path.
-            if (animate && sourceTaskId && !rigModel) {
-              const rigSource = getCompletedTask(sourceTaskId, res.locals.userAddress);
-              if (rigSource && rigSource.kind === "animate" && rigSource.phase === "rig" && !rigOnly) {
-                console.log(`[GEN] retarget-only: source rig=${rigSource.tripoTaskId} animations=${(animations || []).join(",")}`);
-                const retargetId = await provider.animate({
-                  rigTaskId: rigSource.tripoTaskId,
-                  animations: animations || [],
-                  animateInPlace: Boolean(animateInPlace),
-                  rigModel: rigSource.rigModel,
-                });
-                const taskId = registerTask({ tripoTaskId: retargetId, providerKey: key, userAddress: res.locals.userAddress, kind: "animate", phase: "retarget", animations });
-                return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
-              }
-            }
-
-            const fileToken = await provider.uploadSource({ kind: "cid", cid: sourceAssetCid });
-            const source: SourceRef = { kind: "fileToken", fileToken };
-
-            if (animate) {
-              console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)} inPlace=${Boolean(animateInPlace)}`);
-              const rigCheckId = await provider.rigCheck({ source });
-              const taskId = registerTask({
-                tripoTaskId: rigCheckId, providerKey: key, userAddress: res.locals.userAddress,
-                kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken, rigModel,
-              });
-              return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
-            }
-
-            if (retopo) {
-              console.log(`[GEN] starting retopo source=${sourceAssetCid} faceLimit=${faceLimit ?? "adaptive"}`);
-              const decimateId = await provider.retopo({ source, faceLimit });
-              const taskId = registerTask({ tripoTaskId: decimateId, providerKey: key, userAddress: res.locals.userAddress });
-              return res.status(202).json({ taskId, provider: "tripo3d", status: "running", retopo: true });
-            }
-
-            // retexture (schema guarantees exactly one action flag)
-            if (retexture) {
-              console.log(`[GEN] starting retexture source=${sourceAssetCid}`);
-              const refineId = await provider.retexture({ prompt, source, textureQuality });
-              const taskId = registerTask({ tripoTaskId: refineId, providerKey: key, userAddress: res.locals.userAddress });
-              return res.status(202).json({ taskId, provider: "tripo3d", status: "running", refined: true });
-            }
-          }
-
-          // Fresh generation. Action flags without sourceAssetCid are
-          // ignored here — the prompt/image starts a new model.
-          console.log(
-            `[GEN] using Tripo3D adapter for "${prompt || (images ? "(multiview)" : "(image)")}" image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
+          // await (not bare return) so provider errors land in the try/catch.
+          return await handleTripoRequest(
+            res, buildTripoProvider, providerKey, res.locals.userAddress, req.body,
           );
-          const tripoTaskId = images
-            ? await provider.multiviewToModel({
-                views: images.map((img: { imageData: string; imageMime: string; view: string }) => ({
-                  view: img.view,
-                  image: Buffer.from(img.imageData, "base64"),
-                  mime: img.imageMime,
-                })) as MultiviewImage[],
-                textureQuality,
-              })
-            : imageData
-              ? await provider.imageToModel({
-                  image: Buffer.from(imageData, "base64"),
-                  mime: imageMime,
-                  textureQuality,
-                })
-              : await provider.textToModel({ prompt, textureQuality });
-          const taskId = registerTask({
-            tripoTaskId,
-            providerKey: key,
-            userAddress: res.locals.userAddress,
-          });
-          console.log(
-            `[GEN] tripo task registered public=${taskId} tripo=${tripoTaskId}`,
-          );
-          return res.status(202).json({
-            taskId,
-            provider: "tripo3d",
-            status: "running",
-          });
         }
 
         console.log("[GEN] cloud adapter not implemented - rejecting");
@@ -439,47 +866,7 @@ export default function generateAssetNode(
           },
         });
       } catch (error) {
-        const err = error as Error;
-        console.error("[GEN] error:", err.message);
-        if (err instanceof TripoApiError && err.status === 400 && err.message === "Source asset unavailable in IPFS") {
-          return res.status(400).json({
-            error: {
-              code: "SOURCE_ASSET_UNAVAILABLE",
-              message: err.message,
-            },
-          });
-        }
-        if (err instanceof TripoApiError && err.status === 400 && err.message === "Source asset exceeds the 150 MB upload limit") {
-          return res.status(400).json({
-            error: {
-              code: "SOURCE_ASSET_TOO_LARGE",
-              message: err.message,
-            },
-          });
-        }
-        if (err instanceof TripoApiError && err.status === 400 &&
-            (err.message === MSG_SOURCE_UNSUPPORTED || err.message.startsWith(MSG_SOURCE_UNRESOLVABLE_PREFIX))) {
-          return res.status(400).json({
-            error: {
-              code: "SOURCE_ASSET_UNSUPPORTED_FORMAT",
-              message: err.message,
-            },
-          });
-        }
-        if (err instanceof TripoApiError) {
-          return res.status(err.status).json({
-            error: {
-              code: providerErrorCode(err.status),
-              message: err.message,
-            },
-          });
-        }
-        res.status(500).json({
-          error: {
-            code: "GENERATION_FAILED",
-            message: err.message,
-          },
-        });
+        return sendGenerationError(res, error as Error);
       }
     },
   );
@@ -507,20 +894,7 @@ export default function generateAssetNode(
       } catch (error) {
         const err = error as Error;
         console.error("[GEN] balance error:", err.message);
-        if (err instanceof TripoApiError) {
-          return res.status(err.status).json({
-            error: {
-              code: providerErrorCode(err.status),
-              message: err.message,
-            },
-          });
-        }
-        res.status(500).json({
-          error: {
-            code: "BALANCE_FAILED",
-            message: err.message,
-          },
-        });
+        return sendProviderOrServerError(res, err, "BALANCE_FAILED");
       }
     },
   );
@@ -578,150 +952,11 @@ export default function generateAssetNode(
       const provider = buildTripoProvider(entry.providerKey);
       const poll = await provider.poll(entry.tripoTaskId);
 
-      if (poll.status === "queued" || poll.status === "running") {
-        const stageLabels = {
-          "rig-check": "Checking rig compatibility",
-          rig: "Rigging skeleton",
-          retarget: "Baking animations",
-        };
-        return res.json({
-          status: poll.status,
-          progress: poll.progress ?? 0,
-          ...(entry.kind === "animate" && {
-            stage: stageLabels[entry.phase || "rig-check"],
-          }),
-        });
-      }
-
-      // Animate chain: a succeeded rig-check or rig task starts the next
-      // phase instead of finishing. Terminal phases: retarget (animate),
-      // or rig when rigOnly was requested (rigged model, no animation).
-      const chainTerminal =
-        entry.phase === "retarget" || (entry.rigOnly && entry.phase === "rig");
-      if (
-        entry.kind === "animate" &&
-        poll.status === "success" &&
-        !chainTerminal
-      ) {
-        if (entry.phase === "rig-check") {
-          const rigOutput = (
-            poll.output
-          ) as { riggable?: boolean; rig_type?: string } | undefined;
-          if (!rigOutput?.riggable) {
-            evictTask(taskId);
-            console.log(`[GEN] animate chain: model not riggable taskId=${taskId}`);
-            return res.json({
-              status: "failed",
-              error: {
-                code: "MODEL_NOT_RIGGABLE",
-                message:
-                  "Tripo reports this model is not riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.",
-              },
-            });
-          }
-          const rig = await provider.rig({
-            source: { kind: "fileToken", fileToken: entry.sourceFileToken || "" },
-            rigType: rigOutput.rig_type || "biped",
-            model: entry.rigModel,
-          });
-          updateTaskEntry(taskId, res.locals.userAddress, {
-            tripoTaskId: rig.taskId,
-            phase: "rig",
-            rigModel: rig.model,
-          });
-          console.log(
-            `[GEN] animate chain: rig started taskId=${taskId} tripo=${rig.taskId} rig_type=${rigOutput.rig_type} model=${rig.model}`,
-          );
-          return res.json({
-            status: "running",
-            progress: 40,
-            stage: "Rigging skeleton",
-          });
-        }
-        // phase === "rig" → start retarget with the requested presets
-        const retargetId = await provider.animate({
-          rigTaskId: entry.tripoTaskId,
-          animations: entry.animations || [],
-          animateInPlace: Boolean(entry.animateInPlace),
-          rigModel: entry.rigModel,
-        });
-        updateTaskEntry(taskId, res.locals.userAddress, {
-          tripoTaskId: retargetId,
-          phase: "retarget",
-        });
-        console.log(
-          `[GEN] animate chain: retarget started taskId=${taskId} tripo=${retargetId}`,
-        );
-        return res.json({
-          status: "running",
-          progress: 75,
-          stage: "Baking animations",
-        });
-      }
-
-      if (poll.status === "success") {
-        if (!poll.glbUrl) {
-          throw new Error("Tripo success response missing model URL");
-        }
-        const buffer = await provider.download(poll.glbUrl);
-        markTaskComplete(taskId, res.locals.userAddress);
-        console.log(
-          `[GEN] task complete taskId=${taskId} size=${buffer.length}`,
-        );
-        return res.json({
-          status: "success",
-          assetData: Buffer.from(buffer).toString("base64"),
-          format: "glb",
-          path: "asset.glb",
-          provider: "tripo3d",
-          providerTaskId: entry.tripoTaskId,
-        });
-      }
-
-      // failed or cancelled — include the chain stage so the user knows
-      // which step died (the upstream message alone says "Task failed").
-      evictTask(taskId);
-      const failStage =
-        entry.kind === "animate"
-          ? {
-              "rig-check": "Rig compatibility check",
-              rig: "Rigging",
-              retarget: "Animation bake",
-            }[entry.phase || "rig-check"]
-          : null;
-      const failMessage = poll.error || "Task failed";
-      console.log(
-        `[GEN] task failed taskId=${taskId} stage=${failStage || "generate"} error=${failMessage}`,
+      return await respondToPoll(
+        res, provider, entry, taskId, res.locals.userAddress, poll,
       );
-      return res.json({
-        status: "failed",
-        error: {
-          code: "PROVIDER_TASK_FAILED",
-          message: failStage ? `${failStage} failed — ${failMessage}` : failMessage,
-        },
-      });
     } catch (error) {
-      const err = error as Error;
-      console.error("[GEN] get error:", err.message);
-      if (err instanceof TripoApiError) {
-        // Auth/credit failures are terminal for the task: evict the entry
-        // (and its transient BYOK key) instead of waiting for the TTL.
-        if (err.status === 401 || err.status === 402) {
-          evictTask(String(req.params.taskId));
-        }
-        return res.status(err.status).json({
-          error: {
-            code: providerErrorCode(err.status),
-            message: err.message,
-          },
-        });
-      }
-      res.status(500).json({
-        error: {
-          code: "GENERATION_FAILED",
-          message: err.message,
-        },
-      });
+      return sendPollError(res, error as Error, String(req.params.taskId));
     }
   });
 
