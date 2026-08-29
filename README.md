@@ -42,7 +42,7 @@ See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementa
 Arbesk ships two clients on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
-- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`.
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`.
 
 Status legend: **✅** supported in the CLI today · **TODO** — feasible in a headless CLI, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
 
@@ -66,7 +66,7 @@ Status legend: **✅** supported in the CLI today · **TODO** — feasible in a 
 | | Download a specific historical version | ✅ | ✅ | `download <name> <version>` (Studio restores via clocks/chat instead) |
 | | Rename asset | ✅ | ✅ | `rename <old> <new>` |
 | | Delete asset from collection (unpublish) | ✅ | ✅ | `delete` (always prompts; no `--yes` flag — TODO) |
-| | Send asset to another collection | ✅ | TODO | |
+| | Send asset to another collection | ✅ | ✅ | `send <asset> <collection> [fork\|live-ref]` (default fork; live-ref writes a child_ref wrapper) |
 | | New empty asset | ✅ | TODO | |
 | | Burn unreachable/inaccessible tokens | ✅ | TODO | |
 | **Publishing** | Save draft (manifest build + IPFS upload) | ✅ | TODO | CLI writes are always relayed immediately |

@@ -24,6 +24,7 @@ import {
   detectFormat,
 } from "./catalog.ts";
 import { createCollection } from "./collections.ts";
+import { sendAssetToCollection } from "./send.ts";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -56,6 +57,7 @@ function help(): void {
   console.log("  upload <file>     save a local model to the current collection");
   console.log("  delete <name>     remove from the collection (only confirmation)");
   console.log("  rename <old> <new>  rename an asset");
+  console.log("  send <name> <collection> [fork|live-ref]  link an asset into another collection");
 }
 
 function requireSession(): Session | null {
@@ -332,6 +334,48 @@ async function cmdCreate(name?: string): Promise<void> {
   if (result.transactionHash) console.log("Tx: " + result.transactionHash);
 }
 
+async function cmdSend(name?: string, collection?: string, mode?: string): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  if (!name || !collection) {
+    console.error("Usage: besk send <asset> <collection> [fork|live-ref]");
+    process.exitCode = 2;
+    return;
+  }
+  const linkMode = mode ?? "fork";
+  if (linkMode !== "fork" && linkMode !== "live-ref") {
+    console.error("Unsupported link mode: " + linkMode + " (fork or live-ref)");
+    process.exitCode = 2;
+    return;
+  }
+  const sourceTokenId = await currentCollectionTokenId(s);
+  const hit = await resolveAssetByName(sourceTokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return;
+  }
+  const target = await resolveCollectionByName(s.address, collection);
+  if (!target) {
+    console.error("No collection named " + collection + ". Run `besk collections`.");
+    process.exitCode = 5;
+    return;
+  }
+  const result = await sendAssetToCollection(s, {
+    sourceTokenId,
+    targetTokenId: target.tokenId,
+    assetId: hit.assetID,
+    assetName: name,
+    assetCid: hit.cid,
+    mode: linkMode,
+  });
+  console.log(
+    linkMode === "fork"
+      ? "Forked " + name + " into " + displayName(target.name)
+      : "Linked " + name + " into " + displayName(target.name) + " as " + result.targetAssetId + " (live reference)",
+  );
+}
+
 async function main(): Promise<void> {
   if (!command || command === "help" || command === "--help") {
     help();
@@ -350,6 +394,7 @@ async function main(): Promise<void> {
   else if (command === "upload") await cmdUpload(args[1]);
   else if (command === "delete") await cmdDelete(args[1]);
   else if (command === "rename") await cmdRename(args[1], args[2]);
+  else if (command === "send") await cmdSend(args[1], args[2], args[3]);
   else {
     console.error("Unknown command: " + command);
     help();
