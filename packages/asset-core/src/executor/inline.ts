@@ -2,7 +2,7 @@ import type { ExecutorPort, ExecutorOp } from "../types.ts";
 import { compose } from "../formats/gltf/composer.ts";
 import { decompose } from "../formats/gltf/decomposer.ts";
 import { decompose as decomposeGlb } from "../formats/gltf/glb-parser.ts";
-import { applyNodeColors } from "../formats/gltf/source-color-editor.ts";
+import { bakeSourceColorsOp } from "../formats/gltf/apply-node-colors.ts";
 
 /**
  * Inline (calling-thread) op table. Each op takes the SAME single-payload
@@ -56,16 +56,7 @@ const OPS: Record<ExecutorOp, (payload: any) => Promise<any>> = {
     });
   },
 
-  bakeSourceColors: async (payload) => {
-    const { gltfJson, nodeColors } = payload || {};
-    if (!gltfJson) throw new Error("bakeSourceColors: gltfJson is required");
-    if (!nodeColors || Object.keys(nodeColors).length === 0) {
-      return { bakedJson: gltfJson, modified: 0, skipped: 0 };
-    }
-    const bakedJson = JSON.parse(JSON.stringify(gltfJson));
-    const { modified, skipped } = applyNodeColors(bakedJson, nodeColors);
-    return { bakedJson, modified, skipped };
-  },
+  bakeSourceColors: async (payload) => bakeSourceColorsOp(payload),
 };
 
 export const inlineExecutor: ExecutorPort = {

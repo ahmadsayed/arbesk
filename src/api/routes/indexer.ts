@@ -64,47 +64,34 @@ async function withFreshIndexer(
 export default function indexerRoutes(storage: StorageAdapter) {
   const router = Router();
 
-  router.get("/owned", validateQuery(ownedQuerySchema), async (req, res) => {
-    const { address, chainId, force } = req.query as unknown as {
-      address: string;
-      chainId: number;
-      force: boolean;
+  const listHandler =
+    (kind: "owned" | "shared") =>
+    async (req: any, res: any) => {
+      const { address, chainId, force } = req.query as unknown as {
+        address: string;
+        chainId: number;
+        force: boolean;
+      };
+
+      try {
+        const indexer = await withFreshIndexer(chainId, force, storage);
+        res.json({
+          chainId,
+          address: address.toLowerCase(),
+          [kind]:
+            kind === "owned"
+              ? indexer.getOwnedTokens(address)
+              : indexer.getSharedTokens(address),
+          lastScannedBlock: indexer.lastScannedBlock,
+        });
+      } catch (err) {
+        console.error(`[${ts()}] [INDEXER-API] failed to get ${kind} tokens:`, String((err as Error).message));
+        sendError(res, 500, "INDEXER_READ_FAILED", "failed to read indexer state");
+      }
     };
 
-    try {
-      const indexer = await withFreshIndexer(chainId, force, storage);
-      res.json({
-        chainId,
-        address: address.toLowerCase(),
-        owned: indexer.getOwnedTokens(address),
-        lastScannedBlock: indexer.lastScannedBlock,
-      });
-    } catch (err) {
-      console.error(`[${ts()}] [INDEXER-API] failed to get owned tokens:`, String((err as Error).message));
-      sendError(res, 500, "INDEXER_READ_FAILED", "failed to read indexer state");
-    }
-  });
-
-  router.get("/shared", validateQuery(sharedQuerySchema), async (req, res) => {
-    const { address, chainId, force } = req.query as unknown as {
-      address: string;
-      chainId: number;
-      force: boolean;
-    };
-
-    try {
-      const indexer = await withFreshIndexer(chainId, force, storage);
-      res.json({
-        chainId,
-        address: address.toLowerCase(),
-        shared: indexer.getSharedTokens(address),
-        lastScannedBlock: indexer.lastScannedBlock,
-      });
-    } catch (err) {
-      console.error(`[${ts()}] [INDEXER-API] failed to get shared tokens:`, String((err as Error).message));
-      sendError(res, 500, "INDEXER_READ_FAILED", "failed to read indexer state");
-    }
-  });
+  router.get("/owned", validateQuery(ownedQuerySchema), listHandler("owned"));
+  router.get("/shared", validateQuery(sharedQuerySchema), listHandler("shared"));
 
   return router;
 }

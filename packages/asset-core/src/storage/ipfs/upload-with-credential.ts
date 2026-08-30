@@ -119,6 +119,22 @@ async function uploadToPresignedPut(
   }
 }
 
+/**
+ * POST a FormData to Kubo's /api/v0/add; throws with the response body on
+ * non-2xx. Shared by the single-file and batch upload paths.
+ */
+async function kuboAdd(apiUrl: string, form: FormData, extraQuery = ""): Promise<Response> {
+  const res = await fetch(`${apiUrl}/api/v0/add?cid-version=1${extraQuery}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`IPFS add failed: ${res.status} - ${text}`);
+  }
+  return res;
+}
+
 async function uploadToKuboApi(
   blob: Blob,
   filename: string,
@@ -127,14 +143,7 @@ async function uploadToKuboApi(
   const apiUrl = credential.apiUrl || "http://127.0.0.1:5001";
   const form = new FormData();
   form.append("file", blob, filename);
-  const res = await fetch(`${apiUrl}/api/v0/add?cid-version=1`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`IPFS add failed: ${res.status} - ${text}`);
-  }
+  const res = await kuboAdd(apiUrl, form);
   const result = (await res.json()) as any;
   const cidStr = result.Hash;
   console.log(`[${ts()}] [UPLOAD] kubo stored → ${cidStr} (${result.Size} bytes)`);
@@ -228,14 +237,7 @@ async function uploadBatchToKuboApi(
   }
 
   return uploadLimiter.run(async () => {
-    const res = await fetch(
-      `${apiUrl}/api/v0/add?cid-version=1&wrap-with-directory=false`,
-      { method: "POST", body: form }
-    );
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Kubo batch add failed: ${res.status} - ${text}`);
-    }
+    const res = await kuboAdd(apiUrl, form, "&wrap-with-directory=false");
 
     const text = await res.text();
     const results = new Map<string, string>();

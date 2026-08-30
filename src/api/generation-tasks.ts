@@ -97,10 +97,14 @@ export function updateTaskEntry(
 }
 
 /**
- * Look up a running task entry. Returns undefined if expired, missing,
- * already complete, or owned by a different wallet address.
+ * Look up a task entry in a given lifecycle status. Returns undefined if
+ * expired, missing, in another status, or owned by a different wallet address.
  */
-export function getTask(taskId: string, userAddress: string): TaskEntry | undefined {
+function getTaskInStatus(
+  taskId: string,
+  userAddress: string,
+  status: "running" | "complete",
+): TaskEntry | undefined {
   const entry = registry.get(taskId);
   if (!entry) return undefined;
   if (Date.now() - entry.createdAt > TTL_MS) {
@@ -108,8 +112,16 @@ export function getTask(taskId: string, userAddress: string): TaskEntry | undefi
     return undefined;
   }
   if (entry.userAddress !== userAddress) return undefined;
-  if (entry.status !== "running") return undefined;
+  if (entry.status !== status) return undefined;
   return entry;
+}
+
+/**
+ * Look up a running task entry. Returns undefined if expired, missing,
+ * already complete, or owned by a different wallet address.
+ */
+export function getTask(taskId: string, userAddress: string): TaskEntry | undefined {
+  return getTaskInStatus(taskId, userAddress, "running");
 }
 
 /**
@@ -131,15 +143,7 @@ export function getCompletedTask(
   taskId: string,
   userAddress: string,
 ): TaskEntry | undefined {
-  const entry = registry.get(taskId);
-  if (!entry) return undefined;
-  if (Date.now() - entry.createdAt > TTL_MS) {
-    registry.delete(taskId);
-    return undefined;
-  }
-  if (entry.userAddress !== userAddress) return undefined;
-  if (entry.status !== "complete") return undefined;
-  return entry;
+  return getTaskInStatus(taskId, userAddress, "complete");
 }
 
 /**

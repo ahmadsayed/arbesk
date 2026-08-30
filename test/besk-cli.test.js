@@ -56,6 +56,8 @@ const mockSanitizeFileName = jest.fn((n) => n);
 const mockExtFor = jest.fn(() => ".glb");
 const mockReadImageFile = jest.fn();
 const mockSaveGenerated = jest.fn();
+const mockLoadAssetSource = jest.fn();
+const mockResolveVersionCid = jest.fn();
 
 const mockResolveCompositeSourceCid = jest.fn();
 
@@ -112,6 +114,8 @@ jest.unstable_mockModule("../packages/besk/src/helpers.ts", () => ({
   extFor: mockExtFor,
   readImageFile: mockReadImageFile,
   saveGenerated: mockSaveGenerated,
+  loadAssetSource: mockLoadAssetSource,
+  resolveVersionCid: mockResolveVersionCid,
 }));
 
 let logs = [];

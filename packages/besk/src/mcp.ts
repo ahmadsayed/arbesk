@@ -13,7 +13,6 @@
  */
 import fs from "fs";
 import path from "path";
-import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
 import {
   listCollections,
   getCollectionAssets,
@@ -45,7 +44,9 @@ import type { Session } from "./session.ts";
 import {
   displayName,
   currentCollectionTokenId,
+  loadAssetSource,
   makeNodeId,
+  resolveVersionCid,
   sanitizeFileName,
   extFor,
   readImageFile,
@@ -188,9 +189,7 @@ async function hListAssets(s: Session, args: Args): Promise<unknown> {
 
 async function hAssetInfo(s: Session, args: Args): Promise<unknown> {
   const hit = await assetFor(s, args);
-  const m = (await getManifest(hit.cid)) as Record<string, any>;
-  const srcCid = resolveCompositeSourceCid(m);
-  const source = srcCid ? ((await getManifest(srcCid)) as Record<string, any>) : m;
+  const { manifest: m, source } = await loadAssetSource(hit.cid);
   const nodes = m?.scene?.nodes ?? (Array.isArray(m.nodes) ? m.nodes : []);
   return {
     name: m.name ?? "(unnamed)",
@@ -223,14 +222,11 @@ async function hDownloadAsset(s: Session, args: Args): Promise<unknown> {
   let cid = hit.cid;
   const version = optionalString(args, "version");
   if (version) {
-    const chain = await getVersionHistory(hit.cid);
-    const target = chain.find((e) => String(e.version) === String(version));
-    if (!target) throw new Error("Version " + version + " not found for " + hit.name);
-    cid = target.cid;
+    const versionCid = await resolveVersionCid(hit.cid, version);
+    if (!versionCid) throw new Error("Version " + version + " not found for " + hit.name);
+    cid = versionCid;
   }
-  const m = (await getManifest(cid)) as Record<string, any>;
-  const srcCid = resolveCompositeSourceCid(m) ?? cid;
-  const source = srcCid === cid ? m : ((await getManifest(srcCid)) as Record<string, any>);
+  const { manifest: m, srcCid, source } = await loadAssetSource(cid);
   const format = detectFormat(source);
   const bytes = await downloadAsset(srcCid, format);
   const dir = optionalString(args, "directory") ?? process.cwd();

@@ -4,8 +4,7 @@ import path from "node:path";
 import libCoverage from "istanbul-lib-coverage";
 
 const { createCoverageMap } = libCoverage;
-import libReport from "istanbul-lib-report";
-import reports from "istanbul-reports";
+import { writeCoverageReports } from "./write-coverage-reports.mjs";
 
 const TMP_DIR = path.resolve("coverage/tmp/e2e");
 const OUT_DIR = path.resolve("coverage/e2e");
@@ -35,20 +34,5 @@ function mergeTmpCoverage() {
   return map;
 }
 
-function writeReports(map) {
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  fs.writeFileSync(
-    path.join(OUT_DIR, "coverage-final.json"),
-    JSON.stringify(map.toJSON(), null, 2),
-  );
-  const context = libReport.createContext({
-    dir: OUT_DIR,
-    coverageMap: map,
-  });
-  reports.create("html").execute(context);
-  reports.create("text").execute(context);
-  reports.create("text-summary").execute(context);
-}
-
 const coverageMap = mergeTmpCoverage();
-writeReports(coverageMap);
+writeCoverageReports(coverageMap, OUT_DIR);

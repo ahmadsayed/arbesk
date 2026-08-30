@@ -95,6 +95,8 @@ fallback `"gltf"`) and dispatches to a `FormatCodec` (`formats/codec.ts`).
   worker), `glb-image-resolve.ts` (image bytes from data-URI/bufferView,
   shared with the worker),
   `material-editor.ts`/`source-color-editor.ts` (parametric color/scale),
+  `apply-node-colors.ts` (pure per-node color baking — worker-safe, no bare
+  imports; the worker and the inline executor both use it),
   `merkle-editors.ts`, `dedup.ts`, `bounds.ts`, `cache-aware-fetch.ts`.
 - `async-gltf.ts` — dispatches heavy glTF ops through the `ExecutorPort` (Web
   Worker pool in the browser, `executor/inline.ts` on the backend), with

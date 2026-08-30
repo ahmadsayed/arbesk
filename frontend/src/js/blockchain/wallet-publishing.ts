@@ -35,6 +35,21 @@ function _canPublishWithCurrentWallet() {
 }
 
 /**
+ * Shared write-path preamble: resolve the active contract, verify a wallet is
+ * connected and allowed to publish. Returns null (after logging/toasting)
+ * when not ready.
+ */
+function _readyContract() {
+  const c = getActiveContract();
+  if (!walletState.get().walletAddress || !c) {
+    console.error("Wallet or contract not ready");
+    return null;
+  }
+  if (!_canPublishWithCurrentWallet()) return null;
+  return c;
+}
+
+/**
  * For CDP (email) sessions, write through the backend relay (no browser tx).
  * Returns { handled, txHash }; when not CDP, handled=false and the caller falls
  * through to the existing EOA browser-transaction path.
@@ -70,12 +85,8 @@ async function publishAsset(
   editorRoot: string,
   editorListUri: string
 ) {
-  const c = getActiveContract();
-  if (!walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-  if (!_canPublishWithCurrentWallet()) return null;
+  const c = _readyContract();
+  if (!c) return null;
 
   const relayed = await _relayForCdp("publish", tokenId, {
     uri: tokenURI,
@@ -131,12 +142,8 @@ async function updateAssetURI(
   newTokenURI: string,
   proof: string[]
 ) {
-  const c = getActiveContract();
-  if (!walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-  if (!_canPublishWithCurrentWallet()) return null;
+  const c = _readyContract();
+  if (!c) return null;
 
   const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof });
   if (relayed.handled) return relayed.txHash;
@@ -198,12 +205,8 @@ async function updateEditors(
   callerRole: number,
   callerProof: string[]
 ) {
-  const c = getActiveContract();
-  if (!walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-  if (!_canPublishWithCurrentWallet()) return null;
+  const c = _readyContract();
+  if (!c) return null;
 
   const relayed = await _relayForCdp("updateEditors", tokenId, {
     newRoot,
@@ -235,12 +238,8 @@ async function updateEditors(
  * @returns {Promise<string|null>} txHash on success, null on failure
  */
 async function burn(tokenId: number | string, proof: string[]) {
-  const c = getActiveContract();
-  if (!walletState.get().walletAddress || !c) {
-    console.error("Wallet or contract not ready");
-    return null;
-  }
-  if (!_canPublishWithCurrentWallet()) return null;
+  const c = _readyContract();
+  if (!c) return null;
 
   // Resolve manifest CID before burning (after burn, tokenURI may revert)
   let manifestCid = null;

@@ -453,46 +453,34 @@ function _attachProviderListeners() {
   if (web3Provider._arbeskListenersAttached) return;
   web3Provider._arbeskListenersAttached = true;
 
+  const handleAccountsChanged = (accounts: string[]) => {
+    if (!accounts || accounts.length === 0) {
+      disconnectWallet();
+    } else {
+      walletState.set({ walletAddress: accounts[0] });
+      _checkBalance();
+      emit(EVENTS.WALLET_CONNECTED, {
+        address: walletState.get().walletAddress,
+        chainId: null,
+      });
+    }
+  };
+  const handleChainChanged = () => {
+    window.location.reload();
+  };
+
   if (activeConnectionSource === "walletconnect") {
     // WalletConnect uses its own event emitter
-    onWalletConnectEvent("accountsChanged", (accounts: string[]) => {
-      if (!accounts || accounts.length === 0) {
-        disconnectWallet();
-      } else {
-        walletState.set({ walletAddress: accounts[0] });
-        _checkBalance();
-        emit(EVENTS.WALLET_CONNECTED, {
-          address: walletState.get().walletAddress,
-          chainId: null,
-        });
-      }
-    });
-
-    onWalletConnectEvent("chainChanged", () => {
-      window.location.reload();
-    });
+    onWalletConnectEvent("accountsChanged", handleAccountsChanged);
+    onWalletConnectEvent("chainChanged", handleChainChanged);
 
     onWalletConnectEvent("disconnect", () => {
       disconnectWallet();
     });
   } else {
     // Injected wallet (EIP-1193)
-    web3Provider.on("accountsChanged", (accounts: string[]) => {
-      if (accounts.length === 0) {
-        disconnectWallet();
-      } else {
-        walletState.set({ walletAddress: accounts[0] });
-        _checkBalance();
-        emit(EVENTS.WALLET_CONNECTED, {
-          address: walletState.get().walletAddress,
-          chainId: null,
-        });
-      }
-    });
-
-    web3Provider.on("chainChanged", () => {
-      window.location.reload();
-    });
+    web3Provider.on("accountsChanged", handleAccountsChanged);
+    web3Provider.on("chainChanged", handleChainChanged);
   }
 }
 

@@ -3,142 +3,16 @@
  *
  * Edits per-component colors directly inside a monolithic glTF/GLB source asset.
  * No post-processor overrides - the color is baked into the source CID.
+ *
+ * The pure glTF-JSON mutation lives in apply-node-colors.ts (worker-safe: no
+ * runtime ports, no @gltf-transform); this module adds the IPFS-backed flow.
  */
 
 import { getRuntime } from "../../runtime.ts";
 import { isGLB, decompose } from "./glb-parser.ts";
+import { applyNodeColors } from "./apply-node-colors.ts";
 
-/**
- * Convert a hex color string to a glTF baseColorFactor RGBA array.
- */
-function hexToBaseColorFactor(hex: string): number[] {
-  const clean = hex.replace("#", "");
-  return [
-    parseInt(clean.substring(0, 2), 16) / 255,
-    parseInt(clean.substring(2, 4), 16) / 255,
-    parseInt(clean.substring(4, 6), 16) / 255,
-    1.0,
-  ];
-}
-
-interface NodeMaterialMatch {
-  nodeIndex: number;
-  primitiveIndex: number;
-  materialIndex: number;
-}
-
-/**
- * Find every (node, primitive, materialIndex) tuple that belongs to a named node.
- * @param gltf - glTF JSON object (dynamic schema)
- */
-function findNodeMaterials(gltf: any, nodeName: string): NodeMaterialMatch[] {
-  const matches: NodeMaterialMatch[] = [];
-  if (!gltf.nodes || !gltf.meshes) return matches;
-
-  for (let ni = 0; ni < gltf.nodes.length; ni++) {
-    const node = gltf.nodes[ni];
-    if (!node.name || node.name.toLowerCase() !== nodeName.toLowerCase()) continue;
-    if (node.mesh === undefined || node.mesh === null) continue;
-
-    const mesh = gltf.meshes[node.mesh];
-    if (!mesh || !mesh.primitives) continue;
-
-    for (let pi = 0; pi < mesh.primitives.length; pi++) {
-      const prim = mesh.primitives[pi];
-      if (prim.material === undefined || prim.material === null) continue;
-      matches.push({ nodeIndex: ni, primitiveIndex: pi, materialIndex: prim.material });
-    }
-  }
-  return matches;
-}
-
-/**
- * Clone a material and update all relevant primitive references so a color edit
- * only affects the intended nodes, not every node sharing the material.
- * @param gltf - glTF JSON object (mutated in place; dynamic schema)
- */
-function ensureUniqueMaterialForNodes(
-  gltf: any,
-  matches: NodeMaterialMatch[],
-  newMaterialName: string
-): void {
-  if (matches.length === 0) return;
-
-  const targetMaterialIndex = matches[0].materialIndex;
-  const usedByOthers = gltf.nodes.some((node: any, ni: number) => {
-    if (node.mesh === undefined || node.mesh === null) return false;
-    const mesh = gltf.meshes[node.mesh];
-    if (!mesh || !mesh.primitives) return false;
-    return mesh.primitives.some((prim: any, pi: number) => {
-      const isTarget = matches.some(
-        (m) => m.nodeIndex === ni && m.primitiveIndex === pi
-      );
-      return !isTarget && prim.material === targetMaterialIndex;
-    });
-  });
-
-  if (!usedByOthers) return; // already unique
-
-  const original = gltf.materials[targetMaterialIndex];
-  if (!original) return;
-
-  const clone = structuredClone(original);
-  clone.name = newMaterialName;
-  const cloneIndex = gltf.materials.length;
-  gltf.materials.push(clone);
-
-  for (const match of matches) {
-    gltf.meshes[gltf.nodes[match.nodeIndex].mesh].primitives[
-      match.primitiveIndex
-    ].material = cloneIndex;
-    match.materialIndex = cloneIndex;
-  }
-}
-
-/**
- * Apply color edits directly to a glTF JSON object.
- *
- * @param gltf - glTF JSON object (mutated in place; dynamic schema)
- * @param nodeColors - { "nodeName": "#RRGGBB", ... }
- */
-export function applyNodeColors(
-  gltf: any,
-  nodeColors: Record<string, string>
-): { modified: number; skipped: number } {
-  let modified = 0;
-  let skipped = 0;
-
-  if (!gltf.materials) gltf.materials = [];
-
-  for (const [nodeName, color] of Object.entries(nodeColors)) {
-    const matches = findNodeMaterials(gltf, nodeName);
-    if (matches.length === 0) {
-      console.warn(`[SRC-COLOR] node "${nodeName}" not found in source`);
-      skipped++;
-      continue;
-    }
-
-    ensureUniqueMaterialForNodes(gltf, matches, `${nodeName}_color`);
-
-    const factor = hexToBaseColorFactor(color);
-    const seenMaterials = new Set<number>();
-    for (const match of matches) {
-      if (seenMaterials.has(match.materialIndex)) continue;
-      seenMaterials.add(match.materialIndex);
-
-      const mat = gltf.materials[match.materialIndex];
-      if (!mat) continue;
-      mat.pbrMetallicRoughness ||= {};
-      mat.pbrMetallicRoughness.baseColorFactor = factor;
-      console.log(
-        `[SRC-COLOR] node "${nodeName}" material ${match.materialIndex} → ${color}`
-      );
-    }
-    modified++;
-  }
-
-  return { modified, skipped };
-}
+export { applyNodeColors };
 
 /**
  * Edit colors in a source asset (glTF JSON or GLB) and upload the new asset.

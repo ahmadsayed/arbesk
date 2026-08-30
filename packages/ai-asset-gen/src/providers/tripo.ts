@@ -162,6 +162,30 @@ function mapTripoCodeToHttp(code: number): number {
   return 502;
 }
 
+/** Guard: throw a 400 TripoApiError when a required string arg is missing. */
+function requireString(value: unknown, name: string): void {
+  if (!value || typeof value !== "string") {
+    throw new TripoApiError(`${name} is required`, 0, 400);
+  }
+}
+
+/**
+ * POST a task-creation endpoint and validate the task_id in the response.
+ * Every createXxxTask variant funnels through here.
+ */
+async function startTask(
+  path: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  timeoutMs?: number,
+): Promise<string> {
+  const data = await tripoFetch(path, apiKey, "POST", body, timeoutMs);
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  return data.task_id;
+}
+
 /**
  * Map the textureQuality option to Tripo's texture_quality field.
  * "standard" is Tripo's default — omitting the field keeps payloads minimal.
@@ -182,16 +206,12 @@ export async function createTask(
   apiKey: string,
   options: TextureQualityOptions = {},
 ): Promise<string> {
-  if (!prompt || typeof prompt !== "string") {
-    throw new TripoApiError("prompt is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(prompt, "prompt");
+  requireString(apiKey, "apiKey");
   console.log(
     `[GEN] Tripo createTask prompt_len=${prompt.length} tq=${options.textureQuality || "standard"}`,
   );
-  const data = await tripoFetch("generation/text-to-model", apiKey, "POST", {
+  const taskId = await startTask("generation/text-to-model", apiKey, {
     prompt,
     model: TRIPO_MODEL_VERSION,
     texture: true,
@@ -201,11 +221,8 @@ export async function createTask(
     auto_size: true,
     ...textureQualityField(options),
   });
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  console.log(`[GEN] Tripo task created task_id=${data.task_id}`);
-  return data.task_id;
+  console.log(`[GEN] Tripo task created task_id=${taskId}`);
+  return taskId;
 }
 
 /**
@@ -214,9 +231,7 @@ export async function createTask(
 export async function getBalance(
   apiKey: string,
 ): Promise<{ balance: number; frozen: number }> {
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(apiKey, "apiKey");
   const data = await tripoFetch("account/balance", apiKey);
   if (typeof data?.balance !== "number") {
     throw new TripoApiError("Tripo did not return a balance", 0, 502);
@@ -239,12 +254,8 @@ export async function uploadImage(
   if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
     throw new TripoApiError("imageBuffer is required", 0, 400);
   }
-  if (!mime || typeof mime !== "string") {
-    throw new TripoApiError("mime is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(mime, "mime");
+  requireString(apiKey, "apiKey");
   const ext = mime.split("/")[1] || "png";
   console.log(`[GEN] Tripo uploadImage size=${imageBuffer.length} mime=${mime}`);
   const form = new FormData();
@@ -271,9 +282,7 @@ export async function uploadModel(glbBuffer: Buffer, apiKey: string): Promise<st
   if (!Buffer.isBuffer(glbBuffer) || glbBuffer.length === 0) {
     throw new TripoApiError("glbBuffer is required", 0, 400);
   }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(apiKey, "apiKey");
   console.log(`[GEN] Tripo uploadModel size=${glbBuffer.length}`);
   // Log the first 4 bytes to confirm GLB magic.
   if (glbBuffer.length >= 4) {
@@ -305,16 +314,12 @@ export async function createImageTask(
   apiKey: string,
   options: TextureQualityOptions = {},
 ): Promise<string> {
-  if (!fileToken || typeof fileToken !== "string") {
-    throw new TripoApiError("fileToken is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(fileToken, "fileToken");
+  requireString(apiKey, "apiKey");
   console.log(
     `[GEN] Tripo createImageTask file_token=${fileToken} tq=${options.textureQuality || "standard"}`,
   );
-  const data = await tripoFetch("generation/image-to-model", apiKey, "POST", {
+  const taskId = await startTask("generation/image-to-model", apiKey, {
     file: { file_token: fileToken },
     model: TRIPO_MODEL_VERSION,
     texture: true,
@@ -322,11 +327,8 @@ export async function createImageTask(
     auto_size: true,
     ...textureQualityField(options),
   });
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  console.log(`[GEN] Tripo image task created task_id=${data.task_id}`);
-  return data.task_id;
+  console.log(`[GEN] Tripo image task created task_id=${taskId}`);
+  return taskId;
 }
 
 /** Multiview views in the canonical order Tripo's inputs array follows. */
@@ -366,13 +368,11 @@ export async function createMultiviewTask(
   if (present.length < 2) {
     throw new TripoApiError("multiview requires at least 2 views", 0, 400);
   }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(apiKey, "apiKey");
   console.log(
     `[GEN] Tripo createMultiviewTask views=${present.join(",")} tq=${options.textureQuality || "standard"}`,
   );
-  const data = await tripoFetch("generation/multiview-to-model", apiKey, "POST", {
+  const taskId = await startTask("generation/multiview-to-model", apiKey, {
     // View-key array in canonical order: [{front: t}, {left: t}, ...].
     inputs: present.map((v) => ({ [v]: viewTokens[v] })),
     model: TRIPO_MODEL_VERSION,
@@ -381,11 +381,8 @@ export async function createMultiviewTask(
     auto_size: true,
     ...textureQualityField(options),
   });
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  console.log(`[GEN] Tripo multiview task created task_id=${data.task_id}`);
-  return data.task_id;
+  console.log(`[GEN] Tripo multiview task created task_id=${taskId}`);
+  return taskId;
 }
 
 /**
@@ -402,28 +399,19 @@ export async function createRefineTask(
   apiKey: string,
   options: TextureQualityOptions = {},
 ): Promise<string> {
-  if (!prompt || typeof prompt !== "string") {
-    throw new TripoApiError("prompt is required", 0, 400);
-  }
-  if (!fileToken || typeof fileToken !== "string") {
-    throw new TripoApiError("fileToken is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(prompt, "prompt");
+  requireString(fileToken, "fileToken");
+  requireString(apiKey, "apiKey");
   console.log(`[GEN] Tripo refine prompt_len=${prompt.length}`);
-  const data = await tripoFetch("models/texture", apiKey, "POST", {
+  const taskId = await startTask("models/texture", apiKey, {
     input: fileToken,
     text_prompt: prompt,
     texture: true,
     pbr: true,
     ...textureQualityField(options),
   }, TRIPO_INGEST_TIMEOUT_MS);
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  console.log(`[GEN] Tripo refine task created task_id=${data.task_id}`);
-  return data.task_id;
+  console.log(`[GEN] Tripo refine task created task_id=${taskId}`);
+  return taskId;
 }
 
 /**
@@ -443,28 +431,21 @@ export async function decimateTask(
   apiKey: string,
   options: DecimateOptions = {},
 ): Promise<string> {
-  if (!fileToken || typeof fileToken !== "string") {
-    throw new TripoApiError("fileToken is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(fileToken, "fileToken");
+  requireString(apiKey, "apiKey");
   const { faceLimit, quad = false } = options;
   console.log(
     `[GEN] Tripo decimateTask input=${fileToken} quad=${quad} face_limit=${faceLimit ?? "adaptive"}`,
   );
-  const data = await tripoFetch("mesh/decimate", apiKey, "POST", {
+  const taskId = await startTask("mesh/decimate", apiKey, {
     input: fileToken,
     model: "v2.0",
     quad,
     bake: true,
     ...(faceLimit && { face_limit: faceLimit }),
   }, TRIPO_INGEST_TIMEOUT_MS);
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  console.log(`[GEN] Tripo decimate task created task_id=${data.task_id}`);
-  return data.task_id;
+  console.log(`[GEN] Tripo decimate task created task_id=${taskId}`);
+  return taskId;
 }
 
 /**
@@ -473,20 +454,12 @@ export async function decimateTask(
  * @returns task_id
  */
 export async function rigCheckTask(fileToken: string, apiKey: string): Promise<string> {
-  if (!fileToken || typeof fileToken !== "string") {
-    throw new TripoApiError("fileToken is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(fileToken, "fileToken");
+  requireString(apiKey, "apiKey");
   console.log(`[GEN] Tripo rigCheckTask input=${fileToken}`);
-  const data = await tripoFetch("animations/rig-check", apiKey, "POST", {
+  return startTask("animations/rig-check", apiKey, {
     input: fileToken,
   }, TRIPO_INGEST_TIMEOUT_MS);
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  return data.task_id;
 }
 
 /**
@@ -498,23 +471,12 @@ async function startRigTask(
   model: string,
   apiKey: string,
 ): Promise<string> {
-  const data = await tripoFetch("animations/rig", apiKey, "POST", {
+  return startTask("animations/rig", apiKey, {
     input: fileToken,
     rig_type: rigType,
     spec: "tripo",
     model,
   }, TRIPO_INGEST_TIMEOUT_MS);
-  if (typeof data.task_id !== "string") {
-    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-  }
-  return data.task_id;
-}
-
-/** Guard: throw a 400 TripoApiError when a required string arg is missing. */
-function requireString(value: unknown, name: string): void {
-  if (!value || typeof value !== "string") {
-    throw new TripoApiError(`${name} is required`, 0, 400);
-  }
 }
 
 /**
@@ -588,15 +550,11 @@ export async function retargetTask(
   apiKey: string,
   options: RetargetOptions = {},
 ): Promise<string> {
-  if (!rigTaskId || typeof rigTaskId !== "string") {
-    throw new TripoApiError("rigTaskId is required", 0, 400);
-  }
+  requireString(rigTaskId, "rigTaskId");
   if (!Array.isArray(animations) || animations.length === 0) {
     throw new TripoApiError("animations is required", 0, 400);
   }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(apiKey, "apiKey");
   // v1.0 biped rigs use the preset:biped:* namespace; generic (v2.5) rigs
   // take the short form. Map only the short form, never double-prefix.
   const isBipedV1 = options.rigModel === TRIPO_RIG_BIPED_MODEL;
@@ -640,12 +598,8 @@ export async function retargetTask(
  * @returns true when Tripo accepted the cancel
  */
 export async function cancelTask(taskId: string, apiKey: string): Promise<boolean> {
-  if (!taskId || typeof taskId !== "string") {
-    throw new TripoApiError("taskId is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(taskId, "taskId");
+  requireString(apiKey, "apiKey");
   console.log(`[GEN] Tripo cancel task_id=${taskId}`);
   try {
     await tripoFetch(`tasks/${taskId}/cancel`, apiKey, "POST");
@@ -661,15 +615,33 @@ export async function cancelTask(taskId: string, apiKey: string): Promise<boolea
 }
 
 /**
+ * Map a v3 terminal-failure status to a poll result. Tripo reports
+ * error_code + error_message on these — surface both; falling back to the
+ * bare status loses the entire diagnosis.
+ */
+function terminalFailureResult(data: any, status: string): TripoPollResult {
+  const errorCode =
+    typeof data.error_code === "number" ? data.error_code : null;
+  const errorMessage =
+    data.error_message || data.error_msg || data.message || null;
+  console.log(
+    `[GEN] Tripo poll status=${status} error_code=${errorCode ?? "-"} message=${errorMessage ?? "-"}`,
+  );
+  const detail = errorMessage || `Task ${status}`;
+  return {
+    status: "failed",
+    error: errorCode !== null ? `${detail} (Tripo error ${errorCode})` : detail,
+  };
+}
+
+const TERMINAL_FAILURE_STATUSES = ["failed", "cancelled", "banned", "expired"];
+
+/**
  * Poll a task.
  */
 export async function pollTask(taskId: string, apiKey: string): Promise<TripoPollResult> {
-  if (!taskId || typeof taskId !== "string") {
-    throw new TripoApiError("taskId is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(taskId, "taskId");
+  requireString(apiKey, "apiKey");
   console.log(`[GEN] Tripo poll task_id=${taskId}`);
   const data = await tripoFetch(`tasks/${taskId}`, apiKey);
   const status = data.status;
@@ -688,27 +660,8 @@ export async function pollTask(taskId: string, apiKey: string): Promise<TripoPol
     // either way so chain callers can inspect it.
     return { status, glbUrl: glbUrl || undefined, output: data.output };
   }
-  // v3 terminal failures: failed, cancelled, banned, expired. Tripo reports
-  // error_code + error_message on these — surface both; falling back to the
-  // bare status loses the entire diagnosis.
-  if (
-    status === "failed" ||
-    status === "cancelled" ||
-    status === "banned" ||
-    status === "expired"
-  ) {
-    const errorCode =
-      typeof data.error_code === "number" ? data.error_code : null;
-    const errorMessage =
-      data.error_message || data.error_msg || data.message || null;
-    console.log(
-      `[GEN] Tripo poll status=${status} error_code=${errorCode ?? "-"} message=${errorMessage ?? "-"}`,
-    );
-    const detail = errorMessage || `Task ${status}`;
-    return {
-      status: "failed",
-      error: errorCode !== null ? `${detail} (Tripo error ${errorCode})` : detail,
-    };
+  if (TERMINAL_FAILURE_STATUSES.includes(status)) {
+    return terminalFailureResult(data, status);
   }
   throw new TripoApiError(`Unknown Tripo status: ${status}`, 0, 502);
 }
@@ -717,9 +670,7 @@ export async function pollTask(taskId: string, apiKey: string): Promise<TripoPol
  * Download the generated GLB.
  */
 export async function downloadModel(glbUrl: string): Promise<Buffer> {
-  if (!glbUrl || typeof glbUrl !== "string") {
-    throw new TripoApiError("glbUrl is required", 0, 400);
-  }
+  requireString(glbUrl, "glbUrl");
   console.log(`[GEN] Tripo download url_len=${glbUrl.length}`);
   // NOTE: never put glbUrl in an error message — it is a signed URL whose
   // query string carries the access credentials.

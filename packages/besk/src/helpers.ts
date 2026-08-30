@@ -7,7 +7,8 @@
 import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
-import { listCollections, updateCollection, uploadAsset } from "./catalog.ts";
+import { getManifest, getVersionHistory, listCollections, updateCollection, uploadAsset } from "./catalog.ts";
+import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
 import type { GeneratedModel } from "./generate.ts";
 import type { Session } from "./session.ts";
 
@@ -22,6 +23,26 @@ export function openBrowser(url: string): void {
 
 export function displayName(name: string | null): string {
   return name ?? "My Library";
+}
+
+/**
+ * Fetch an asset manifest and resolve its composite source document.
+ * `source` falls back to the manifest itself when it is not composite.
+ */
+export async function loadAssetSource(
+  cid: string,
+): Promise<{ manifest: Record<string, any>; srcCid: string; source: Record<string, any> }> {
+  const m = (await getManifest(cid)) as Record<string, any>;
+  const srcCid = resolveCompositeSourceCid(m) ?? cid;
+  const source = srcCid === cid ? m : ((await getManifest(srcCid)) as Record<string, any>);
+  return { manifest: m, srcCid, source };
+}
+
+/** Resolve a version number to its manifest CID; null when not found. */
+export async function resolveVersionCid(cid: string, version: string): Promise<string | null> {
+  const chain = await getVersionHistory(cid);
+  const target = chain.find((e) => String(e.version) === String(version));
+  return target ? target.cid : null;
 }
 
 export async function currentCollectionTokenId(s: Session): Promise<string> {

@@ -86,7 +86,11 @@ async function payForGenerationWithUSDC(
  * @param {string} prompt - generation prompt stored in the event.
  * @returns {Promise<string|null>} transaction hash on success, null on failure.
  */
-async function recordGeneration(nodeId: string, prompt: string) {
+/**
+ * Shared preamble for generation write paths: requires a connected wallet and
+ * a configured contract; toasts and returns null otherwise.
+ */
+function _requireGenerationContract(action: string): { c: any; contractAddress: string } | null {
   if (!walletState.get().walletAddress) {
     showToast({
       type: "error",
@@ -101,11 +105,26 @@ async function recordGeneration(nodeId: string, prompt: string) {
     showToast({
       type: "error",
       title: "Contract Not Configured",
-      message: "Cannot record generation. Contract not deployed.",
+      message: `Cannot ${action}. Contract not deployed.`,
       duration: 0,
     });
     return null;
   }
+  return { c, contractAddress };
+}
+
+/** True for wallet user-denied rejections (MetaMask 4001 etc.) — stay silent. */
+function _isUserRejection(error: any): boolean {
+  const msg = error?.message || "";
+  return (
+    msg.includes("User denied") || msg.includes("rejected") || error?.code === 4001
+  );
+}
+
+async function recordGeneration(nodeId: string, prompt: string) {
+  const ready = _requireGenerationContract("record generation");
+  if (!ready) return null;
+  const { c, contractAddress } = ready;
   if (!isFreeTierContract()) {
     showToast({
       type: "error",
@@ -137,11 +156,7 @@ async function recordGeneration(nodeId: string, prompt: string) {
   } catch (error) {
     console.error("recordGeneration failed:", error);
     const msg = (error as any).message || "";
-    if (
-      msg.includes("User denied") ||
-      msg.includes("rejected") ||
-      (error as any).code === 4001
-    ) {
+    if (_isUserRejection(error)) {
       // silent
     } else if (msg.includes("DailyGenerationLimitReached")) {
       showToast({
@@ -171,25 +186,9 @@ async function recordGeneration(nodeId: string, prompt: string) {
  * @returns {Promise<string|null>}
  */
 async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
-  if (!walletState.get().walletAddress) {
-    showToast({
-      type: "error",
-      title: "Not Signed In",
-      message: "Please log in or sign up first.",
-    });
-    return null;
-  }
-  const c = getActiveContract();
-  const contractAddress = _getContractAddress();
-  if (!c || !contractAddress) {
-    showToast({
-      type: "error",
-      title: "Contract Not Configured",
-      message: "Cannot process payment. Contract not deployed.",
-      duration: 0,
-    });
-    return null;
-  }
+  const ready = _requireGenerationContract("process payment");
+  if (!ready) return null;
+  const { c, contractAddress } = ready;
   try {
     const tierCostWei = await c.read.tierCosts([BigInt(tier)]);
     if (tierCostWei === 0n) {
@@ -374,11 +373,7 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
   } catch (error) {
     console.error("payWithUSDC failed:", error);
     const msg = (error as any).message || "";
-    if (
-      msg.includes("User denied") ||
-      msg.includes("rejected") ||
-      (error as any).code === 4001
-    ) {
+    if (_isUserRejection(error)) {
       // silent
     } else if (
       msg.includes("insufficient") ||

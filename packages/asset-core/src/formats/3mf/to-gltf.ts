@@ -9,6 +9,7 @@
  */
 
 import type { Parsed3mf } from "./parser.ts";
+import { arrayBufferToBase64 } from "../../utils/encoding.ts";
 
 /** −90° about X as a glTF quaternion [x, y, z, w]. */
 const Z_UP_TO_Y_UP_QUATERNION = [
@@ -22,15 +23,7 @@ function u8ToBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== "undefined") {
     return Buffer.from(bytes).toString("base64");
   }
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + CHUNK) as any
-    );
-  }
-  return btoa(binary);
+  return arrayBufferToBase64(bytes);
 }
 
 /**

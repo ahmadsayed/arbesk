@@ -81,13 +81,11 @@ async function buildWalletProof(tokenId: string | number, walletAddr: string) {
 }
 
 /**
- * Throw if the connected wallet is not an authorized editor of the token.
+ * Build the wallet's Merkle editor proof for the token, or throw an
+ * authorization error (with a specific message when the caller is the owner
+ * but missing from the editor list).
  */
-/**
- * @param {string|number} tokenId
- * @param {string} walletAddr
- */
-export async function verifyCanEdit(tokenId: string | number, walletAddr: string) {
+async function requireEditorProof(tokenId: string | number, walletAddr: string) {
   const proofResult = await buildWalletProof(tokenId, walletAddr);
   if (!proofResult) {
     const owner = await isOwner(tokenId);
@@ -98,6 +96,18 @@ export async function verifyCanEdit(tokenId: string | number, walletAddr: string
     }
     throw new Error("Not an authorized editor");
   }
+  return proofResult;
+}
+
+/**
+ * Throw if the connected wallet is not an authorized editor of the token.
+ */
+/**
+ * @param {string|number} tokenId
+ * @param {string} walletAddr
+ */
+export async function verifyCanEdit(tokenId: string | number, walletAddr: string) {
+  await requireEditorProof(tokenId, walletAddr);
 }
 
 /**
@@ -115,16 +125,7 @@ export async function republishCollection(
   collectionCid: string,
   walletAddr: string
 ) {
-  const proofResult = await buildWalletProof(tokenId, walletAddr);
-  if (!proofResult) {
-    const owner = await isOwner(tokenId);
-    if (owner) {
-      throw new Error(
-        "Token owner is not in the current editor list. Add this wallet as an editor in the Team panel, or update the smart contract to allow owner bypass."
-      );
-    }
-    throw new Error("Not an authorized editor");
-  }
+  const proofResult = await requireEditorProof(tokenId, walletAddr);
   const txHash = await wallet.updateAssetURI(tokenId, collectionCid, proofResult.proof);
   if (!txHash) throw new Error("Republish transaction failed");
   return txHash;

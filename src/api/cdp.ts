@@ -48,66 +48,20 @@ export interface CdpEndUser {
 }
 
 /**
- * Find an end user by exact email (trimmed/lowercased). Scans listEndUsers;
- * returns a minimal end-user view or null.
+ * Page through listEndUsers and return the first user matching `matches`,
+ * mapped to the minimal end-user view, or null.
  */
-export async function findEndUserByEmail(
+async function scanEndUsers(
   cdp: CdpClient,
-  email: string,
+  matches: (user: any) => boolean,
 ): Promise<CdpEndUser | null> {
-  const target = email.trim().toLowerCase();
   let pageToken: string | undefined = undefined;
   do {
     const page = await cdp.endUser.listEndUsers(
       pageToken ? { pageSize: 100, pageToken } : { pageSize: 100 },
     );
     for (const user of page.endUsers ?? []) {
-      const methods = (user.authenticationMethods ?? []) as {
-        type?: string;
-        email?: string;
-      }[];
-      const hit = methods.some(
-        (m) =>
-          m.type === "email" &&
-          typeof m.email === "string" &&
-          m.email.toLowerCase() === target,
-      );
-      if (hit) {
-        return {
-          userId: user.userId,
-          authenticationMethods: methods,
-          evmSmartAccounts: user.evmSmartAccounts,
-          evmSmartAccountObjects: user.evmSmartAccountObjects?.map((o) => ({
-            address: o.address,
-          })),
-        };
-      }
-    }
-    pageToken = page.nextPageToken || undefined;
-  } while (pageToken);
-  return null;
-}
-
-/**
- * Find an end user by smart-account address (for browser-assisted sessions,
- * whose session carries the address but not the CDP user id).
- */
-export async function findEndUserByAddress(
-  cdp: CdpClient,
-  address: string,
-): Promise<CdpEndUser | null> {
-  const target = address.toLowerCase();
-  let pageToken: string | undefined = undefined;
-  do {
-    const page = await cdp.endUser.listEndUsers(
-      pageToken ? { pageSize: 100, pageToken } : { pageSize: 100 },
-    );
-    for (const user of page.endUsers ?? []) {
-      const addrs = [
-        ...(user.evmSmartAccounts ?? []),
-        ...(user.evmSmartAccountObjects ?? []).map((o) => o.address),
-      ];
-      if (addrs.some((a) => a.toLowerCase() === target)) {
+      if (matches(user)) {
         return {
           userId: user.userId,
           authenticationMethods: (user.authenticationMethods ?? []) as {
@@ -124,6 +78,47 @@ export async function findEndUserByAddress(
     pageToken = page.nextPageToken || undefined;
   } while (pageToken);
   return null;
+}
+
+/**
+ * Find an end user by exact email (trimmed/lowercased). Scans listEndUsers;
+ * returns a minimal end-user view or null.
+ */
+export async function findEndUserByEmail(
+  cdp: CdpClient,
+  email: string,
+): Promise<CdpEndUser | null> {
+  const target = email.trim().toLowerCase();
+  return scanEndUsers(cdp, (user) => {
+    const methods = (user.authenticationMethods ?? []) as {
+      type?: string;
+      email?: string;
+    }[];
+    return methods.some(
+      (m) =>
+        m.type === "email" &&
+        typeof m.email === "string" &&
+        m.email.toLowerCase() === target,
+    );
+  });
+}
+
+/**
+ * Find an end user by smart-account address (for browser-assisted sessions,
+ * whose session carries the address but not the CDP user id).
+ */
+export async function findEndUserByAddress(
+  cdp: CdpClient,
+  address: string,
+): Promise<CdpEndUser | null> {
+  const target = address.toLowerCase();
+  return scanEndUsers(cdp, (user) => {
+    const addrs = [
+      ...(user.evmSmartAccounts ?? []),
+      ...(user.evmSmartAccountObjects ?? []).map((o: any) => o.address),
+    ];
+    return addrs.some((a) => a.toLowerCase() === target);
+  });
 }
 
 /**

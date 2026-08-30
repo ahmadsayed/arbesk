@@ -909,6 +909,26 @@ function followupNodeId(suffix: string): string {
 }
 
 /**
+ * Shared follow-up prologue: post the user prompt, open a stoppable working
+ * bubble, and gather the save-context fields every follow-up generateAsset
+ * call needs.
+ */
+function beginFollowup(prompt: string, workingText: string, kind: string) {
+  addChatMessage("user", prompt);
+  const { working, signal, onTaskId, onProgress } =
+    addStoppableWorkingMessage(workingText);
+  return {
+    working,
+    signal,
+    onTaskId,
+    onProgress,
+    nodeId: followupNodeId(kind),
+    prevAssetManifestCid: getActiveAssetManifestCid() || undefined,
+    transformMatrix: buildTransformMatrix(),
+  };
+}
+
+/**
  * Error mapping for the follow-up actions. All variants share the same
  * skeleton; the options pick which canned messages apply:
  * - notRiggable: message for MODEL_NOT_RIGGABLE (rig/animate paths)
@@ -1381,11 +1401,8 @@ async function retryRig(generationId: string, rigModel: string) {
   if (!record?.sourceAssetCid) return;
   if (!(await ensureFollowupGates("rig"))) return;
   const prompt = `Auto-rig (${rigModel === "v1.0-20240301" ? "v1.0 Humanoid" : "v2.5 Generic"})`;
-  addChatMessage("user", prompt);
-  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
-  const nodeId = followupNodeId("rig");
-  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
-  const transformMatrix = buildTransformMatrix();
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(prompt, "Rigging — checking compatibility, then building the skeleton…", "rig");
   try {
     const result = await generateAsset({
       prompt: "Auto-rig",
@@ -1440,11 +1457,8 @@ async function retryAnimate(generationId: string, rigModel: string) {
 
   const labels = animations.map((p: string) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels} (${rigModel === "v1.0-20240301" ? "v1.0" : "v2.5"})`;
-  addChatMessage("user", prompt);
-  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging and animating — this chains three Tripo tasks and takes a few minutes…");
-  const nodeId = followupNodeId("anim");
-  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
-  const transformMatrix = buildTransformMatrix();
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(prompt, "Rigging and animating — this chains three Tripo tasks and takes a few minutes…", "anim");
   try {
     const result = await generateAsset({
       prompt: `Animate: ${labels}`,
@@ -1534,11 +1548,8 @@ async function onRetexture(generationId: string) {
   const texturePrompt = await showTexturePromptDialog();
   if (!texturePrompt) return;
   if (!(await ensureFollowupGates("retexture"))) return;
-  addChatMessage("user", `Retexture: ${texturePrompt}`);
-  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Retexturing — this takes a minute or two…");
-  const nodeId = followupNodeId("retex");
-  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
-  const transformMatrix = buildTransformMatrix();
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(`Retexture: ${texturePrompt}`, "Retexturing — this takes a minute or two…", "retex");
   try {
     const result = await generateAsset({
       prompt: texturePrompt,
@@ -1586,15 +1597,8 @@ async function onRetopo(generationId: string) {
   if (!(await ensureFollowupGates("retopo"))) return;
 
   const prompt = "Retopo for animation";
-  addChatMessage("user", prompt);
-  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage(
-    "Rebuilding topology — this takes a minute or two…",
-  );
-
-  const nodeId = followupNodeId("retopo");
-  const prevAssetManifestCid =
-    getActiveAssetManifestCid() || undefined;
-  const transformMatrix = buildTransformMatrix();
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(prompt, "Rebuilding topology — this takes a minute or two…", "retopo");
 
   try {
     const result = await generateAsset({
@@ -1651,11 +1655,8 @@ async function onAutoRig(generationId: string) {
   const rigModel = await showRigModelDialog("Auto-rig — rig model");
   if (rigModel === null) return; // cancelled
   const prompt = "Auto-rig";
-  addChatMessage("user", prompt);
-  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage("Rigging — checking compatibility, then building the skeleton…");
-  const nodeId = followupNodeId("rig");
-  const prevAssetManifestCid = getActiveAssetManifestCid() || undefined;
-  const transformMatrix = buildTransformMatrix();
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(prompt, "Rigging — checking compatibility, then building the skeleton…", "rig");
   try {
     const result = await generateAsset({
       prompt,
@@ -1815,15 +1816,8 @@ async function onAnimate(generationId: string) {
 
   const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels}`;
-  addChatMessage("user", prompt);
-  const { working, signal, onTaskId, onProgress } = addStoppableWorkingMessage(
-    "Rigging and animating — this chains three Tripo tasks and takes a few minutes…",
-  );
-
-  const nodeId = followupNodeId("anim");
-  const prevAssetManifestCid =
-    getActiveAssetManifestCid() || undefined;
-  const transformMatrix = buildTransformMatrix();
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(prompt, "Rigging and animating — this chains three Tripo tasks and takes a few minutes…", "anim");
 
   try {
     const result = await generateAsset({

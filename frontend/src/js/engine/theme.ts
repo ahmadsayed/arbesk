@@ -20,28 +20,36 @@ export function getCssVar(name: string): string {
 }
 
 /**
+ * Parse a 6-digit hex string ("#RRGGBB" or "RRGGBB") to normalized [r, g, b]
+ * floats. Returns null when invalid.
+ */
+function hexToRgb(hex: string): [number, number, number] | null {
+  const h = normalizeHex(hex);
+  if (!h) return null;
+  return [
+    parseInt(h.slice(0, 2), 16) / 255,
+    parseInt(h.slice(2, 4), 16) / 255,
+    parseInt(h.slice(4, 6), 16) / 255,
+  ];
+}
+
+/**
  * Parse a 6-digit hex string ("#RRGGBB" or "RRGGBB") to a BABYLON.Color3.
  * Returns the engine fallback if Babylon is unavailable.
  */
 export function hexToColor3(hex: string): BABYLON.Color3 | null {
-  const h = normalizeHex(hex);
-  if (!h) return null;
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  return new BABYLON.Color3(r, g, b);
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  return new BABYLON.Color3(rgb[0], rgb[1], rgb[2]);
 }
 
 /**
  * Parse a 6-digit hex string to a BABYLON.Color4 with the given alpha.
  */
 export function hexToColor4(hex: string, alpha = 1): BABYLON.Color4 | null {
-  const h = normalizeHex(hex);
-  if (!h) return null;
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  return new BABYLON.Color4(r, g, b, alpha);
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  return new BABYLON.Color4(rgb[0], rgb[1], rgb[2], alpha);
 }
 
 /**

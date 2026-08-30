@@ -256,15 +256,11 @@ export async function relayWrite(
   tokenId: string | number,
   params: Record<string, unknown>,
 ): Promise<Record<string, any>> {
-  const response = await fetchWithSession("/wallet/relay", {
-    method: "POST",
-    body: { op, tokenId, params },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(message || "Relay failed", response.status, code);
-  }
+  const data = await fetchJsonOrThrow(
+    "/wallet/relay",
+    { method: "POST", body: { op, tokenId, params } },
+    "Relay failed"
+  );
   return data.receipt ?? data;
 }
 
@@ -310,6 +306,28 @@ async function fetchWithSession(path: string, { method = "POST", body, headers =
   }
 
   return response;
+}
+
+/**
+ * fetchWithSession + standard error mapping: parse the JSON body and throw an
+ * ApiError carrying the backend's message/code on non-2xx responses.
+ */
+async function fetchJsonOrThrow(
+  path: string,
+  options: FetchWithSessionOptions,
+  fallbackMessage: string
+): Promise<any> {
+  const response = await fetchWithSession(path, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const { message, code } = parseErrorBody(data);
+    throw new ApiError(
+      message || `${fallbackMessage} (HTTP ${response.status})`,
+      response.status,
+      code
+    );
+  }
+  return data;
 }
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -368,23 +386,37 @@ export async function getContractArtifact(contractName = "ArbeskAsset"): Promise
 }
 
 /**
- * GET /api/v1/indexer/owned?address=0x...&chainId=...
- * Returns token IDs owned by the address on the given chain, or null on failure.
+ * GET /api/v1/indexer/:kind?address=0x...&chainId=...
+ * Returns token IDs from the given indexer list ("owned" | "shared"), or null
+ * on failure (callers fall back to an on-chain scan).
  */
-export async function getOwnedTokens(address: string, chainId: number, force = false): Promise<string[] | null> {
+async function getIndexerTokens(
+  kind: "owned" | "shared",
+  address: string,
+  chainId: number,
+  force: boolean
+): Promise<string[] | null> {
   try {
     const forceParam = force ? "&force=true" : "";
-    const res = await fetch(`${API_BASE}/indexer/owned?address=${encodeURIComponent(address)}&chainId=${chainId}${forceParam}`, {
+    const res = await fetch(`${API_BASE}/indexer/${kind}?address=${encodeURIComponent(address)}&chainId=${chainId}${forceParam}`, {
       headers: { Accept: "application/json" },
     });
     if (!res.ok) throw new Error(`indexer returned ${res.status}`);
     const data = await res.json();
-    if (!Array.isArray(data.owned)) throw new Error("invalid indexer response");
-    return data.owned.map(String);
+    if (!Array.isArray(data[kind])) throw new Error("invalid indexer response");
+    return data[kind].map(String);
   } catch (err) {
-    warn("[SESSION] indexer query failed, falling back to scan:", (err as Error).message);
+    warn(`[SESSION] ${kind} indexer query failed:`, (err as Error).message);
     return null;
   }
+}
+
+/**
+ * GET /api/v1/indexer/owned?address=0x...&chainId=...
+ * Returns token IDs owned by the address on the given chain, or null on failure.
+ */
+export async function getOwnedTokens(address: string, chainId: number, force = false): Promise<string[] | null> {
+  return getIndexerTokens("owned", address, chainId, force);
 }
 
 /**
@@ -393,20 +425,7 @@ export async function getOwnedTokens(address: string, chainId: number, force = f
  * or null on failure.
  */
 export async function getSharedTokens(address: string, chainId: number, force = false): Promise<string[] | null> {
-  try {
-    const forceParam = force ? "&force=true" : "";
-    const res = await fetch(
-      `${API_BASE}/indexer/shared?address=${encodeURIComponent(address)}&chainId=${chainId}${forceParam}`,
-      { headers: { Accept: "application/json" } }
-    );
-    if (!res.ok) throw new Error(`indexer returned ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data.shared)) throw new Error("invalid indexer response");
-    return data.shared.map(String);
-  } catch (err) {
-    warn("[SESSION] shared indexer query failed:", (err as Error).message);
-    return null;
-  }
+  return getIndexerTokens("shared", address, chainId, force);
 }
 
 // ─── Generations ─────────────────────────────────────────────────────────────
@@ -487,19 +506,7 @@ async function pollGeneration(taskId: string, signal?: AbortSignal, onProgress?:
  * cancel. Provider credits already consumed are not refunded.
  */
 export async function cancelGenerationTask(taskId: string): Promise<{ status: string; upstreamCancelled: boolean }> {
-  const response = await fetchWithSession(`/generations/${taskId}`, {
-    method: "DELETE",
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Cancel failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-  return data;
+  return fetchJsonOrThrow(`/generations/${taskId}`, { method: "DELETE" }, "Cancel failed");
 }
 
 // ─── Provider Balance (BYOK) ───
@@ -511,19 +518,7 @@ export async function cancelGenerationTask(taskId: string): Promise<{ status: st
  * sent per-request and never persisted server-side.
  */
 export async function getProviderBalance(providerKey: string): Promise<{ balance: number; frozen: number }> {
-  const response = await fetchWithSession("/generations/balance", {
-    body: { providerKey },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Balance check failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-  return data;
+  return fetchJsonOrThrow("/generations/balance", { body: { providerKey } }, "Balance check failed");
 }
 
 /**
@@ -916,20 +911,7 @@ export async function snapshotCommentsArchive(publishContext: { tokenId: string 
  * Exact match only — the backend never lists or autocompletes emails.
  */
 export async function resolveUserEmail(email: string): Promise<{ exists: boolean; address?: string | null }> {
-  const response = await fetchWithSession("/users/resolve-email", {
-    body: { email },
-  });
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Email resolution failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-  return data;
+  return fetchJsonOrThrow("/users/resolve-email", { body: { email } }, "Email resolution failed");
 }
 
 // ─── IPFS Upload Credential ───────────────────────────────────────────────────
@@ -998,19 +980,7 @@ export async function unpinAssetCids(
   if (contractAddress) body.contractAddress = contractAddress;
   if (Array.isArray(proof) && proof.length > 0) body.proof = proof;
 
-  const response = await fetchWithSession("/ipfs/unpin", { body });
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const { message, code } = parseErrorBody(data);
-    throw new ApiError(
-      message || `Unpin failed (HTTP ${response.status})`,
-      response.status,
-      code
-    );
-  }
-
-  return data;
+  return fetchJsonOrThrow("/ipfs/unpin", { body }, "Unpin failed");
 }
 
 // ─── Ledger ──────────────────────────────────────────────────────────────────

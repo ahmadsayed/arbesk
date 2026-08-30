@@ -8,7 +8,6 @@ import path from "path";
 import { login } from "./auth.ts";
 import { whoami, logout, loadSession, setActiveCollection } from "./session.ts";
 import type { Session } from "./session.ts";
-import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
 import {
   listCollections,
   getCollectionAssets,
@@ -38,7 +37,9 @@ import type { GenerationBody } from "./generate.ts";
 import {
   displayName,
   currentCollectionTokenId,
+  loadAssetSource,
   makeNodeId,
+  resolveVersionCid,
   sanitizeFileName,
   extFor,
   readImageFile,
@@ -120,6 +121,48 @@ function requireSession(): Session | null {
   return s;
 }
 
+/**
+ * Shared command preamble: session + named-asset resolution in the active
+ * collection. Prints the usage/error, sets exitCode, and returns null on
+ * failure.
+ */
+async function requireNamedAsset(name: string | undefined, usage: string) {
+  const s = requireSession();
+  if (!s) return null;
+  if (!name) {
+    console.error(usage);
+    process.exitCode = 2;
+    return null;
+  }
+  const tokenId = await currentCollectionTokenId(s);
+  const hit = await resolveAssetByName(tokenId, name);
+  if (!hit) {
+    console.error("No asset named " + name);
+    process.exitCode = 5;
+    return null;
+  }
+  return { s, tokenId, hit };
+}
+
+/**
+ * Shared command preamble: named-collection resolution. Prints the
+ * usage/error, sets exitCode, and returns null on failure.
+ */
+async function requireNamedCollection(s: Session, name: string | undefined, usage: string) {
+  if (!name) {
+    console.error("Usage: besk " + usage);
+    process.exitCode = 2;
+    return null;
+  }
+  const c = await resolveCollectionByName(s.address, name);
+  if (!c) {
+    console.error("No collection named " + name + ". Run `besk collections`.");
+    process.exitCode = 5;
+    return null;
+  }
+  return c;
+}
+
 async function cmdCollections(): Promise<void> {
   const s = requireSession();
   if (!s) return;
@@ -137,17 +180,8 @@ async function cmdCollections(): Promise<void> {
 async function cmdUse(name?: string): Promise<void> {
   const s = requireSession();
   if (!s) return;
-  if (!name) {
-    console.error("Usage: besk use <collection>");
-    process.exitCode = 2;
-    return;
-  }
-  const c = await resolveCollectionByName(s.address, name);
-  if (!c) {
-    console.error("No collection named " + name + ". Run `besk collections`.");
-    process.exitCode = 5;
-    return;
-  }
+  const c = await requireNamedCollection(s, name, "use <collection>");
+  if (!c) return;
   setActiveCollection(c.tokenId);
   console.log("Now using " + displayName(c.name));
 }
@@ -168,20 +202,9 @@ async function cmdList(): Promise<void> {
 }
 
 async function cmdDelete(name?: string): Promise<void> {
-  const s = requireSession();
-  if (!s) return;
-  if (!name) {
-    console.error("Usage: besk delete <name>");
-    process.exitCode = 2;
-    return;
-  }
-  const tokenId = await currentCollectionTokenId(s);
-  const hit = await resolveAssetByName(tokenId, name);
-  if (!hit) {
-    console.error("No asset named " + name);
-    process.exitCode = 5;
-    return;
-  }
+  const ctx = await requireNamedAsset(name, "Usage: besk delete <name>");
+  if (!ctx) return;
+  const { s, tokenId, hit } = ctx;
   const answer = (await prompt("Delete " + name + " from your library? [y/N] ")).trim().toLowerCase();
   if (answer !== "y" && answer !== "yes") {
     console.log("Cancelled");
@@ -194,20 +217,14 @@ async function cmdDelete(name?: string): Promise<void> {
 }
 
 async function cmdRename(oldName?: string, newName?: string): Promise<void> {
-  const s = requireSession();
-  if (!s) return;
   if (!oldName || !newName) {
     console.error("Usage: besk rename <old> <new>");
     process.exitCode = 2;
     return;
   }
-  const tokenId = await currentCollectionTokenId(s);
-  const hit = await resolveAssetByName(tokenId, oldName);
-  if (!hit) {
-    console.error("No asset named " + oldName);
-    process.exitCode = 5;
-    return;
-  }
+  const ctx = await requireNamedAsset(oldName, "Usage: besk rename <old> <new>");
+  if (!ctx) return;
+  const { s, tokenId, hit } = ctx;
   const assetManifest = (await getManifest(hit.cid)) as Record<string, any>;
   assetManifest.name = newName;
   const newAssetCid = await writeManifest(assetManifest);
@@ -245,23 +262,10 @@ async function cmdUpload(file?: string): Promise<void> {
 }
 
 async function cmdInfo(name?: string): Promise<void> {
-  const s = requireSession();
-  if (!s) return;
-  if (!name) {
-    console.error("Usage: besk info <name>");
-    process.exitCode = 2;
-    return;
-  }
-  const tokenId = await currentCollectionTokenId(s);
-  const hit = await resolveAssetByName(tokenId, name);
-  if (!hit) {
-    console.error("No asset named " + name);
-    process.exitCode = 5;
-    return;
-  }
-  const m = (await getManifest(hit.cid)) as Record<string, any>;
-  const srcCid = resolveCompositeSourceCid(m);
-  const source = srcCid ? ((await getManifest(srcCid)) as Record<string, any>) : m;
+  const ctx = await requireNamedAsset(name, "Usage: besk info <name>");
+  if (!ctx) return;
+  const { hit } = ctx;
+  const { manifest: m, source } = await loadAssetSource(hit.cid);
   // Asset manifests carry scene.nodes; CLI uploads store the composite glTF
   // JSON directly, whose nodes sit at the top level.
   const nodes = m?.scene?.nodes ?? (Array.isArray(m.nodes) ? m.nodes : []);
@@ -276,20 +280,9 @@ async function cmdInfo(name?: string): Promise<void> {
 }
 
 async function cmdHistory(name?: string): Promise<void> {
-  const s = requireSession();
-  if (!s) return;
-  if (!name) {
-    console.error("Usage: besk history <name>");
-    process.exitCode = 2;
-    return;
-  }
-  const tokenId = await currentCollectionTokenId(s);
-  const hit = await resolveAssetByName(tokenId, name);
-  if (!hit) {
-    console.error("No asset named " + name);
-    process.exitCode = 5;
-    return;
-  }
+  const ctx = await requireNamedAsset(name, "Usage: besk history <name>");
+  if (!ctx) return;
+  const { hit } = ctx;
   const chain = await getVersionHistory(hit.cid);
   if (chain.length === 0) {
     console.log("No history.");
@@ -307,34 +300,20 @@ async function cmdHistory(name?: string): Promise<void> {
 }
 
 async function cmdDownload(name?: string, version?: string): Promise<void> {
-  const s = requireSession();
-  if (!s) return;
-  if (!name) {
-    console.error("Usage: besk download <name> [version]");
-    process.exitCode = 2;
-    return;
-  }
-  const tokenId = await currentCollectionTokenId(s);
-  const hit = await resolveAssetByName(tokenId, name);
-  if (!hit) {
-    console.error("No asset named " + name);
-    process.exitCode = 5;
-    return;
-  }
+  const ctx = await requireNamedAsset(name, "Usage: besk download <name> [version]");
+  if (!ctx) return;
+  const { hit } = ctx;
   let cid = hit.cid;
   if (version) {
-    const chain = await getVersionHistory(hit.cid);
-    const target = chain.find((e) => String(e.version) === String(version));
-    if (!target) {
+    const versionCid = await resolveVersionCid(hit.cid, version);
+    if (!versionCid) {
       console.error("Version " + version + " not found for " + name);
       process.exitCode = 5;
       return;
     }
-    cid = target.cid;
+    cid = versionCid;
   }
-  const m = (await getManifest(cid)) as Record<string, any>;
-  const srcCid = resolveCompositeSourceCid(m) ?? cid;
-  const source = srcCid === cid ? m : ((await getManifest(srcCid)) as Record<string, any>);
+  const { manifest: m, srcCid, source } = await loadAssetSource(cid);
   const format = detectFormat(source);
   console.log("Downloading " + name + " (v" + (m.version ?? 1) + ", " + format + ")…");
   const bytes = await downloadAsset(srcCid, format);
@@ -813,24 +792,13 @@ async function cmdGenerate(argv: string[]): Promise<void> {
 
 /** Shared preamble for follow-up ops: resolve the asset and its source CID. */
 async function resolveSourceAsset(
-  s: Session,
   name: string | undefined,
   usage: string,
 ): Promise<{ tokenId: string; assetId: string; srcCid: string } | null> {
-  if (!name) {
-    console.error(usage);
-    process.exitCode = 2;
-    return null;
-  }
-  const tokenId = await currentCollectionTokenId(s);
-  const hit = await resolveAssetByName(tokenId, name);
-  if (!hit) {
-    console.error("No asset named " + name);
-    process.exitCode = 5;
-    return null;
-  }
-  const srcCid = await resolveSourceCid(hit.cid);
-  return { tokenId, assetId: hit.assetID, srcCid };
+  const ctx = await requireNamedAsset(name, usage);
+  if (!ctx) return null;
+  const srcCid = await resolveSourceCid(ctx.hit.cid);
+  return { tokenId: ctx.tokenId, assetId: ctx.hit.assetID, srcCid };
 }
 
 async function cmdRetexture(argv: string[]): Promise<void> {
@@ -839,7 +807,7 @@ async function cmdRetexture(argv: string[]): Promise<void> {
   const { positional, flags } = parseFlags(argv);
   const [name, ...promptParts] = positional;
   const prompt = promptParts.join(" ");
-  const src = await resolveSourceAsset(s, name, "Usage: besk retexture <name> <prompt>");
+  const src = await resolveSourceAsset(name, "Usage: besk retexture <name> <prompt>");
   if (!src) return;
   if (!prompt) {
     console.error("Usage: besk retexture <name> <prompt>");
@@ -870,7 +838,7 @@ async function cmdRetopo(argv: string[]): Promise<void> {
   if (!s) return;
   const { positional, flags } = parseFlags(argv);
   const [name, face] = positional;
-  const src = await resolveSourceAsset(s, name, "Usage: besk retopo <name> [faceLimit]");
+  const src = await resolveSourceAsset(name, "Usage: besk retopo <name> [faceLimit]");
   if (!src) return;
   let faceLimit: number | undefined;
   if (face !== undefined) {
@@ -901,7 +869,7 @@ async function cmdRig(argv: string[]): Promise<void> {
   const s = requireSession();
   if (!s) return;
   const { positional, flags } = parseFlags(argv);
-  const src = await resolveSourceAsset(s, positional[0], "Usage: besk rig <name>");
+  const src = await resolveSourceAsset(positional[0], "Usage: besk rig <name>");
   if (!src) return;
   const key = await requireProviderKey(flags);
   if (!key) return;
@@ -924,7 +892,7 @@ async function cmdAnimate(argv: string[]): Promise<void> {
   if (!s) return;
   const { positional, flags } = parseFlags(argv);
   const [name, ...presets] = positional;
-  const src = await resolveSourceAsset(s, name, "Usage: besk animate <name> <preset> [preset...] [--no-in-place]");
+  const src = await resolveSourceAsset(name, "Usage: besk animate <name> <preset> [preset...] [--no-in-place]");
   if (!src) return;
   if (presets.length < 1 || presets.length > 5) {
     console.error("Pick 1-5 animation presets (e.g. preset:idle preset:biped:dance_01).");
@@ -974,17 +942,8 @@ async function cmdCancel(argv: string[]): Promise<void> {
 async function cmdBurn(name?: string): Promise<void> {
   const s = requireSession();
   if (!s) return;
-  if (!name) {
-    console.error("Usage: besk burn <collection>");
-    process.exitCode = 2;
-    return;
-  }
-  const c = await resolveCollectionByName(s.address, name);
-  if (!c) {
-    console.error("No collection named " + name + ". Run `besk collections`.");
-    process.exitCode = 5;
-    return;
-  }
+  const c = await requireNamedCollection(s, name, "burn <collection>");
+  if (!c) return;
   const label = displayName(c.name);
   const answer = await prompt(
     "Are you sure you want to delete the collection \"" + label +

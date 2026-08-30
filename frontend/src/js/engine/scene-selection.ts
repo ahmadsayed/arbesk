@@ -54,6 +54,15 @@ function _emitSelectionChanged() {
   });
 }
 
+/** Make `nodeId` the primary selection: highlight + state + event. */
+function _selectPrimary(nodeId: string, mesh: BABYLON.AbstractMesh | null | undefined) {
+  state.highlightedSubMeshName = null;
+  _addNodeHighlight(nodeId);
+  state.highlightedNodeId = nodeId;
+  uiState.set({ selectedNodeId: nodeId });
+  emit(EVENTS.NODE_SELECTED, { nodeId, mesh });
+}
+
 /**
  * Single-select: collapse the selection to exactly this node.
  */
@@ -68,11 +77,7 @@ function selectNode(nodeId: string, mesh?: BABYLON.AbstractMesh | null) {
   for (const id of state.selectedNodeIds) _removeNodeHighlight(id);
   state.selectedNodeIds.clear();
   state.selectedNodeIds.add(nodeId);
-  state.highlightedSubMeshName = null;
-  _addNodeHighlight(nodeId);
-  state.highlightedNodeId = nodeId;
-  uiState.set({ selectedNodeId: nodeId });
-  emit(EVENTS.NODE_SELECTED, { nodeId, mesh });
+  _selectPrimary(nodeId, mesh);
   _emitSelectionChanged();
 }
 
@@ -100,11 +105,7 @@ function toggleNodeSelection(nodeId: string, mesh?: BABYLON.AbstractMesh | null)
     }
   } else {
     state.selectedNodeIds.add(nodeId);
-    state.highlightedSubMeshName = null;
-    _addNodeHighlight(nodeId);
-    state.highlightedNodeId = nodeId;
-    uiState.set({ selectedNodeId: nodeId });
-    emit(EVENTS.NODE_SELECTED, { nodeId, mesh });
+    _selectPrimary(nodeId, mesh);
   }
   _emitSelectionChanged();
 }

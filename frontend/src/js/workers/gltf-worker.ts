@@ -8,10 +8,15 @@
  *   - source color baking (per-node material color mutation)
  *
  * The worker runs in a separate context without the page's import map, DOM,
- * or session state, so it only imports pure project modules (gltf-core.ts,
- * utils, cache-aware-fetch). @gltf-transform/core is loaded from the same
- * vendored bundle the main thread's import map points at
- * (see frontend/src/js/vendor/README.md) via a relative path instead.
+ * or session state, so it only imports *bare-free* project modules — every
+ * @arbesk/asset-core subpath above must transitively avoid bare specifiers
+ * (fflate, @gltf-transform/core, …), which is why applyNodeColors comes from
+ * the pure apply-node-colors.js and NOT from source-color-editor.js (that one
+ * pulls glb-parser → @gltf-transform/core). The GLB parse prologue below uses
+ * @gltf-transform/core from the vendored bundle by relative path for the same
+ * reason (see frontend/src/js/vendor/README.md). The build rewrites the bare
+ * @arbesk/asset-core specifiers to ../vendor/asset-core/ relative paths
+ * (frontend/scripts/render-ts.js).
  */
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
@@ -35,6 +40,7 @@ import {
 } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import { extFromMimeType } from "@arbesk/asset-core/formats/gltf/image-mime.js";
 import { resolveGlbImageBytes } from "@arbesk/asset-core/formats/gltf/glb-image-resolve.js";
+import { bakeSourceColorsOp } from "@arbesk/asset-core/formats/gltf/apply-node-colors.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
 
@@ -349,6 +355,8 @@ async function decomposeGlb(payload: any) {
   const { arrayBuffer } = payload || {};
   if (!arrayBuffer) throw new Error("decomposeGlb: arrayBuffer is required");
 
+  // Note: asset-core's parseGLB is not imported here — it pulls the bare
+  // `@gltf-transform/core` specifier, unresolvable in the worker (see header).
   const { json, resources } = await getIO().binaryToJSON(
     new Uint8Array(arrayBuffer)
   );
@@ -367,124 +375,7 @@ async function decomposeGlb(payload: any) {
   return { composite, buffers, images };
 }
 
-function hexToBaseColorFactor(hex: string): number[] {
-  const clean = hex.replace("#", "");
-  return [
-    parseInt(clean.substring(0, 2), 16) / 255,
-    parseInt(clean.substring(2, 4), 16) / 255,
-    parseInt(clean.substring(4, 6), 16) / 255,
-    1.0,
-  ];
-}
-
-interface NodeMaterialMatch {
-  nodeIndex: number;
-  primitiveIndex: number;
-  materialIndex: number;
-}
-
-function findNodeMaterials(gltf: any, nodeName: string): NodeMaterialMatch[] {
-  const matches: NodeMaterialMatch[] = [];
-  if (!gltf.nodes || !gltf.meshes) return matches;
-
-  for (let ni = 0; ni < gltf.nodes.length; ni++) {
-    const node = gltf.nodes[ni];
-    if (!node.name || node.name.toLowerCase() !== nodeName.toLowerCase())
-      continue;
-    if (node.mesh === undefined || node.mesh === null) continue;
-
-    const mesh = gltf.meshes[node.mesh];
-    if (!mesh || !mesh.primitives) continue;
-
-    for (let pi = 0; pi < mesh.primitives.length; pi++) {
-      const prim = mesh.primitives[pi];
-      if (prim.material === undefined || prim.material === null) continue;
-      matches.push({
-        nodeIndex: ni,
-        primitiveIndex: pi,
-        materialIndex: prim.material,
-      });
-    }
-  }
-  return matches;
-}
-
-function ensureUniqueMaterialForNodes(
-  gltf: any,
-  matches: NodeMaterialMatch[],
-  newMaterialName: string
-): void {
-  if (matches.length === 0) return;
-
-  const targetMaterialIndex = matches[0].materialIndex;
-  const usedByOthers = gltf.nodes.some((node: any, ni: number) => {
-    if (node.mesh === undefined || node.mesh === null) return false;
-    const mesh = gltf.meshes[node.mesh];
-    if (!mesh || !mesh.primitives) return false;
-    return mesh.primitives.some((prim: any, pi: number) => {
-      const isTarget = matches.some(
-        (m) => m.nodeIndex === ni && m.primitiveIndex === pi
-      );
-      return !isTarget && prim.material === targetMaterialIndex;
-    });
-  });
-
-  if (!usedByOthers) return;
-
-  const original = gltf.materials[targetMaterialIndex];
-  if (!original) return;
-
-  const clone = JSON.parse(JSON.stringify(original));
-  clone.name = newMaterialName;
-  const cloneIndex = gltf.materials.length;
-  gltf.materials.push(clone);
-
-  for (const match of matches) {
-    gltf.meshes[gltf.nodes[match.nodeIndex].mesh].primitives[
-      match.primitiveIndex
-    ].material = cloneIndex;
-    match.materialIndex = cloneIndex;
-  }
-}
-
-function bakeSourceColors(payload: any) {
-  const { gltfJson, nodeColors } = payload || {};
-  if (!gltfJson) throw new Error("bakeSourceColors: gltfJson is required");
-  if (!nodeColors || Object.keys(nodeColors).length === 0) {
-    return { bakedJson: gltfJson, modified: 0, skipped: 0 };
-  }
-
-  const gltf = JSON.parse(JSON.stringify(gltfJson));
-  if (!gltf.materials) gltf.materials = [];
-
-  let modified = 0;
-  let skipped = 0;
-
-  for (const [nodeName, color] of Object.entries(nodeColors)) {
-    const matches = findNodeMaterials(gltf, nodeName);
-    if (matches.length === 0) {
-      skipped++;
-      continue;
-    }
-
-    ensureUniqueMaterialForNodes(gltf, matches, `${nodeName}_color`);
-
-    const factor = hexToBaseColorFactor(color as string);
-    const seenMaterials = new Set<number>();
-    for (const match of matches) {
-      if (seenMaterials.has(match.materialIndex)) continue;
-      seenMaterials.add(match.materialIndex);
-
-      const mat = gltf.materials[match.materialIndex];
-      if (!mat) continue;
-      mat.pbrMetallicRoughness ||= {};
-      mat.pbrMetallicRoughness.baseColorFactor = factor;
-    }
-    modified++;
-  }
-
-  return { bakedJson: gltf, modified, skipped };
-}
+const bakeSourceColors = bakeSourceColorsOp;
 
 function sanitizeAsyncName(name: any): string {
   return (
@@ -578,6 +469,32 @@ async function uploadExtractedItems(
   }
 }
 
+/** Upload extracted buffers + images in parallel, rewriting placeholders. */
+async function uploadBuffersAndImages(
+  composite: any,
+  buffers: any[],
+  images: any[],
+  credential: UploadCredential,
+  dedupMap: Map<string, string> | null
+): Promise<void> {
+  await Promise.all([
+    uploadExtractedItems(
+      buffers,
+      composite.buffers,
+      credential,
+      dedupMap,
+      WORKER_BUFFER_PLACEHOLDER
+    ),
+    uploadExtractedItems(
+      images,
+      composite.images,
+      credential,
+      dedupMap,
+      WORKER_IMAGE_PLACEHOLDER
+    ),
+  ]);
+}
+
 /**
  * Decompose a standard glTF and upload its buffers/images from the worker.
  * Returns the composite with ipfs:// URIs already in place.
@@ -590,22 +507,7 @@ async function decomposeAndUploadGltf(payload: any) {
   }
 
   const { composite, buffers, images } = await decomposeGltf({ gltfJson });
-  await Promise.all([
-    uploadExtractedItems(
-      buffers,
-      composite.buffers,
-      credential,
-      options.dedupMap || null,
-      WORKER_BUFFER_PLACEHOLDER
-    ),
-    uploadExtractedItems(
-      images,
-      composite.images,
-      credential,
-      options.dedupMap || null,
-      WORKER_IMAGE_PLACEHOLDER
-    ),
-  ]);
+  await uploadBuffersAndImages(composite, buffers, images, credential, options.dedupMap || null);
 
   // No raw buffers/images are returned; they were uploaded in the worker.
   return { composite, buffers: [], images: [] };
@@ -625,22 +527,7 @@ async function decomposeAndUploadGlb(payload: any) {
   const storeComposite = options.storeComposite !== false;
   const { composite, buffers, images } = await decomposeGlb({ arrayBuffer });
 
-  await Promise.all([
-    uploadExtractedItems(
-      buffers,
-      composite.buffers,
-      credential,
-      options.dedupMap || null,
-      WORKER_BUFFER_PLACEHOLDER
-    ),
-    uploadExtractedItems(
-      images,
-      composite.images,
-      credential,
-      options.dedupMap || null,
-      WORKER_IMAGE_PLACEHOLDER
-    ),
-  ]);
+  await uploadBuffersAndImages(composite, buffers, images, credential, options.dedupMap || null);
 
   let compositeCid = null;
   if (storeComposite) {

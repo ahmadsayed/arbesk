@@ -25,6 +25,25 @@ import { walletState } from "../state/wallet-state.ts";
 import { identityMatrix, applyCollectionMutation } from "@arbesk/asset-core/utils/collections.js";
 
 /**
+ * Build a Merkle editor proof for the wallet against the token's current
+ * editor list (defaulting to a fresh wallet-only list when none exists).
+ */
+async function buildLocalEditorProof(
+  tokenId: string,
+  walletAddr: string,
+  errorMessage: string
+) {
+  let editorList = await loadEditorList(tokenId);
+  if (!editorList || editorList.length === 0) {
+    editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
+  }
+  const currentVersion = await getEditorSetVersion(tokenId);
+  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
+  if (!proofResult) throw new Error(errorMessage);
+  return proofResult;
+}
+
+/**
  * Remove an asset from its parent collection.
  * @returns New collection CID on success, null on cancel.
  */
@@ -87,13 +106,7 @@ export async function deleteAssetFromCollection({
   });
 
   const walletAddr = walletState.get().walletAddress as string;
-  let editorList = await loadEditorList(tokenId);
-  if (!editorList || editorList.length === 0) {
-    editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
-  }
-  const currentVersion = await getEditorSetVersion(tokenId);
-  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
-  if (!proofResult) throw new Error("Not an authorized editor");
+  const proofResult = await buildLocalEditorProof(tokenId, walletAddr, "Not an authorized editor");
 
   const txHash = await updateAssetURI(
     tokenId,
@@ -156,13 +169,7 @@ export async function deleteAssetFromCollection({
  */
 export async function burnCollection(tokenId: string): Promise<string | null> {
   const { walletAddress: walletAddr } = requireWallet();
-  let editorList = await loadEditorList(tokenId);
-  if (!editorList || editorList.length === 0) {
-    editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
-  }
-  const currentVersion = await getEditorSetVersion(tokenId);
-  const proofResult = getProof(editorList, walletAddr, tokenId, currentVersion);
-  if (!proofResult) throw new Error("Not authorized to burn this collection");
+  const proofResult = await buildLocalEditorProof(tokenId, walletAddr, "Not authorized to burn this collection");
 
   return burn(tokenId, proofResult.proof);
 }
