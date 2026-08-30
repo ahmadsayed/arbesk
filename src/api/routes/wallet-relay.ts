@@ -92,32 +92,30 @@ async function executeRelayOp(
  * userId came from the session or an address scan, and which smart-account
  * list the address appeared in.
  */
-async function resolveRelayUserId(cdp: any, record: any): Promise<string | null> {
-  const userId = record.userId ?? null;
-  if (userId) {
-    console.log("[RELAY] session userId=" + userId + " address=" + record.address);
-    return userId;
+async function resolveRelayUserId(
+  cdp: any,
+  record: any,
+): Promise<{ userId: string | null; address: string }> {
+  if (record.userId) {
+    console.log("[RELAY] session userId=" + record.userId + " address=" + record.address);
+    return { userId: record.userId, address: record.address };
   }
-  const u: {
-    userId?: string;
-    evmSmartAccounts?: string[];
-    evmSmartAccountObjects?: { address?: string }[];
-  } | null = await findEndUserByAddress(cdp, record.address);
+  const u: { userId?: string; evmSmartAccounts?: string[] } | null =
+    await findEndUserByAddress(cdp, record.address);
   if (!u) {
     console.log("[RELAY] address-scan found NO end-user for address=" + record.address);
-    return null;
+    return { userId: null, address: record.address };
   }
-  const sa = u.evmSmartAccounts ?? [];
-  const sao = (u.evmSmartAccountObjects ?? []).map((o) => o.address ?? "");
-  const addr = record.address.toLowerCase();
+  // CDP stores addresses EIP-55 checksummed; sendUserOperation is
+  // case-sensitive, so use the canonical stored form, not the lowercase
+  // session address.
+  const canonical = u.evmSmartAccounts?.[0] || record.address;
   console.log(
-    "[RELAY] address-scan userId=" + u.userId + " address=" + record.address +
-    " | in evmSmartAccounts=" + sa.some((a) => a.toLowerCase() === addr) +
-    " | in evmSmartAccountObjects=" + sao.some((a) => a.toLowerCase() === addr) +
-    " | evmSmartAccounts=[" + sa.join(", ") + "]" +
-    " | evmSmartAccountObjects=[" + sao.join(", ") + "]"
+    "[RELAY] address-scan userId=" + u.userId +
+    " | sessionAddress=" + record.address +
+    " | canonicalAddress=" + canonical
   );
-  return u.userId ?? null;
+  return { userId: u.userId ?? null, address: canonical };
 }
 
 export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
@@ -159,7 +157,7 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
         return sendError(res, 503, "CDP_NOT_CONFIGURED", "CDP server API key not configured");
       }
 
-      const userId = await resolveRelayUserId(cdp, record);
+      const { userId, address } = await resolveRelayUserId(cdp, record);
       if (!userId) {
         return sendError(
           res,
@@ -169,12 +167,12 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
         );
       }
 
-      console.log("[RELAY] sending op=" + op + " userId=" + userId + " address=" + record.address + " chain=" + cid);
+      console.log("[RELAY] sending op=" + op + " userId=" + userId + " address=" + address + " chain=" + cid);
 
       const signer = createCdpServerSigner({
         cdp,
         userId,
-        address: record.address,
+        address,
         chainId: cid,
       });
       const contract = createAssetContract({
