@@ -117,6 +117,8 @@ const EXPECTED_TOOLS = [
   "delete_asset", "rename_asset", "send_asset", "link_asset", "show_asset",
   "generate_model", "retexture_model", "retopo_model", "rig_model", "animate_model",
   "get_asset_metadata", "get_collection_metadata",
+  "set_asset_metadata", "delete_asset_metadata",
+  "set_collection_metadata", "delete_collection_metadata",
   "provider_balance", "cancel_generation",
 ];
 
@@ -286,6 +288,54 @@ describe("besk mcp asset writes", () => {
 
   test("upload_asset rejects a missing file", async () => {
     await expect(callTool("upload_asset", { file: "/no/such.glb" })).rejects.toThrow(/File not found/);
+  });
+});
+
+describe("besk mcp metadata writes", () => {
+  test("set_asset_metadata merges annotations and links the previous manifest", async () => {
+    const r = await callTool("set_asset_metadata", { name: "world", patch: { role: "hero" } });
+    expect(r).toMatchObject({ set: ["role"], cid: "bafyWritten1" });
+    expect(written[0].metadata.annotations).toEqual({ role: "hero" });
+    expect(written[0].prev_asset_manifest_cid).toBe("bafyWorld");
+    expect(relayMock).toHaveBeenCalledWith(
+      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [] },
+    );
+  });
+
+  test("delete_asset_metadata removes keys and links the previous manifest", async () => {
+    const r = await callTool("delete_asset_metadata", { name: "world", keys: ["role"] });
+    expect(r).toMatchObject({ unset: ["role"], cid: "bafyWritten1" });
+    expect(written[0].prev_asset_manifest_cid).toBe("bafyWorld");
+    expect(relayMock).toHaveBeenCalledWith(
+      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [] },
+    );
+  });
+
+  test("set_collection_metadata merges annotations on the collection", async () => {
+    const r = await callTool("set_collection_metadata", { patch: { theme: "scifi" } });
+    expect(r).toMatchObject({ set: ["theme"], cid: "bafyWritten1" });
+    expect(written[0].metadata.annotations).toEqual({ theme: "scifi" });
+    expect(relayMock).toHaveBeenCalledWith(
+      currentSession, "updateUri", "1", { newUri: "bafyWritten1", proof: [] },
+    );
+  });
+
+  test("delete_collection_metadata removes collection annotation keys", async () => {
+    const r = await callTool("delete_collection_metadata", { keys: ["theme"] });
+    expect(r).toMatchObject({ unset: ["theme"], cid: "bafyWritten1" });
+    expect(relayMock).toHaveBeenCalledWith(
+      currentSession, "updateUri", "1", { newUri: "bafyWritten1", proof: [] },
+    );
+  });
+
+  test("set_asset_metadata requires an object patch", async () => {
+    await expect(callTool("set_asset_metadata", { name: "world" })).rejects.toThrow(/patch must be an object/);
+    await expect(callTool("set_asset_metadata", { name: "world", patch: "x" })).rejects.toThrow(/patch must be an object/);
+  });
+
+  test("delete_asset_metadata requires a string array of keys", async () => {
+    await expect(callTool("delete_asset_metadata", { name: "world", keys: "x" })).rejects.toThrow(/keys must be/);
+    await expect(callTool("delete_asset_metadata", { name: "world", keys: [1] })).rejects.toThrow(/keys must be/);
   });
 });
 

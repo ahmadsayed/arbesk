@@ -56,7 +56,6 @@ export async function getCollectionMetadata(session: Session, tokenId: string) {
 
 // Write ops are wired by the Task 5 set/unset dispatchers (CLI + MCP); shipped
 // now so the shared module covers both read and write sides.
-// fallow-ignore-next-line unused-export
 export async function setAssetMetadata(
   session: Session,
   tokenId: string,
@@ -67,6 +66,7 @@ export async function setAssetMetadata(
   const { getManifest, writeManifest, updateCollection } = await import("./catalog.ts");
   const m = (await getManifest(cid)) as Record<string, any>;
   setAnnotations(m, patch);
+  m.prev_asset_manifest_cid = cid;
   const newCid = await writeManifest(m);
   await updateCollection(session, tokenId, (draft: Record<string, any>) => {
     draft.assets[assetID] = newCid;
@@ -74,7 +74,6 @@ export async function setAssetMetadata(
   return newCid;
 }
 
-// fallow-ignore-next-line unused-export
 export async function unsetAssetMetadata(
   session: Session,
   tokenId: string,
@@ -85,6 +84,7 @@ export async function unsetAssetMetadata(
   const { getManifest, writeManifest, updateCollection } = await import("./catalog.ts");
   const m = (await getManifest(cid)) as Record<string, any>;
   unsetAnnotations(m, keys);
+  m.prev_asset_manifest_cid = cid;
   const newCid = await writeManifest(m);
   await updateCollection(session, tokenId, (draft: Record<string, any>) => {
     draft.assets[assetID] = newCid;
@@ -92,7 +92,6 @@ export async function unsetAssetMetadata(
   return newCid;
 }
 
-// fallow-ignore-next-line unused-export
 export async function setCollectionMetadata(
   session: Session,
   tokenId: string,
@@ -104,7 +103,6 @@ export async function setCollectionMetadata(
   );
 }
 
-// fallow-ignore-next-line unused-export
 export async function unsetCollectionMetadata(
   session: Session,
   tokenId: string,

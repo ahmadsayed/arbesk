@@ -45,7 +45,12 @@ import {
   readImageFile,
   saveGenerated,
 } from "./helpers.ts";
-import { getAssetMetadata, getCollectionMetadata } from "./metadata.ts";
+import {
+  getAssetMetadata, getCollectionMetadata,
+  setAssetMetadata, unsetAssetMetadata,
+  setCollectionMetadata, unsetCollectionMetadata,
+  patchFromPairs,
+} from "./metadata.ts";
 
 /** cli.ts adapter over helpers.readImageFile: print + exit code instead of throwing. */
 function readImageFileCli(file: string): { imageData: string; imageMime: string } | null {
@@ -91,8 +96,10 @@ function help(): void {
   console.log("  use <name>        switch to a collection");
   console.log("  list              list assets in the current collection");
   console.log("  info <name>       show an asset's identity card");
-  console.log("  metadata get <name>   show an asset's computed facts + annotations");
-  console.log("  collection-meta get   show the active collection's annotations");
+  console.log("  metadata get <name>      show an asset's computed facts + annotations");
+  console.log("  metadata set <name> --key k --value v [...]   set asset annotations");
+  console.log("  metadata unset <name> --key k [...]            remove asset annotations");
+  console.log("  collection-meta get|set|unset                  active collection annotations");
   console.log("  history <name>    show an asset's version chain");
   console.log("  download <name> [version]  pull a model to a local file");
   console.log("  upload <file>     save a local model to the current collection");
@@ -977,17 +984,75 @@ async function cmdCollectionMetaGet(): Promise<void> {
   console.log(JSON.stringify(meta, null, 2));
 }
 
+function keyValueFlags(flags: Record<string, string[]>): { keys: string[]; values: string[] } {
+  const keys = flags["--key"] ?? [];
+  const values = flags["--value"] ?? [];
+  if (keys.length === 0) return { keys: [], values: [] };
+  if (values.length !== keys.length) {
+    console.error("Every --key needs a matching --value.");
+    process.exitCode = 2;
+    return { keys: [], values: [] };
+  }
+  return { keys, values };
+}
+
+async function cmdMetadataSet(name?: string, rest?: string[]): Promise<void> {
+  const ctx = await requireNamedAsset(name, "Usage: besk metadata set <name> --key k --value v [--key k2 --value v2 ...]");
+  if (!ctx) return;
+  const { flags } = parseFlags(rest ?? []);
+  const { keys, values } = keyValueFlags(flags);
+  if (keys.length === 0) return;
+  const cid = await setAssetMetadata(ctx.s, ctx.tokenId, ctx.hit.assetID, ctx.hit.cid, patchFromPairs(keys, values));
+  console.log("Set " + keys.join(", ") + " (cid " + cid + ")");
+}
+
+async function cmdMetadataUnset(name?: string, rest?: string[]): Promise<void> {
+  const ctx = await requireNamedAsset(name, "Usage: besk metadata unset <name> --key k [--key k2 ...]");
+  if (!ctx) return;
+  const { flags } = parseFlags(rest ?? []);
+  const keys = flags["--key"] ?? [];
+  if (keys.length === 0) return;
+  const cid = await unsetAssetMetadata(ctx.s, ctx.tokenId, ctx.hit.assetID, ctx.hit.cid, keys);
+  console.log("Unset " + keys.join(", ") + " (cid " + cid + ")");
+}
+
+async function cmdCollectionMetaSet(rest: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { flags } = parseFlags(rest);
+  const { keys, values } = keyValueFlags(flags);
+  if (keys.length === 0) return;
+  const tokenId = await currentCollectionTokenId(s);
+  const cid = await setCollectionMetadata(s, tokenId, patchFromPairs(keys, values));
+  console.log("Set " + keys.join(", ") + " (cid " + cid + ")");
+}
+
+async function cmdCollectionMetaUnset(rest: string[]): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const { flags } = parseFlags(rest);
+  const keys = flags["--key"] ?? [];
+  if (keys.length === 0) return;
+  const tokenId = await currentCollectionTokenId(s);
+  const cid = await unsetCollectionMetadata(s, tokenId, keys);
+  console.log("Unset " + keys.join(", ") + " (cid " + cid + ")");
+}
+
 async function cmdMetadata(argv: string[]): Promise<void> {
   const sub = argv[0];
   if (sub === "get") return cmdMetadataGet(argv[1]);
-  console.error("Usage: besk metadata get <name>");
+  if (sub === "set") return cmdMetadataSet(argv[1], argv.slice(2));
+  if (sub === "unset") return cmdMetadataUnset(argv[1], argv.slice(2));
+  console.error("Usage: besk metadata <get|set|unset> <name> ...");
   process.exitCode = 2;
 }
 
 async function cmdCollectionMeta(argv: string[]): Promise<void> {
   const sub = argv[0];
   if (sub === "get") return cmdCollectionMetaGet();
-  console.error("Usage: besk collection-meta get");
+  if (sub === "set") return cmdCollectionMetaSet(argv.slice(1));
+  if (sub === "unset") return cmdCollectionMetaUnset(argv.slice(1));
+  console.error("Usage: besk collection-meta <get|set|unset> ...");
   process.exitCode = 2;
 }
 

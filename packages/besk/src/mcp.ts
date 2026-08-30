@@ -52,7 +52,14 @@ import {
   readImageFile,
   saveGenerated,
 } from "./helpers.ts";
-import { getAssetMetadata, getCollectionMetadata } from "./metadata.ts";
+import {
+  getAssetMetadata,
+  getCollectionMetadata,
+  setAssetMetadata,
+  unsetAssetMetadata,
+  setCollectionMetadata,
+  unsetCollectionMetadata,
+} from "./metadata.ts";
 
 export interface McpToolDef {
   name: string;
@@ -213,6 +220,46 @@ async function hGetAssetMetadata(s: Session, args: Args): Promise<unknown> {
 
 async function hGetCollectionMetadata(s: Session, args: Args): Promise<unknown> {
   return getCollectionMetadata(s, await tokenIdFor(s, args));
+}
+
+function requirePatch(args: Args): Record<string, unknown> {
+  const p = args.patch;
+  if (!p || typeof p !== "object" || Array.isArray(p)) {
+    throw new Error("patch must be an object of key→value");
+  }
+  return p as Record<string, unknown>;
+}
+
+function requireKeys(args: Args): string[] {
+  const keys = args.keys;
+  if (!Array.isArray(keys) || keys.some((k) => typeof k !== "string" || !k)) {
+    throw new Error("keys must be a non-empty array of strings");
+  }
+  return keys as string[];
+}
+
+async function hSetAssetMetadata(s: Session, args: Args): Promise<unknown> {
+  const hit = await assetFor(s, args);
+  const patch = requirePatch(args);
+  const cid = await setAssetMetadata(s, hit.tokenId, hit.assetID, hit.cid, patch);
+  return { set: Object.keys(patch), cid };
+}
+
+async function hDeleteAssetMetadata(s: Session, args: Args): Promise<unknown> {
+  const hit = await assetFor(s, args);
+  const keys = requireKeys(args);
+  const cid = await unsetAssetMetadata(s, hit.tokenId, hit.assetID, hit.cid, keys);
+  return { unset: keys, cid };
+}
+
+async function hSetCollectionMetadata(s: Session, args: Args): Promise<unknown> {
+  const cid = await setCollectionMetadata(s, await tokenIdFor(s, args), requirePatch(args));
+  return { set: Object.keys(requirePatch(args)), cid };
+}
+
+async function hDeleteCollectionMetadata(s: Session, args: Args): Promise<unknown> {
+  const cid = await unsetCollectionMetadata(s, await tokenIdFor(s, args), requireKeys(args));
+  return { unset: requireKeys(args), cid };
 }
 
 async function hAssetHistory(s: Session, args: Args): Promise<unknown> {
@@ -658,6 +705,10 @@ const TOOLS: ToolEntry[] = [
   ),
   tool("get_asset_metadata", "Return an asset's computed facts and user/agent annotations.", { ...NAME, ...COLLECTION }, ["name"], hGetAssetMetadata),
   tool("get_collection_metadata", "Return a collection's user/agent annotations.", { ...COLLECTION }, [], hGetCollectionMetadata),
+  tool("set_asset_metadata", "Merge key/value pairs into an asset's annotations (writes a new manifest version).", { ...NAME, patch: { type: "object", description: "key→value map to merge" }, ...COLLECTION }, ["name", "patch"], hSetAssetMetadata),
+  tool("delete_asset_metadata", "Remove keys from an asset's annotations (writes a new manifest version).", { ...NAME, keys: { type: "array", items: { type: "string" }, description: "keys to remove" }, ...COLLECTION }, ["name", "keys"], hDeleteAssetMetadata),
+  tool("set_collection_metadata", "Merge key/value pairs into a collection's annotations.", { patch: { type: "object", description: "key→value map to merge" }, ...COLLECTION }, ["patch"], hSetCollectionMetadata),
+  tool("delete_collection_metadata", "Remove keys from a collection's annotations.", { keys: { type: "array", items: { type: "string" }, description: "keys to remove" }, ...COLLECTION }, ["keys"], hDeleteCollectionMetadata),
   tool("provider_balance", "Show the Tripo3D credit balance for a BYOK key.", { ...KEY }, [], hBalance),
   tool(
     "cancel_generation",
