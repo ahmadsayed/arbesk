@@ -69,6 +69,37 @@ const nodeSchema = z.object({
   child_ref: childRefSchema.optional(),
 });
 
+// System-computed model facts (deterministic only — no heuristics). Every
+// field optional: a format that cannot derive a field simply omits it.
+const computedMetadataSchema = z.object({
+  format: z.enum(["glb", "gltf", "3mf"]).optional(),
+  dimensions: z
+    .object({
+      width: z.number(),
+      height: z.number(),
+      depth: z.number(),
+      unit: z.string().optional(),
+    })
+    .optional(),
+  bounds: z
+    .object({
+      min: z.array(z.number()).length(3),
+      max: z.array(z.number()).length(3),
+    })
+    .optional(),
+  center: z.array(z.number()).length(3).optional(),
+  origin: z.array(z.number()).length(3).optional(),
+  animation_clips: z.array(z.string()).optional(),
+  triangle_count: z.number().int().nonnegative().optional(),
+  vertex_count: z.number().int().nonnegative().optional(),
+  mesh_count: z.number().int().nonnegative().optional(),
+  node_count: z.number().int().nonnegative().optional(),
+  material_count: z.number().int().nonnegative().optional(),
+  texture_count: z.number().int().nonnegative().optional(),
+  rigged: z.boolean().optional(),
+  bone_count: z.number().int().nonnegative().optional(),
+});
+
 export const manifestSchema = z.object({
   version: z.union([z.string().min(1), z.number()]),
   type: z.enum(["asset", "scene", "collection", "world"]).optional(),
@@ -88,6 +119,8 @@ export const manifestSchema = z.object({
   metadata: z
     .object({
       chat: z.array(chatProvenanceEntrySchema).optional(),
+      annotations: z.record(z.unknown()).optional(),
+      computed: computedMetadataSchema.passthrough().optional(),
     })
     .optional(),
 });

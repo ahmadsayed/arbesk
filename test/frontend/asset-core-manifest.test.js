@@ -41,4 +41,19 @@ describe("asset-core manifest module", () => {
     expect(m.prev_asset_manifest_cid).toBe("bafyprev");
     expect(typeof m.timestamp).toBe("number");
   });
+
+  test("validateManifest preserves metadata.computed and metadata.annotations", () => {
+    const m = {
+      version: 1,
+      metadata: {
+        computed: { format: "glb", triangle_count: 10 },
+        annotations: { character_name: "Knight", tags: ["hero"] },
+      },
+    };
+    const r = validateManifest(m);
+    expect(r.valid).toBe(true);
+    expect(r.data.metadata.computed.format).toBe("glb");
+    expect(r.data.metadata.computed.triangle_count).toBe(10);
+    expect(r.data.metadata.annotations.character_name).toBe("Knight");
+  });
 });
