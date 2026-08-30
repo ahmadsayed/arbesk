@@ -27,7 +27,7 @@ export function createCdpServerSigner(config: CdpServerSignerConfig): Signer {
   const getOperation =
     config.getOperation ??
     (async (userOpHash: string) => {
-      const op = (await cdp.evm.getUserOperation({ userOpHash } as any)) as any;
+      const op = (await cdp.evm.getUserOperation({ smartAccount: address, userOpHash } as any)) as any;
       return { status: String(op?.status ?? ""), transactionHash: op?.transactionHash };
     });
 
