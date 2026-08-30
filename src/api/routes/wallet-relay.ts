@@ -86,6 +86,40 @@ async function executeRelayOp(
   return { error: { status: 400, code: "UNKNOWN_OP", message: "Unknown relay op: " + op } };
 }
 
+/**
+ * Resolve the CDP end-user id for a relay op, logging enough detail to
+ * diagnose "Smart account not found for this end user" failures: whether the
+ * userId came from the session or an address scan, and which smart-account
+ * list the address appeared in.
+ */
+async function resolveRelayUserId(cdp: any, record: any): Promise<string | null> {
+  const userId = record.userId ?? null;
+  if (userId) {
+    console.log("[RELAY] session userId=" + userId + " address=" + record.address);
+    return userId;
+  }
+  const u: {
+    userId?: string;
+    evmSmartAccounts?: string[];
+    evmSmartAccountObjects?: { address?: string }[];
+  } | null = await findEndUserByAddress(cdp, record.address);
+  if (!u) {
+    console.log("[RELAY] address-scan found NO end-user for address=" + record.address);
+    return null;
+  }
+  const sa = u.evmSmartAccounts ?? [];
+  const sao = (u.evmSmartAccountObjects ?? []).map((o) => o.address ?? "");
+  const addr = record.address.toLowerCase();
+  console.log(
+    "[RELAY] address-scan userId=" + u.userId + " address=" + record.address +
+    " | in evmSmartAccounts=" + sa.some((a) => a.toLowerCase() === addr) +
+    " | in evmSmartAccountObjects=" + sao.some((a) => a.toLowerCase() === addr) +
+    " | evmSmartAccounts=[" + sa.join(", ") + "]" +
+    " | evmSmartAccountObjects=[" + sao.join(", ") + "]"
+  );
+  return u.userId ?? null;
+}
+
 export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
   const getCdp = deps.getCdpClientFn ?? getCdpClient;
   const router = Router();
@@ -125,11 +159,7 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
         return sendError(res, 503, "CDP_NOT_CONFIGURED", "CDP server API key not configured");
       }
 
-      let userId = record.userId ?? null;
-      if (!userId) {
-        const u = await findEndUserByAddress(cdp, record.address);
-        userId = u?.userId ?? null;
-      }
+      const userId = await resolveRelayUserId(cdp, record);
       if (!userId) {
         return sendError(
           res,
@@ -138,6 +168,8 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
           "No delegated wallet for this session. Log in via the browser to grant a delegation.",
         );
       }
+
+      console.log("[RELAY] sending op=" + op + " userId=" + userId + " address=" + record.address + " chain=" + cid);
 
       const signer = createCdpServerSigner({
         cdp,
