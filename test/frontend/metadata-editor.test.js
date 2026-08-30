@@ -1,7 +1,6 @@
 /**
  * @jest-environment jsdom
  */
-import { jest } from "@jest/globals";
 
 const { getPendingAnnotations, setPendingAnnotations, clearPendingAnnotations } =
   await import("../../frontend/src/js/services/asset-save/annotations.js");

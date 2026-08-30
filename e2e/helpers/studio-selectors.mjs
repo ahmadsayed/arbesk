@@ -108,6 +108,10 @@ export const SELECTORS = {
   postCommentBtn: "#postCommentBtn",
   commentsCount: "#commentsCount",
   commentsEmpty: "#commentsEmpty",
+  // Inspector metadata section (computed facts + editable annotations)
+  metadataSection: "#metadataSection",
+  metadataAddBtn: "#metadataAddBtn",
+  metadataAnnotationsList: "#metadataAnnotationsList",
   // Library / collection browser
   libraryGate: "#libraryGate",
   libraryMain: "#libraryMain",
@@ -134,6 +138,8 @@ export const SELECTORS = {
   libraryDetails: "#libraryDetails",
   libraryDetailsEmpty: "#libraryDetailsEmpty",
   libraryDetailsTitle: "#libraryDetailsTitle",
+  libraryDetailsMetadata: "#libraryDetailsMetadata",
+  libraryDetailsEditMetadataBtn: "#libraryDetailsEditMetadataBtn",
   contextMenu: ".context-menu",
   contextMenuItem: ".context-menu-item",
 };

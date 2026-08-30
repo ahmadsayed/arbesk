@@ -23,5 +23,3 @@ export type {
   AssetRefLike,
 } from "./facade.ts";
 export type { CollectionSummary, AssetSummary } from "./catalog/index.ts";
-export { computeModelStats } from "./formats/gltf/model-stats.ts";
-export type { ComputedMetadata, ComputedDimensions } from "./formats/gltf/model-stats.ts";

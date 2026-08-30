@@ -1,7 +1,6 @@
 /**
  * @jest-environment jsdom
  */
-import { jest } from "@jest/globals";
 
 const { computeAssetStats } = await import(
   "../../frontend/src/js/services/asset-save/metadata-extract.js"

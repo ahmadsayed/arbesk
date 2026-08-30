@@ -67,6 +67,8 @@ export async function setAssetMetadata(
   const m = (await getManifest(cid)) as Record<string, any>;
   setAnnotations(m, patch);
   m.prev_asset_manifest_cid = cid;
+  m.version = (m.version || 0) + 1;
+  m.timestamp = Date.now();
   const newCid = await writeManifest(m);
   await updateCollection(session, tokenId, (draft: Record<string, any>) => {
     draft.assets[assetID] = newCid;
@@ -85,6 +87,8 @@ export async function unsetAssetMetadata(
   const m = (await getManifest(cid)) as Record<string, any>;
   unsetAnnotations(m, keys);
   m.prev_asset_manifest_cid = cid;
+  m.version = (m.version || 0) + 1;
+  m.timestamp = Date.now();
   const newCid = await writeManifest(m);
   await updateCollection(session, tokenId, (draft: Record<string, any>) => {
     draft.assets[assetID] = newCid;
