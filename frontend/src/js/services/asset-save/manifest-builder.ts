@@ -8,6 +8,7 @@
  */
 
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
+import { computeAssetStats } from "./metadata-extract.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 import { snapshotCommentsArchive } from "../api.ts";
 import { getTokenURI } from "../token.ts";
@@ -840,6 +841,14 @@ export async function prepareManifestForWrite(assetName: string) {
     log(
       `Save: decomposed ${decomposedCount} glTF node(s) to composite format`
     );
+  }
+
+  // Recompute deterministic model facts (metadata.computed) from the root
+  // source. Best-effort: a failure must never block the save.
+  const computedStats = await computeAssetStats(manifest);
+  if (computedStats) {
+    manifest.metadata ||= {};
+    manifest.metadata.computed = computedStats;
   }
 
   // Finalize version bump + version-scoped chat provenance.
