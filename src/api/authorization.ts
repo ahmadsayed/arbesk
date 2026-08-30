@@ -112,4 +112,3 @@ const authz = createAuthz({
 });
 
 export const { checkAssetAccess, authorizeAssetAccess, getTokenUri } = authz;
-export type { AssetAccessOptions, AssetAccessResult } from "@arbesk/authz/types.js";

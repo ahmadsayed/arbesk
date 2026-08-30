@@ -135,7 +135,7 @@ function attachMetadata(
   state._nonChromeMeshCache = null;
 }
 
-export type ChildRefResolutionPlan =
+type ChildRefResolutionPlan =
   | { kind: "invalid" }
   | {
       kind: "same-collection";

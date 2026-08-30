@@ -7,7 +7,7 @@
 import { createStore } from "../state/create-store.ts";
 import { EVENTS } from "../events/bus.ts";
 
-export interface AssetStoreState {
+interface AssetStoreState {
   activeAssetManifestCid: string | null;
   activeAssetTokenId: string | null;
   activeAssetName: string | null;

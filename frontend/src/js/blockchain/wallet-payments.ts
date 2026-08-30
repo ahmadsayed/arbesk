@@ -424,7 +424,6 @@ async function payWithUSDC(nodeId: string, prompt: string, tier: number) {
 
 export {
   payForGenerationWithUSDC,
-  payWithUSDC,
   recordGeneration,
   isFreeTierContract,
 };

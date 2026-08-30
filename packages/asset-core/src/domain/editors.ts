@@ -134,7 +134,7 @@ export function verifyProof(
 /**
  * @returns localStorage key
  */
-export function editorListKey(tag: string): string {
+function editorListKey(tag: string): string {
   return EDITOR_LIST_PREFIX + tag;
 }
 
@@ -210,7 +210,7 @@ export async function getEditorSetVersion(tag: string): Promise<number> {
 // ─── Add/remove commands ────────────────────────────────────────────────────
 
 /** Role assigned by addEditorCommand (matches CollaboratorRole.Editor in services/team.ts). */
-export const EDITOR_ROLE_EDITOR = 2;
+const EDITOR_ROLE_EDITOR = 2;
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 

@@ -14,8 +14,7 @@ import { sanitizeFileName } from "../../utils/uri.ts";
 import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 import { unzipBytes, strFromU8 } from "./zip.ts";
 
-export const COMPOSITE_3MF_FORMAT = "composite-3mf";
-export const COMPOSITE_3MF_PATH = "composite.3mf.json";
+const COMPOSITE_3MF_FORMAT = "composite-3mf";
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const ROOT_RELS_PATH = "_rels/.rels";

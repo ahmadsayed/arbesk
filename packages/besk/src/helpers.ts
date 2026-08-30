@@ -32,7 +32,7 @@ export async function currentCollectionTokenId(s: Session): Promise<string> {
   return def.tokenId;
 }
 
-export const IMAGE_MIME: Record<string, string> = {
+const IMAGE_MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",

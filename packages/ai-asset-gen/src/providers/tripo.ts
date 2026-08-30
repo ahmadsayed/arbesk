@@ -1,20 +1,20 @@
 // Tripo3D v3 REST API (global region; China region is openapi.tripo3d.com).
 // Tripo retires the v2 API on 2026-11-01 — do not revert to /v2/openapi.
-export const TRIPO_API_BASE = "https://openapi.tripo3d.ai/v3";
+const TRIPO_API_BASE = "https://openapi.tripo3d.ai/v3";
 export const TRIPO_MODEL_VERSION = process.env.TRIPO_3D_MODEL || "v3.1-20260211";
 // The rig endpoint has its own model line — its default is a retired version
 // (rejected with code 1004, verified 2026-08-02). Allowed: v1.0-20240301,
 // v2.5-20260210.
-export const TRIPO_RIG_MODEL = process.env.TRIPO_3D_RIG_MODEL || "v2.5-20260210";
+const TRIPO_RIG_MODEL = process.env.TRIPO_3D_RIG_MODEL || "v2.5-20260210";
 // Biped (humanoid) rig line. v1.0-20240301 is the docs-recommended humanoid
 // rig (90+ biped presets) but was rejected with code 1004 on 2026-08-02 —
 // rigModelTask tries it first for bipeds and falls back to TRIPO_RIG_MODEL,
 // so the better rig kicks in automatically when Tripo re-enables it.
-export const TRIPO_RIG_BIPED_MODEL =
+const TRIPO_RIG_BIPED_MODEL =
   process.env.TRIPO_3D_RIG_BIPED_MODEL || "v1.0-20240301";
 
 /** Valid Tripo texture_quality levels (generation ≥ v3.0 and models/texture). */
-export const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
+const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
 
 /**
  * Upstream timeout for calls that make Tripo ingest an uploaded model
@@ -490,6 +490,34 @@ export async function rigCheckTask(fileToken: string, apiKey: string): Promise<s
 }
 
 /**
+ * POST /animations/rig with a single model; returns the task_id.
+ */
+async function startRigTask(
+  fileToken: string,
+  rigType: string,
+  model: string,
+  apiKey: string,
+): Promise<string> {
+  const data = await tripoFetch("animations/rig", apiKey, "POST", {
+    input: fileToken,
+    rig_type: rigType,
+    spec: "tripo",
+    model,
+  }, TRIPO_INGEST_TIMEOUT_MS);
+  if (typeof data.task_id !== "string") {
+    throw new TripoApiError("Tripo did not return a task ID", 0, 502);
+  }
+  return data.task_id;
+}
+
+/** Guard: throw a 400 TripoApiError when a required string arg is missing. */
+function requireString(value: unknown, name: string): void {
+  if (!value || typeof value !== "string") {
+    throw new TripoApiError(`${name} is required`, 0, 400);
+  }
+}
+
+/**
  * Create a rig task: attach a skeleton to a model.
  * Bipeds try the humanoid rig line (TRIPO_RIG_BIPED_MODEL) first and fall
  * back to the generic line (TRIPO_RIG_MODEL) when Tripo rejects it (code
@@ -510,30 +538,18 @@ export async function rigModelTask(
   apiKey: string,
   options: RigModelOptions = {},
 ): Promise<{ taskId: string; model: string }> {
-  if (!fileToken || typeof fileToken !== "string") {
-    throw new TripoApiError("fileToken is required", 0, 400);
-  }
-  if (!rigType || typeof rigType !== "string") {
-    throw new TripoApiError("rigType is required", 0, 400);
-  }
-  if (!apiKey || typeof apiKey !== "string") {
-    throw new TripoApiError("apiKey is required", 0, 400);
-  }
+  requireString(fileToken, "fileToken");
+  requireString(rigType, "rigType");
+  requireString(apiKey, "apiKey");
   // Explicit model override — skip auto-select and fallback entirely.
   if (options.model) {
     console.log(
       `[GEN] Tripo rigModelTask input=${fileToken} rig_type=${rigType} model=${options.model} (explicit)`,
     );
-    const data = await tripoFetch("animations/rig", apiKey, "POST", {
-      input: fileToken,
-      rig_type: rigType,
-      spec: "tripo",
+    return {
+      taskId: await startRigTask(fileToken, rigType, options.model, apiKey),
       model: options.model,
-    }, TRIPO_INGEST_TIMEOUT_MS);
-    if (typeof data.task_id !== "string") {
-      throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-    }
-    return { taskId: data.task_id, model: options.model };
+    };
   }
   const preferred = rigType === "biped" ? TRIPO_RIG_BIPED_MODEL : TRIPO_RIG_MODEL;
   const candidates =
@@ -544,16 +560,7 @@ export async function rigModelTask(
       console.log(
         `[GEN] Tripo rigModelTask input=${fileToken} rig_type=${rigType} model=${model}`,
       );
-      const data = await tripoFetch("animations/rig", apiKey, "POST", {
-        input: fileToken,
-        rig_type: rigType,
-        spec: "tripo",
-        model,
-      }, TRIPO_INGEST_TIMEOUT_MS);
-      if (typeof data.task_id !== "string") {
-        throw new TripoApiError("Tripo did not return a task ID", 0, 502);
-      }
-      return { taskId: data.task_id, model };
+      return { taskId: await startRigTask(fileToken, rigType, model, apiKey), model };
     } catch (e) {
       const err = e as TripoApiError;
       // 1004 = model version rejected/retired — try the next candidate.

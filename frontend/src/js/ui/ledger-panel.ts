@@ -30,7 +30,7 @@ const ACTIVITY_CONFIG = {
   LOAD: { label: "Load", icon: "→" },
 };
 
-export interface LedgerPanelState {
+interface LedgerPanelState {
   /** extracted chain entries, most recent first */
   activities: any[];
   /** opType filter bound to #ledgerFilter ("" = all) */

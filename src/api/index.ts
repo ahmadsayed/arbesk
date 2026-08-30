@@ -30,7 +30,7 @@ import cliAuthRoutes from "./routes/cli-auth.ts";
 import devConsoleRoutes from "./routes/dev-console.ts";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
-export interface ApiDeps {
+interface ApiDeps {
   storage: StorageAdapter;
   core: ArbeskCore;
 }

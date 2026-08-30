@@ -39,7 +39,7 @@ export function makeChainReadPort(
   };
 }
 
-export function resolveContract(chainId: number | null, contractAddressOverride?: string) {
+function resolveContract(chainId: number | null, contractAddressOverride?: string) {
   const cid = chainId ?? DEFAULT_CHAIN_ID;
   const contractAddress =
     contractAddressOverride ?? getContractAddress(cid) ?? process.env.CONTRACT_ADDRESS;

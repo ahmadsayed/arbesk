@@ -10,10 +10,10 @@
  * the bytes that were hashed at upload time.
  */
 
-export const DB_NAME = "arbesk-content-cache";
-export const STORE_NAME = "payloads";
-export const DB_VERSION = 1;
-export const MAX_CACHE_BYTES = 500 * 1024 * 1024; // 500 MB
+const DB_NAME = "arbesk-content-cache";
+const STORE_NAME = "payloads";
+const DB_VERSION = 1;
+const MAX_CACHE_BYTES = 500 * 1024 * 1024; // 500 MB
 export const BIG_CONTENT_THRESHOLD_BYTES = 64 * 1024; // 64 KB
 
 // IndexedDB types/globals are referenced structurally (not via the DOM lib)
@@ -35,7 +35,7 @@ function getIndexedDB(): { open(name: string, version: number): any } | null {
  * Payload record shape stored in memory and IndexedDB:
  * { hash, cid, compressed, bytes, bytesCount, storedAt }
  */
-export interface CachedPayloadRecord {
+interface CachedPayloadRecord {
   hash: string;
   cid: string;
   compressed: boolean;

@@ -47,6 +47,9 @@
     "chai",
     "ethers",
     "hardhat",
+    "istanbul-lib-coverage",
+    "istanbul-lib-report",
+    "istanbul-reports",
     "postcss",
     "prettier",
     "pug",
@@ -56,5 +59,43 @@
     "v8-to-istanbul",
     "viem",
     "workerpool"
+  ],
+  "ignoreExports": [
+    {
+      "file": "packages/asset-core/src/domain/editors.ts",
+      "exports": ["EditorEntry", "MAX_EDITORS_PER_TOKEN", "computeRoot", "getProof", "makeLeaf"]
+    },
+    {
+      "file": "packages/wallet/src/merkle.ts",
+      "exports": ["EditorEntry", "MAX_EDITORS_PER_TOKEN", "computeRoot", "getProof", "makeLeaf"]
+    },
+    {
+      "file": "frontend/src/js/state/library-state.ts",
+      "exports": ["_resetForTesting"]
+    },
+    {
+      "file": "frontend/src/js/state/wallet-state.ts",
+      "exports": ["_resetForTesting"]
+    },
+    {
+      "file": "packages/asset-core/src/domain/asset-store.ts",
+      "exports": ["_resetForTesting"]
+    },
+    {
+      "file": "packages/asset-core/src/formats/gltf/decomposer.ts",
+      "exports": ["decompose"]
+    },
+    {
+      "file": "packages/asset-core/src/formats/gltf/glb-parser.ts",
+      "exports": ["decompose"]
+    },
+    {
+      "file": "packages/asset-core/src/catalog/index.ts",
+      "exports": ["getCollectionAssets", "listCollections", "resolveAssetByName", "resolveCollectionByName"]
+    },
+    {
+      "file": "packages/besk/src/catalog.ts",
+      "exports": ["getCollectionAssets", "listCollections", "resolveAssetByName", "resolveCollectionByName"]
+    }
   ]
 }

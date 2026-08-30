@@ -2,7 +2,7 @@ import { sendError } from "./errors.ts";
 import type { RequestHandler } from "express";
 import type { ZodError, ZodSchema } from "zod";
 
-export interface ValidationIssue {
+interface ValidationIssue {
   path: (string | number)[];
   message: string;
 }

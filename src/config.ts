@@ -50,7 +50,7 @@ export const NETWORK_CONFIGS: Record<number, NetworkConfig> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function getNetworkConfig(chainId: any): NetworkConfig | null {
+function getNetworkConfig(chainId: any): NetworkConfig | null {
   return NETWORK_CONFIGS[Number(chainId)] || null;
 }
 
@@ -89,7 +89,7 @@ export function getConfiguredContracts(chainId: any): string[] {
   return seen;
 }
 
-export function getRpcUrl(chainId: any): string {
+function getRpcUrl(chainId: any): string {
   const envUrl = process.env.API_URL || process.env.HARDHAT_RPC_URL;
   if (chainId) {
     const cfg = getNetworkConfig(chainId);
@@ -139,7 +139,6 @@ export function getViemPublicClient(chainId: any): PublicClient | null {
 export const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 export const HARDHAT_RPC_URL =
   process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545";
-export const API_URL = process.env.API_URL || HARDHAT_RPC_URL;
 export const NOSTR_RELAY_URL =
   process.env.NOSTR_RELAY_URL || "ws://127.0.0.1:7777";
 export const NOSTR_SERVICE_PRIVATE_KEY = process.env.NOSTR_SERVICE_PRIVATE_KEY;

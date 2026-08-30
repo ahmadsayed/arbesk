@@ -18,8 +18,6 @@ import type {
 import { createMockProvider } from "./providers/mock-provider.ts";
 import { createTripoProvider } from "./providers/tripo-provider.ts";
 
-export { UnsupportedCapabilityError, requireCapability } from "./errors.ts";
-
 export interface GenerationProvider {
   readonly id: string;
   /** Declared capabilities — the single source of truth. */

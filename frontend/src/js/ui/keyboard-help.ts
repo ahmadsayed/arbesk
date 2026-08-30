@@ -59,7 +59,7 @@ function buildHtml(): string {
   return `<div style="margin-top:calc(-1 * var(--size-2))">${sections}</div>`;
 }
 
-export function showKeyboardHelp(): Promise<void> {
+function showKeyboardHelp(): Promise<void> {
   return showInfoDialog("Keyboard Shortcuts", buildHtml());
 }
 

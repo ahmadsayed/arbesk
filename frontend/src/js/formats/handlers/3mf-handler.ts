@@ -17,11 +17,12 @@ import type {
   FormatSaveContext,
 } from "../registry.ts";
 
-// Canonical composite-3MF markers. Mirror COMPOSITE_3MF_FORMAT and
-// COMPOSITE_3MF_PATH from @arbesk/asset-core/formats/3mf/decomposer.js, which is
-// imported lazily (and only where a real decomposition uploads parts) so that
-// read-side paths — load, and the already-composite normalize below — never
-// pull the IPFS write chain into the module graph.
+// Canonical composite-3MF markers. COMPOSITE_3MF_FORMAT mirrors
+// @arbesk/asset-core/formats/3mf/decomposer.js, which is imported lazily
+// (and only where a real decomposition uploads parts) so that read-side
+// paths — load, and the already-composite normalize below — never pull the
+// IPFS write chain into the module graph. COMPOSITE_3MF_PATH is the
+// manifest `source.path` convention for composite 3MF nodes (frontend-local).
 const COMPOSITE_3MF_FORMAT = "composite-3mf";
 const COMPOSITE_3MF_PATH = "composite.3mf.json";
 

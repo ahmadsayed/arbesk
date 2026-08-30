@@ -8,8 +8,8 @@
  * wallet-state store — importing wallet-core here would create an import
  * cycle (wallet-core imports this module's consumers).
  */
-import { createPublicClient, createWalletClient, custom, http } from "viem";
-import type { PublicClient, WalletClient } from "viem";
+import { createPublicClient, http } from "viem";
+import type { PublicClient } from "viem";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { getRpcUrl } from "./network-config.ts";
 import { walletState } from "../state/wallet-state.ts";
@@ -37,12 +37,4 @@ export function getReadClient(chainId?: number): PublicClient {
     readClients.set(id, c);
   }
   return c;
-}
-
-/**
- * Wallet client over the injected EIP-1193 provider (signing + sending).
- * @param provider EIP-1193 provider
- */
-export function getWalletClient(provider: any): WalletClient {
-  return createWalletClient({ transport: custom(provider) });
 }

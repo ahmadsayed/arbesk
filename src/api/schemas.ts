@@ -13,11 +13,11 @@ export const ethereumAddressSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
 
-export const tokenIdSchema = z
+const tokenIdSchema = z
   .union([z.string().min(1), z.number().int().nonnegative()])
   .transform((v) => String(v));
 
-export const chainIdSchema = z
+const chainIdSchema = z
   .union([z.string(), z.number().int().nonnegative()])
   .transform((v) => (typeof v === "string" ? Number(v) : v))
   .refine((v) => Number.isFinite(v) && v > 0, {
@@ -26,7 +26,7 @@ export const chainIdSchema = z
 
 // ─── Route Body Schemas ─────────────────────────────────────────────────────
 
-export const siweProofSchema = z.object({
+const siweProofSchema = z.object({
   kind: z.literal("siwe"),
   message: z.string().min(1, "message is required"),
   signature: z.string().min(1, "signature is required"),
@@ -36,7 +36,7 @@ export const siweProofSchema = z.object({
 // Design seam for future OAuth/OIDC sign-in — accepted by the schema so the
 // client can target the proof envelope, but not yet verified (see
 // proof-verify.ts#verifyOidc).
-export const oidcProofSchema = z.object({
+const oidcProofSchema = z.object({
   kind: z.literal("oidc"),
   provider: z.string().min(1, "provider is required"),
   idToken: z.string().min(1, "idToken is required"),
@@ -52,7 +52,7 @@ export const createSessionSchema = z.object({
 const MAX_IMAGE_BASE64_LENGTH = 14 * 1024 * 1024;
 
 // Biped retarget presets accepted by Tripo POST /animations/retarget.
-export const ANIMATION_PRESETS = [
+const ANIMATION_PRESETS = [
   "preset:idle",
   "preset:walk",
   "preset:run",
@@ -296,13 +296,3 @@ export const gcSchema = z.object({
   maxUnpin: z.number().int().positive().optional(),
   chainId: chainIdSchema.optional(),
 });
-
-// ─── Manifest Shape Schemas ─────────────────────────────────────────────────
-
-// The canonical manifest schema + runtime validator live in asset-core
-// (`packages/asset-core/src/manifest/`); re-exported here so existing
-// backend import sites stay stable. Wire format unchanged.
-export {
-  manifestSchema,
-  validateManifest,
-} from "@arbesk/asset-core/manifest/utils.js";

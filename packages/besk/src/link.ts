@@ -28,7 +28,7 @@ export interface LinkChildOptions {
 }
 
 /** Column-major 4x4: uniform scale on the diagonal, translation in the last column. */
-export function composeTransform(
+function composeTransform(
   position?: { x: number; y: number; z: number },
   scale?: number,
 ): number[] {

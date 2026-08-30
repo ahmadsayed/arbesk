@@ -4,7 +4,6 @@
  * Builds block explorer URLs for EVM networks.
  */
 
-import { switchNetwork } from "./wallet.ts";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 
 const EXPLORER_URLS: Record<number, string | null> = {
@@ -17,7 +16,7 @@ const EXPLORER_URLS: Record<number, string | null> = {
 /**
  * Get the explorer base URL for a chain ID.
  */
-export function getExplorerBaseUrl(chainId: number | string): string | null {
+function getExplorerBaseUrl(chainId: number | string): string | null {
   return EXPLORER_URLS[Number(chainId)] || null;
 }
 
@@ -57,5 +56,3 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 }
-
-export { switchNetwork };

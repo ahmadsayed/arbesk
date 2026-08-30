@@ -19,7 +19,7 @@ import { walletState } from "../state/wallet-state.ts";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { Alpine, registerAlpineComponent } from "./alpine.ts";
 
-export interface HeaderWalletState {
+interface HeaderWalletState {
   /** full wallet address, "" when disconnected */
   address: string;
   walletSource: "cdp" | "walletconnect" | "injected" | null;

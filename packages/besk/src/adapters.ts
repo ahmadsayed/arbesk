@@ -125,7 +125,7 @@ async function toBytes(data: unknown): Promise<Uint8Array> {
 }
 
 /** Mint one upload credential from the backend with the CLI session token. */
-export async function mintUploadCredential(): Promise<UploadCredential> {
+async function mintUploadCredential(): Promise<UploadCredential> {
   const s = loadSession();
   if (!s) throw new Error("Not logged in. Run `besk login <email>`.");
   debug("minting IPFS upload credential");

@@ -35,7 +35,7 @@ import {
 
 const { hexToBytes } = utils;
 
-export interface ChatSession {
+interface ChatSession {
   address: string;
   clientWs: WebSocket;
   allowMessage: () => boolean;

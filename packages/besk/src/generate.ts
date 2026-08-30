@@ -42,11 +42,6 @@ export interface PollOptions {
   onProgress?: (p: { status: string; progress?: number; stage?: string; taskId?: string }) => void;
 }
 
-export interface PollResult {
-  taskId?: string;
-  [key: string]: unknown;
-}
-
 const DEFAULT_INTERVAL_MS = 3000;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 

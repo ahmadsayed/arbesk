@@ -202,7 +202,6 @@ export {
   selectAllNodes,
   selectSubMesh,
   selectNodeById,
-  clearHighlight,
   deselectAll,
   deselectNodes,
 };

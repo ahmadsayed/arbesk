@@ -34,7 +34,7 @@ export interface AttachedImage {
 /**
  * Sort a copy of the images into canonical view order.
  */
-export function sortByCanonicalView(images: AttachedImage[]): AttachedImage[] {
+function sortByCanonicalView(images: AttachedImage[]): AttachedImage[] {
   return [...images].sort(
     (a, b) => VIEW_ORDER.indexOf(a.view) - VIEW_ORDER.indexOf(b.view)
   );

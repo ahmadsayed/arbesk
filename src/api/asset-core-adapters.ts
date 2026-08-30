@@ -36,7 +36,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * getJSON/getBytes auto-gunzip (decomposed components are stored gzipped),
  * getRawBytes returns the exact stored bytes.
  */
-export function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort {
+function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort {
   return {
     async getJSON(cid) {
       const raw = await storage.catBytes(cid);
@@ -60,7 +60,7 @@ export function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort
  * ignored (the backend writes through its own storage adapter, not the
  * browser's signed-URL flow).
  */
-export function createBackendIpfsWritePort(storage: StorageAdapter): IpfsWritePort {
+function createBackendIpfsWritePort(storage: StorageAdapter): IpfsWritePort {
   const write: IpfsWritePort["write"] = async (
     data,
     filename,

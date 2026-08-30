@@ -21,7 +21,7 @@ export interface NetworkConfig {
   blockExplorer: string | null;
 }
 
-export const NETWORK_CONFIGS: Record<number, NetworkConfig> = {
+const NETWORK_CONFIGS: Record<number, NetworkConfig> = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {
     name: "Hardhat Local",
     chainId: CHAIN_IDS.HARDHAT_LOCAL,

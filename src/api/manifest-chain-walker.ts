@@ -93,7 +93,7 @@ export async function walkManifestChain(
   return { visited, assetUnique, shared, allReachable, errors };
 }
 
-export interface WalkContext {
+interface WalkContext {
   recurseIntoSources: boolean;
   recurseIntoCollectionAssets: boolean;
   maxDepth: number;

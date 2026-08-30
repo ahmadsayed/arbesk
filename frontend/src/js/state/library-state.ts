@@ -43,7 +43,7 @@ export interface LibraryAssetItem {
 /** Any card shown in the library grid. */
 export type LibraryItem = LibraryCollectionItem | LibraryAssetItem;
 
-export interface LibraryState {
+interface LibraryState {
   collections: LibraryCollectionItem[];
   assets: LibraryAssetItem[];
   currentCollectionTokenId: string | number | null;

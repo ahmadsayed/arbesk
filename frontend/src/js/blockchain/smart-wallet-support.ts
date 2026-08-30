@@ -10,7 +10,7 @@ import { CHAIN_IDS } from "../../../../constants/chains.js";
 /** Chain IDs where CDP ERC-4337 smart wallets are supported.
  *  Currently Base Sepolia only.
  */
-export const SMART_WALLET_SUPPORTED_CHAIN_IDS = [CHAIN_IDS.BASE_TESTNET];
+const SMART_WALLET_SUPPORTED_CHAIN_IDS = [CHAIN_IDS.BASE_TESTNET];
 
 /**
  * Check whether the given chain supports CDP smart wallets.

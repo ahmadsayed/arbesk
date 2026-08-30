@@ -1,7 +1,7 @@
 import { createStore } from "@arbesk/asset-core/state/create-store.js";
 import { EVENTS } from "@arbesk/asset-core/events/bus.js";
 
-export interface UiState {
+interface UiState {
   selectedNodeId: string | null;
   nestingDepth: number;
 }

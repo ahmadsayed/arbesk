@@ -69,7 +69,7 @@ function installSignedUrlDiagnostics(): void {
   globalThis.fetch = wrapped;
 }
 
-export interface PoolEntry {
+interface PoolEntry {
   url: string;
   mintedAt: number;
 }
@@ -78,7 +78,7 @@ export interface PoolEntry {
  * The published Pinata SDK types omit the `gateways` accessor, so we cast
  * through this local interface when performing authenticated gateway reads.
  */
-export interface PinataWithGateways {
+interface PinataWithGateways {
   gateways: {
     public: {
       get(cid: string): Promise<{ data: any; contentType: string }>;

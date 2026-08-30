@@ -1,7 +1,7 @@
 import type { FormatCodec, DecomposeResult } from "../codec.ts";
 import { compose } from "./composer.ts";
 import { decompose as decomposeExample } from "./decomposer.ts";
-import { isCompositeExample, EXAMPLE_MAGIC } from "./format.ts";
+import { isCompositeExample, EXAMPLE_MAGIC, EXAMPLE_FORMAT, EXAMPLE_EXTENSION } from "./format.ts";
 
 function toBytes(input: unknown): Uint8Array {
   if (input instanceof Uint8Array) return input;
@@ -10,8 +10,8 @@ function toBytes(input: unknown): Uint8Array {
 }
 
 export const exampleCodec: FormatCodec = {
-  format: "example",
-  extensions: [".example"],
+  format: EXAMPLE_FORMAT,
+  extensions: [EXAMPLE_EXTENSION],
 
   sniff(bytes: Uint8Array): boolean {
     if (bytes.length < EXAMPLE_MAGIC.length + 1) return false;

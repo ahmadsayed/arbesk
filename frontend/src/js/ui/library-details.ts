@@ -63,7 +63,7 @@ function disposePreview(): void {
   if (handle) void handle.dispose();
 }
 
-export function truncateAddress(addr: string): string {
+function truncateAddress(addr: string): string {
   if (!addr || addr.length <= 10) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
@@ -74,7 +74,7 @@ export function truncateAddress(addr: string): string {
  * address→email lookup (the resolve-email endpoint is email→address only,
  * need-to-know by design), so other users always render as addresses.
  */
-export function ownerDisplay(address: string): string {
+function ownerDisplay(address: string): string {
   const w = walletState.get();
   if (
     w.walletSource === "cdp" &&

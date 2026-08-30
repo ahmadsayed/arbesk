@@ -192,7 +192,6 @@ async function isIpfsCidReachable(
 // getManifestChain moved into asset-core (it consumes the IpfsReadPort);
 // re-exported here so existing consumers of this module keep working.
 export { getManifestChain } from "@arbesk/asset-core/manifest/chain.js";
-export type { ManifestChainEntry } from "@arbesk/asset-core/manifest/chain.js";
 
 export {
   gatewayBase,

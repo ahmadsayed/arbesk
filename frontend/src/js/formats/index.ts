@@ -15,10 +15,6 @@ registerFormatHandler(glbHandler);
 registerFormatHandler(threeMfHandler);
 
 export {
-  registerFormatHandler,
-  getFormatHandler,
-  detectAssetFormat,
   resolveFormatHandler,
   listFormatHandlers,
-  _resetFormatRegistry,
 } from "./registry.ts";

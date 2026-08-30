@@ -54,7 +54,7 @@ const EDITOR_LIST_URI_ABI = [
   },
 ] as const;
 
-export interface IndexerState {
+interface IndexerState {
   lastScannedBlock: number;
   /** tokenId (decimal string) -> owner address (lowercase) */
   ownership: Record<string, string>;

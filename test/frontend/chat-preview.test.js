@@ -135,8 +135,10 @@ beforeAll(async () => {
   URL.createObjectURL = jest.fn(() => "blob:fake-preview");
   URL.revokeObjectURL = jest.fn();
 
+  // index registers the built-in handlers; registerFormatHandler lives in registry
+  await import("../../frontend/src/js/formats/index.js");
   ({ registerFormatHandler } = await import(
-    "../../frontend/src/js/formats/index.js"
+    "../../frontend/src/js/formats/registry.js"
   ));
   registerFormatHandler({
     format: "testfmt",

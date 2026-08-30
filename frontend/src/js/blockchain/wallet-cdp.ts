@@ -10,15 +10,7 @@
 import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut, createDelegation } from "@coinbase/cdp-core";
 import { log, error, warn } from "../utils/log.ts";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
-import {
-  isSmartWalletSupported,
-  SMART_WALLET_SUPPORTED_CHAIN_IDS,
-} from "./smart-wallet-support.ts";
 import type { Signer } from "@arbesk/wallet/types.js";
-import { createPublicClient, http } from "viem";
-import type { PublicClient } from "viem";
-
-export { isSmartWalletSupported, SMART_WALLET_SUPPORTED_CHAIN_IDS };
 
 // ─── Module-level state ─────────────────────────────────────────────────────
 
@@ -37,9 +29,6 @@ let _signer: Signer | null = null;
 
 /** CDP network name for Base Sepolia */
 const CDP_NETWORK_BASE_SEPOLIA = "base-sepolia";
-
-/** Public Base Sepolia RPC endpoint (for read-only passthrough calls) */
-const BASE_SEPOLIA_RPC_URL = "https://base-sepolia-rpc.publicnode.com";
 
 /** localStorage key holding the verified CDP email, for header display across reloads */
 const CDP_EMAIL_KEY = "arbesk-cdp-email";
@@ -445,15 +434,4 @@ export function createCdpSigner(
       };
     },
   };
-}
-
-// ─── Read-only viem client for CDP ────────────────────────────────────────────
-
-/**
- * Build a read-only viem PublicClient pointed at the Base Sepolia public RPC.
- * CDP contract *reads* go through this; *writes* go through `createCdpSigner`
- * (sponsored UserOperations), never through this client.
- */
-export function createCdpReadClient(): PublicClient {
-  return createPublicClient({ transport: http(BASE_SEPOLIA_RPC_URL) });
 }

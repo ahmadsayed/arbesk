@@ -58,7 +58,7 @@ function normalizeHex(hex: string): string | null {
 
 const THEME_STORAGE_KEY = "arbesk-theme";
 
-export type ThemeName = "light" | "dark";
+type ThemeName = "light" | "dark";
 
 /**
  * Initialize theme on page load. Reads saved preference from localStorage,
@@ -92,15 +92,9 @@ function applyTheme(theme: ThemeName) {
 }
 
 /** Persist and apply a specific theme ("light" or "dark"). */
-export function setTheme(theme: ThemeName) {
+function setTheme(theme: ThemeName) {
   localStorage.setItem(THEME_STORAGE_KEY, theme);
   applyTheme(theme);
-}
-
-/** Clear saved preference and revert to system preference. */
-export function clearTheme() {
-  localStorage.removeItem(THEME_STORAGE_KEY);
-  applySystemTheme();
 }
 
 /** Toggle between light and dark. */
@@ -108,9 +102,4 @@ export function toggleTheme() {
   const current =
     document.documentElement.getAttribute("data-theme") || "light";
   setTheme(current === "dark" ? "light" : "dark");
-}
-
-/** Return the currently applied theme. */
-export function getTheme() {
-  return document.documentElement.getAttribute("data-theme") || "light";
 }

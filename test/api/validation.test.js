@@ -6,8 +6,8 @@ import {
   snapshotCommentsSchema,
   unpinSchema,
   gcSchema,
-  validateManifest,
 } from "../../src/api/schemas.ts";
+import { validateManifest } from "@arbesk/asset-core/manifest/utils.js";
 
 describe("API schemas", () => {
   describe("cidSchema", () => {

@@ -8,7 +8,7 @@
  * does not crash the entire wallet stack.
  *
  * Usage:
- *   import { getWalletConnectProvider, initWalletConnect } from './wallet-connect.ts';
+ *   import { getWalletConnectProvider } from './wallet-connect.ts';
  *   const provider = await getWalletConnectProvider();
  *   await provider.enable();
  */
@@ -79,7 +79,7 @@ async function loadEthereumProvider() {
  * Initialize the WalletConnect Ethereum provider.
  * Uses a singleton pattern - subsequent calls return the same instance.
  */
-export async function initWalletConnect(): Promise<any> {
+async function initWalletConnect(): Promise<any> {
   if (provider) return provider;
   if (initPromise) return initPromise;
 
@@ -145,25 +145,6 @@ export async function initWalletConnect(): Promise<any> {
 export async function getWalletConnectProvider(): Promise<any> {
   if (provider) return provider;
   return initWalletConnect();
-}
-
-/**
- * Connect via WalletConnect (shows QR modal).
- * @returns accounts
- */
-export async function connectWalletConnect(): Promise<string[]> {
-  const wc = await getWalletConnectProvider();
-  if (!wc) throw new Error("WalletConnect provider not available");
-
-  try {
-    await wc.enable();
-    const accounts = wc.accounts || [];
-    console.log("[WALLET-CONNECT] connected:", accounts[0]);
-    return accounts;
-  } catch (err) {
-    console.error("[WALLET-CONNECT] connection failed:", err);
-    throw err;
-  }
 }
 
 /**

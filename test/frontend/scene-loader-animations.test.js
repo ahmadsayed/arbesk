@@ -70,8 +70,10 @@ beforeAll(async () => {
     () => ({ createAnchorNode: jest.fn(() => ({ parent: null, metadata: {} })) })
   );
 
+  // index registers the built-in handlers; registerFormatHandler lives in registry
+  await import("../../frontend/src/js/formats/index.js");
   ({ registerFormatHandler } = await import(
-    "../../frontend/src/js/formats/index.js"
+    "../../frontend/src/js/formats/registry.js"
   ));
   registerFormatHandler({
     format: "testanim",

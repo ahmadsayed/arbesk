@@ -20,20 +20,20 @@
 
 import { Alpine, registerAlpineComponent } from "./alpine.ts";
 
-export interface DialogButton {
+interface DialogButton {
   text: string;
   value: string;
   className: string;
 }
 
-export interface DialogOption {
+interface DialogOption {
   value: string;
   label: string;
   checked: boolean;
   countsTowardMax: boolean;
 }
 
-export interface DialogState {
+interface DialogState {
   open: boolean;
   kind: "" | "prompt" | "confirm" | "info" | "checkbox" | "custom" | "burn";
   title: string;
@@ -52,7 +52,7 @@ export interface DialogState {
   titleId: string;
 }
 
-export interface DialogSpec {
+interface DialogSpec {
   kind: "prompt" | "confirm" | "info" | "checkbox" | "custom" | "burn";
   title: string;
   body?: string;

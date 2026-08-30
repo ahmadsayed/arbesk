@@ -5,7 +5,6 @@
  *
  * - `log(tag, ...args)` is silenced unless `globalThis.ARBESK_DEBUG === true`
  *   or `localStorage.arbesk-debug === "true"` (browser debug toggle).
- * - `warn`/`error` always emit.
  */
 
 function isDebugEnabled(): boolean {
@@ -21,12 +20,4 @@ function isDebugEnabled(): boolean {
 export function log(tag: string, ...args: unknown[]): void {
   if (!isDebugEnabled()) return;
   console.log(`[${tag}]`, ...args);
-}
-
-export function warn(tag: string, ...args: unknown[]): void {
-  console.warn(`[${tag}]`, ...args);
-}
-
-export function error(tag: string, ...args: unknown[]): void {
-  console.error(`[${tag}]`, ...args);
 }
