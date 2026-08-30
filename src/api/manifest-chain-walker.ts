@@ -104,6 +104,87 @@ interface WalkContext {
   errors: string[];
 }
 
+async function readManifest(
+  cid: string,
+  ctx: WalkContext,
+  storage: StorageAdapter,
+): Promise<any | null> {
+  try {
+    const raw = await storage.catBytes(cid);
+    const decompressed = await maybeDecompress(raw);
+    return JSON.parse(decompressed);
+  } catch (e) {
+    console.warn(`[WALK] cannot read ${cid}: ${(e as Error).message}`);
+    ctx.errors.push(`read ${cid}: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+async function processCollectionManifest(
+  manifest: any,
+  ctx: WalkContext,
+  storage: StorageAdapter,
+): Promise<void> {
+  // Collection manifests map asset IDs to asset manifest CIDs. Those asset
+  // manifests may be shared with other collections, so treat them as shared
+  // unless the caller explicitly wants full reachability (GC mode).
+  for (const assetCid of Object.values(manifest.assets || {})) {
+    if (typeof assetCid !== "string" || !assetCid) continue;
+    if (ctx.recurseIntoCollectionAssets) {
+      await walkSingleChain(assetCid, {
+        ...ctx,
+        recurseIntoCollectionAssets: false,
+      }, storage);
+    } else {
+      ctx.shared.add(assetCid);
+      ctx.allReachable.add(assetCid);
+    }
+  }
+}
+
+async function processAssetManifest(
+  manifest: any,
+  ctx: WalkContext,
+  storage: StorageAdapter,
+): Promise<void> {
+  // Asset manifest: thumbnail and comments archive are unique to this asset.
+  const thumbnailCid = manifest?.thumbnail?.cid;
+  if (thumbnailCid && typeof thumbnailCid === "string") {
+    ctx.assetUnique.add(thumbnailCid);
+    ctx.allReachable.add(thumbnailCid);
+  }
+
+  const commentsArchiveCid = manifest?.comments_archive_cid;
+  if (commentsArchiveCid && typeof commentsArchiveCid === "string") {
+    ctx.assetUnique.add(commentsArchiveCid);
+    ctx.allReachable.add(commentsArchiveCid);
+  }
+
+  // Source asset CIDs are potentially shared via dedup.
+  const nodes = getSceneNodes(manifest);
+  for (const node of nodes) {
+    if (node?.source?.cid && typeof node.source.cid === "string") {
+      ctx.shared.add(node.source.cid);
+      ctx.allReachable.add(node.source.cid);
+      if (ctx.recurseIntoSources) {
+        await collectEmbeddedIpfsCids(
+          node.source.cid,
+          ctx.allReachable,
+          ctx.errors,
+          storage,
+        );
+      }
+    }
+    if (
+      node?.source?.bundleCid &&
+      typeof node.source.bundleCid === "string"
+    ) {
+      ctx.shared.add(node.source.bundleCid);
+      ctx.allReachable.add(node.source.bundleCid);
+    }
+  }
+}
+
 async function walkSingleChain(
   startCid: string,
   ctx: WalkContext,
@@ -117,16 +198,8 @@ async function walkSingleChain(
     }
     ctx.visited.add(currentCid);
 
-    let manifest: any;
-    try {
-      const raw = await storage.catBytes(currentCid);
-      const decompressed = await maybeDecompress(raw);
-      manifest = JSON.parse(decompressed);
-    } catch (e) {
-      console.warn(`[WALK] cannot read ${currentCid}: ${(e as Error).message}`);
-      ctx.errors.push(`read ${currentCid}: ${(e as Error).message}`);
-      break;
-    }
+    const manifest = await readManifest(currentCid, ctx, storage);
+    if (!manifest) break;
 
     const validation = validateManifest(manifest);
     if (!validation.valid) {
@@ -142,58 +215,9 @@ async function walkSingleChain(
     ctx.allReachable.add(currentCid);
 
     if (isCollection) {
-      // Collection manifests map asset IDs to asset manifest CIDs. Those asset
-      // manifests may be shared with other collections, so treat them as shared
-      // unless the caller explicitly wants full reachability (GC mode).
-      for (const assetCid of Object.values(manifest.assets || {})) {
-        if (typeof assetCid !== "string" || !assetCid) continue;
-        if (ctx.recurseIntoCollectionAssets) {
-          await walkSingleChain(assetCid, {
-            ...ctx,
-            recurseIntoCollectionAssets: false,
-          }, storage);
-        } else {
-          ctx.shared.add(assetCid);
-          ctx.allReachable.add(assetCid);
-        }
-      }
+      await processCollectionManifest(manifest, ctx, storage);
     } else {
-      // Asset manifest: thumbnail and comments archive are unique to this asset.
-      const thumbnailCid = manifest?.thumbnail?.cid;
-      if (thumbnailCid && typeof thumbnailCid === "string") {
-        ctx.assetUnique.add(thumbnailCid);
-        ctx.allReachable.add(thumbnailCid);
-      }
-
-      const commentsArchiveCid = manifest?.comments_archive_cid;
-      if (commentsArchiveCid && typeof commentsArchiveCid === "string") {
-        ctx.assetUnique.add(commentsArchiveCid);
-        ctx.allReachable.add(commentsArchiveCid);
-      }
-
-      // Source asset CIDs are potentially shared via dedup.
-      const nodes = getSceneNodes(manifest);
-      for (const node of nodes) {
-        if (node?.source?.cid && typeof node.source.cid === "string") {
-          ctx.shared.add(node.source.cid);
-          ctx.allReachable.add(node.source.cid);
-          if (ctx.recurseIntoSources) {
-            await collectEmbeddedIpfsCids(
-              node.source.cid,
-              ctx.allReachable,
-              ctx.errors,
-              storage,
-            );
-          }
-        }
-        if (
-          node?.source?.bundleCid &&
-          typeof node.source.bundleCid === "string"
-        ) {
-          ctx.shared.add(node.source.bundleCid);
-          ctx.allReachable.add(node.source.bundleCid);
-        }
-      }
+      await processAssetManifest(manifest, ctx, storage);
     }
 
     currentCid = manifest.prev_asset_manifest_cid || null;

@@ -179,6 +179,86 @@ export default function ipfsRoutes(storage: StorageAdapter) {
    * attempt is attributed on-chain. Full closure requires reachability-based
    * deletion (GC semantics) and is a known mainnet follow-up.
    */
+async function findMatchingContract(
+  tokenId: string,
+  chainId: number | null,
+  sessionAddress: string,
+  proof: any,
+  startCid: string,
+  candidates: string[],
+  storage: StorageAdapter,
+): Promise<{
+  matched: { contractAddr: string; access: any } | null;
+  error?: { status: number; code: string; message: string };
+}> {
+  let matched: { contractAddr: string; access: any } | null = null;
+  let lastError: Error | null = null;
+  let sawDenied = false;
+  let sawMembershipMiss = false;
+  for (const candidate of candidates) {
+    let access;
+    try {
+      access = await checkAssetAccess(
+        tokenId,
+        chainId,
+        sessionAddress,
+        { proof, requiredRole: 2, contractAddress: candidate },
+      );
+    } catch (e) {
+      lastError = e as Error;
+      continue;
+    }
+    if (!access.allowed || access.role < 2) {
+      sawDenied = true;
+      continue;
+    }
+
+    let belongs;
+    try {
+      const tokenUri = await getTokenUri(tokenId, chainId, {
+        contractAddress: candidate,
+      });
+      const tokenUriCid = tokenUri.replace(/^ipfs:\/\//, "");
+      belongs = await cidBelongsToToken(startCid, tokenUriCid, storage);
+    } catch (e) {
+      console.error("[UNPIN] token collection unreadable:", (e as Error).message);
+      return {
+        matched: null,
+        error: { status: 502, code: "COLLECTION_UNREADABLE", message: (e as Error).message },
+      };
+    }
+    if (!belongs) {
+      sawMembershipMiss = true;
+      continue;
+    }
+    matched = { contractAddr: candidate, access };
+    break;
+  }
+
+  if (!matched) {
+    if (sawMembershipMiss) {
+      return {
+        matched: null,
+        error: { status: 400, code: "CID_NOT_IN_TOKEN", message: `CID ${startCid} is not referenced by token ${tokenId}` },
+      };
+    }
+    if (sawDenied) {
+      console.warn(
+        `[UNPIN] denied - ${sessionAddress} is not owner/editor of token ${tokenId}`,
+      );
+      return {
+        matched: null,
+        error: { status: 403, code: "FORBIDDEN", message: "Session wallet is not the token owner or an editor" },
+      };
+    }
+    return {
+      matched: null,
+      error: { status: 400, code: "INVALID_TOKEN", message: lastError?.message || "Token not found on any configured contract" },
+    };
+  }
+  return { matched };
+}
+
   router.post("/unpin", authenticate, unpinRateLimit, validateBody(unpinSchema), async (req, res) => {
     const startTime = Date.now();
     try {
@@ -219,84 +299,20 @@ export default function ipfsRoutes(storage: StorageAdapter) {
 
       // Try each candidate contract in order (free tier first, then paid):
       // the first one where on-chain ownership/editor rights AND CID
-      // membership both pass wins. A token that only exists on the paid
-      // contract misses on the free one (ownerOf reverts) and matches later.
-      let matched: {
-        contractAddr: string;
-        access: Awaited<ReturnType<typeof checkAssetAccess>>;
-      } | null = null;
-      let lastError: Error | null = null;
-      let sawDenied = false;
-      let sawMembershipMiss = false;
-      for (const candidate of candidates) {
-        let access;
-        try {
-          access = await checkAssetAccess(
-            tokenId,
-            chainId ?? null,
-            sessionAddress,
-            { proof, requiredRole: 2, contractAddress: candidate },
-          );
-        } catch (e) {
-          // Token does not exist on this contract — try the next candidate.
-          lastError = e as Error;
-          continue;
-        }
-        if (!access.allowed || access.role < 2) {
-          sawDenied = true;
-          continue;
-        }
-
-        // The CID must belong to the claimed token, otherwise an attacker
-        // could pass their own tokenId and unpin a victim's manifest chain.
-        let belongs;
-        try {
-          const tokenUri = await getTokenUri(tokenId, chainId ?? null, {
-            contractAddress: candidate,
-          });
-          const tokenUriCid = tokenUri.replace(/^ipfs:\/\//, "");
-          belongs = await cidBelongsToToken(startCid, tokenUriCid, storage);
-        } catch (e) {
-          // Fail closed: an unreadable collection manifest must not silently
-          // allow the unpin.
-          console.error("[UNPIN] token collection unreadable:", (e as Error).message);
-          return sendError(res, 502, "COLLECTION_UNREADABLE", (e as Error).message);
-        }
-        if (!belongs) {
-          sawMembershipMiss = true;
-          continue;
-        }
-        matched = { contractAddr: candidate, access };
-        break;
+      // membership both pass wins.
+      const match = await findMatchingContract(
+        tokenId,
+        chainId ?? null,
+        sessionAddress,
+        proof,
+        startCid,
+        candidates,
+        storage
+      );
+      if (match.error) {
+        return sendError(res, match.error.status, match.error.code, match.error.message);
       }
-
-      if (!matched) {
-        if (sawMembershipMiss) {
-          return sendError(
-            res,
-            400,
-            "CID_NOT_IN_TOKEN",
-            `CID ${startCid} is not referenced by token ${tokenId}`,
-          );
-        }
-        if (sawDenied) {
-          console.warn(
-            `[UNPIN] denied - ${sessionAddress} is not owner/editor of token ${tokenId}`,
-          );
-          return sendError(
-            res,
-            403,
-            "FORBIDDEN",
-            "Session wallet is not the token owner or an editor",
-          );
-        }
-        return sendError(
-          res,
-          400,
-          "INVALID_TOKEN",
-          lastError?.message || "Token not found on any configured contract",
-        );
-      }
+      const matched = match.matched!;
 
       console.log(
         `[UNPIN] authorized via contract ${matched.contractAddr} (role=${matched.access.role})`,

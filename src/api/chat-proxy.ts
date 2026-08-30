@@ -102,6 +102,73 @@ export function createChatProxy(httpServer: Server): WebSocketServer | null {
   return wss;
 }
 
+function handleClientMessage(
+  clientWs: WebSocket,
+  relay: Relay,
+  session: ChatSession,
+  assetTag: string,
+  authResult: any,
+  remote: string,
+  raw: RawData,
+): void {
+  if (clientWs.readyState !== WebSocket.OPEN) return;
+
+  try {
+    const payload = JSON.parse(raw.toString());
+    if (payload.type === "ping") {
+      sendClient(clientWs, { type: "pong" });
+      return;
+    }
+    if (payload.type !== "chat" || typeof payload.content !== "string") {
+      sendClient(clientWs, {
+        type: "error",
+        message: "Invalid message format",
+      });
+      return;
+    }
+
+    const content = payload.content.trim();
+    if (!content) return;
+    if (content.length > MAX_CONTENT_LENGTH) {
+      sendClient(clientWs, {
+        type: "error",
+        message: `Message too long (max ${MAX_CONTENT_LENGTH})`,
+      });
+      return;
+    }
+
+    if (!session.allowMessage()) {
+      sendClient(clientWs, { type: "error", message: "Rate limit exceeded" });
+      return;
+    }
+
+    const event = buildSignedEvent(content, assetTag, authResult.address);
+    relay
+      .publish(event)
+      .then(() => {
+        console.log(
+          `[CHAT] published | assetTag=${assetTag} sender=${authResult.address.slice(0, 10)}… len=${content.length}`,
+        );
+      })
+      .catch((err: Error) => {
+        console.warn(
+          `[CHAT] publish rejected | assetTag=${assetTag}:`,
+          err.message,
+        );
+        sendClient(clientWs, {
+          type: "error",
+          message: "Relay rejected message",
+        });
+      });
+  } catch (err) {
+    console.warn(
+      `[CHAT] bad client message | client=${remote}:`,
+      (err as Error).message,
+    );
+    sendClient(clientWs, { type: "error", message: "Invalid JSON" });
+  }
+}
+
 // ─── Connection Handler ─────────────────────────────────────────────────────
 
 async function handleConnection(
@@ -206,62 +273,7 @@ async function handleConnection(
 
   // 6. Handle incoming chat messages from browser
   clientWs.on("message", (raw: RawData) => {
-    if (clientWs.readyState !== WebSocket.OPEN) return;
-
-    try {
-      const payload = JSON.parse(raw.toString());
-      if (payload.type === "ping") {
-        sendClient(clientWs, { type: "pong" });
-        return;
-      }
-      if (payload.type !== "chat" || typeof payload.content !== "string") {
-        sendClient(clientWs, {
-          type: "error",
-          message: "Invalid message format",
-        });
-        return;
-      }
-
-      const content = payload.content.trim();
-      if (!content) return;
-      if (content.length > MAX_CONTENT_LENGTH) {
-        sendClient(clientWs, {
-          type: "error",
-          message: `Message too long (max ${MAX_CONTENT_LENGTH})`,
-        });
-        return;
-      }
-
-      if (!session.allowMessage()) {
-        sendClient(clientWs, { type: "error", message: "Rate limit exceeded" });
-        return;
-      }
-
-      const event = buildSignedEvent(content, assetTag, authResult.address);
-      relay
-        .publish(event)
-        .then(() => {
-          console.log(
-            `[CHAT] published | assetTag=${assetTag} sender=${authResult.address.slice(0, 10)}… len=${content.length}`,
-          );
-        })
-        .catch((err: Error) => {
-          console.warn(
-            `[CHAT] publish rejected | assetTag=${assetTag}:`,
-            err.message,
-          );
-          sendClient(clientWs, {
-            type: "error",
-            message: "Relay rejected message",
-          });
-        });
-    } catch (err) {
-      console.warn(
-        `[CHAT] bad client message | client=${remote}:`,
-        (err as Error).message,
-      );
-      sendClient(clientWs, { type: "error", message: "Invalid JSON" });
-    }
+    handleClientMessage(clientWs, relay, session, assetTag, authResult, remote, raw);
   });
 
   clientWs.on("close", (code: number, reason: Buffer) => {

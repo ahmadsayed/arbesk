@@ -128,6 +128,34 @@ function findItem(id: string | number): LibraryItem | null {
   );
 }
 
+/** Resolve the empty-state "at Home vs in a collection" context. */
+function resolveEmptyStateContext(state: any) {
+  const atHome =
+    state.currentCollectionTokenId === null ||
+    state.currentCollectionTokenId === undefined ||
+    state.currentCollectionTokenId === "";
+  const openCollection = atHome
+    ? null
+    : state.collections.find(
+        (c: any) => String(c.tokenId) === String(state.currentCollectionTokenId)
+      );
+  return { atHome, openCollection };
+}
+
+function emptyStateTitle(multi: boolean, atHome: boolean, openCollection: any): string {
+  return multi ? "Selection" : atHome ? "Home" : openCollection?.name || "Collection";
+}
+
+function emptyStateHint(atHome: boolean): string {
+  return atHome
+    ? "Open a collection to upload .glb, .gltf or .3mf files"
+    : "Drop .glb, .gltf or .3mf files anywhere to upload";
+}
+
+function emptyStatePrompt(multi: boolean): string {
+  return multi ? "Select a single item to see details" : "Select an item to see details";
+}
+
 /**
  * Empty / multi-select state, styled like the item details view (title,
  * badge, k/v rows). The overview row shows the location's item count from
@@ -143,24 +171,13 @@ function renderEmptyState(selectedCount = 0): void {
   const pane = el("libraryDetails");
   if (pane) pane.dataset.state = multi ? "multi" : "empty";
 
-  const { collections, assets, currentCollectionTokenId } = libraryState.get();
-  const atHome =
-    currentCollectionTokenId === null ||
-    currentCollectionTokenId === undefined ||
-    currentCollectionTokenId === "";
-  const openCollection = atHome
-    ? null
-    : collections.find(
-        (c) => String(c.tokenId) === String(currentCollectionTokenId)
-      );
+  const state = libraryState.get();
+  const { collections, assets } = state;
+  const { atHome, openCollection } = resolveEmptyStateContext(state);
 
   const titleEl = el("libraryDetailsEmptyTitle");
   if (titleEl) {
-    titleEl.textContent = multi
-      ? "Selection"
-      : atHome
-        ? "Home"
-        : openCollection?.name || "Collection";
+    titleEl.textContent = emptyStateTitle(multi, atHome, openCollection);
   }
   const badgeEl = el("libraryDetailsEmptyBadge");
   if (badgeEl) badgeEl.textContent = multi ? "Items" : "Overview";
@@ -180,15 +197,11 @@ function renderEmptyState(selectedCount = 0): void {
   // is no target collection, so dropping files is rejected.
   const hintEl = el("libraryDetailsEmptyHint");
   if (hintEl) {
-    hintEl.textContent = atHome
-      ? "Open a collection to upload .glb, .gltf or .3mf files"
-      : "Drop .glb, .gltf or .3mf files anywhere to upload";
+    hintEl.textContent = emptyStateHint(atHome);
   }
   const promptEl = el("libraryDetailsEmptyPrompt");
   if (promptEl) {
-    promptEl.textContent = multi
-      ? "Select a single item to see details"
-      : "Select an item to see details";
+    promptEl.textContent = emptyStatePrompt(multi);
   }
 }
 
@@ -377,13 +390,112 @@ async function startCollectionMosaic(
   previewEl.hidden = false;
 }
 
-function renderItem(item: LibraryItem): void {
-  const req = ++_requestSeq;
-  disposePreview();
-  _ownerAddress = null;
-  _currentItemId = item.id;
-  _currentCid = item.manifestCid || null;
+function renderCollectionDetails(
+  item: LibraryItem,
+  manifest: any,
+  req: number,
+  childrenLabel: HTMLElement | null,
+  childrenEl: HTMLElement | null,
+  formatRow: HTMLElement | null
+): void {
+  // Collections have no scene nodes — show the asset count instead.
+  if (childrenLabel) childrenLabel.textContent = "Assets";
+  const assetCount = manifest?.assets ? Object.keys(manifest.assets).length : 0;
+  if (childrenEl) {
+    childrenEl.textContent =
+      assetCount === 1 ? "1 asset" : `${assetCount} assets`;
+  }
+  if (formatRow) formatRow.hidden = true;
+  void startCollectionMosaic(item, manifest, req);
+}
 
+function renderAssetDetails(
+  item: LibraryItem,
+  manifest: any,
+  req: number,
+  childrenLabel: HTMLElement | null,
+  childrenEl: HTMLElement | null,
+  formatRow: HTMLElement | null
+): void {
+  if (childrenLabel) childrenLabel.textContent = "Children";
+  const nodes = manifest?.scene?.nodes;
+  if (childrenEl) {
+    childrenEl.textContent = Array.isArray(nodes) ? `${nodes.length} nodes` : "—";
+  }
+  if (formatRow) formatRow.hidden = false;
+  const formatEl = el("libraryDetailsFormat");
+  const format = manifest?.scene?.nodes?.[0]?.source?.format;
+  if (formatEl) formatEl.textContent = format ? String(format).toUpperCase() : "—";
+  void startAssetPreview(item, manifest, req);
+}
+
+async function renderManifestDetails(
+  item: LibraryItem,
+  req: number,
+  modifiedEl: HTMLElement | null,
+  versionEl: HTMLElement | null
+): Promise<void> {
+  let manifest: any = null;
+  try {
+    manifest = await getFromRemoteIPFS(item.manifestCid);
+  } catch (err) {
+    console.warn("[LIBRARY-DETAILS] manifest fetch failed:", err);
+  }
+  if (req !== _requestSeq) return;
+
+  if (modifiedEl) modifiedEl.textContent = formatModified(manifest?.timestamp);
+
+  if (versionEl && !manifest) versionEl.textContent = "—";
+  if (manifest) {
+    const { count, more } = await countVersions(manifest);
+    if (req !== _requestSeq) return;
+    if (versionEl) versionEl.textContent = more ? `v${count}+` : `v${count}`;
+  }
+
+  const childrenLabel = el("libraryDetailsChildrenLabel");
+  const childrenEl = el("libraryDetailsChildren");
+  const formatRow = el("libraryDetailsFormatRow");
+  if (item.type === "collection") {
+    renderCollectionDetails(item, manifest, req, childrenLabel, childrenEl, formatRow);
+    return;
+  }
+
+  renderAssetDetails(item, manifest, req, childrenLabel, childrenEl, formatRow);
+}
+
+function renderEditorsRow(
+  list: any[],
+  req: number,
+  editorsEl: HTMLElement | null
+): void {
+  if (req !== _requestSeq) return;
+  if (editorsEl) {
+    editorsEl.textContent =
+      list.length === 0
+        ? "just you"
+        : list.length === 1
+          ? "1 editor"
+          : `${list.length} editors`;
+  }
+}
+
+function renderOwnerRow(
+  address: string | null,
+  req: number,
+  ownerEl: HTMLElement | null,
+  copyBtn: HTMLButtonElement | null
+): void {
+  if (req !== _requestSeq) return;
+  _ownerAddress = address;
+  const display = address ? ownerDisplay(address) : "Unknown";
+  if (ownerEl) {
+    ownerEl.textContent = display;
+    if (address && display !== address) ownerEl.title = address;
+  }
+  if (copyBtn) copyBtn.hidden = !address;
+}
+
+function renderItemHeader(item: LibraryItem): void {
   const pane = el("libraryDetails");
   if (pane) pane.dataset.state = item.type === "collection" ? "collection" : "asset";
 
@@ -395,6 +507,16 @@ function renderItem(item: LibraryItem): void {
   }
   const roleEl = el("libraryDetailsRole");
   if (roleEl) roleEl.textContent = capitalize(item.role || "");
+}
+
+function renderItem(item: LibraryItem): void {
+  const req = ++_requestSeq;
+  disposePreview();
+  _ownerAddress = null;
+  _currentItemId = item.id;
+  _currentCid = item.manifestCid || null;
+
+  renderItemHeader(item);
 
   // Each newly selected item starts with the disclosure collapsed.
   const extraEl = el("libraryDetailsExtra");
@@ -418,17 +540,9 @@ function renderItem(item: LibraryItem): void {
   // Editors — token-scoped Merkle list (chain read + IPFS, cached).
   const editorsEl = el("libraryDetailsEditors");
   if (editorsEl) editorsEl.textContent = "…";
-  void loadEditorList(String(item.tokenId)).then((list) => {
-    if (req !== _requestSeq) return;
-    if (editorsEl) {
-      editorsEl.textContent =
-        list.length === 0
-          ? "just you"
-          : list.length === 1
-            ? "1 editor"
-            : `${list.length} editors`;
-    }
-  });
+  void loadEditorList(String(item.tokenId)).then((list) =>
+    renderEditorsRow(list, req, editorsEl)
+  );
 
   // Owner — cached chain read; CDP users see their own email when the
   // owner is the connected smart account, otherwise a truncated address.
@@ -439,67 +553,16 @@ function renderItem(item: LibraryItem): void {
     ownerEl.removeAttribute("title");
   }
   if (copyBtn) copyBtn.hidden = true;
-  void resolveOwner(String(item.tokenId)).then((address) => {
-    if (req !== _requestSeq) return;
-    _ownerAddress = address;
-    const display = address ? ownerDisplay(address) : "Unknown";
-    if (ownerEl) {
-      ownerEl.textContent = display;
-      if (address && display !== address) ownerEl.title = address;
-    }
-    if (copyBtn) copyBtn.hidden = !address;
-  });
+  void resolveOwner(String(item.tokenId)).then((address) =>
+    renderOwnerRow(address, req, ownerEl, copyBtn)
+  );
 
   // Manifest — Modified/Assets/Format rows + version walk, then the preview.
   const modifiedEl = el("libraryDetailsModified");
   if (modifiedEl) modifiedEl.textContent = "…";
   const versionEl = el("libraryDetailsVersion");
   if (versionEl) versionEl.textContent = "…";
-  void (async () => {
-    let manifest: any = null;
-    try {
-      manifest = await getFromRemoteIPFS(item.manifestCid);
-    } catch (err) {
-      console.warn("[LIBRARY-DETAILS] manifest fetch failed:", err);
-    }
-    if (req !== _requestSeq) return;
-
-    if (modifiedEl) modifiedEl.textContent = formatModified(manifest?.timestamp);
-
-    if (versionEl && !manifest) versionEl.textContent = "—";
-    if (manifest) {
-      const { count, more } = await countVersions(manifest);
-      if (req !== _requestSeq) return;
-      if (versionEl) versionEl.textContent = more ? `v${count}+` : `v${count}`;
-    }
-
-    const childrenLabel = el("libraryDetailsChildrenLabel");
-    const childrenEl = el("libraryDetailsChildren");
-    const formatRow = el("libraryDetailsFormatRow");
-    if (item.type === "collection") {
-      // Collections have no scene nodes — show the asset count instead.
-      if (childrenLabel) childrenLabel.textContent = "Assets";
-      const assetCount = manifest?.assets ? Object.keys(manifest.assets).length : 0;
-      if (childrenEl) {
-        childrenEl.textContent =
-          assetCount === 1 ? "1 asset" : `${assetCount} assets`;
-      }
-      if (formatRow) formatRow.hidden = true;
-      void startCollectionMosaic(item, manifest, req);
-      return;
-    }
-
-    if (childrenLabel) childrenLabel.textContent = "Children";
-    const nodes = manifest?.scene?.nodes;
-    if (childrenEl) {
-      childrenEl.textContent = Array.isArray(nodes) ? `${nodes.length} nodes` : "—";
-    }
-    if (formatRow) formatRow.hidden = false;
-    const formatEl = el("libraryDetailsFormat");
-    const format = manifest?.scene?.nodes?.[0]?.source?.format;
-    if (formatEl) formatEl.textContent = format ? String(format).toUpperCase() : "—";
-    void startAssetPreview(item, manifest, req);
-  })();
+  void renderManifestDetails(item, req, modifiedEl, versionEl);
 }
 
 function render(): void {

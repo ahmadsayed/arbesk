@@ -176,25 +176,32 @@ function _applyUniformScale(factor: number) {
 }
 
 /**
- * Show the Token Child Info panel for a child_ref node.
- *
- * @param {string} nodeId
+ * Normalize a child_ref's identity across the legacy flat shape
+ * ({tokenId, chainId, contractAddress}) and the collection shape
+ * ({collection: {chainId, contractAddress, tokenId}, assetID}).
+ * @param {any} childRef
  */
-function showTokenChildInfo(nodeId: string) {
-  if (parametricEditor) parametricEditor.hidden = true;
-  if (tokenChildInfo) tokenChildInfo.hidden = false;
-  if (tokenChildInfoDetails) tokenChildInfoDetails.open = true;
-  if (componentEditor) componentEditor.hidden = true;
-  _refreshScaleFields();
-
-  const childRef = getNodeChildRef(nodeId);
-  // Support both legacy {tokenId, chainId, contractAddress, resolution} and
-  // collection {collection: {chainId, contractAddress, tokenId}, assetID} formats.
+function resolveChildRefIdentity(childRef: any) {
   const refTokenId = childRef?.tokenId || childRef?.collection?.tokenId || null;
   const refChainId = childRef?.chainId || childRef?.collection?.chainId || null;
   const refContractAddress =
     childRef?.contractAddress || childRef?.collection?.contractAddress || null;
+  return { refTokenId, refChainId, refContractAddress };
+}
 
+/**
+ * Populate the token child info DOM fields.
+ * @param {any} childRef
+ * @param {string|null} refTokenId
+ * @param {any} refChainId
+ * @param {string|null} refContractAddress
+ */
+function renderTokenChildFields(
+  childRef: any,
+  refTokenId: string | null,
+  refChainId: any,
+  refContractAddress: string | null
+) {
   if (childRef && tokenChildIdEl) {
     tokenChildIdEl.textContent = refTokenId ? `Token #${refTokenId}` : "—";
   }
@@ -208,6 +215,26 @@ function showTokenChildInfo(nodeId: string) {
     tokenChildResolutionEl.textContent = childRef?.resolution || "latest";
   if (tokenChildCidEl)
     tokenChildCidEl.textContent = childRef?.resolvedCid || "—";
+}
+
+/**
+ * Show the Token Child Info panel for a child_ref node.
+ *
+ * @param {string} nodeId
+ */
+function showTokenChildInfo(nodeId: string) {
+  if (parametricEditor) parametricEditor.hidden = true;
+  if (tokenChildInfo) tokenChildInfo.hidden = false;
+  if (tokenChildInfoDetails) tokenChildInfoDetails.open = true;
+  if (componentEditor) componentEditor.hidden = true;
+  _refreshScaleFields();
+
+  const childRef = getNodeChildRef(nodeId);
+  // Support both legacy and collection child_ref formats (see helper).
+  const { refTokenId, refChainId, refContractAddress } =
+    resolveChildRefIdentity(childRef);
+
+  renderTokenChildFields(childRef, refTokenId, refChainId, refContractAddress);
 
   if (inspector) inspector.classList.remove("collapsed");
 }

@@ -282,6 +282,80 @@ function selectInjectedWallet(wallet: EIP6963Wallet): void {
   hideWalletModal();
 }
 
+async function verifyOtp(
+  flowId: string,
+  email: string,
+  otpInput: HTMLInputElement | null,
+  otpError: Element | null,
+  otpVerifyBtn: HTMLButtonElement | null,
+  verifyEmailOtp: any,
+  autoConnectCdpWallet: any
+): Promise<void> {
+  const otp = otpInput ? otpInput.value.trim() : "";
+  if (!otp) {
+    if (otpError) otpError.textContent = "Please enter the code from your email.";
+    return;
+  }
+  if (otpError) otpError.textContent = "";
+  if (otpVerifyBtn) { otpVerifyBtn.disabled = true; otpVerifyBtn.textContent = "Verifying…"; }
+
+  try {
+    await verifyEmailOtp(flowId, otp);
+    // verifyEmailOtp sets module-level state; autoConnectCdpWallet reads it
+    // and returns the provider without a network round-trip.
+    const cdpResult = await autoConnectCdpWallet();
+    if (!cdpResult) {
+      throw new Error("Could not restore CDP session after OTP verification.");
+    }
+
+    if (!resolvePromise) return;
+    resolvePromise({
+      provider: null, // CDP has no EIP-1193 provider — wallet-core builds a read-only Web3
+      source: "cdp",
+      walletAddress: cdpResult.smartAccountAddress,
+      eoaAddress: cdpResult.eoaAddress,
+      email,
+    });
+    hideWalletModal();
+  } catch (err) {
+    const msg =
+      (err as Error).message ||
+      "Verification failed. Check your code and try again.";
+    if (otpError) otpError.textContent = msg;
+    if (otpVerifyBtn) { otpVerifyBtn.disabled = false; otpVerifyBtn.textContent = "Verify"; }
+  }
+}
+
+function wireOtpBackButton(
+  otpBackBtn: HTMLElement | null,
+  otpStep: HTMLElement | null,
+  emailStep: HTMLElement | null,
+  sendBtn: HTMLButtonElement | null,
+  emailInput: HTMLInputElement | null
+): void {
+  if (!otpBackBtn) return;
+  otpBackBtn.addEventListener("click", () => {
+    if (otpStep) otpStep.style.display = "none";
+    if (emailStep) emailStep.style.display = "";
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
+    if (emailInput) emailInput.focus();
+  }, { once: true });
+}
+
+function readEmailOrShowError(
+  emailInput: HTMLInputElement | null,
+  emailError: Element | null
+): string | null {
+  const email = emailInput ? emailInput.value.trim() : "";
+  if (!email || !email.includes("@")) {
+    if (emailError) emailError.textContent = "Please enter a valid email address.";
+    if (emailInput) emailInput.focus();
+    return null;
+  }
+  if (emailError) emailError.textContent = "";
+  return email;
+}
+
 /**
  * User clicked "Send code" — start the CDP email OTP flow.
  * Shows the OTP input step and wires the Verify button.
@@ -305,13 +379,8 @@ async function selectEmailWallet(): Promise<void> {
     "#walletOtpStep"
   ) as HTMLElement | null;
 
-  const email = emailInput ? emailInput.value.trim() : "";
-  if (!email || !email.includes("@")) {
-    if (emailError) emailError.textContent = "Please enter a valid email address.";
-    if (emailInput) emailInput.focus();
-    return;
-  }
-  if (emailError) emailError.textContent = "";
+  const email = readEmailOrShowError(emailInput, emailError);
+  if (!email) return;
 
   // Disable button and show loading state
   if (sendBtn) {
@@ -365,50 +434,10 @@ async function selectEmailWallet(): Promise<void> {
     }
 
     // Back button — return to email step
-    if (otpBackBtn) {
-      otpBackBtn.addEventListener("click", () => {
-        if (otpStep) otpStep.style.display = "none";
-        if (emailStep) emailStep.style.display = "";
-        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send code"; }
-        if (emailInput) emailInput.focus();
-      }, { once: true });
-    }
+    wireOtpBackButton(otpBackBtn, otpStep, emailStep, sendBtn, emailInput);
 
-    async function handleVerify(): Promise<void> {
-      const otp = otpInput ? otpInput.value.trim() : "";
-      if (!otp) {
-        if (otpError) otpError.textContent = "Please enter the code from your email.";
-        return;
-      }
-      if (otpError) otpError.textContent = "";
-      if (otpVerifyBtn) { otpVerifyBtn.disabled = true; otpVerifyBtn.textContent = "Verifying…"; }
-
-      try {
-        await verifyEmailOtp(flowId, otp);
-        // verifyEmailOtp sets module-level state; autoConnectCdpWallet reads it
-        // and returns the provider without a network round-trip.
-        const cdpResult = await autoConnectCdpWallet();
-        if (!cdpResult) {
-          throw new Error("Could not restore CDP session after OTP verification.");
-        }
-
-        if (!resolvePromise) return;
-        resolvePromise({
-          provider: null, // CDP has no EIP-1193 provider — wallet-core builds a read-only Web3
-          source: "cdp",
-          walletAddress: cdpResult.smartAccountAddress,
-          eoaAddress: cdpResult.eoaAddress,
-          email,
-        });
-        hideWalletModal();
-      } catch (err) {
-        const msg =
-          (err as Error).message ||
-          "Verification failed. Check your code and try again.";
-        if (otpError) otpError.textContent = msg;
-        if (otpVerifyBtn) { otpVerifyBtn.disabled = false; otpVerifyBtn.textContent = "Verify"; }
-      }
-    }
+    const handleVerify = () =>
+      verifyOtp(flowId, email, otpInput, otpError, otpVerifyBtn, verifyEmailOtp, autoConnectCdpWallet);
 
     if (otpVerifyBtn) {
       otpVerifyBtn.addEventListener("click", handleVerify, { once: true });

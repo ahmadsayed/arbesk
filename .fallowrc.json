@@ -55,23 +55,7 @@
     ]
   },
   "health": {
-    "thresholdOverrides": [
-      {
-        "files": ["frontend/src/js/blockchain/wallet-payments.ts"],
-        "functions": ["payWithUSDC"],
-        "maxCognitive": 25,
-        "maxCrap": 150,
-        "maxUnitSize": 260,
-        "reason": "Legacy payment flow on the P4 decrap list — the override keeps line-shift re-attribution from blocking unrelated cleanup commits until the refactor lands."
-      },
-      {
-        "files": ["packages/asset-core/src/formats/3mf/to-gltf.ts"],
-        "functions": ["parsed3mfToGltf"],
-        "maxCognitive": 30,
-        "maxUnitSize": 160,
-        "reason": "Legacy 3MF→glTF converter scheduled for the complexity pass — same line-shift rationale."
-      }
-    ]
+    "thresholdOverrides": []
   },
   "ignoreDependencies": [
     "@coinbase/cdp-core",

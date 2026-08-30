@@ -43,6 +43,49 @@ export interface WalletRelayDeps {
   getAuthz?: () => Authz;
 }
 
+async function authorizeRelay(
+  authz: Authz,
+  op: string,
+  tokenId: any,
+  cid: number,
+  address: string,
+  proof: any,
+  requiredRole: any,
+): Promise<{ error?: { status: number; code: string; message: string } }> {
+  if (op === "publish") {
+    // Minting a brand-new token: there is no prior owner to authorize against.
+    // ownerOf reverting is the signal the token does not exist yet — the only
+    // case where publish is valid.
+    try {
+      await authz.checkAssetAccess(tokenId, cid, address, { proof, requiredRole });
+      return { error: { status: 409, code: "TOKEN_EXISTS", message: "Token already minted; publish creates a new token" } };
+    } catch {
+      // ownerOf reverted → token does not exist → mint allowed.
+    }
+  } else {
+    const access = await authz.checkAssetAccess(tokenId, cid, address, {
+      proof,
+      requiredRole,
+    });
+    if (!access.allowed) {
+      return { error: { status: 403, code: "PERMISSION_DENIED", message: "You do not have write access to this asset" } };
+    }
+  }
+  return {};
+}
+
+async function executeRelayOp(
+  contract: any,
+  op: string,
+  args: any,
+): Promise<{ receipt?: any; error?: { status: number; code: string; message: string } }> {
+  if (op === "publish") return { receipt: await contract.publish(args) };
+  if (op === "updateUri") return { receipt: await contract.updateUri(args) };
+  if (op === "updateEditors") return { receipt: await contract.updateEditors(args) };
+  if (op === "burn") return { receipt: await contract.burn(args) };
+  return { error: { status: 400, code: "UNKNOWN_OP", message: "Unknown relay op: " + op } };
+}
+
 export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
   const getCdp = deps.getCdpClientFn ?? getCdpClient;
   const router = Router();
@@ -72,26 +115,9 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
         ? deps.getAuthz()
         : (await import("../authz.ts")).createAuthzInstance();
 
-      if (op === "publish") {
-        // Minting a brand-new token: there is no prior owner to authorize
-        // against. A valid session + delegated wallet (both checked below) is
-        // the gate, and the contract reverts on a TokenAlreadyMinted collision.
-        // ownerOf reverting is the signal the token does not exist yet — the
-        // only case where publish is valid.
-        try {
-          await authz.checkAssetAccess(tokenId, cid, record.address, { proof, requiredRole });
-          return sendError(res, 409, "TOKEN_EXISTS", "Token already minted; publish creates a new token");
-        } catch {
-          // ownerOf reverted → token does not exist → mint allowed.
-        }
-      } else {
-        const access = await authz.checkAssetAccess(tokenId, cid, record.address, {
-          proof,
-          requiredRole,
-        });
-        if (!access.allowed) {
-          return sendError(res, 403, "PERMISSION_DENIED", "You do not have write access to this asset");
-        }
+      const authzResult = await authorizeRelay(authz, op, tokenId, cid, record.address, proof, requiredRole);
+      if (authzResult.error) {
+        return sendError(res, authzResult.error.status, authzResult.error.code, authzResult.error.message);
       }
 
       const cdp = await getCdp();
@@ -126,14 +152,11 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
       });
 
       const args = { tokenId, ...params };
-      let receipt;
-      if (op === "publish") receipt = await contract.publish(args);
-      else if (op === "updateUri") receipt = await contract.updateUri(args);
-      else if (op === "updateEditors") receipt = await contract.updateEditors(args);
-      else if (op === "burn") receipt = await contract.burn(args);
-      else return sendError(res, 400, "UNKNOWN_OP", "Unknown relay op: " + op);
-
-      res.status(200).json({ receipt });
+      const result = await executeRelayOp(contract, op, args);
+      if (result.error) {
+        return sendError(res, result.error.status, result.error.code, result.error.message);
+      }
+      res.status(200).json({ receipt: result.receipt });
     } catch (err) {
       const e = err as Error;
       console.error("[RELAY] failed:", e.message);

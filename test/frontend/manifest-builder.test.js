@@ -727,3 +727,248 @@ describe("prepareManifestForWrite", () => {
     expect(written.scene.nodes.some((n) => n.node_id === "n1")).toBe(true);
   });
 });
+
+// =====================================================================
+// prepareManifestForWrite — edit-baking branches
+//
+// Characterization for the source-color / post-processor / transform edit
+// branches the earlier tests do not reach. These MUST stay at the END of the
+// file: jest.unstable_mockModule registrations survive jest.resetModules() and
+// would leak into earlier tests.
+// =====================================================================
+describe("prepareManifestForWrite — edit-baking branches", () => {
+  /**
+   * Register the engine-module mocks (scene-graph, parametric-preview,
+   * asset-file-drop) that prepareManifestForWrite's edit-baking branches read.
+   * Call BEFORE load().
+   */
+  function mockEngineModules({
+    pendingChildRefs = [],
+    pendingPP = new Map(),
+    pendingTransforms = new Map(),
+    pendingColors = new Map(),
+    pendingOverrides = new Map(),
+    pendingRemovals = new Set(),
+  } = {}) {
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/scene-graph.js",
+      () => ({
+        getPendingChildRefs: jest.fn().mockReturnValue(pendingChildRefs),
+        waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
+        getPendingPostProcessorEdits: jest.fn().mockReturnValue(pendingPP),
+        clearPendingPostProcessorEdits: jest.fn(),
+        getPendingTransformEdits: jest.fn().mockReturnValue(pendingTransforms),
+        clearPendingTransformEdits: jest.fn(),
+        clearPendingChildRefs: jest.fn(),
+        getPendingChildRefRemovals: jest.fn().mockReturnValue(pendingRemovals),
+        clearPendingChildRefRemovals: jest.fn(),
+        getPendingSourceOverrides: jest.fn().mockReturnValue(pendingOverrides),
+        clearPendingSourceOverrides: jest.fn(),
+        captureAssetThumbnail: jest.fn(),
+        getNodeMeshes: jest.fn(),
+        getNodeSubMeshes: jest.fn(),
+        getNodeChildRef: jest.fn(),
+        deselectAll: jest.fn(),
+        selectNodeById: jest.fn(),
+        selectSubMesh: jest.fn(),
+        state: { selectedNodeIds: new Set() },
+      })
+    );
+    jest.unstable_mockModule(
+      "../../frontend/src/js/engine/parametric-preview.js",
+      () => ({
+        getPendingSourceColorEdits: jest.fn().mockReturnValue(pendingColors),
+        clearPendingSourceColorEdits: jest.fn(),
+        clearPendingSourceColorEdit: jest.fn(),
+      })
+    );
+    jest.unstable_mockModule(
+      "../../frontend/src/js/services/asset-file-drop.js",
+      () => ({
+        handleAssetFileDropped: jest.fn(),
+        waitForPendingFileDrops: jest.fn().mockResolvedValue(undefined),
+      })
+    );
+  }
+
+  async function freshStore() {
+    const stateMod = await import("@arbesk/asset-core/domain/asset-store.js");
+    stateMod._resetForTesting();
+    return stateMod.assetStore;
+  }
+
+  it("returns null when no asset is open and no edits are pending", async () => {
+    mockEngineModules();
+    const ctx = await load();
+    await freshStore();
+
+    const result = await ctx.mod.prepareManifestForWrite("Empty");
+
+    expect(result).toBeNull();
+  });
+
+  it("bakes pending source-color edits into node sources", async () => {
+    mockEngineModules({
+      pendingColors: new Map([["n1", new Map([["Body", "#ff0000"]])]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.editSourceColors.mockResolvedValue({
+      sourceCid: "bafyColored",
+      format: "gltf",
+      path: "composite.gltf",
+      modified: true,
+      skipped: false,
+    });
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Colored");
+
+    expect(result.manifest.scene.nodes[0].source).toEqual({
+      cid: "bafyColored",
+      path: "composite.gltf",
+      format: "gltf",
+    });
+    expect(result.manifest.version).toBe(2);
+    expect(ctx.gltfHandler.editSourceColors).toHaveBeenCalledTimes(1);
+    expect(ctx.gltfHandler.editSourceColors.mock.calls[0][1]).toEqual({
+      Body: "#ff0000",
+    });
+  });
+
+  it("leaves the source unchanged when a format has no editSourceColors hook", async () => {
+    mockEngineModules({
+      pendingColors: new Map([["n1", new Map([["Body", "#ff0000"]])]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.editSourceColors = undefined;
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Unsupported");
+
+    expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyCached");
+  });
+
+  // KNOWN GAP: rate-limit errors are absorbed by Promise.allSettled inside the
+  // bake helpers, so a 429 does NOT propagate to the caller — it silently skips
+  // the affected node. This pins the current behavior; propagation is a separate
+  // decision, not part of this complexity refactor.
+  it("leaves the source unchanged when source-color baking fails (non-rate-limit)", async () => {
+    mockEngineModules({
+      pendingColors: new Map([["n1", new Map([["Body", "#ff0000"]])]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.editSourceColors.mockRejectedValue(new Error("boom"));
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Failed");
+
+    expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyCached");
+  });
+
+  it("bakes composite post-processor colors into a decomposed node", async () => {
+    mockEngineModules({
+      pendingPP: new Map([["n1", { color: "#00ff00" }]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.editCompositeColors.mockResolvedValue({
+      compositeCid: "bafyCompositeColored",
+    });
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("PP Composite");
+
+    expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyCompositeColored");
+    expect(ctx.gltfHandler.editCompositeColors).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores a post-processor overlay on a monolithic node", async () => {
+    mockEngineModules({
+      pendingPP: new Map([
+        [
+          "n1",
+          {
+            color: "#ff0000",
+            scale: { x: 2, y: 2, z: 2 },
+            meshOverrides: { Body: "#0000ff" },
+          },
+        ],
+      ]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "asset.gltf", format: "gltf" }),
+    ]);
+    // Monolithic: not stored form, so no composite bake.
+    ctx.gltfHandler.isStoredForm.mockReturnValue(false);
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("PP Overlay");
+
+    expect(result.manifest.scene.nodes[0].post_processor).toEqual({
+      color: "#ff0000",
+      scale: { x: 2, y: 2, z: 2 },
+      meshOverrides: { Body: "#0000ff" },
+    });
+  });
+
+  it("applies transform edits to node transform_matrix", async () => {
+    const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2];
+    mockEngineModules({ pendingTransforms: new Map([["n1", matrix]]) });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyCached", path: "composite.gltf", format: "gltf" }),
+    ]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Transformed");
+
+    expect(result.manifest.scene.nodes[0].transform_matrix).toEqual(matrix);
+  });
+});

@@ -383,6 +383,226 @@ interface ReferenceImage {
  * to IPFS, constructs the manifest, and writes it to IPFS directly -
  * no server-side IPFS writes.
  */
+/**
+ * Assemble the POST /generations request body. Conditional fields are added
+ * only when present: BYOK key, follow-up context (sourceAssetCid + task id +
+ * mode flags), texture quality, image-to-3D data, and multiview views.
+ * @param {any} args
+ * @param {number|null} chainId
+ */
+function buildGenerationBody(args: any, chainId: number | null): Record<string, any> {
+  const {
+    prompt,
+    nodeId,
+    provider,
+    providerKey,
+    sourceAssetCid,
+    sourceTaskId,
+    retexture,
+    retopo,
+    animate,
+    rigOnly,
+    rigModel,
+    animateInPlace,
+    animations,
+    faceLimit,
+    textureQuality,
+    imageData,
+    imageMime,
+    images,
+  } = args;
+
+  return {
+    prompt,
+    nodeId,
+    provider,
+    ...(chainId && { chainId }),
+    ...(providerKey && { providerKey }),
+    ...(sourceAssetCid && {
+      sourceAssetCid,
+      ...(sourceTaskId && { sourceTaskId }),
+      ...(retexture && { retexture: true }),
+      ...(retopo && { retopo: true, ...(faceLimit && { faceLimit }) }),
+      ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations, ...(animateInPlace && { animateInPlace: true }) }), ...(rigModel && { rigModel }) }),
+    }),
+    ...(textureQuality && { textureQuality }),
+    ...(imageData && { imageData, imageMime }),
+    // Multiview (2+ images): canonical-ordered views, no legacy imageData,
+    // no imageName on the wire.
+    ...(Array.isArray(images) &&
+      images.length > 0 && {
+        images: images.map(({ imageData: d, imageMime: m, view }) => ({
+          imageData: d,
+          imageMime: m,
+          view,
+        })),
+      }),
+  };
+}
+
+/**
+ * Pin the image-to-3D reference image(s) to IPFS and build the reference
+ * entries recorded in the manifest. Single image → referenceImage; multiview
+ * (images[]) → referenceImages with the front view also filling the legacy
+ * singular reference_image for back-compat.
+ * @param {any} args
+ * @param {any} writeToIPFS
+ */
+async function uploadReferenceImages(
+  args: { imageData?: string; imageMime?: string; imageName?: string; images?: any[] },
+  writeToIPFS: any
+): Promise<{ referenceImage: ReferenceImage | null; referenceImages: ReferenceImage[] | null }> {
+  const { imageData, imageMime, imageName, images } = args;
+
+  let referenceImage: ReferenceImage | null = null;
+  if (imageData) {
+    const imageBytes = base64ToBytes(imageData);
+    const imageExt = (imageMime || "image/png").split("/")[1] || "png";
+    const referenceImageCid = await writeToIPFS(
+      imageBytes,
+      imageName || `reference.${imageExt}`
+    );
+    log(`[GEN] browser uploaded reference image → ${referenceImageCid}`);
+    referenceImage = {
+      cid: referenceImageCid,
+      mime: imageMime,
+      name: imageName || `reference.${imageExt}`,
+    };
+  }
+
+  let referenceImages: ReferenceImage[] | null = null;
+  if (Array.isArray(images) && images.length > 0) {
+    referenceImages = [];
+    for (const view of images) {
+      const viewExt = (view.imageMime || "image/png").split("/")[1] || "png";
+      const viewName = view.imageName || `reference-${view.view}.${viewExt}`;
+      const viewCid = await writeToIPFS(base64ToBytes(view.imageData), viewName);
+      log(`[GEN] browser uploaded reference image (${view.view}) → ${viewCid}`);
+      referenceImages.push({
+        cid: viewCid,
+        mime: view.imageMime,
+        name: viewName,
+        view: view.view,
+      });
+    }
+    referenceImage =
+      referenceImages.find((entry) => entry.view === "front") ||
+      referenceImages[0];
+  }
+
+  return { referenceImage, referenceImages };
+}
+
+/**
+ * Build the single source node for a generation.
+ * @param {any} args
+ */
+function buildGenerationNode(args: any) {
+  const {
+    nodeId,
+    displayName,
+    assetCid,
+    data,
+    referenceImage,
+    referenceImages,
+    transformMatrix,
+    scaleCompensation,
+  } = args;
+  return {
+    node_id: nodeId,
+    type: "source_asset",
+    name: displayName,
+    source: {
+      cid: assetCid,
+      path: data.path || `asset.${data.format}`,
+      format: data.format,
+    },
+    // Reference image the model was generated from (image-to-3D only).
+    ...(referenceImage && { reference_image: referenceImage }),
+    // Multiview: all reference views (canonical order); reference_image
+    // above still carries the front view for existing readers.
+    ...(referenceImages && { reference_images: referenceImages }),
+    transform_matrix:
+      Array.isArray(transformMatrix) && transformMatrix.length === 16
+        ? transformMatrix
+        : identityMatrix(),
+    post_processor: scaleCompensation
+      ? { color: null, scale: { x: scaleCompensation, y: scaleCompensation, z: scaleCompensation } }
+      : { color: null, scale: { x: 1, y: 1, z: 1 } },
+  };
+}
+
+/**
+ * Build the asset manifest for this generation: load (or create) the base,
+ * bump the version chain, and replace the single source node.
+ * @param {any} args
+ */
+async function buildGenerationManifest(args: any): Promise<any> {
+  const {
+    prompt,
+    nodeId,
+    assetId,
+    prevAssetManifestCid,
+    transformMatrix,
+    assetCid,
+    data,
+    referenceImage,
+    referenceImages,
+    scaleCompensation,
+    getFromRemoteIPFS,
+  } = args;
+
+  const displayName = prompt
+    ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
+    : nodeId;
+
+  let manifest: any = null;
+  if (prevAssetManifestCid) {
+    try {
+      manifest = await getFromRemoteIPFS(prevAssetManifestCid);
+      log(`[GEN] previous manifest loaded - v${manifest.version}`);
+    } catch (e) {
+      warn(
+        `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${(e as Error).message}`
+      );
+    }
+  }
+
+  if (!manifest) {
+    manifest = {
+      asset_id: assetId || `asset_${Date.now()}`,
+      version: 0,
+      timestamp: Date.now(),
+      prev_asset_manifest_cid: null,
+      scene: { nodes: [] },
+    };
+  }
+
+  manifest.version = (manifest.version || 0) + 1;
+  manifest.timestamp = Date.now();
+  if (prevAssetManifestCid !== undefined) {
+    manifest.prev_asset_manifest_cid = prevAssetManifestCid || null;
+  }
+  manifest.scene ||= { nodes: [] };
+  manifest.scene.nodes ||= [];
+
+  // Replace or create the single node for this generation
+  manifest.scene.nodes = [
+    buildGenerationNode({
+      nodeId,
+      displayName,
+      assetCid,
+      data,
+      referenceImage,
+      referenceImages,
+      transformMatrix,
+      scaleCompensation,
+    }),
+  ];
+
+  return manifest;
+}
+
 export async function generateAsset({
   prompt,
   nodeId,
@@ -417,32 +637,29 @@ export async function generateAsset({
   const rawChainId = walletState.get().chainId;
   const chainId = rawChainId ? Number(rawChainId) : null;
 
-  const body: Record<string, any> = {
-    prompt,
-    nodeId,
-    provider,
-    ...(chainId && { chainId }),
-    ...(providerKey && { providerKey }),
-    ...(sourceAssetCid && {
+  const body = buildGenerationBody(
+    {
+      prompt,
+      nodeId,
+      provider,
+      providerKey,
       sourceAssetCid,
-      ...(sourceTaskId && { sourceTaskId }),
-      ...(retexture && { retexture: true }),
-      ...(retopo && { retopo: true, ...(faceLimit && { faceLimit }) }),
-      ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations, ...(animateInPlace && { animateInPlace: true }) }), ...(rigModel && { rigModel }) }),
-    }),
-    ...(textureQuality && { textureQuality }),
-    ...(imageData && { imageData, imageMime }),
-    // Multiview (2+ images): canonical-ordered views, no legacy imageData,
-    // no imageName on the wire.
-    ...(Array.isArray(images) &&
-      images.length > 0 && {
-        images: images.map(({ imageData: d, imageMime: m, view }) => ({
-          imageData: d,
-          imageMime: m,
-          view,
-        })),
-      }),
-  };
+      sourceTaskId,
+      retexture,
+      retopo,
+      animate,
+      rigOnly,
+      rigModel,
+      animateInPlace,
+      animations,
+      faceLimit,
+      textureQuality,
+      imageData,
+      imageMime,
+      images,
+    },
+    chainId
+  );
 
   announceStatus("Generating 3D asset…");
   const response = await fetchWithSession("/generations", {
@@ -495,107 +712,27 @@ export async function generateAsset({
     ? await followupScaleCompensation(sourceAssetCid, assetBytes)
     : null;
 
-  // Reference image (image-to-3D): pin it on IPFS and record it in the
-  // manifest so the provenance chain keeps what the model was made from.
-  let referenceImage: ReferenceImage | null = null;
-  if (imageData) {
-    const imageBytes = base64ToBytes(imageData);
-    const imageExt = (imageMime || "image/png").split("/")[1] || "png";
-    const referenceImageCid = await writeToIPFS(
-      imageBytes,
-      imageName || `reference.${imageExt}`
-    );
-    log(`[GEN] browser uploaded reference image → ${referenceImageCid}`);
-    referenceImage = {
-      cid: referenceImageCid,
-      mime: imageMime,
-      name: imageName || `reference.${imageExt}`,
-    };
-  }
-
-  // Multiview reference images: pin each view on IPFS and record them all in
-  // the manifest; the front view also fills the legacy singular
-  // reference_image for back-compat with existing readers.
-  let referenceImages: ReferenceImage[] | null = null;
-  if (Array.isArray(images) && images.length > 0) {
-    referenceImages = [];
-    for (const view of images) {
-      const viewExt = (view.imageMime || "image/png").split("/")[1] || "png";
-      const viewName = view.imageName || `reference-${view.view}.${viewExt}`;
-      const viewCid = await writeToIPFS(base64ToBytes(view.imageData), viewName);
-      log(`[GEN] browser uploaded reference image (${view.view}) → ${viewCid}`);
-      referenceImages.push({
-        cid: viewCid,
-        mime: view.imageMime,
-        name: viewName,
-        view: view.view,
-      });
-    }
-    referenceImage =
-      referenceImages.find((entry) => entry.view === "front") ||
-      referenceImages[0];
-  }
+  // Reference image (image-to-3D) + multiview views: pin to IPFS, record in
+  // the manifest (front view fills the legacy singular reference_image).
+  const { referenceImage, referenceImages } = await uploadReferenceImages(
+    { imageData, imageMime, imageName, images },
+    writeToIPFS
+  );
 
   // Build the manifest (same logic previously done server-side)
-  const displayName = prompt
-    ? prompt.slice(0, 60) + (prompt.length > 60 ? "…" : "")
-    : nodeId;
-
-  let manifest: any = null;
-  if (prevAssetManifestCid) {
-    try {
-      manifest = await getFromRemoteIPFS(prevAssetManifestCid);
-      log(`[GEN] previous manifest loaded - v${manifest.version}`);
-    } catch (e) {
-      warn(
-        `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${(e as Error).message}`
-      );
-    }
-  }
-
-  if (!manifest) {
-    manifest = {
-      asset_id: assetId || `asset_${Date.now()}`,
-      version: 0,
-      timestamp: Date.now(),
-      prev_asset_manifest_cid: null,
-      scene: { nodes: [] },
-    };
-  }
-
-  manifest.version = (manifest.version || 0) + 1;
-  manifest.timestamp = Date.now();
-  if (prevAssetManifestCid !== undefined) {
-    manifest.prev_asset_manifest_cid = prevAssetManifestCid || null;
-  }
-  manifest.scene ||= { nodes: [] };
-  manifest.scene.nodes ||= [];
-
-  // Replace or create the single node for this generation
-  manifest.scene.nodes = [
-    {
-      node_id: nodeId,
-      type: "source_asset",
-      name: displayName,
-      source: {
-        cid: assetCid,
-        path: data.path || `asset.${data.format}`,
-        format: data.format,
-      },
-      // Reference image the model was generated from (image-to-3D only).
-      ...(referenceImage && { reference_image: referenceImage }),
-      // Multiview: all reference views (canonical order); reference_image
-      // above still carries the front view for existing readers.
-      ...(referenceImages && { reference_images: referenceImages }),
-      transform_matrix:
-        Array.isArray(transformMatrix) && transformMatrix.length === 16
-          ? transformMatrix
-          : identityMatrix(),
-      post_processor: scaleCompensation
-        ? { color: null, scale: { x: scaleCompensation, y: scaleCompensation, z: scaleCompensation } }
-        : { color: null, scale: { x: 1, y: 1, z: 1 } },
-    },
-  ];
+  const manifest = await buildGenerationManifest({
+    prompt,
+    nodeId,
+    assetId,
+    prevAssetManifestCid,
+    transformMatrix,
+    assetCid,
+    data,
+    referenceImage,
+    referenceImages,
+    scaleCompensation,
+    getFromRemoteIPFS,
+  });
 
   announceStatus("Uploading manifest to IPFS…");
   const assetManifestCid = await writeJSONToIPFS(manifest, null as any, {

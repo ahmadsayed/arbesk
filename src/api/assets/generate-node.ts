@@ -97,6 +97,55 @@ function looksLikeGltfJson(buf: Buffer): boolean {
  * @param compositeBuf - raw bytes of the glTF JSON
  * @returns self-contained GLB binary
  */
+function validateComposedUris(composed: any): void {
+  for (const buf of composed.buffers || []) {
+    if (buf.uri && !buf.uri.startsWith("data:")) {
+      console.log(`[GEN] source glTF has unresolvable buffer uri=${buf.uri}`);
+      throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (buffer uri: ${buf.uri})`, 0, 400);
+    }
+  }
+  for (const img of composed.images || []) {
+    if (img.uri && !img.uri.startsWith("data:")) {
+      console.log(`[GEN] source glTF has unresolvable image uri=${img.uri}`);
+      throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (image uri: ${img.uri})`, 0, 400);
+    }
+  }
+}
+
+function packComposedBuffers(composed: any): Buffer {
+  const binParts: Buffer[] = [];
+  const bufOffsets: number[] = [];
+  let cumulative = 0;
+  for (const buf of composed.buffers || []) {
+    bufOffsets.push(cumulative);
+    if (buf.uri && buf.uri.startsWith("data:")) {
+      const b64 = buf.uri.split(",")[1];
+      const bytes = Buffer.from(b64, "base64");
+      binParts.push(bytes);
+      cumulative += bytes.length;
+    } else {
+      const len = buf.byteLength || 0;
+      binParts.push(Buffer.alloc(len));
+      cumulative += len;
+    }
+  }
+
+  for (let i = 0; i < (composed.buffers || []).length; i++) {
+    composed.buffers[i] = { byteLength: binParts[i].length };
+  }
+
+  if (composed.bufferViews) {
+    for (const bv of composed.bufferViews) {
+      if (bv.buffer > 0 && bv.buffer < bufOffsets.length) {
+        bv.byteOffset = (bv.byteOffset || 0) + bufOffsets[bv.buffer];
+        bv.buffer = 0;
+      }
+    }
+  }
+
+  return Buffer.concat(binParts);
+}
+
 async function resolveCompositeToGlb(
   compositeBuf: Buffer,
   core: ArbeskCore,
@@ -115,62 +164,16 @@ async function resolveCompositeToGlb(
     await (await core.compose(gltf)).text()
   ) as any;
 
-  // Fail fast on references that are neither ipfs:// (resolved above) nor
-  // data: (inlined below) — a relative or http(s) URI would otherwise be
-  // silently zero-filled into a corrupt GLB.
-  for (const buf of composed.buffers || []) {
-    if (buf.uri && !buf.uri.startsWith("data:")) {
-      console.log(`[GEN] source glTF has unresolvable buffer uri=${buf.uri}`);
-      throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (buffer uri: ${buf.uri})`, 0, 400);
-    }
-  }
-  for (const img of composed.images || []) {
-    if (img.uri && !img.uri.startsWith("data:")) {
-      console.log(`[GEN] source glTF has unresolvable image uri=${img.uri}`);
-      throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (image uri: ${img.uri})`, 0, 400);
-    }
-  }
+  // Fail fast on references that are neither ipfs:// nor data: — a relative
+  // or http(s) URI would otherwise be silently zero-filled into a corrupt GLB.
+  validateComposedUris(composed);
 
-  // Pack data-URI buffers into a single BIN chunk. The buffers are
-  // concatenated in order; bufferViews that reference buffer > 0 need their
-  // byteOffset adjusted by the cumulative size of previous buffers.
-  const binParts: Buffer[] = [];
-  const bufOffsets: number[] = [];
-  let cumulative = 0;
-  for (const buf of composed.buffers || []) {
-    bufOffsets.push(cumulative);
-    if (buf.uri && buf.uri.startsWith("data:")) {
-      const b64 = buf.uri.split(",")[1];
-      const bytes = Buffer.from(b64, "base64");
-      binParts.push(bytes);
-      cumulative += bytes.length;
-    } else {
-      const len = buf.byteLength || 0;
-      binParts.push(Buffer.alloc(len));
-      cumulative += len;
-    }
-  }
-
-  // Rewrite buffer definitions: no URIs (they reference the BIN chunk).
-  for (let i = 0; i < (composed.buffers || []).length; i++) {
-    composed.buffers[i] = { byteLength: binParts[i].length };
-  }
-
-  // Adjust bufferView byteOffsets for buffer > 0.
-  if (composed.bufferViews) {
-    for (const bv of composed.bufferViews) {
-      if (bv.buffer > 0 && bv.buffer < bufOffsets.length) {
-        bv.byteOffset = (bv.byteOffset || 0) + bufOffsets[bv.buffer];
-        bv.buffer = 0;
-      }
-    }
-  }
-
-  const bin = Buffer.concat(binParts);
+  // Pack data-URI buffers into a single BIN chunk (in place).
+  const bin = packComposedBuffers(composed);
   const glb = Buffer.from(serializeGLB(composed, bin));
 
   console.log(
-    `[GEN] composite composed → GLB buffers=${binParts.length} bin=${bin.length}B total=${glb.length}B`,
+    `[GEN] composite composed → GLB buffers=${(composed.buffers || []).length} bin=${bin.length}B total=${glb.length}B`,
   );
   return glb;
 }

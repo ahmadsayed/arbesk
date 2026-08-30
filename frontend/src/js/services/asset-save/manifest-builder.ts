@@ -356,10 +356,348 @@ function collectChatProvenanceEntries(activeCid: string | null | undefined) {
 }
 
 /**
+ * Apply viewport gizmo transform edits.
+ * Updates node.transform_matrix so the saved manifest renders the node
+ * in its edited position/rotation/scale on next load.
+ * @param {any} manifest
+ * @param {Map<string, any>} pendingTransforms
+ */
+function applyTransformEdits(manifest: any, pendingTransforms: Map<string, any>) {
+  if (pendingTransforms.size === 0) return;
+  for (const [nodeId, matrixArray] of pendingTransforms) {
+    const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+    if (!node) continue;
+    node.transform_matrix = matrixArray;
+    log(`Save: applied transform edit | node=${nodeId}`);
+  }
+}
+
+/**
+ * Bake pending viewport file-drop source overrides. Must happen after the
+ * prevManifest snapshot so a drop-only save is not reported as "no changes".
+ * An override replaces the node's source and resets its post_processor to
+ * defaults — the old edits described the old geometry. When the node does not
+ * exist yet (fresh draft created by a drop with no asset open), a new single
+ * node is appended.
+ * @param {any} manifest
+ * @param {Map<string, any>} pendingOverrides
+ */
+function applySourceOverrides(manifest: any, pendingOverrides: Map<string, any>) {
+  if (pendingOverrides.size === 0) return;
+  for (const [nodeId, override] of pendingOverrides) {
+    const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+    if (node) {
+      node.source = { ...override.source };
+      node.post_processor = {
+        color: null,
+        scale: { x: 1, y: 1, z: 1 },
+      };
+      log(`Save: applied source override | node=${nodeId}`);
+    } else {
+      manifest.scene.nodes.push({
+        node_id: nodeId,
+        type: "source_asset",
+        name: override.name,
+        source: { ...override.source },
+        transform_matrix: identityMatrix(),
+        post_processor: {
+          color: null,
+          scale: { x: 1, y: 1, z: 1 },
+        },
+      });
+      log(`Save: created node from source override | node=${nodeId}`);
+    }
+  }
+}
+
+/**
+ * Bake pending linked-child refs into the manifest, then drop child assets the
+ * user unlinked this session. Both MUST happen after the prevManifest snapshot
+ * so a "link/remove child → Save" on an otherwise unchanged draft is detected
+ * as a change and written.
+ * @param {any} manifest
+ * @param {any[]} pendingRefs
+ */
+function applyPendingChildRefs(manifest: any, pendingRefs: any[]) {
+  for (const pendingNode of pendingRefs) {
+    if (!manifest.scene.nodes.some((n: any) => n.node_id === pendingNode.node_id)) {
+      manifest.scene.nodes.push(pendingNode);
+    }
+  }
+  const pendingRemovals = getPendingChildRefRemovals();
+  if (pendingRemovals.size > 0) {
+    manifest.scene.nodes = manifest.scene.nodes.filter(
+      (n: any) => !pendingRemovals.has(n.node_id)
+    );
+  }
+}
+
+/**
+ * Build the async bake job for a single node's source-color edit.
+ * @param {any} node
+ * @param {string} nodeId
+ * @param {Record<string, string>} colorMap
+ * @param {any} manifest
+ * @param {Map<string, string>} dedupMap
+ */
+function buildSourceColorJob(
+  node: any,
+  nodeId: string,
+  colorMap: Record<string, string>,
+  manifest: any,
+  dedupMap: Map<string, string>
+) {
+  return (async () => {
+    try {
+      const handler = resolveFormatHandler(node.source);
+      if (typeof handler.editSourceColors !== "function") {
+        warn(
+          `Save: source-color edit unsupported for format ${handler.format} | node=${nodeId}`
+        );
+        return null;
+      }
+      const result = await handler.editSourceColors(node, colorMap, {
+        assetName: manifest.name,
+        assetId: manifest.asset_id,
+        dedupMap,
+      });
+      return { nodeId, result };
+    } catch (err) {
+      if (isRateLimitError(err)) throw err;
+      warn(
+        `Save: failed to bake colors into source for ${nodeId}:`,
+        (err as Error).message
+      );
+      return null;
+    }
+  })();
+}
+
+/**
+ * Apply direct source color edits.
+ * These mutate the source glTF/GLB asset and update node.source.cid.
+ * Each node is independent, so bake them concurrently.
+ * @param {any} manifest
+ * @param {Map<string, any>} pendingColors - nodeId → (meshName → color)
+ * @param {Map<string, string>} dedupMap
+ */
+async function applySourceColorEdits(
+  manifest: any,
+  pendingColors: Map<string, any>,
+  dedupMap: Map<string, string>
+) {
+  if (pendingColors.size === 0) return;
+
+  const colorJobs = [];
+  for (const [nodeId, nodeEdits] of pendingColors) {
+    const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+    if (!node || !node.source?.cid) continue;
+
+    const colorMap: Record<string, string> = {};
+    for (const [meshName, color] of nodeEdits) {
+      colorMap[meshName] = color;
+    }
+
+    colorJobs.push(
+      buildSourceColorJob(node, nodeId, colorMap, manifest, dedupMap)
+    );
+  }
+
+  const colorResults = await Promise.allSettled(colorJobs);
+  for (const r of colorResults) {
+    if (r.status !== "fulfilled" || !r.value) continue;
+    const { nodeId, result } = r.value;
+    const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+    if (!node) continue;
+    node.source.cid = result.sourceCid;
+    // The edited source is always glTF JSON now; keep the node's
+    // format/path truthful so the loader doesn't treat it as a binary GLB.
+    if (result.format) node.source.format = result.format;
+    if (result.path) node.source.path = result.path;
+    log(
+      `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
+    );
+  }
+}
+
+/**
+ * Store a post-processor edit as a runtime overlay on a monolithic node.
+ * @param {any} node
+ * @param {any} pp
+ */
+function applyPostProcessorOverlay(node: any, pp: any) {
+  node.post_processor ||= {};
+  if (pp.color !== undefined) node.post_processor.color = pp.color;
+  if (pp.scale !== undefined) node.post_processor.scale = { ...pp.scale };
+  if (pp.meshOverrides && Object.keys(pp.meshOverrides).length > 0)
+    node.post_processor.meshOverrides = { ...pp.meshOverrides };
+  else if (node.post_processor.meshOverrides)
+    delete node.post_processor.meshOverrides;
+}
+
+/**
+ * Apply a composite post-processor bake result: update node.source.cid and
+ * reconcile the node's post_processor scale overlay.
+ * @param {any} node
+ * @param {any} pp
+ * @param {any} result
+ */
+function applyCompositeBakeResult(node: any, pp: any, result: any) {
+  if (result) {
+    node.source.cid = result.compositeCid;
+  }
+
+  // Scale still goes to post_processor (geometry, not material)
+  if (
+    pp.scale &&
+    (pp.scale.x !== 1 || pp.scale.y !== 1 || pp.scale.z !== 1)
+  ) {
+    node.post_processor ||= {};
+    node.post_processor.scale = { ...pp.scale };
+  } else if (node.post_processor) {
+    delete node.post_processor.scale;
+  }
+  // Clean up empty post_processor
+  if (
+    node.post_processor &&
+    Object.keys(node.post_processor).length === 0
+  ) {
+    delete node.post_processor;
+  }
+}
+
+/**
+ * Build the async composite-color bake job for a decomposed node.
+ * @param {any} node
+ * @param {string} nodeId
+ * @param {any} pp
+ * @param {any} manifest
+ */
+function buildCompositeBakeJob(node: any, nodeId: string, pp: any, manifest: any) {
+  return (async () => {
+    let result = null;
+    const handler = resolveFormatHandler(node.source);
+    if (typeof handler.editCompositeColors !== "function") {
+      // Fall through to overlay path by returning null.
+      return { nodeId, pp, result };
+    }
+    try {
+      result = await handler.editCompositeColors(
+        node,
+        pp.meshOverrides || null,
+        pp.color || null,
+        {
+          assetName: manifest.name,
+          assetId: manifest.asset_id,
+        }
+      );
+      log(
+        `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
+      );
+    } catch (err) {
+      warn(
+        `Save: failed to bake colors into composite glTF for ${nodeId}:`,
+        (err as Error).message
+      );
+    }
+    return { nodeId, pp, result };
+  })();
+}
+
+/**
+ * Apply post-processor edits.
+ * Decomposed nodes: bake colors directly into the composite glTF.
+ * Monolithic nodes: store as node.post_processor (runtime overlay).
+ * @param {any} manifest
+ * @param {Map<string, any>} pendingPP - nodeId → edit payload
+ */
+async function applyPostProcessorEdits(manifest: any, pendingPP: Map<string, any>) {
+  if (pendingPP.size === 0) return;
+
+  const ppJobs = [];
+  for (const [nodeId, pp] of pendingPP) {
+    const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+    if (!node) continue;
+
+    const isDecomposed =
+      !!node.source?.cid && resolveFormatHandler(node.source).isStoredForm(node);
+
+    // Handlers without a composite color bake (e.g. 3MF, which keeps edits
+    // as overlays by design) must take the overlay branch even in stored
+    // form — otherwise the null bake result silently drops the edit.
+    const canBakeCompositeColors =
+      isDecomposed &&
+      typeof resolveFormatHandler(node.source).editCompositeColors ===
+        "function";
+
+    if (canBakeCompositeColors && (pp.color || pp.meshOverrides)) {
+      // Decomposed nodes need an async composite bake. Capture the node id
+      // and the edit payload so we can apply the result later.
+      ppJobs.push(buildCompositeBakeJob(node, nodeId, pp, manifest));
+    } else {
+      // Monolithic node - store as post_processor overlay (also covers
+      // decomposed nodes with only scale edits, which don't need a fetch).
+      applyPostProcessorOverlay(node, pp);
+    }
+  }
+
+  const ppResults = await Promise.allSettled(ppJobs);
+  for (const r of ppResults) {
+    if (r.status !== "fulfilled" || !r.value) continue;
+    const { nodeId, pp, result } = r.value;
+    const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+    if (!node) continue;
+
+    applyCompositeBakeResult(node, pp, result);
+  }
+
+  log(`Save: applied ${pendingPP.size} pending post-processor edit(s)`);
+}
+
+/**
+ * Finalize versioning and chat provenance.
+ * @param {any} manifest
+ * @param {any} prevManifest
+ * @param {string|null} latestCid
+ * @param {string|null|undefined} activeCid
+ */
+function finalizeVersionAndChat(
+  manifest: any,
+  prevManifest: any,
+  latestCid: string | null,
+  activeCid: string | null | undefined
+) {
+  // prevManifest is the tip of the chain that supplies version + prev link
+  // and is also the baseline for no-op detection. When the user has navigated
+  // to an older version (v2 of v1..v6), edits/saves still append to the tip
+  // as the next linear version (v7), not branch off as v3.
+  if (prevManifest) {
+    manifest.version = (prevManifest.version || 0) + 1;
+    manifest.prev_asset_manifest_cid = latestCid;
+  } else if (latestCid) {
+    advanceManifestVersion(manifest, latestCid);
+  }
+
+  // Chat provenance is version-scoped: drop entries carried over from the
+  // previous version, then record prompts consumed since that version.
+  if (manifest.metadata) delete manifest.metadata.chat;
+  const chatEntries = collectChatProvenanceEntries(activeCid);
+  if (chatEntries.length > 0) {
+    manifest.metadata = { ...(manifest.metadata || {}), chat: chatEntries };
+  } else if (manifest.metadata && Object.keys(manifest.metadata).length === 0) {
+    delete manifest.metadata;
+  }
+}
+
+/**
  * @param {string} assetName
  */
-export async function prepareManifestForWrite(assetName: string) {
-  let manifest;
+/**
+ * Gather pending edits and load (or build) the base manifest for a save.
+ * Returns null when there is no asset open and nothing to save.
+ * @param {string} assetName
+ */
+async function loadOrBuildBaseManifest(assetName: string) {
   // A linked-asset drop is fire-and-forget: if the user hits Save/Publish
   // while the drop is still resolving, its node is not in pendingChildRefs
   // yet and would be silently lost. Wait for any in-flight drops first.
@@ -372,6 +710,7 @@ export async function prepareManifestForWrite(assetName: string) {
   const pendingOverrides = getPendingSourceOverrides();
 
   const activeCid = getActiveAssetManifestCid();
+  let manifest;
   if (activeCid) {
     manifest = _useCachedManifest(activeCid);
     if (!manifest) {
@@ -399,6 +738,30 @@ export async function prepareManifestForWrite(assetName: string) {
   } else {
     return null;
   }
+
+  return {
+    manifest,
+    activeCid,
+    pendingRefs,
+    pendingPP,
+    pendingTransforms,
+    pendingColors,
+    pendingOverrides,
+  };
+}
+
+export async function prepareManifestForWrite(assetName: string) {
+  const loaded = await loadOrBuildBaseManifest(assetName);
+  if (!loaded) return null;
+  const {
+    manifest,
+    activeCid,
+    pendingRefs,
+    pendingPP,
+    pendingTransforms,
+    pendingColors,
+    pendingOverrides,
+  } = loaded;
 
   manifest.name = assetName;
   manifest.asset_id ||= `asset_${Date.now()}`;
@@ -437,59 +800,11 @@ export async function prepareManifestForWrite(assetName: string) {
         JSON.parse(JSON.stringify(baseManifest))
       : JSON.parse(JSON.stringify(baseManifest));
 
-  // Bake pending linked-child refs into the manifest. This MUST happen after
-  // the prevManifest snapshot above: pushing them earlier makes the no-op
-  // baseline already contain the child, so "link a child → Save" on an
-  // otherwise unchanged draft is wrongly reported as "no changes".
-  for (const pendingNode of (pendingRefs as any[])) {
-    if (!manifest.scene.nodes.some((n: any) => n.node_id === pendingNode.node_id)) {
-      manifest.scene.nodes.push(pendingNode);
-    }
-  }
+  // Bake pending linked-child refs, then drop unlinked child assets.
+  applyPendingChildRefs(manifest, pendingRefs as any[]);
 
-  // Drop child assets the user unlinked this session. Must run AFTER the
-  // prevManifest snapshot above (symmetric to the pending-add bake) so a
-  // "remove child → Save" on an otherwise unchanged draft is detected as a
-  // change and written.
-  const pendingRemovals = getPendingChildRefRemovals();
-  if (pendingRemovals.size > 0) {
-    manifest.scene.nodes = manifest.scene.nodes.filter(
-      (n: any) => !pendingRemovals.has(n.node_id)
-    );
-  }
-
-  // Bake pending viewport file-drop source overrides. Same ordering rule as
-  // the child refs above: must happen after the prevManifest snapshot so a
-  // drop-only save is not reported as "no changes". An override replaces the
-  // node's source and resets its post_processor to defaults — the old edits
-  // described the old geometry. When the node does not exist yet (fresh draft
-  // created by a drop with no asset open), a new single node is appended.
-  if (pendingOverrides.size > 0) {
-    for (const [nodeId, override] of pendingOverrides) {
-      const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-      if (node) {
-        node.source = { ...override.source };
-        node.post_processor = {
-          color: null,
-          scale: { x: 1, y: 1, z: 1 },
-        };
-        log(`Save: applied source override | node=${nodeId}`);
-      } else {
-        manifest.scene.nodes.push({
-          node_id: nodeId,
-          type: "source_asset",
-          name: override.name,
-          source: { ...override.source },
-          transform_matrix: identityMatrix(),
-          post_processor: {
-            color: null,
-            scale: { x: 1, y: 1, z: 1 },
-          },
-        });
-        log(`Save: created node from source override | node=${nodeId}`);
-      }
-    }
-  }
+  // Bake pending viewport file-drop source overrides.
+  applySourceOverrides(manifest, pendingOverrides);
 
   const sourceNodes = manifest.scene.nodes.filter(
     (n: any) => n.source?.cid && !n.child_ref
@@ -504,177 +819,14 @@ export async function prepareManifestForWrite(assetName: string) {
     : new Map();
   log(`Save: dedup map built | entries=${dedupMap.size} skipped=${!needsDedup}`);
 
-  // Apply direct source color edits.
-  // These mutate the source glTF/GLB asset and update node.source.cid.
-  // Each node is independent, so bake them concurrently.
-  if (pendingColors.size > 0) {
-    const colorJobs = [];
-    for (const [nodeId, nodeEdits] of pendingColors) {
-      const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-      if (!node || !node.source?.cid) continue;
+  // Apply direct source color edits (mutate source glTF/GLB, update node.source.cid).
+  await applySourceColorEdits(manifest, pendingColors, dedupMap);
 
-            const colorMap: Record<string, string> = {};
-      for (const [meshName, color] of nodeEdits) {
-        colorMap[meshName] = color;
-      }
-
-      colorJobs.push(
-        (async () => {
-          try {
-            const handler = resolveFormatHandler(node.source);
-            if (typeof handler.editSourceColors !== "function") {
-              warn(
-                `Save: source-color edit unsupported for format ${handler.format} | node=${nodeId}`
-              );
-              return null;
-            }
-            const result = await handler.editSourceColors(node, colorMap, {
-              assetName: manifest.name,
-              assetId: manifest.asset_id,
-              dedupMap,
-            });
-            return { nodeId, result };
-          } catch (err) {
-            if (isRateLimitError(err)) throw err;
-            warn(
-              `Save: failed to bake colors into source for ${nodeId}:`,
-              (err as Error).message
-            );
-            return null;
-          }
-        })()
-      );
-    }
-
-    const colorResults = await Promise.allSettled(colorJobs);
-    for (const r of colorResults) {
-      if (r.status !== "fulfilled" || !r.value) continue;
-      const { nodeId, result } = r.value;
-      const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-      if (!node) continue;
-      node.source.cid = result.sourceCid;
-      // The edited source is always glTF JSON now; keep the node's
-      // format/path truthful so the loader doesn't treat it as a binary GLB.
-      if (result.format) node.source.format = result.format;
-      if (result.path) node.source.path = result.path;
-      log(
-        `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
-      );
-    }
-  }
-
-  // Apply post-processor edits.
-  // Decomposed nodes: bake colors directly into the composite glTF.
-  // Monolithic nodes: store as node.post_processor (runtime overlay).
-  if (pendingPP.size > 0) {
-    const ppJobs = [];
-    for (const [nodeId, pp] of pendingPP) {
-      const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-      if (!node) continue;
-
-      const isDecomposed =
-        !!node.source?.cid && resolveFormatHandler(node.source).isStoredForm(node);
-
-      // Handlers without a composite color bake (e.g. 3MF, which keeps edits
-      // as overlays by design) must take the overlay branch even in stored
-      // form — otherwise the null bake result silently drops the edit.
-      const canBakeCompositeColors =
-        isDecomposed &&
-        typeof resolveFormatHandler(node.source).editCompositeColors ===
-          "function";
-
-      if (canBakeCompositeColors && (pp.color || pp.meshOverrides)) {
-        // Decomposed nodes need an async composite bake. Capture the node id
-        // and the edit payload so we can apply the result later.
-        ppJobs.push(
-          (async () => {
-            let result = null;
-            const handler = resolveFormatHandler(node.source);
-            if (typeof handler.editCompositeColors !== "function") {
-              // Fall through to overlay path by returning null.
-              return { nodeId, pp, result };
-            }
-            try {
-              result = await handler.editCompositeColors(
-                node,
-                pp.meshOverrides || null,
-                pp.color || null,
-                {
-                  assetName: manifest.name,
-                  assetId: manifest.asset_id,
-                }
-              );
-              log(
-                `Save: baked colors into composite glTF | node=${nodeId} newCid=${result.compositeCid}`
-              );
-            } catch (err) {
-              warn(
-                `Save: failed to bake colors into composite glTF for ${nodeId}:`,
-                (err as Error).message
-              );
-            }
-            return { nodeId, pp, result };
-          })()
-        );
-      } else {
-        // Monolithic node - store as post_processor overlay (also covers
-        // decomposed nodes with only scale edits, which don't need a fetch).
-        node.post_processor ||= {};
-        if (pp.color !== undefined) node.post_processor.color = pp.color;
-        if (pp.scale !== undefined) node.post_processor.scale = { ...pp.scale };
-        if (pp.meshOverrides && Object.keys(pp.meshOverrides).length > 0)
-          node.post_processor.meshOverrides = { ...pp.meshOverrides };
-        else if (node.post_processor.meshOverrides)
-          delete node.post_processor.meshOverrides;
-      }
-    }
-
-    const ppResults = await Promise.allSettled(ppJobs);
-    for (const r of ppResults) {
-      if (r.status !== "fulfilled" || !r.value) continue;
-      const { nodeId, pp, result } = r.value;
-      const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-      if (!node) continue;
-
-      if (result) {
-        node.source.cid = result.compositeCid;
-      }
-
-      // Scale still goes to post_processor (geometry, not material)
-      if (
-        pp.scale &&
-        (pp.scale.x !== 1 || pp.scale.y !== 1 || pp.scale.z !== 1)
-      ) {
-        node.post_processor ||= {};
-        node.post_processor.scale = { ...pp.scale };
-      } else if (node.post_processor) {
-        delete node.post_processor.scale;
-      }
-      // Clean up empty post_processor
-      if (
-        node.post_processor &&
-        Object.keys(node.post_processor).length === 0
-      ) {
-        delete node.post_processor;
-      }
-    }
-
-    log(
-      `Save: applied ${pendingPP.size} pending post-processor edit(s)`
-    );
-  }
+  // Apply post-processor edits (decomposed bake / monolithic overlay).
+  await applyPostProcessorEdits(manifest, pendingPP);
 
   // Apply viewport gizmo transform edits.
-  // Updates node.transform_matrix so the saved manifest renders the node
-  // in its edited position/rotation/scale on next load.
-  if (pendingTransforms.size > 0) {
-    for (const [nodeId, matrixArray] of pendingTransforms) {
-      const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-      if (!node) continue;
-      node.transform_matrix = matrixArray;
-      log(`Save: applied transform edit | node=${nodeId}`);
-    }
-  }
+  applyTransformEdits(manifest, pendingTransforms);
 
   // Decompose monolithic glTF nodes into composite (ipfs://) format.
   // Only affects glTF nodes that haven't been decomposed yet.
@@ -690,26 +842,8 @@ export async function prepareManifestForWrite(assetName: string) {
     );
   }
 
-  // prevManifest is the tip of the chain that supplies version + prev link
-  // and is also the baseline for no-op detection. When the user has navigated
-  // to an older version (v2 of v1..v6), edits/saves still append to the tip
-  // as the next linear version (v7), not branch off as v3.
-  if (prevManifest) {
-    manifest.version = (prevManifest.version || 0) + 1;
-    manifest.prev_asset_manifest_cid = latestCid;
-  } else if (latestCid) {
-    advanceManifestVersion(manifest, latestCid);
-  }
-
-  // Chat provenance is version-scoped: drop entries carried over from the
-  // previous version, then record prompts consumed since that version.
-  if (manifest.metadata) delete manifest.metadata.chat;
-  const chatEntries = collectChatProvenanceEntries(activeCid);
-  if (chatEntries.length > 0) {
-    manifest.metadata = { ...(manifest.metadata || {}), chat: chatEntries };
-  } else if (manifest.metadata && Object.keys(manifest.metadata).length === 0) {
-    delete manifest.metadata;
-  }
+  // Finalize version bump + version-scoped chat provenance.
+  finalizeVersionAndChat(manifest, prevManifest, latestCid, activeCid);
 
   return {
     manifest,

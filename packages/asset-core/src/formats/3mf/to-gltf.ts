@@ -58,116 +58,123 @@ function transformToMatrix4(t: number[]): number[] {
   ];
 }
 
-/**
- * @param parsed - result of parse3mfModel()
- * @returns glTF 2.0 JSON
- */
-export function parsed3mfToGltf(parsed: Parsed3mf): object {
+function sumBufferBytes(objects: any[]): number {
   let totalBytes = 0;
-  for (const obj of parsed.objects) {
+  for (const obj of objects) {
     totalBytes += obj.vertices.length * 4 + obj.triangles.length * 4;
   }
-  const buffer = new ArrayBuffer(totalBytes);
-  const view = new DataView(buffer);
+  return totalBytes;
+}
 
-  const bufferViews: any[] = [];
-  const accessors: any[] = [];
-  const meshes: any[] = [];
-  const materials: any[] = [];
-  const materialIndexByKey = new Map<string, number>(); // "pid:pindex" → materials[] index
-
-  let byteOffset = 0;
-  for (const obj of parsed.objects) {
-    // Positions (FLOAT VEC3)
-    const positionsByteOffset = byteOffset;
-    const min = [Infinity, Infinity, Infinity];
-    const max = [-Infinity, -Infinity, -Infinity];
-    for (let i = 0; i < obj.vertices.length; i++) {
-      const value = obj.vertices[i];
-      view.setFloat32(byteOffset, value, true);
-      byteOffset += 4;
-      const axis = i % 3;
-      if (value < min[axis]) min[axis] = value;
-      if (value > max[axis]) max[axis] = value;
-    }
-    bufferViews.push({
-      buffer: 0,
-      byteOffset: positionsByteOffset,
-      byteLength: obj.vertices.length * 4,
-    });
-    accessors.push({
-      bufferView: bufferViews.length - 1,
-      componentType: 5126, // FLOAT
-      count: obj.vertices.length / 3,
-      type: "VEC3",
-      min,
-      max,
-    });
-    const positionAccessor = accessors.length - 1;
-
-    // Indices (UNSIGNED_INT SCALAR)
-    const indicesByteOffset = byteOffset;
-    for (const index of obj.triangles) {
-      view.setUint32(byteOffset, index, true);
-      byteOffset += 4;
-    }
-    bufferViews.push({
-      buffer: 0,
-      byteOffset: indicesByteOffset,
-      byteLength: obj.triangles.length * 4,
-    });
-    accessors.push({
-      bufferView: bufferViews.length - 1,
-      componentType: 5125, // UNSIGNED_INT
-      count: obj.triangles.length,
-      type: "SCALAR",
-    });
-    const indexAccessor = accessors.length - 1;
-
-    // Material from basematerials via pid/pindex
-    let materialIndex: number | undefined;
-    if (obj.pid !== null && obj.pindex !== null) {
-      const key = `${obj.pid}:${obj.pindex}`;
-      if (!materialIndexByKey.has(key)) {
-        const groupMats = parsed.basematerials.filter(
-          (m) => m.groupId === obj.pid
-        );
-        const mat = groupMats[obj.pindex];
-        materialIndexByKey.set(key, materials.length);
-        materials.push({
-          name: mat?.name || `basematerial_${key}`,
-          // Note: displaycolor alpha is carried into baseColorFactor[3], but
-          // alphaMode stays default (opaque) in v1 — translucent 3MF materials
-          // render opaque.
-          pbrMetallicRoughness: {
-            baseColorFactor: displayColorToFactor(mat?.color),
-            metallicFactor: 0,
-            roughnessFactor: 0.5,
-          },
-        });
-      }
-      materialIndex = materialIndexByKey.get(key);
-    }
-
-    const primitive: {
-      attributes: { POSITION: number };
-      indices: number;
-      material?: number;
-    } = {
-      attributes: { POSITION: positionAccessor },
-      indices: indexAccessor,
-    };
-    if (materialIndex !== undefined) primitive.material = materialIndex;
-    meshes.push({
-      name: obj.name || `object_${obj.id}`,
-      primitives: [primitive],
+function resolveMaterialIndex(
+  obj: any,
+  parsed: Parsed3mf,
+  materials: any[],
+  materialIndexByKey: Map<string, number>
+): number | undefined {
+  if (obj.pid === null || obj.pindex === null) return undefined;
+  const key = `${obj.pid}:${obj.pindex}`;
+  if (!materialIndexByKey.has(key)) {
+    const groupMats = parsed.basematerials.filter(
+      (m) => m.groupId === obj.pid
+    );
+    const mat = groupMats[obj.pindex];
+    materialIndexByKey.set(key, materials.length);
+    materials.push({
+      name: mat?.name || `basematerial_${key}`,
+      // Note: displaycolor alpha is carried into baseColorFactor[3], but
+      // alphaMode stays default (opaque) in v1 — translucent 3MF materials
+      // render opaque.
+      pbrMetallicRoughness: {
+        baseColorFactor: displayColorToFactor(mat?.color),
+        metallicFactor: 0,
+        roughnessFactor: 0.5,
+      },
     });
   }
+  return materialIndexByKey.get(key);
+}
 
-  // Scene graph: axis-fix root + one node per build item.
-  const meshIndexByObjectId = new Map<string, number>(
-    parsed.objects.map((o, index) => [o.id, index])
-  );
+function appendObjectMesh(
+  obj: any,
+  parsed: Parsed3mf,
+  view: DataView,
+  byteOffset: number,
+  materials: any[],
+  materialIndexByKey: Map<string, number>,
+  bufferViews: any[],
+  accessors: any[]
+): { mesh: any; byteOffset: number } {
+  // Positions (FLOAT VEC3)
+  const positionsByteOffset = byteOffset;
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < obj.vertices.length; i++) {
+    const value = obj.vertices[i];
+    view.setFloat32(byteOffset, value, true);
+    byteOffset += 4;
+    const axis = i % 3;
+    if (value < min[axis]) min[axis] = value;
+    if (value > max[axis]) max[axis] = value;
+  }
+  bufferViews.push({
+    buffer: 0,
+    byteOffset: positionsByteOffset,
+    byteLength: obj.vertices.length * 4,
+  });
+  accessors.push({
+    bufferView: bufferViews.length - 1,
+    componentType: 5126, // FLOAT
+    count: obj.vertices.length / 3,
+    type: "VEC3",
+    min,
+    max,
+  });
+  const positionAccessor = accessors.length - 1;
+
+  // Indices (UNSIGNED_INT SCALAR)
+  const indicesByteOffset = byteOffset;
+  for (const index of obj.triangles) {
+    view.setUint32(byteOffset, index, true);
+    byteOffset += 4;
+  }
+  bufferViews.push({
+    buffer: 0,
+    byteOffset: indicesByteOffset,
+    byteLength: obj.triangles.length * 4,
+  });
+  accessors.push({
+    bufferView: bufferViews.length - 1,
+    componentType: 5125, // UNSIGNED_INT
+    count: obj.triangles.length,
+    type: "SCALAR",
+  });
+  const indexAccessor = accessors.length - 1;
+
+  // Material from basematerials via pid/pindex
+  const materialIndex = resolveMaterialIndex(obj, parsed, materials, materialIndexByKey);
+
+  const primitive: {
+    attributes: { POSITION: number };
+    indices: number;
+    material?: number;
+  } = {
+    attributes: { POSITION: positionAccessor },
+    indices: indexAccessor,
+  };
+  if (materialIndex !== undefined) primitive.material = materialIndex;
+  const mesh = {
+    name: obj.name || `object_${obj.id}`,
+    primitives: [primitive],
+  };
+
+  return { mesh, byteOffset };
+}
+
+function buildItemNodes(
+  parsed: Parsed3mf,
+  meshIndexByObjectId: Map<string, number>
+): Array<{ name: string; mesh: number; matrix?: number[] }> {
   const itemNodes: Array<{ name: string; mesh: number; matrix?: number[] }> =
     [];
   for (const [i, item] of parsed.items.entries()) {
@@ -185,8 +192,15 @@ export function parsed3mfToGltf(parsed: Parsed3mf): object {
     if (item.transform) node.matrix = transformToMatrix4(item.transform);
     itemNodes.push(node);
   }
+  return itemNodes;
+}
 
-  const nodes = [
+function buildNodes(parsed: Parsed3mf): any[] {
+  const meshIndexByObjectId = new Map<string, number>(
+    parsed.objects.map((o, index) => [o.id, index])
+  );
+  const itemNodes = buildItemNodes(parsed, meshIndexByObjectId);
+  return [
     {
       name: "3mf_root",
       rotation: Z_UP_TO_Y_UP_QUATERNION,
@@ -194,6 +208,41 @@ export function parsed3mfToGltf(parsed: Parsed3mf): object {
     },
     ...itemNodes,
   ];
+}
+
+/**
+ * @param parsed - result of parse3mfModel()
+ * @returns glTF 2.0 JSON
+ */
+export function parsed3mfToGltf(parsed: Parsed3mf): object {
+  const totalBytes = sumBufferBytes(parsed.objects);
+  const buffer = new ArrayBuffer(totalBytes);
+  const view = new DataView(buffer);
+
+  const bufferViews: any[] = [];
+  const accessors: any[] = [];
+  const meshes: any[] = [];
+  const materials: any[] = [];
+  const materialIndexByKey = new Map<string, number>(); // "pid:pindex" → materials[] index
+
+  let byteOffset = 0;
+  for (const obj of parsed.objects) {
+    const { mesh, byteOffset: nextOffset } = appendObjectMesh(
+      obj,
+      parsed,
+      view,
+      byteOffset,
+      materials,
+      materialIndexByKey,
+      bufferViews,
+      accessors
+    );
+    byteOffset = nextOffset;
+    meshes.push(mesh);
+  }
+
+  // Scene graph: axis-fix root + one node per build item.
+  const nodes = buildNodes(parsed);
 
   return {
     asset: { version: "2.0", generator: "arbesk-3mf" },

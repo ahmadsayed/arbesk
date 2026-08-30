@@ -1366,6 +1366,215 @@ describe("generateAsset", () => {
     ).rejects.toMatchObject({ status: 400, code: "SOURCE_ASSET_UNAVAILABLE" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   }, 15_000);
+
+  test("passes multiview images and records reference_images on the node", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({ status: 202, body: { taskId: "task-mv-1", provider: "tripo3d", status: "running" } })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const front = Buffer.from("front-bytes").toString("base64");
+    const left = Buffer.from("left-bytes").toString("base64");
+    const views = [
+      { imageData: front, imageMime: "image/png", imageName: "front.png", view: "front" },
+      { imageData: left, imageMime: "image/jpeg", imageName: "left.jpg", view: "left" },
+    ];
+
+    await generateAsset({
+      prompt: "Multiview chair",
+      nodeId: "n-mv",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      images: views,
+    });
+
+    // Wire carries canonical-ordered views without legacy imageData/imageName.
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body).images).toEqual([
+      { imageData: front, imageMime: "image/png", view: "front" },
+      { imageData: left, imageMime: "image/jpeg", view: "left" },
+    ]);
+
+    // reference_images records every view; reference_image carries the front.
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.scene.nodes[0].reference_images).toEqual([
+      { cid: "bafySourceAsset", mime: "image/png", name: "front.png", view: "front" },
+      { cid: "bafySourceAsset", mime: "image/jpeg", name: "left.jpg", view: "left" },
+    ]);
+    expect(manifest.scene.nodes[0].reference_image).toEqual(
+      manifest.scene.nodes[0].reference_images[0]
+    );
+  }, 15_000);
+
+  test("loads the previous manifest and increments version when prevAssetManifestCid is set", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({
+        body: {
+          assetData: Buffer.from("hello").toString("base64"),
+          format: "glb",
+          path: "asset.glb",
+        },
+      })
+    );
+    const { generateAsset } = await loadApi({ fetchMock });
+    const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    remote.getFromRemoteIPFS.mockResolvedValue({
+      asset_id: "asset-1",
+      version: 3,
+      scene: { nodes: [] },
+    });
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "a refined cube",
+      nodeId: "cube-node",
+      provider: "mock",
+      prevAssetManifestCid: "bafyPrevManifest",
+    });
+
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.version).toBe(4);
+    expect(manifest.prev_asset_manifest_cid).toBe("bafyPrevManifest");
+    expect(manifest.asset_id).toBe("asset-1");
+  }, 15_000);
+
+  test("falls back to a fresh manifest when the previous manifest cannot be read", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({
+        body: {
+          assetData: Buffer.from("hello").toString("base64"),
+          format: "glb",
+          path: "asset.glb",
+        },
+      })
+    );
+    const { generateAsset } = await loadApi({ fetchMock });
+    const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    remote.getFromRemoteIPFS.mockRejectedValue(new Error("ipfs down"));
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "a refined cube",
+      nodeId: "cube-node",
+      provider: "mock",
+      prevAssetManifestCid: "bafyPrevManifest",
+    });
+
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.version).toBe(1);
+    expect(manifest.prev_asset_manifest_cid).toBe("bafyPrevManifest");
+  }, 15_000);
+
+  test("passes animateInPlace and rigModel to the backend", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        buildResponse({ status: 202, body: { taskId: "task-anim-2", provider: "tripo3d", status: "running" } })
+      )
+      .mockResolvedValueOnce(
+        buildResponse({
+          body: {
+            status: "success",
+            assetData: Buffer.from("glb-bytes").toString("base64"),
+            format: "glb",
+            path: "asset.glb",
+            provider: "tripo3d",
+          },
+        })
+      );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    await generateAsset({
+      prompt: "Animate in place",
+      nodeId: "n-anim",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      sourceAssetCid: "bafySource",
+      animate: true,
+      animateInPlace: true,
+      rigModel: "v2.5-20260210",
+    });
+
+    const [, postOpts] = fetchMock.mock.calls[0];
+    expect(JSON.parse(postOpts.body)).toEqual({
+      prompt: "Animate in place",
+      nodeId: "n-anim",
+      provider: "tripo3d",
+      providerKey: "tripo-key",
+      sourceAssetCid: "bafySource",
+      animate: true,
+      animateInPlace: true,
+      rigModel: "v2.5-20260210",
+      chainId: 1,
+    });
+  }, 15_000);
+
+  test("honors a valid 16-element transformMatrix on the node", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      buildResponse({
+        body: {
+          assetData: Buffer.from("hello").toString("base64"),
+          format: "glb",
+          path: "asset.glb",
+        },
+      })
+    );
+    const { generateAsset } = await loadApi({ fetchMock });
+    const { writeJSONToIPFS } = await import(
+      "../../frontend/src/js/ipfs/write-to-ipfs.js"
+    );
+    localStorage.setItem(
+      "arbesk_session",
+      makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
+    );
+
+    const matrix = [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 3, 0, 4, 5, 6, 1];
+    await generateAsset({
+      prompt: "a cube",
+      nodeId: "cube-node",
+      provider: "mock",
+      transformMatrix: matrix,
+    });
+
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.scene.nodes[0].transform_matrix).toEqual(matrix);
+  }, 15_000);
 });
 
 describe("getProviderBalance", () => {

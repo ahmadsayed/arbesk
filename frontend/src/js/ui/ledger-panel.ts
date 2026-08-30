@@ -126,6 +126,47 @@ function toRow(entry: any): LedgerRow {
  * manifest is fetched from remote IPFS with getFromRemoteIPFS(); there is no
  * server endpoint such as /api/v1/manifests/:cid/history.
  */
+function buildManifestEntry(manifestCid: string, manifest: any): ActivityEntry {
+  return {
+    id: `manifest-${manifestCid}`,
+    timestamp: manifest.timestamp || 0,
+    opType: manifest.version === 1 ? "SAVE" : "LOAD",
+    manifestId: manifest.asset_id || manifest.manifest_id || "-",
+    cid: manifestCid,
+    prevCid: manifest.prev_manifest_cid || null,
+    actorType: "USER",
+    actorAddress: walletState.get().walletAddress || "system",
+    payload: {
+      version: manifest.version,
+      nodeCount: manifest.nodes?.length || 0,
+    },
+  };
+}
+
+function buildChatEntry(
+  manifestCid: string,
+  manifest: any,
+  index: number,
+  h: any
+): ActivityEntry {
+  return {
+    id: `chat-${manifestCid}-${h.timestamp}-${index}-${h.prompt}`,
+    timestamp: (h.timestamp || 0) * 1000,
+    opType: "AI",
+    manifestId: manifest.asset_id || manifest.manifest_id || "-",
+    cid: manifestCid,
+    prevCid: null,
+    actorType: "USER",
+    actorAddress: walletState.get().walletAddress || "system",
+    payload: {
+      prompt: h.prompt,
+      provider: h.provider,
+      task: h.task,
+      taskId: h.taskId,
+    },
+  };
+}
+
 function extractActivities(chain: any[]): ActivityEntry[] {
   const entries: ActivityEntry[] = [];
   const seen = new Set<string>();
@@ -139,20 +180,7 @@ function extractActivities(chain: any[]): ActivityEntry[] {
     // Manifest-level entry: each version in the chain represents a saved state.
     if (manifestCid && !seen.has(`manifest-${manifestCid}`)) {
       seen.add(`manifest-${manifestCid}`);
-      entries.push({
-        id: `manifest-${manifestCid}`,
-        timestamp: manifest.timestamp || 0,
-        opType: manifest.version === 1 ? "SAVE" : "LOAD",
-        manifestId: manifest.asset_id || manifest.manifest_id || "-",
-        cid: manifestCid,
-        prevCid: manifest.prev_manifest_cid || null,
-        actorType: "USER",
-        actorAddress: walletState.get().walletAddress || "system",
-        payload: {
-          version: manifest.version,
-          nodeCount: manifest.nodes?.length || 0,
-        },
-      });
+      entries.push(buildManifestEntry(manifestCid, manifest));
     }
 
     // Chat provenance entries. metadata.chat is version-scoped and the walk
@@ -162,23 +190,7 @@ function extractActivities(chain: any[]): ActivityEntry[] {
       const key = `chat-${manifestCid}-${h.timestamp}-${index}-${h.prompt}`;
       if (seen.has(key)) continue;
       seen.add(key);
-
-      entries.push({
-        id: key,
-        timestamp: (h.timestamp || 0) * 1000,
-        opType: "AI",
-        manifestId: manifest.asset_id || manifest.manifest_id || "-",
-        cid: manifestCid,
-        prevCid: null,
-        actorType: "USER",
-        actorAddress: walletState.get().walletAddress || "system",
-        payload: {
-          prompt: h.prompt,
-          provider: h.provider,
-          task: h.task,
-          taskId: h.taskId,
-        },
-      });
+      entries.push(buildChatEntry(manifestCid, manifest, index, h));
     }
   }
 

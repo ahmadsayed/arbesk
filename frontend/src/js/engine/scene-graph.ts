@@ -43,6 +43,7 @@ import {
   hasStoredCameraPose,
   clearStoredCameraPose,
 } from "./camera-persistence.ts";
+import { resolvePickedNodeId } from "./scene-picking.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Re-exports — backward compatibility
@@ -352,31 +353,10 @@ export function initEngine() {
     const pickResult = pointerInfo.pickInfo;
     if (pickResult.hit && pickResult.pickedMesh) {
       const mesh = pickResult.pickedMesh;
-      let target = mesh;
-      // Walk the full parent chain. Track the first nodeId seen (for regular
-      // nodes) but do NOT stop — continue until a childRef boundary is found
-      // or the chain ends. A childRef boundary means we are inside a child
-      // asset; the parent manifest's node_id is on the outer anchor above it.
-      let firstNodeId = null;
-      let childAssetNodeId = null;
-
-      while (target) {
-        if (target.metadata?.childRef) {
-          // childAnchor: its parent is the outer anchor whose metadata.nodeId
-          // is the parent-manifest node_id (manifest-loaded path).
-          // Fall back to childAnchor's own nodeId for freshly-dropped nodes.
-          childAssetNodeId =
-            target.parent?.metadata?.nodeId || target.metadata?.nodeId || null;
-          break;
-        }
-        if (target.metadata?.nodeId && !firstNodeId) {
-          firstNodeId = target.metadata.nodeId;
-        }
-        target = target.parent;
-      }
-
-      const resolvedNodeId = childAssetNodeId || firstNodeId;
-      const isChildAssetNode = !!childAssetNodeId;
+      // Walk the full parent chain: first nodeId for regular nodes, or the
+      // childRef boundary for child assets (see scene-picking.ts).
+      const { target, resolvedNodeId, isChildAssetNode } =
+        resolvePickedNodeId(mesh);
 
       const now = Date.now();
       const isDoubleClick =
