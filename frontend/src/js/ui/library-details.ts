@@ -33,6 +33,12 @@ import type { PreviewHandle } from "../services/chat-preview.ts";
 import { openItem } from "./library-grid.ts";
 import { CHAIN_IDS } from "../../../../constants/chains.js";
 
+// Loaded lazily so the edit-metadata flow (and its dialog/write deps) never
+// enters the module graph until the user clicks "Edit metadata…". The flow
+// lives in library-context-menu.ts so the details pane and the context menu
+// share one collection-write path.
+const contextMenuOps = () => import("./library-context-menu.ts");
+
 /** Preview id used with the chat-preview registry (one live preview max). */
 const PREVIEW_ID = "library-details";
 /** localStorage key for the pane visibility toggle; default visible. */
@@ -390,6 +396,29 @@ async function startCollectionMosaic(
   previewEl.hidden = false;
 }
 
+/**
+ * Render the Metadata row from a manifest's `metadata.annotations` map,
+ * flattened into a single "key: value · key: value" string (an em dash when
+ * empty). Collections are editable via the "Edit metadata…" button (Step 3);
+ * assets show annotations read-only (they are edited in Studio).
+ */
+function renderMetadata(manifest: any, isCollection: boolean): void {
+  const target = el("libraryDetailsMetadata");
+  const annotations = (manifest?.metadata?.annotations ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const keys = Object.keys(annotations);
+  if (target) {
+    target.textContent =
+      keys.length === 0
+        ? "—"
+        : keys.map((k) => k + ": " + JSON.stringify(annotations[k])).join(" · ");
+  }
+  const editBtn = el("libraryDetailsEditMetadataBtn");
+  if (editBtn) editBtn.hidden = !isCollection;
+}
+
 function renderCollectionDetails(
   item: LibraryItem,
   manifest: any,
@@ -406,6 +435,7 @@ function renderCollectionDetails(
       assetCount === 1 ? "1 asset" : `${assetCount} assets`;
   }
   if (formatRow) formatRow.hidden = true;
+  renderMetadata(manifest, true);
   void startCollectionMosaic(item, manifest, req);
 }
 
@@ -426,6 +456,7 @@ function renderAssetDetails(
   const formatEl = el("libraryDetailsFormat");
   const format = manifest?.scene?.nodes?.[0]?.source?.format;
   if (formatEl) formatEl.textContent = format ? String(format).toUpperCase() : "—";
+  renderMetadata(manifest, false);
   void startAssetPreview(item, manifest, req);
 }
 
@@ -660,6 +691,23 @@ export function initLibraryDetails(): void {
     const show = extra.hidden;
     extra.hidden = !show;
     btn.setAttribute("aria-expanded", String(show));
+  });
+
+  // Collection-only affordance: opens the shared annotations editor, which
+  // writes through updateCollectionManifest (applyCollectionMutation +
+  // updateAssetURI) — the same seam rename/delete use.
+  el("libraryDetailsEditMetadataBtn")?.addEventListener("click", () => {
+    if (_currentItemId === null) return;
+    contextMenuOps()
+      .then(({ requestEditCollectionMetadata }) =>
+        requestEditCollectionMetadata(String(_currentItemId))
+      )
+      .catch((err) =>
+        console.warn(
+          "[LIBRARY-DETAILS] edit metadata flow failed to load:",
+          err
+        )
+      );
   });
 
   initViewLeaveGuard();

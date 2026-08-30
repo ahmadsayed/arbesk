@@ -72,6 +72,10 @@ function singleItemMenuItems(ids: string[]): ContextMenuItem[] {
       },
       { label: "Rename", action: () => requestRename(id) },
       {
+        label: "Edit metadata…",
+        action: () => requestEditCollectionMetadata(id),
+      },
+      {
         label: "Manage Collaborators",
         action: () => requestManageCollaborators(id),
       },
@@ -198,6 +202,137 @@ async function requestBurnCollection(id: string): Promise<void> {
       message: (err as Error).message || "Could not burn the collection.",
     });
   }
+}
+
+/**
+ * Minimal key/value editor for a collection's `metadata.annotations` map,
+ * exposed as a JSON object (annotations are arbitrary values). The user edits
+ * JSON in a textarea; on save it is validated as a plain object and written
+ * through updateCollectionManifest (applyCollectionMutation + updateAssetURI),
+ * the same seam rename/delete use.
+ */
+export async function requestEditCollectionMetadata(id: string): Promise<void> {
+  const collection = getItem(id);
+  if (!collection) return;
+
+  let annotations: Record<string, unknown> = {};
+  try {
+    const { getFromRemoteIPFS } = await ipfsOps();
+    const manifest = await getFromRemoteIPFS(collection.manifestCid);
+    annotations = (manifest?.metadata?.annotations ?? {}) as Record<
+      string,
+      unknown
+    >;
+  } catch (err) {
+    console.warn(
+      "[LIBRARY-CONTEXT-MENU] could not load current annotations:",
+      err
+    );
+  }
+
+  const raw = await showMetadataEditor(annotations);
+  if (raw === null) return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    showToast({
+      type: "error",
+      title: "Invalid JSON",
+      message: "Annotations must be a valid JSON object.",
+    });
+    return;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    showToast({
+      type: "error",
+      title: "Invalid annotations",
+      message: "Annotations must be a JSON object.",
+    });
+    return;
+  }
+
+  try {
+    const { updateCollectionManifest } = await assetDeleteOps();
+    await updateCollectionManifest(
+      collection.tokenId,
+      (col: any) => {
+        col.metadata = { ...(col.metadata || {}) };
+        col.metadata.annotations = parsed as Record<string, unknown>;
+        return col;
+      },
+      { label: "edit collection metadata" }
+    );
+    announce(`Updated metadata for ${collection.name}`);
+  } catch (err) {
+    console.error("[LIBRARY-CONTEXT-MENU] edit metadata failed:", err);
+    showToast({
+      type: "error",
+      title: "Update Failed",
+      message: (err as Error).message || "Could not update metadata.",
+    });
+  }
+}
+
+/** Textarea-based JSON editor for collection annotations. */
+function showMetadataEditor(
+  annotations: Record<string, unknown>
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+
+    const group = document.createElement("div");
+    group.className = "form-group";
+
+    const label = document.createElement("label");
+    label.className = "form-label";
+    label.htmlFor = "metadataAnnotationsEditor";
+    label.textContent = "Annotations (JSON object)";
+
+    const textarea = document.createElement("textarea");
+    textarea.id = "metadataAnnotationsEditor";
+    textarea.className = "form-input";
+    textarea.rows = 8;
+    textarea.spellcheck = false;
+    textarea.value = JSON.stringify(annotations ?? {}, null, 2);
+
+    group.append(label, textarea);
+
+    const actions = document.createElement("div");
+    actions.className = "dialog-actions";
+    actions.style.display = "flex";
+    actions.style.gap = "var(--size-2)";
+    actions.style.justifyContent = "flex-end";
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn-secondary";
+    cancel.textContent = "Cancel";
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "btn btn-primary";
+    save.textContent = "Save";
+
+    actions.append(cancel, save);
+    wrap.append(group, actions);
+
+    // showCustomDialog overwrites wrap.closeDialog — wire the buttons after
+    // the dialog is built so they call the real closeDialog.
+    showCustomDialog("Edit metadata", wrap).then((v) => resolve(v));
+
+    cancel.addEventListener("click", () => {
+      const w = wrap as any;
+      if (typeof w.closeDialog === "function") w.closeDialog(null);
+      else resolve(null);
+    });
+    save.addEventListener("click", () => {
+      const w = wrap as any;
+      if (typeof w.closeDialog === "function") w.closeDialog(textarea.value);
+      else resolve(textarea.value);
+    });
+  });
 }
 
 export async function requestRename(id: string): Promise<void> {
