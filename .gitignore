@@ -45,6 +45,10 @@ blockchain/typechain/
 blockchain/typechain-types/
 blockchain/coverage/
 
+# Mutation testing (slither-mutate) — isolated venv + campaign output, never committed
+blockchain/.venv-mutate/
+blockchain/mutation_campaign*/
+
 # Testing
 coverage/
 .nyc_output/

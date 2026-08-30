@@ -57,6 +57,7 @@ npm run test:all                       # lint → typecheck → frontend → api
 npm run test:api                       # test/api.test.js alone
 npm run test:frontend                  # test/frontend/ + deployment integrity
 npm run test:contracts                 # Hardhat tests in Docker
+(cd blockchain && npm run test:mutation)  # slither-mutate vs blockchain/test/ArbeskAsset.test.js (~15-20 min, no Docker needed)
 npm run bench:asset-core               # asset-core pipeline benchmark → test-results/asset-core-bench.json
 npm run test:e2e -- --project=chromium # Playwright critical path (:ui = visible browser)
 npm run audit                        # fallow quality gate (dead code/complexity/dupes/styling) on the changeset vs HEAD
