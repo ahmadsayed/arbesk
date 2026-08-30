@@ -41,6 +41,7 @@ import { initOutliner } from "./ui/outliner.ts";
 import { initNesting } from "./ui/nesting.ts";
 import { initCollaborators } from "./ui/collaborators.ts";
 import { initCommentsPanel } from "./ui/comments-panel.ts";
+import { initMetadataEditor } from "./ui/metadata-editor.ts";
 import { rewriteShortcutTitles } from "./utils/platform.ts";
 import "./ui/keyboard-help.ts";
 import "./engine/undo-controller.ts";
@@ -81,6 +82,7 @@ initOutliner();
 initNesting();
 initCollaborators();
 initCommentsPanel();
+initMetadataEditor();
 rewriteShortcutTitles();
 
 // ─── Theme ───

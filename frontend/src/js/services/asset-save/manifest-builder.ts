@@ -9,6 +9,7 @@
 
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
 import { computeAssetStats } from "./metadata-extract.ts";
+import { getPendingAnnotations, clearPendingAnnotations } from "./annotations.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 import { snapshotCommentsArchive } from "../api.ts";
 import { getTokenURI } from "../token.ts";
@@ -843,6 +844,13 @@ export async function prepareManifestForWrite(assetName: string) {
     );
   }
 
+  // Bake pending annotations (Inspector metadata editor) into the manifest.
+  const pendingAnnotations = getPendingAnnotations();
+  if (pendingAnnotations !== null) {
+    manifest.metadata ||= {};
+    manifest.metadata.annotations = pendingAnnotations;
+  }
+
   // Recompute deterministic model facts (metadata.computed) from the root
   // source. Best-effort: a failure must never block the save.
   const computedStats = await computeAssetStats(manifest);
@@ -922,6 +930,7 @@ export async function saveAssetDraftCore(
     clearPendingTransformEdits();
     clearPendingSourceColorEdits();
     clearPendingSourceOverrides();
+    clearPendingAnnotations();
     // Keep the in-memory manifest cache aligned with the active CID even when
     // no new version is written, so the next save/publish can skip the IPFS
     // round-trip entirely.
@@ -968,6 +977,7 @@ export async function saveAssetDraftCore(
   clearPendingTransformEdits();
   clearPendingSourceColorEdits();
   clearPendingSourceOverrides();
+  clearPendingAnnotations();
 
   return {
     ok: true,

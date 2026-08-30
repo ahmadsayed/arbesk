@@ -1,0 +1,123 @@
+// ═══════════════════════════════════════════════════════════════════
+// Inspector — Metadata editor (computed facts + editable annotations)
+// ═══════════════════════════════════════════════════════════════════
+
+.metadata-section {
+  // Section is toggled via the [hidden] attribute (reset handles display).
+  .metadata-computed,
+  .metadata-annotations {
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-2);
+  }
+
+  .metadata-annotations {
+    padding-top: var(--size-2);
+    border-top: var(--border-size-1) solid var(--border-hairline);
+  }
+}
+
+.metadata-block-title {
+  margin: 0;
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+}
+
+// Read-only computed facts list (dl > dt/dd).
+.metadata-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+
+  dt {
+    font-size: var(--font-size-0);
+    color: var(--dim-fg);
+  }
+
+  dd {
+    margin: 0;
+    font-size: var(--font-size-1);
+    font-family: var(--font-mono);
+    word-break: break-word;
+  }
+
+  .metadata-empty {
+    font-size: var(--font-size-0);
+    color: var(--dim-fg);
+    font-style: italic;
+  }
+}
+
+// Editable key/value annotations.
+.metadata-kv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+
+.metadata-kv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+
+.metadata-kv-key {
+  flex: 0 0 40%;
+  font-family: var(--font-mono);
+}
+
+.metadata-kv-value {
+  flex: 1 1 auto;
+}
+
+.metadata-kv-del {
+  flex-shrink: 0;
+  color: var(--destructive-fg);
+  background-color: var(--destructive-bg);
+  border-color: transparent;
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
+.metadata-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+
+.metadata-quick-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-1);
+}
+
+.metadata-quick-label {
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+}
+
+.metadata-chip {
+  font-size: var(--font-size-0);
+  color: var(--accent-fg);
+  background-color: var(--accent-bg);
+  border: var(--border-size-1) solid transparent;
+  border-radius: var(--radius-round);
+  padding: 2px var(--size-2);
+  cursor: pointer;
+  transition: filter var(--duration-quick) var(--ease-out-3),
+              background-color var(--duration-quick) var(--ease-out-3);
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
