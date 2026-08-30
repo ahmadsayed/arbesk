@@ -116,6 +116,7 @@ const EXPECTED_TOOLS = [
   "list_assets", "asset_info", "asset_history", "download_asset", "upload_asset",
   "delete_asset", "rename_asset", "send_asset", "link_asset", "show_asset",
   "generate_model", "retexture_model", "retopo_model", "rig_model", "animate_model",
+  "get_asset_metadata", "get_collection_metadata",
   "provider_balance", "cancel_generation",
 ];
 

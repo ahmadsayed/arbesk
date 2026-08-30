@@ -45,6 +45,7 @@ import {
   readImageFile,
   saveGenerated,
 } from "./helpers.ts";
+import { getAssetMetadata, getCollectionMetadata } from "./metadata.ts";
 
 /** cli.ts adapter over helpers.readImageFile: print + exit code instead of throwing. */
 function readImageFileCli(file: string): { imageData: string; imageMime: string } | null {
@@ -90,6 +91,8 @@ function help(): void {
   console.log("  use <name>        switch to a collection");
   console.log("  list              list assets in the current collection");
   console.log("  info <name>       show an asset's identity card");
+  console.log("  metadata get <name>   show an asset's computed facts + annotations");
+  console.log("  collection-meta get   show the active collection's annotations");
   console.log("  history <name>    show an asset's version chain");
   console.log("  download <name> [version]  pull a model to a local file");
   console.log("  upload <file>     save a local model to the current collection");
@@ -959,6 +962,35 @@ async function cmdBurn(name?: string): Promise<void> {
   if (receipt.transactionHash) console.log("Tx: " + receipt.transactionHash);
 }
 
+async function cmdMetadataGet(name?: string): Promise<void> {
+  const ctx = await requireNamedAsset(name, "Usage: besk metadata get <name>");
+  if (!ctx) return;
+  const meta = await getAssetMetadata(ctx.s, ctx.hit.cid);
+  console.log(JSON.stringify(meta, null, 2));
+}
+
+async function cmdCollectionMetaGet(): Promise<void> {
+  const s = requireSession();
+  if (!s) return;
+  const tokenId = await currentCollectionTokenId(s);
+  const meta = await getCollectionMetadata(s, tokenId);
+  console.log(JSON.stringify(meta, null, 2));
+}
+
+async function cmdMetadata(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  if (sub === "get") return cmdMetadataGet(argv[1]);
+  console.error("Usage: besk metadata get <name>");
+  process.exitCode = 2;
+}
+
+async function cmdCollectionMeta(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  if (sub === "get") return cmdCollectionMetaGet();
+  console.error("Usage: besk collection-meta get");
+  process.exitCode = 2;
+}
+
 /** Command dispatch table — each handler receives nothing; args are module state. */
 const COMMANDS: Record<string, () => void | Promise<void>> = {
   login: () => login(args[1]),
@@ -985,6 +1017,8 @@ const COMMANDS: Record<string, () => void | Promise<void>> = {
   animate: () => cmdAnimate(args.slice(1)),
   balance: () => cmdBalance(args.slice(1)),
   cancel: () => cmdCancel(args.slice(1)),
+  metadata: () => cmdMetadata(args.slice(1)),
+  "collection-meta": () => cmdCollectionMeta(args.slice(1)),
   mcp: async () => {
     const { startMcpServer } = await import("./mcp-server.ts");
     await startMcpServer();

@@ -52,6 +52,7 @@ import {
   readImageFile,
   saveGenerated,
 } from "./helpers.ts";
+import { getAssetMetadata, getCollectionMetadata } from "./metadata.ts";
 
 export interface McpToolDef {
   name: string;
@@ -200,7 +201,18 @@ async function hAssetInfo(s: Session, args: Args): Promise<unknown> {
     created: m.timestamp ? new Date(m.timestamp).toISOString() : null,
     nodes: nodes.length,
     previous: m.prev_asset_manifest_cid ?? null,
+    computed: m?.metadata?.computed ?? null,
+    annotations: m?.metadata?.annotations ?? {},
   };
+}
+
+async function hGetAssetMetadata(s: Session, args: Args): Promise<unknown> {
+  const hit = await assetFor(s, args);
+  return getAssetMetadata(s, hit.cid);
+}
+
+async function hGetCollectionMetadata(s: Session, args: Args): Promise<unknown> {
+  return getCollectionMetadata(s, await tokenIdFor(s, args));
 }
 
 async function hAssetHistory(s: Session, args: Args): Promise<unknown> {
@@ -644,6 +656,8 @@ const TOOLS: ToolEntry[] = [
     },
     ["name", "presets"], hAnimate,
   ),
+  tool("get_asset_metadata", "Return an asset's computed facts and user/agent annotations.", { ...NAME, ...COLLECTION }, ["name"], hGetAssetMetadata),
+  tool("get_collection_metadata", "Return a collection's user/agent annotations.", { ...COLLECTION }, [], hGetCollectionMetadata),
   tool("provider_balance", "Show the Tripo3D credit balance for a BYOK key.", { ...KEY }, [], hBalance),
   tool(
     "cancel_generation",
