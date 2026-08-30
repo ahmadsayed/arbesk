@@ -2,12 +2,13 @@ import type { ArbeskCoreConfig, ArbeskRuntime } from "./types.ts";
 import { defaultKernels } from "./kernels/index.ts";
 import { inlineExecutor } from "./executor/inline.ts";
 import { memoryStorage } from "./storage/memory.ts";
+import { _setRuntime, getRuntime } from "./runtime-state.ts";
 
-let runtime: ArbeskRuntime | null = null;
+export { getRuntime };
 
 /** Set the process-wide runtime. Called once per environment by createArbeskCore(). */
 export function initRuntime(config: ArbeskCoreConfig): ArbeskRuntime {
-  runtime = {
+  const runtime: ArbeskRuntime = {
     ipfsRead: config.ipfsRead,
     ipfsWrite: config.ipfsWrite,
     credentials: config.credentials ?? null,
@@ -18,16 +19,10 @@ export function initRuntime(config: ArbeskCoreConfig): ArbeskRuntime {
     executor: config.executor ?? inlineExecutor,
     kernels: { ...defaultKernels, ...(config.kernels ?? {}) },
   };
-  return runtime;
-}
-
-export function getRuntime(): ArbeskRuntime {
-  if (!runtime) {
-    throw new Error("asset-core: not initialized — call createArbeskCore() (or initRuntime()) first");
-  }
+  _setRuntime(runtime);
   return runtime;
 }
 
 export function _resetRuntimeForTesting(): void {
-  runtime = null;
+  _setRuntime(null);
 }

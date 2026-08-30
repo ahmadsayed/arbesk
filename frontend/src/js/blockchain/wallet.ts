@@ -9,11 +9,11 @@
  *   wallet-network.ts   - network switching
  *   wallet-payments.ts  - USDC + free-tier generation payments
  *   wallet-publishing.ts - NFT mint, tokenURI update, editor set, burn
+ *   wallet-provider.ts - shared live provider ref + NETWORKS (leaf)
  */
 
 // Core (shared state contract + connection lifecycle)
 export {
-  web3Provider,
   contract,
   initWallet,
   connectWallet,
@@ -23,8 +23,10 @@ export {
   getActiveConnectionSource,
   getActiveContract,
   getSigner,
-  NETWORKS,
 } from "./wallet-core.ts";
+
+// Shared live provider + network definitions (leaf module)
+export { web3Provider, NETWORKS } from "./wallet-provider.ts";
 
 // viem read client (per-chain cached)
 export { getReadClient } from "./viem-clients.ts";

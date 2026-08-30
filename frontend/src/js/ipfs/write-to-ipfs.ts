@@ -6,7 +6,7 @@
  * upload-with-credential.js.
  */
 
-import { getUploadCredential } from "../services/api.ts";
+import { getUploadCredential } from "../services/backend-client.ts";
 import { compress } from "@arbesk/asset-core/utils/compression.js";
 import { sanitizeFileName } from "@arbesk/asset-core/utils/uri.js";
 import { uploadToIPFSWithCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";

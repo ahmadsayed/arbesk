@@ -9,7 +9,7 @@
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
-import { getContractArtifact, relayWrite } from "../services/api.ts";
+import { getContractArtifact, relayWrite } from "../services/backend-client.ts";
 import { showToast } from "../ui/toasts.ts";
 import { isIpfsCidReachable } from "../ipfs/remote-ipfs.ts";
 import { getActiveConnectionSource, getActiveContract } from "./wallet-core.ts";
@@ -271,7 +271,7 @@ async function burn(tokenId: number | string, proof: string[]) {
         );
       } else {
         console.log(`[BURN] unpinning IPFS content for ${manifestCid}…`);
-        const { unpinAssetCids } = await import("../services/api.ts");
+        const { unpinAssetCids } = await import("../services/backend-client.ts");
         const { chainId, contractAddress } = walletState.get();
         const result = await unpinAssetCids(manifestCid, {
           tokenId: String(tokenId),

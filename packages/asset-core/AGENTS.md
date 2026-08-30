@@ -40,6 +40,7 @@ never imports network/DOM/chain/storage directly: `ipfsRead` + `ipfsWrite`
 src/
   facade.ts              createArbeskCore composition root
   runtime.ts             process-wide runtime (initRuntime/getRuntime)
+  runtime-state.ts       runtime holder leaf — format pipelines import getRuntime from here, never from runtime.ts (cycle: runtime → executor/inline → composer → runtime)
   types.ts               port + config types
   index.ts               public exports
   formats/               compose/decompose pipeline (see below)

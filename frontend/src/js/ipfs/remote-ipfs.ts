@@ -11,7 +11,7 @@
  * cache (asset-core/utils/content-cache.js) for heavyweight buffers/images.
  */
 
-import { getConfig } from "../services/api.ts";
+import { getConfig } from "../services/backend-client.ts";
 import { isGzipped, decompress } from "@arbesk/asset-core/utils/compression.js";
 import { arrayBufferToBase64 } from "@arbesk/asset-core/utils/encoding.js";
 import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";

@@ -90,7 +90,7 @@ export function warmupCdpClient(): Promise<boolean> {
   if (!_warmupPromise) {
     _warmupPromise = (async () => {
       try {
-        const { getConfig } = await import("../services/api.ts");
+        const { getConfig } = await import("../services/backend-client.ts");
         const config = await getConfig();
         if (!config?.cdpProjectId) return false;
         await initCdpClient(config.cdpProjectId);

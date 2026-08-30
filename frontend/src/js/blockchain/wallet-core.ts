@@ -12,7 +12,7 @@
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
-import { getContractAddress, getContractArtifact } from "../services/api.ts";
+import { getContractAddress, getContractArtifact } from "../services/backend-client.ts";
 import { showToast, dismissToast } from "../ui/toasts.ts";
 import { log, warn, error } from "../utils/log.ts";
 import {
@@ -40,25 +40,7 @@ import { createEoaSigner } from "@arbesk/wallet/adapters/eoa.js";
 import { buildUserIdentity } from "@arbesk/wallet/facade.js";
 import { getContract, formatEther } from "viem";
 import { getReadClient } from "./viem-clients.ts";
-
-// ─── Network definitions (shared with wallet-network.ts) ───
-
-export const NETWORKS = {
-  hardhat: {
-    chainId: `0x${CHAIN_IDS.HARDHAT_LOCAL.toString(16)}`,
-    chainName: "Hardhat Local",
-    rpcUrls: ["http://127.0.0.1:8545"],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: [] as string[],
-  },
-  baseSepolia: {
-    chainId: `0x${CHAIN_IDS.BASE_TESTNET.toString(16)}`,
-    chainName: "Base Sepolia Testnet",
-    rpcUrls: ["https://sepolia.base.org"],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    blockExplorerUrls: ["https://sepolia.basescan.org"],
-  },
-};
+import { web3Provider, setWeb3Provider, NETWORKS } from "./wallet-provider.ts";
 
 // ─── Module-level state ───
 
@@ -68,7 +50,6 @@ let activeConnectionSource: "injected" | "walletconnect" | "cdp" | null = null;
 /** rdns of the injected wallet (e.g., 'io.metamask') */
 let _activeWalletRdns: string | null = null;
 
-let web3Provider: any = null;
 let contract: any = null;
 let contractAddress: string | null = null;
 let lowBalanceToastId: any = null;
@@ -280,7 +261,7 @@ async function autoConnectWallet() {
       // Try WalletConnect silent restore
       const wcProvider = await getWalletConnectProvider();
       if (wcProvider && wcProvider.connected) {
-        web3Provider = wcProvider;
+        setWeb3Provider(wcProvider);
         const accounts = wcProvider.accounts || [];
         if (accounts.length > 0) {
           activeConnectionSource = "walletconnect";
@@ -301,7 +282,7 @@ async function autoConnectWallet() {
             method: "eth_accounts",
           });
           if (accounts && accounts.length > 0) {
-            web3Provider = wallet.provider;
+            setWeb3Provider(wallet.provider);
             activeConnectionSource = "injected";
             _activeWalletRdns = wallet.rdns;
             await _finishWalletSetup(accounts[0]);
@@ -319,7 +300,7 @@ async function autoConnectWallet() {
         method: "eth_accounts",
       });
       if (accounts && accounts.length > 0) {
-        web3Provider = window.ethereum;
+        setWeb3Provider(window.ethereum);
         activeConnectionSource = "injected";
         _activeWalletRdns = null; // unknown which wallet
         await _finishWalletSetup(accounts[0]);
@@ -496,7 +477,7 @@ function _attachProviderListeners() {
 async function authenticateUser() {
   const _tAuth = performance.now();
   try {
-    const { getOrCreateSession } = await import("../services/api.ts");
+    const { getOrCreateSession } = await import("../services/backend-client.ts");
     const session = await getOrCreateSession();
     console.log(`[LOGIN-TIMING] sessionAuth: ${Math.round(performance.now() - _tAuth)}ms`);
     emit(EVENTS.USER_AUTHENTICATED, {
@@ -538,7 +519,7 @@ async function connectWallet() {
       await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress, result.email || null);
     } else if (source === "walletconnect") {
       // WalletConnect provider is already connected by this point
-      web3Provider = provider;
+      setWeb3Provider(provider);
       activeConnectionSource = "walletconnect";
       _activeWalletRdns = null;
       localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
@@ -551,7 +532,7 @@ async function connectWallet() {
       await _finishWalletSetup(accounts[0]);
     } else {
       // Injected wallet - request accounts to trigger popup
-      web3Provider = provider;
+      setWeb3Provider(provider);
       activeConnectionSource = "injected";
       _activeWalletRdns = walletRdns || null;
 
@@ -629,7 +610,7 @@ async function disconnectWallet() {
 
   activeConnectionSource = null;
   _activeWalletRdns = null;
-  web3Provider = null;
+  setWeb3Provider(null);
   signer = null;
   contract = null;
   contractAddress = null;
@@ -656,7 +637,6 @@ function getActiveContract(): any {
 }
 
 export {
-  web3Provider,
   contract,
   initWallet,
   connectWallet,

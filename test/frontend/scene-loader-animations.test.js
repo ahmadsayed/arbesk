@@ -66,7 +66,7 @@ beforeAll(async () => {
     () => ({ applyColor: jest.fn(), applyScale: jest.fn() })
   );
   await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/scene-graph.js",
+    "../../frontend/src/js/engine/anchor-node.js",
     () => ({ createAnchorNode: jest.fn(() => ({ parent: null, metadata: {} })) })
   );
 

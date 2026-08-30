@@ -13,6 +13,7 @@ import {
 import { escapeHtml } from "../utils/html.ts";
 import { showToast } from "./toasts.ts";
 import { createCollectionFlow } from "./library-create.ts";
+import { openInStudio } from "./library-open.ts";
 
 // Blockchain/IPFS operations are loaded lazily so that unit tests for this
 // module can run in jsdom without pulling in the full Studio dependency tree.
@@ -66,7 +67,6 @@ function singleItemMenuItems(ids: string[]): ContextMenuItem[] {
       {
         label: "Open in Studio",
         action: async () => {
-          const { openInStudio } = await import("./library-grid.ts");
           openInStudio(collection.tokenId);
         },
       },
@@ -150,7 +150,6 @@ async function openSelectedAssetInStudio(ids: string[]): Promise<void> {
   if (!ids.length) return;
   const asset = libraryState.get().assets.find((a) => a.id === ids[0]);
   if (!asset) return;
-  const { openInStudio } = await import("./library-grid.ts");
   openInStudio(asset.tokenId, asset.assetId);
 }
 

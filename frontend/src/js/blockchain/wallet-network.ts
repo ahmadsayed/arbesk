@@ -6,7 +6,7 @@
  */
 
 import { showToast } from "../ui/toasts.ts";
-import { web3Provider, NETWORKS } from "./wallet-core.ts";
+import { web3Provider, NETWORKS } from "./wallet-provider.ts";
 
 /**
  * Detect the "chain is not added to wallet" error across wallet vendors.

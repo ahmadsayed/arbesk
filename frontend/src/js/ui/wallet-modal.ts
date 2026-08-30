@@ -321,7 +321,7 @@ async function selectEmailWallet(): Promise<void> {
 
   try {
     // Init CDP client (lazy — get project ID from cached config)
-    const { getConfig } = await import("../services/api.ts");
+    const { getConfig } = await import("../services/backend-client.ts");
     const config = await getConfig();
     if (!config?.cdpProjectId) {
       if (emailError) emailError.textContent = "Email sign-in is not configured. Contact support.";

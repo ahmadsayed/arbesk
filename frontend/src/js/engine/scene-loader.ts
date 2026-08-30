@@ -28,7 +28,7 @@ import {
 import { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
 import { applyColor, applyScale } from "./time-travel.ts";
 import { clearScene, disposeNodeContent } from "./cleanup.ts";
-import { createAnchorNode } from "./scene-graph.ts";
+import { createAnchorNode } from "./anchor-node.ts";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
 /**

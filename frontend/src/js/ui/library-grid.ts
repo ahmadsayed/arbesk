@@ -3,6 +3,7 @@ import type { LibraryItem } from "../state/library-state.ts";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { escapeHtml } from "../utils/html.ts";
 import { loadThumbnailInto } from "../utils/thumbnail.ts";
+import { openInStudio } from "./library-open.ts";
 import {
   computeRangeSelection,
   filterItems,
@@ -215,17 +216,9 @@ let lastClickedId: string | number | null = null;
 let lastClickTime = 0;
 const DOUBLE_CLICK_MS = 400;
 
-export function openInStudio(tokenId: string | number, assetId?: string | number): void {
-  const params = new URLSearchParams();
-  params.set("asset", String(tokenId));
-  if (assetId) params.set("assetId", String(assetId));
-  // SPA in-app transition — no full reload, so the wallet/session stay alive.
-  // The router activates the Studio view and calls loadFromParams() to open the
-  // asset the query string points at.
-  import("../app/router.ts")
-    .then(({ navigate }) => navigate(`/studio?${params.toString()}`))
-    .catch((err) => console.error("[LIBRARY] open-in-studio failed:", err));
-}
+// Lives in the library-open leaf (shared with library-context-menu without
+// an import cycle); re-exported for existing consumers.
+export { openInStudio } from "./library-open.ts";
 
 export function openItem(id: string | number): void {
   const state = libraryState.get();

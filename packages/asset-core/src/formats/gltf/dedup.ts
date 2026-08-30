@@ -13,7 +13,7 @@ import {
   SUPPORTED_HASH_ALGORITHMS,
 } from "../../utils/hash.ts";
 import { compress } from "../../utils/compression.ts";
-import { getRuntime } from "../../runtime.ts";
+import { getRuntime } from "../../runtime-state.ts";
 import {
   IPFS_URI_PREFIX,
   cidFromIpfsUri,
@@ -48,6 +48,21 @@ export interface DedupUploadResult {
 const _inflightUploads = new Map<string, Promise<DedupUploadResult>>();
 
 /**
+ * Extract the dedup hash → CID pair from a composite buffer/image entry,
+ * or null when the entry carries no usable IPFS reference.
+ */
+function dedupEntryFromItem(item: any): { hash: string; cid: string } | null {
+  const meta = item?._arbesk;
+  // Accept any supported algorithm so composites written with the older
+  // murmur3-32 key still contribute to the dedup map after the migration.
+  if (!meta?.hash || !SUPPORTED_HASH_ALGORITHMS.has(meta.hashAlgo)) return null;
+  const uri = item?.uri;
+  if (!uri?.startsWith(IPFS_URI_PREFIX)) return null;
+  const cid = uri.slice(IPFS_URI_PREFIX.length);
+  return cid ? { hash: meta.hash, cid } : null;
+}
+
+/**
  * Build a hash → CID map from one or more composite glTF JSONs.
  *
  * @param composites - Composite glTF JSON or array of them (dynamic schema)
@@ -56,24 +71,13 @@ export function buildDedupMap(composites: any): Map<string, string> {
   const map = new Map<string, string>();
   const list = Array.isArray(composites) ? composites : [composites];
   for (const composite of list) {
-    if (!composite) continue;
     for (const item of [
-      ...(composite.buffers || []),
-      ...(composite.images || []),
+      ...(composite?.buffers || []),
+      ...(composite?.images || []),
     ]) {
-      const meta = item?._arbesk;
-      // Accept any supported algorithm so composites written with the older
-      // murmur3-32 key still contribute to the dedup map after the migration.
-      if (
-        !meta?.hash ||
-        !SUPPORTED_HASH_ALGORITHMS.has(meta.hashAlgo) ||
-        !item.uri
-      )
-        continue;
-      if (!item.uri.startsWith(IPFS_URI_PREFIX)) continue;
-      const cid = item.uri.slice(IPFS_URI_PREFIX.length);
-      if (cid && !map.has(meta.hash)) {
-        map.set(meta.hash, cid);
+      const entry = dedupEntryFromItem(item);
+      if (entry && !map.has(entry.hash)) {
+        map.set(entry.hash, entry.cid);
       }
     }
   }

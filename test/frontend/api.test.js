@@ -71,6 +71,16 @@ async function loadApi(options = {}) {
     getContractAddress: jest.fn((chainId) =>
       Number(chainId) === Number(_chainIdResult) ? _networkAddress : null
     ),
+    getRpcUrl: jest.fn(() => "http://127.0.0.1:8545"),
+  }));
+
+  // backend-client.ts (the wallet-free leaf api.ts delegates to) reads the
+  // chain id via viem-clients directly — mock it here so getContractAddress
+  // never hits a real RPC endpoint.
+  await jest.unstable_mockModule("../../frontend/src/js/blockchain/viem-clients.js", () => ({
+    getReadClient: jest.fn(() => ({
+      getChainId: jest.fn().mockResolvedValue(_chainIdResult),
+    })),
   }));
 
   await jest.unstable_mockModule("@arbesk/wallet/siwe.js", () => ({

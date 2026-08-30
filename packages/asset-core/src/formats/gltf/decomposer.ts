@@ -17,7 +17,7 @@
  */
 
 import { sanitizeFileName } from "../../utils/uri.ts";
-import { getRuntime } from "../../runtime.ts";
+import { getRuntime } from "../../runtime-state.ts";
 import { uploadWithDedup } from "./dedup.ts";
 import {
   isComposite,

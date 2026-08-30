@@ -9,7 +9,7 @@
  */
 
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
-import { getRuntime } from "../../runtime.ts";
+import { getRuntime } from "../../runtime-state.ts";
 import { sanitizeFileName, extractDataURI } from "../../utils/uri.ts";
 import { extFromMimeType } from "./image-mime.ts";
 import { resolveGlbImageBytes } from "./glb-image-resolve.ts";

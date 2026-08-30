@@ -18,7 +18,7 @@ let initPromise: Promise<any> | null = null;
 let EthereumProvider: any = null;
 
 import { SUPPORTED_CHAIN_IDS } from "../../../../constants/chains.js";
-import { getConfig } from "../services/api.ts";
+import { getConfig } from "../services/backend-client.ts";
 
 // Default chains supported by WalletConnect (Hardhat local + Base Sepolia Testnet)
 const DEFAULT_CHAINS = SUPPORTED_CHAIN_IDS;

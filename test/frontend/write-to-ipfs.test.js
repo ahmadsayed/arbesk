@@ -4,7 +4,7 @@ import { jest } from "@jest/globals";
 async function loadModule(credential, uploadResponse) {
   jest.resetModules();
   const getUploadCredential = jest.fn(async () => credential);
-  jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+  jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
     __esModule: true,
     getUploadCredential,
   }));
