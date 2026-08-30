@@ -20,6 +20,7 @@ import { openInStudio } from "./library-open.ts";
 const assetDeleteOps = () => import("../services/asset-delete.ts");
 const ipfsOps = () => import("../ipfs/remote-ipfs.ts");
 const ipfsWriteOps = () => import("../ipfs/write-to-ipfs.ts");
+const tokenOps = () => import("../services/token.ts");
 const libraryInitOps = () => import("./library-controller.ts");
 const collaboratorsPanelOps = () => import("./collaborators-panel.ts");
 
@@ -217,8 +218,18 @@ export async function requestEditCollectionMetadata(id: string): Promise<void> {
 
   let annotations: Record<string, unknown> = {};
   try {
+    // Resolve the FRESH on-chain manifest rather than the cached libraryState
+    // manifestCid, so the editor's starting annotations match the source
+    // updateCollectionManifest writes from (it also reads the on-chain
+    // tokenURI). This prevents a stale cache from clobbering annotations
+    // changed elsewhere.
+    const { getTokenURI } = await tokenOps();
     const { getFromRemoteIPFS } = await ipfsOps();
-    const manifest = await getFromRemoteIPFS(collection.manifestCid);
+    const currentCid = await getTokenURI(collection.tokenId);
+    if (!currentCid) {
+      throw new Error(`no tokenURI for collection #${collection.tokenId}`);
+    }
+    const manifest = await getFromRemoteIPFS(currentCid);
     annotations = (manifest?.metadata?.annotations ?? {}) as Record<
       string,
       unknown
@@ -255,7 +266,7 @@ export async function requestEditCollectionMetadata(id: string): Promise<void> {
 
   try {
     const { updateCollectionManifest } = await assetDeleteOps();
-    await updateCollectionManifest(
+    const newCid = await updateCollectionManifest(
       collection.tokenId,
       (col: any) => {
         col.metadata = { ...(col.metadata || {}) };
@@ -264,6 +275,14 @@ export async function requestEditCollectionMetadata(id: string): Promise<void> {
       },
       { label: "edit collection metadata" }
     );
+    // Refresh the cached manifestCid so the details pane re-reads the
+    // post-edit manifest (and any follow-up edit starts from it) instead of
+    // the stale pre-edit CID.
+    libraryState.set({
+      collections: libraryState.get().collections.map((c) =>
+        c.id === id ? { ...c, manifestCid: newCid } : c
+      ),
+    });
     announce(`Updated metadata for ${collection.name}`);
   } catch (err) {
     console.error("[LIBRARY-CONTEXT-MENU] edit metadata failed:", err);
