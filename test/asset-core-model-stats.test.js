@@ -1,5 +1,3 @@
-import { jest } from "@jest/globals";
-
 const { computeModelStats } = await import(
   "../packages/asset-core/src/formats/gltf/model-stats.ts"
 );
@@ -50,5 +48,28 @@ describe("computeModelStats", () => {
     expect(s.animation_clips).toBeUndefined();
     expect(s.origin).toBeUndefined();
     expect(s.rigged).toBeUndefined();
+  });
+
+  test("honors TRIANGLE_STRIP mode and dedups shared accessors", () => {
+    const gltf = {
+      meshes: [
+        {
+          primitives: [
+            { attributes: { POSITION: 0 }, indices: 1, mode: 4 },
+            { attributes: { POSITION: 0 }, indices: 1 },
+            { attributes: { POSITION: 2 }, indices: 3, mode: 5 },
+          ],
+        },
+      ],
+      accessors: [
+        { count: 6 },
+        { count: 9 },
+        { count: 5 },
+        { count: 5 },
+      ],
+    };
+    const s = computeModelStats(gltf, { format: "gltf" });
+    expect(s.triangle_count).toBe(6);
+    expect(s.vertex_count).toBe(11);
   });
 });

@@ -1,7 +1,7 @@
 /**
  * Deterministic model facts extracted from parsed glTF 2.0 JSON.
  * Pure functions — no buffer reads; counts come from accessor/mesh metadata.
- * No heuristics: only values derivable with exact accuracy are computed.
+ * No heuristics: values are derived deterministically from glTF metadata. Counts honor primitive mode and dedup shared accessors.
  */
 import { computeGltfBounds } from "./bounds.ts";
 import type { GltfBounds } from "./bounds.ts";
@@ -37,32 +37,58 @@ function rootTranslation(gltf: any): number[] {
   return gltf?.nodes?.[rootNodeIdx]?.translation ?? [0, 0, 0];
 }
 
-/** Sum of triangle counts across primitives (indexed → index.count/3, else POSITION.count/3). */
+/** glTF primitive mode constants (mode omitted ⇒ TRIANGLES = 4). */
+const TRIANGLES = 4;
+const TRIANGLE_STRIP = 5;
+const TRIANGLE_FAN = 6;
+
+/** The accessor whose count drives a primitive's triangle count (index if indexed, else POSITION), or null. */
+function countAccessor(prim: any): number | null {
+  if (typeof prim.indices === "number") return prim.indices;
+  const pos = prim.attributes?.POSITION;
+  return typeof pos === "number" ? pos : null;
+}
+
+/** Element count (index count if indexed, else POSITION count) for one primitive. */
+function primitiveElementCount(gltf: any, prim: any): number {
+  const acc = countAccessor(prim);
+  return acc === null ? 0 : gltf.accessors?.[acc]?.count ?? 0;
+}
+
+/** Triangles contributed by one primitive, honoring its mode. */
+function primitiveTriangleCount(gltf: any, prim: any): number {
+  const n = primitiveElementCount(gltf, prim);
+  const mode = prim.mode ?? TRIANGLES;
+  if (mode === TRIANGLES) return Math.floor(n / 3);
+  if (mode === TRIANGLE_STRIP || mode === TRIANGLE_FAN) return Math.max(0, n - 2);
+  return 0; // POINTS / LINES / LINE_LOOP / LINE_STRIP
+}
+
+/** Sum of triangle counts across primitives, deduping shared accessors. */
 function triangleCount(gltf: any): number {
+  const seen = new Set<number>();
   let total = 0;
   for (const mesh of gltf?.meshes ?? []) {
     for (const prim of mesh?.primitives ?? []) {
-      const idx = prim.indices;
-      if (typeof idx === "number") {
-        total += Math.floor((gltf.accessors?.[idx]?.count ?? 0) / 3);
-      } else {
-        const pos = prim.attributes?.POSITION;
-        if (typeof pos === "number") {
-          total += Math.floor((gltf.accessors?.[pos]?.count ?? 0) / 3);
-        }
-      }
+      const acc = countAccessor(prim);
+      if (acc === null || seen.has(acc)) continue;
+      seen.add(acc);
+      total += primitiveTriangleCount(gltf, prim);
     }
   }
   return total;
 }
 
-/** Sum of vertex counts across primitives (POSITION accessor count). */
+/** Sum of POSITION accessor counts, deduping shared accessors. */
 function vertexCount(gltf: any): number {
+  const seen = new Set<number>();
   let total = 0;
   for (const mesh of gltf?.meshes ?? []) {
     for (const prim of mesh?.primitives ?? []) {
       const pos = prim.attributes?.POSITION;
-      if (typeof pos === "number") total += gltf.accessors?.[pos]?.count ?? 0;
+      if (typeof pos !== "number" || seen.has(pos)) continue;
+      seen.add(pos);
+      total += gltf.accessors?.[pos]?.count ?? 0;
     }
   }
   return total;
