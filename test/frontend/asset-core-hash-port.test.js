@@ -11,7 +11,7 @@ import { jest } from "@jest/globals";
 jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
   getActiveContract: jest.fn(() => null),
 }));
-jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
   resolveUserEmail: jest.fn(),
 }));
 

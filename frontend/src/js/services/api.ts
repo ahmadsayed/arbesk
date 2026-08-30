@@ -35,6 +35,7 @@ export {
   getUploadCredential,
   getUploadCredentials,
   unpinAssetCids,
+  resolveUserEmail,
 } from "./backend-client.ts";
 export type {
   CachedSession,
@@ -644,14 +645,4 @@ export async function snapshotCommentsArchive(publishContext: { tokenId: string 
   return data;
 }
 
-// ─── Users (CDP email resolution) ────────────────────────────────────────────
-
-/**
- * POST /api/v1/users/resolve-email
- * Resolve a full email to the CDP end user's smart account address.
- * Exact match only — the backend never lists or autocompletes emails.
- */
-export async function resolveUserEmail(email: string): Promise<{ exists: boolean; address?: string | null }> {
-  return fetchJsonOrThrow("/users/resolve-email", { body: { email } }, "Email resolution failed");
-}
 

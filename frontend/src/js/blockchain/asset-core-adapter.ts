@@ -7,7 +7,7 @@
 import type { ChainPort, HashPort, StoragePort } from "@arbesk/asset-core/types.js";
 import { encodePacked, keccak256 } from "viem/utils";
 import { getActiveContract } from "./wallet.ts";
-import { resolveUserEmail } from "../services/api.ts";
+import { resolveUserEmail } from "../services/backend-client.ts";
 
 /**
  * HashPort backed by viem. `soliditySha3` mirrors Web3.utils.soliditySha3

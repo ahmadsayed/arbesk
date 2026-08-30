@@ -39,6 +39,21 @@
     "e2e/**",
     "docs/diagrams/**"
   ],
+  "boundaries": {
+    "zones": [
+      {
+        "name": "frontend-wallet-ipfs-leaf",
+        "patterns": ["frontend/src/js/blockchain/**", "frontend/src/js/ipfs/**"]
+      },
+      {
+        "name": "frontend-services-api",
+        "patterns": ["frontend/src/js/services/api.ts"]
+      }
+    ],
+    "rules": [
+      { "from": "frontend-wallet-ipfs-leaf", "allow": [] }
+    ]
+  },
   "health": {
     "thresholdOverrides": [
       {
