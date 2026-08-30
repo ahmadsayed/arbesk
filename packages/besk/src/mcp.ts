@@ -374,7 +374,7 @@ async function sourceFor(s: Session, args: Args) {
   return { ...hit, srcCid };
 }
 
-async function hGenerateModel(s: Session, args: Args): Promise<unknown> {
+function buildGenerateBody(args: Args): GenerationBody {
   const prompt = optionalString(args, "prompt");
   const imageFile = optionalString(args, "imageFile");
   const views = Array.isArray(args.views) ? (args.views as { view: string; file: string }[]) : [];
@@ -404,6 +404,12 @@ async function hGenerateModel(s: Session, args: Args): Promise<unknown> {
     }
     body.images = views.map((v) => ({ ...readImageFile(v.file), view: v.view }));
   }
+  return body;
+}
+
+async function hGenerateModel(s: Session, args: Args): Promise<unknown> {
+  const prompt = optionalString(args, "prompt");
+  const body = buildGenerateBody(args);
   const model = await runGeneration(s, body, {});
   const name = optionalString(args, "name") ??
     (prompt ? prompt.slice(0, 60) : "image_" + Date.now());

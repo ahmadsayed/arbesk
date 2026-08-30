@@ -100,28 +100,48 @@ onUndoStackChange(_syncToolbarButtons);
 // invalidate every snapshot.
 on(EVENTS.SCENE_CLEARED, () => clearUndoStacks());
 
-// Single Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y dispatcher.
-document.addEventListener("keydown", (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-  const key = e.key.toLowerCase();
-  if (key !== "z" && key !== "y") return;
-  const el = document.activeElement as HTMLElement | null;
-  const tag = el?.tagName?.toLowerCase();
+/**
+ * Decide whether a Ctrl/Cmd+Z / Ctrl/Cmd+Y keydown should trigger undo/redo.
+ * Returns null when the key is not z/y or the focus is in a text-editing
+ * context (a color input is the one exception — undo is allowed there).
+ * @param {string} key - lowercased key
+ * @param {boolean} shiftKey
+ * @param {HTMLElement|null} activeEl
+ */
+function resolveUndoKeydown(
+  key: string,
+  shiftKey: boolean,
+  activeEl: HTMLElement | null,
+): { wantsRedo: boolean } | null {
+  if (key !== "z" && key !== "y") return null;
+  const tag = activeEl?.tagName?.toLowerCase();
   // Allow undo when a color input is focused; block for text fields.
   const isColorInput =
-    tag === "input" && (el as HTMLInputElement).type === "color";
+    tag === "input" && (activeEl as HTMLInputElement).type === "color";
   if (!isColorInput) {
     const editing =
-      el?.isContentEditable ||
+      activeEl?.isContentEditable ||
       tag === "textarea" ||
       tag === "select" ||
       tag === "input";
-    if (editing) return;
+    if (editing) return null;
   }
-  const wantsRedo = (key === "z" && e.shiftKey) || key === "y";
-  if (wantsRedo && !canRedo()) return;
-  if (!wantsRedo && !canUndo()) return;
+  const wantsRedo = (key === "z" && shiftKey) || key === "y";
+  return { wantsRedo };
+}
+
+// Single Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y dispatcher.
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const decision = resolveUndoKeydown(
+    e.key.toLowerCase(),
+    e.shiftKey,
+    document.activeElement as HTMLElement | null,
+  );
+  if (!decision) return;
+  if (decision.wantsRedo && !canRedo()) return;
+  if (!decision.wantsRedo && !canUndo()) return;
   e.preventDefault();
-  if (wantsRedo) redo();
+  if (decision.wantsRedo) redo();
   else undo();
 });

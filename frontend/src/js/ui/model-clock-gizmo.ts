@@ -472,6 +472,84 @@ function syncVisuals(g: any): void {
   }
 }
 
+function handleGizmoPointerDown(
+  pi: any,
+  gizmo: any,
+  camera: BABYLON.ArcRotateCamera,
+  canvas: any,
+  picked: any,
+): void {
+  if (picked !== gizmo.handle) return;
+  isDraggingHandle = true;
+  gizmo.dragAngle = Math.atan2(gizmo.handle.position.y, gizmo.handle.position.x);
+  gizmo.dragTargetAngle = gizmo.dragAngle;
+  gizmo.dragHoverIdx = -1;
+  camera.detachControl();
+  if (canvas) {
+    canvas.style.cursor = "grabbing";
+    if (pi.event?.pointerId !== undefined) {
+      canvas.setPointerCapture(pi.event.pointerId);
+    }
+  }
+}
+
+function handleGizmoPointerMove(
+  gizmo: any,
+  canvas: any,
+  picked: any,
+  ringAngleFromPointer: () => number | null,
+): void {
+  if (!isDraggingHandle) {
+    const hovered = picked === gizmo.handle;
+    gizmo.handle.material = hovered ? gizmo.handleHoverMat : gizmo.handleMat;
+    if (canvas) canvas.style.cursor = hovered ? "grab" : "";
+    return;
+  }
+  const target = ringAngleFromPointer();
+  if (target === null) return;
+  gizmo.dragTargetAngle = target;
+  gizmo.dragAngle = _lerpAngle(gizmo.dragAngle, target, DRAG_SMOOTHING);
+  placeHandle(gizmo, gizmo.dragAngle);
+  gizmo.dragHoverIdx = _indexForAngle(
+    (gizmo.dragTargetAngle * 180) / Math.PI,
+    gizmo.filtered.length,
+  );
+  updateTickColors(gizmo, gizmo.dragHoverIdx);
+}
+
+function handleGizmoPointerUp(
+  pi: any,
+  gizmo: any,
+  camera: BABYLON.ArcRotateCamera,
+  canvas: any,
+): void {
+  if (!isDraggingHandle) return;
+  isDraggingHandle = false;
+  camera.attachControl(canvas, true);
+  if (canvas) {
+    canvas.style.cursor = "";
+    if (pi.event?.pointerId !== undefined) {
+      try {
+        canvas.releasePointerCapture(pi.event.pointerId);
+      } catch {
+        // Capture may have already been released if the pointer left
+        // the canvas; releasing the camera is what matters here.
+      }
+    }
+  }
+  // Commit where the cursor actually is, not the smoothed position.
+  const idx = _indexForAngle(
+    (gizmo.dragTargetAngle * 180) / Math.PI,
+    gizmo.filtered.length,
+  );
+  gizmo.dragHoverIdx = -1;
+  placeHandle(gizmo, (_angleForIndex(idx, gizmo.filtered.length) * Math.PI) / 180);
+  const entry = gizmo.filtered[idx];
+  if (entry && entry.cid !== store.getState().activeCid) {
+    store.loadVersion(entry.cid);
+  }
+}
+
 /** Wire rotation-gizmo-style drag + hover on the handle. */
 function wireDrag(
   gizmo: any,
@@ -504,72 +582,19 @@ function wireDrag(
 
   gizmo.pointerObserver = uScene.onPointerObservable.add(
     (pi: any) => {
-    const picked = pi.pickInfo?.pickedMesh;
-    switch (pi.type) {
-      case BABYLON.PointerEventTypes.POINTERDOWN: {
-        if (picked !== gizmo.handle) return;
-        isDraggingHandle = true;
-        gizmo.dragAngle = Math.atan2(gizmo.handle.position.y, gizmo.handle.position.x);
-        gizmo.dragTargetAngle = gizmo.dragAngle;
-        gizmo.dragHoverIdx = -1;
-        camera.detachControl();
-        if (canvas) {
-          canvas.style.cursor = "grabbing";
-          if (pi.event?.pointerId !== undefined) {
-            canvas.setPointerCapture(pi.event.pointerId);
-          }
-        }
-        break;
+      const picked = pi.pickInfo?.pickedMesh;
+      switch (pi.type) {
+        case BABYLON.PointerEventTypes.POINTERDOWN:
+          handleGizmoPointerDown(pi, gizmo, camera, canvas, picked);
+          break;
+        case BABYLON.PointerEventTypes.POINTERMOVE:
+          handleGizmoPointerMove(gizmo, canvas, picked, ringAngleFromPointer);
+          break;
+        case BABYLON.PointerEventTypes.POINTERUP:
+          handleGizmoPointerUp(pi, gizmo, camera, canvas);
+          break;
       }
-      case BABYLON.PointerEventTypes.POINTERMOVE: {
-        if (!isDraggingHandle) {
-          const hovered = picked === gizmo.handle;
-          gizmo.handle.material = hovered ? gizmo.handleHoverMat : gizmo.handleMat;
-          if (canvas) canvas.style.cursor = hovered ? "grab" : "";
-          return;
-        }
-        const target = ringAngleFromPointer();
-        if (target === null) return;
-        gizmo.dragTargetAngle = target;
-        gizmo.dragAngle = _lerpAngle(gizmo.dragAngle, target, DRAG_SMOOTHING);
-        placeHandle(gizmo, gizmo.dragAngle);
-        gizmo.dragHoverIdx = _indexForAngle(
-          (gizmo.dragTargetAngle * 180) / Math.PI,
-          gizmo.filtered.length
-        );
-        updateTickColors(gizmo, gizmo.dragHoverIdx);
-        break;
-      }
-      case BABYLON.PointerEventTypes.POINTERUP: {
-        if (!isDraggingHandle) return;
-        isDraggingHandle = false;
-        camera.attachControl(canvas, true);
-        if (canvas) {
-          canvas.style.cursor = "";
-          if (pi.event?.pointerId !== undefined) {
-            try {
-              canvas.releasePointerCapture(pi.event.pointerId);
-            } catch {
-              // Capture may have already been released if the pointer left
-              // the canvas; releasing the camera is what matters here.
-            }
-          }
-        }
-        // Commit where the cursor actually is, not the smoothed position.
-        const idx = _indexForAngle(
-          (gizmo.dragTargetAngle * 180) / Math.PI,
-          gizmo.filtered.length
-        );
-        gizmo.dragHoverIdx = -1;
-        placeHandle(gizmo, (_angleForIndex(idx, gizmo.filtered.length) * Math.PI) / 180);
-        const entry = gizmo.filtered[idx];
-        if (entry && entry.cid !== store.getState().activeCid) {
-          store.loadVersion(entry.cid);
-        }
-        break;
-      }
-    }
-  });
+    });
 }
 
 /**
