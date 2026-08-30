@@ -256,9 +256,17 @@ describe("prepareManifestForWrite", () => {
       currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
     });
 
+    // computeAssetStats fetches the root source composite to recompute
+    // metadata.computed; return null so it yields no stats and this test stays
+    // focused on the manifest-cache path.
+    ctx.remote.getFromRemoteIPFS.mockResolvedValue(null);
+
     const result = await ctx.mod.prepareManifestForWrite("Cached Asset");
 
-    expect(ctx.remote.getFromRemoteIPFS).not.toHaveBeenCalled();
+    // The manifest came from the in-memory cache, not IPFS: the only IPFS call
+    // is computeAssetStats' source-composite fetch, which targets the source
+    // CID (bafyCached), never the manifest CID (bafyManifest).
+    expect(ctx.remote.getFromRemoteIPFS).not.toHaveBeenCalledWith("bafyManifest");
     expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyCached");
     expect(result.manifest._manifestCid).toBeUndefined();
   });
@@ -391,7 +399,10 @@ describe("prepareManifestForWrite", () => {
 
     const result = await ctx.mod.prepareManifestForWrite("No Chat Asset");
 
-    expect(result.manifest.metadata).toBeUndefined();
+    // Chat provenance is dropped when no prompts were consumed; metadata.computed
+    // is always recomputed and remains present.
+    expect(result.manifest.metadata.chat).toBeUndefined();
+    expect(result.manifest.metadata.computed).toBeDefined();
   });
 
   // Regression: stored-form 3MF nodes have no editCompositeColors hook —

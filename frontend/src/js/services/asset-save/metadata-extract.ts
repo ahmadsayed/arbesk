@@ -5,7 +5,7 @@
  * computed fields are optional).
  */
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
-import { computeModelStats } from "@arbesk/asset-core/formats/gltf/model-stats.js";
+import { computeModelStats } from "@arbesk/asset-core";
 import { warn } from "../../utils/log.ts";
 
 export async function computeAssetStats(
