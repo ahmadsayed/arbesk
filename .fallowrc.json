@@ -55,7 +55,8 @@
     ]
   },
   "health": {
-    "thresholdOverrides": []
+    "thresholdOverrides": [],
+    "ignore": ["blockchain/scripts/**", "test/**"]
   },
   "ignoreDependencies": [
     "@coinbase/cdp-core",
