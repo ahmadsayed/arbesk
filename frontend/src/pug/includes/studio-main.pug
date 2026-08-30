@@ -74,25 +74,24 @@ aside#inspector.inspector
               .component-editor-swatch#selectedComponentSwatch
             input#selectedComponentColor.form-color.component-color-editor(type="color" aria-label="Component color")
     section#metadataSection.inspector-section.metadata-section(hidden)
-      details(open)
-        summary.inspector-section-title Metadata
+      details.metadata-subsection
+        summary.inspector-section-title Auto-detected
         div
-          .metadata-computed
-            h6.metadata-block-title Auto-detected
-            dl#metadataComputedList.metadata-list
-          .metadata-annotations
-            h6.metadata-block-title Notes for the AI
-            #metadataAnnotationsList.metadata-kv
-            .metadata-actions
-              button#metadataAddBtn.btn.btn-secondary.btn-sm(type="button") + Add field
-            .metadata-quick-add
-              span.metadata-quick-label Quick add:
-              button.metadata-chip(type="button" data-key="character_name") character_name
-              button.metadata-chip(type="button" data-key="role") role
-              button.metadata-chip(type="button" data-key="species") species
-              button.metadata-chip(type="button" data-key="tags") tags
-              button.metadata-chip(type="button" data-key="lore") lore
-              button.metadata-chip(type="button" data-key="pivot") pivot
+          dl#metadataComputedList.metadata-list
+      details.metadata-subsection(open)
+        summary.inspector-section-title Notes for the AI
+        div
+          #metadataAnnotationsList.metadata-kv
+          .metadata-actions
+            button#metadataAddBtn.btn.btn-secondary.btn-sm(type="button") + Add field
+          .metadata-quick-add
+            span.metadata-quick-label Quick add:
+            button.metadata-chip(type="button" data-key="character_name") character_name
+            button.metadata-chip(type="button" data-key="role") role
+            button.metadata-chip(type="button" data-key="species") species
+            button.metadata-chip(type="button" data-key="tags") tags
+            button.metadata-chip(type="button" data-key="lore") lore
+            button.metadata-chip(type="button" data-key="pivot") pivot
     section#commentsSection.inspector-section.comments-section(hidden x-data="commentsPanel" :hidden="!sectionVisible")
       h3#commentsTitle.inspector-section-title Comments ·
         span#commentsCount(x-text="count") 0

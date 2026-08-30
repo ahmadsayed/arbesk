@@ -26,8 +26,94 @@ function hasComputedFacts(
   return !!computed && Object.keys(computed).length > 0;
 }
 
-function formatComputedValue(v: unknown): string {
+/** Human-readable label + formatter for each computed fact. */
+interface ComputedFieldDef {
+  label: string;
+  format: (v: unknown) => string;
+}
+
+const COMPUTED_ORDER = [
+  "format",
+  "dimensions",
+  "bounds",
+  "center",
+  "origin",
+  "animation_clips",
+  "triangle_count",
+  "vertex_count",
+  "mesh_count",
+  "node_count",
+  "material_count",
+  "texture_count",
+  "rigged",
+  "bone_count",
+];
+
+function trim(n: number): string {
+  return Number.isFinite(n) ? String(Math.round(n * 100) / 100) : "—";
+}
+
+function formatRaw(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v);
+}
+
+function formatVector(v: unknown): string {
+  if (!Array.isArray(v)) return formatRaw(v);
+  return "(" + v.map((n) => trim(Number(n))).join(", ") + ")";
+}
+
+function formatDimensions(v: unknown): string {
+  const d = (v ?? {}) as { width?: number; height?: number; depth?: number; unit?: string };
+  const dims = [d.width, d.height, d.depth]
+    .map((n) => (typeof n === "number" ? trim(n) : "—"))
+    .join(" × ");
+  return dims + (d.unit ? " " + d.unit : "");
+}
+
+function formatBounds(v: unknown): string {
+  const b = (v ?? {}) as { min?: number[]; max?: number[] };
+  const min = Array.isArray(b.min) ? b.min.map((n) => trim(Number(n))).join(", ") : "—";
+  const max = Array.isArray(b.max) ? b.max.map((n) => trim(Number(n))).join(", ") : "—";
+  return "[" + min + "] → [" + max + "]";
+}
+
+function formatClips(v: unknown): string {
+  if (!Array.isArray(v)) return formatRaw(v);
+  return v.length === 0 ? "—" : v.join(", ");
+}
+
+function formatCount(v: unknown): string {
+  return typeof v === "number" ? v.toLocaleString("en-US") : String(v);
+}
+
+function formatBoolean(v: unknown): string {
+  return v ? "Yes" : "No";
+}
+
+const COMPUTED_FIELDS: Record<string, ComputedFieldDef> = {
+  format: { label: "Format", format: (v) => String(v).toUpperCase() },
+  dimensions: { label: "Dimensions", format: formatDimensions },
+  bounds: { label: "Bounds", format: formatBounds },
+  center: { label: "Center", format: formatVector },
+  origin: { label: "Origin", format: formatVector },
+  animation_clips: { label: "Animations", format: formatClips },
+  triangle_count: { label: "Triangles", format: formatCount },
+  vertex_count: { label: "Vertices", format: formatCount },
+  mesh_count: { label: "Meshes", format: formatCount },
+  node_count: { label: "Nodes", format: formatCount },
+  material_count: { label: "Materials", format: formatCount },
+  texture_count: { label: "Textures", format: formatCount },
+  rigged: { label: "Rigged", format: formatBoolean },
+  bone_count: { label: "Bones", format: formatCount },
+};
+
+function computedRank(key: string): number {
+  const idx = COMPUTED_ORDER.indexOf(key);
+  return idx === -1 ? COMPUTED_ORDER.length : idx;
+}
+
+function sortComputedEntries(entries: [string, unknown][]): [string, unknown][] {
+  return entries.slice().sort((a, b) => computedRank(a[0]) - computedRank(b[0]));
 }
 
 function renderComputedEmpty(list: HTMLElement): void {
@@ -41,11 +127,15 @@ function renderComputedEntries(
   list: HTMLElement,
   entries: [string, unknown][]
 ): void {
-  for (const [k, v] of entries) {
+  for (const [k, v] of sortComputedEntries(entries)) {
+    const field = COMPUTED_FIELDS[k] ?? { label: k, format: formatRaw };
     const dt = document.createElement("dt");
-    dt.textContent = k;
+    dt.className = "metadata-fact-label";
+    dt.textContent = field.label;
     const dd = document.createElement("dd");
-    dd.textContent = formatComputedValue(v);
+    dd.className = "metadata-fact-value";
+    dd.textContent = field.format(v);
+    dd.title = formatRaw(v);
     list.append(dt, dd);
   }
 }

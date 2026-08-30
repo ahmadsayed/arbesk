@@ -3,47 +3,52 @@
 // ═══════════════════════════════════════════════════════════════════
 
 .metadata-section {
-  // Section is toggled via the [hidden] attribute (reset handles display).
-  .metadata-computed,
-  .metadata-annotations {
-    display: flex;
-    flex-direction: column;
-    gap: var(--size-2);
-  }
-
-  .metadata-annotations {
-    padding-top: var(--size-2);
-    border-top: var(--border-size-1) solid var(--border-hairline);
-  }
-}
-
-.metadata-block-title {
-  margin: 0;
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-6);
-  color: var(--dim-fg);
-}
-
-// Read-only computed facts list (dl > dt/dd).
-.metadata-list {
-  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--size-1);
+  gap: var(--size-2);
+}
 
-  dt {
-    font-size: var(--font-size-0);
-    color: var(--dim-fg);
+// Collapsible sub-sections (Auto-detected / Notes for the AI).
+.metadata-subsection {
+  border-bottom: var(--border-size-1) solid var(--border-hairline);
+
+  &:last-child {
+    border-bottom: none;
   }
 
-  dd {
+  // Give the collapsed <summary> breathing room inside the subsection.
+  summary {
+    padding-block: var(--size-2);
+  }
+}
+
+// Read-only computed facts grid (dl > dt/dd) — human label left, value right.
+.metadata-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--size-3);
+  row-gap: var(--size-1);
+  align-items: baseline;
+  padding: var(--size-1) 0 var(--size-2);
+
+  .metadata-fact-label {
+    font-size: var(--font-size-0);
+    font-weight: normal;
+    color: var(--dim-fg);
+    white-space: nowrap;
+  }
+
+  .metadata-fact-value {
     margin: 0;
-    font-size: var(--font-size-1);
+    font-size: var(--font-size-0);
     font-family: var(--font-mono);
+    text-align: right;
     word-break: break-word;
   }
 
   .metadata-empty {
+    grid-column: 1 / -1;
     font-size: var(--font-size-0);
     color: var(--dim-fg);
     font-style: italic;
@@ -55,6 +60,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--size-2);
+  padding: var(--size-1) 0 var(--size-2);
 }
 
 .metadata-kv-row {
