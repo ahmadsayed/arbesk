@@ -89,12 +89,17 @@ describe("Frontend Build", () => {
       }
     });
 
-    test("ApiError class is exported", () => {
-      expect(api).toMatch(/export class ApiError/);
+    test("ApiError is re-exported from the backend-client leaf", () => {
+      // The class itself lives in backend-client.ts (wallet-free leaf);
+      // api.js re-exports it for backward compatibility.
+      expect(api).toMatch(/export \{[^}]*ApiError[^}]*\} from "\.\/backend-client\.js"/);
+      const client = readBuilt("services/backend-client.js");
+      expect(client).toMatch(/export class ApiError/);
     });
 
     test("API_BASE is /api/v1", () => {
-      expect(api).toMatch(/API_BASE\s*=\s*"\/api\/v1"/);
+      const client = readBuilt("services/backend-client.js");
+      expect(client).toMatch(/API_BASE\s*=\s*"\/api\/v1"/);
     });
   });
 
