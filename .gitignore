@@ -72,3 +72,4 @@ reasonix.toml
 
 # Local npm cache (sandbox installs)
 .npm-cache/
+blockchain/migrations/

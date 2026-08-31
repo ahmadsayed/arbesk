@@ -33,6 +33,13 @@ const ZERO_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
+// chainId → { deploymentBlock, logChunkSize } — mirrors constants/chains.js,
+// inlined because this CJS script cannot require the ESM module.
+const CHAIN_INDEX = {
+  31415822: { deploymentBlock: 0, logChunkSize: 10000 }, // Hardhat local
+  84532: { deploymentBlock: 44309130, logChunkSize: 2000 }, // Base Sepolia
+};
+
 /** Leaf encoding matches ArbeskAssetBase._requireEditor (new asset-scoped schema). */
 function makeLeaf(address, role, tokenId, version, assetScope = ZERO_HASH) {
   return hre.ethers.solidityPackedKeccak256(
@@ -59,11 +66,10 @@ async function fetchEditorList(cid) {
 
 async function snapshot() {
   if (!OLD) throw new Error("OLD_CONTRACT_ADDRESS is required for snapshot");
-  const { CHAIN_IDS } = require("../../constants/chains.js");
   const chainId = Number((await hre.ethers.provider.getNetwork()).chainId);
-  const { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } = require("../../constants/chains.js");
-  const fromBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
-  const chunk = LOG_CHUNK_SIZES[chainId] ?? 2000;
+  const cfg = CHAIN_INDEX[chainId] ?? { deploymentBlock: 0, logChunkSize: 2000 };
+  const fromBlock = cfg.deploymentBlock;
+  const chunk = cfg.logChunkSize;
   const latest = await hre.ethers.provider.getBlockNumber();
   const transferTopic = hre.ethers.id("Transfer(address,address,uint256)");
 
@@ -79,21 +85,20 @@ async function snapshot() {
       topics: [transferTopic],
     });
     for (const log of logs) {
-      const [f, t, tokenIdBn] = hre.ethers.AbiCoder.defaultAbiCoder().decode(
-        ["address", "address", "uint256"],
-        log.data
-      );
-      const tokenId = tokenIdBn.toString();
-      if (f.toLowerCase() === ZERO_ADDR) {
+      // ERC-721 Transfer has all three args indexed → read from topics.
+      const fromAddr = "0x" + log.topics[1].slice(26);
+      const toAddr = "0x" + log.topics[2].slice(26);
+      const tokenId = BigInt(log.topics[3]).toString();
+      if (fromAddr.toLowerCase() === ZERO_ADDR) {
         tokens.set(tokenId, {
           tokenId,
-          owner: t.toLowerCase(),
+          owner: toAddr.toLowerCase(),
           tokenURI: await old.tokenURI(tokenId),
           editorRoot: await old.editorRoot(tokenId),
           editorSetVersion: (await old.editorSetVersion(tokenId)).toString(),
           editorListURI: await old.editorListURI(tokenId),
         });
-      } else if (t.toLowerCase() === ZERO_ADDR) {
+      } else if (toAddr.toLowerCase() === ZERO_ADDR) {
         tokens.delete(tokenId);
       }
     }
