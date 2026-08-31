@@ -26,6 +26,8 @@ export interface PublishParams {
 export interface UpdateUriParams {
   tokenId: string | number;
   newUri: string;
+  /** Editor-grant scope: `bytes32(0)` = collection-wide, `keccak256(assetId)` = asset-scoped. */
+  assetScope: string;
   proof: string[];
 }
 
@@ -77,7 +79,7 @@ export function createAssetContract(config: AssetContractConfig): AssetContractC
   return {
     publish: (p) =>
       write("publishAsset", [p.uri, toUint256(p.tokenId), p.editorRoot, p.editorListUri]),
-    updateUri: (p) => write("updateAssetURI", [toUint256(p.tokenId), p.newUri, p.proof]),
+    updateUri: (p) => write("updateAssetURI", [toUint256(p.tokenId), p.newUri, p.assetScope, p.proof]),
     updateEditors: (p) =>
       write("updateEditors", [toUint256(p.tokenId), p.newRoot, p.newListUri, p.callerRole, p.callerProof]),
     burn: (p) => write("burn", [toUint256(p.tokenId), p.proof]),

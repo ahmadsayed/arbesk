@@ -3,7 +3,7 @@
  * facade's getMerkleProof and the @arbesk/authz asset-access check.
  *
  * Leaf encoding matches ArbeskAssetBase._requireEditor:
- *   keccak256(abi.encodePacked(address, role, tokenId, editorSetVersion))
+ *   keccak256(abi.encodePacked(address, role, tokenId, assetScope, editorSetVersion))
  * implemented with viem encodePacked + keccak256 (byte-identical to
  * Web3.utils.soliditySha3 and the asset-core HashPort path).
  *
@@ -35,14 +35,15 @@ export function makeLeaf(
   role: number,
   tokenId: string | number,
   setVersion: string | number,
+  assetScope: string = ZERO_HASH,
 ): string {
   // Cast the packed arrays the same way asset-core's browser HashPort does:
   // viem's encodePacked demands branded Address/uint value types, but the
   // output bytes are identical to Web3.utils.soliditySha3.
   return keccak256(
     encodePacked(
-      ["address", "uint8", "uint256", "uint256"] as any,
-      [address.toLowerCase(), role, BigInt(tokenId), BigInt(setVersion)] as any,
+      ["address", "uint8", "uint256", "bytes32", "uint256"] as any,
+      [address.toLowerCase(), role, BigInt(tokenId), assetScope, BigInt(setVersion)] as any,
     ),
   );
 }
@@ -58,6 +59,7 @@ export function computeRoot(
   editorList: EditorEntry[],
   tokenId: string | number,
   setVersion: string | number,
+  assetScope: string = ZERO_HASH,
 ): string {
   if (!editorList || editorList.length === 0) return ZERO_HASH;
   if (editorList.length > MAX_EDITORS_PER_TOKEN) {
@@ -66,7 +68,7 @@ export function computeRoot(
     );
   }
   const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion),
+    makeLeaf(e.address, e.role, tokenId, setVersion, assetScope),
   );
   return buildTree(leaves).root;
 }
@@ -79,6 +81,7 @@ export function getProof(
   targetAddress: string,
   tokenId: string | number,
   setVersion: string | number,
+  assetScope: string = ZERO_HASH,
 ): { proof: string[]; role: number } | null {
   if (!editorList || editorList.length === 0) return null;
   const entry = editorList.find(
@@ -87,10 +90,10 @@ export function getProof(
   if (!entry) return null;
 
   const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion),
+    makeLeaf(e.address, e.role, tokenId, setVersion, assetScope),
   );
   const tree = buildTree(leaves);
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion, assetScope);
   return { proof: tree.getProof(leaf), role: entry.role };
 }
 

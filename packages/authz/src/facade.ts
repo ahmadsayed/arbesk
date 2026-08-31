@@ -78,6 +78,7 @@ export function createAuthz(config: AuthzConfig): Authz {
             Number(requiredRole),
             id.toString(),
             setVersion.toString(),
+            opts.assetScope ?? ZERO_ROOT,
           );
           if (verifyEditorProof(root, leaf, proof)) {
             return {

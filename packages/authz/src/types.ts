@@ -15,6 +15,8 @@ export interface AssetAccessOptions {
   requiredRole?: number;
   /** Explicit contract address override. */
   contractAddress?: string;
+  /** Editor-grant scope: `bytes32(0)` = collection-wide, `keccak256(assetId)` = asset-scoped. */
+  assetScope?: string;
 }
 
 export interface AssetAccessResult {

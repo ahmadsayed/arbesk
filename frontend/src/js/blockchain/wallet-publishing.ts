@@ -16,6 +16,9 @@ import { getActiveConnectionSource, getActiveContract } from "./wallet-core.ts";
 import { isSmartWalletSupported } from "./smart-wallet-support.ts";
 import { sendContractCall } from "./wallet-send.ts";
 
+/** bytes32(0) — collection-wide editor-grant scope (see #50). */
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 // ── Helpers ──
 
 function _canPublishWithCurrentWallet() {
@@ -140,20 +143,21 @@ async function publishAsset(
 async function updateAssetURI(
   tokenId: number | string,
   newTokenURI: string,
-  proof: string[]
+  proof: string[],
+  assetScope: string = ZERO_HASH
 ) {
   const c = _readyContract();
   if (!c) return null;
 
-  const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof });
+  const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof, assetScope });
   if (relayed.handled) return relayed.txHash;
 
   try {
     const receipt = await sendContractCall({
       to: walletState.get().contractAddress,
       abi: c.abi,
-      functionName: "updateAssetURI(uint256,string,bytes32[])",
-      args: [BigInt(tokenId), newTokenURI, proof],
+      functionName: "updateAssetURI(uint256,string,bytes32,bytes32[])",
+      args: [BigInt(tokenId), newTokenURI, assetScope, proof],
       pendingPayload: { tokenId, tokenURI: newTokenURI },
     });
     return receipt.transactionHash;

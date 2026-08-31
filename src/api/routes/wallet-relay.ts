@@ -38,6 +38,9 @@ const CONTRACT_ABI: Abi = JSON.parse(fs.readFileSync(ABI_PATH, "utf8")).abi;
 
 const DEFAULT_CHAIN_ID = Number(process.env.DEFAULT_CHAIN_ID || 84532);
 
+/** bytes32(0) — collection-wide editor-grant scope (see #50). */
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 export interface WalletRelayDeps {
   getCdpClientFn?: () => Promise<CdpClient | null>;
   getAuthz?: () => Authz;
@@ -80,7 +83,7 @@ async function executeRelayOp(
   args: any,
 ): Promise<{ receipt?: any; error?: { status: number; code: string; message: string } }> {
   if (op === "publish") return { receipt: await contract.publish(args) };
-  if (op === "updateUri") return { receipt: await contract.updateUri(args) };
+  if (op === "updateUri") return { receipt: await contract.updateUri({ ...args, assetScope: args.assetScope ?? ZERO_HASH }) };
   if (op === "updateEditors") return { receipt: await contract.updateEditors(args) };
   if (op === "burn") return { receipt: await contract.burn(args) };
   return { error: { status: 400, code: "UNKNOWN_OP", message: "Unknown relay op: " + op } };

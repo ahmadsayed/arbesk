@@ -77,6 +77,17 @@ describe("merkle parity: wallet vs asset-core", () => {
     }
   });
 
+  test("makeLeaf is byte-identical with a non-zero assetScope", () => {
+    const scope = "0x" + "ab".repeat(32); // arbitrary bytes32 (keccak256(assetId)-shaped)
+    for (const f of FIXTURES) {
+      for (const e of f.editors) {
+        expect(assetCore.makeLeaf(e.address, e.role, f.tokenId, f.version, scope)).toBe(
+          wallet.makeLeaf(e.address, e.role, f.tokenId, f.version, scope)
+        );
+      }
+    }
+  });
+
   test("computeRoot is byte-identical (including empty list)", () => {
     for (const f of FIXTURES) {
       expect(assetCore.computeRoot(f.editors, f.tokenId, f.version)).toBe(

@@ -46,12 +46,14 @@ export function makeLeaf(
   address: string,
   role: number,
   tokenId: string | number,
-  setVersion: number
+  setVersion: number,
+  assetScope: string = "0x0000000000000000000000000000000000000000000000000000000000000000"
 ): string {
   return _soliditySha3(
     { type: "address", value: address },
     { type: "uint8", value: role },
     { type: "uint256", value: tokenId },
+    { type: "bytes32", value: assetScope },
     { type: "uint256", value: setVersion }
   );
 }
@@ -71,7 +73,8 @@ function _buildTree(leaves: string[]): SimpleMerkleTree | null {
 export function computeRoot(
   editorList: EditorEntry[],
   tokenId: string | number,
-  setVersion: number
+  setVersion: number,
+  assetScope: string = "0x0000000000000000000000000000000000000000000000000000000000000000"
 ): string {
   if (!editorList || editorList.length === 0) {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -82,7 +85,7 @@ export function computeRoot(
     );
   }
   const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion)
+    makeLeaf(e.address, e.role, tokenId, setVersion, assetScope)
   );
   const tree = _buildTree(leaves);
   return tree!.root;
@@ -95,7 +98,8 @@ export function getProof(
   editorList: EditorEntry[],
   targetAddress: string,
   tokenId: string | number,
-  setVersion: number
+  setVersion: number,
+  assetScope: string = "0x0000000000000000000000000000000000000000000000000000000000000000"
 ): { proof: string[]; role: number } | null {
   if (!editorList || editorList.length === 0) return null;
   const entry = editorList.find(
@@ -104,10 +108,10 @@ export function getProof(
   if (!entry) return null;
 
   const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion)
+    makeLeaf(e.address, e.role, tokenId, setVersion, assetScope)
   );
   const tree = _buildTree(leaves);
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion, assetScope);
   const proof = tree!.getProof(leaf);
   return { proof, role: entry.role };
 }
