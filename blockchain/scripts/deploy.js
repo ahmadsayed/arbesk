@@ -15,6 +15,7 @@ const path = require("path");
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
+  const { upgrades } = hre;
   console.log("Deploying with account:", deployer.address);
 
   const network = hre.network.name;
@@ -34,10 +35,11 @@ async function main() {
   const ArbeskAssetFree = await hre.ethers.getContractFactory(
     "ArbeskAssetFree"
   );
-  const freeAsset = await ArbeskAssetFree.deploy();
-  await freeAsset.waitForDeployment();
+  const freeAsset = await upgrades.deployProxy(ArbeskAssetFree, [], {
+    initializer: "initialize",
+  });
   const freeAddress = await freeAsset.getAddress();
-  console.log("ArbeskAssetFree deployed to:", freeAddress);
+  console.log("ArbeskAssetFree proxy deployed to:", freeAddress);
 
   let paidAddress = null;
   let usdcAddress = null;
@@ -66,10 +68,13 @@ async function main() {
     console.log("USDC token address:", usdcAddress);
 
     const ArbeskAsset = await hre.ethers.getContractFactory("ArbeskAsset");
-    const paidAsset = await ArbeskAsset.deploy(treasury, usdcAddress);
-    await paidAsset.waitForDeployment();
+    const paidAsset = await upgrades.deployProxy(
+      ArbeskAsset,
+      [treasury, usdcAddress],
+      { initializer: "initialize" }
+    );
     paidAddress = await paidAsset.getAddress();
-    console.log("ArbeskAsset (paid) deployed to:", paidAddress);
+    console.log("ArbeskAsset (paid) proxy deployed to:", paidAddress);
   } else {
     // ── Testnet: free tier only ──
     console.log(

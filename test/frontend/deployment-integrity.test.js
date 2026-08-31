@@ -76,6 +76,10 @@ const REQUIRED_PAID_ABI_FUNCTIONS = [
   "editorSetVersion",
   "burn",
   "MAX_EDITORS_PER_TOKEN",
+  "initialize",
+  "migrateAsset",
+  "finalizeMigration",
+  "migrationFinalized",
 ];
 
 const REQUIRED_FREE_ABI_FUNCTIONS = [
@@ -91,6 +95,10 @@ const REQUIRED_FREE_ABI_FUNCTIONS = [
   "editorRoot",
   "editorSetVersion",
   "burn",
+  "initialize",
+  "migrateAsset",
+  "finalizeMigration",
+  "migrationFinalized",
 ];
 
 describe("Deployment Pipeline Integrity", () => {
