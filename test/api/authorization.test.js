@@ -109,6 +109,7 @@ describe("authorization", () => {
         2,
         "42",
         "7",
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
       );
       expect(mockVerifyProof).toHaveBeenCalledWith(
         REAL_ROOT,

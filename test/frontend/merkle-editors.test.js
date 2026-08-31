@@ -81,6 +81,7 @@ describe("merkle-editors", () => {
       { type: "address", value: "0x1234567890abcdef1234567890abcdef12345678" },
       { type: "uint8", value: 2 },
       { type: "uint256", value: 1 },
+      { type: "bytes32", value: "0x0000000000000000000000000000000000000000000000000000000000000000" },
       { type: "uint256", value: 1 }
     );
   });
