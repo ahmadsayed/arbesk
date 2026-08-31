@@ -325,6 +325,48 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
+  // Governance - Ownable2Step two-step transfer (#57)
+  // ════════════════════════════════════════════════════════════════════
+
+  describe("Governance (Ownable2Step)", function () {
+    it("transferOwnership starts a two-step transfer", async () => {
+      await expect(asset.transferOwnership(editor.address))
+        .to.emit(asset, "OwnershipTransferStarted")
+        .withArgs(owner.address, editor.address);
+      expect(await asset.pendingOwner()).to.equal(editor.address);
+      // owner() is unchanged until the pending owner accepts.
+      expect(await asset.owner()).to.equal(owner.address);
+    });
+
+    it("old owner still controls until the transfer is accepted", async () => {
+      await asset.transferOwnership(editor.address);
+      await asset.pause();
+      await asset.unpause();
+    });
+
+    it("non-pending-owner cannot accept", async () => {
+      await asset.transferOwnership(editor.address);
+      await expect(asset.connect(user).acceptOwnership())
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+    });
+
+    it("pending owner accepts and becomes the new owner", async () => {
+      await asset.transferOwnership(editor.address);
+      await asset.connect(editor).acceptOwnership();
+      expect(await asset.owner()).to.equal(editor.address);
+
+      // The old deployer is no longer privileged.
+      await expect(asset.pause())
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(owner.address);
+      // The new owner is privileged.
+      await asset.connect(editor).pause();
+      await asset.connect(editor).unpause();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════
   // publishAsset (Merkle)
   // ════════════════════════════════════════════════════════════════════
 

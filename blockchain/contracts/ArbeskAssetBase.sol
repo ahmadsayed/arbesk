@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
@@ -19,7 +19,7 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
  *
  *      Concrete contracts: ArbeskAsset (paid), ArbeskAssetFree (free).
  */
-abstract contract ArbeskAssetBase is ERC721, Ownable, Pausable {
+abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
     // ── Custom Errors ──
     error TokenAlreadyMinted(uint256 tokenId);
     error NonexistentToken(uint256 tokenId);
