@@ -69,3 +69,6 @@ frontend/dist/js/blockchain/dev-account.js
 # Reasonix harness session artifacts
 reasonix.toml
 .reasonix/
+
+# Local npm cache (sandbox installs)
+.npm-cache/

@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, upgrades } = require("hardhat");
 const { SimpleMerkleTree } = require("@openzeppelin/merkle-tree");
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -9,32 +9,32 @@ const { SimpleMerkleTree } = require("@openzeppelin/merkle-tree");
 // byte-compatible with OZ MerkleProof.sol by construction.
 // ════════════════════════════════════════════════════════════════════════════
 
-function makeLeaf(address, role, tokenId, setVersion) {
+function makeLeaf(address, role, tokenId, setVersion, assetScope = ethers.ZeroHash) {
   return ethers.solidityPackedKeccak256(
-    ["address", "uint8", "uint256", "uint256"],
-    [address, role, tokenId, setVersion]
+    ["address", "uint8", "uint256", "bytes32", "uint256"],
+    [address, role, tokenId, assetScope, setVersion]
   );
 }
 
-function computeRoot(editorList, tokenId, setVersion) {
+function computeRoot(editorList, tokenId, setVersion, assetScope = ethers.ZeroHash) {
   if (!editorList || editorList.length === 0) return ethers.ZeroHash;
   const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion)
+    makeLeaf(e.address, e.role, tokenId, setVersion, assetScope)
   );
   return SimpleMerkleTree.of(leaves).root;
 }
 
-function getProof(editorList, targetAddress, tokenId, setVersion) {
+function getProof(editorList, targetAddress, tokenId, setVersion, assetScope = ethers.ZeroHash) {
   const entry = editorList.find(
     (e) => e.address.toLowerCase() === targetAddress.toLowerCase()
   );
   if (!entry) return null;
 
   const leaves = editorList.map((e) =>
-    makeLeaf(e.address, e.role, tokenId, setVersion)
+    makeLeaf(e.address, e.role, tokenId, setVersion, assetScope)
   );
   const tree = SimpleMerkleTree.of(leaves);
-  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion);
+  const leaf = makeLeaf(targetAddress, entry.role, tokenId, setVersion, assetScope);
 
   return { proof: tree.getProof(leaf), role: entry.role };
 }
@@ -71,8 +71,11 @@ describe("ArbeskAsset (Merkle)", function () {
     await usdc.mint(owner.address, mintAmount);
 
     const Factory = await ethers.getContractFactory("ArbeskAsset");
-    asset = await Factory.deploy(treasury.address, await usdc.getAddress());
-    await asset.waitForDeployment();
+    asset = await upgrades.deployProxy(
+      Factory,
+      [treasury.address, await usdc.getAddress()],
+      { initializer: "initialize" }
+    );
   });
 
   // ── Helpers ──
@@ -168,8 +171,11 @@ describe("ArbeskAsset (Merkle)", function () {
 
     it("reverts if USDC token is not set (address(0))", async () => {
       const Factory = await ethers.getContractFactory("ArbeskAsset");
-      const noUsdc = await Factory.deploy(treasury.address, ethers.ZeroAddress);
-      await noUsdc.waitForDeployment();
+      const noUsdc = await upgrades.deployProxy(
+        Factory,
+        [treasury.address, ethers.ZeroAddress],
+        { initializer: "initialize" }
+      );
 
       await usdc
         .connect(user)
@@ -256,10 +262,12 @@ describe("ArbeskAsset (Merkle)", function () {
         .withArgs(user.address);
     });
 
+    it("setUsdcToken reverts on zero address", async () => {
+      await expect(asset.setUsdcToken(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(asset, "ZeroAddress");
+    });
+
     it("setUsdcToken updates token and emits UsdcTokenUpdated", async () => {
-      // NOTE: setUsdcToken has NO zero-address guard (unlike setTreasury /
-      // setTierCost). This test intentionally does not assert a revert for
-      // address(0) — flag for a human whether that is intentional (#55).
       const MockUSDC = await ethers.getContractFactory("MockUSDC");
       const newUsdc = await MockUSDC.deploy();
       await newUsdc.waitForDeployment();
@@ -290,8 +298,11 @@ describe("ArbeskAsset (Merkle)", function () {
 
     it("withdrawUSDC reverts when USDC token not set", async () => {
       const Factory = await ethers.getContractFactory("ArbeskAsset");
-      const noUsdc = await Factory.deploy(treasury.address, ethers.ZeroAddress);
-      await noUsdc.waitForDeployment();
+      const noUsdc = await upgrades.deployProxy(
+        Factory,
+        [treasury.address, ethers.ZeroAddress],
+        { initializer: "initialize" }
+      );
       await expect(noUsdc.withdrawUSDC())
         .to.be.revertedWithCustomError(noUsdc, "UsdcTokenNotSet");
     });
@@ -363,6 +374,147 @@ describe("ArbeskAsset (Merkle)", function () {
       // The new owner is privileged.
       await asset.connect(editor).pause();
       await asset.connect(editor).unpause();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // Asset-scoped editors (#50)
+  // ════════════════════════════════════════════════════════════════════
+
+  describe("Asset-scoped editors", function () {
+    it("collection-scope (bytes32(0)) editor updates URI", async () => {
+      const tokenId = 500;
+      const editors = [{ address: editor.address, role: CollaboratorRole.Editor }];
+      const root = computeRoot(editors, tokenId, 1); // scope = bytes32(0)
+      await asset.connect(user).publishAsset("ipfs://scope", tokenId, root, "");
+
+      const { proof } = getProof(editors, editor.address, tokenId, 1);
+      await asset
+        .connect(editor)
+        .updateAssetURI(tokenId, "ipfs://ok", ethers.ZeroHash, proof);
+      expect(await asset.tokenURI(tokenId)).to.equal("ipfs://ok");
+    });
+
+    it("asset-scoped editor updates URI with matching scope", async () => {
+      const tokenId = 501;
+      const assetScope = ethers.id("asset-1");
+      const editors = [{ address: editor.address, role: CollaboratorRole.Editor }];
+      const root = computeRoot(editors, tokenId, 1, assetScope);
+      await asset.connect(user).publishAsset("ipfs://scope2", tokenId, root, "");
+
+      const { proof } = getProof(editors, editor.address, tokenId, 1, assetScope);
+      await asset
+        .connect(editor)
+        .updateAssetURI(tokenId, "ipfs://scoped", assetScope, proof);
+      expect(await asset.tokenURI(tokenId)).to.equal("ipfs://scoped");
+    });
+
+    it("asset-scoped proof fails with a different assetScope", async () => {
+      const tokenId = 502;
+      const assetScope = ethers.id("asset-a");
+      const otherScope = ethers.id("asset-b");
+      const editors = [{ address: editor.address, role: CollaboratorRole.Editor }];
+      const root = computeRoot(editors, tokenId, 1, assetScope);
+      await asset.connect(user).publishAsset("ipfs://scope3", tokenId, root, "");
+
+      const { proof } = getProof(editors, editor.address, tokenId, 1, assetScope);
+      await expect(
+        asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", otherScope, proof)
+      ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
+    });
+
+    it("asset-scoped proof fails as collection-wide (bytes32(0))", async () => {
+      const tokenId = 503;
+      const assetScope = ethers.id("asset-c");
+      const editors = [{ address: editor.address, role: CollaboratorRole.Editor }];
+      const root = computeRoot(editors, tokenId, 1, assetScope);
+      await asset.connect(user).publishAsset("ipfs://scope4", tokenId, root, "");
+
+      const { proof } = getProof(editors, editor.address, tokenId, 1, assetScope);
+      await expect(
+        asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", ethers.ZeroHash, proof)
+      ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // Migration (one-shot re-mint, #56/#50)
+  // ════════════════════════════════════════════════════════════════════
+
+  describe("Migration", function () {
+    it("owner can migrate a token with historical state", async () => {
+      const tokenId = 700;
+      const root = ethers.id("root");
+      await asset.migrateAsset(
+        tokenId,
+        user.address,
+        "ipfs://migrated",
+        root,
+        3,
+        "ipfs://list"
+      );
+      expect(await asset.ownerOf(tokenId)).to.equal(user.address);
+      expect(await asset.tokenURI(tokenId)).to.equal("ipfs://migrated");
+      expect(await asset.editorRoot(tokenId)).to.equal(root);
+      expect(await asset.editorSetVersion(tokenId)).to.equal(3n);
+      expect(await asset.editorListURI(tokenId)).to.equal("ipfs://list");
+    });
+
+    it("migrateAsset reverts for non-owner", async () => {
+      await expect(
+        asset.connect(user).migrateAsset(701, user.address, "ipfs://x", ethers.ZeroHash, 1, "")
+      )
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+    });
+
+    it("migrateAsset reverts on duplicate tokenId", async () => {
+      const tokenId = 702;
+      const editors = [{ address: user.address, role: CollaboratorRole.Editor }];
+      const root = computeRoot(editors, tokenId, 1);
+      await asset.connect(user).publishAsset("ipfs://exists", tokenId, root, "");
+      await expect(
+        asset.migrateAsset(tokenId, user.address, "ipfs://dup", ethers.ZeroHash, 1, "")
+      ).to.be.revertedWithCustomError(asset, "TokenAlreadyMinted");
+    });
+
+    it("migrateAsset reverts after finalizeMigration", async () => {
+      await asset.finalizeMigration();
+      await expect(
+        asset.migrateAsset(703, user.address, "ipfs://late", ethers.ZeroHash, 1, "")
+      ).to.be.revertedWithCustomError(asset, "MigrationClosed");
+    });
+
+    it("finalizeMigration is owner-only and emits MigrationComplete", async () => {
+      await expect(asset.connect(user).finalizeMigration())
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+      await expect(asset.finalizeMigration()).to.emit(asset, "MigrationComplete");
+      expect(await asset.migrationFinalized()).to.equal(true);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // Upgradeability (UUPS, #56)
+  // ════════════════════════════════════════════════════════════════════
+
+  describe("Upgradeability (UUPS)", function () {
+    it("upgrades to a new implementation and preserves state", async function () {
+      const tokenId = 800;
+      const editors = [{ address: user.address, role: CollaboratorRole.Editor }];
+      const root = computeRoot(editors, tokenId, 1);
+      await asset.connect(user).publishAsset("ipfs://pre-upgrade", tokenId, root, "");
+
+      // Redeploy the same contract as a stand-in V2 implementation and
+      // repoint the proxy — on-chain state must survive the upgrade.
+      const V2 = await ethers.getContractFactory("ArbeskAsset");
+      await upgrades.upgradeProxy(await asset.getAddress(), V2);
+
+      expect(await asset.ownerOf(tokenId)).to.equal(user.address);
+      expect(await asset.tokenURI(tokenId)).to.equal("ipfs://pre-upgrade");
+      expect(await asset.editorRoot(tokenId)).to.equal(root);
+      expect(await asset.developerTreasuryWallet()).to.equal(treasury.address);
+      expect(await asset.tierCosts(Tier.Basic)).to.equal(TIER_COSTS.Basic);
     });
   });
 
@@ -481,7 +633,7 @@ describe("ArbeskAsset (Merkle)", function () {
       // updateAssetURI exercises _requireEditor with Editor role
       await asset
         .connect(user)
-        .updateAssetURI(tokenId, "ipfs://updated", proof);
+        .updateAssetURI(tokenId, "ipfs://updated", ethers.ZeroHash, proof);
       expect(await asset.tokenURI(tokenId)).to.equal("ipfs://updated");
     });
 
@@ -489,20 +641,20 @@ describe("ArbeskAsset (Merkle)", function () {
       const { proof } = getProof(editors, editor.address, tokenId, version);
       // updateAssetURI requires Editor role; editor has Viewer role
       await expect(
-        asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", proof)
+        asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", ethers.ZeroHash, proof)
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
 
     it("invalid proof (wrong address) reverts", async () => {
       const { proof } = getProof(editors, user.address, tokenId, version);
       await expect(
-        asset.connect(editor2).updateAssetURI(tokenId, "ipfs://nope", proof)
+        asset.connect(editor2).updateAssetURI(tokenId, "ipfs://nope", ethers.ZeroHash, proof)
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
 
     it("empty proof reverts for non-empty tree", async () => {
       await expect(
-        asset.connect(user).updateAssetURI(tokenId, "ipfs://x", [])
+        asset.connect(user).updateAssetURI(tokenId, "ipfs://x", ethers.ZeroHash, [])
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
 
@@ -523,7 +675,7 @@ describe("ArbeskAsset (Merkle)", function () {
 
       // Old proof should now fail (version 1 ≠ current version 2)
       await expect(
-        asset.connect(user).updateAssetURI(tokenId, "ipfs://nope", proof)
+        asset.connect(user).updateAssetURI(tokenId, "ipfs://nope", ethers.ZeroHash, proof)
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
 
@@ -541,7 +693,7 @@ describe("ArbeskAsset (Merkle)", function () {
 
       // Try to use it on tokenId (100) - leaf has tokenId baked in
       await expect(
-        asset.connect(user).updateAssetURI(tokenId, "ipfs://nope", proof)
+        asset.connect(user).updateAssetURI(tokenId, "ipfs://nope", ethers.ZeroHash, proof)
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
 
@@ -554,7 +706,7 @@ describe("ArbeskAsset (Merkle)", function () {
       const { proof } = getProof(single, user.address, tid, 1);
       expect(proof).to.have.lengthOf(0); // single leaf, no siblings
 
-      await asset.connect(user).updateAssetURI(tid, "ipfs://updated", proof);
+      await asset.connect(user).updateAssetURI(tid, "ipfs://updated", ethers.ZeroHash, proof);
       expect(await asset.tokenURI(tid)).to.equal("ipfs://updated");
     });
 
@@ -587,7 +739,7 @@ describe("ArbeskAsset (Merkle)", function () {
 
       await asset
         .connect(user)
-        .updateAssetURI(tid, "ipfs://big-updated", proof);
+        .updateAssetURI(tid, "ipfs://big-updated", ethers.ZeroHash, proof);
       expect(await asset.tokenURI(tid)).to.equal("ipfs://big-updated");
     });
   });
@@ -797,8 +949,9 @@ describe("ArbeskAsset (Merkle)", function () {
 
     beforeEach(async () => {
       const FreeFactory = await ethers.getContractFactory("ArbeskAssetFree");
-      freeAsset = await FreeFactory.deploy();
-      await freeAsset.waitForDeployment();
+      freeAsset = await upgrades.deployProxy(FreeFactory, [], {
+        initializer: "initialize",
+      });
     });
 
     it("has MAX_EDITORS_PER_TOKEN = 5000", async () => {
@@ -888,7 +1041,7 @@ describe("ArbeskAsset (Merkle)", function () {
       const { proof } = getProof(editors, user.address, tokenId, 1);
       await freeAsset
         .connect(user)
-        .updateAssetURI(tokenId, "ipfs://updated", proof);
+        .updateAssetURI(tokenId, "ipfs://updated", ethers.ZeroHash, proof);
       expect(await freeAsset.tokenURI(tokenId)).to.equal("ipfs://updated");
     });
 
@@ -946,7 +1099,7 @@ describe("ArbeskAsset (Merkle)", function () {
       // editor tries to update URI - they need a valid proof, but they're
       // not in the tree
       await expect(
-        asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", [])
+        asset.connect(editor).updateAssetURI(tokenId, "ipfs://nope", ethers.ZeroHash, [])
       ).to.be.revertedWithCustomError(asset, "NotAuthorizedEditor");
     });
   });

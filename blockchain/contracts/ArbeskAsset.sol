@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "./ArbeskAssetBase.sol";
 
 /**
@@ -14,7 +14,7 @@ import "./ArbeskAssetBase.sol";
  *
  *      MAX_EDITORS_PER_TOKEN = 5000 (safety net — full list on IPFS).
  */
-contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
+contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     enum Tier {
@@ -63,11 +63,19 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
         address indexed newToken
     );
 
-    // ── Constructor ──
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @dev Proxy initializer — called once by the ERC1967 proxy.
+    function initialize(
         address _treasury,
         address _usdcToken
-    ) ArbeskAssetBase("ArbeskAsset", "ARBA") {
+    ) public initializer {
+        __ArbeskAssetBase_init("ArbeskAsset", "ARBA");
+        __ReentrancyGuard_init();
+
         if (_treasury == address(0)) revert ZeroAddress();
         developerTreasuryWallet = _treasury;
         usdcToken = IERC20(_usdcToken);
@@ -113,6 +121,7 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
     }
 
     function setUsdcToken(address _usdcToken) external onlyOwner {
+        if (_usdcToken == address(0)) revert ZeroAddress();
         address oldToken = address(usdcToken);
         usdcToken = IERC20(_usdcToken);
         emit UsdcTokenUpdated(oldToken, _usdcToken);
@@ -139,4 +148,7 @@ contract ArbeskAsset is ArbeskAssetBase, ReentrancyGuard {
     fallback() external payable {
         revert DirectTransferNotAllowed();
     }
+
+    /// @dev Reserved storage for future versions (must stay at the end).
+    uint256[50] private __gap;
 }

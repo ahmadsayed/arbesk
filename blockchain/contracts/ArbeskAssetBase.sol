@@ -1,25 +1,40 @@
 // SPDX-License-Identifier: ISC
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable2Step.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /**
  * @title ArbeskAssetBase
- * @dev Abstract base contract with Merkle-root editor architecture.
- *      The full editor list lives on IPFS; only `_tokenURIs`,
+ * @dev UUPS-upgradeable abstract base contract with Merkle-root editor
+ *      architecture. The full editor list lives on IPFS; only `_tokenURIs`,
  *      `editorRoot`, `editorSetVersion`, and `editorListURI` stay on-chain
- *      (4 storage slots per token regardless of editor count —
- *      down from ~14 in the old design).
+ *      (4 storage slots per token regardless of editor count — down from ~14
+ *      in the old design).
  *
  *      Uses plain ERC721 (not ERC721Enumerable) to avoid the all/owned
  *      token arrays, which add ~3 extra storage slots per mint.
  *
  *      Concrete contracts: ArbeskAsset (paid), ArbeskAssetFree (free).
+ *
+ *      Editor leaves are asset-scoped: `assetScope = bytes32(0)` means a
+ *      collection-wide grant; `assetScope = keccak256(assetId)` grants rights
+ *      on a single asset within the collection.
+ *
+ *      `migrateAsset` / `finalizeMigration` provide a one-shot, owner-only
+ *      window for the v1→v2 data migration (see blockchain/scripts/migrate-v2.js).
  */
-abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
+abstract contract ArbeskAssetBase is
+    Initializable,
+    ERC721Upgradeable,
+    Ownable2StepUpgradeable,
+    PausableUpgradeable,
+    UUPSUpgradeable
+{
     // ── Custom Errors ──
     error TokenAlreadyMinted(uint256 tokenId);
     error NonexistentToken(uint256 tokenId);
@@ -29,6 +44,7 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
     error InvalidPromptLength();
     error InvalidNodeId();
     error ZeroEditorRoot();
+    error MigrationClosed();
 
     // ── Enums ──
     enum CollaboratorRole {
@@ -44,6 +60,8 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
     /// @dev IPFS CID of the full editor list JSON. Stored on-chain so any
     ///      browser can discover the editor list without localStorage.
     mapping(uint256 => string) public editorListURI;
+    /// @dev One-shot migration window — `finalizeMigration()` closes it forever.
+    bool public migrationFinalized;
 
     // ── Events ──
     event AssetPublished(
@@ -58,23 +76,26 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
     );
     event AssetBurned(uint256 indexed tokenId, address indexed burner);
     event AssetURIUpdated(uint256 indexed tokenId, string newAssetURI);
+    event MigrationComplete();
 
-    // ── Constructor ──
-    constructor(
+    // ── Initializer ──
+    /// @dev Shared initializer. Concrete contracts call this from their own
+    ///      `initialize()` (guarded by the `initializer` modifier).
+    function __ArbeskAssetBase_init(
         string memory name_,
         string memory symbol_
-    ) Ownable(msg.sender) ERC721(name_, symbol_) {}
+    ) internal onlyInitializing {
+        __ERC721_init(name_, symbol_);
+        __Ownable_init(msg.sender);
+        __Ownable2Step_init();
+        __Pausable_init();
+        __UUPSUpgradeable_init();
+    }
 
     // ── NFT Minting ──
 
     /// @notice Publish a new asset NFT. Mint + set tokenURI + commit the
     ///         Merkle root for the initial editor list.
-    /// @param uri IPFS CID pointing to the asset manifest (tokenURI).
-    /// @param tokenId Unique identifier chosen by the dapp.
-    /// @param editorRoot_ Merkle root of the initial editor list (computed
-    ///        off-chain from the full list stored on IPFS). Must be non-zero:
-    ///        a zero root permanently bricks the token because every
-    ///        editor-gated operation requires a proof against it.
     function publishAsset(
         string memory uri,
         uint256 tokenId,
@@ -101,16 +122,18 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
 
     // ── URI Updates (requires Merkle proof) ──
 
-    /// @notice Update the asset URI. Caller must submit a Merkle proof
-    ///         that they hold the Editor role in the current tree.
-    ///         Non-zero→non-zero SSTORE — immune to bucket multiplier.
+    /// @notice Update the asset URI. Caller must submit a Merkle proof that
+    ///         they hold the Editor role at `assetScope` in the current tree.
+    ///         `assetScope = bytes32(0)` is a collection-wide grant;
+    ///         `assetScope = keccak256(assetId)` is an asset-scoped grant.
     function updateAssetURI(
         uint256 tokenId,
         string memory newAssetURI,
+        bytes32 assetScope,
         bytes32[] calldata proof
     ) public {
         if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, proof);
+        _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, assetScope, proof);
         _setTokenURI(tokenId, newAssetURI);
         emit AssetURIUpdated(tokenId, newAssetURI);
     }
@@ -118,11 +141,8 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
     // ── Editor Set Management ──
 
     /// @notice Replace the entire editor set with a new Merkle root.
-    ///         Caller must prove they are an Editor in the CURRENT tree.
-    ///         Bumping editorSetVersion invalidates all old proofs.
-    /// @dev The new root must be non-zero: with a zero root no proof can ever
-    ///      verify, permanently bricking the token (updateAssetURI,
-    ///      updateEditors, and burn all require a proof against the root).
+    ///         Caller must prove they are an Editor in the CURRENT tree
+    ///         (collection-scope only — editor-set admin is never asset-scoped).
     function updateEditors(
         uint256 tokenId,
         bytes32 newRoot,
@@ -130,7 +150,7 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
         CollaboratorRole callerRole,
         bytes32[] calldata callerProof
     ) external {
-        _requireEditor(tokenId, msg.sender, callerRole, callerProof);
+        _requireEditor(tokenId, msg.sender, callerRole, bytes32(0), callerProof);
         if (callerRole != CollaboratorRole.Editor)
             revert InvalidCollaboratorRole();
         if (newRoot == bytes32(0)) revert ZeroEditorRoot();
@@ -145,11 +165,10 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
 
     // ── Burn ──
 
-    /// @notice Burn a token. Caller must prove Editor role in the Merkle tree.
-    ///         Cleans up root + version state after burn (storage refund).
+    /// @notice Burn a token. Caller must prove Editor role (collection-scope).
     function burn(uint256 tokenId, bytes32[] calldata proof) public {
         if (!_exists(tokenId)) revert NonexistentToken(tokenId);
-        _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, proof);
+        _requireEditor(tokenId, msg.sender, CollaboratorRole.Editor, bytes32(0), proof);
 
         _burn(tokenId);
         delete editorRoot[tokenId];
@@ -160,19 +179,54 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
 
     // ── Admin ──
 
-    /// @notice Pause the contract.
-    /// @dev Payment-pause-only by design: Pausable gates generation/payment
-    ///      entry points (`recordGeneration`, `payForGenerationWithUSDC`).
-    ///      Publishing, URI updates, editor-set changes, and burn stay live
-    ///      while paused so asset management is never frozen.
+    /// @notice Pause the contract (payment/generation entry points only).
     function pause() external onlyOwner {
         _pause();
     }
 
-    /// @notice Unpause the contract. See `pause()` for the pause scope.
+    /// @notice Unpause the contract.
     function unpause() external onlyOwner {
         _unpause();
     }
+
+    // ── Migration (one-shot) ──
+
+    /// @notice Re-mint an existing token to its original owner with its
+    ///         historical URI + editor state, under the new leaf schema.
+    ///         The migration script recomputes `editorRoot_` from the old
+    ///         editor list using the new asset-scoped leaf. Owner-only,
+    ///         gated by the migration window.
+    function migrateAsset(
+        uint256 tokenId,
+        address owner,
+        string calldata uri,
+        bytes32 editorRoot_,
+        uint256 editorSetVersion_,
+        string calldata editorListUri
+    ) external onlyOwner {
+        if (migrationFinalized) revert MigrationClosed();
+        if (_exists(tokenId)) revert TokenAlreadyMinted(tokenId);
+
+        _mint(owner, tokenId);
+        _setTokenURI(tokenId, uri);
+        editorRoot[tokenId] = editorRoot_;
+        editorSetVersion[tokenId] = editorSetVersion_;
+        editorListURI[tokenId] = editorListUri;
+        emit EditorSetChanged(tokenId, editorRoot_, editorSetVersion_);
+    }
+
+    /// @notice Permanently close the migration window.
+    function finalizeMigration() external onlyOwner {
+        migrationFinalized = true;
+        emit MigrationComplete();
+    }
+
+    // ── Upgrade authorization ──
+
+    /// @dev The upgrade key is the single highest-value target in the system;
+    ///      gated to the contract owner (the Safe multisig + timelock after
+    ///      governance transfer — see #57 / #56).
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ── Internal Helpers ──
 
@@ -181,25 +235,25 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
     }
 
     /// @dev Verify a caller is in the current Merkle tree with the required
-    ///      role. The leaf hash includes tokenId + editorSetVersion so proofs
-    ///      cannot be replayed after a set change or across different tokens.
+    ///      role at the given scope. The leaf includes tokenId + assetScope +
+    ///      editorSetVersion so proofs cannot be replayed after a set change,
+    ///      across scopes, or across different tokens.
     function _requireEditor(
         uint256 tokenId,
         address caller,
         CollaboratorRole requiredRole,
+        bytes32 assetScope,
         bytes32[] calldata proof
     ) internal view {
         bytes32 leaf = keccak256(
-            abi.encodePacked(caller, requiredRole, tokenId, editorSetVersion[tokenId])
+            abi.encodePacked(caller, requiredRole, tokenId, assetScope, editorSetVersion[tokenId])
         );
         if (!MerkleProof.verify(proof, editorRoot[tokenId], leaf))
             revert NotAuthorizedEditor(tokenId, caller);
     }
 
     /// @dev One-time initialization of the editor root for a newly minted
-    ///      token. Called internally by publishAsset only. No existing-root
-    ///      guard is needed here: publishAsset/_mint already revert on
-    ///      existing tokens, and burn deletes the root.
+    ///      token. Called internally by publishAsset only.
     function initEditors(uint256 tokenId, bytes32 root, string memory listUri) internal {
         editorRoot[tokenId] = root;
         editorSetVersion[tokenId] = 1;
@@ -212,12 +266,7 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
         _tokenURIs[tokenId] = uri;
     }
 
-    /// @dev Shared input validation for generation entry points
-    ///      (`recordGeneration`, `payForGenerationWithUSDC`).
-    /// @param nodeId Off-chain scene node the generation is for. Reverts with
-    ///        InvalidNodeId if zero.
-    /// @param prompt Generation prompt. Reverts with InvalidPromptLength if
-    ///        empty or longer than 500 bytes.
+    /// @dev Shared input validation for generation entry points.
     function _validateGenerationInput(
         bytes32 nodeId,
         string calldata prompt
@@ -226,4 +275,7 @@ abstract contract ArbeskAssetBase is ERC721, Ownable2Step, Pausable {
         if (promptLen == 0 || promptLen > 500) revert InvalidPromptLength();
         if (nodeId == bytes32(0)) revert InvalidNodeId();
     }
+
+    /// @dev Reserved storage for future versions (must stay at the end).
+    uint256[50] private __gap;
 }

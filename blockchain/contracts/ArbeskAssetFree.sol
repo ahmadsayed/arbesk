@@ -36,8 +36,15 @@ contract ArbeskAssetFree is ArbeskAssetBase {
         uint256 countToday
     );
 
-    // ── Constructor ──
-    constructor() ArbeskAssetBase("ArbeskAssetFree", "ARBF") {}
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @dev Proxy initializer — called once by the ERC1967 proxy.
+    function initialize() public initializer {
+        __ArbeskAssetBase_init("ArbeskAssetFree", "ARBF");
+    }
 
     // ── Free Generation Recording ──
 
@@ -72,4 +79,7 @@ contract ArbeskAssetFree is ArbeskAssetBase {
             quota.count
         );
     }
+
+    /// @dev Reserved storage for future versions (must stay at the end).
+    uint256[50] private __gap;
 }
