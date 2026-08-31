@@ -228,6 +228,103 @@ describe("ArbeskAsset (Merkle)", function () {
   });
 
   // ════════════════════════════════════════════════════════════════════
+  // Admin setters + withdrawUSDC (coverage gap #55 + regression #54)
+  // ════════════════════════════════════════════════════════════════════
+
+  describe("Admin", function () {
+    it("setTreasury reverts on zero address", async () => {
+      await expect(asset.setTreasury(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(asset, "ZeroAddress");
+    });
+
+    it("setTreasury reverts for non-owner", async () => {
+      await expect(asset.connect(user).setTreasury(user.address))
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+    });
+
+    it("setTreasury updates wallet and emits TreasuryUpdated", async () => {
+      await expect(asset.setTreasury(editor.address))
+        .to.emit(asset, "TreasuryUpdated")
+        .withArgs(treasury.address, editor.address);
+      expect(await asset.developerTreasuryWallet()).to.equal(editor.address);
+    });
+
+    it("setUsdcToken reverts for non-owner", async () => {
+      await expect(asset.connect(user).setUsdcToken(await usdc.getAddress()))
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+    });
+
+    it("setUsdcToken updates token and emits UsdcTokenUpdated", async () => {
+      // NOTE: setUsdcToken has NO zero-address guard (unlike setTreasury /
+      // setTierCost). This test intentionally does not assert a revert for
+      // address(0) — flag for a human whether that is intentional (#55).
+      const MockUSDC = await ethers.getContractFactory("MockUSDC");
+      const newUsdc = await MockUSDC.deploy();
+      await newUsdc.waitForDeployment();
+      const oldToken = await asset.usdcToken();
+      await expect(asset.setUsdcToken(await newUsdc.getAddress()))
+        .to.emit(asset, "UsdcTokenUpdated")
+        .withArgs(oldToken, await newUsdc.getAddress());
+      expect(await asset.usdcToken()).to.equal(await newUsdc.getAddress());
+    });
+
+    it("setTierCost reverts on zero cost", async () => {
+      await expect(asset.setTierCost(Tier.Basic, 0))
+        .to.be.revertedWithCustomError(asset, "InvalidCost");
+    });
+
+    it("setTierCost reverts for non-owner", async () => {
+      await expect(asset.connect(user).setTierCost(Tier.Basic, 100))
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+    });
+
+    it("setTierCost updates price and emits TierCostUpdated", async () => {
+      await expect(asset.setTierCost(Tier.Standard, 999))
+        .to.emit(asset, "TierCostUpdated")
+        .withArgs(Tier.Standard, TIER_COSTS.Standard, 999n);
+      expect(await asset.tierCosts(Tier.Standard)).to.equal(999n);
+    });
+
+    it("withdrawUSDC reverts when USDC token not set", async () => {
+      const Factory = await ethers.getContractFactory("ArbeskAsset");
+      const noUsdc = await Factory.deploy(treasury.address, ethers.ZeroAddress);
+      await noUsdc.waitForDeployment();
+      await expect(noUsdc.withdrawUSDC())
+        .to.be.revertedWithCustomError(noUsdc, "UsdcTokenNotSet");
+    });
+
+    it("withdrawUSDC reverts when balance is zero", async () => {
+      await expect(asset.withdrawUSDC())
+        .to.be.revertedWithCustomError(asset, "NoBalanceToWithdraw");
+    });
+
+    it("withdrawUSDC drains full balance to treasury (regression #54)", async () => {
+      // The paid flow transfers USDC user→treasury directly, so the contract
+      // balance only accumulates from a mistaken DIRECT transfer — which is
+      // exactly what withdrawUSDC exists to recover.
+      const amount = ethers.parseUnits("50", USDC_DECIMALS);
+      await usdc.connect(user).transfer(await asset.getAddress(), amount);
+      expect(await usdc.balanceOf(await asset.getAddress())).to.equal(amount);
+
+      const before = await usdc.balanceOf(treasury.address);
+      await expect(asset.withdrawUSDC())
+        .to.emit(usdc, "Transfer")
+        .withArgs(await asset.getAddress(), treasury.address, amount);
+      expect(await usdc.balanceOf(await asset.getAddress())).to.equal(0n);
+      expect(await usdc.balanceOf(treasury.address)).to.equal(before + amount);
+    });
+
+    it("withdrawUSDC reverts for non-owner", async () => {
+      await expect(asset.connect(user).withdrawUSDC())
+        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+        .withArgs(user.address);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════
   // publishAsset (Merkle)
   // ════════════════════════════════════════════════════════════════════
 
@@ -717,6 +814,25 @@ describe("ArbeskAsset (Merkle)", function () {
           (v) => v > 0n,
           15n
         );
+    });
+
+    it("resets daily quota across a day boundary", async function () {
+      const { time } = require("@nomicfoundation/hardhat-network-helpers");
+
+      await expect(
+        freeAsset.connect(user).recordGeneration(ethers.id("d1"), "prompt 1")
+      )
+        .to.emit(freeAsset, "AssetGenerationRecorded")
+        .withArgs(user.address, ethers.id("d1"), "prompt 1", (v) => v > 0n, 1n);
+
+      await time.increase(86401); // cross a full day boundary
+
+      // countToday resets to 1 for the new day, not 2.
+      await expect(
+        freeAsset.connect(user).recordGeneration(ethers.id("d2"), "prompt 2")
+      )
+        .to.emit(freeAsset, "AssetGenerationRecorded")
+        .withArgs(user.address, ethers.id("d2"), "prompt 2", (v) => v > 0n, 1n);
     });
 
     it("updateAssetURI with Merkle proof", async () => {
