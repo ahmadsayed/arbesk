@@ -31,6 +31,9 @@ const CHAINS_FILE = "constants/chains.js";
 const INDEXER_STATE = `.data/token-indexer-${CHAIN_ID}.json`;
 const BACKUP = "blockchain/deployments/baseSepolia/.cutover-backup.json";
 
+/**
+ * @returns {string}
+ */
 function readBaseAddress() {
   for (const f of ["blockchain/.env", ".env"]) {
     const p = path.join(ROOT, f);
@@ -41,6 +44,9 @@ function readBaseAddress() {
   throw new Error("BASE_CONTRACT_ADDRESS not found in blockchain/.env or .env");
 }
 
+/**
+ * @returns {string}
+ */
 function readDeploymentBlock() {
   const p = path.join(ROOT, CHAINS_FILE);
   const m = fs.readFileSync(p, "utf8").match(
@@ -50,7 +56,12 @@ function readDeploymentBlock() {
   return m[1];
 }
 
-/** Replace a value (case-insensitive) across every address/config source. */
+/**
+ * Replace a value (case-insensitive) across every address/config source.
+ * @param {string} oldVal
+ * @param {string} newVal
+ * @param {string[]} files
+ */
 function replaceInFiles(oldVal, newVal, files) {
   for (const f of files) {
     const p = path.join(ROOT, f);
@@ -70,6 +81,10 @@ function replaceInFiles(oldVal, newVal, files) {
   }
 }
 
+/**
+ * @param {string} oldBlock
+ * @param {string} newBlock
+ */
 function replaceBlock(oldBlock, newBlock) {
   const p = path.join(ROOT, CHAINS_FILE);
   const src = fs.readFileSync(p, "utf8");
@@ -82,6 +97,9 @@ function replaceBlock(oldBlock, newBlock) {
   console.log(`✅ ${CHAINS_FILE}`);
 }
 
+/**
+ * @param {string} newBlock
+ */
 function resetIndexer(newBlock) {
   const p = path.join(ROOT, INDEXER_STATE);
   if (!fs.existsSync(p)) {
@@ -98,12 +116,15 @@ function resetIndexer(newBlock) {
     fs.writeFileSync(p, JSON.stringify(state, null, 2));
     console.log(`✅ ${INDEXER_STATE} reset to block ${newBlock}`);
   } catch (err) {
-    console.warn(`⚠️  could not reset indexer state: ${err.message}`);
+    console.warn(`⚠️  could not reset indexer state: ${(/** @type {Error} */ (err)).message}`);
   }
 }
 
 function main() {
   const args = process.argv.slice(2);
+  /**
+   * @param {string} flag
+   */
   const get = (flag) => {
     const i = args.indexOf(flag);
     return i >= 0 ? args[i + 1] : null;

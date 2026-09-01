@@ -31,6 +31,8 @@ import authenticate from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
 import { validateBody } from "../validation.ts";
 import { generateAssetSchema, providerBalanceSchema } from "../schemas.ts";
+import { verifyOnChainGeneration } from "../generation-verify.ts";
+import { CHAIN_IDS } from "../../../constants/chains.js";
 
 const Router = express.Router;
 
@@ -847,6 +849,26 @@ export default function generateAssetNode(
 
         if (rejectMissingProviderKey(res, effectiveProvider, providerKey)) {
           return;
+        }
+
+        // On-chain generation verification (#48): when the client claims an
+        // on-chain generation/payment transaction, verify it before spending
+        // provider credits. Opt-in — mock/BYOK requests omit the txHash.
+        if (req.body.generationTxHash) {
+          const verification = await verifyOnChainGeneration({
+            chainId: Number(req.body.chainId) || CHAIN_IDS.BASE_TESTNET,
+            userAddress: res.locals.userAddress,
+            nodeId,
+            txHash: req.body.generationTxHash,
+          });
+          if (!verification.ok) {
+            return res.status(402).json({
+              error: {
+                code: verification.reason || "GENERATION_NOT_VERIFIED",
+                message: "On-chain generation verification failed",
+              },
+            });
+          }
         }
 
         if (useMockAdapter) {

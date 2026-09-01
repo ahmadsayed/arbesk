@@ -88,6 +88,8 @@ export const generateAssetSchema = z
   .object({
     prompt: z.string().min(1, "prompt is required").optional(),
     nodeId: z.string().min(1, "nodeId is required"),
+    chainId: z.number().int().nonnegative().optional(),
+    generationTxHash: z.string().max(66).optional(),
     provider: z.string().optional(),
     providerKey: z.string().max(200).optional(),
     // Follow-up actions (tripo3d only): the source model is referenced by
