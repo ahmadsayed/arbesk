@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import type { PublicClient } from "viem";
 import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
 import { getPublicClient, getContractAddress, NETWORK_CONFIGS } from "../config.ts";
+import { maybeDecompress } from "./ipfs-utils.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -215,8 +216,12 @@ class TokenIndexer {
         this._removeTokenEditors(tokenId);
         return;
       }
-      const raw = await this.storage.cat(cid);
-      const list = JSON.parse(raw);
+      // Editor lists are stored gzipped (writeJSONToIPFS compress:true) — read
+      // raw bytes and decompress before parsing (a gzipped blob can't be
+      // JSON.parse'd as a string).
+      const raw = await this.storage.catBytes(cid);
+      const decompressed = await maybeDecompress(raw);
+      const list = JSON.parse(decompressed);
       if (!Array.isArray(list)) {
         this._removeTokenEditors(tokenId);
         return;
