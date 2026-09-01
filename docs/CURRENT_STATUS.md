@@ -314,7 +314,7 @@ frontend/src/js/
 |---------|----------|---------|-------|
 | `hardhat` / `localhost` (chain 31415822) | ArbeskAssetFree | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Local container, MockUSDC |
 | `hardhat` / `localhost` (chain 31415822) | ArbeskAsset (paid) | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Local container, MockUSDC |
-| `baseSepolia` (chain 84532) | ArbeskAssetFree | `0xa39eFfc859b326CCCeB177CfBbef00C1876e18d8` (block 44309130, verified on Basescan) | **Current testnet target (EOA + CDP email login)** — fresh breaking deployment 2026-07-18, no token migration from the previous contract |
+| `baseSepolia` (chain 84532) | ArbeskAssetFree | `0x2D323Db44D022601885e2e34f0767293d02B704C` (UUPS proxy, impl `0xeA483012d916f5D62cfA904f6Cb54340fc0883C6`, block 46254847, verified on Basescan) | **Current testnet target (EOA + CDP email login)** — UUPS-upgradeable v2 with asset-scoped Merkle editors; 6 tokens migrated from `0xa39eFfc…` via `migrate-v2.js` |
 | `baseSepolia` (chain 84532) | ArbeskAsset (paid) | — | Not deployed on testnet |
 
 ### 4.2 Known Contract Issues
