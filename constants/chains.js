@@ -43,19 +43,3 @@ export const LOG_CHUNK_SIZES = {
   // ("query exceeds max block range 2000").
   [CHAIN_IDS.BASE_TESTNET]: 2000,
 };
-
-/**
- * Contract address migrations (old → new) for chains that have been
- * redeployed. Existing immutable manifests embed the OLD address in
- * `child_ref.collection.contractAddress`; resolution remaps it to the current
- * address so nested references keep resolving after a redeploy.
- *
- * Keys are lowercased for case-insensitive lookup; values are the current
- * checksummed addresses.
- */
-export const CONTRACT_MIGRATIONS = {
-  [CHAIN_IDS.BASE_TESTNET]: {
-    "0xa39effc859b326ccceb177cfbbef00c1876e18d8":
-      "0x2D323Db44D022601885e2e34f0767293d02B704C",
-  },
-};

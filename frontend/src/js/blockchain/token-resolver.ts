@@ -15,24 +15,33 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { normalizeTokenURI } from "./uri-utils.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { getReadClient } from "./viem-clients.ts";
-import { CONTRACT_MIGRATIONS } from "../../../../constants/chains.js";
 
 /**
- * Remap a `child_ref`'s embedded contract address to the current deployment
- * after a contract migration. Existing manifests are immutable, so their
- * `child_ref.collection.contractAddress` still holds the OLD address — remap
- * it at resolution time so nested references keep resolving after a redeploy.
+ * Resolve which contract to read a token from. Prefer the current deployment
+ * (the connected/configured contract) and fall back to the address embedded
+ * in the manifest only when the token isn't on the current contract. This
+ * survives a contract redeploy without a static old→new map: a migrated token
+ * lives on the current contract, while an unmigrated legacy token still
+ * resolves via its manifest's embedded address.
  */
-function remapMigratedContract(
+async function resolveContractForToken(
   chainId: number | null,
-  address: string | null
-): string | null {
-  if (!address || chainId == null) return address;
-  const map = CONTRACT_MIGRATIONS[chainId] as
-    | Record<string, string>
-    | undefined;
-  if (!map) return address;
-  return map[address.toLowerCase()] ?? address;
+  currentAddress: string | null,
+  embeddedAddress: string | null,
+  tokenId: string
+): Promise<string | null> {
+  if (!embeddedAddress) return currentAddress;
+  if (!currentAddress) return embeddedAddress;
+  if (currentAddress.toLowerCase() === embeddedAddress.toLowerCase()) {
+    return currentAddress;
+  }
+  // Token may have migrated to the current contract — check there first.
+  try {
+    await readTokenURI(chainId, currentAddress, tokenId);
+    return currentAddress;
+  } catch {
+    return embeddedAddress;
+  }
 }
 
 const resolutionCache = new Map<string, { manifestCid: string; timestamp: number }>();
@@ -175,9 +184,11 @@ export async function resolveChildRef(
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
   const chainId = Number(childRef.chainId || walletChainId) || null;
-  const contractAddress = remapMigratedContract(
+  const contractAddress = await resolveContractForToken(
     chainId,
-    childRef.contractAddress || walletContractAddress || null
+    walletContractAddress || null,
+    childRef.contractAddress || null,
+    childRef.tokenId
   );
 
   // Check cache using resolved values
