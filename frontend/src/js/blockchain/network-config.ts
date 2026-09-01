@@ -34,7 +34,7 @@ const NETWORK_CONFIGS: Record<number, NetworkConfig> = {
   [CHAIN_IDS.BASE_TESTNET]: {
     name: "Base Sepolia Testnet",
     chainId: CHAIN_IDS.BASE_TESTNET,
-    contractAddress: "0xa39eFfc859b326CCCeB177CfBbef00C1876e18d8",
+    contractAddress: "0x2D323Db44D022601885e2e34f0767293d02B704C",
     paidContractAddress: null, // Paid tier not deployed on testnet
     usdcToken: null, // USDC not deployed on testnet
     rpcUrl: "https://sepolia.base.org",

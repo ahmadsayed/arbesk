@@ -35,13 +35,16 @@ const BACKUP = "blockchain/deployments/baseSepolia/.cutover-backup.json";
  * @returns {string}
  */
 function readBaseAddress() {
-  for (const f of ["blockchain/.env", ".env"]) {
+  // Prefer root .env: deploy.js updates blockchain/.env to the NEW address
+  // during deploy, so root .env is the reliable source of the OLD address
+  // pre-cutover.
+  for (const f of [".env", "blockchain/.env"]) {
     const p = path.join(ROOT, f);
     if (!fs.existsSync(p)) continue;
     const m = fs.readFileSync(p, "utf8").match(/^BASE_CONTRACT_ADDRESS=(.+)$/m);
     if (m) return m[1].trim();
   }
-  throw new Error("BASE_CONTRACT_ADDRESS not found in blockchain/.env or .env");
+  throw new Error("BASE_CONTRACT_ADDRESS not found in .env or blockchain/.env");
 }
 
 /**

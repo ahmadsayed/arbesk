@@ -20,6 +20,7 @@
 const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 const { SimpleMerkleTree } = require("@openzeppelin/merkle-tree");
 
 const OP = process.env.OP || "snapshot";
@@ -37,7 +38,8 @@ const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 // inlined because this CJS script cannot require the ESM module.
 const CHAIN_INDEX = {
   31415822: { deploymentBlock: 0, logChunkSize: 10000 }, // Hardhat local
-  84532: { deploymentBlock: 44309130, logChunkSize: 2000 }, // Base Sepolia
+  // sepolia.base.org rejects eth_getLogs ranges > 10000 blocks — use the max.
+  84532: { deploymentBlock: 44309130, logChunkSize: 10000 }, // Base Sepolia
 };
 
 /** Leaf encoding matches ArbeskAssetBase._requireEditor (new asset-scoped schema). */
@@ -59,7 +61,13 @@ function computeRoot(editorList, tokenId, version, assetScope = ZERO_HASH) {
 async function fetchEditorList(cid) {
   const res = await fetch(`${IPFS_GATEWAY}/ipfs/${cid}`);
   if (!res.ok) throw new Error(`IPFS fetch ${cid} failed: ${res.status}`);
-  const json = await res.json();
+  let buf = Buffer.from(await res.arrayBuffer());
+  // Editor lists are stored gzipped (writeJSONToIPFS compress:true) — Pinata
+  // serves the raw gzip bytes, so decompress before parsing.
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    buf = zlib.gunzipSync(buf);
+  }
+  const json = JSON.parse(buf.toString("utf8"));
   if (!Array.isArray(json)) throw new Error(`editor list ${cid} is not an array`);
   return json;
 }
@@ -74,8 +82,10 @@ async function snapshot() {
   const transferTopic = hre.ethers.id("Transfer(address,address,uint256)");
 
   const old = await hre.ethers.getContractAt(CONTRACT_NAME, OLD);
-  const tokens = new Map();
 
+  // First pass: track live tokens (mints minus burns) WITHOUT reading state —
+  // a minted-then-burned token's tokenURI reverts against current state.
+  const live = new Map(); // tokenId → owner from the mint event
   for (let from = fromBlock; from <= latest; from += chunk) {
     const to = Math.min(from + chunk - 1, latest);
     const logs = await hre.ethers.provider.getLogs({
@@ -90,18 +100,24 @@ async function snapshot() {
       const toAddr = "0x" + log.topics[2].slice(26);
       const tokenId = BigInt(log.topics[3]).toString();
       if (fromAddr.toLowerCase() === ZERO_ADDR) {
-        tokens.set(tokenId, {
-          tokenId,
-          owner: toAddr.toLowerCase(),
-          tokenURI: await old.tokenURI(tokenId),
-          editorRoot: await old.editorRoot(tokenId),
-          editorSetVersion: (await old.editorSetVersion(tokenId)).toString(),
-          editorListURI: await old.editorListURI(tokenId),
-        });
+        live.set(tokenId, toAddr.toLowerCase());
       } else if (toAddr.toLowerCase() === ZERO_ADDR) {
-        tokens.delete(tokenId);
+        live.delete(tokenId);
       }
     }
+  }
+
+  // Second pass: snapshot current on-chain state for the live tokens only.
+  const tokens = [];
+  for (const tokenId of live.keys()) {
+    tokens.push({
+      tokenId,
+      owner: (await old.ownerOf(tokenId)).toLowerCase(),
+      tokenURI: await old.tokenURI(tokenId),
+      editorRoot: await old.editorRoot(tokenId),
+      editorSetVersion: (await old.editorSetVersion(tokenId)).toString(),
+      editorListURI: await old.editorListURI(tokenId),
+    });
   }
 
   const out = {
@@ -109,7 +125,7 @@ async function snapshot() {
     blockNumber: latest,
     oldContract: OLD,
     newContract: NEW,
-    tokens: [...tokens.values()],
+    tokens,
   };
   const file =
     SNAPSHOT_PATH ||
