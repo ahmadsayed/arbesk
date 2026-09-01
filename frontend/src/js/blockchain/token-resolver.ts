@@ -15,6 +15,25 @@ import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { normalizeTokenURI } from "./uri-utils.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { getReadClient } from "./viem-clients.ts";
+import { CONTRACT_MIGRATIONS } from "../../../../constants/chains.js";
+
+/**
+ * Remap a `child_ref`'s embedded contract address to the current deployment
+ * after a contract migration. Existing manifests are immutable, so their
+ * `child_ref.collection.contractAddress` still holds the OLD address — remap
+ * it at resolution time so nested references keep resolving after a redeploy.
+ */
+function remapMigratedContract(
+  chainId: number | null,
+  address: string | null
+): string | null {
+  if (!address || chainId == null) return address;
+  const map = CONTRACT_MIGRATIONS[chainId] as
+    | Record<string, string>
+    | undefined;
+  if (!map) return address;
+  return map[address.toLowerCase()] ?? address;
+}
 
 const resolutionCache = new Map<string, { manifestCid: string; timestamp: number }>();
 
@@ -156,8 +175,10 @@ export async function resolveChildRef(
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
   const chainId = Number(childRef.chainId || walletChainId) || null;
-  const contractAddress =
-    childRef.contractAddress || walletContractAddress || null;
+  const contractAddress = remapMigratedContract(
+    chainId,
+    childRef.contractAddress || walletContractAddress || null
+  );
 
   // Check cache using resolved values
   const resolvedRef = { ...childRef, chainId, contractAddress } as any;
