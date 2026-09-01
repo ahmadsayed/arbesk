@@ -1,44 +1,49 @@
 const hre = require("hardhat");
 
+/**
+ * Proxy-aware Basescan verification for the UUPS-upgradeable contracts.
+ *
+ * The contracts are deployed behind an ERC1967 proxy (see deploy.js), so the
+ * flat-contract `verify:verify` with constructor args no longer applies:
+ *   1. resolve the implementation address from the proxy's ERC1967 slot,
+ *   2. verify the implementation (initialize()-based, no constructor args),
+ *   3. verify the proxy and link it to the implementation so Basescan
+ *      renders "Read as Proxy".
+ *
+ * VERIFY_CONTRACT=ArbeskAssetFree (default) | ArbeskAsset (paid, local).
+ */
 async function main() {
-  // Determine which contract to verify (free tier is the one deployed on testnet)
   const contractName = process.env.VERIFY_CONTRACT || "ArbeskAssetFree";
-  // deploy.js writes the testnet free-tier address to BASE_CONTRACT_ADDRESS;
+  // deploy.js writes the testnet free-tier proxy to BASE_CONTRACT_ADDRESS;
   // local deploys use CONTRACT_ADDRESS.
-  const address =
+  const proxyAddress =
     contractName === "ArbeskAssetFree"
       ? hre.network.name === "baseSepolia"
         ? process.env.BASE_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS
         : process.env.CONTRACT_ADDRESS
       : process.env.PAID_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS;
 
-  const treasury = process.env.TREASURY_ADDRESS;
-
-  if (!address) {
+  if (!proxyAddress) {
     console.error(
       `Set CONTRACT_ADDRESS (or BASE_CONTRACT_ADDRESS / PAID_CONTRACT_ADDRESS) in .env`
     );
     process.exit(1);
   }
 
-  console.log(`Verifying ${contractName} at:`, address);
+  const { upgrades } = hre;
+  const implAddress = await upgrades.erc1967.getImplementationAddress(
+    proxyAddress
+  );
+  console.log(`Proxy (${contractName}): ${proxyAddress}`);
+  console.log(`Implementation: ${implAddress}`);
 
-  let constructorArguments;
-  if (contractName === "ArbeskAssetFree") {
-    constructorArguments = [];
-  } else {
-    // ArbeskAsset (paid tier)
-    if (!treasury) {
-      console.error("Set TREASURY_ADDRESS in .env for ArbeskAsset verification");
-      process.exit(1);
-    }
-    const usdcAddress = process.env.USDC_TOKEN || hre.ethers.ZeroAddress;
-    constructorArguments = [treasury, usdcAddress];
-  }
+  // Verify the implementation — no constructor args (UUPS uses initialize()).
+  await hre.run("verify:verify", { address: implAddress });
 
+  // Verify the proxy (ERC1967Proxy constructor: implementation + empty data).
   await hre.run("verify:verify", {
-    address,
-    constructorArguments,
+    address: proxyAddress,
+    constructorArguments: [implAddress, "0x"],
   });
 }
 

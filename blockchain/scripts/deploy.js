@@ -47,6 +47,34 @@ async function main() {
   if (isLocal) {
     // ── Local: deploy MockUSDC + ArbeskAsset (paid tier) for testing ──
     usdcAddress = process.env.USDC_TOKEN;
+    if (usdcAddress) {
+      // Validate the env USDC token is actually a USDC-like ERC20 on this
+      // network. A stale address from a prior deploy can collide with a fresh
+      // proxy address (deterministic CREATE nonces) or point at a contract
+      // that is not a token at all — silently wiring the paid tier to the
+      // wrong token. Verify symbol + decimals instead of just "has code".
+      let valid = false;
+      try {
+        const probe = await hre.ethers.getContractAt(
+          [
+            "function symbol() view returns (string)",
+            "function decimals() view returns (uint8)",
+          ],
+          usdcAddress
+        );
+        const symbol = await probe.symbol();
+        const decimals = await probe.decimals();
+        valid = symbol === "USDC" && decimals === 6n;
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        console.log(
+          `USDC_TOKEN ${usdcAddress} is not a valid USDC token — deploying fresh MockUSDC`
+        );
+        usdcAddress = null;
+      }
+    }
     if (!usdcAddress) {
       console.log(
         "No USDC_TOKEN env var - deploying MockUSDC for local testing..."
