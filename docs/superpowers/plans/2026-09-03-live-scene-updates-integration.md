@@ -392,9 +392,11 @@ git commit -m "feat(live): emit ASSET_URI_CHANGED at updateAssetURI"
 import { SimplePool } from "nostr-tools";
 import type { NostrEvent } from "nostr-tools";
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
 import { KIND_ASSET_UPDATE, KIND_BINDING, TAG_TOKEN, TAG_ADDRESS } from "@arbesk/nostr";
 import { getNostrFacade, getOrCreateBinding, getTokenOwner } from "./nostr-browser.ts";
 import { getContractAddress } from "../blockchain/network-config.ts";
+import { getManifestNodes } from "../engine/transforms.ts";
 import { NOSTR_RELAY_URL } from "./nostr-config.ts";
 import { invalidateResolution } from "../blockchain/token-resolver.ts";
 
@@ -406,7 +408,7 @@ const seen = new Set<string>();
 
 function collectTokens(): { chainId: number; tokenId: string }[] {
   // child_ref nodes carry collection.chainId/tokenId (new) or flat chainId/tokenId (legacy).
-  const nodes = (window as any).__ARBESK_NODES__ || []; // replaced by engine hook below
+  const nodes = getManifestNodes(getCurrentManifest());
   const set = new Map<string, { chainId: number; tokenId: string }>();
   for (const n of nodes) {
     const ref = n?.child_ref;
@@ -473,9 +475,9 @@ export function stopLiveUpdates(): void {
 }
 ```
 
-- [ ] **Step 2: Add an engine hook to expose the manifest nodes**
+- [ ] **Step 2: Note — manifest node source**
 
-The feed reads the current child_ref nodes. Expose them from `engine/state.ts` so `collectTokens()` can read the live manifest instead of a window global. Add to `state.ts`:
+`collectTokens()` reads the live manifest via `getManifestNodes(getCurrentManifest())` (from `engine/transforms.ts` + `@arbesk/asset-core/domain/asset.js`). This is the same source `outliner.ts` uses internally; do NOT add a hook to `engine/state.ts` and do NOT use a window global. The `getManifestNodes` import (`services/live-updates.ts` → `engine/transforms.ts`) is acyclic (transforms is a pure leaf). No code change in this step.
 
 ```ts
 export function getReferencedChildNodes(): any[] {
@@ -493,7 +495,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/js/services/live-updates.ts frontend/src/js/engine/state.ts
+git add frontend/src/js/services/live-updates.ts
 git commit -m "feat(live): subscribe, verify, and emit update feed"
 ```
 
@@ -529,7 +531,7 @@ Append to `scene-loader.ts`:
 ```ts
 /** Tears down and re-resolves a single child_ref node in place. */
 export async function reloadChildRefNode(nodeId: string): Promise<void> {
-  const node = getNodes().find((n: any) => n?.node_id === nodeId && n?.child_ref);
+  const node = getManifestNodes(getCurrentManifest()).find((n: any) => n?.node_id === nodeId && n?.child_ref);
   const anchor = state.nodeAnchors.get(nodeId);
   if (!node || !anchor) return;
   const parent = anchor.parent;
@@ -539,19 +541,20 @@ export async function reloadChildRefNode(nodeId: string): Promise<void> {
 }
 ```
 
-(Import `getNodes` from `@arbesk/asset-core/domain/asset.js` and `disposeNodeSubtree` from `./cleanup.ts`.)
+(Import `getCurrentManifest` from `@arbesk/asset-core/domain/asset.js`, `getManifestNodes` from `./transforms.ts`, and `disposeNodeSubtree` from `./cleanup.ts`. `loadTokenChildNode`, `state`, and `BABYLON` are already in scope in `scene-loader.ts`.)
 
 - [ ] **Step 3: Write `frontend/src/js/engine/child-reload.ts`**
 
 ```ts
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
-import { getNodes } from "@arbesk/asset-core/domain/asset.js";
+import { getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
+import { getManifestNodes } from "./transforms.ts";
 import { reloadChildRefNode } from "./scene-loader.ts";
 
 /** Reloads every child_ref node whose referenced token matches the update. */
 export function initChildReload(): void {
   on(EVENTS.ASSET_URI_UPDATED, (payload: any) => {
-    for (const n of getNodes()) {
+    for (const n of getManifestNodes(getCurrentManifest())) {
       const ref = n?.child_ref;
       if (!ref) continue;
       const chainId = Number(ref.collection?.chainId ?? ref.chainId ?? 0);
