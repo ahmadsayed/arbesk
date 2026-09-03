@@ -82,12 +82,12 @@ wallets sign ECDSA. So we bind the two once:
 
 1. **Key origin.** Browser derives a deterministic Nostr key from a wallet
    signature (EIP-712 over a fixed domain-separated message) — no seed to store,
-   non-custodial. (CLI/MCP key origin is an open sub-decision, §15.)
+   non-custodial. CLI/MCP hold a locally-generated key in `besk` config (see §14.2).
 2. **Binding document.** `{ address: W, pubkey: P, walletSignature }` where
    `walletSignature` is the wallet's EIP-712 signature over `"Arbesk Nostr
    identity: <P>"`, recoverable to `W`.
-3. **Publish the binding** as a Nostr event tagged `#address:<W>` (new kind,
-   `KIND_BINDING`), signed by `P`. Subscribers discover it by querying
+3. **Publish the binding** as a Nostr event tagged `#address:<W>` (kind
+   `KIND_BINDING` = `10050`), signed by `P`. Subscribers discover it by querying
    `#address:<W>`.
 4. **Per-event verification (subscriber):** (a) `walletSignature` recovers `W`;
    (b) the event's Schnorr sig verifies against `P`; (c) `W` is still owner/editor
@@ -95,7 +95,7 @@ wallets sign ECDSA. So we bind the two once:
 
 ## 6. Nostr event schema
 
-- **kind:** `KIND_ASSET_UPDATE` (e.g. `20001`), dedicated — never reuse kind `1`.
+- **kind:** `KIND_ASSET_UPDATE` (`20001`), dedicated — never reuse kind `1`.
 - **tag:** `#token` = `"<chainId>:<contract>:<tokenId>"` (`TAG_TOKEN`).
 - **content (JSON):** `{ chainId, contractAddress, tokenId, newAssetURI, assetId? }`.
 - **signature:** the author's own Nostr key (Schnorr), **not** a service key.
@@ -196,21 +196,22 @@ backend trust point.
 ## 14. Decisions (resolved)
 
 1. **Non-custodial** user-signed update events; chain as reconciliation truth.
-2. **Key origin:** wallet-signed binding (browser); CLI/MCP key origin open (§15).
+2. **Key origin:** wallet-signed binding (browser); locally-held key in `besk`
+   config (CLI/MCP) — non-custodial, never backend-held.
 3. **Relay topology:** shared federated + NIP-65 outbox.
 4. **Dedicated `KIND_ASSET_UPDATE` + `#token` tag**; append-only events.
 5. **Two choke points** (`wallet-publishing.ts` + `besk/relay.ts`) → one shared
    SDK module.
 6. **Chat/comments stay custodial** — migrated later under GH issue #58.
+7. **Binding discovery:** relay query `#address:<W>` on kind `KIND_BINDING`.
+8. **Relay hosting:** extend the existing Docker relay to be client-reachable
+   (dev default); hosted/public relays are a deployment option, not a code change.
+9. **Kinds:** `KIND_ASSET_UPDATE = 20001`, `KIND_BINDING = 10050`.
 
-## 15. Open sub-decisions (non-blocking)
+## 15. Open sub-decisions
 
-- Exact `KIND_ASSET_UPDATE` / `KIND_BINDING` numbers.
-- **CLI/MCP key origin:** locally-held Nostr key in `besk` config (recommended,
-  non-custodial) vs. derived during login.
-- **Binding discovery:** relay query `#address:<W>` (recommended) vs. a backend/IPFS
-  directory.
-- Relay hosting: extend the existing Docker relay vs. point at hosted/public relays.
+None blocking. Relay hosting (§14.8) is a deployment choice; all code-path
+decisions above are resolved.
 
 ## 16. Related
 
