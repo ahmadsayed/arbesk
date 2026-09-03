@@ -333,7 +333,7 @@ async function loadNode(
   if (node.child_ref) {
     // Tag the outer anchor with the child_ref so the inspector / dive button
     // can resolve it directly from the manifest node_id.
-    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref };
+    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref, depth: depth || 0 };
     meshes = await loadTokenChildNode(
       node,
       anchor,
@@ -772,5 +772,5 @@ export async function reloadChildRefNode(nodeId: string): Promise<void> {
   const parent = anchor.parent;
   const depth = (anchor.metadata as any)?.depth ?? 0;
   disposeNodeSubtree(nodeId);
-  await loadTokenChildNode(node, parent as BABYLON.TransformNode, depth, new Set<string>());
+  await loadNode(node, parent as BABYLON.TransformNode, depth, new Set<string>());
 }
