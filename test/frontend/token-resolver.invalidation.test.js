@@ -1,13 +1,22 @@
 // test/frontend/token-resolver.invalidation.test.js
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect } from "@jest/globals";
+import {
+  invalidateResolution,
+  _setCachedForTest,
+  _getCachedForTest,
+} from "../../frontend/src/js/blockchain/token-resolver.ts";
 
-// resolveChildRef is async and hits viem; test the cache directly by
-// reaching the internal map through a small exported helper added below.
 describe("invalidateResolution", () => {
-  it("removes the cached CID for a token", async () => {
-    const { invalidateResolution, _setCachedForTest } = await import("../../frontend/src/js/blockchain/token-resolver.ts");
-    _setCachedForTest(31415822, "0xabc", "7", "bafy-old");
-    invalidateResolution(31415822, "0xabc", "7");
-    expect(_setCachedForTest).toBeTruthy();
+  it("removes the cached CID for a token", () => {
+    const chainId = 31415822;
+    const contractAddress = "0xabc";
+    const tokenId = "7";
+
+    _setCachedForTest(chainId, contractAddress, tokenId, "bafy-old");
+    expect(_getCachedForTest(chainId, contractAddress, tokenId)).toBe("bafy-old");
+
+    invalidateResolution(chainId, contractAddress, tokenId);
+
+    expect(_getCachedForTest(chainId, contractAddress, tokenId)).toBeNull();
   });
 });

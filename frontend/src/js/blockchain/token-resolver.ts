@@ -132,6 +132,15 @@ export function _setCachedForTest(
   setCachedResolution({ chainId, contractAddress, tokenId }, cid);
 }
 
+/** Test-only seam: reads the cached CID directly (jest reaches the internal map). */
+export function _getCachedForTest(
+  chainId: number,
+  contractAddress: string,
+  tokenId: string
+): string | null {
+  return getCachedResolution({ chainId, contractAddress, tokenId });
+}
+
 // Minimal ERC-721 ABI for tokenURI
 const minERC721ABI = [
   {
