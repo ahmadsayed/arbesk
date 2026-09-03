@@ -2,7 +2,7 @@ import { SimplePool } from "nostr-tools";
 import type { NostrEvent } from "nostr-tools";
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
-import { KIND_ASSET_UPDATE, KIND_BINDING, TAG_TOKEN, TAG_ADDRESS } from "@arbesk/nostr";
+import { KIND_ASSET_UPDATE, KIND_BINDING, TAG_TOKEN, TAG_ADDRESS, tokenTag } from "@arbesk/nostr";
 import { getNostrFacade, getOrCreateBinding, getTokenOwner } from "./nostr-browser.ts";
 import { getContractAddress } from "../blockchain/network-config.ts";
 import { getManifestNodes } from "../engine/transforms.ts";
@@ -15,16 +15,17 @@ let unsub: (() => void) | null = null;
 let relaySub: { close: () => void } | null = null;
 const seen = new Set<string>();
 
-function collectTokens(): { chainId: number; tokenId: string }[] {
-  // child_ref nodes carry collection.chainId/tokenId (new) or flat chainId/tokenId (legacy).
+export function collectTokens(): { chainId: number; contractAddress: string; tokenId: string }[] {
+  // child_ref nodes carry collection.chainId/contractAddress/tokenId (new) or flat chainId/contractAddress/tokenId (legacy).
   const nodes = getManifestNodes(getCurrentManifest());
-  const set = new Map<string, { chainId: number; tokenId: string }>();
+  const set = new Map<string, { chainId: number; contractAddress: string; tokenId: string }>();
   for (const n of nodes) {
     const ref = n?.child_ref;
     if (!ref) continue;
     const chainId = Number(ref.collection?.chainId ?? ref.chainId ?? 0);
+    const contractAddress = ref.collection?.contractAddress ?? ref.contractAddress ?? "";
     const tokenId = String(ref.collection?.tokenId ?? ref.tokenId ?? "");
-    if (chainId && tokenId) set.set(`${chainId}:${tokenId}`, { chainId, tokenId });
+    if (chainId && contractAddress && tokenId) set.set(tokenTag(chainId, contractAddress, tokenId), { chainId, contractAddress, tokenId });
   }
   return [...set.values()];
 }
@@ -60,10 +61,10 @@ export function startLiveUpdates(): void {
       seen.add(event.id);
       try {
         const payload = JSON.parse(event.content);
-        const tokenTag = event.tags.find((t) => t[0] === TAG_TOKEN)?.[1] || "";
+        const eventTag = event.tags.find((t) => t[0] === TAG_TOKEN)?.[1] || "";
         // Only react to tokens this scene references.
         const tokens = collectTokens();
-        if (!tokens.some((t) => `${t.chainId}:${t.tokenId}` === tokenTag)) return;
+        if (!tokens.some((t) => tokenTag(t.chainId, t.contractAddress, t.tokenId) === eventTag)) return;
         const owner = await getTokenOwner(payload.chainId, payload.tokenId);
         if (!owner) return;
         const binding = await resolveBindingFor(owner);
