@@ -292,7 +292,7 @@ git commit -m "feat(nostr): add ports and kind constants"
 ```ts
 // packages/nostr/test/identity.test.ts
 import { describe, it, expect } from "@jest/globals";
-import { generatePrivateKey, privateKeyToAccount } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { getPublicKey } from "nostr-tools";
 import { keccak256 } from "viem";
 import { buildBinding, deriveSecretKey, derivePubkey } from "@arbesk/nostr/identity.js";
@@ -465,7 +465,7 @@ git commit -m "feat(nostr): binding verification"
 ```ts
 // packages/nostr/test/events.test.ts
 import { describe, it, expect } from "@jest/globals";
-import { generatePrivateKey, privateKeyToAccount } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { buildBinding } from "@arbesk/nostr/identity.js";
 import { signAssetUpdate, verifyEventSignature, tokenTag } from "@arbesk/nostr/events.js";
 import { KIND_ASSET_UPDATE, TAG_TOKEN } from "@arbesk/nostr/kinds.js";
@@ -507,6 +507,7 @@ Expected: FAIL — `Cannot find module '@arbesk/nostr/events.js'`.
 
 ```ts
 import { finalizeEvent, verifyEvent } from "nostr-tools";
+import { hexToBytes } from "viem";
 import type { NostrEvent } from "nostr-tools";
 import type { AssetUpdatePayload, Binding } from "./types.ts";
 import { KIND_ASSET_UPDATE, TAG_TOKEN } from "./kinds.ts";
@@ -537,7 +538,7 @@ export function signAssetUpdate(
       content,
       tags: [[TAG_TOKEN, tokenTag(payload.chainId, contractAddress, payload.tokenId)]],
     },
-    deriveSecretKey(binding.signature)
+    hexToBytes(`0x${deriveSecretKey(binding.signature)}`)
   );
 }
 
@@ -581,7 +582,7 @@ git commit -m "feat(nostr): asset-update event signing and verification"
 ```ts
 // packages/nostr/test/verify.test.ts
 import { describe, it, expect } from "@jest/globals";
-import { generatePrivateKey, privateKeyToAccount } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import type { NostrEvent } from "nostr-tools";
 import { buildBinding } from "@arbesk/nostr/identity.js";
 import { signAssetUpdate } from "@arbesk/nostr/events.js";
@@ -698,7 +699,7 @@ git commit -m "feat(nostr): publish and end-to-end update verification"
 ```ts
 // packages/nostr/test/facade.test.ts
 import { describe, it, expect } from "@jest/globals";
-import { generatePrivateKey, privateKeyToAccount } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createNostrFacade } from "@arbesk/nostr";
 
 describe("facade", () => {
