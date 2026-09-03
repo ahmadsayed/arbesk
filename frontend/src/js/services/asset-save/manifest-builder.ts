@@ -123,6 +123,14 @@ export function manifestsSemanticallyEqual(a: any, b: any) {
     delete copy.timestamp;
     delete copy.version;
     delete copy.prev_asset_manifest_cid;
+    // metadata.computed is derived model stats recomputed on every save; it is
+    // not independent semantic state, so a recomputation alone must not mint a
+    // spurious version. Drop the key and, if that leaves metadata empty, drop
+    // metadata too (an empty object is not semantic state).
+    if (copy.metadata) {
+      delete copy.metadata.computed;
+      if (Object.keys(copy.metadata).length === 0) delete copy.metadata;
+    }
     return copy;
   };
   return JSON.stringify(strip(a)) === JSON.stringify(strip(b));

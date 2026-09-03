@@ -2,7 +2,7 @@
 
 5-minute triage checklist and GNOME reference application comparisons.
 
-## 15. Quick Audit (5-Minute Triage)
+## 16. Quick Audit (5-Minute Triage)
 
 For a fast first-pass, check only these items — they reveal the most about overall HIG health:
 
@@ -13,12 +13,13 @@ For a fast first-pass, check only these items — they reveal the most about ove
 5. **F.3.1** `prefers-reduced-motion` support — shows whether accessibility was designed-in or bolted-on.
 6. **H.2.3** Dialog focus trap — the most common modal bug that traps keyboard users.
 7. **J.1.1** Welcome/empty state exists — shows whether idle states were designed.
+8. **K.1.3** Wallet signature intent — does the user know *what* they're signing? (the Web3 gap GNOME HIG can't see)
 
-If any of these 7 fail, the audit score will almost certainly be below 70.
+If any of these 8 fail, the audit score will almost certainly be below 70.
 
 ---
 
-## 16. Known HIG Patterns to Compare Against
+## 17. Known HIG Patterns to Compare Against
 
 When assessing the Arbesk Studio, compare it to these GNOME reference applications:
 
@@ -30,8 +31,9 @@ When assessing the Arbesk Studio, compare it to these GNOME reference applicatio
 | **GNOME Settings** | View switcher with icon-only sidebar, search |
 | **GNOME Console** | Bottom input bar, monospace output |
 
-Arbesk Studio is closest to **GNOME Builder** (IDE-like, 3D viewport, multiple panels, keyboard shortcuts) in its *visual aesthetic and panel layout*, but remember it is a **browser-based Web 3.0 application**. When in doubt about a pattern:
+Arbesk Studio is closest to **GNOME Builder** (IDE-like, 3D viewport, multiple panels, keyboard shortcuts) in its *visual aesthetic and panel layout*, but remember it is a **browser dApp**. When in doubt about a pattern:
 - For **visual design and layout**: ask "What would Builder do?"
-- For **accessibility**: ask "Does this meet WCAG 2.1 AA?"
+- For **accessibility**: ask "Does this meet WCAG 2.2 AA?"
+- For **wallet / transaction / trust clarity**: ask "Does the user know what they're signing and whether it's on-chain?" (see `references/web3-ux.md`)
 - For **interaction and keyboard behavior**: ask "Does this follow web application conventions?"
 - For **responsive and touch**: ask "Does this work on a modern web browser with mixed input?"

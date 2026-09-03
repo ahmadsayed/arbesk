@@ -14,6 +14,7 @@ out/
 
 # Env files
 .env
+.env.backup
 .env.local
 .env.*.local
 .env.pinata

@@ -22,18 +22,7 @@ _canBurn[tokenId][addr] → bool               tokenURI → collection manifest 
 \* The Merkle migration first brought this to ~5 slots. The subsequent removal of `ERC721Enumerable` dropped the `_allTokens` / `_ownedTokens` arrays, leaving only `_owners`, `_tokenURIs`, `editorRoot`, `editorSetVersion`, and `editorListURI`.
 ```
 
-### 1.2 Gas Impact at 100K Tokens (0.01 gwei MegaETH)
-
-| Operation | Old (m=8,192) | New (m=2,048) | Savings |
-|-----------|--------------|--------------|---------|
-| Mint token | $22.64 | $3.54 | 6.4× |
-| Add editor | $5.66 | $0.0006 | 9,400× |
-| Update URI | $0.0004 | $0.0004 | Same |
-| Daily gen (ret.) | $0.001 | $0.001 | Same |
-
-> Actual savings are larger because the old table assumed only 3 editors. With Merkle, editor count no longer affects mint cost.
-
-### 1.3 Editor Limits
+### 1.2 Editor Limits
 
 | Limit | Old (Free) | Old (Paid) | New | Reason |
 |-------|-----------|-----------|-----|--------|
@@ -252,6 +241,5 @@ frontend/src/js/ui/
   collaborators-panel.js       ← Merkle editor list UI
 
 docs/
-  MEGAETH_ANALYSIS.md          ← cost projections updated for Merkle
   MERKLE_IMPLEMENTATION.md     ← this file
 ```

@@ -16,10 +16,13 @@ import workerpool from "../vendor/workerpool-10.0.2.mjs";
 // module - fails to evaluate and only workerpool's built-in [run, methods]
 // methods register. Passing a string (via .href) keeps workerpool on the
 // direct-load path with the {type:"module"} workerOpts intact.
+// The worker is a fixed asset at /js/workers/. Use an absolute path against
+// import.meta.url so the URL stays correct even when code-splitting places
+// this module in a chunk under /js/chunks/ (a relative path would miss it).
 // @ts-ignore TS1470 - NodeNext treats frontend .ts as CommonJS output
 // (frontend/package.json has no "type":"module"), but this is browser-native
 // ESM where import.meta is valid.
-const WORKER_SCRIPT = new URL("./gltf-worker.js?v=7", import.meta.url).href;
+const WORKER_SCRIPT = new URL("/js/workers/gltf-worker.js?v=8", import.meta.url).href;
 const MAX_WORKERS = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
 
 let pool: any = null;

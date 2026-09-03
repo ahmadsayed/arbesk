@@ -123,23 +123,30 @@ button#newAssetTopBtn.btn.btn-secondary.btn-sm.headerbar-new(
 
 The 3D viewport shows: a 40×40 wireframe ground grid (α 0.3), a 2D X/Y/Z orientation gizmo in the top-right corner, and a dashed drop indicator on drag. **No in-scene axis cylinders, no view cube, no toolbar overlay.** All viewport chrome carries `metadata.isViewportChrome = true` so `clearScene()` preserves it.
 
-### 3.2 Keyboard-Driven (every action has a key)
+### 3.2 Keyboard — pragmatic, not exhaustive
 
-Implemented shortcuts in `scene-graph.js` (single `keydown` listener on `document`):
+**Not "every action has a key."** A shortcut earns its place only if it's frequent, not browser-owned, and documented in `ui/keyboard-help.ts` (`Ctrl+/`). Current bindings:
 
-| Key | Action | Why |
+| Key | Action | Module |
 |---|---|---|
-| `Esc` | Deselect current node | Mirrors GNOME modal dismissal |
-| `Home` | Frame all (zoom to fit scene) | Recovery from lost perspective |
-| `F` | Frame selected node | Recovery from lost perspective |
-| `1` | Front orthographic view (Blender) | Standard view snap |
-| `3` | Right orthographic view | Standard view snap |
-| `7` | Top orthographic view | Standard view snap |
-| `Ctrl+B` | Toggle left sidebar (sidebar.js) | GNOME panel toggle convention |
-| `Ctrl+N` | New asset (headerbar button) | GNOME app convention |
-| `Alt+Left` | Back to parent world (headerbar) | GNOME navigation convention |
+| `F` | Frame selected | `engine/scene-graph.ts` |
+| `Home` | Frame all | `engine/scene-graph.ts` |
+| `0` | Reset view (forget saved camera pose) | `engine/scene-graph.ts` |
+| `G` | Toggle grid & axes | `ui/transform-gizmo.ts` |
+| `T` / `R` / `S` | Gizmo translate / rotate / scale | `ui/transform-gizmo.ts` |
+| `Esc` | Deselect | `engine/scene-graph.ts` |
+| `Ctrl+B` | Toggle sidebar | `ui/sidebar.ts` |
+| `Ctrl+1–5` | Switch sidebar panel | `ui/sidebar.ts` |
+| `Alt+←` | Ascend to parent asset | `ui/nesting.ts` |
+| `Ctrl+N` / `Ctrl+S` | New asset / Save draft | `engine/scene-graph.ts` / `ui/asset-save.ts` |
+| `Delete` / `Backspace` | Unlink selected child | `engine/child-remove.ts` |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo | `engine/undo-controller.ts` |
+| `Ctrl+A` | Select all scene nodes | `engine/scene-graph.ts` |
+| `Ctrl+/` | Keyboard help | `ui/keyboard-help.ts` |
 
-The handler **must** skip when the user is typing in any `<input>`, `<textarea>`, `<select>`, or `contentEditable` element — see the `editable` guard pattern in `scene-graph.js`.
+The viewport is **perspective-only** — there are no `1/3/7` ortho view shortcuts (see "Ortho mode" below).
+
+**Consolidation debt**: shortcuts are ~20 separate `document` listeners across ~17 modules, each re-implementing the `editable` guard. New chords route through the shared dispatcher (see `references/checklists.md` §8); do not add another listener. Every handler **must** skip when focus is in an `<input>`, `<textarea>`, `<select>`, or `contentEditable`.
 
 ### 3.3 Responsive Feedback (no silent state changes)
 
@@ -148,7 +155,7 @@ Selection feedback is the **HighlightLayer** (amber `#D4A017` outer glow):
 - `state.highlightLayer` is created once during `initEngine()`
 - `selectNode(nodeId, mesh)` clears the previous highlight and adds the new node's meshes
 - `deselectAll()` clears the highlight, resets `state.highlightedNodeId`, dispatches `node:deselected`
-- `closeInspector()` (in `parametric-preview.js`) calls `deselectAll()` so re-clicking the same mesh re-opens the inspector
+- `closeInspector()` (in `parametric-preview.ts`) calls `deselectAll()` so re-clicking the same mesh re-opens the inspector
 
 Camera framing uses `BABYLON.Animation.CreateAndStartAnimation` for smooth 300ms transitions — never snap instantly.
 
@@ -194,7 +201,7 @@ export const state = {
 };
 ```
 
-Functions that need state import it: `import { state } from "./state.js";`
+Functions that need state import it: `import { state } from "./state.ts";`
 
 ---
 
@@ -204,11 +211,11 @@ Arbesk uses custom DOM events on `document` for cross-module communication (no e
 
 | Event | Dispatched by | Listened by | Purpose |
 |---|---|---|---|
-| `node:selected` | `selectNode()` in scene-graph | `parametric-preview.js` | Open inspector |
+| `node:selected` | `selectNode()` in scene-graph | `parametric-preview.ts` | Open inspector |
 | `node:deselected` | `deselectAll()` | (none yet — extend as needed) | Notify of deselection |
-| `outliner:nodeSelected` | outliner.js | `parametric-preview.js` | Outliner → inspector sync |
+| `outliner:nodeSelected` | outliner.ts | `parametric-preview.ts` | Outliner → inspector sync |
 | `scene:cleared` | `clearScene()` | Various | Reset UI on scene reset |
-| `scene:tokenChildAdded` | `loadTokenChildNode` | `parametric-preview.js` | Update token CID display |
+| `scene:tokenChildAdded` | `loadTokenChildNode` | `parametric-preview.ts` | Update token CID display |
 | `parametric:save` | save handler | Various | Parametric version saved |
 | `asset:draftSaved` | save handler | headerbar | Refresh save button state |
 | `asset:linkedDropped` | drop zone | scene-graph | Add token child to scene |
@@ -264,41 +271,11 @@ state.scene.onPointerObservable.add((pointerInfo) => {
 }, BABYLON.PointerEventTypes.POINTERPICK);
 ```
 
-### Ortho mode gotcha (critical)
+### Ortho mode — REMOVED, do not re-add
 
-**Do not rely on Babylon's `radius`-derived ortho frustum.** Set all four corners explicitly:
+The Studio once had `1`/`3`/`7` orthographic view shortcuts backed by custom ortho-frustum code (explicit `orthoLeft/Right/Top/Bottom` corners + a custom wheel-zoom listener). It forced hand-rolled projection logic that hid state Babylon couldn't see, and it **broke and became unstable** — so it was removed and the viewport reverted to Babylon's **default perspective viewer** (`engine/scene-camera.ts`: "perspective-only").
 
-```js
-cam.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-cam.orthoLeft   = -halfW;
-cam.orthoRight  = +halfW;
-cam.orthoBottom = -halfH;
-cam.orthoTop    = +halfH;
-cam.radius      = someValue; // used for direction calc, not visible area
-```
-
-**Wheel zoom in ortho mode** must be handled with a custom listener — Babylon's default scales `radius`, which doesn't affect the frustum when corners are explicit:
-
-```js
-canvas.addEventListener("wheel", (e) => {
-  if (state.camera?.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
-    e.preventDefault();
-    const factor = Math.exp(e.deltaY * 0.0015);
-    cam.orthoLeft   *= factor;
-    cam.orthoRight  *= factor;
-    cam.orthoTop    *= factor;
-    cam.orthoBottom *= factor;
-  }
-}, { passive: false });
-```
-
-### View preset coordinates (Blender convention)
-
-| View | alpha | beta | What you see |
-|---|---|---|---|
-| Front (1) | 0 | π/2 | Camera on +Z, looking at -Z face |
-| Right (3) | π/2 | π/2 | Camera on +X, looking at -X face |
-| Top (7) | 0 | 0.01 | Camera above (+Y), looking down — beta=0.01 avoids gimbal lock |
+**Lesson (out-of-the-box first — see AGENTS.md):** a shortcut is not free when it drags custom engine code with it. Do **not** re-implement orthographic view snapping or custom projection; if ortho views ever return, it must be via Babylon's built-in camera modes only.
 
 ---
 

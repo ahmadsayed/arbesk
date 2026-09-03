@@ -1,6 +1,6 @@
 # Checklists — GNOME HIG UI/UX Audit
 
-Full 10-category audit checklists (A–J), scoring rubric, and step-by-step audit procedure.
+Full 11-category audit checklists (A–K), scoring rubric, and step-by-step audit procedure.
 
 ## 2. Audit Categories & Scoring
 
@@ -13,7 +13,7 @@ Each category is scored 0–100. The final score is the average across all categ
 | C | Layout & Spacing | 1.0 | GNOME shell conventions, panel sizing, spacing scale, grid alignment, overflow handling |
 | D | Buttons & Interactive Controls | 1.0 | Sizing (min 36×36px touch target), state coverage (hover/focus/active/disabled), icon-only patterns, primary/secondary distinction |
 | E | Keyboard Navigation | 1.2 | Shortcut coverage, discoverability, form-field guard, focus order, Escape/Enter conventions |
-| F | Accessibility | 1.2 | WCAG 2.1 AA/AAA compliance (primary), ARIA labels, screen reader support, focus rings, `prefers-reduced-motion`, heading hierarchy, alt text. GNOME HIG accessibility practices are secondary references.
+| F | Accessibility | 1.2 | WCAG 2.2 AA/AAA compliance (primary), ARIA labels, screen reader support, focus rings, `prefers-reduced-motion`, heading hierarchy, alt text. GNOME HIG accessibility practices are secondary references.
 | G | Forms & Input | 0.8 | Label association, placeholder contrast, error states, help text, color/range inputs |
 | H | Dialogs & Modals | 0.8 | Focus trap, Escape dismiss, backdrop, title/body/actions pattern, animation |
 | I | Responsive Design | 0.8 | Breakpoint coverage, touch targets on mobile, bottom-sheet patterns, overflow |
@@ -53,7 +53,7 @@ Count PASS items. Score = (PASS / (PASS + FAIL)) × 100.
 
 ### Step 5: Write findings
 
-For each FAIL, write a 1–2 sentence recommendation referencing the specific GNOME HIG principle violated and the file(s) that need changing.
+For each FAIL, write a 1–2 sentence recommendation naming the specific reference (GNOME HIG / WCAG 2.2 / Web3) and the file(s) that need changing. **Evidence rule**: record measured values (contrast ratios, px) or mark the item "unverified" — never invent a number or report a FAIL you didn't actually check.
 
 ---
 
@@ -242,8 +242,8 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 > **Note**: Keyboard shortcuts follow **web application conventions** first, GNOME HIG second. Standard web shortcuts (e.g., `Ctrl+Z` for undo, `Tab`/`Shift+Tab` for focus navigation) must work as expected. GNOME-specific shortcuts (e.g., `Alt+Left` for back, `Home` for reset view) are used where they enhance the studio IDE-like experience and do not conflict with browser defaults.
 
 - [ ] **E.1.1** `Escape` deselects node (modal dismissal pattern). ✅
-- [ ] **E.1.2** `Escape` closes dialogs. ✅ (dialog.js global key handler)
-- [ ] **E.1.3** `Escape` at child root ascends to parent. ✅ (nesting.js)
+- [ ] **E.1.2** `Escape` closes dialogs. ✅ (dialog.ts global key handler)
+- [ ] **E.1.3** `Escape` at child root ascends to parent. ✅ (nesting.ts)
 - [ ] **E.1.4** `Home` frames all (GNOME "reset view" convention). ✅
 - [ ] **E.1.5** `F` frames selected (GNOME "focus/find" convention). ✅
 - [ ] **E.1.6** `Ctrl+B` toggles left sidebar. ✅
@@ -253,27 +253,34 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 - [ ] **E.1.10** `Enter` submits forms (prompt input, dialog inputs). ✅
 - [ ] **E.1.11** `Tab` and `Shift+Tab` cycle focus in a logical order. **FAIL**: No explicit focus management or `tabindex` ordering. Focus order depends entirely on DOM order — may skip the 3D viewport canvas entirely.
 
-- [ ] **E.1.12** `Ctrl+Z` / `Ctrl+Shift+Z` for undo/redo of parametric edits. **FAIL**: No undo/redo implementation for color/scale changes.
+- [x] **E.1.12** `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` for undo/redo of parametric edits. ✅ (`engine/undo-controller.ts` owns the dispatcher).
 
 ### E.2 Form-Field Guard
 
-- [ ] **E.2.1** Global `keydown` handler checks `document.activeElement` before processing shortcuts. ✅ (scene-graph.js)
+- [ ] **E.2.1** Global `keydown` handler checks `document.activeElement` before processing shortcuts. ✅ (scene-graph.ts)
 - [ ] **E.2.2** The guard checks for `input`, `textarea`, `select`, and `contentEditable`. ✅
-- [ ] **E.2.3** All global keyboard listeners use this guard (not just scene-graph's).  
-  *Check*: `sidebar.js` Ctrl+B handler **does not** check active element — typing "b" in a prompt could toggle the sidebar. **FAIL**. `nesting.js` Alt+Left handler also lacks the guard.
+- [x] **E.2.3** All global keyboard listeners use this guard (not just scene-graph's).  
+  *Check*: `sidebar.ts` (Ctrl+B / Ctrl+1–5) and `nesting.ts` (Alt+←) now guard via `isEditing()`. ✅ — **but** the guard is copy-pasted ~8× with drift; consolidate into one shared helper (see E.5).
 
 ### E.3 Discoverability
 
 - [ ] **E.3.1** Every action button has a `title` attribute showing its keyboard shortcut. ✅
 - [ ] **E.3.2** Shortcut notation uses platform convention (Ctrl on Linux/Windows, Cmd on Mac). **FAIL**: All `title` attributes show `Ctrl+` — macOS users see `Ctrl` but expect `⌘`. Use `Ctrl`/`Cmd` or `CtrlOrCmd`.
 
-- [ ] **E.3.3** There is a keyboard shortcuts reference accessible somewhere in the UI. **FAIL**: No "Keyboard Shortcuts" help panel, dialog, or tooltip.
+- [x] **E.3.3** There is a keyboard shortcuts reference accessible somewhere in the UI. ✅ (`ui/keyboard-help.ts`, opened via `Ctrl+/` or the bottombar help button).
 
 ### E.4 Focus Order
 
 - [ ] **E.4.1** Header bar buttons are focusable in logical order (back → new → title → actions → wallet). ✅ (DOM order)
 - [ ] **E.4.2** Sidebar content receives focus after the switcher icons. ✅ (DOM order)
-- [ ] **E.4.3** Focus is trapped inside open dialogs. **FAIL**: `dialog.js` adds a global Escape listener but does not trap focus (Tab at the end of a dialog leaks focus to the background).
+- [ ] **E.4.3** Focus is trapped inside open dialogs. **FAIL**: `dialog.ts` adds a global Escape listener but does not trap focus (Tab at the end of a dialog leaks focus to the background).
+
+### E.5 Shortcut Pragmatism (don't add shortcuts nobody will use)
+
+- [ ] **E.5.1** Every shortcut passes the 4-question bar: (1) frequent enough to earn a chord? (2) does the browser/OS already own it? (3) can it be a visible button instead? (4) willing to document it? — fail any → use a button, not a chord.
+- [ ] **E.5.2** Shortcuts route through ONE dispatcher/keymap, not scattered `document.addEventListener("keydown")` per module. **FAIL**: ~20 listeners across ~17 modules.
+- [ ] **E.5.3** Escape has a single priority stack (dialog > popover > context menu > library > deselect > ascend), not ~10 handlers special-casing each other. **FAIL**: `nesting.ts` checks `activeElement.tagName === "BODY"` to avoid clashing with dialogs.
+- [ ] **E.5.4** Single-key viewport shortcuts (`F`/`G`/`Home`/`0`) fire only when the viewport/canvas is the target — not when focus is on an arbitrary button.
 
 ---
 
@@ -281,15 +288,15 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 **Files**: `frontend/src/pug/app.pug`, `frontend/src/scss/base/_tokens.scss`, `frontend/src/scss/components/_buttons.scss`, `frontend/src/scss/components/_forms.scss`
 
-### F.1 ARIA Labels (WCAG 2.1 AA — Required)
+### F.1 ARIA Labels (WCAG 2.2 AA — Required)
 
 > **Note**: Because Arbesk Studio is a web application, ARIA and semantic HTML are the primary accessibility mechanisms. GTK accessibility patterns (e.g., ATK roles) do not apply here.
 
 - [ ] **F.1.1** All buttons have either visible text or `aria-label`. ✅ (verified on all headerbar, sidebar, inspector buttons)
 - [ ] **F.1.2** Navigation landmarks are marked (`<nav>`, `role="navigation"`). ✅ (path bar uses `<nav>`)
-- [ ] **F.1.3** The sidebar view switcher is marked as a tab list with `role="tablist"` and `role="tab"` on buttons. **FAIL**: Switcher buttons use plain `<button>` with `data-view` attributes — no `role="tab"`, `aria-selected`, or `role="tablist"` on the container.
+- [x] **F.1.3** The sidebar view switcher is marked as a tab list with `role="tablist"` and `role="tab"` on buttons. ✅ (`studio-sidebar.pug` uses `role="tab"`, `aria-selected`, `tabindex`).
 - [ ] **F.1.4** The header bar title announces its editability (`contenteditable="true"` needs `role="textbox"` and `aria-multiline="false"`). **FAIL**: `#assetStatusName` has `contenteditable="true"` but no ARIA role.
-- [ ] **F.1.5** Collapsible panels use `aria-expanded`. **FAIL**: `#sidebarToggle` does not toggle `aria-expanded` on the sidebar element.
+- [x] **F.1.5** Collapsible panels use `aria-expanded`. ✅ (`#sidebarToggle` has `aria-expanded` + `aria-controls`).
 
 ### F.2 Focus Rings
 
@@ -370,7 +377,7 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 ### H.2 Behavior
 
 - [ ] **H.2.1** Escape dismisses the dialog. ✅
-- [ ] **H.2.2** Clicking the backdrop dismisses the dialog. **FAIL**: `dialog.js` creates the backdrop but does not add a click handler to dismiss.
+- [ ] **H.2.2** Clicking the backdrop dismisses the dialog. **FAIL**: `dialog.ts` creates the backdrop but does not add a click handler to dismiss.
 - [ ] **H.2.3** Focus is trapped inside the dialog. **FAIL**: No focus trap (prevents Tab from leaving the dialog).
 - [ ] **H.2.4** Opening a dialog moves focus to the first focusable element inside. **FAIL**: Focus stays wherever it was before `showDialog()`.
 
@@ -430,12 +437,12 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 - [ ] **J.2.1** A spinner indicates 3D generation in progress. ✅ (`.messagebar-spinner`)
 - [ ] **J.2.2** The spinner is visible but not distracting (small, at the action point). ✅
-- [ ] **J.2.3** Token child resolution shows a loading placeholder. ✅ (`placeholders.js`)
+- [ ] **J.2.3** Token child resolution shows a loading placeholder. ✅ (`placeholders.ts`)
 - [ ] **J.2.4** Long operations show progress feedback beyond the spinner. **FAIL**: No progress indicator for IPFS uploads or on-chain transactions — only a spinner.
 
 ### J.3 Error States
 
-- [ ] **J.3.1** Failed token child resolution shows an error placeholder. ✅ (`placeholders.js`)
+- [ ] **J.3.1** Failed token child resolution shows an error placeholder. ✅ (`placeholders.ts`)
 - [ ] **J.3.2** Failed generation shows an error message in the UI (not just console). **FAIL**: Errors may only appear in console or as a brief overlay.
 - [ ] **J.3.3** Network errors show actionable recovery steps. **FAIL**: No "Retry" pattern for failed operations.
 
@@ -443,3 +450,9 @@ For each FAIL, write a 1–2 sentence recommendation referencing the specific GN
 
 - [ ] **J.4.1** The viewport shows the grid and gizmo when no scene is active (not a blank canvas). ✅
 - [ ] **J.4.2** Bottom bar shows useful status text ("Ready" or "No asset loaded"). ⚠️ Verify.
+
+---
+
+## 14. Category K: Web3 & Trust Audit Checklist
+
+**File**: `references/web3-ux.md` — the full K checklist (K.1 wallet/onboarding, K.2 transaction feedback, K.3 on/off-chain transparency, K.4 trust/security cues, K.5 generation/wait feedback) lives there. Score with the same `PASS / (PASS + FAIL) × 100` formula; mark missing surfaces `N/A ➖`. On conflict with category F (accessibility), WCAG wins; on conflict with A–D (visual), the Web3 clarity requirement wins.

@@ -2,16 +2,18 @@
 
 Markdown template for producing scored audit reports.
 
-## 14. Report Template
+## 15. Report Template
 
 When the audit is complete, produce a report in this format:
 
 ```markdown
-# GNOME HIG Audit Report — Arbesk Studio
+# Arbesk Studio UI/UX Audit Report
 
 **Date**: YYYY-MM-DD
 **Auditor**: [name]
 **Version**: [git commit hash]
+
+> **Evidence rule**: only report numbers or FAILs you actually measured or verified in source. Mark anything unverified as "unverified" — never invent a contrast ratio or state a violation you didn't check.
 
 ---
 
@@ -29,6 +31,7 @@ When the audit is complete, produce a report in this format:
 | H. Dialogs & Modals | XX/100 | |
 | I. Responsive Design | XX/100 | |
 | J. Empty States & Feedback | XX/100 | |
+| K. Web3 & Trust | XX/100 | |
 
 ---
 

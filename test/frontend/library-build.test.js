@@ -46,10 +46,10 @@ describe("Library view build (app.html)", () => {
     expect(html).toMatch(/id="walletPopover"/);
   });
 
-  test("app.html loads app-init.js as the single module entry", () => {
+  test("app.html loads app.js as the single module entry", () => {
     const html = readDist("app.html");
     expect(html).toMatch(
-      /<script[^>]+type="module"[^>]+src="\/js\/app-init\.js"/
+      /<script[^>]+type="module"[^>]+src="\/js\/app\.js"/
     );
   });
 

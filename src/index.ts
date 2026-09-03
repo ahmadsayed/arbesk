@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import morgan from "morgan";
 import type { TokenIndexer } from "morgan";
 import helmet from "helmet";
+import compression from "compression";
 
 const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -58,6 +59,13 @@ app.use(
     },
   ),
 );
+
+/* ─── Response compression ───
+ * gzip/deflate negotiated by Accept-Encoding. The bundled frontend
+ * (dist/js/app.js) is ~2.4 MB minified; compression shrinks it to ~780 KB
+ * on the wire. Placed before express.static so static assets are compressed.
+ */
+app.use(compression());
 
 /* ─── Content-Security-Policy (report-only) ───
  * Delivered via HTTP header because <meta> does not support

@@ -2,7 +2,8 @@
   "name": "arbesk-frontend",
   "version": "0.1.0",
   "scripts": {
-    "build": "npm run clean && npm run build:pug && npm run build:scss && npm run build:scripts && npm run build:ts && npm run build:assets",
+    "build": "npm run clean && npm run build:pug && npm run build:scss && npm run build:bundle && npm run build:assets",
+    "build:bundle": "node scripts/bundle.js",
     "build:assets": "node scripts/build-assets.js",
     "build:ts": "node scripts/build-ts.js",
     "build:pug": "node scripts/build-pug.js",
@@ -23,6 +24,7 @@
     "@coinbase/cdp-core": "latest",
     "@swc/core": "^1.16.0",
     "autoprefixer": "10.4.4",
+    "esbuild": "^0.25.12",
     "postcss": "8.4.12",
     "prettier": "2.6.0",
     "pug": "3.0.2",

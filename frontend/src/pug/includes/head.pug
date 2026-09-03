@@ -80,22 +80,14 @@ script(src="https://cdn.jsdelivr.net/npm/focus-trap@7.6.2/dist/focus-trap.umd.mi
 //- Babylon.js is NOT loaded here — it is fetched lazily on first Studio
 //- entry by js/engine/babylon-loader.js, so the Library view and the
 //- sign-in modal boot without waiting for a 3D engine they never use.
+//- Two vendor bundles (viem, cdp-core) are pre-bundled and resolved here so
+//- the single app.js stays small and cdp-core loads on demand.
 script(type="importmap").
   {
     "imports": {
-      "@arbesk/asset-core": "/js/vendor/asset-core/index.js",
-      "@arbesk/asset-core/": "/js/vendor/asset-core/",
-      "@arbesk/wallet": "/js/vendor/wallet/index.js",
-      "@arbesk/wallet/": "/js/vendor/wallet/",
-      "@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js",
-      "fflate": "https://esm.sh/fflate@0.8.2",
-      "alpinejs": "https://esm.sh/alpinejs@3.16.1",
-      "fast-xml-parser": "https://esm.sh/fast-xml-parser@4.5.3",
-      "@openzeppelin/merkle-tree": "https://esm.sh/@openzeppelin/merkle-tree@1.0.8",
-      "@coinbase/cdp-core": "https://esm.sh/@coinbase/cdp-core@0.0.113?bundle",
-      "siwe": "https://esm.sh/siwe@3.0.0",
-      "viem": "https://esm.sh/viem@2.52.2",
-      "viem/utils": "https://esm.sh/viem@2.52.2/utils",
-      "zod": "https://esm.sh/zod@3.25.76"
+      "@coinbase/cdp-core": "/js/vendor/cdp-core.js",
+      "viem": "/js/vendor/viem.js",
+      "viem/utils": "/js/vendor/viem.js"
     }
   }
+

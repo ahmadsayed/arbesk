@@ -425,6 +425,7 @@ describe("Deployment Pipeline Integrity", () => {
       "frontend/src/js/workers/gltf-worker.ts",
     );
     const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
+    const BUNDLE_PATH = resolve(ROOT_DIR, "frontend/scripts/bundle.js");
 
     test("vendored gltf-transform-core bundle exists", () => {
       expect(existsSync(VENDOR_PATH)).toBe(true);
@@ -442,11 +443,10 @@ describe("Deployment Pipeline Integrity", () => {
       expect(content).not.toContain("esm.sh/@gltf-transform/core");
     });
 
-    test("app.pug import map points @gltf-transform/core at the vendored file", () => {
-      const content = renderPugSource(STUDIO_PUG_PATH);
-      expect(content).toContain(
-        '"@gltf-transform/core": "/js/vendor/gltf-transform-core-4.1.2.js"',
-      );
+    test("bundle.js aliases @gltf-transform/core at the vendored file", () => {
+      const content = readFileSync(BUNDLE_PATH, "utf-8");
+      expect(content).toContain("'@gltf-transform/core': GLTF_TRANSFORM_VENDOR");
+      expect(content).toContain("vendor/gltf-transform-core-4.1.2.js");
       expect(content).not.toContain("esm.sh/@gltf-transform/core");
     });
 

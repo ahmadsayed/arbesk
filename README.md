@@ -6,7 +6,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 
 - Repository: <https://github.com/ahmadsayed/arbesk>
 - License: ISC
-- Current status: token child worlds, the free-tier contract, Merkle editor proofs, and collection manifests are all implemented. CDP email-login smart accounts, standalone library page, asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented.
+- Current status: token child worlds, the free-tier contract, Merkle editor proofs, and collection manifests are all implemented. CDP email-login smart accounts, the Library view (unified SPA), asset-level Nostr comments, token indexer, and the Tripo3D v3 generation integration (text-to-3D, image-to-3D, HD texture, smart retopology, rig & animate — BYOK) are also implemented.
 
 ---
 
@@ -19,8 +19,8 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 - **Merkle editor proofs** — editor sets are stored on IPFS; the contract stores only a Merkle root and version. URI updates, editor set changes, and burns require a valid Merkle proof.
 - **Real 3D generation (Tripo3D v3, BYOK)** — text-to-3D and image-to-3D (JPEG/PNG/WebP attach) as async tasks with live polling; HD texture toggle; texture-only refine; smart retopology (`mesh/decimate` v2.0) for animation-ready topology; rig & animate chain (`rig-check → rig → retarget`, plus retarget-only re-animation of rigged models); credit balance display. Results land as chat bubbles with live orbitable previews and load into Studio on demand.
 - **Mock 3D generation** — backend mock adapter returns local GLTF/GLB-style assets for deterministic development.
-- **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, history entries, token-based `child_ref` links, and optional thumbnails.
-- **Parametric versions** — color and scale edits append history entries without payment or SaaS generation.
+- **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, token-based `child_ref` links, and optional thumbnails.
+- **Parametric versions** — color and scale edits are saved as first-class manifest versions without payment or SaaS generation.
 - **Babylon.js scene graph** — loads GLB/GLTF assets from IPFS, supports one-node-per-world replacement behavior, selection, lazy child anchors, and history scrubbing.
 - **On-demand browser IPFS cache** — memory + IndexedDB cache for IPFS JSON/blob payloads, populated only when content is opened (currently disabled).
 - **Publish thumbnails** — publishing captures an optional `512x288` WebP snapshot, stores it on IPFS, and adds a lightweight `manifest.thumbnail` CID reference.
@@ -187,7 +187,6 @@ arbesk/
 | [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Implementation status, validation snapshot, known gaps |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture and data flows |
 | [`docs/API_SPEC.md`](docs/API_SPEC.md) | Implemented Express API routes and response shapes |
-| [`docs/MEGAETH_ANALYSIS.md`](docs/MEGAETH_ANALYSIS.md) | MegaETH gas model and cost projections |
 | [`docs/MERKLE_IMPLEMENTATION.md`](docs/MERKLE_IMPLEMENTATION.md) | Merkle editor architecture |
 | [`AGENTS.md`](AGENTS.md) | AI agent conventions, commands, file map, safety rules |
 
@@ -201,7 +200,7 @@ arbesk/
 | Frontend templates | Pug |
 | Styling | Custom SCSS design system (no Bootstrap) |
 | 3D renderer | Babylon.js |
-| Frontend JS | Vanilla JavaScript ES modules |
+| Frontend JS | TypeScript ES modules (swc per-file emit, no bundler) |
 | Web3 | Web3.js + custom wallet picker (EIP-6963 + WalletConnect v2) + CDP embedded wallets |
 | Blockchain | EVM-compatible / local Hardhat / Base Sepolia Testnet |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
@@ -270,7 +269,7 @@ docker compose run --rm hardhat npx hardhat test
 npm run test:e2e -- --project=chromium
 ```
 
-See `e2e/README.md` for the full E2E contract (22 specs, worktree isolation, selector map).
+See `e2e/README.md` for the full E2E contract (23 specs, worktree isolation, selector map).
 
 ---
 

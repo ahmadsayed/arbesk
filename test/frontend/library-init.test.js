@@ -3,17 +3,18 @@ import path from "path";
 import url from "url";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const DIST_JS = path.resolve(__dirname, "../../frontend/dist/js");
+const SRC_JS = path.resolve(__dirname, "../../frontend/src/js");
 
-function readBuilt(name) {
-  return fs.readFileSync(path.join(DIST_JS, name), "utf-8");
+function readSource(rel) {
+  return fs.readFileSync(path.join(SRC_JS, rel), "utf-8");
 }
 
-// Library page wiring moved into the unified SPA bootstrap (app-init.js) plus
-// the extracted data/gate module (library-controller.js). These tests guard
-// that the Library controls are still wired in the single-document shell.
-describe("app-init.js (Library wiring)", () => {
-  const src = () => readBuilt("app-init.js");
+// Library page wiring moved into the unified SPA bootstrap (app-init.ts) plus
+// the extracted data/gate module (library-controller.ts). The frontend is now
+// bundled into dist/js/app.js by esbuild, so these guards read the SOURCE
+// files that esbuild consumes rather than per-file dist output.
+describe("app-init.ts (Library wiring)", () => {
+  const src = () => readSource("app-init.ts");
 
   test("wires the wallet lifecycle", () => {
     expect(src()).toMatch(/initWallet\(\)/);
@@ -40,15 +41,15 @@ describe("app-init.js (Library wiring)", () => {
   });
 });
 
-describe("library-controller.js", () => {
-  const src = () => readBuilt("ui/library-controller.js");
+describe("library-controller.ts", () => {
+  const src = () => readSource("ui/library-controller.ts");
 
   test("gates #libraryMain behind #libraryGate by toggling the hidden class", () => {
     expect(src()).toMatch(
-      /gate\.classList\.toggle\(\s*["']hidden["']\s*,\s*connected\s*\)/
+      /gate\.classList\.toggle\(\s*["']hidden["']\s*,\s*connected\s*\)/,
     );
     expect(src()).toMatch(
-      /main\.classList\.toggle\(\s*["']hidden["']\s*,\s*!connected\s*\)/
+      /main\.classList\.toggle\(\s*["']hidden["']\s*,\s*!connected\s*\)/,
     );
   });
 });

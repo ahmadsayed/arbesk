@@ -10,8 +10,8 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 ## Hard Rules
 
 1. **Minimal chrome** — no in-scene axes, view cube, toolbar overlay. Only grid, gizmo, drop indicator.
-2. **Every action has a key** — Blender conventions (`1/3/7` views, `F` frame, `Esc` deselect).
-3. **Form fields steal keystrokes** — guard `document.activeElement` in global `keydown` handlers.
+2. **Shortcuts earn their place** — add a chord only if it passes the 4-question bar: (1) frequent enough, (2) the browser/OS doesn't already own it, (3) not better as a visible button, (4) you'll document it in `keyboard-help.ts` + a `title` tooltip. Viewport keys: `F` frame selected, `Home` frame all, `0` reset view, `G` toggle grid, `Esc` deselect; gizmo `T`/`R`/`S`. **The viewport is perspective-only** — `1/3/7` ortho views were removed because they forced custom projection code that broke and became unstable; we reverted to Babylon's default viewer. Never re-add them.
+3. **Form fields steal keystrokes** — every global `keydown` handler guards `document.activeElement` (input/textarea/select/contentEditable). Prefer ONE shared guard helper + ONE dispatcher/keymap over per-module listeners — ~20 listeners across ~17 modules already exist and drift; don't add more.
 4. **Selection feedback = HighlightLayer** (amber `#D4A017`); camera framing = 300ms animation.
 5. **All viewport chrome gets `metadata.isViewportChrome = true`** so `clearScene()` preserves it.
 6. **Rebuild after every change** — `npm run build:frontend`; backend serves `dist/`, not `src/`.
@@ -37,10 +37,13 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 | `frontend/src/js/ui/asset-drop-zone.ts` | drop target for dragged cards |
 | `frontend/src/js/ui/asset-save.ts` | Save Draft / Publish wiring |
 | `frontend/src/js/ui/outliner.ts` | scene graph tree |
+| `frontend/src/js/ui/keyboard-help.ts` | `Ctrl+/` shortcuts reference — the discoverability gatekeeper: every new shortcut lands here |
+| `frontend/src/js/engine/undo-controller.ts` | `Ctrl+Z`/`Ctrl+Y` undo/redo dispatcher |
+| `frontend/src/js/utils/platform.ts` | `MOD` (Ctrl on Linux/Win, ⌘ on Mac) for shortcut labels |
 
 ## Supporting Files (read on demand)
 
-- Read `references/checklists.md` when adding a panel or keyboard shortcut (7-step checklist, keydown guard).
+- Read `references/checklists.md` when adding a panel or keyboard shortcut (4-question bar, shared guard, dispatcher, Escape stack).
 - Read `references/patterns.md` when you need an empty state, drop zone, or spinner.
 - Read `references/pitfalls.md` when something feels off (ortho frustum, HighlightLayer stencil, mesh disposal, form guards).
 - Read `references/alpine.md` when converting an imperative panel to Alpine.js (store/getter/template pattern, dynamic components, async render timing, jest testing).
