@@ -206,6 +206,117 @@ async function _checkBalance() {
 // ─── Auto-connect ───
 
 /**
+ * Silently restores a CDP (email-login) smart-account session.
+ * @remarks Handles every outcome internally (success, no stored session,
+ *   warmup failure, error) and never falls through to the injected-wallet
+ *   probes — a stored "cdp" choice is authoritative.
+ */
+async function _restoreCdp() {
+  // Try CDP silent restore
+  try {
+    const _t0 = performance.now();
+    const _mark = (label: string) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
+    const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.ts");
+    _mark("sdkModuleImport");
+    // warmupCdpClient was kicked off at page load (app-init.js) — this
+    // awaits the shared in-flight promise, so the config fetch + SDK
+    // initialize overlap with UI setup instead of serializing here.
+    const warmed = await warmupCdpClient();
+    _mark("initCdpClient (warmup)");
+    if (warmed) {
+      const cdpResult = await autoConnectCdpWallet();
+      _mark("autoConnectCdpWallet");
+      if (cdpResult) {
+        // CDP: contract reads go through the viem read client (public RPC);
+        // writes go through the injected CdpSigner. No EIP-1193 provider.
+        activeConnectionSource = "cdp";
+        const email = getCdpEmail() || cdpResult.email || null;
+        await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
+        _mark("finishWalletSetup (total restore)");
+        return;
+      }
+    }
+    // lastWallet was "cdp" but restore did not connect — stay disconnected.
+  } catch (cdpErr) {
+    warn("[WALLET] CDP auto-connect failed:", (cdpErr as Error).message);
+    localStorage.removeItem(LAST_WALLET_KEY);
+  }
+}
+
+/**
+ * Silently restores a WalletConnect session.
+ * @returns `true` when a connected session was restored, `false` otherwise
+ *   (so the caller can fall through to other restore strategies).
+ */
+async function _restoreWalletConnect(): Promise<boolean> {
+  // Try WalletConnect silent restore
+  const wcProvider = await getWalletConnectProvider();
+  if (wcProvider && wcProvider.connected) {
+    setWeb3Provider(wcProvider);
+    const accounts = wcProvider.accounts || [];
+    if (accounts.length > 0) {
+      activeConnectionSource = "walletconnect";
+      await _finishWalletSetup(accounts[0]);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Silently restores an injected (EIP-6963) wallet announced under `rdns`.
+ * @returns `true` when a silent eth_accounts probe recovered an authorized
+ *   account, `false` otherwise (so the caller can fall through).
+ */
+async function _restoreInjectedByRdns(rdns: string): Promise<boolean> {
+  // Try to reconnect injected wallet by rdns
+  requestWallets();
+  // Give wallets a moment to announce
+  await new Promise((r) => setTimeout(r, 300));
+  const wallet = getWalletByRdns(rdns);
+  if (wallet && wallet.provider) {
+    // Try silent eth_accounts (no popup)
+    try {
+      const accounts = await wallet.provider.request({
+        method: "eth_accounts",
+      });
+      if (accounts && accounts.length > 0) {
+        setWeb3Provider(wallet.provider);
+        activeConnectionSource = "injected";
+        _activeWalletRdns = wallet.rdns;
+        await _finishWalletSetup(accounts[0]);
+        return true;
+      }
+    } catch {
+      // Silent fail - wallet not authorized
+    }
+  }
+  return false;
+}
+
+/**
+ * Silently restores any available injected provider (MetaMask-style
+ * `window.ethereum`) regardless of the stored wallet.
+ * @returns `true` when an authorized account was recovered, `false` otherwise.
+ */
+async function _restoreAnyInjectedProvider(): Promise<boolean> {
+  // Fallback: try any available injected provider (MetaMask-style)
+  if (window.ethereum) {
+    const accounts = await window.ethereum.request({
+      method: "eth_accounts",
+    });
+    if (accounts && accounts.length > 0) {
+      setWeb3Provider(window.ethereum);
+      activeConnectionSource = "injected";
+      _activeWalletRdns = null; // unknown which wallet
+      await _finishWalletSetup(accounts[0]);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Auto-signs in on page load if previously authorized (no popup).
  */
 async function autoConnectWallet() {
@@ -213,88 +324,18 @@ async function autoConnectWallet() {
     const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
 
     if (lastWallet === "cdp") {
-      // Try CDP silent restore
-      try {
-        const _t0 = performance.now();
-        const _mark = (label: string) => console.log(`[LOGIN-TIMING] ${label}: ${Math.round(performance.now() - _t0)}ms`);
-        const { warmupCdpClient, autoConnectCdpWallet, getCdpEmail } = await import("./wallet-cdp.ts");
-        _mark("sdkModuleImport");
-        // warmupCdpClient was kicked off at page load (app-init.js) — this
-        // awaits the shared in-flight promise, so the config fetch + SDK
-        // initialize overlap with UI setup instead of serializing here.
-        const warmed = await warmupCdpClient();
-        _mark("initCdpClient (warmup)");
-        if (warmed) {
-          const cdpResult = await autoConnectCdpWallet();
-          _mark("autoConnectCdpWallet");
-          if (cdpResult) {
-            // CDP: contract reads go through the viem read client (public RPC);
-            // writes go through the injected CdpSigner. No EIP-1193 provider.
-            activeConnectionSource = "cdp";
-            const email = getCdpEmail() || cdpResult.email || null;
-            await _finishWalletSetup(cdpResult.smartAccountAddress, cdpResult.eoaAddress, email);
-            _mark("finishWalletSetup (total restore)");
-            return;
-          }
-        }
-        // lastWallet was "cdp" but restore did not connect — don't fall
-        // through to the injected-wallet probe below.
-        return;
-      } catch (cdpErr) {
-        warn("[WALLET] CDP auto-connect failed:", (cdpErr as Error).message);
-        localStorage.removeItem(LAST_WALLET_KEY);
-        return;
-      }
+      // A stored "cdp" choice is authoritative — never fall through to the
+      // injected-wallet probes below.
+      await _restoreCdp();
+      return;
     } else if (lastWallet === "walletconnect") {
-      // Try WalletConnect silent restore
-      const wcProvider = await getWalletConnectProvider();
-      if (wcProvider && wcProvider.connected) {
-        setWeb3Provider(wcProvider);
-        const accounts = wcProvider.accounts || [];
-        if (accounts.length > 0) {
-          activeConnectionSource = "walletconnect";
-          await _finishWalletSetup(accounts[0]);
-          return;
-        }
-      }
+      if (await _restoreWalletConnect()) return;
     } else if (lastWallet) {
-      // Try to reconnect injected wallet by rdns
-      requestWallets();
-      // Give wallets a moment to announce
-      await new Promise((r) => setTimeout(r, 300));
-      const wallet = getWalletByRdns(lastWallet);
-      if (wallet && wallet.provider) {
-        // Try silent eth_accounts (no popup)
-        try {
-          const accounts = await wallet.provider.request({
-            method: "eth_accounts",
-          });
-          if (accounts && accounts.length > 0) {
-            setWeb3Provider(wallet.provider);
-            activeConnectionSource = "injected";
-            _activeWalletRdns = wallet.rdns;
-            await _finishWalletSetup(accounts[0]);
-            return;
-          }
-        } catch {
-          // Silent fail - wallet not authorized
-        }
-      }
+      if (await _restoreInjectedByRdns(lastWallet)) return;
     }
 
     // Fallback: try any available injected provider (MetaMask-style)
-    if (window.ethereum) {
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
-      });
-      if (accounts && accounts.length > 0) {
-        setWeb3Provider(window.ethereum);
-        activeConnectionSource = "injected";
-        _activeWalletRdns = null; // unknown which wallet
-        await _finishWalletSetup(accounts[0]);
-        return;
-      }
-    }
+    if (await _restoreAnyInjectedProvider()) return;
 
     // No previous connection - stay disconnected
   } catch (err) {
