@@ -205,7 +205,7 @@ interface CommentsPanelComponent {
   post(): void;
 }
 
-export function commentsPanel(): CommentsPanelComponent {
+function commentsPanel(): CommentsPanelComponent {
   return {
     get comments() { return store().events; },
     get count() { return store().events.length; },

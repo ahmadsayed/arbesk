@@ -257,4 +257,4 @@ on(EVENTS.SCENE_EMPTY, resetNesting);
 
 // ─── Exports ─────────────────────────────────────────────────────────
 
-export { initNesting, ascendOneLevel, resetNesting, currentDepth };
+export { initNesting, ascendOneLevel };

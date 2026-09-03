@@ -503,10 +503,8 @@ function onSceneEmpty(): void {
 
 export {
   initOutliner,
-  refreshOutliner,
   renderTree,
   selectNode,
-  clearSelection,
   createNodeElement,
   buildOutlineTree,
   getNodes,

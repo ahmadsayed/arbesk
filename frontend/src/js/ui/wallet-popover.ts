@@ -250,14 +250,4 @@ function initWalletPopover(): void {
   });
 }
 
-/** Programmatic open (no-op until the store exists). */
-function openPopover(): void {
-  openState();
-}
-
-/** Programmatic close. */
-function closePopover(): void {
-  closeState();
-}
-
-export { initWalletPopover, openPopover, closePopover };
+export { initWalletPopover };

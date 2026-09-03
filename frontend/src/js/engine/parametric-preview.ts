@@ -572,4 +572,4 @@ on(EVENTS.TRANSFORM_STAGED, (e: {nodeIds?: string[]}) => {
   if (e.nodeIds.includes(activeNodeId)) _refreshScaleFields();
 });
 
-export { openInspector, closeInspector };
+export { openInspector };

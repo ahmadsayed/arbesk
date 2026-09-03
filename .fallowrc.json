@@ -18,6 +18,13 @@
     "e2e/**",
     "docs/diagrams/**"
   ],
+  "ignoreExportsUsedInFile": true,
+  "publicPackages": [
+    "@arbesk/asset-core",
+    "@arbesk/wallet",
+    "@arbesk/authz",
+    "@arbesk/ai-asset-gen"
+  ],
   "boundaries": {
     "zones": [
       {
@@ -39,7 +46,9 @@
   },
   "ignoreDependencies": [
     "@coinbase/cdp-core",
+    "@nomicfoundation/hardhat-network-helpers",
     "@nomicfoundation/hardhat-toolbox",
+    "@openzeppelin/hardhat-upgrades",
     "alpinejs",
     "autoprefixer",
     "chai",
@@ -95,6 +104,66 @@
     {
       "file": "packages/besk/src/catalog.ts",
       "exports": ["getCollectionAssets", "listCollections", "resolveAssetByName", "resolveCollectionByName"]
+    },
+
+    // Backward-compat re-export barrels / modules (scene-graph re-export block,
+    // wallet.ts barrel, token-resolver + create-panel re-exports): the names are
+    // consumed via their canonical modules, so the re-exports read as unused.
+    {
+      "file": "frontend/src/js/blockchain/wallet.ts",
+      "exports": ["autoConnectWallet", "authenticateUser", "getActiveConnectionSource", "NETWORKS", "web3Provider", "payForGenerationWithUSDC", "recordGeneration", "isFreeTierContract", "walletContract"]
+    },
+    {
+      "file": "frontend/src/js/engine/scene-graph.ts",
+      "exports": ["DEFAULT_WOOD_COLOR", "MAX_CHILD_ASSET_DEPTH", "extractCid", "detectAssetFormat", "getManifestNodes", "applyTransformMatrix", "applyDefaultMaterial", "getRenderableMeshes", "getWorldBounds", "centerImportedAsset", "createPlaceholder", "disposePlaceholder", "disposeNode", "disposeNodeContent", "disposeNodeSubtree", "clearPendingPostProcessorEdit", "clearPendingTransformEdit", "stagePendingSourceOverride", "clearPendingSourceOverride", "loadNode", "loadAsset", "replaceRootModelSource", "createRootDraftSource", "getNodeAnchor"]
+    },
+    {
+      "file": "frontend/src/js/engine/transforms.ts",
+      "exports": ["detectAssetFormat"]
+    },
+    {
+      "file": "frontend/src/js/engine/cleanup.ts",
+      "exports": ["clearPendingSourceOverride"]
+    },
+    {
+      "file": "frontend/src/js/blockchain/token-resolver.ts",
+      "exports": ["normalizeTokenURI"]
+    },
+    {
+      "file": "frontend/src/js/ui/create-panel.ts",
+      "exports": ["addChatMessage"]
+    },
+
+    // Test-only public surface: consumed via dynamic import() in Jest specs
+    // (fallow's syntactic graph cannot resolve dynamic imports).
+    {
+      "file": "frontend/src/js/services/chat-preview.ts",
+      "exports": ["getChatPreview"]
+    },
+    {
+      "file": "frontend/src/js/ui/ledger-panel.ts",
+      "exports": ["refreshLedger"]
+    },
+    {
+      "file": "src/api/authz.ts",
+      "exports": ["createAuthzInstance"]
+    },
+
+    // Re-exported types from the API client barrel (type-only consumers).
+    {
+      "file": "frontend/src/js/services/api.ts",
+      "exports": ["CachedSession", "UploadCredential", "UnpinTokenContext"]
+    },
+
+    // Two distinct functions share this name: network-config (sync, per-chain
+    // lookup) vs backend-client (async, fetches /config). Intentional overlap.
+    {
+      "file": "frontend/src/js/blockchain/network-config.ts",
+      "exports": ["getContractAddress"]
+    },
+    {
+      "file": "frontend/src/js/services/backend-client.ts",
+      "exports": ["getContractAddress"]
     }
   ]
 }

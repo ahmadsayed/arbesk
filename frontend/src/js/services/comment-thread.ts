@@ -86,6 +86,9 @@ export class CommentThread {
     }
   }
 
+  // Public entry point for manually loading an archive; exercised by
+  // comment-thread.test.js via a dynamic import fallow cannot resolve.
+  // fallow-ignore-next-line unused-class-member
   async loadArchive(cid: string): Promise<void> {
     await this._loadArchive(cid);
   }
